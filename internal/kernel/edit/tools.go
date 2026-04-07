@@ -1,0 +1,288 @@
+package edit
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/postfix/serena/internal/kernel"
+	"github.com/postfix/serena/internal/kernel/diag"
+	"github.com/postfix/serena/internal/mcp"
+	"github.com/postfix/serena/internal/workspace"
+)
+
+// --- Argument structs ---
+
+// ReplaceBodyArgs is the input schema for the replace_symbol_body tool.
+type ReplaceBodyArgs struct {
+	Path       string `json:"path" jsonschema:"File path"`
+	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol whose body to replace"`
+	NewBody    string `json:"new_body" jsonschema:"New body content to replace with"`
+}
+
+// InsertBeforeArgs is the input schema for the insert_before_symbol tool.
+type InsertBeforeArgs struct {
+	Path       string `json:"path" jsonschema:"File path"`
+	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol to insert before"`
+	Content    string `json:"content" jsonschema:"Content to insert"`
+}
+
+// InsertAfterArgs is the input schema for the insert_after_symbol tool.
+type InsertAfterArgs struct {
+	Path       string `json:"path" jsonschema:"File path"`
+	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol to insert after"`
+	Content    string `json:"content" jsonschema:"Content to insert"`
+}
+
+// RenameSymbolArgs is the input schema for the rename_symbol tool.
+type RenameSymbolArgs struct {
+	Path    string `json:"path" jsonschema:"File path where symbol is defined"`
+	Line    int    `json:"line" jsonschema:"Line number of symbol (1-indexed)"`
+	Col     int    `json:"column" jsonschema:"Column number of symbol (1-indexed)"`
+	NewName string `json:"new_name" jsonschema:"New name for the symbol"`
+}
+
+// SafeDeleteArgs is the input schema for the safe_delete_symbol tool.
+type SafeDeleteArgs struct {
+	Path       string `json:"path" jsonschema:"File path"`
+	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol to delete"`
+	Force      bool   `json:"force,omitempty" jsonschema:"Delete even if references exist (default: false)"`
+}
+
+// VerifyEditArgs is the input schema for the verify_edit tool.
+type VerifyEditArgs struct {
+	Path string `json:"path" jsonschema:"File path to verify after editing"`
+}
+
+// RegisterTools registers all 6 symbol editing tools with the MCP server.
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	registerReplaceBody(server, k, extractor, diagStore, wsKeyFn)
+	registerInsertBefore(server, k, diagStore, wsKeyFn)
+	registerInsertAfter(server, k, diagStore, wsKeyFn)
+	registerRenameSymbol(server, k, diagStore, wsKeyFn)
+	registerSafeDelete(server, k, diagStore, wsKeyFn)
+	registerVerifyEdit(server, diagStore, wsKeyFn)
+}
+
+// --- helpers ---
+
+func textResult(text string) *mcpsdk.CallToolResult {
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: text},
+		},
+	}
+}
+
+func errorResult(msg string) *mcpsdk.CallToolResult {
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: msg},
+		},
+		IsError: true,
+	}
+}
+
+func filePathToURI(path string) string {
+	if strings.HasPrefix(path, "file://") {
+		return path
+	}
+	return "file://" + path
+}
+
+// detectLang guesses the language from file extension.
+func detectLang(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".go"):
+		return "go"
+	case strings.HasSuffix(path, ".py"):
+		return "python"
+	case strings.HasSuffix(path, ".ts"), strings.HasSuffix(path, ".tsx"),
+		strings.HasSuffix(path, ".js"), strings.HasSuffix(path, ".jsx"):
+		return "typescript"
+	case strings.HasSuffix(path, ".rs"):
+		return "rust"
+	default:
+		return ""
+	}
+}
+
+// appendVerifyInfo runs VerifyEdit and appends results to the text.
+func appendVerifyInfo(ctx context.Context, diagStore *diag.DiagnosticStore, uri string, text string) string {
+	vr, err := VerifyEdit(ctx, diagStore, uri)
+	if err != nil {
+		return text + "\n\nVerification: (error: " + err.Error() + ")"
+	}
+	if vr.HasErrors {
+		var sb strings.Builder
+		sb.WriteString(text)
+		sb.WriteString(fmt.Sprintf("\n\nPost-edit verification: %d error(s)", vr.ErrorCount))
+		for _, e := range vr.Errors {
+			sb.WriteString(fmt.Sprintf("\n  L%d:%d [%s] %s", e.Line, e.Col, e.Source, e.Message))
+		}
+		return sb.String()
+	}
+	return text + "\n\nPost-edit verification: OK (no errors)"
+}
+
+// --- tool registrations ---
+
+func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "replace_symbol_body",
+		Description: "Replace a symbol's body with new content using tree-sitter for precise extraction",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
+		rt, err := k.GetRuntime(wsKeyFn())
+		if err != nil {
+			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+		}
+		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true for mutation
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+		}
+		uri := filePathToURI(args.Path)
+		lang := detectLang(args.Path)
+		if err := ReplaceBody(ctx, lease, extractor, uri, args.SymbolName, args.NewBody, lang); err != nil {
+			return errorResult(fmt.Sprintf("replace body: %v", err)), nil, nil
+		}
+		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
+		text = appendVerifyInfo(ctx, diagStore, uri, text)
+		return textResult(text), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction"})
+}
+
+func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "insert_before_symbol",
+		Description: "Insert content immediately before a symbol",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
+		rt, err := k.GetRuntime(wsKeyFn())
+		if err != nil {
+			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+		}
+		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+		}
+		uri := filePathToURI(args.Path)
+		if err := InsertBefore(ctx, lease, uri, args.SymbolName, args.Content); err != nil {
+			return errorResult(fmt.Sprintf("insert before: %v", err)), nil, nil
+		}
+		text := fmt.Sprintf("Inserted content before %q in %s", args.SymbolName, args.Path)
+		text = appendVerifyInfo(ctx, diagStore, uri, text)
+		return textResult(text), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "insert_before_symbol", Description: "Insert content immediately before a symbol"})
+}
+
+func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "insert_after_symbol",
+		Description: "Insert content immediately after a symbol",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
+		rt, err := k.GetRuntime(wsKeyFn())
+		if err != nil {
+			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+		}
+		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+		}
+		uri := filePathToURI(args.Path)
+		if err := InsertAfter(ctx, lease, uri, args.SymbolName, args.Content); err != nil {
+			return errorResult(fmt.Sprintf("insert after: %v", err)), nil, nil
+		}
+		text := fmt.Sprintf("Inserted content after %q in %s", args.SymbolName, args.Path)
+		text = appendVerifyInfo(ctx, diagStore, uri, text)
+		return textResult(text), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol"})
+}
+
+func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "rename_symbol",
+		Description: "Rename a symbol across all files in the workspace",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
+		rt, err := k.GetRuntime(wsKeyFn())
+		if err != nil {
+			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+		}
+		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+		}
+		uri := filePathToURI(args.Path)
+		// Convert from 1-indexed (user-facing) to 0-indexed (LSP).
+		result, err := RenameSymbol(ctx, lease, uri, args.Line-1, args.Col-1, args.NewName)
+		if err != nil {
+			return errorResult(fmt.Sprintf("rename: %v", err)), nil, nil
+		}
+		text := fmt.Sprintf("Renamed to %q: %d files changed, %d edits applied\nFiles: %s",
+			args.NewName, result.FilesChanged, result.EditsApplied, strings.Join(result.Files, ", "))
+		text = appendVerifyInfo(ctx, diagStore, uri, text)
+		return textResult(text), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "rename_symbol", Description: "Rename a symbol across all files in the workspace"})
+}
+
+func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "safe_delete_symbol",
+		Description: "Delete a symbol if it has no references; reports reference count if blocked",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
+		rt, err := k.GetRuntime(wsKeyFn())
+		if err != nil {
+			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+		}
+		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+		}
+		uri := filePathToURI(args.Path)
+		result, err := SafeDelete(ctx, lease, uri, args.SymbolName, args.Force)
+		if err != nil {
+			return errorResult(fmt.Sprintf("safe delete: %v", err)), nil, nil
+		}
+		if !result.Deleted {
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("Cannot delete %q: %d reference(s) found\n", args.SymbolName, result.References))
+			for _, ref := range result.RefLocations {
+				sb.WriteString(fmt.Sprintf("  %s:%d:%d\n", ref.URI,
+					ref.Range.Start.Line+1, ref.Range.Start.Character+1))
+			}
+			sb.WriteString("Use force=true to delete anyway.")
+			return textResult(sb.String()), nil, nil
+		}
+		text := fmt.Sprintf("Deleted %q from %s", args.SymbolName, args.Path)
+		text = appendVerifyInfo(ctx, diagStore, uri, text)
+		return textResult(text), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "safe_delete_symbol", Description: "Delete a symbol if it has no references; reports reference count if blocked"})
+}
+
+func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "verify_edit",
+		Description: "Check for compilation errors after an edit; returns diagnostic summary",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args VerifyEditArgs) (*mcpsdk.CallToolResult, any, error) {
+		uri := filePathToURI(args.Path)
+		result, err := VerifyEdit(ctx, diagStore, uri)
+		if err != nil {
+			return errorResult(fmt.Sprintf("verify: %v", err)), nil, nil
+		}
+		if !result.HasErrors {
+			return textResult("No errors found."), nil, nil
+		}
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("%d error(s) found:\n", result.ErrorCount))
+		for _, e := range result.Errors {
+			sb.WriteString(fmt.Sprintf("  L%d:%d [%s] %s\n", e.Line, e.Col, e.Source, e.Message))
+		}
+		return textResult(sb.String()), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "verify_edit", Description: "Check for compilation errors after an edit; returns diagnostic summary"})
+}

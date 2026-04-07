@@ -1,0 +1,56 @@
+package config
+
+// SerenaConfig is the top-level configuration for the Serena daemon.
+// Mirrors the Python Serena config schema (D-11) with Go types.
+type SerenaConfig struct {
+	// Daemon settings
+	Daemon DaemonConfig `koanf:"daemon"`
+	// Logging settings
+	Logging LoggingConfig `koanf:"logging"`
+	// Default project settings (overridden per-project)
+	Defaults ProjectDefaults `koanf:"defaults"`
+}
+
+// DaemonConfig holds daemon-specific settings.
+type DaemonConfig struct {
+	// SocketPath overrides default /tmp/serena-$UID/daemon.sock (D-14)
+	SocketPath string `koanf:"socket_path"`
+	// HTTPAddr is the listen address for Streamable HTTP (default ":8080")
+	HTTPAddr string `koanf:"http_addr"`
+	// ShutdownTimeout in seconds for graceful shutdown
+	ShutdownTimeout int `koanf:"shutdown_timeout"`
+}
+
+// LoggingConfig holds logging settings.
+type LoggingConfig struct {
+	// Format: "text" (default) or "json" (D-16)
+	Format string `koanf:"format"`
+	// Level: "debug", "info", "warn", "error" (default: "info")
+	Level string `koanf:"level"`
+	// Dir: log file directory (default: ~/.serena/logs/) (D-17)
+	Dir string `koanf:"dir"`
+}
+
+// ProjectDefaults holds default project settings.
+type ProjectDefaults struct {
+	// Contexts define tool sets for different environments
+	Contexts map[string]ContextConfig `koanf:"contexts"`
+	// Modes define operational patterns
+	Modes map[string]ModeConfig `koanf:"modes"`
+}
+
+// ContextConfig defines a tool context.
+type ContextConfig struct {
+	// Tools lists tool names available in this context
+	Tools []string `koanf:"tools"`
+	// Description of this context
+	Description string `koanf:"description"`
+}
+
+// ModeConfig defines an operational mode.
+type ModeConfig struct {
+	// Tools lists tool names available in this mode
+	Tools []string `koanf:"tools"`
+	// Description of this mode
+	Description string `koanf:"description"`
+}

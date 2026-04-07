@@ -35,15 +35,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Symbol Retrieval (Layer 1)
 
-- [ ] **SYM-01**: User can go to definition of a symbol
-- [ ] **SYM-02**: User can find all references to a symbol
-- [ ] **SYM-03**: User can get symbol overview (file outline) showing all symbols in a file
-- [ ] **SYM-04**: User can search for symbols across the workspace by name/pattern
-- [ ] **SYM-05**: User can get hover/type information for a symbol
-- [ ] **SYM-06**: User can find implementations of an interface/abstract type
-- [ ] **SYM-07**: User can get call hierarchy (callers and callees) for a function
-- [ ] **SYM-08**: User can get type hierarchy for a class/interface
-- [ ] **SYM-09**: User can analyze blast radius (combined references + call/type hierarchy) for a symbol
+- [x] **SYM-01**: User can go to definition of a symbol
+- [x] **SYM-02**: User can find all references to a symbol
+- [x] **SYM-03**: User can get symbol overview (file outline) showing all symbols in a file
+- [x] **SYM-04**: User can search for symbols across the workspace by name/pattern
+- [x] **SYM-05**: User can get hover/type information for a symbol
+- [x] **SYM-06**: User can find implementations of an interface/abstract type
+- [x] **SYM-07**: User can get call hierarchy (callers and callees) for a function
+- [x] **SYM-08**: User can get type hierarchy for a class/interface
+- [x] **SYM-09**: User can analyze blast radius (combined references + call/type hierarchy) for a symbol
 
 ### Symbol Editing (Layer 1)
 
@@ -167,15 +167,15 @@ Deferred to future release. Tracked but not in current roadmap.
 | DMN-11 | Phase 2 | Complete |
 | DMN-12 | Phase 1 | Complete |
 | DMN-13 | Phase 1 | Complete |
-| SYM-01 | Phase 2 | Pending |
-| SYM-02 | Phase 2 | Pending |
-| SYM-03 | Phase 2 | Pending |
-| SYM-04 | Phase 2 | Pending |
-| SYM-05 | Phase 2 | Pending |
-| SYM-06 | Phase 2 | Pending |
-| SYM-07 | Phase 2 | Pending |
-| SYM-08 | Phase 2 | Pending |
-| SYM-09 | Phase 2 | Pending |
+| SYM-01 | Phase 2 | Complete |
+| SYM-02 | Phase 2 | Complete |
+| SYM-03 | Phase 2 | Complete |
+| SYM-04 | Phase 2 | Complete |
+| SYM-05 | Phase 2 | Complete |
+| SYM-06 | Phase 2 | Complete |
+| SYM-07 | Phase 2 | Complete |
+| SYM-08 | Phase 2 | Complete |
+| SYM-09 | Phase 2 | Complete |
 | EDT-01 | Phase 2 | Pending |
 | EDT-02 | Phase 2 | Pending |
 | EDT-03 | Phase 2 | Pending |

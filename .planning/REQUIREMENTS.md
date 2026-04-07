@@ -47,12 +47,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Symbol Editing (Layer 1)
 
-- [ ] **EDT-01**: User can replace a symbol's body with new content
-- [ ] **EDT-02**: User can insert content before a symbol
-- [ ] **EDT-03**: User can insert content after a symbol
-- [ ] **EDT-04**: User can rename a symbol across all files in the workspace
-- [ ] **EDT-05**: User can safely delete a symbol (with reference check)
-- [ ] **EDT-06**: Edits are verified against LSP diagnostics after application
+- [x] **EDT-01**: User can replace a symbol's body with new content
+- [x] **EDT-02**: User can insert content before a symbol
+- [x] **EDT-03**: User can insert content after a symbol
+- [x] **EDT-04**: User can rename a symbol across all files in the workspace
+- [x] **EDT-05**: User can safely delete a symbol (with reference check)
+- [x] **EDT-06**: Edits are verified against LSP diagnostics after application
 
 ### File Operations
 
@@ -176,12 +176,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | SYM-07 | Phase 2 | Complete |
 | SYM-08 | Phase 2 | Complete |
 | SYM-09 | Phase 2 | Complete |
-| EDT-01 | Phase 2 | Pending |
-| EDT-02 | Phase 2 | Pending |
-| EDT-03 | Phase 2 | Pending |
-| EDT-04 | Phase 2 | Pending |
-| EDT-05 | Phase 2 | Pending |
-| EDT-06 | Phase 2 | Pending |
+| EDT-01 | Phase 2 | Complete |
+| EDT-02 | Phase 2 | Complete |
+| EDT-03 | Phase 2 | Complete |
+| EDT-04 | Phase 2 | Complete |
+| EDT-05 | Phase 2 | Complete |
+| EDT-06 | Phase 2 | Complete |
 | FIL-01 | Phase 2 | Complete |
 | FIL-02 | Phase 2 | Complete |
 | FIL-03 | Phase 2 | Complete |

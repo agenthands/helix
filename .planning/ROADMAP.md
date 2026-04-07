@@ -54,7 +54,7 @@ Plans:
 - [x] 02-03-PLAN.md — LS worker pool with lifecycle, TTL, pressure eviction, circuit breaking
 - [x] 02-04-PLAN.md — Symbol retrieval tools (definition, references, hover, hierarchy, blast radius)
 - [x] 02-05-PLAN.md — Diagnostics tools (diagnostics, code actions, formatting)
-- [ ] 02-06-PLAN.md — Symbol editing with tree-sitter body surgery
+- [x] 02-06-PLAN.md — Symbol editing with tree-sitter body surgery
 
 ### Phase 3: Multi-Language and Skills
 **Goal**: The server supports 40+ languages with auto-discovery and quirk handling, persists project knowledge across sessions, and provides workflow skills for onboarding and session handoff

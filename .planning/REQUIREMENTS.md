@@ -56,12 +56,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### File Operations
 
-- [ ] **FIL-01**: User can read a file or file range
-- [ ] **FIL-02**: User can create or overwrite a file
-- [ ] **FIL-03**: User can list directory contents
-- [ ] **FIL-04**: User can find files by glob/name pattern
-- [ ] **FIL-05**: User can search for regex patterns across the codebase
-- [ ] **FIL-06**: User can replace content via regex or literal match
+- [x] **FIL-01**: User can read a file or file range
+- [x] **FIL-02**: User can create or overwrite a file
+- [x] **FIL-03**: User can list directory contents
+- [x] **FIL-04**: User can find files by glob/name pattern
+- [x] **FIL-05**: User can search for regex patterns across the codebase
+- [x] **FIL-06**: User can replace content via regex or literal match
 
 ### Memory & Knowledge
 
@@ -182,12 +182,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | EDT-04 | Phase 2 | Pending |
 | EDT-05 | Phase 2 | Pending |
 | EDT-06 | Phase 2 | Pending |
-| FIL-01 | Phase 2 | Pending |
-| FIL-02 | Phase 2 | Pending |
-| FIL-03 | Phase 2 | Pending |
-| FIL-04 | Phase 2 | Pending |
-| FIL-05 | Phase 2 | Pending |
-| FIL-06 | Phase 2 | Pending |
+| FIL-01 | Phase 2 | Complete |
+| FIL-02 | Phase 2 | Complete |
+| FIL-03 | Phase 2 | Complete |
+| FIL-04 | Phase 2 | Complete |
+| FIL-05 | Phase 2 | Complete |
+| FIL-06 | Phase 2 | Complete |
 | MEM-01 | Phase 3 | Pending |
 | MEM-02 | Phase 3 | Pending |
 | MEM-03 | Phase 3 | Pending |

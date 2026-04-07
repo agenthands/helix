@@ -50,7 +50,7 @@ Plans:
 
 Plans:
 - [ ] 02-01-PLAN.md — LSP 3.17 metamodel codegen and JSON-RPC codec
-- [ ] 02-02-PLAN.md — File operations (read, write, list, find, search, replace)
+- [x] 02-02-PLAN.md — File operations (read, write, list, find, search, replace)
 - [ ] 02-03-PLAN.md — LS worker pool with lifecycle, TTL, pressure eviction, circuit breaking
 - [ ] 02-04-PLAN.md — Symbol retrieval tools (definition, references, hover, hierarchy, blast radius)
 - [ ] 02-05-PLAN.md — Diagnostics tools (diagnostics, code actions, formatting)

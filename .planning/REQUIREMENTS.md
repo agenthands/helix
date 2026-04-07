@@ -147,13 +147,80 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| MCP-01 | Phase 1 | Pending |
+| MCP-02 | Phase 1 | Pending |
+| MCP-03 | Phase 1 | Pending |
+| MCP-04 | Phase 1 | Pending |
+| MCP-05 | Phase 1 | Pending |
+| MCP-06 | Phase 1 | Pending |
+| MCP-07 | Phase 1 | Pending |
+| DMN-01 | Phase 1 | Pending |
+| DMN-02 | Phase 1 | Pending |
+| DMN-03 | Phase 1 | Pending |
+| DMN-04 | Phase 1 | Pending |
+| DMN-05 | Phase 1 | Pending |
+| DMN-06 | Phase 1 | Pending |
+| DMN-07 | Phase 2 | Pending |
+| DMN-08 | Phase 2 | Pending |
+| DMN-09 | Phase 2 | Pending |
+| DMN-10 | Phase 2 | Pending |
+| DMN-11 | Phase 2 | Pending |
+| DMN-12 | Phase 1 | Pending |
+| DMN-13 | Phase 1 | Pending |
+| SYM-01 | Phase 2 | Pending |
+| SYM-02 | Phase 2 | Pending |
+| SYM-03 | Phase 2 | Pending |
+| SYM-04 | Phase 2 | Pending |
+| SYM-05 | Phase 2 | Pending |
+| SYM-06 | Phase 2 | Pending |
+| SYM-07 | Phase 2 | Pending |
+| SYM-08 | Phase 2 | Pending |
+| SYM-09 | Phase 2 | Pending |
+| EDT-01 | Phase 2 | Pending |
+| EDT-02 | Phase 2 | Pending |
+| EDT-03 | Phase 2 | Pending |
+| EDT-04 | Phase 2 | Pending |
+| EDT-05 | Phase 2 | Pending |
+| EDT-06 | Phase 2 | Pending |
+| FIL-01 | Phase 2 | Pending |
+| FIL-02 | Phase 2 | Pending |
+| FIL-03 | Phase 2 | Pending |
+| FIL-04 | Phase 2 | Pending |
+| FIL-05 | Phase 2 | Pending |
+| FIL-06 | Phase 2 | Pending |
+| MEM-01 | Phase 3 | Pending |
+| MEM-02 | Phase 3 | Pending |
+| MEM-03 | Phase 3 | Pending |
+| MEM-04 | Phase 3 | Pending |
+| MEM-05 | Phase 3 | Pending |
+| LNG-01 | Phase 3 | Pending |
+| LNG-02 | Phase 3 | Pending |
+| LNG-03 | Phase 3 | Pending |
+| LNG-04 | Phase 2 | Pending |
+| PRF-01 | Phase 4 | Pending |
+| PRF-02 | Phase 4 | Pending |
+| PRF-03 | Phase 4 | Pending |
+| PRF-04 | Phase 4 | Pending |
+| PRF-05 | Phase 4 | Pending |
+| DGN-01 | Phase 2 | Pending |
+| DGN-02 | Phase 2 | Pending |
+| DGN-03 | Phase 2 | Pending |
+| WRK-01 | Phase 1 | Pending |
+| WRK-02 | Phase 2 | Pending |
+| WRK-03 | Phase 2 | Pending |
+| WRK-04 | Phase 1 | Pending |
+| WFL-01 | Phase 3 | Pending |
+| WFL-02 | Phase 3 | Pending |
+| WFL-03 | Phase 3 | Pending |
+| MIG-01 | Phase 1 | Pending |
+| MIG-02 | Phase 1 | Pending |
+| MIG-03 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 54 total
-- Mapped to phases: 0
-- Unmapped: 54 ⚠️
+- v1 requirements: 68 total
+- Mapped to phases: 68
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-07 after initial definition*
+*Last updated: 2026-04-07 after roadmap creation*

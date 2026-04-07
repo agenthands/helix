@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-04-07T20:09:04.364Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-04-07T20:13:26.690Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 02 (code-intelligence-kernel) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-04-07
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P02 | 3min | 2 tasks | 11 files |
 | Phase 01 P03 | 7min | 2 tasks | 19 files |
 | Phase 02 P02 | 3min | 2 tasks | 9 files |
+| Phase 02 P01 | 7min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Used MCP Go SDK v1.5.0 with io.Pipe GRPCTransport bridge pattern
 - [Phase 01]: Force-tracked generated .pb.go files for protoc-free builds
 - [Phase 02]: Pure Go stdlib for file ops (no external deps); workspace root via closure; symlink-aware path validation
+- [Phase 02]: Custom thin JSON-RPC (~300 lines) over unmaintained go.lsp.dev/jsonrpc2 for daemon multiplexing
+- [Phase 02]: Session-prefixed JSON-RPC IDs to avoid collision between sessions sharing LS workers
+- [Phase 02]: Named types for array-based LSP type aliases; X|null simplified to Go pointers
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T20:09:04.362Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-04-07T20:13:26.688Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

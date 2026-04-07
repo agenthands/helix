@@ -76,7 +76,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **LNG-01**: Server supports 40+ languages via LSP (matching current Serena coverage)
 - [ ] **LNG-02**: Language servers are auto-discovered and downloaded when needed
 - [ ] **LNG-03**: Per-language quirk handling via adapter layer (initialization, capabilities, encoding)
-- [ ] **LNG-04**: LSP types generated from official metamodel JSON (not hardcoded)
+- [x] **LNG-04**: LSP types generated from official metamodel JSON (not hardcoded)
 
 ### Agent Profiles & Configuration (Layer 3)
 
@@ -196,7 +196,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | LNG-01 | Phase 3 | Pending |
 | LNG-02 | Phase 3 | Pending |
 | LNG-03 | Phase 3 | Pending |
-| LNG-04 | Phase 2 | Pending |
+| LNG-04 | Phase 2 | Complete |
 | PRF-01 | Phase 4 | Pending |
 | PRF-02 | Phase 4 | Pending |
 | PRF-03 | Phase 4 | Pending |

@@ -107,9 +107,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Repo Migration
 
-- [ ] **MIG-01**: Current Python Serena moved to legacy/ folder
-- [ ] **MIG-02**: Go project initialized at repo root with standard Go module layout
-- [ ] **MIG-03**: Single binary distribution (go build produces one executable)
+- [x] **MIG-01**: Current Python Serena moved to legacy/ folder
+- [x] **MIG-02**: Go project initialized at repo root with standard Go module layout
+- [x] **MIG-03**: Single binary distribution (go build produces one executable)
 
 ## v2 Requirements
 
@@ -212,9 +212,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | WFL-01 | Phase 3 | Pending |
 | WFL-02 | Phase 3 | Pending |
 | WFL-03 | Phase 3 | Pending |
-| MIG-01 | Phase 1 | Pending |
-| MIG-02 | Phase 1 | Pending |
-| MIG-03 | Phase 1 | Pending |
+| MIG-01 | Phase 1 | Complete |
+| MIG-02 | Phase 1 | Complete |
+| MIG-03 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 68 total

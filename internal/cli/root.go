@@ -2,8 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/postfix/serena/internal/config"
+	"github.com/postfix/serena/internal/daemon"
 )
 
 // NewRootCommand creates the root cobra command with all flags.
@@ -45,20 +50,51 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	serve, _ := cmd.Flags().GetBool("serve")
-	if serve {
-		// TODO: Plan 02 implements daemon startup
-		return fmt.Errorf("daemon mode not yet implemented")
+	mode, _ := cmd.Flags().GetString("mode")
+
+	if serve || mode == "http" {
+		return runDaemon(cmd)
 	}
 
-	mode, _ := cmd.Flags().GetString("mode")
 	switch mode {
 	case "stdio", "auto":
 		// TODO: Plan 03 implements forwarder
 		return fmt.Errorf("forwarder mode not yet implemented")
-	case "http":
-		// HTTP mode IS daemon mode (per research Pattern 1)
-		return fmt.Errorf("daemon mode not yet implemented")
 	default:
 		return fmt.Errorf("unknown mode: %s", mode)
 	}
+}
+
+// runDaemon starts the Serena daemon with config loading and signal handling.
+func runDaemon(cmd *cobra.Command) error {
+	jsonLog, _ := cmd.Flags().GetBool("json")
+	socketPath, _ := cmd.Flags().GetString("socket")
+	httpAddr, _ := cmd.Flags().GetString("http-addr")
+	configPath, _ := cmd.Flags().GetString("config")
+
+	// Set up logger (D-16, D-17: stderr + configurable format)
+	var handler slog.Handler
+	if jsonLog {
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	}
+	logger := slog.New(handler)
+
+	// Load config with CLI overrides
+	overrides := make(map[string]interface{})
+	if socketPath != "" {
+		overrides["daemon.socket_path"] = socketPath
+	}
+	if httpAddr != "" {
+		overrides["daemon.http_addr"] = httpAddr
+	}
+
+	cfg, err := config.Load("", configPath, overrides)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	d := daemon.New(cfg, logger)
+	return d.Run(cmd.Context())
 }

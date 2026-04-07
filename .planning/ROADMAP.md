@@ -29,12 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A stdio forwarder proxies MCP JSON-RPC traffic to the daemon; a Streamable HTTP endpoint serves multi-client connections
   4. Agents can discover available tools via MCP tool listing with JSON Schema definitions, and receive structured error codes on failures
   5. User can activate a project by repo path and the daemon tracks workspace/session state keyed correctly
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md — Repo migration to legacy/ and Go project scaffold with CLI entry point
+- [ ] 01-02-PLAN.md — Daemon skeleton with config, workspace registry, socket listener, and graceful shutdown
+- [ ] 01-03-PLAN.md — MCP server, tool registry, gRPC IPC, stdio forwarder, and Streamable HTTP transport
 
 ### Phase 2: Code Intelligence Kernel
 **Goal**: Agents can perform symbol-level retrieval, editing, file operations, and diagnostics on a Go project through warm LS workers managed by the daemon
@@ -46,7 +46,7 @@ Plans:
   3. User can replace a symbol body, insert before/after a symbol, rename across files, and safely delete a symbol with reference checking and post-edit diagnostic verification
   4. User can read files, create files, list directories, find files by pattern, search by regex, and replace content via regex
   5. Server auto-detects project languages, initializes appropriate LS, and supports multi-project workspaces
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 02-01: TBD
@@ -62,7 +62,7 @@ Plans:
   2. Per-language quirk handling works transparently -- initialization sequences, capability differences, and encoding quirks are abstracted behind a uniform interface
   3. User can write, read, list, search, edit, rename, and delete project-scoped and global memories that persist across sessions
   4. Automated onboarding generates project understanding; prepare-for-new-conversation summarizes session state; skill packs can extend tools without touching core
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 03-01: TBD
@@ -76,7 +76,7 @@ Plans:
   1. Pre-built profiles for Claude Code, Codex, IDE assistant, and CI bot each expose a curated tool set with appropriate descriptions and prompt overrides
   2. User can switch modes within a session (planning, editing, review) and the available tools and behavior adapt accordingly
   3. Configuration loads correctly from CLI args, project config, user config, and active profile in precedence order; tools report schema size for token budget optimization
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 04-01: TBD

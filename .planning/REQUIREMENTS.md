@@ -25,11 +25,11 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DMN-04**: Daemon serves Streamable HTTP directly for multi-client/remote scenarios
 - [x] **DMN-05**: Workspace state keyed by repo root + language + toolchain fingerprint
 - [x] **DMN-06**: Session state keyed by MCP session + dirty buffer overlay + mode/capability profile
-- [ ] **DMN-07**: Clean sessions attach to existing warm LS workers
-- [ ] **DMN-08**: Sessions with divergent unsaved buffers promote to their own LS view
-- [ ] **DMN-09**: Idle LS workers stay warm for configurable TTL, then retire
-- [ ] **DMN-10**: Crashy LS workers are circuit-broken with backoff and restarted without killing the server
-- [ ] **DMN-11**: Mutations for the same session/view are serialized; reads are parallel where safe
+- [x] **DMN-07**: Clean sessions attach to existing warm LS workers
+- [x] **DMN-08**: Sessions with divergent unsaved buffers promote to their own LS view
+- [x] **DMN-09**: Idle LS workers stay warm for configurable TTL, then retire
+- [x] **DMN-10**: Crashy LS workers are circuit-broken with backoff and restarted without killing the server
+- [x] **DMN-11**: Mutations for the same session/view are serialized; reads are parallel where safe
 - [x] **DMN-12**: Daemon handles graceful shutdown with signal handling and child process cleanup
 - [x] **DMN-13**: Stale Unix socket files are detected and cleaned up on daemon start
 
@@ -95,8 +95,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Project & Workspace Management
 
 - [x] **WRK-01**: User can activate a project by pointing at a repo path
-- [ ] **WRK-02**: Server auto-detects project languages and initializes appropriate LS
-- [ ] **WRK-03**: Multi-project support for monorepos and multi-service architectures
+- [x] **WRK-02**: Server auto-detects project languages and initializes appropriate LS
+- [x] **WRK-03**: Multi-project support for monorepos and multi-service architectures
 - [x] **WRK-04**: Project-local configuration via .serena/ directory
 
 ### Onboarding & Workflows (Layer 2)
@@ -160,11 +160,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | DMN-04 | Phase 1 | Complete |
 | DMN-05 | Phase 1 | Complete |
 | DMN-06 | Phase 1 | Complete |
-| DMN-07 | Phase 2 | Pending |
-| DMN-08 | Phase 2 | Pending |
-| DMN-09 | Phase 2 | Pending |
-| DMN-10 | Phase 2 | Pending |
-| DMN-11 | Phase 2 | Pending |
+| DMN-07 | Phase 2 | Complete |
+| DMN-08 | Phase 2 | Complete |
+| DMN-09 | Phase 2 | Complete |
+| DMN-10 | Phase 2 | Complete |
+| DMN-11 | Phase 2 | Complete |
 | DMN-12 | Phase 1 | Complete |
 | DMN-13 | Phase 1 | Complete |
 | SYM-01 | Phase 2 | Pending |
@@ -206,8 +206,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | DGN-02 | Phase 2 | Pending |
 | DGN-03 | Phase 2 | Pending |
 | WRK-01 | Phase 1 | Complete |
-| WRK-02 | Phase 2 | Pending |
-| WRK-03 | Phase 2 | Pending |
+| WRK-02 | Phase 2 | Complete |
+| WRK-03 | Phase 2 | Complete |
 | WRK-04 | Phase 1 | Complete |
 | WFL-01 | Phase 3 | Pending |
 | WFL-02 | Phase 3 | Pending |

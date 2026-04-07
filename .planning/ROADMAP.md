@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Repo migration to legacy/ and Go project scaffold with CLI entry point
 - [x] 01-02-PLAN.md — Daemon skeleton with config, workspace registry, socket listener, and graceful shutdown
-- [ ] 01-03-PLAN.md — MCP server, tool registry, gRPC IPC, stdio forwarder, and Streamable HTTP transport
+- [x] 01-03-PLAN.md — MCP server, tool registry, gRPC IPC, stdio forwarder, and Streamable HTTP transport
 
 ### Phase 2: Code Intelligence Kernel
 **Goal**: Agents can perform symbol-level retrieval, editing, file operations, and diagnostics on a Go project through warm LS workers managed by the daemon

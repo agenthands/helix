@@ -9,20 +9,20 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### MCP Runtime (Layer 0)
 
-- [ ] **MCP-01**: Server exposes tools via stdio transport with JSON-RPC framing
-- [ ] **MCP-02**: Server exposes tools via Streamable HTTP transport with session management
-- [ ] **MCP-03**: Tools are listed with JSON Schema definitions for agent discovery
-- [ ] **MCP-04**: Errors are returned as structured MCP error codes with parseable detail
-- [ ] **MCP-05**: Long-running operations support cancellation via MCP protocol
-- [ ] **MCP-06**: Server sends progress notifications during indexing and heavy operations
-- [ ] **MCP-07**: Dynamic tool registry allows adding/removing tools at runtime without restart
+- [x] **MCP-01**: Server exposes tools via stdio transport with JSON-RPC framing
+- [x] **MCP-02**: Server exposes tools via Streamable HTTP transport with session management
+- [x] **MCP-03**: Tools are listed with JSON Schema definitions for agent discovery
+- [x] **MCP-04**: Errors are returned as structured MCP error codes with parseable detail
+- [x] **MCP-05**: Long-running operations support cancellation via MCP protocol
+- [x] **MCP-06**: Server sends progress notifications during indexing and heavy operations
+- [x] **MCP-07**: Dynamic tool registry allows adding/removing tools at runtime without restart
 
 ### Daemon & Process Management
 
 - [x] **DMN-01**: Persistent supervisor daemon manages workspace registry, LS workers, caches, and file watchers
 - [x] **DMN-02**: Daemon survives MCP client disconnects and reconnects without losing warm state
-- [ ] **DMN-03**: Thin stdio forwarder proxies MCP traffic to daemon via Unix socket/named pipe
-- [ ] **DMN-04**: Daemon serves Streamable HTTP directly for multi-client/remote scenarios
+- [x] **DMN-03**: Thin stdio forwarder proxies MCP traffic to daemon via Unix socket/named pipe
+- [x] **DMN-04**: Daemon serves Streamable HTTP directly for multi-client/remote scenarios
 - [x] **DMN-05**: Workspace state keyed by repo root + language + toolchain fingerprint
 - [x] **DMN-06**: Session state keyed by MCP session + dirty buffer overlay + mode/capability profile
 - [ ] **DMN-07**: Clean sessions attach to existing warm LS workers
@@ -147,17 +147,17 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MCP-01 | Phase 1 | Pending |
-| MCP-02 | Phase 1 | Pending |
-| MCP-03 | Phase 1 | Pending |
-| MCP-04 | Phase 1 | Pending |
-| MCP-05 | Phase 1 | Pending |
-| MCP-06 | Phase 1 | Pending |
-| MCP-07 | Phase 1 | Pending |
+| MCP-01 | Phase 1 | Complete |
+| MCP-02 | Phase 1 | Complete |
+| MCP-03 | Phase 1 | Complete |
+| MCP-04 | Phase 1 | Complete |
+| MCP-05 | Phase 1 | Complete |
+| MCP-06 | Phase 1 | Complete |
+| MCP-07 | Phase 1 | Complete |
 | DMN-01 | Phase 1 | Complete |
 | DMN-02 | Phase 1 | Complete |
-| DMN-03 | Phase 1 | Pending |
-| DMN-04 | Phase 1 | Pending |
+| DMN-03 | Phase 1 | Complete |
+| DMN-04 | Phase 1 | Complete |
 | DMN-05 | Phase 1 | Complete |
 | DMN-06 | Phase 1 | Complete |
 | DMN-07 | Phase 2 | Pending |

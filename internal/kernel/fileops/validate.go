@@ -1,0 +1,59 @@
+package fileops
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// ValidatePath resolves symlinks and ensures the path is within the workspace root.
+// Returns the cleaned absolute path or an error if the path escapes the root.
+func ValidatePath(root, path string) (string, error) {
+	if root == "" {
+		return "", fmt.Errorf("workspace root is empty")
+	}
+
+	// Resolve the root to an absolute, symlink-resolved path
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolving workspace root: %w", err)
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolving workspace root symlinks: %w", err)
+	}
+
+	// Build the target path
+	var absPath string
+	if filepath.IsAbs(path) {
+		absPath = filepath.Clean(path)
+	} else {
+		absPath = filepath.Join(resolvedRoot, path)
+	}
+
+	// Resolve symlinks for the target. If the file doesn't exist yet,
+	// resolve the parent directory instead (for create operations).
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet — resolve parent dir
+			parentResolved, parentErr := filepath.EvalSymlinks(filepath.Dir(absPath))
+			if parentErr != nil {
+				// Parent doesn't exist either — use cleaned abs path
+				resolvedPath = absPath
+			} else {
+				resolvedPath = filepath.Join(parentResolved, filepath.Base(absPath))
+			}
+		} else {
+			return "", fmt.Errorf("resolving path symlinks: %w", err)
+		}
+	}
+
+	// Check containment: resolved path must be within or equal to resolved root
+	if !strings.HasPrefix(resolvedPath, resolvedRoot+string(filepath.Separator)) && resolvedPath != resolvedRoot {
+		return "", fmt.Errorf("path %q is outside workspace root %q", path, root)
+	}
+
+	return resolvedPath, nil
+}

@@ -65,11 +65,14 @@ Plans:
   2. Per-language quirk handling works transparently -- initialization sequences, capability differences, and encoding quirks are abstracted behind a uniform interface
   3. User can write, read, list, search, edit, rename, and delete project-scoped and global memories that persist across sessions
   4. Automated onboarding generates project understanding; prepare-for-new-conversation summarizes session state; skill packs can extend tools without touching core
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Language registry with 40+ embedded entries, YAML override, and three-tier installer
+- [ ] 03-02-PLAN.md — Memory system with markdown storage, SQLite FTS5 index, and file watcher
+- [ ] 03-03-PLAN.md — Skill interface with Skill/ToolProvider/WorkflowProvider and Caddy-style registration
+- [ ] 03-04-PLAN.md — QuirkAdapter interface evolution and pool integration with language registry
+- [ ] 03-05-PLAN.md — Memory skill (7 MCP tools) and workflow skill (onboarding + session handoff)
 
 ### Phase 4: Agent Profiles and Configuration
 **Goal**: Different agent clients (Claude Code, Codex, IDE assistants, CI bots) get tailored tool sets, modes, and prompts out of the box with a layered configuration system
@@ -93,5 +96,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete |  |
 | 2. Code Intelligence Kernel | 0/6 | In Progress | - |
-| 3. Multi-Language and Skills | 0/2 | Not started | - |
+| 3. Multi-Language and Skills | 0/5 | Not started | - |
 | 4. Agent Profiles and Configuration | 0/1 | Not started | - |

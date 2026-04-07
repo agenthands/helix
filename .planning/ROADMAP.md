@@ -46,12 +46,15 @@ Plans:
   3. User can replace a symbol body, insert before/after a symbol, rename across files, and safely delete a symbol with reference checking and post-edit diagnostic verification
   4. User can read files, create files, list directories, find files by pattern, search by regex, and replace content via regex
   5. Server auto-detects project languages, initializes appropriate LS, and supports multi-project workspaces
-**Plans**: 3 plans
+**Plans**: 6 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md — LSP 3.17 metamodel codegen and JSON-RPC codec
+- [ ] 02-02-PLAN.md — File operations (read, write, list, find, search, replace)
+- [ ] 02-03-PLAN.md — LS worker pool with lifecycle, TTL, pressure eviction, circuit breaking
+- [ ] 02-04-PLAN.md — Symbol retrieval tools (definition, references, hover, hierarchy, blast radius)
+- [ ] 02-05-PLAN.md — Diagnostics tools (diagnostics, code actions, formatting)
+- [ ] 02-06-PLAN.md — Symbol editing with tree-sitter body surgery
 
 ### Phase 3: Multi-Language and Skills
 **Goal**: The server supports 40+ languages with auto-discovery and quirk handling, persists project knowledge across sessions, and provides workflow skills for onboarding and session handoff
@@ -88,7 +91,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 1/3 | In Progress|  |
-| 2. Code Intelligence Kernel | 0/3 | Not started | - |
+| 1. Foundation | 3/3 | Complete |  |
+| 2. Code Intelligence Kernel | 0/6 | In Progress | - |
 | 3. Multi-Language and Skills | 0/2 | Not started | - |
 | 4. Agent Profiles and Configuration | 0/1 | Not started | - |

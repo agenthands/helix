@@ -1,0 +1,239 @@
+package fileops
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/postfix/serena/internal/mcp"
+)
+
+// ReadFileArgs is the input schema for the read_file tool.
+type ReadFileArgs struct {
+	Path      string `json:"path" jsonschema:"File path to read (relative to workspace root)"`
+	StartLine int    `json:"start_line,omitempty" jsonschema:"Start line (1-indexed, optional)"`
+	EndLine   int    `json:"end_line,omitempty" jsonschema:"End line (1-indexed, inclusive, optional)"`
+}
+
+// CreateFileArgs is the input schema for the create_file tool.
+type CreateFileArgs struct {
+	Path    string `json:"path" jsonschema:"File path to create (relative to workspace root)"`
+	Content string `json:"content" jsonschema:"File content to write"`
+}
+
+// ListDirectoryArgs is the input schema for the list_directory tool.
+type ListDirectoryArgs struct {
+	Path string `json:"path" jsonschema:"Directory path (relative to workspace root)"`
+}
+
+// FindFilesArgs is the input schema for the find_files tool.
+type FindFilesArgs struct {
+	Pattern string `json:"pattern" jsonschema:"Glob pattern to match files (supports ** for recursive)"`
+}
+
+// SearchInFilesArgs is the input schema for the search_in_files tool.
+type SearchInFilesArgs struct {
+	Pattern      string `json:"pattern" jsonschema:"Regex pattern to search for"`
+	IncludeGlob  string `json:"include_glob,omitempty" jsonschema:"Only search files matching this glob (optional)"`
+	ExcludeGlob  string `json:"exclude_glob,omitempty" jsonschema:"Skip files matching this glob (optional)"`
+	ContextLines int    `json:"context_lines,omitempty" jsonschema:"Number of context lines before/after match (optional)"`
+	MaxResults   int    `json:"max_results,omitempty" jsonschema:"Maximum number of results (default 100, optional)"`
+}
+
+// ReplaceInFileArgs is the input schema for the replace_in_file tool.
+type ReplaceInFileArgs struct {
+	Path        string `json:"path" jsonschema:"File path (relative to workspace root)"`
+	Pattern     string `json:"pattern" jsonschema:"Pattern to search for (literal or regex)"`
+	Replacement string `json:"replacement" jsonschema:"Replacement string"`
+	IsRegex     bool   `json:"is_regex,omitempty" jsonschema:"Treat pattern as regex (default false)"`
+}
+
+// RegisterTools registers all file operation tools with the MCP tool registry.
+// The workspaceRoot function provides the active workspace root path.
+func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string) {
+	registerReadFile(server, workspaceRoot)
+	registerCreateFile(server, workspaceRoot)
+	registerListDirectory(server, workspaceRoot)
+	registerFindFiles(server, workspaceRoot)
+	registerSearchInFiles(server, workspaceRoot)
+	registerReplaceInFile(server, workspaceRoot)
+}
+
+func textResult(text string) *mcpsdk.CallToolResult {
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: text},
+		},
+	}
+}
+
+func errorResult(msg string) *mcpsdk.CallToolResult {
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: msg},
+		},
+		IsError: true,
+	}
+}
+
+func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "read_file",
+		Description: "Read a file's content, optionally a specific line range",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReadFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		if args.StartLine > 0 || args.EndLine > 0 {
+			content, err := ReadFileRange(root, args.Path, args.StartLine, args.EndLine)
+			if err != nil {
+				return errorResult(err.Error()), nil, nil
+			}
+			return textResult(content), nil, nil
+		}
+
+		content, err := ReadFile(root, args.Path)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+		return textResult(content), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range"})
+}
+
+func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "create_file",
+		Description: "Create a new file with content (errors if file already exists)",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args CreateFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		if err := CreateFile(root, args.Path, args.Content); err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+		return textResult("created: " + args.Path), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "create_file", Description: "Create a new file with content (errors if file already exists)"})
+}
+
+func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "list_directory",
+		Description: "List directory contents with file type, size, and modification time",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ListDirectoryArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		entries, err := ListDirectory(root, args.Path)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+
+		var sb strings.Builder
+		for _, e := range entries {
+			kind := "FILE"
+			if e.IsDir {
+				kind = "DIR "
+			}
+			sb.WriteString(fmt.Sprintf("%s  %8d  %s  %s\n", kind, e.Size, e.ModTime.Format("2006-01-02 15:04"), e.Name))
+		}
+		if sb.Len() == 0 {
+			return textResult("(empty directory)"), nil, nil
+		}
+		return textResult(sb.String()), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "list_directory", Description: "List directory contents with file type, size, and modification time"})
+}
+
+func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "find_files",
+		Description: "Find files matching a glob pattern (supports ** for recursive matching)",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindFilesArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		files, err := FindFiles(root, args.Pattern)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+
+		if len(files) == 0 {
+			return textResult("no files found matching: " + args.Pattern), nil, nil
+		}
+		return textResult(strings.Join(files, "\n")), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "find_files", Description: "Find files matching a glob pattern (supports ** for recursive matching)"})
+}
+
+func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "search_in_files",
+		Description: "Search for a regex pattern across the codebase, with optional context lines",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchInFilesArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		opts := SearchOpts{
+			MaxResults:   args.MaxResults,
+			ContextLines: args.ContextLines,
+			IncludeGlob:  args.IncludeGlob,
+			ExcludeGlob:  args.ExcludeGlob,
+		}
+
+		matches, err := SearchPattern(root, args.Pattern, opts)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+
+		if len(matches) == 0 {
+			return textResult("no matches found for: " + args.Pattern), nil, nil
+		}
+
+		var sb strings.Builder
+		for _, m := range matches {
+			sb.WriteString(fmt.Sprintf("%s:%d: %s\n", m.Path, m.Line, m.Text))
+			for _, line := range m.ContextBefore {
+				sb.WriteString(fmt.Sprintf("  - %s\n", line))
+			}
+			for _, line := range m.ContextAfter {
+				sb.WriteString(fmt.Sprintf("  + %s\n", line))
+			}
+		}
+		return textResult(sb.String()), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines"})
+}
+
+func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "replace_in_file",
+		Description: "Replace all occurrences of a pattern in a file (literal or regex)",
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return errorResult("no active workspace — activate a project first"), nil, nil
+		}
+
+		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+
+		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil
+	})
+	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)"})
+}

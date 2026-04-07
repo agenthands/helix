@@ -200,7 +200,7 @@ pylint.html
 /*.yml
 !*.template.yml
 /agent-ui
-/test/**/.serena
+/legacy/test/**/.serena
 
 # clojure-lsp temporary files
 .calva/
@@ -219,35 +219,35 @@ tmp/
 .claude/settings.local.json
 
 # Elixir
-/test/resources/repos/elixir/test_repo/deps
+/legacy/test/resources/repos/elixir/test_repo/deps
 # Exception: Don't ignore Elixir test repository lib directory (contains source code)
-!/test/resources/repos/elixir/test_repo/lib
+!/legacy/test/resources/repos/elixir/test_repo/lib
 
 #Cpp
-/test/resources/repos/cpp/test_repo/.ccls-cache
+/legacy/test/resources/repos/cpp/test_repo/.ccls-cache
 
 # Exception: Don't ignore Nix test repository lib directory (contains source code)
-!/test/resources/repos/nix/test_repo/lib
+!/legacy/test/resources/repos/nix/test_repo/lib
 
 # Exception: Don't ignore OCaml test repository lib directory (contains source code)
-!/test/resources/repos/ocaml/test_repo/lib
+!/legacy/test/resources/repos/ocaml/test_repo/lib
 
 # Exception: Don't ignore Julia test repository lib directory (contains source code)
-!/test/resources/repos/julia/test_repo/lib
+!/legacy/test/resources/repos/julia/test_repo/lib
 
 # Exception: Don't ignore Solidity test repository lib directory (contains source code)
-!/test/resources/repos/solidity/test_repo/contracts/lib
+!/legacy/test/resources/repos/solidity/test_repo/contracts/lib
 
 # Swift
-/test/resources/repos/swift/test_repo/.build
-/test/resources/repos/swift/test_repo/.swiftpm
+/legacy/test/resources/repos/swift/test_repo/.build
+/legacy/test/resources/repos/swift/test_repo/.swiftpm
 
 # OCaml
-/test/resources/repos/ocaml/test_repo/_build
+/legacy/test/resources/repos/ocaml/test_repo/_build
 
 # Elm
-/test/resources/repos/elm/test_repo/.elm/
-/test/resources/repos/elm/test_repo/elm-stuff/
+/legacy/test/resources/repos/elm/test_repo/.elm/
+/legacy/test/resources/repos/elm/test_repo/elm-stuff/
 
 # Scala
 .metals/
@@ -255,7 +255,7 @@ tmp/
 .scala-build/
 .bloop/
 bootstrap
-test/resources/repos/scala/.bloop/
+legacy/test/resources/repos/scala/.bloop/
 
 # Haskell
 .stack-work/
@@ -270,3 +270,9 @@ cabal.project.local*
 
 zz-misc/
 vue-implementation/
+
+# Go
+/serena
+*.exe
+/bin/
+/api/proto/**/*.pb.go

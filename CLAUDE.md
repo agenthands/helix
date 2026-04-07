@@ -2,15 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Development Commands
+## Go Development Commands
 
-**Essential Commands (use these exact commands):**
-- `uv run poe format` - Format code (RUFF) - ONLY allowed formatting command
-- `uv run poe type-check` - Run mypy type checking - ONLY allowed type checking command  
-- `uv run poe test` - Run tests with default markers (excludes java/rust by default)
-- `uv run poe test -m "python or go"` - Run specific language tests
-- `uv run poe test -m vue` - Run Vue tests
-- `uv run poe lint` - Check code style without fixing
+- `go build ./cmd/serena` - Build the serena binary
+- `go test ./...` - Run all Go tests
+- `go vet ./...` - Run Go vet
+- `gofmt -w .` - Format Go code
+- `make build` - Build via Makefile
+- `make test` - Run tests via Makefile
+
+**Always run go vet and go test before completing any Go task.**
+
+## Legacy Python Commands (run from legacy/ directory)
+
+- `cd legacy && uv run poe format` - Format Python code (RUFF)
+- `cd legacy && uv run poe type-check` - Run mypy type checking
+- `cd legacy && uv run poe test` - Run Python tests with default markers (excludes java/rust)
+- `cd legacy && uv run poe test -m "python or go"` - Run specific language tests
+- `cd legacy && uv run poe test -m vue` - Run Vue tests
+- `cd legacy && uv run poe lint` - Check Python code style without fixing
 
 **Test Markers:**
 Available pytest markers for selective testing:
@@ -18,10 +28,8 @@ Available pytest markers for selective testing:
 - `snapshot` - for symbolic editing operation tests
 
 **Project Management:**
-- `uv run serena-mcp-server` - Start MCP server from project root
-- `uv run index-project` - Index project for faster tool performance
-
-**Always run format, type-check, and test before completing any task.**
+- `cd legacy && uv run serena-mcp-server` - Start MCP server
+- `cd legacy && uv run index-project` - Index project for faster tool performance
 
 ## Architecture Overview
 
@@ -29,24 +37,24 @@ Serena is a dual-layer coding agent toolkit:
 
 ### Core Components
 
-**1. SerenaAgent (`src/serena/agent.py`)**
+**1. SerenaAgent (`legacy/src/serena/agent.py`)**
 - Central orchestrator managing projects, tools, and user interactions
 - Coordinates language servers, memory persistence, and MCP server interface
 - Manages tool registry and context/mode configurations
 
-**2. SolidLanguageServer (`src/solidlsp/ls.py`)**  
+**2. SolidLanguageServer (`legacy/src/solidlsp/ls.py`)**  
 - Unified wrapper around Language Server Protocol (LSP) implementations
 - Provides language-agnostic interface for symbol operations
 - Handles caching, error recovery, and multiple language server lifecycle
 
-**3. Tool System (`src/serena/tools/`)**
+**3. Tool System (`legacy/src/serena/tools/`)**
 - **file_tools.py** - File system operations, search, regex replacements
 - **symbol_tools.py** - Language-aware symbol finding, navigation, editing
 - **memory_tools.py** - Project knowledge persistence and retrieval
 - **config_tools.py** - Project activation, mode switching
 - **workflow_tools.py** - Onboarding and meta-operations
 
-**4. Configuration System (`src/serena/config/`)**
+**4. Configuration System (`legacy/src/serena/config/`)**
 - **Contexts** - Define tool sets for different environments (desktop-app, agent, ide-assistant)
 - **Modes** - Operational patterns (planning, editing, interactive, one-shot)
 - **Projects** - Per-project settings and language server configs
@@ -54,10 +62,10 @@ Serena is a dual-layer coding agent toolkit:
 ### Language Support Architecture
 
 Each supported language has:
-1. **Language Server Implementation** in `src/solidlsp/language_servers/`
+1. **Language Server Implementation** in `legacy/src/solidlsp/language_servers/`
 2. **Runtime Dependencies** - Automatic language server downloads when needed
-3. **Test Repository** in `test/resources/repos/<language>/`
-4. **Test Suite** in `test/solidlsp/<language>/`
+3. **Test Repository** in `legacy/test/resources/repos/<language>/`
+4. **Test Suite** in `legacy/test/solidlsp/<language>/`
 
 ### Memory & Knowledge System
 

@@ -66,3 +66,9 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 
 	return &cfg, nil
 }
+
+// DefaultSocketPath returns the default Unix socket path for the daemon.
+func DefaultSocketPath() string {
+	uid := strconv.Itoa(int(syscall.Getuid()))
+	return filepath.Join(os.TempDir(), "serena-"+uid, "daemon.sock")
+}

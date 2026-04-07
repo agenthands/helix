@@ -9,6 +9,7 @@ import (
 
 	"github.com/postfix/serena/internal/config"
 	"github.com/postfix/serena/internal/daemon"
+	"github.com/postfix/serena/internal/forwarder"
 )
 
 // NewRootCommand creates the root cobra command with all flags.
@@ -58,11 +59,32 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	switch mode {
 	case "stdio", "auto":
-		// TODO: Plan 03 implements forwarder
-		return fmt.Errorf("forwarder mode not yet implemented")
+		return runForwarder(cmd)
 	default:
 		return fmt.Errorf("unknown mode: %s", mode)
 	}
+}
+
+// runForwarder starts the stdio forwarder that proxies MCP traffic to the daemon.
+func runForwarder(cmd *cobra.Command) error {
+	socketPath, _ := cmd.Flags().GetString("socket")
+	jsonLog, _ := cmd.Flags().GetBool("json")
+
+	// Set up logger (stderr only -- stdout is for MCP JSON-RPC)
+	var handler slog.Handler
+	if jsonLog {
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	}
+	logger := slog.New(handler)
+
+	// Use default socket path if not specified
+	if socketPath == "" {
+		socketPath = config.DefaultSocketPath()
+	}
+
+	return forwarder.RunForwarder(cmd.Context(), socketPath, logger)
 }
 
 // runDaemon starts the Serena daemon with config loading and signal handling.

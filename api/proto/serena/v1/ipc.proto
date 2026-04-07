@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package serena.v1;
+
+option go_package = "github.com/postfix/serena/api/proto/serena/v1;serenav1";
+
+// ForwarderService handles bidirectional MCP message streaming
+// between the stdio forwarder and the daemon process.
+service ForwarderService {
+  // StreamMCP carries MCP JSON-RPC messages bidirectionally.
+  // Forwarder sends client messages, daemon sends responses.
+  rpc StreamMCP(stream MCPMessage) returns (stream MCPMessage);
+}
+
+// MCPMessage wraps a raw MCP JSON-RPC message for gRPC transport.
+message MCPMessage {
+  // Raw MCP JSON-RPC message bytes (not parsed by forwarder).
+  bytes payload = 1;
+  // Session identifier for routing within the daemon.
+  string session_id = 2;
+}

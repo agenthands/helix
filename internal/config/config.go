@@ -9,6 +9,22 @@ type SerenaConfig struct {
 	Logging LoggingConfig `koanf:"logging"`
 	// Default project settings (overridden per-project)
 	Defaults ProjectDefaults `koanf:"defaults"`
+	// Worker pool settings for LS process management
+	WorkerPool WorkerPoolConfig `koanf:"worker_pool"`
+}
+
+// WorkerPoolConfig holds configuration for the LS worker pool.
+type WorkerPoolConfig struct {
+	// BaseTTL is the base idle timeout in seconds (default 300).
+	BaseTTL int `koanf:"base_ttl"`
+	// CeilingTTL is the maximum idle timeout in seconds (default 3600).
+	CeilingTTL int `koanf:"ceiling_ttl"`
+	// MaxWorkers is the maximum number of concurrent LS workers (default 10).
+	MaxWorkers int `koanf:"max_workers"`
+	// RSSHardCapMB is the per-worker RSS hard cap in MB for pressure eviction (default 2048).
+	RSSHardCapMB int `koanf:"rss_hard_cap_mb"`
+	// PressureCheckInterval is the interval in seconds between pressure checks (default 10).
+	PressureCheckInterval int `koanf:"pressure_check_interval"`
 }
 
 // DaemonConfig holds daemon-specific settings.

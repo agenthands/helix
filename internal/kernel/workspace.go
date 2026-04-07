@@ -1,0 +1,91 @@
+package kernel
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+
+	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/workspace"
+)
+
+// WorkspaceRuntime extends Phase 1 workspace with LS pool integration.
+// Per D-01: daemon owns the pool, WorkspaceRuntime coordinates language detection
+// and document version tracking.
+type WorkspaceRuntime struct {
+	key         workspace.WorkspaceKey
+	pool        *lspool.Pool
+	docVersions sync.Map // map[string]*atomic.Int32 -- per Pitfall 5: workspace owns version counters
+	languages   []string // detected languages
+	mu          sync.RWMutex
+}
+
+// NewWorkspaceRuntime creates a new workspace runtime for the given key.
+func NewWorkspaceRuntime(key workspace.WorkspaceKey, pool *lspool.Pool) *WorkspaceRuntime {
+	return &WorkspaceRuntime{
+		key:  key,
+		pool: pool,
+	}
+}
+
+// Key returns the workspace key.
+func (w *WorkspaceRuntime) Key() workspace.WorkspaceKey {
+	return w.key
+}
+
+// DetectLanguages scans the root path for language marker files (per WRK-02).
+// Detects: Go (go.mod), Python (pyproject.toml, setup.py), TypeScript (tsconfig.json, package.json),
+// Rust (Cargo.toml).
+func (w *WorkspaceRuntime) DetectLanguages(rootPath string) []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var langs []string
+
+	markers := []struct {
+		files    []string
+		language string
+	}{
+		{files: []string{"go.mod"}, language: "go"},
+		{files: []string{"pyproject.toml", "setup.py", "setup.cfg"}, language: "python"},
+		{files: []string{"tsconfig.json", "package.json"}, language: "typescript"},
+		{files: []string{"Cargo.toml"}, language: "rust"},
+	}
+
+	for _, m := range markers {
+		for _, f := range m.files {
+			if _, err := os.Stat(filepath.Join(rootPath, f)); err == nil {
+				langs = append(langs, m.language)
+				break
+			}
+		}
+	}
+
+	w.languages = langs
+	return langs
+}
+
+// Languages returns the detected languages.
+func (w *WorkspaceRuntime) Languages() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	out := make([]string, len(w.languages))
+	copy(out, w.languages)
+	return out
+}
+
+// NextDocVersion returns the next monotonically increasing version for a document URI.
+// Per Pitfall 5: workspace owns version counters, not sessions.
+func (w *WorkspaceRuntime) NextDocVersion(uri string) int32 {
+	actual, _ := w.docVersions.LoadOrStore(uri, &atomic.Int32{})
+	counter := actual.(*atomic.Int32)
+	return counter.Add(1)
+}
+
+// AcquireSession acquires a worker lease from the pool for this workspace.
+// The language is determined from the workspace key.
+func (w *WorkspaceRuntime) AcquireSession(ctx context.Context, sessionID string, dirty bool) (*lspool.WorkerLease, error) {
+	return w.pool.AcquireLease(ctx, sessionID, w.key, dirty)
+}

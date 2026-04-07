@@ -26,17 +26,17 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-- [ ] Go rewrite of full stack (Layers 0-3)
+- [x] Go rewrite foundation (Layer 0 MCP runtime + daemon skeleton) — Phase 1
+- [x] Thin edge adapters: stdio forwarder + Streamable HTTP server — Phase 1
 - [ ] Persistent supervisor daemon with warm LS workers
-- [ ] Thin edge adapters: stdio forwarder + Streamable HTTP server
 - [ ] Workspace cache separate from session views (gopls pattern)
 - [ ] Daemon-managed LS workers with TTLs, circuit breaking, restart policy
 - [ ] Serialized mutations, parallel reads per session/workspace
-- [ ] Dynamic tool registry with pluggable skill packs
+- [x] Dynamic tool registry with pluggable skill packs — Phase 1
 - [ ] Per-session/per-workspace isolation with dirty buffer promotion
 - [ ] Agent profiles (Claude Code, Codex, IDE assistant, CI bot)
 - [ ] Drop JetBrains backend dependency entirely
-- [ ] Move Python Serena to `legacy/` folder in same repo
+- [x] Move Python Serena to `legacy/` folder in same repo — Phase 1
 
 ### Out of Scope
 
@@ -141,4 +141,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-07 after initialization*
+*Last updated: 2026-04-07 after Phase 1 completion*

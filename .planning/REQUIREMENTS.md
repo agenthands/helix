@@ -84,7 +84,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PRF-02**: Dynamic mode switching within a session (planning, editing, review)
 - [x] **PRF-03**: Tool description and prompt overrides per profile
 - [x] **PRF-04**: Token budget awareness — tools report schema size for context optimization
-- [ ] **PRF-05**: Configuration loaded from CLI args → project config → user config → active profile
+- [x] **PRF-05**: Configuration loaded from CLI args → project config → user config → active profile
 
 ### Diagnostics & Code Quality
 
@@ -201,7 +201,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | PRF-02 | Phase 4 | Complete |
 | PRF-03 | Phase 4 | Complete |
 | PRF-04 | Phase 4 | Complete |
-| PRF-05 | Phase 4 | Pending |
+| PRF-05 | Phase 4 | Complete |
 | DGN-01 | Phase 2 | Pending |
 | DGN-02 | Phase 2 | Pending |
 | DGN-03 | Phase 2 | Pending |

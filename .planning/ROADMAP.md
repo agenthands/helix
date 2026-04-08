@@ -87,7 +87,7 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md — Profile and mode types, 5 embedded profile YAMLs, 4 mode YAMLs, and loader
 - [x] 04-02-PLAN.md — switch_mode and get_token_budget MCP tools via profile skill
-- [ ] 04-03-PLAN.md — Config precedence wiring and profile-aware tool filtering middleware
+- [x] 04-03-PLAN.md — Config precedence wiring and profile-aware tool filtering middleware
 
 ## Progress
 

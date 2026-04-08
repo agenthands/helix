@@ -7,8 +7,8 @@ import (
 )
 
 // shutdown performs two-phase graceful shutdown (DMN-12).
-// Phase 1: Close listeners, drain active sessions.
-// Phase 2: (Future) Stop LS workers, flush caches.
+// Phase 1: Stop kernel (drain workers, close LS processes) per D-10.
+// Phase 2: Close listeners, clean up socket.
 func (d *Daemon) shutdown() {
 	timeout := time.Duration(d.config.Daemon.ShutdownTimeout) * time.Second
 	if timeout == 0 {
@@ -20,17 +20,21 @@ func (d *Daemon) shutdown() {
 
 	d.logger.Info("graceful shutdown starting", "timeout", timeout)
 
-	// Phase 1: Close listeners
+	// Phase 1: Stop kernel (drain workers, close LS processes).
+	if d.kernel != nil {
+		if err := d.kernel.Shutdown(ctx); err != nil {
+			d.logger.Warn("kernel shutdown error", "error", err)
+		}
+	}
+
+	// Phase 2: Close listeners.
 	if d.socketListener != nil {
 		d.socketListener.Close()
 	}
-	// Clean up socket file
+	// Clean up socket file.
 	if d.config.Daemon.SocketPath != "" {
 		os.Remove(d.config.Daemon.SocketPath)
 	}
-
-	// Phase 2: Future -- stop LS workers, flush workspace state
-	_ = ctx // used in Phase 2 for LS worker shutdown with timeout
 
 	d.logger.Info("graceful shutdown complete")
 }

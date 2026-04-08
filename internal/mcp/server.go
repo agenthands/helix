@@ -10,12 +10,22 @@ import (
 	"github.com/postfix/serena/internal/workspace"
 )
 
+// ActivateCallback is called when a project is activated via the activate_project tool.
+// It allows the daemon to wire kernel workspace activation alongside the registry.
+type ActivateCallback func(ctx context.Context, repoPath string) error
+
+// SkillToolExecutor is implemented by skills that support direct tool execution.
+type SkillToolExecutor interface {
+	ExecuteTool(name string, args map[string]interface{}) (string, error)
+}
+
 // SerenaMCPServer wraps the official MCP SDK server with Serena's tool registry,
 // structured errors, and middleware (MCP-01, MCP-02, MCP-03, MCP-05, MCP-06).
 type SerenaMCPServer struct {
-	sdk      *mcpsdk.Server
-	registry *ToolRegistry
-	logger   *slog.Logger
+	sdk              *mcpsdk.Server
+	registry         *ToolRegistry
+	logger           *slog.Logger
+	activateCallback ActivateCallback
 }
 
 // PingArgs is the input schema for the ping diagnostic tool.
@@ -113,6 +123,12 @@ func (s *SerenaMCPServer) registerActivateProjectTool(workspaces *workspace.Regi
 				IsError: true,
 			}, nil, nil
 		}
+		// Notify callback (kernel workspace activation) if set.
+		if s.activateCallback != nil {
+			if err := s.activateCallback(ctx, args.RepoPath); err != nil {
+				s.logger.Warn("activate callback failed", "error", err)
+			}
+		}
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.TextContent{Text: "workspace activated: " + ws.Key.RepoRoot + " (status: " + ws.Status + ")"},
@@ -154,4 +170,36 @@ func (s *SerenaMCPServer) AddTool(tool *mcpsdk.Tool, handler mcpsdk.ToolHandler)
 func (s *SerenaMCPServer) RemoveTool(name string) {
 	s.sdk.RemoveTools(name)
 	s.registry.Unregister(name)
+}
+
+// SetActivateCallback installs a callback invoked when activate_project succeeds.
+// The daemon uses this to activate the kernel workspace alongside the registry.
+func (s *SerenaMCPServer) SetActivateCallback(cb ActivateCallback) {
+	s.activateCallback = cb
+}
+
+// AddSkillTool registers a skill-provided tool with a generic ExecuteTool handler.
+// Uses the generic mcpsdk.AddTool so the SDK auto-generates an input schema.
+func (s *SerenaMCPServer) AddSkillTool(name, description string, executor SkillToolExecutor) {
+	toolName := name // capture for closure
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{
+		Name:        toolName,
+		Description: description,
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+		result, err := executor.ExecuteTool(toolName, args)
+		if err != nil {
+			return &mcpsdk.CallToolResult{
+				Content: []mcpsdk.Content{
+					&mcpsdk.TextContent{Text: err.Error()},
+				},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: result},
+			},
+		}, nil, nil
+	})
+	s.registry.Register(&ToolDef{Name: name, Description: description})
 }

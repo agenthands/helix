@@ -60,7 +60,8 @@ func TestDaemon_StartsAndStops(t *testing.T) {
 	cfg.Daemon.ShutdownTimeout = 2
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	d := New(cfg, logger)
+	d, err := New(cfg, logger)
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -80,8 +81,8 @@ func TestDaemon_StartsAndStops(t *testing.T) {
 	}
 
 	// Verify socket exists
-	_, err := os.Stat(socketPath)
-	assert.NoError(t, err, "socket file should exist")
+	_, statErr := os.Stat(socketPath)
+	assert.NoError(t, statErr, "socket file should exist")
 
 	// Cancel context triggers shutdown
 	cancel()

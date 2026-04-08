@@ -123,6 +123,9 @@ func runDaemon(cmd *cobra.Command) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	d := daemon.New(cfg, logger)
+	d, err := daemon.New(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("initializing daemon: %w", err)
+	}
 	return d.Run(cmd.Context())
 }

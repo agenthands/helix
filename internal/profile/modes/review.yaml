@@ -1,0 +1,38 @@
+name: review
+description: >
+  Code review mode. Symbol retrieval, diagnostics, blast radius analysis,
+  and memory tools are available. No editing tools.
+
+skills:
+  - symbol-retrieval
+  - diagnostics
+  - memory
+
+tools:
+  - get_blast_radius
+  - search_for_pattern
+  - read_file
+
+exclude_tools:
+  - create_text_file
+  - replace_content
+  - replace_symbol_body
+  - insert_before_symbol
+  - insert_after_symbol
+  - delete_symbol
+  - replace_lines
+  - insert_at_line
+  - delete_lines
+  - execute_shell_command
+
+prompts: {}
+
+prompt: |
+  Code review mode. Analyze code, do not modify it. Focus on finding issues,
+  understanding impact, and providing actionable feedback.
+
+  Use diagnostic tools to surface compiler and linter warnings. Use blast
+  radius analysis to understand the impact of proposed changes. Use symbolic
+  tools to trace references and understand code structure.
+
+  Present findings with file paths, symbol names, and line numbers.

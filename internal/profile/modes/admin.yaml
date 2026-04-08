@@ -1,0 +1,24 @@
+name: admin
+description: >
+  Full administrative access. All tools including configuration and project
+  management tools are available.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+
+tools:
+  - activate_project
+  - switch_mode
+
+exclude_tools: []
+
+prompts: {}
+
+prompt: |
+  Full administrative access. All tools are available including project
+  activation, mode switching, and configuration management. Use with care.

@@ -1,0 +1,56 @@
+name: codex
+description: >
+  Codex agent running in a sandboxed environment. Non-symbolic editing tools
+  and shell commands are excluded as Codex handles those natively.
+
+prompt: |
+  You are running in the Codex agent mode where file operations, basic
+  line-based edits, and shell commands are handled by your own internal tools.
+  Do not attempt to use excluded tools; rely on your own internal tools for
+  basic file or shell operations.
+
+  Prioritize Serena's symbolic tools for code intelligence. Avoid reading
+  entire source files unless strictly necessary. Use overview and symbolic
+  search tools for token-efficient code exploration.
+
+  Use symbolic editing tools for precise code modifications when adjusting
+  entire symbols. For smaller targeted changes, use file-based editing.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+
+tools: []
+
+exclude_tools:
+  - read_file
+  - create_text_file
+  - replace_content
+  - execute_shell_command
+  - prepare_for_new_conversation
+
+tool_description_overrides:
+  find_symbol: "Find a symbol by name path. Preferred over reading entire files in the sandbox."
+  get_symbols_overview: "Overview of symbols in a file. Use this for efficient code exploration."
+  replace_symbol_body: "Replace the body of a symbol. Use for precise structural edits."
+
+default_mode: edit
+single_project: true
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

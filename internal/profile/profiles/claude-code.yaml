@@ -1,0 +1,57 @@
+name: claude-code
+description: >
+  Claude Code CLI agent where file operations, basic edits, and shell commands
+  are handled natively. Serena provides semantic code intelligence.
+
+prompt: |
+  You are running in a CLI coding agent context where file operations, basic
+  line-based edits and reads, and shell commands are handled by your own
+  internal tools.
+
+  Prioritize Serena's symbolic tools over file reads. Avoid reading entire
+  source files unless strictly necessary. Use overview and symbolic search
+  tools for token-efficient code exploration. For non-code files or when you
+  don't know a symbol's name path, use the pattern search tool.
+
+  Use symbolic editing tools for precise code modifications. The symbol-based
+  approach is appropriate when you need to adjust an entire symbol (method,
+  class, function). For smaller changes within a symbol, use file-based editing.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+
+tools: []
+
+exclude_tools:
+  - read_file
+  - create_text_file
+  - replace_content
+  - execute_shell_command
+  - prepare_for_new_conversation
+
+tool_description_overrides:
+  find_symbol: "Find a symbol by name path. Use this instead of reading entire files."
+  get_symbols_overview: "Get an overview of symbols in a file. Preferred over reading full file contents."
+  search_for_pattern: "Search for a regex pattern across the codebase. Use when symbol name is unknown."
+
+default_mode: edit
+single_project: true
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

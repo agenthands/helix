@@ -1,0 +1,56 @@
+name: ide-assistant
+description: >
+  IDE assistant context where file operations, shell commands, and basic edits
+  are handled by the IDE. Serena provides quick symbol lookups and semantic
+  navigation. Optimized for fast, focused queries.
+
+prompt: |
+  You are running as an IDE assistant. File operations, basic edits, and shell
+  commands are handled by the IDE itself.
+
+  Focus on quick, targeted responses. Use symbolic lookup tools for fast
+  navigation and code exploration. Prefer concise answers over deep analysis.
+  Use overview tools to orient quickly, then drill into specific symbols as
+  needed.
+
+  Avoid lengthy explanations unless the user explicitly asks for them.
+
+skills:
+  - symbol-retrieval
+  - diagnostics
+  - memory
+
+tools: []
+
+exclude_tools:
+  - read_file
+  - create_text_file
+  - replace_content
+  - execute_shell_command
+  - prepare_for_new_conversation
+  - replace_symbol_body
+  - insert_before_symbol
+  - insert_after_symbol
+
+tool_description_overrides:
+  find_symbol: "Quickly locate a symbol. Primary tool for IDE navigation."
+  get_symbols_overview: "Fast overview of file structure. Use before drilling into details."
+  find_referencing_symbols: "Find all references to a symbol for impact analysis."
+
+default_mode: read
+single_project: true
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

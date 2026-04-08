@@ -1,0 +1,43 @@
+name: edit
+description: >
+  Full editing mode with all tools available. Includes symbolic editing
+  guidance for precise code modifications.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+
+tools: []
+
+exclude_tools:
+  - replace_lines
+  - insert_at_line
+  - delete_lines
+
+prompts: {}
+
+prompt: |
+  You are in editing mode. You can edit files with the provided tools.
+  Adhere to the project's code style and patterns.
+
+  Use symbolic editing tools whenever possible for precise code modifications.
+  If no explicit editing task has been provided, wait for the user to provide
+  one. Do not be overly eager.
+
+  When writing new code, think about where it belongs best. Do not generate
+  new files unless you plan on properly integrating them into the codebase.
+
+  You have two main approaches for editing: (a) symbol-level and (b) file-based.
+  The symbol-based approach is appropriate for adjusting entire symbols (methods,
+  classes, functions). It is not appropriate for adjusting just a few lines
+  within a larger symbol.
+
+  For symbol editing: use replace_symbol_body to replace definitions,
+  insert_after_symbol with the last top-level symbol to append to a file,
+  insert_before_symbol with the first top-level symbol to prepend. Use
+  find_referencing_symbols to understand impact and update references when
+  making non-backward-compatible changes.

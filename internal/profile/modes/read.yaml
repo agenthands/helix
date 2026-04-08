@@ -1,0 +1,33 @@
+name: read
+description: >
+  Read-only exploration mode. Symbol retrieval, file reading, search, and
+  memory reading are available. No editing or mutation tools.
+
+skills:
+  - symbol-retrieval
+  - memory
+
+tools:
+  - read_file
+  - search_for_pattern
+  - list_dir
+  - find_file
+
+exclude_tools:
+  - create_text_file
+  - replace_content
+  - replace_symbol_body
+  - insert_before_symbol
+  - insert_after_symbol
+  - delete_symbol
+  - replace_lines
+  - insert_at_line
+  - delete_lines
+  - execute_shell_command
+
+prompts: {}
+
+prompt: |
+  Read-only exploration mode. You can browse code, find symbols, search
+  patterns, and read memories. You cannot modify any files. If an edit is
+  needed, switch to edit mode first.

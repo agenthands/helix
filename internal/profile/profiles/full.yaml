@@ -1,0 +1,41 @@
+name: full
+description: >
+  Full access profile with all skills and tools enabled. No exclusions.
+  Use as default or escape hatch when other profiles are too restrictive.
+
+prompt: |
+  All Serena tools are available. Use symbolic tools for code intelligence
+  and editing tools for modifications. Choose the most appropriate tool for
+  each task.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+
+tools: []
+
+exclude_tools: []
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

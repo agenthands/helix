@@ -129,6 +129,7 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 
 	// 10. Register kernel tools with MCP server.
 	var activeWSKey workspace.WorkspaceKey
+	var activeWSLang string
 	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
 	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
 
@@ -138,7 +139,11 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 
 	// Diag lease provider.
 	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
-		return k.Pool().AcquireLease(ctx, "diag-"+uri, activeWSKey, false)
+		key := activeWSKey
+		if key.Language == "" && activeWSLang != "" {
+			key.Language = activeWSLang
+		}
+		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn)
 
@@ -182,6 +187,9 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 			return err
 		}
 		activeWSKey = workspace.WorkspaceKey{RepoRoot: repoPath}
+		if langs := rt.Languages(); len(langs) > 0 {
+			activeWSLang = langs[0]
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),

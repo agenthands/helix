@@ -101,8 +101,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Onboarding & Workflows (Layer 2)
 
-- [ ] **WFL-01**: Automated onboarding workflow generates project understanding
-- [ ] **WFL-02**: Prepare-for-new-conversation summarizes session state for handoff
+- [x] **WFL-01**: Automated onboarding workflow generates project understanding
+- [x] **WFL-02**: Prepare-for-new-conversation summarizes session state for handoff
 - [x] **WFL-03**: Plugin/skill pack interface allows extending tools without touching core
 
 ### Repo Migration
@@ -209,8 +209,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | WRK-02 | Phase 2 | Complete |
 | WRK-03 | Phase 2 | Complete |
 | WRK-04 | Phase 1 | Complete |
-| WFL-01 | Phase 3 | Pending |
-| WFL-02 | Phase 3 | Pending |
+| WFL-01 | Phase 3 | Complete |
+| WFL-02 | Phase 3 | Complete |
 | WFL-03 | Phase 3 | Complete |
 | MIG-01 | Phase 1 | Complete |
 | MIG-02 | Phase 1 | Complete |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-04-08T09:05:00.038Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-04-08T09:11:03.317Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 03 (multi-language-and-skills) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-04-08
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P03 | 3min | 2 tasks | 4 files |
 | Phase 03-02 P02 | 4min | 2 tasks | 8 files |
 | Phase 03-multi-language-and-skills P01 | 3min | 2 tasks | 6 files |
+| Phase 03-multi-language-and-skills P05 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Recent decisions affecting current work:
 - [Phase 03-02]: Used FTS5 content sync triggers for simpler upsert; modernc.org/sqlite (CGO-free); 300ms debounce for watcher; index is disposable, rebuilds from markdown files
 - [Phase 03-multi-language-and-skills]: 52 language entries embedded in binary from legacy Python adapters; gopkg.in/yaml.v3 for YAML override
 - [Phase 03-multi-language-and-skills]: Three-tier LS resolution: PATH lookup, managed download (npm/pip/cargo/gem/dotnet/binary), helpful error
+- [Phase 03-05]: Memory skill ExecuteTool uses switch dispatch over map for explicit parameter validation per tool
+- [Phase 03-05]: Workflow onboarding scans one level deep into top-level dirs for language detection (lightweight, not recursive)
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T09:05:00.033Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-04-08T09:11:03.315Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

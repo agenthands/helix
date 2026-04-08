@@ -75,7 +75,7 @@ func TestHTTPSmoke_WithLS(t *testing.T) {
 	// Symbol search via HTTP transport.
 	result, err := httpSession.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "search_symbols",
-		Arguments: map[string]any{"query": "Helper", "scope": "workspace"},
+		Arguments: map[string]any{"query": "Helper"},
 	})
 	require.NoError(t, err)
 	require.False(t, result.IsError, "search_symbols via HTTP failed: %s", textContent(result))

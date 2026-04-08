@@ -75,17 +75,39 @@ Deferred to v1.2+. Tracked but not in current roadmap.
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| | | |
+| HARN-01 | Phase 6 | Pending |
+| HARN-02 | Phase 6 | Pending |
+| HARN-03 | Phase 6 | Pending |
+| HARN-04 | Phase 6 | Pending |
+| HARN-05 | Phase 6 | Pending |
+| HARN-06 | Phase 6 | Pending |
+| DOG-01 | Phase 6 | Pending |
+| DOG-02 | Phase 6 | Pending |
+| DOG-03 | Phase 6 | Pending |
+| DOG-04 | Phase 6 | Pending |
+| DOG-05 | Phase 6 | Pending |
+| DOG-06 | Phase 6 | Pending |
+| EDIT-01 | Phase 7 | Pending |
+| EDIT-02 | Phase 7 | Pending |
+| EDIT-03 | Phase 7 | Pending |
+| EDIT-04 | Phase 7 | Pending |
+| LANG-01 | Phase 7 | Pending |
+| LANG-02 | Phase 7 | Pending |
+| LANG-03 | Phase 7 | Pending |
+| LANG-04 | Phase 7 | Pending |
+| LANG-05 | Phase 7 | Pending |
+| ADV-01 | Phase 8 | Pending |
+| ADV-02 | Phase 8 | Pending |
+| ADV-03 | Phase 8 | Pending |
+| ADV-04 | Phase 8 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 24 total
-- Mapped to phases: 0
-- Unmapped: 24 ⚠️
+- v1.1 requirements: 25 total
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after initial definition*
+*Last updated: 2026-04-08 after roadmap creation*

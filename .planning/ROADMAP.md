@@ -3,6 +3,7 @@
 ## Milestones
 
 - :white_check_mark: **v1.0 MVP** — Phases 1-5 (shipped 2026-04-08)
+- :construction: **v1.1 Integration Testing** — Phases 6-8 (in progress)
 
 ## Phases
 
@@ -19,7 +20,53 @@
 
 </details>
 
+### :construction: v1.1 Integration Testing (In Progress)
+
+**Milestone Goal:** Prove all 38 MCP tools work end-to-end by testing against Serena's own codebase and multi-language fixtures.
+
+- [ ] **Phase 6: Test Harness + Go Dogfooding** — Build integration test infrastructure and exercise all tool categories against Serena's own Go codebase
+- [ ] **Phase 7: Symbol Editing + Multi-Language Fixtures** — Verify edit round-trips and validate cross-language symbol operations against known fixtures
+- [ ] **Phase 8: Advanced Testing** — Profile filtering, mode visibility, concurrency safety, and error path coverage
+
+## Phase Details
+
+### Phase 6: Test Harness + Go Dogfooding
+**Goal**: Developers can run integration tests that spin up a real daemon and verify all tool categories against Serena's own Go code
+**Depends on**: Phase 5 (v1.0 complete)
+**Requirements**: HARN-01, HARN-02, HARN-03, HARN-04, HARN-05, HARN-06, DOG-01, DOG-02, DOG-03, DOG-04, DOG-05, DOG-06
+**Success Criteria** (what must be TRUE):
+  1. Running `go test -tags integration ./...` executes integration tests while `go test ./...` skips them
+  2. A single test helper call starts a daemon in-process, connects an MCP client, and returns a ready-to-use test context with LS readiness polling
+  3. Symbol retrieval, file operations, diagnostics, memory, workflow, and profile tools all return correct results when called against Serena's own Go source
+  4. Tests skip cleanly when gopls is not installed, enforce per-test timeouts, and leave no orphaned LS processes after teardown
+**Plans**: TBD
+
+### Phase 7: Symbol Editing + Multi-Language Fixtures
+**Goal**: Developers can verify that edit operations are correct round-trips and that symbol tools work identically across Python, TypeScript, Java, and Rust fixture projects
+**Depends on**: Phase 6
+**Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04, LANG-01, LANG-02, LANG-03, LANG-04, LANG-05
+**Success Criteria** (what must be TRUE):
+  1. An edit round-trip test reads a symbol body, replaces it, re-reads, and confirms the new body is returned
+  2. Insert before/after, rename, and safe-delete operations produce correct file state verified by re-reading symbols
+  3. Each of 4 language fixtures (Python, TypeScript, Java, Rust) has known symbols that symbol retrieval tools resolve correctly
+  4. Cross-file reference chains in multi-file fixtures return the expected reference sets
+**Plans**: TBD
+
+### Phase 8: Advanced Testing
+**Goal**: Developers can verify that profile filtering, mode visibility, concurrency, and error handling all behave correctly under test
+**Depends on**: Phase 6
+**Requirements**: ADV-01, ADV-02, ADV-03, ADV-04
+**Success Criteria** (what must be TRUE):
+  1. Each of 5 agent profiles exposes exactly its declared tool subset -- no extra tools, no missing tools
+  2. Each of 4 modes filters tool visibility to match its mode definition
+  3. Concurrent tool calls from multiple goroutines complete without races (passes `go test -race`) or deadlocks
+  4. Calling a tool before workspace activation, on a nonexistent file, or for an unknown symbol returns a structured MCP error (not a panic or hang)
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 6 -> 7 -> 8
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -28,3 +75,6 @@
 | 3. Multi-Language and Skills | v1.0 | 5/5 | Complete | 2026-04-08 |
 | 4. Agent Profiles and Configuration | v1.0 | 3/3 | Complete | 2026-04-08 |
 | 5. Daemon Bootstrap Integration | v1.0 | 3/3 | Complete | 2026-04-08 |
+| 6. Test Harness + Go Dogfooding | v1.1 | 0/? | Not started | - |
+| 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 0/? | Not started | - |
+| 8. Advanced Testing | v1.1 | 0/? | Not started | - |

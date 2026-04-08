@@ -299,6 +299,37 @@ func (s *profileSkill) ExecuteGetTokenBudget(profileName, modeName, format strin
 	return computeTokenBudget(s.store, profileName, modeName, detailed)
 }
 
+// ExecuteTool dispatches MCP tool calls to the appropriate handler.
+func (s *profileSkill) ExecuteTool(name string, params map[string]interface{}) (string, error) {
+	switch name {
+	case "switch_mode":
+		targetMode, _ := params["target_mode"].(string)
+		if targetMode == "" {
+			return "", fmt.Errorf("missing required parameter: target_mode")
+		}
+		result, err := s.ExecuteSwitchMode(targetMode)
+		if err != nil {
+			return "", err
+		}
+		data, _ := json.Marshal(result)
+		return string(data), nil
+
+	case "get_token_budget":
+		profileName, _ := params["profile"].(string)
+		modeName, _ := params["mode"].(string)
+		format, _ := params["format"].(string)
+		result, err := s.ExecuteGetTokenBudget(profileName, modeName, format)
+		if err != nil {
+			return "", err
+		}
+		data, _ := json.Marshal(result)
+		return string(data), nil
+
+	default:
+		return "", fmt.Errorf("unknown tool: %s", name)
+	}
+}
+
 // GetProfileSkill returns the registered profile skill instance for wiring.
 // Returns nil if the skill has not been registered yet.
 func GetProfileSkill() *profileSkill {

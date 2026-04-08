@@ -39,11 +39,12 @@
   2. A single test helper call starts a daemon in-process, connects an MCP client, and returns a ready-to-use test context with LS readiness polling
   3. Symbol retrieval, file operations, diagnostics, memory, workflow, and profile tools all return correct results when called against Serena's own Go source
   4. Tests skip cleanly when gopls is not installed, enforce per-test timeouts, and leave no orphaned LS processes after teardown
-**Plans:** 3 plans
+**Plans:** 4 plans
 Plans:
-- [ ] 06-01-PLAN.md — Test harness infrastructure: daemon accessors, MCP client wiring, Go fixture, self-test
-- [ ] 06-02-PLAN.md — Symbol retrieval (9 tools), file operations (6 tools), diagnostics (3 tools) integration tests
-- [ ] 06-03-PLAN.md — Memory (7 tools), workflow (2 tools), profile (2 tools) integration tests + HTTP transport smoke
+- [x] 06-01-PLAN.md — Test harness infrastructure: daemon accessors, MCP client wiring, Go fixture, self-test
+- [x] 06-02-PLAN.md — Symbol retrieval (9 tools), file operations (6 tools), diagnostics (3 tools) integration tests
+- [x] 06-03-PLAN.md — Memory (7 tools), workflow (2 tools), profile (2 tools) integration tests + HTTP transport smoke
+- [ ] 06-04-PLAN.md — Gap closure: fix Language field bug in workspace key, update tests to strict assertions
 
 ### Phase 7: Symbol Editing + Multi-Language Fixtures
 **Goal**: Developers can verify that edit operations are correct round-trips and that symbol tools work identically across Python, TypeScript, Java, and Rust fixture projects
@@ -79,6 +80,6 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 3. Multi-Language and Skills | v1.0 | 5/5 | Complete | 2026-04-08 |
 | 4. Agent Profiles and Configuration | v1.0 | 3/3 | Complete | 2026-04-08 |
 | 5. Daemon Bootstrap Integration | v1.0 | 3/3 | Complete | 2026-04-08 |
-| 6. Test Harness + Go Dogfooding | v1.1 | 0/3 | Planned | - |
+| 6. Test Harness + Go Dogfooding | v1.1 | 3/4 | In Progress | - |
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 0/? | Not started | - |
 | 8. Advanced Testing | v1.1 | 0/? | Not started | - |

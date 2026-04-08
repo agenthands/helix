@@ -40,30 +40,33 @@ var ErrCircuitOpen = errors.New("circuit breaker is open; retry after backoff")
 
 // Pool manages a pool of LS workers with TTL, pressure eviction, and share-until-dirty policy.
 type Pool struct {
-	mu       sync.RWMutex
-	workers  map[string]*Worker        // keyed by worker ID
-	leases   map[string]*WorkerLease   // keyed by session ID
-	circuits map[string]*CircuitBreaker // keyed by language
-	registry *langregistry.Registry
-	pressure MemoryPressure
-	config   PoolConfig
-	logger   *slog.Logger
-	nextID   int
-	done     chan struct{}
+	mu        sync.RWMutex
+	workers   map[string]*Worker        // keyed by worker ID
+	leases    map[string]*WorkerLease   // keyed by session ID
+	circuits  map[string]*CircuitBreaker // keyed by language
+	registry  *langregistry.Registry
+	installer *langregistry.Installer
+	pressure  MemoryPressure
+	config    PoolConfig
+	logger    *slog.Logger
+	nextID    int
+	done      chan struct{}
 }
 
 // NewPool creates a new LS worker pool.
 // The registry provides language server resolution for worker creation.
-func NewPool(cfg PoolConfig, registry *langregistry.Registry, pressure MemoryPressure, logger *slog.Logger) *Pool {
+// The installer uses three-tier resolution (PATH/download/error) to find LS binaries.
+func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger) *Pool {
 	return &Pool{
-		workers:  make(map[string]*Worker),
-		leases:   make(map[string]*WorkerLease),
-		circuits: make(map[string]*CircuitBreaker),
-		registry: registry,
-		pressure: pressure,
-		config:   cfg,
-		logger:   logger.With("component", "lspool"),
-		done:     make(chan struct{}),
+		workers:   make(map[string]*Worker),
+		leases:    make(map[string]*WorkerLease),
+		circuits:  make(map[string]*CircuitBreaker),
+		registry:  registry,
+		installer: installer,
+		pressure:  pressure,
+		config:    cfg,
+		logger:    logger.With("component", "lspool"),
+		done:      make(chan struct{}),
 	}
 }
 
@@ -238,8 +241,19 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 		return nil, fmt.Errorf("no language server configured for %s", wsKey.Language)
 	}
 
+	// Use three-tier installer resolution (PATH/download/error) if available,
+	// otherwise fall back to entry.Command directly.
+	command, args := entry.Command, entry.Args
+	if p.installer != nil {
+		resolved, resolvedArgs, err := p.installer.Resolve(ctx, entry)
+		if err != nil {
+			return nil, fmt.Errorf("resolving language server for %s: %w", wsKey.Language, err)
+		}
+		command, args = resolved, resolvedArgs
+	}
+
 	quirks := GetQuirkAdapter(entry)
-	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, entry.Command, entry.Args, p.logger)
+	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger)
 	worker.SetQuirks(quirks)
 
 	// Start the worker (releases lock temporarily for potentially long init).

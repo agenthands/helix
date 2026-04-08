@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Full rewrite of the Python-based Serena, keeping the same repo and brand. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers.
+A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Full rewrite of the Python-based Serena, shipping as a single Go binary. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
 
 ## Core Value
 
@@ -12,31 +12,30 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Validated
 
-<!-- Inferred from existing Python Serena codebase -->
-
-- ✓ Symbol-level code retrieval (find symbol, symbol overview, references) — existing
-- ✓ Symbolic editing (replace body, insert before/after, safe delete) — existing
-- ✓ Multi-language LSP support (40+ languages) — existing
-- ✓ MCP protocol exposure (stdio transport) — existing
-- ✓ Pattern search across codebase — existing
-- ✓ File operations (read, list, find) — existing
-- ✓ Configurable tool sets via contexts and modes — existing
-- ✓ Project-specific memory persistence — existing
-- ✓ Rename refactoring via LSP — existing
+- ✓ Go rewrite with daemon skeleton, MCP runtime, gRPC forwarder, HTTP transport — v1.0 Phase 1
+- ✓ Single binary distribution via `go build` — v1.0 Phase 1
+- ✓ Python Serena moved to `legacy/` as reference — v1.0 Phase 1
+- ✓ LSP 3.17 metamodel codegen (324 structs, 216 union types) — v1.0 Phase 2
+- ✓ JSON-RPC codec for LS communication — v1.0 Phase 2
+- ✓ LS worker pool with adaptive TTL, circuit breaking, pressure eviction — v1.0 Phase 2
+- ✓ 9 symbol retrieval tools (definition, references, overview, search, hover, implementations, call/type hierarchy, blast radius) — v1.0 Phase 2
+- ✓ 6 symbol editing tools with tree-sitter body surgery — v1.0 Phase 2
+- ✓ 6 file operation tools — v1.0 Phase 2
+- ✓ 3 diagnostic tools (diagnostics, code actions, formatting) — v1.0 Phase 2
+- ✓ 52-language embedded registry with YAML override — v1.0 Phase 3
+- ✓ Three-tier LS installer (PATH/download/error) — v1.0 Phase 3
+- ✓ Memory system (markdown + SQLite FTS5) — v1.0 Phase 3
+- ✓ Skill interface (Skill/ToolProvider/WorkflowProvider) — v1.0 Phase 3
+- ✓ 7 memory MCP tools + onboarding/handoff workflows — v1.0 Phase 3
+- ✓ 5 agent profiles (claude-code, codex, ide-assistant, ci-bot, full) — v1.0 Phase 4
+- ✓ 4 modes (read/edit/review/admin) with switch_mode tool — v1.0 Phase 4
+- ✓ Token budget reporting via get_token_budget — v1.0 Phase 4
+- ✓ Layered config precedence (CLI > project > user > profile) — v1.0 Phase 4
+- ✓ Dynamic tool registry with pluggable skill packs — v1.0
 
 ### Active
 
-- [x] Go rewrite foundation (Layer 0 MCP runtime + daemon skeleton) — Phase 1
-- [x] Thin edge adapters: stdio forwarder + Streamable HTTP server — Phase 1
-- [ ] Persistent supervisor daemon with warm LS workers
-- [ ] Workspace cache separate from session views (gopls pattern)
-- [ ] Daemon-managed LS workers with TTLs, circuit breaking, restart policy
-- [ ] Serialized mutations, parallel reads per session/workspace
-- [x] Dynamic tool registry with pluggable skill packs — Phase 1
-- [ ] Per-session/per-workspace isolation with dirty buffer promotion
-- [ ] Agent profiles (Claude Code, Codex, IDE assistant, CI bot)
-- [ ] Drop JetBrains backend dependency entirely
-- [x] Move Python Serena to `legacy/` folder in same repo — Phase 1
+(None yet — define for next milestone)
 
 ### Out of Scope
 
@@ -44,101 +43,57 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Python compatibility layer — clean Go rewrite, no Python interop
 - Mobile/embedded targets — server-side only
 - Custom language server implementations — wrap existing LSP servers, don't reimplement
+- Knowledge graphs — CodeGraphContext/GitNexus own this space
+- Vector/embedding search — Augment Context Engine does this better
+- Git operations — GitHub MCP Server handles git comprehensively
 
 ## Context
 
-This is a brownfield rewrite in the same repo (`postfix/serena`). The existing Python codebase provides:
-- Proven tool taxonomy (40+ tools across symbol ops, file ops, memory, config, workflows)
-- Validated LSP integration patterns for 40+ languages
-- Battle-tested MCP protocol handling
-- Known pain points: asyncio complexity, per-session LS startup cost, timeout/race issues, MCP tool timeouts
+Shipped v1.0 with 24,840 lines of Go across 21 packages. Single binary, 52 languages, 30+ MCP tools.
 
-The Go rewrite addresses runtime correctness as the foundation problem. Current Serena release notes show ongoing work to reduce asyncio, move to synchronous LSP, background init, and linearized tool execution — all signals that the Python runtime model is fighting the architecture.
+Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC.
 
-Go is chosen for: single binary distribution, native concurrency (goroutines for LS workers), low memory footprint, and ecosystem fit (gopls is the reference implementation for the daemon+forwarder pattern).
+Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction.
 
-## Architecture
-
-### Layer 0: MCP Runtime
-- stdio + Streamable HTTP transport
-- Capability negotiation
-- Dynamic tool registry
-- Per-session/per-workspace isolation
-- Cancellation, timeouts, structured errors
-
-### Layer 1: Code Intelligence Kernel
-- LSP adapters (generic protocol, language-specific quirks)
-- Symbol graph
-- References/definitions/rename/edit primitives
-- Workspace snapshots/index/cache
-- Deterministic edit planning and verification
-
-### Layer 2: Skills (pluggable)
-- Semantic retrieval workflows
-- Targeted editing workflows
-- Memory system
-- Repo understanding/onboarding
-- Language/framework packs
-- Review/refactor/test-generation helpers
-
-### Layer 3: Agent Profiles (pluggable)
-- Claude Code profile
-- Codex profile
-- IDE assistant profile
-- CI/code-review bot profile
-
-**Key rule:** Everything in Layer 2+ must be removable without weakening Layer 0-1.
-
-### Runtime Model
-
-**Daemon core + edge adapters:**
-- One persistent supervisor daemon (workspace registry, LS process manager, caches, file watchers, health checks)
-- stdio forwarder for local MCP hosts (tiny proxy → daemon via Unix socket)
-- Streamable HTTP server for multi-client/remote/IDE scenarios
-- Workspace key = repo root + language + toolchain fingerprint
-- Session key = MCP session + dirty buffer overlay + mode/capability profile
-- Share caches broadly, share live LS state cautiously
-
-**LS worker policy:**
-- Clean sessions attach to existing warm workers
-- Divergent unsaved buffers promote to own LS view
-- Idle workers stay warm for TTL, then retire
-- Crashy workers get circuit-broken and restarted
+Python Serena preserved in `legacy/` as reference.
 
 ## Constraints
 
-- **Language**: Go — single binary, native concurrency, gopls ecosystem precedent
-- **Protocol**: MCP (Model Context Protocol) — primary interface for all clients
+- **Language**: Go — single binary, native concurrency
+- **Protocol**: MCP (Model Context Protocol) — primary interface
 - **LSP only**: No JetBrains or proprietary backends
-- **Repo strategy**: Same repo, Python code moved to `legacy/`
-- **Compatibility**: Must support the same 40+ languages currently supported via LSP
+- **Repo**: Same repo, Python in `legacy/`
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Go rewrite (not incremental Python improvement) | Runtime/lifecycle correctness is the foundation problem; Python asyncio fights the architecture | — Pending |
-| Daemon + edge adapters (gopls pattern) | Solves warm cache, multi-client, reconnect; avoids per-session LS startup cost | — Pending |
-| Drop JetBrains backend | Simplify to LSP-only; JetBrains coupling adds complexity without universal benefit | — Pending |
-| 4-layer architecture with removable upper layers | Prevents monolith; keeps core universal; skills are plugins not requirements | — Pending |
-| Same repo with legacy/ folder | Brand continuity, git history preserved, gradual migration path | — Pending |
+| Go rewrite | Runtime/lifecycle correctness is the foundation problem | ✓ Good — clean single binary, native concurrency |
+| Daemon + edge adapters (gopls pattern) | Warm cache, multi-client, reconnect | ✓ Good — worker pool with adaptive TTL |
+| Drop JetBrains backend | Simplify to LSP-only | ✓ Good — 52 languages via LSP |
+| 4-layer architecture | Prevents monolith; skills as plugins | ✓ Good — clean separation |
+| gRPC internal IPC | Typed APIs between forwarder and daemon | ✓ Good — clean proto contract |
+| Tree-sitter for body surgery | LSP-only editing was fragile (Serena pain point) | ✓ Good — precise body extraction for 4 languages |
+| Full LSP metamodel codegen | Forward-sync with spec, no hand-maintained types | ✓ Good — 324 structs, 216 unions generated |
+| Markdown + SQLite FTS5 for memory | Humans own content, engine owns search | ✓ Good — rebuildable index |
+| Caddy-style skill registration | Compiled-in plugins without go-plugin overhead | ✓ Good — clean init() pattern |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
+**After each phase transition:**
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (via `/gsd:complete-milestone`):
+**After each milestone:**
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-07 after Phase 1 completion*
+*Last updated: 2026-04-08 after v1.0 milestone*

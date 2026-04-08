@@ -85,7 +85,19 @@ func (w *WorkspaceRuntime) NextDocVersion(uri string) int32 {
 }
 
 // AcquireSession acquires a worker lease from the pool for this workspace.
-// The language is determined from the workspace key.
+// The language is determined from the workspace key, falling back to the first
+// detected language if the key's Language field is empty.
 func (w *WorkspaceRuntime) AcquireSession(ctx context.Context, sessionID string, dirty bool) (*lspool.WorkerLease, error) {
-	return w.pool.AcquireLease(ctx, sessionID, w.key, dirty)
+	w.mu.RLock()
+	lang := ""
+	if len(w.languages) > 0 {
+		lang = w.languages[0]
+	}
+	w.mu.RUnlock()
+
+	key := w.key
+	if key.Language == "" && lang != "" {
+		key.Language = lang
+	}
+	return w.pool.AcquireLease(ctx, sessionID, key, dirty)
 }

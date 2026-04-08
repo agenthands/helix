@@ -51,6 +51,7 @@ type Pool struct {
 	logger    *slog.Logger
 	nextID    int
 	done      chan struct{}
+	runCtx    context.Context // lifecycle context from Run(); workers use this instead of request ctx
 }
 
 // NewPool creates a new LS worker pool.
@@ -73,6 +74,7 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 // Run starts background goroutines for TTL checks and pressure eviction.
 // Blocks until ctx is cancelled.
 func (p *Pool) Run(ctx context.Context) error {
+	p.runCtx = ctx // Store lifecycle context for worker spawning.
 	ttlTicker := time.NewTicker(30 * time.Second)
 	defer ttlTicker.Stop()
 
@@ -256,9 +258,14 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger)
 	worker.SetQuirks(quirks)
 
-	// Start the worker (releases lock temporarily for potentially long init).
+	// Start the worker with the pool's lifecycle context (not the request context)
+	// so the LS process outlives individual tool calls.
+	startCtx := ctx
+	if p.runCtx != nil {
+		startCtx = p.runCtx
+	}
 	p.mu.Unlock()
-	err := worker.Start(ctx)
+	err := worker.Start(startCtx)
 	p.mu.Lock()
 
 	if err != nil {

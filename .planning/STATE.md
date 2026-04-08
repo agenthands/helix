@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Phase 4 context gathered
-last_updated: "2026-04-08T10:03:25.803Z"
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-04-08T10:17:47.223Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 15
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-07)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 03 — multi-language-and-skills
+**Current focus:** Phase 04 — agent-profiles-and-configuration
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 04 (agent-profiles-and-configuration) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-04-08
 
 Progress: [░░░░░░░░░░] 0%
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-multi-language-and-skills P01 | 3min | 2 tasks | 6 files |
 | Phase 03-multi-language-and-skills P05 | 3min | 2 tasks | 5 files |
 | Phase 03-multi-language-and-skills P04 | 4min | 2 tasks | 6 files |
+| Phase 04 P01 | 3min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase 03-05]: Memory skill ExecuteTool uses switch dispatch over map for explicit parameter validation per tool
 - [Phase 03-05]: Workflow onboarding scans one level deep into top-level dirs for language detection (lightweight, not recursive)
 - [Phase 03-multi-language-and-skills]: adapterFactory map for language-to-adapter resolution; notification handler registration deferred pending jsonrpc.Conn support
+- [Phase 04]: Profile extends ContextSpec via yaml inline embedding for seamless YAML parsing
+- [Phase 04]: Override strategy: YAML unmarshal on top of existing struct (set fields overwrite, unset preserved)
 
 ### Pending Todos
 
@@ -112,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T10:03:25.800Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-agent-profiles-and-configuration/04-CONTEXT.md
+Last session: 2026-04-08T10:17:47.221Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

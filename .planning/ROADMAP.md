@@ -85,7 +85,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Profile and mode types, 5 embedded profile YAMLs, 4 mode YAMLs, and loader
+- [x] 04-01-PLAN.md — Profile and mode types, 5 embedded profile YAMLs, 4 mode YAMLs, and loader
 - [ ] 04-02-PLAN.md — switch_mode and get_token_budget MCP tools via profile skill
 - [ ] 04-03-PLAN.md — Config precedence wiring and profile-aware tool filtering middleware
 
@@ -99,4 +99,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation | 3/3 | Complete |  |
 | 2. Code Intelligence Kernel | 0/6 | In Progress | - |
 | 3. Multi-Language and Skills | 1/5 | In Progress|  |
-| 4. Agent Profiles and Configuration | 0/3 | Not started | - |
+| 4. Agent Profiles and Configuration | 1/3 | In Progress|  |

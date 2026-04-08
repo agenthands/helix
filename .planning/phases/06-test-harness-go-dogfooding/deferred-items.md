@@ -1,9 +1,20 @@
 # Deferred Items - Phase 06
 
-## Workspace Key Language Routing
+## ~~Workspace Key Language Routing~~ (RESOLVED in 06-04)
 
-**Found during:** 06-01 Task 2
-**Severity:** Blocks LS-backed tool testing (search_symbols, go_to_definition, find_references, etc.)
-**Description:** `activeWSKey` in `internal/daemon/daemon.go` line 184 is set to `workspace.WorkspaceKey{RepoRoot: repoPath}` without a Language field. The LS worker pool requires `Language` to resolve the correct language server binary. All LS-backed MCP tools fail with "no language server configured for " when the workspace key has an empty language.
-**Impact:** Plans 02 and 03 cannot exercise LS-backed symbol tools until this is resolved.
-**Suggested fix:** The daemon's activate callback should either (a) set Language based on detected languages from `rt.Languages()`, or (b) the tool layer should resolve language from the file path being operated on.
+**Resolved by:** 06-04 Tasks 1-2
+
+## edit/rename.go pathToURI does not resolve relative paths
+
+**Found during:** 06-04 Task 2
+**Severity:** Medium - edit tools may fail with relative paths against gopls
+**Description:** `internal/kernel/edit/rename.go` has its own `pathToURI` that does not resolve relative paths against the workspace root. The same bug was fixed in `internal/kernel/symbols/tools.go` during 06-04.
+**Impact:** Edit tools using file paths may produce incorrect URIs when given relative paths.
+**Suggested fix:** Update `pathToURI` in edit/rename.go to accept a root parameter, matching the fix in symbols/tools.go.
+
+## TestHTTPSmoke_WithLS schema validation failure (pre-existing)
+
+**Found during:** 06-04 Task 2
+**Severity:** Low - pre-existing test failure unrelated to 06-04 changes
+**Description:** `TestHTTPSmoke_WithLS` fails with "unexpected additional properties [scope]" -- the search_symbols tool schema rejects the `scope` argument passed by the HTTP smoke test.
+**Impact:** One integration test fails; not caused by 06-04 changes.

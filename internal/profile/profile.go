@@ -96,3 +96,9 @@ func (s *ProfileStore) DefaultProfile() *Profile {
 	p, _ := s.profiles["full"]
 	return p
 }
+
+// SetProfile adds or replaces a profile in the store.
+// Intended for testing and dynamic profile injection.
+func (s *ProfileStore) SetProfile(name string, p *Profile) {
+	s.profiles[name] = p
+}

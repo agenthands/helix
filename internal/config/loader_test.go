@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	_ "github.com/postfix/serena/internal/profile" // ensure embedded profiles are loadable
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -71,5 +73,88 @@ func TestLoad_ProjectConfigOverridesGlobal(t *testing.T) {
 	// Global sets logging level (not overridden by project)
 	if cfg.Logging.Level != "debug" {
 		t.Errorf("expected global logging level debug, got %s", cfg.Logging.Level)
+	}
+}
+
+func TestLoad_DefaultProfile(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Profile != "full" {
+		t.Errorf("expected default profile 'full', got %q", cfg.Profile)
+	}
+	if cfg.Mode != "" {
+		t.Errorf("expected empty default mode, got %q", cfg.Mode)
+	}
+}
+
+func TestResolveProfile_KnownProfile(t *testing.T) {
+	cfg := &SerenaConfig{Profile: "claude-code"}
+	store, prof, err := ResolveProfile(cfg, "")
+	if err != nil {
+		t.Fatalf("ResolveProfile failed: %v", err)
+	}
+	if store == nil {
+		t.Fatal("expected non-nil ProfileStore")
+	}
+	if prof == nil {
+		t.Fatal("expected non-nil Profile for claude-code")
+	}
+}
+
+func TestResolveProfile_UnknownFallsBackToFull(t *testing.T) {
+	cfg := &SerenaConfig{Profile: "nonexistent-profile"}
+	_, prof, err := ResolveProfile(cfg, "")
+	if err != nil {
+		t.Fatalf("ResolveProfile failed: %v", err)
+	}
+	// Should fall back to the "full" default profile
+	if prof == nil {
+		t.Fatal("expected fallback to full profile, got nil")
+	}
+}
+
+func TestResolveProfile_CLIOverrideTakesPrecedence(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create project config with profile=claude-code
+	projectPath := filepath.Join(dir, "project.yml")
+	os.WriteFile(projectPath, []byte("profile: claude-code\n"), 0600)
+
+	// CLI overrides to ci-bot
+	overrides := map[string]interface{}{
+		"profile": "ci-bot",
+	}
+
+	cfg, err := Load("/nonexistent/global.yml", projectPath, overrides)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.Profile != "ci-bot" {
+		t.Errorf("expected CLI override profile 'ci-bot', got %q", cfg.Profile)
+	}
+
+	// Resolve should find the ci-bot profile
+	_, prof, err := ResolveProfile(cfg, "")
+	if err != nil {
+		t.Fatalf("ResolveProfile failed: %v", err)
+	}
+	if prof == nil {
+		t.Fatal("expected non-nil profile for ci-bot")
+	}
+}
+
+func TestResolveProfile_DescriptionOverridesAccessible(t *testing.T) {
+	cfg := &SerenaConfig{Profile: "claude-code"}
+	_, prof, err := ResolveProfile(cfg, "")
+	if err != nil {
+		t.Fatalf("ResolveProfile failed: %v", err)
+	}
+	// ToolDescriptionOverrides should be accessible (may be empty for some profiles)
+	if prof.ToolDescriptionOverrides == nil {
+		// This is acceptable - not all profiles have overrides
+		t.Log("claude-code profile has no tool description overrides (acceptable)")
 	}
 }

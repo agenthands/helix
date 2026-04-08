@@ -32,10 +32,12 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Token budget reporting via get_token_budget — v1.0 Phase 4
 - ✓ Layered config precedence (CLI > project > user > profile) — v1.0 Phase 4
 - ✓ Dynamic tool registry with pluggable skill packs — v1.0
+- ✓ Centralized daemon bootstrap with 38+ callable MCP tools — v1.0 Phase 5
+- ✓ Kernel tool skill adapters for uniform composition model — v1.0 Phase 5
 
 ### Active
 
-(None yet — define for next milestone)
+(None — define for next milestone via `/gsd-new-milestone`)
 
 ### Out of Scope
 

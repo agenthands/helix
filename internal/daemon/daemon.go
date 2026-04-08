@@ -203,6 +203,12 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 	}, nil
 }
 
+// MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
+func (d *Daemon) MCPServer() *serenaMCP.SerenaMCPServer { return d.mcpServer }
+
+// KernelInstance returns the kernel for lifecycle management in tests.
+func (d *Daemon) KernelInstance() *kernel.Kernel { return d.kernel }
+
 // registerSkillTools registers all tools from a ToolProvider with the MCP server.
 // Skills with ExecuteTool (memory, workflow) get live handlers; others are catalog-only.
 func registerSkillTools(server *serenaMCP.SerenaMCPServer, tp skill.ToolProvider, logger *slog.Logger) {

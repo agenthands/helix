@@ -97,6 +97,17 @@ func (s *ProfileStore) DefaultProfile() *Profile {
 	return p
 }
 
+// ToolDescriptionOverrides returns the description override map for the named profile.
+// Returns nil if the profile has no overrides or is not found.
+// This method satisfies the mcp.ProfileResolver interface.
+func (s *ProfileStore) ToolDescriptionOverrides(profileName string) map[string]string {
+	p, ok := s.profiles[profileName]
+	if !ok {
+		return nil
+	}
+	return p.ToolDescriptionOverrides
+}
+
 // SetProfile adds or replaces a profile in the store.
 // Intended for testing and dynamic profile injection.
 func (s *ProfileStore) SetProfile(name string, p *Profile) {

@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,12 +17,37 @@ import (
 
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
 	"github.com/postfix/serena/internal/config"
+	"github.com/postfix/serena/internal/kernel"
+	"github.com/postfix/serena/internal/kernel/diag"
+	"github.com/postfix/serena/internal/kernel/edit"
+	"github.com/postfix/serena/internal/kernel/fileops"
+	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/kernel/symbols"
+	"github.com/postfix/serena/internal/langregistry"
 	serenaMCP "github.com/postfix/serena/internal/mcp"
+	"github.com/postfix/serena/internal/profile"
+	"github.com/postfix/serena/internal/skill"
 	"github.com/postfix/serena/internal/workspace"
 )
 
+// SkillToolExecutor is implemented by skills that support direct tool execution
+// (memory, workflow). Kernel skill adapters skip this and register via RegisterTools.
+type SkillToolExecutor interface {
+	ExecuteTool(name string, args map[string]interface{}) (string, error)
+}
+
+// daemonSessionProvider is a minimal SessionProvider for the profile skill.
+type daemonSessionProvider struct {
+	session *serenaMCP.SessionInfo
+}
+
+func (p *daemonSessionProvider) CurrentSession() *serenaMCP.SessionInfo {
+	return p.session
+}
+
 // Daemon is the persistent supervisor process (DMN-01).
-// It manages workspace registry, MCP server, listeners, and survives client disconnects (DMN-02).
+// It manages workspace registry, MCP server, kernel, skills, listeners,
+// and survives client disconnects (DMN-02).
 type Daemon struct {
 	config         *config.SerenaConfig
 	logger         *slog.Logger
@@ -28,17 +55,170 @@ type Daemon struct {
 	mcpServer      *serenaMCP.SerenaMCPServer
 	grpcServer     *grpc.Server
 	socketListener net.Listener
+	kernel         *kernel.Kernel
+	langRegistry   *langregistry.Registry
+	profileStore   *profile.ProfileStore
+	activeProfile  *profile.Profile
+	diagStore      *diag.DiagnosticStore
+	bodyExtractor  *edit.BodyExtractor
 }
 
 // New creates a new Daemon with the given config and logger.
-func New(cfg *config.SerenaConfig, logger *slog.Logger) *Daemon {
+// Fail-fast for core subsystems per D-06; degrade gracefully for optional ones per D-07.
+func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 	workspaces := workspace.NewRegistry()
-	return &Daemon{
-		config:     cfg,
-		logger:     logger,
-		workspaces: workspaces,
-		mcpServer:  serenaMCP.NewSerenaMCPServer(workspaces, logger),
+
+	// 1. Language registry (fail-fast).
+	langReg, err := langregistry.NewRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("creating language registry: %w", err)
 	}
+
+	// 2. Installer for three-tier LS resolution.
+	homeDir, _ := os.UserHomeDir()
+	installer := langregistry.NewInstaller(langregistry.InstallerConfig{
+		AutoInstall: true,
+		BinDir:      filepath.Join(homeDir, ".serena", "bin"),
+	}, logger)
+
+	// 3. Memory pressure (platform-specific).
+	pressure := newPlatformPressure()
+
+	// 4. Convert WorkerPoolConfig to PoolConfig.
+	poolCfg := lspool.PoolConfig{
+		BaseTTL:               cfg.WorkerPool.BaseTTL,
+		CeilingTTL:            cfg.WorkerPool.CeilingTTL,
+		MaxWorkers:            cfg.WorkerPool.MaxWorkers,
+		RSSHardCapMB:          cfg.WorkerPool.RSSHardCapMB,
+		PressureCheckInterval: cfg.WorkerPool.PressureCheckInterval,
+	}
+	if poolCfg.BaseTTL == 0 {
+		poolCfg = lspool.DefaultPoolConfig()
+	}
+
+	// 5. Create kernel (fail-fast).
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger)
+
+	// 6. Create diagnostic store and body extractor.
+	diagStore := diag.NewDiagnosticStore()
+	bodyExtractor := edit.NewBodyExtractor()
+
+	// 7. Create MCP server.
+	mcpServer := serenaMCP.NewSerenaMCPServer(workspaces, logger)
+
+	// 8. Resolve profile per D-08.
+	globalDir := filepath.Join(homeDir, ".serena")
+	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving profile: %w", err)
+	}
+	logger.Info("profile resolved",
+		"profile", cfg.Profile,
+		"default_mode", activeProfile.DefaultMode,
+	)
+
+	// 9. Initialize skills per D-07 (degraded mode for optional providers).
+	skillDeps := skill.SkillDeps{
+		ProjectDir: filepath.Join(globalDir, "default-project"),
+		GlobalDir:  globalDir,
+		Logger:     logger,
+	}
+	if err := skill.InitAll(skillDeps); err != nil {
+		logger.Warn("skill initialization partially failed, continuing in degraded mode", "error", err)
+	}
+
+	// 10. Register kernel tools with MCP server.
+	var activeWSKey workspace.WorkspaceKey
+	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
+	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
+
+	symbols.RegisterTools(mcpServer, k, wsKeyFn)
+	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
+	fileops.RegisterTools(mcpServer, workspaceRootFn)
+
+	// Diag lease provider.
+	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
+		return k.Pool().AcquireLease(ctx, "diag-"+uri, activeWSKey, false)
+	}
+	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn)
+
+	// 11. Register skill-provided tools with MCP SDK.
+	for _, tp := range skill.ToolProviders() {
+		// Skip kernel skill adapters (already registered via RegisterTools above).
+		switch tp.Name() {
+		case "symbol-retrieval", "symbol-editing", "file-ops", "diagnostics":
+			continue
+		}
+		registerSkillTools(mcpServer, tp, logger)
+	}
+
+	// 12. Wire profile skill session provider.
+	defaultMode := activeProfile.DefaultMode
+	if defaultMode == "" {
+		defaultMode = "edit"
+	}
+	sessionProvider := &daemonSessionProvider{
+		session: &serenaMCP.SessionInfo{
+			Profile: cfg.Profile,
+			Mode:    defaultMode,
+		},
+	}
+	if ps := profile.GetProfileSkill(); ps != nil {
+		ps.SetSessionProvider(sessionProvider)
+	}
+
+	// 13. Install ProfileFilterMiddleware on the MCP server.
+	getSessionFn := func(ctx context.Context) *serenaMCP.SessionInfo {
+		return sessionProvider.CurrentSession()
+	}
+	mcpServer.SDK().AddReceivingMiddleware(
+		serenaMCP.ProfileFilterMiddleware(profileStore, getSessionFn, logger),
+	)
+
+	// 14. Update activate_project to also activate workspace in kernel.
+	mcpServer.SetActivateCallback(func(ctx context.Context, repoPath string) error {
+		rt, err := k.ActivateWorkspace(ctx, repoPath)
+		if err != nil {
+			return err
+		}
+		activeWSKey = workspace.WorkspaceKey{RepoRoot: repoPath}
+		logger.Info("kernel workspace activated",
+			"root", repoPath,
+			"languages", rt.Languages(),
+		)
+		return nil
+	})
+
+	return &Daemon{
+		config:        cfg,
+		logger:        logger,
+		workspaces:    workspaces,
+		mcpServer:     mcpServer,
+		kernel:        k,
+		langRegistry:  langReg,
+		profileStore:  profileStore,
+		activeProfile: activeProfile,
+		diagStore:     diagStore,
+		bodyExtractor: bodyExtractor,
+	}, nil
+}
+
+// registerSkillTools registers all tools from a ToolProvider with the MCP server.
+// Skills with ExecuteTool (memory, workflow) get live handlers; others are catalog-only.
+func registerSkillTools(server *serenaMCP.SerenaMCPServer, tp skill.ToolProvider, logger *slog.Logger) {
+	executor, hasExecutor := tp.(SkillToolExecutor)
+	for _, td := range tp.Tools() {
+		if hasExecutor {
+			server.AddSkillTool(td.Name, td.Description, executor)
+		} else {
+			// Catalog-only registration (e.g., profile skill with custom Execute* methods).
+			server.Registry().Register(&serenaMCP.ToolDef{
+				Name:        td.Name,
+				Description: td.Description,
+			})
+		}
+	}
+	logger.Info("skill tools registered", "skill", tp.Name(), "tools", len(tp.Tools()), "has_executor", hasExecutor)
 }
 
 // Run starts the daemon and blocks until shutdown (DMN-01, DMN-12).
@@ -57,6 +237,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
+
+	// Kernel runs in the errgroup (manages LS worker pool lifecycle).
+	g.Go(func() error {
+		return d.kernel.Run(gctx)
+	})
 
 	// Unix socket listener for forwarder connections via gRPC (DMN-03)
 	g.Go(func() error {

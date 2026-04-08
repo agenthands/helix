@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -31,6 +32,14 @@ func callTool(t *testing.T, session *mcp.ClientSession, name string, args map[st
 	require.NoError(t, err, "tool %s call error", name)
 	require.False(t, result.IsError, "tool %s failed: %s", name, textContent(result))
 	return result
+}
+
+// requireLS skips the test if the given language server binary is not on PATH.
+func requireLS(t *testing.T, binary string) {
+	t.Helper()
+	if _, err := exec.LookPath(binary); err != nil {
+		t.Skipf("%s not installed, skipping integration test", binary)
+	}
 }
 
 // callToolExpectError invokes an MCP tool and asserts it returns an error result.

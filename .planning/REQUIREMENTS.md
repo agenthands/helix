@@ -81,9 +81,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Agent Profiles & Configuration (Layer 3)
 
 - [x] **PRF-01**: Pre-built agent profiles for Claude Code, Codex, IDE assistant, and CI bot
-- [ ] **PRF-02**: Dynamic mode switching within a session (planning, editing, review)
+- [x] **PRF-02**: Dynamic mode switching within a session (planning, editing, review)
 - [x] **PRF-03**: Tool description and prompt overrides per profile
-- [ ] **PRF-04**: Token budget awareness — tools report schema size for context optimization
+- [x] **PRF-04**: Token budget awareness — tools report schema size for context optimization
 - [ ] **PRF-05**: Configuration loaded from CLI args → project config → user config → active profile
 
 ### Diagnostics & Code Quality
@@ -198,9 +198,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | LNG-03 | Phase 3 | Complete |
 | LNG-04 | Phase 2 | Complete |
 | PRF-01 | Phase 4 | Complete |
-| PRF-02 | Phase 4 | Pending |
+| PRF-02 | Phase 4 | Complete |
 | PRF-03 | Phase 4 | Complete |
-| PRF-04 | Phase 4 | Pending |
+| PRF-04 | Phase 4 | Complete |
 | PRF-05 | Phase 4 | Pending |
 | DGN-01 | Phase 2 | Pending |
 | DGN-02 | Phase 2 | Pending |

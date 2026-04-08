@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-04-08T10:17:47.223Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-04-08T10:21:54.176Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 04 (agent-profiles-and-configuration) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-08
 
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-multi-language-and-skills P05 | 3min | 2 tasks | 5 files |
 | Phase 03-multi-language-and-skills P04 | 4min | 2 tasks | 6 files |
 | Phase 04 P01 | 3min | 2 tasks | 13 files |
+| Phase 04 P02 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,9 @@ Recent decisions affecting current work:
 - [Phase 03-multi-language-and-skills]: adapterFactory map for language-to-adapter resolution; notification handler registration deferred pending jsonrpc.Conn support
 - [Phase 04]: Profile extends ContextSpec via yaml inline embedding for seamless YAML parsing
 - [Phase 04]: Override strategy: YAML unmarshal on top of existing struct (set fields overwrite, unset preserved)
+- [Phase 04]: SessionProvider interface pattern for skill-to-session coupling (avoids global state)
+- [Phase 04]: Exported Execute* methods on skill structs for testable MCP tools without round-trip
+- [Phase 04]: Token estimation via JSON marshal length / 4 as rough heuristic
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T10:17:47.221Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-04-08T10:21:54.174Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

@@ -34,9 +34,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Fix component contracts (RegisterFn, profile skill names, pool-installer wiring)
-- [ ] 05-02-PLAN.md — Daemon bootstrap wiring (kernel, skills, tools, middleware, config, shutdown)
-- [ ] 05-03-PLAN.md — Integration smoke tests for all 6 E2E flows
+- [x] 05-01-PLAN.md — Fix component contracts (RegisterFn, profile skill names, pool-installer wiring)
+- [x] 05-02-PLAN.md — Daemon bootstrap wiring (kernel, skills, tools, middleware, config, shutdown)
+- [x] 05-03-PLAN.md — Integration smoke tests for all 6 E2E flows
 
 ## Progress
 

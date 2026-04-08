@@ -37,7 +37,10 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(None — define for next milestone via `/gsd-new-milestone`)
+- Integration test harness — end-to-end MCP round-trips against real daemon — v1.1
+- Dogfooding suite — exercise all 38 tools against Serena's own Go codebase — v1.1
+- Multi-language test fixtures — small projects with known symbols for Python, TypeScript, Java, Rust — v1.1
+- Tool correctness assertions — verify each tool returns expected results against known fixture state — v1.1
 
 ### Out of Scope
 
@@ -48,6 +51,16 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Knowledge graphs — CodeGraphContext/GitNexus own this space
 - Vector/embedding search — Augment Context Engine does this better
 - Git operations — GitHub MCP Server handles git comprehensively
+
+## Current Milestone: v1.1 Integration Testing
+
+**Goal:** Prove all 38 MCP tools work end-to-end by testing against Serena's own codebase and multi-language fixtures.
+
+**Target features:**
+- End-to-end integration test harness — spin up daemon, connect MCP client, call tools, verify responses
+- Dogfooding test suite — exercise all tool categories (symbols, editing, file ops, diagnostics, memory, workflow, profile) against Serena's own Go code
+- Multi-language test fixtures — small projects with known symbols/references for Python, TypeScript, Java, Rust
+- Tool correctness assertions — verify each tool returns expected results against known fixture state
 
 ## Context
 
@@ -99,4 +112,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after Phase 5 (daemon bootstrap integration)*
+*Last updated: 2026-04-08 — milestone v1.1 Integration Testing started*

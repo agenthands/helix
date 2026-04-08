@@ -1,239 +1,119 @@
 # Feature Landscape
 
-**Domain:** MCP-based code intelligence platform (LSP gateway for AI coding agents)
-**Researched:** 2026-04-07
-**Overall confidence:** HIGH (based on existing Serena codebase analysis + ecosystem survey of 15+ competing tools)
+**Domain:** Integration testing for MCP code intelligence platform (Serena v1.1)
+**Researched:** 2026-04-08
 
 ## Table Stakes
 
-Features users expect from an MCP code intelligence server. Missing any of these and agents will use built-in tools or a competitor instead.
+Features that must exist for the integration test suite to be credible and useful. Missing any of these means the test suite cannot fulfill its purpose.
 
-### Symbol Retrieval
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Go-to-definition | Every LSP-MCP bridge offers this; agents need to trace code | Low | Direct LSP `textDocument/definition` wrapper |
-| Find references | Core navigation; "who calls this?" is the #1 agent question | Low | Direct LSP `textDocument/references` wrapper |
-| Symbol overview (file) | Agents need structural understanding before diving in | Low | LSP `textDocument/documentSymbol` |
-| Workspace symbol search | Cross-file symbol discovery by name/pattern | Low | LSP `workspace/symbol` |
-| Hover/type info | Quick symbol documentation without reading full body | Low | LSP `textDocument/hover` |
-| Find implementations | Interface-to-concrete navigation, critical for typed languages | Low | LSP `textDocument/implementation` |
-| Type hierarchy | Understanding inheritance chains; offered by Kiro, CodeMCP, Serena (JetBrains) | Med | LSP `typeHierarchy/*` -- not all language servers support it |
-| Call hierarchy (callers/callees) | Impact analysis foundation; CodePathFinder and CodeMCP highlight this | Med | LSP `callHierarchy/*` -- inconsistent LS support |
-
-### Symbol Editing
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Replace symbol body | Targeted editing without line-number drift; Serena's proven differentiator | Med | Requires symbol range resolution + safe replacement |
-| Insert before/after symbol | Structural insertion (new methods, imports) without manual line calc | Med | Symbol boundary detection + content insertion |
-| Rename symbol (cross-file) | Refactoring primitive; every LSP-MCP bridge offers this | Low | LSP `textDocument/rename` with workspace edit application |
-| Safe delete | Remove symbol + verify no remaining references | Med | References check + deletion; currently JetBrains-only in Serena |
-
-### File Operations
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Read file (with range) | Basic but necessary fallback when symbolic read is overkill | Low | Direct file read |
-| Create/overwrite file | Agents need to create new files | Low | Path validation + write |
-| List directory | Project structure exploration | Low | fs.ReadDir wrapper |
-| Find file by pattern | Glob/name-based file discovery | Low | filepath.Walk + glob matching |
-| Search for pattern (regex) | Grep-like search across codebase | Low | ripgrep-style implementation or LSP |
-| Content replacement (regex) | Text-level editing when symbolic editing is not applicable | Med | Regex match + safe replacement with conflict detection |
-
-### Multi-Language LSP Support
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| 15+ languages out of box | mcp-language-server, lsp-mcp, Kiro all support 10-18 languages | Med | Language server config registry + auto-download |
-| Auto language server discovery | Agents shouldn't configure LSP manually | Med | Detect project languages, find/install LS binaries |
-| Language-specific quirk handling | gopls, pyright, typescript-language-server all have different behaviors | High | Per-LS adapter layer (Serena's existing pattern, validated) |
-
-### MCP Protocol Compliance
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| stdio transport | Default MCP transport; every client expects it | Low | Standard stdin/stdout framing |
-| Streamable HTTP transport | MCP spec 2025-06-18+; remote/multi-client scenarios | Med | HTTP/SSE server with session management |
-| Tool listing with schemas | MCP discovery mechanism; agents need this to know what's available | Low | JSON Schema generation from tool definitions |
-| Structured errors | Agents need parseable error responses, not stack traces | Low | MCP error codes + structured detail |
-| Cancellation support | Long-running operations must be cancellable | Med | Context propagation through LSP calls |
-| Progress notifications | MCP spec supports progress; critical during indexing | Low | MCP notification forwarding |
-
-### Project/Workspace Management
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Project activation by path | Agent points at a repo, server handles the rest | Low | Root detection + LS initialization |
-| Multi-project support | Monorepos, multi-service architectures | Med | Workspace key registry |
-| Configuration persistence | .serena/ or equivalent project-local config | Low | YAML/JSON config in project root |
-
-### Memory/Knowledge Persistence
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Write/read project memories | Cross-session knowledge persistence; Serena's proven feature | Low | Markdown files in .serena/memories/ |
-| List/search memories | Discovery of stored knowledge | Low | Directory listing + optional search |
-| Memory CRUD (rename, delete, edit) | Full lifecycle management | Low | File operations on memory store |
-| Global vs project-scoped memories | Style guides vs project-specific knowledge | Low | Directory-based scoping |
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| MCP round-trip test harness | Core deliverable: spin up daemon, connect MCP client, call tools via `CallTool`, assert responses. Without this, nothing else works. | Med | Official MCP Go SDK `NewInMemoryTransports()` for in-process, or HTTP transport for out-of-process |
+| Daemon lifecycle management in tests | Tests must start/stop the daemon cleanly. Already partially done in `daemon_integration_test.go` but needs extraction into reusable `testutil` package. | Low | Existing `daemon.New()` + `daemon.Run()` |
+| Go dogfooding suite (self-test) | Exercise all 38+ tools against Serena's own codebase. The project has ~25,500 lines of Go with known symbols (`Daemon`, `SerenaMCPServer`, `Kernel`, etc.) -- the richest fixture available. | Med | gopls installed in test env, daemon harness |
+| Multi-language fixture projects | Small projects with known symbols for Go, Python, TypeScript, Rust, Java. Legacy already has fixture repos under `test/resources/repos/` for 40+ languages -- port the 4-5 most important ones. | Med | Language servers installed (gopls, pyright/pylsp, tsserver, rust-analyzer, jdtls) |
+| Tool correctness assertions | Each of the 38+ tools must have at least one test calling the tool against a known fixture and verifying the response shape and content. Not snapshot testing -- explicit assertions on known symbols. | High | Fixtures with stable, known symbol names/positions |
+| Build tag / test tag separation | Integration tests are slow (real language servers). Must use `//go:build integration` so `go test ./...` skips them by default but CI runs them with `-tags integration`. | Low | None |
+| Timeout and cleanup handling | LSP servers can hang. Tests need per-test timeouts, context cancellation, and process cleanup to avoid zombie language servers. | Low | Go `t.Deadline()`, `context.WithTimeout` |
+| CI-compatible test execution | Tests must run in GitHub Actions with language servers installable via apt/brew/go install. Must handle missing LS gracefully (skip, not fail). | Med | `testing.Short()` or build tags, conditional skip logic |
 
 ## Differentiators
 
-Features that set Serena 2.0 apart. Not expected, but create competitive advantage.
+Features that elevate the test suite beyond basic correctness. Not expected for v1.1 MVP but high value.
 
-### Daemon Architecture (Primary Differentiator)
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Persistent supervisor daemon | Warm LS cache survives client disconnects; no per-session startup cost. NO competing MCP code intelligence server does this. | High | Unix socket/named pipe daemon with process management |
-| Warm LS worker pool | Language servers stay hot between sessions; sub-second tool response vs 5-30s cold start | High | TTL-based worker lifecycle, workspace key matching |
-| Edge adapter pattern (stdio forwarder) | Thin proxy connects to daemon; crash/reconnect is transparent | Med | stdio-to-unix-socket relay |
-| Circuit breaking for crashy LS | Auto-restart with backoff; don't let one bad LS kill the server | Med | Health tracking + restart policy per LS |
-| Dirty buffer promotion | Unsaved edits get their own LS view; clean sessions share workers | High | Buffer overlay management, LS workspace/folder management |
-| Multi-client sharing | Multiple agents/IDE sessions share one daemon with warm caches | High | Session isolation + shared workspace state |
-
-**Why this matters:** The rywalker.com comparison explicitly notes: "No tool has nailed incremental, real-time graph updates that keep pace with active development." A daemon with warm LS workers is the foundation for solving this.
-
-### Agent Profile System
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Pre-built agent profiles (Claude Code, Codex, IDE, CI) | Tool set + prompt + behavior tuned per client. Serena v1 has contexts/modes; v2 makes this first-class. | Med | Profile = context + mode + tool filter + prompt template |
-| Dynamic mode switching | Planning -> editing -> review within one session | Low | Tool registry hot-swap |
-| Tool description overrides per profile | Same tool, different guidance per agent type | Low | Already proven in Serena v1 contexts |
-| Token budget awareness | Show tool token costs (like Kiro /tools); help agents optimize context | Med | Schema size calculation + budget tracking |
-
-### Compound/Workflow Operations
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Blast radius analysis | "What breaks if I change this?" -- CodeMCP and knowledge graph tools offer this; LSP-backed version is more accurate | High | References + call hierarchy + type hierarchy combined |
-| Onboarding workflow | Auto-generate project understanding; proven in Serena v1 | Med | Structured analysis + memory creation |
-| Change impact from diff | Analyze git diff for affected symbols/callers before commit | High | Diff parsing + symbol resolution + reference tracing |
-| Thinking/reflection tools | Force agent to pause and assess; reduces wasted tool calls. Serena v1 validates this pattern. | Low | Prompt-returning tools that trigger self-assessment |
-| Prepare-for-new-conversation | Summarize session state for handoff to next session | Low | Context gathering + memory write |
-
-### Plugin/Skill Extensibility
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Pluggable skill packs (Layer 2) | Community-contributed workflows without touching core | High | Go plugin interface or subprocess-based extension |
-| Language/framework packs | React-specific, Django-specific tool bundles | Med | Skill pack specialization |
-| Dynamic tool registry | Add/remove tools at runtime without restart | Med | Hot-reload tool definitions |
-| Custom tool definition format | Users define tools via YAML/config (like Serena v1 modes) | Med | Schema-driven tool generation |
-
-### Diagnostics and Code Quality
-
-| Feature | Why Valuable | Complexity | Notes |
-|---------|-------------|------------|-------|
-| Real-time diagnostics after edit | Claude Code's LSP integration does this; agents fix errors inline | Med | LSP `textDocument/publishDiagnostics` subscription |
-| Code actions / quick fixes | Apply LSP-suggested fixes; lsp-mcp bridge offers this | Med | LSP `textDocument/codeAction` |
-| Formatting on demand | LSP-backed formatting via tool call | Low | LSP `textDocument/formatting` |
-
-### Observability
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Web dashboard | Session info, tool usage stats, LS health. Serena v1 has this. | Med | Embedded HTTP server with simple UI |
-| MCP usage analytics | Track tool-level usage (like Sourcegraph's MCP analytics) | Low | Request counting + aggregation |
-| LS health monitoring | Per-language-server status, latency, crash count | Med | Health check loop + metric collection |
+| Feature | Value Proposition | Complexity | Dependencies |
+|---------|-------------------|------------|--------------|
+| MCP client-level e2e tests (full protocol) | Current tests use `ExecuteTool()` bypassing MCP wire protocol. True e2e calls `tools/call` via MCP client through `mcp.NewInMemoryTransports()` to verify JSON schema, arg parsing, error codes. | Med | Official MCP SDK client, in-memory transport |
+| Snapshot / golden file testing for output stability | Capture tool outputs as golden files. Detect unintended response format changes. Legacy uses syrupy for this. Go equivalent: `testutil/golden` pattern or `go-cmp`. | Med | `go-cmp` (already in MCP SDK deps) or custom golden file helper |
+| Profile-filtered tool visibility tests | Verify each profile (claude-code, codex, ci-bot, ide-assistant, full) exposes exactly the expected tool subset. Already partially tested in `TestE2EProfileConfigLayering`. | Low | Existing profile system |
+| Worker pool stress testing | Start multiple concurrent tool calls against the same workspace. Verify share-until-dirty semantics, no races, no deadlocks. | High | `t.Parallel()`, `-race` flag |
+| Cross-file reference chain testing | Call `find_symbol` -> get definition -> call `find_references` -> verify bidirectional link. Multi-file fixture needed. | Med | Multi-file fixtures with known cross-references |
+| Edit round-trip testing | `get_symbol_overview` -> `replace_symbol_body` -> `get_symbol_overview` again -> verify edit took effect. Tests the full read-edit-read cycle. | Med | Tree-sitter body extraction, writable temp fixture copies |
+| Diagnostic tool testing | Call `get_diagnostics` against a fixture with known errors. Verify error locations and messages. | Med | Fixtures with intentional syntax/type errors |
+| Memory + workflow cross-skill integration | Write memory -> onboard project -> verify onboarding incorporates written memory. | Low | Existing memory/workflow skills |
+| Transport-level tests (HTTP + gRPC) | Test MCP over Streamable HTTP and gRPC forwarder, not just in-memory. Catches serialization bugs. | High | HTTP server startup, gRPC forwarder startup |
+| Language server availability checks | Auto-detect which language servers are installed, generate skip reasons. Follow legacy pattern from `conftest.py` `_determine_disabled_languages()`. | Low | `exec.LookPath()` checks |
 
 ## Anti-Features
 
-Features to explicitly NOT build. These are traps.
+Features to explicitly NOT build for v1.1.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| AI/LLM integration in the server | The server provides tools; the LLM client does the reasoning. Mixing concerns kills composability. | Expose clean tools, let Claude/Codex/etc. do the thinking |
-| Code generation tools | Agents generate code themselves; server should navigate and edit, not generate | Provide precise editing primitives; generation is the agent's job |
-| Custom language server implementations | Massive maintenance burden; existing LS implementations are better | Wrap existing LS binaries (gopls, pyright, rust-analyzer, etc.) |
-| Knowledge graph construction | CodeGraphContext, GitNexus already do this well; LSP-backed references are more accurate for real-time queries | Use LSP call/type hierarchies for structural queries; recommend graph tools for offline analysis |
-| Repository packing/context stuffing | Repomix (22k stars) owns this space; context packing is the agent's concern | Provide targeted retrieval tools; let agents decide what to include |
-| Cloud/SaaS hosting of the server | Privacy-first, local-only is the market position; Sourcegraph/Greptile own cloud | Ship a single binary that runs locally |
-| IDE-specific plugins | MCP is the universal protocol; IDE plugins fragment the surface area | MCP-only; let IDE MCP clients connect |
-| Autocomplete/inline suggestions | This is the IDE's job (Copilot, Continue, etc.); MCP tools are for agentic workflows | Focus on tool-use patterns, not inline completion |
-| Vector/embedding-based search | Augment's Context Engine does this with massive investment; competing is losing | Use LSP symbol search + grep; recommend Augment Context Engine MCP for semantic search |
-| Git operations | GitHub MCP server (the most popular MCP server) already does this comprehensively | Focus on code intelligence; let git MCP servers handle git |
+| Testing all 52 languages | Combinatorial explosion. Most LS behaviors are identical -- testing 52 languages adds CI cost with diminishing returns. | Test 5 representative languages: Go (dogfood), Python, TypeScript, Rust, Java. These cover the 4 tree-sitter-supported languages plus the most popular LS. |
+| Mock language servers | Mocking LSP defeats the purpose. Integration tests must hit real language servers to catch real bugs (initialization sequences, capability negotiation, encoding quirks). | Use real language servers against small fixture projects. Mocks already exist in `retrieval_test.go` for unit tests. |
+| Snapshot testing as primary strategy | Snapshots are brittle with LSP -- line numbers shift, URIs change, LS versions change output format. Updates become meaningless noise. | Use structural assertions: "response contains symbol named X at file Y" not "response equals this exact JSON blob". Use snapshots only for output format stability monitoring. |
+| Performance benchmarking suite | Wrong milestone. v1.1 is about correctness, not performance. | Defer to v1.2 or later. Benchmarks need stable correctness tests first. |
+| Fuzzing MCP inputs | Premature. Need working correctness tests before adversarial testing. | Defer. Focus on happy-path and known-error-path coverage. |
+| Testing legacy Python code | Legacy is a reference, not active code. Testing it wastes effort. | Only port fixture repos and test patterns from legacy. Do not test Python Serena itself. |
+| End-to-end agent conversation tests | Testing an LLM calling Serena tools in a loop is non-deterministic and expensive. | Test individual tool calls with deterministic inputs/outputs. |
+| Per-tool unit test duplication | Existing unit tests (mock-based) in `retrieval_test.go`, `edit_test.go`, `fileops_test.go` already cover component logic. | Integration tests should focus on real LS round-trips. Do not duplicate what unit tests already verify. |
 
 ## Feature Dependencies
 
 ```
-stdio transport ─────────────────────────────────── MCP Protocol Core
-  │
-  ├── Tool listing + schemas
-  │     └── Agent profiles (tool filtering per profile)
-  │           └── Dynamic mode switching
-  │
-  ├── Project activation
-  │     ├── LS worker initialization
-  │     │     ├── Symbol retrieval tools (all)
-  │     │     │     ├── Symbol editing tools (need symbol resolution)
-  │     │     │     ├── Blast radius analysis (references + call hierarchy)
-  │     │     │     └── Change impact from diff
-  │     │     ├── Diagnostics subscription
-  │     │     │     └── Code actions / quick fixes
-  │     │     └── Formatting
-  │     ├── File operations (no LS needed)
-  │     └── Memory system (no LS needed)
-  │
-  ├── Daemon architecture
-  │     ├── Warm LS worker pool (requires daemon lifecycle)
-  │     ├── Multi-client sharing (requires session isolation)
-  │     ├── Edge adapter / stdio forwarder (requires daemon socket)
-  │     ├── Circuit breaking (requires worker health tracking)
-  │     └── Dirty buffer promotion (requires worker pool)
-  │
-  └── Streamable HTTP transport (parallel to stdio, requires daemon)
-        └── Multi-client sharing (natural fit with HTTP)
+Build tags + test separation ──> Everything else (all integration tests need this)
 
-Plugin/skill extensibility ──── Dynamic tool registry
-                                  └── Language/framework packs
-                                  └── Custom tool definitions
+Daemon lifecycle testutil ──> MCP round-trip harness ──> All tool tests
+                          ──> Go dogfooding suite
+                          ──> Multi-language fixture tests
+
+Multi-language fixtures ──> Tool correctness assertions (for non-Go languages)
+                       ──> Cross-file reference testing
+                       ──> Edit round-trip testing
+                       ──> Diagnostic tool testing
+
+Go dogfooding (self-test) ──> No fixture dependency (uses Serena's own codebase)
+                          ──> Depends on: daemon harness, gopls availability
+
+MCP client-level e2e ──> mcp.NewInMemoryTransports() from SDK v1.5.0
+                     ──> Daemon harness (to register tools on server side)
+
+Profile visibility tests ──> Existing profile system (no new deps)
+
+Edit round-trip tests ──> Temp dir fixture copies (writes must not mutate fixtures)
+                      ──> Tree-sitter (already a dependency)
+
+Worker pool stress ──> Daemon harness + multiple concurrent clients
 ```
 
 ## MVP Recommendation
 
-### Phase 1: Foundation (must-ship)
-1. **MCP runtime** -- stdio transport, tool listing, structured errors
-2. **Core symbol retrieval** -- definition, references, symbol overview, workspace search, hover
-3. **Core symbol editing** -- replace body, insert before/after, rename
-4. **File operations** -- read, create, list, find, search, replace
-5. **Single language proof** -- Go (gopls) as first-class, validating the adapter pattern
-6. **Project activation** -- point at repo, auto-detect language, start LS
+### Phase 1: Foundation (must ship)
 
-### Phase 2: Daemon + Multi-Language
-7. **Daemon supervisor** -- persistent process, Unix socket, stdio forwarder
-8. **Warm LS pool** -- worker lifecycle, TTL, restart
-9. **3-5 more languages** -- TypeScript, Python, Rust, Java
-10. **Memory system** -- write/read/list/delete project memories
+1. **Test harness with daemon lifecycle** -- Extract `newE2EConfig` pattern from `daemon_integration_test.go` into `internal/testutil/` package. Add `StartTestDaemon(t, opts)` that returns a connected test context with `ExecuteTool()` capability. Add `RequireLanguageServer(t, "gopls")` helper.
+2. **Build tag separation** -- `//go:build integration` on all integration test files. Makefile target `make test-integration`. Keep existing unit tests running with plain `go test ./...`.
+3. **Go dogfooding suite** -- Test all 38 tools against Serena's own Go codebase. This is the highest-value test because it uses the actual project (no fixture needed) and exercises gopls (the most critical LS). Covers: symbol retrieval (find `Daemon`, `Kernel`, `SerenaMCPServer`), symbol editing (replace body in temp copy), file ops (read/list/search own source), diagnostics (format own code), memory (write/read/delete), workflow (onboard own project), profile (switch modes, list tools).
+4. **CI skip logic** -- `t.Skip("gopls not available")` when a required LS is missing. Tests degrade gracefully -- skip, never fail. Follow legacy pattern from `_determine_disabled_languages()`.
 
-### Phase 3: Agent Profiles + Polish
-11. **Agent profiles** -- Claude Code, Codex, IDE assistant presets
-12. **Mode switching** -- planning/editing/review modes
-13. **Diagnostics + code actions** -- post-edit error reporting
-14. **Call/type hierarchy** -- blast radius foundation
-15. **Streamable HTTP transport** -- multi-client scenarios
+### Phase 2: Multi-language + correctness
 
-### Phase 4: Extensibility + Advanced
-16. **Plugin skill packs** -- extension interface
-17. **Change impact analysis** -- diff-based blast radius
-18. **Onboarding workflow** -- automated project understanding
-19. **Web dashboard** -- observability
-20. **Remaining 30+ languages** -- broad coverage
+5. **Port 4 fixture repos from legacy** -- Python, TypeScript, Rust, Java mini-projects from `legacy/test/resources/repos/`. Place in `testdata/fixtures/{lang}/`. Each fixture must have: known symbol names, known cross-file references, known parent-child relationships.
+6. **Tool correctness assertions per language** -- One test per tool category (symbols, editing, fileops, diagnostics) per fixture language. Structural assertions: "definition of `Helper` is at `main.go`", "references to `DemoStruct` include `main.go` and `usage.go`".
+7. **Cross-file reference testing** -- Multi-file fixtures where symbol A in file1 references symbol B in file2. Verify `find_references` returns both files. Verify `find_implementations` works for interfaces.
 
-**Defer indefinitely:** Knowledge graphs, vector search, git operations, code generation, cloud hosting.
+### Phase 3: Protocol-level + advanced
+
+8. **MCP client-level e2e** -- Use `mcp.NewInMemoryTransports()` to test the full MCP wire protocol. Call `tools/call` through the SDK client, verify JSON-RPC framing, arg validation, error codes.
+9. **Edit round-trip testing** -- Copy fixture to temp dir, call `replace_symbol_body`, re-read symbol, verify the edit. Tests tree-sitter body surgery end-to-end.
+10. **Profile visibility tests** -- Each of 5 profiles exposes exactly the expected tool subset. Each of 4 modes filters correctly. Extend existing `TestE2EProfileConfigLayering`.
+
+### Defer to v1.2+
+
+- Snapshot / golden file testing: Add after correctness suite stabilizes and output formats settle.
+- Worker pool stress tests: Needs correctness suite as baseline.
+- Transport-level tests (HTTP/gRPC): Catches serialization issues, but MCP round-trip harness covers 90% of value.
+- Performance benchmarks: Requires stable test infrastructure.
+- Diagnostic tool testing with known errors: Requires crafted error fixtures per language.
 
 ## Sources
 
-- Serena v1 codebase analysis (40+ tools across 6 tool modules) -- HIGH confidence
-- [Ry Walker: Code Intelligence Tools for AI Agents Compared](https://rywalker.com/research/code-intelligence-tools) -- MEDIUM confidence
-- [Augment Code Context Engine MCP](https://www.augmentcode.com/blog/context-engine-mcp-now-live) -- MEDIUM confidence
-- [Kiro Code Intelligence CLI](https://kiro.dev/docs/cli/code-intelligence/) -- MEDIUM confidence
-- [CodeMCP / CKB](https://github.com/SimplyLiz/CodeMCP) -- MEDIUM confidence
-- [mcp-language-server (Go)](https://github.com/isaacphi/mcp-language-server) -- MEDIUM confidence
-- [CodePathFinder MCP](https://codepathfinder.dev/mcp) -- MEDIUM confidence
-- [lsp-mcp bridge](https://glama.ai/mcp/servers/blackwell-systems/LSP-MCP) -- MEDIUM confidence
-- [GitHub MCP Server tool-specific configuration](https://github.blog/changelog/2025-12-10-the-github-mcp-server-adds-support-for-tool-specific-configuration-and-more/) -- MEDIUM confidence
-- [Sourcegraph Cody MCP](https://sourcegraph.com) -- MEDIUM confidence
-- [Continue.dev MCP support](https://docs.continue.dev/customize/deep-dives/mcp) -- MEDIUM confidence
-- [MCP health check best practices](https://mcpcat.io/guides/building-health-check-endpoint-mcp-server/) -- LOW confidence
+- Existing integration tests: `internal/daemon/daemon_integration_test.go` -- 6 e2e tests covering memory, mode switching, token budget, shutdown, profile layering, onboarding
+- Legacy test infrastructure: `legacy/test/conftest.py` -- language-parameterized fixtures, LS lifecycle management, `_determine_disabled_languages()` skip logic, session-scoped LS fixtures
+- Legacy fixture repos: `legacy/test/resources/repos/` -- 40+ language mini-projects with known symbols (Go fixture has `main`, `Helper`, `DemoStruct`, `Value`)
+- Legacy snapshot tests: `legacy/test/serena/test_symbol_editing.py` -- syrupy-based snapshot testing for edit operations
+- Official MCP Go SDK v1.5.0: `mcp.NewInMemoryTransports()` for in-process client-server testing, `mcp.NewClient()` + `c.Connect()` for client-side test setup
+- Official MCP Go SDK examples: `mcp/client_example_test.go` -- shows roots, sampling, elicitation patterns via in-memory transport
+- Existing unit tests: `internal/kernel/symbols/retrieval_test.go` -- mock-based LSP response testing with `testLease` pattern
+- Go testing conventions: `//go:build integration` tags, `testdata/` directories, `testutil` helper packages, `t.Helper()`, `t.Cleanup()`

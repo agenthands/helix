@@ -1,196 +1,170 @@
-# Technology Stack
+# Stack Research
 
-**Project:** Serena 2.0 (Go-native MCP code intelligence platform)
-**Researched:** 2026-04-07
+**Domain:** Integration testing for Go MCP server with multi-language LSP fixtures
+**Researched:** 2026-04-08
+**Confidence:** HIGH
 
 ## Recommended Stack
 
-### MCP Runtime
+### Core Technologies
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| [modelcontextprotocol/go-sdk](https://github.com/modelcontextprotocol/go-sdk) | v1.4.1 | MCP server/client, tool registry, transport | Official SDK, maintained by Anthropic + Google. Supports stdio, Streamable HTTP, and custom transports. Struct-tag-based tool schemas. 4.3k stars, active CVE patching (March 2026 Origin header fix). Targets MCP spec 2025-11-25. | HIGH |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `testing/synctest` | Go 1.25 stdlib | Deterministic concurrent test execution | GA in Go 1.25. Virtualizes time, controls goroutine scheduling. The MCP Go SDK itself uses it in `mcp_test.go`. Eliminates flaky timer-based waits in daemon lifecycle tests. Already available -- Go 1.25.1 is in use. |
+| `mcp.NewInMemoryTransports()` | MCP Go SDK v1.5.0 | In-process MCP client-server transport | Already in go.mod. Returns paired transports connected via `net.Pipe()`. Connect server to one, client to the other -- full MCP protocol round-trips without sockets or HTTP. Zero new dependencies. |
+| `mcp.Client` + `ClientSession.CallTool()` | MCP Go SDK v1.5.0 | MCP client for tool invocation in tests | The SDK's own client. `ClientSession.CallTool()` returns `*CallToolResult` with typed `Content` (TextContent, etc). Already a dependency. The SDK's `TestEndToEnd` uses exactly this pattern. |
+| `github.com/stretchr/testify` | v1.11.1 | Test assertions and requirements | Already in go.mod at this version. `require` for fatal checks, `assert` for soft checks. No suite -- Go subtests suffice. |
+| `github.com/google/go-cmp` | v0.7.0 | Deep structural comparison with readable diffs | Already in go.sum as transitive dependency via MCP SDK. Promote to direct test dependency. Use for comparing complex tool result structures (symbol trees, reference lists) where testify's `Equal` produces unreadable output. |
 
-**Why not mark3labs/mcp-go:** While mcp-go has more stars (8.5k) and a friendlier builder-pattern API, the official SDK is the long-term bet. It's maintained by the spec authors, will always be first to support new spec versions, and has Google co-maintenance. mcp-go is a good community library but carries the risk of lagging behind spec changes. The official SDK API is already idiomatic enough (struct tags + `mcp.AddTool()`). If the official SDK proves insufficient during implementation, mcp-go is a viable fallback -- but start with official.
+### Supporting Libraries
 
-### LSP Client Layer
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `golang.org/x/tools/txtar` | latest | Text-based file archive for fixture definitions | Optional. When multi-file workspace fixtures need to be self-contained in a single test file. Gopls uses this pattern extensively. Lightweight -- just a parser, no framework. Consider only if fixture management becomes unwieldy. |
+| `testing/fstest.MapFS` | Go 1.25 stdlib | In-memory filesystem for unit-level tests | For config/registry tests that don't need real disk. Not for LSP tests (language servers need real files on disk). |
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Custom generated types (gopls pattern) | n/a | LSP protocol types, JSON-RPC framing | No good external LSP client library exists in Go. gopls uses internal generated types from the spec. mcp-language-server and opencode both copy/generate from gopls. This is the ecosystem consensus. | HIGH |
-| [go.lsp.dev/jsonrpc2](https://pkg.go.dev/go.lsp.dev/jsonrpc2) | v0.10.0 | JSON-RPC 2.0 transport layer | Provides Stream abstraction over stdio/TCP. Lightweight, decoupled from LSP types. Alternative: roll your own (gopls does), but jsonrpc2 is small and correct. | MEDIUM |
+### Development Tools
 
-**The LSP types problem:** There is no well-maintained, current, exportable LSP type library in Go. The options are:
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `go test -run TestIntegration -timeout 120s` | Run integration tests with adequate timeout | LSP startup takes 5-15s per language. Default 30s timeout will fail. Use `-short` flag to skip integration tests in quick dev loops. |
+| `go test -count=1` | Disable test caching for integration tests | Tests with external LS processes should not be cached -- LS state is not deterministic across runs. |
+| `-update` flag (custom) | Golden file update for tool output snapshots | Implement `var update = flag.Bool("update", false, "update golden files")` at package level. Standard Go pattern used by gopls, stdlib. |
 
-1. **go.lsp.dev/protocol** -- Stuck at LSP 3.15 (2022), pre-v1, 12 importers. Dead.
-2. **sourcegraph/go-lsp** -- Minimal subset of types, unmaintained.
-3. **bugst/go-lsp** -- 14 stars, alpha, no version guarantees.
-4. **owenrumney/go-lsp** -- Server-focused, LSP 3.17 types but server-side dispatch.
-5. **gopls internal/protocol** -- Best types in Go, auto-generated from spec, but `internal/` package. There's an open issue (golang/go#67658) to export them; still unresolved.
+## Integration Architecture
 
-**Recommendation:** Generate your own LSP types from the LSP metamodel JSON (same approach as gopls). The [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) publishes a machine-readable metamodel. Write a code generator that produces Go structs + JSON tags. This is a one-time investment (~2-3 days) that gives you:
-- Full LSP 3.17 coverage (or whatever version you target)
-- No dependency on abandoned libraries
-- Types exactly matching your client needs (not server-side bloat)
-- Same approach proven by gopls, mcp-language-server, and opencode
+### Test Harness Wiring
 
-For JSON-RPC 2.0 framing specifically, go.lsp.dev/jsonrpc2 is adequate as a starting point, though you may end up with a thin custom implementation given the daemon's multiplexed connection needs.
+The MCP Go SDK provides everything needed for the primary test pattern:
 
-### Process Management & Daemon
+```
+Test func --> mcp.Client --> InMemoryTransport --> SerenaMCPServer --> Daemon (kernel, pool, skills)
+```
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `os/exec` (stdlib) | Go 1.22+ | Spawn/manage language server processes | Standard library. exec.CommandContext for cancellation-aware process management. No library needed. | HIGH |
-| `os/signal` + `context` (stdlib) | Go 1.22+ | Graceful shutdown, signal handling | `signal.NotifyContext` for SIGTERM/SIGINT. Context cancellation propagates through the entire daemon. Idiomatic Go pattern. | HIGH |
-| `net` (stdlib) | Go 1.22+ | Unix domain socket listener for forwarder-daemon IPC | `net.Listen("unix", path)` is all you need. No IPC library required. | HIGH |
-| Custom supervisor (goroutine-based) | n/a | LS worker lifecycle, circuit breaking, TTL management | The supervisor/restart pattern in Go uses a manager goroutine that monitors worker goroutines via channels. No library needed -- this is a core architectural component that should be purpose-built for LS worker semantics (warm TTL, crash counting, circuit breaking). | HIGH |
+1. `mcp.NewInMemoryTransports()` creates a paired pipe (server transport, client transport)
+2. Server transport connects to `SerenaMCPServer` via `Server.Connect()`
+3. Client transport connects via `Client.Connect()`
+4. `ClientSession.CallTool()` sends MCP requests, receives typed `*CallToolResult`
+5. No sockets, no HTTP, no gRPC -- pure in-process with real MCP protocol framing
 
-**Why no external process supervisor library:** The daemon IS the supervisor. External process supervisors (like ochinchina/supervisord) are for managing the daemon itself from outside. Internally, LS worker management is tightly coupled to your workspace/session model and needs custom logic for: warm cache retention, graceful drain on idle, crash-count-based circuit breaking, and session affinity. A generic library would add indirection without value.
+This is the exact pattern the MCP SDK uses for its own `TestEndToEnd`.
 
-**Daemon socket location:** Follow XDG conventions. `$XDG_RUNTIME_DIR/serena/daemon.sock` on Linux, `~/Library/Caches/serena/daemon.sock` on macOS. PID file alongside for liveness checking.
+### Process Management for Language Servers
 
-### Plugin / Skill System
+Language servers are real external processes (gopls, pyright, jdtls, rust-analyzer). No new dependencies needed:
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Go interfaces + registry pattern | n/a | Skill pack registration, agent profile loading | For in-process plugins (compiled into the binary), Go interfaces are the right abstraction. Define a `Skill` interface with `Name()`, `Tools()`, `Init()` methods. Register at init time. Simple, type-safe, zero overhead. | HIGH |
+| Concern | Approach | Why |
+|---------|----------|-----|
+| LS lifecycle | Let existing `lspool` manage LS processes | The worker pool already handles spawn, health check, circuit breaking, TTL. Don't reinvent for tests. |
+| LS availability | `testing.Short()` skip + `exec.LookPath()` | Skip multi-language tests when LS not installed. Fail gracefully with `t.Skip("gopls not found")`. |
+| Parallel safety | `t.Parallel()` with separate temp workspaces | Each test gets `t.TempDir()`. Pool handles concurrent LS access via share-until-dirty. |
+| Cleanup | `t.Cleanup()` for daemon shutdown | Register cleanup in test setup. Daemon's existing signal-first shutdown handles kernel-first ordering. |
+| Timeout | Per-test `context.WithTimeout` | 30s per tool call, 120s per test function. LS initialization is the bottleneck. |
 
-**Why not hashicorp/go-plugin:** go-plugin is designed for out-of-process plugins communicating over gRPC. It's excellent when you need: crash isolation between plugins, cross-language plugins, or plugins from untrusted authors. Serena's skill packs are first-party Go code compiled into the binary. go-plugin would add: subprocess overhead per skill, gRPC serialization cost on every tool call, and complexity in the build/deploy pipeline. The 4-layer architecture already provides clean boundaries via interfaces.
+### Fixture Strategy
 
-**Future escape hatch:** If third-party plugin support becomes a requirement later, go-plugin can be introduced for Layer 2 skills specifically, while keeping Layer 0-1 in-process. The interface-based design doesn't preclude this -- it's additive.
+**Reuse legacy fixtures.** `legacy/test/resources/repos/` contains 45 language fixture repos with known symbols. Copy the 4 target languages plus dogfood against Serena itself:
 
-### Configuration
+| Fixture Source | Language | What It Provides |
+|----------------|----------|------------------|
+| Serena's own codebase | Go | Dogfooding. 25,500 lines, 21 packages. Known symbols for every tool category. |
+| `legacy/test/resources/repos/python/test_repo/` | Python | Models, services, utils with known class/function hierarchy. |
+| `legacy/test/resources/repos/typescript/` | TypeScript | Type definitions, interfaces, modules. |
+| `legacy/test/resources/repos/java/` | Java | Classes, interfaces, inheritance. |
+| `legacy/test/resources/repos/rust/` | Rust | Structs, traits, impls. |
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| [knadh/koanf](https://github.com/knadh/koanf) | v2 (latest) | Layered config: defaults -> global -> project -> CLI | Lightweight alternative to Viper. Respects key case (Viper lowercases everything). Modular providers -- only pull in YAML parser, not the entire dependency tree. 313% smaller binary than Viper. Supports merging multiple sources in order. | HIGH |
-| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing for config files | Standard YAML library for Go. Used by koanf's YAML provider. | HIGH |
+Copy to `testdata/fixtures/{lang}/` within the Go test package. Go's `testdata/` convention ensures `go build` ignores these files while `go test` can access them via relative paths.
 
-**Config hierarchy (matching existing Serena):**
-1. Built-in defaults (hardcoded)
-2. Global config: `~/.serena/serena_config.yml`
-3. Project config: `.serena/project.yml`
-4. Environment variables: `SERENA_*`
-5. CLI flags (highest precedence)
+## Installation
 
-Koanf's `Load()` with ordered providers handles this naturally.
+```bash
+# Promote go-cmp from transitive to direct test dependency
+go get github.com/google/go-cmp@v0.7.0
 
-**Why not Viper:** Forces lowercase keys (breaks YAML specs), pulls massive dependency tree, global state by default. Koanf is the modern Go community choice for new projects.
+# Everything else is already in go.mod:
+# - github.com/modelcontextprotocol/go-sdk v1.5.0 (Client, InMemoryTransport)
+# - github.com/stretchr/testify v1.11.1
+# - golang.org/x/sync v0.20.0 (errgroup for parallel fixture setup)
 
-### Caching
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| [dgraph-io/ristretto](https://github.com/dgraph-io/ristretto) | v2.0.0+ | In-memory symbol cache, workspace index | Generic-aware (v2), TinyLFU admission + SampledLFU eviction gives best-in-class hit rates. Cost-based eviction (can weight by symbol tree size). Concurrent-safe. Ideal for the shared workspace cache where multiple sessions read the same symbol data. | MEDIUM |
-| `sync.Map` + custom (stdlib) | n/a | Session-scoped dirty buffer overlays | Session overlays are small, short-lived, and need fast path for the common case (no dirty buffers). sync.Map or a simple mutex-guarded map is sufficient. Don't over-engineer this. | HIGH |
-
-**Cache topology:**
-- **Workspace cache** (ristretto): Symbol trees, file indexes, LSP response cache. Shared across sessions on same workspace. Keyed by workspace fingerprint.
-- **Session overlay** (simple map): Dirty buffers, unsaved edits. Per-session. Promoted to workspace cache on save.
-- **LSP response cache** (ristretto): Recent textDocument/definition, references results. Short TTL, invalidated on file change events.
-
-### CLI
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| [spf13/cobra](https://github.com/spf13/cobra) | v1.8+ | CLI commands: `serena daemon start`, `serena init`, etc. | De facto standard. Used by kubectl, docker, gh, hugo. Subcommand support, flag parsing, shell completion, help generation. No reason to use anything else. | HIGH |
-
-### Logging
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `log/slog` (stdlib) | Go 1.22+ | Structured logging throughout | Standard library since Go 1.21. Zero dependencies. JSON and text handlers built in. Context-aware. Good enough for a daemon; no need for zerolog's marginal perf gains. Keeps dependency count down. | HIGH |
-
-### Testing
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `testing` (stdlib) | Go 1.22+ | Test framework | Standard Go testing. Table-driven tests. | HIGH |
-| [stretchr/testify](https://github.com/stretchr/testify) | v1.9+ | Assertions, mocks | `assert` and `require` packages reduce test boilerplate significantly. `mock` package for interface mocking (LS client, MCP transport). Most widely used Go test extension. | HIGH |
-
-### Build & Distribution
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| [goreleaser](https://goreleaser.com/) | latest | Cross-platform binary releases | Single binary distribution is a key Go advantage. GoReleaser handles cross-compilation, checksums, GitHub releases, homebrew taps. | MEDIUM |
-| Go modules | Go 1.22+ | Dependency management | Standard. `go.mod` + `go.sum`. | HIGH |
-
-### Concurrency Primitives
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `golang.org/x/sync/errgroup` | latest | Parallel LSP reads with error propagation | Groups of goroutines with shared context cancellation. Perfect for "fan-out N definition lookups, cancel all on first error." | HIGH |
-| `golang.org/x/sync/semaphore` | latest | Concurrency limits on LS worker pool | Weighted semaphore for bounding concurrent LS operations. Prevents overloading a single language server. | HIGH |
+# Optional, only if txtar fixtures are adopted:
+# go get golang.org/x/tools/txtar@latest
+```
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| MCP SDK | modelcontextprotocol/go-sdk | mark3labs/mcp-go | Community vs official. Official will track spec faster. |
-| LSP types | Generated from metamodel | go.lsp.dev/protocol | Stuck at LSP 3.15 (2022), unmaintained |
-| LSP types | Generated from metamodel | sourcegraph/go-lsp | Minimal subset, unmaintained |
-| Config | koanf v2 | spf13/viper | Viper lowercases keys, heavy deps, global state |
-| Plugin | Go interfaces | hashicorp/go-plugin | Over-engineered for in-process compiled plugins |
-| Cache | ristretto v2 | allegro/bigcache | BigCache optimizes for large byte blobs; ristretto better for typed objects with varying costs |
-| Logging | slog (stdlib) | rs/zerolog | Marginal perf gain not worth the dependency for a daemon |
-| JSON-RPC | go.lsp.dev/jsonrpc2 or custom | creachadair/jrpc2 | jsonrpc2 is simpler; custom may be needed for multiplexed daemon connections |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| `mcp.InMemoryTransport` | Streamable HTTP transport | When testing HTTP-specific behavior (CORS, session headers, auth). Not needed for tool correctness. |
+| `mcp.InMemoryTransport` | Stdio transport via `os/exec` | When testing the full forwarder-daemon flow end-to-end. Slower, harder to debug. Use only for a single smoke test. |
+| Go stdlib `testing` + subtests | `testify/suite` | Never for this project. Go subtests (`t.Run`) with table-driven patterns are simpler, more idiomatic, and match existing codebase conventions. |
+| `testing/synctest` | Manual `time.Sleep` waits | Never. synctest eliminates flaky timing in concurrent tests. |
+| Custom 20-line golden file helper | `sebdah/goldie` v2 | Only if golden file management becomes complex (50+ fixtures). Start simple. |
+| Copy legacy fixtures to `testdata/` | Generate fixtures at test time | Only if fixtures need dynamic content (e.g., version-specific syntax). Static fixtures are simpler and reproducible. |
+| `google/go-cmp` | `reflect.DeepEqual` | Never. go-cmp provides readable diffs, custom comparers for ignoring volatile fields (timestamps, IDs). |
 
-## Minimum Go Version
+## What NOT to Use
 
-**Go 1.22** -- Required for:
-- `log/slog` (1.21+)
-- Enhanced `net/http` routing patterns (1.22)
-- Improved `for range` semantics (1.22)
-- Generic type support maturity
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `testcontainers-go` | Language servers are local binaries, not containers. Docker adds setup cost, CI complexity, no benefit for LSP testing. | Direct `lspool` management with `exec.LookPath` availability checks. |
+| `rogpeppe/go-internal/testscript` | Designed for CLI command testing with shell scripts. MCP tool invocation is programmatic Go API calls, not shell commands. | Go subtests calling `ClientSession.CallTool()` directly. |
+| `gomock` / `mockgen` | Integration tests must exercise real subsystems. Mocking the kernel or LS defeats the purpose of e2e testing. | Wire real daemon with real kernel. Skip when LS unavailable. |
+| Custom JSON-RPC MCP client | Reimplementing MCP protocol framing is error-prone and unnecessary. | `mcp.Client` from the SDK speaks the exact protocol. |
+| `httptest.Server` | HTTP layer complexity when in-memory transport exists. | `mcp.InMemoryTransport` -- zero network, real protocol. |
+| `TestMain` re-exec pattern | Complex subprocess management for daemon startup. | In-process `daemon.New()` + InMemoryTransport. Existing `daemon_integration_test.go` proves this works. |
+| `dgraph-io/ristretto` | Considered in v1.0 research but not adopted. Don't add for tests. | Standard `sync.Map` or mutex-guarded maps for any test-local caching. |
 
-Target Go 1.23 if available at development start, for the latest `sync` package improvements.
+## Stack Patterns by Test Type
 
-## Installation (Initial Dependencies)
+**Tool correctness tests (primary -- 38 tools):**
+- `InMemoryTransport` + `Client.CallTool()` + `assert` on result content
+- Fastest feedback loop, no process management, real MCP framing
+- One daemon instance per test function, tools called sequentially
 
-```bash
-# Initialize module
-go mod init github.com/postfix/serena
+**Daemon lifecycle tests (shutdown, reconnect, goroutine leaks):**
+- `daemon.New()` + `daemon.Run()` with `context.WithCancel` + goroutine counting
+- Existing `TestE2ECleanShutdown` pattern, extend for reconnect scenarios
+- Use `testing/synctest` for deterministic timing
 
-# Core
-go get github.com/modelcontextprotocol/go-sdk@v1.4.1
-go get github.com/knadh/koanf/v2
-go get github.com/knadh/koanf/providers/file
-go get github.com/knadh/koanf/parsers/yaml
-go get github.com/spf13/cobra
-go get github.com/dgraph-io/ristretto/v2
+**Multi-language fixture tests:**
+- `testing.Short()` guard + `exec.LookPath()` for LS detection
+- Table-driven: iterate languages, skip unavailable, test same tool matrix
+- Separate `testdata/fixtures/{lang}/` directories
 
-# Concurrency
-go get golang.org/x/sync
+**Profile/mode filtering tests:**
+- In-process `skill.ResolveTools()` assertions (no LS needed)
+- Pure logic, no LSP round-trips, fast
+- Already proven in `TestE2EProfileConfigLayering`
 
-# Testing
-go get github.com/stretchr/testify
+**Dogfooding tests (Serena's own codebase):**
+- Point workspace at repo root, activate, exercise all 38 tools
+- Requires gopls available -- skip with `testing.Short()`
+- Golden file snapshots for symbol overview outputs
 
-# JSON-RPC (evaluate during LSP layer implementation)
-go get go.lsp.dev/jsonrpc2
-```
+## Version Compatibility
 
-## What NOT to Install
-
-| Library | Why Not |
-|---------|---------|
-| `spf13/viper` | Heavy, lowercases keys, global state |
-| `go.lsp.dev/protocol` | Abandoned at LSP 3.15 |
-| `hashicorp/go-plugin` | Subprocess overhead for in-process plugins |
-| `gorilla/mux` | stdlib `net/http` routing is sufficient since Go 1.22 |
-| `gin`/`echo`/`fiber` | No web framework needed; MCP SDK handles HTTP transport |
-| Any ORM | No traditional database; cache is in-memory, persistence is file-based |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| MCP Go SDK v1.5.0 | Go 1.25+ | Uses `testing/synctest` in its own tests. `InMemoryTransport` is stable API. `Client.Connect()` + `CallTool()` are the public testing surface. |
+| `testing/synctest` | Go 1.25+ | Was experimental in 1.24 (`GOEXPERIMENT=synctest`). GA in 1.25 with `Test()` replacing `Run()`. |
+| stretchr/testify v1.11.1 | Go 1.25 | Already in use across all existing test files. |
+| google/go-cmp v0.7.0 | Go 1.25 | Already transitive dependency via MCP SDK. Promote to direct. |
+| golang.org/x/tools/txtar | Go 1.25 | Minimal dependency (parser only). Optional. |
 
 ## Sources
 
-- [Official MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) -- v1.4.1, verified March 2026
-- [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) -- v0.17.0+, MCP spec 2025-11-25
-- [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25)
-- [go.lsp.dev/protocol](https://pkg.go.dev/go.lsp.dev/protocol) -- v0.12.0, LSP 3.15, last updated 2022
-- [golang/go#67658](https://github.com/golang/go/issues/67658) -- Request to export gopls LSP types (unresolved)
-- [isaacphi/mcp-language-server](https://github.com/isaacphi/mcp-language-server) -- Precedent for gopls-derived LSP types in Go MCP server
-- [opencode-ai/opencode](https://github.com/opencode-ai/opencode) -- Go MCP client with LSP integration, uses custom LSP types
-- [knadh/koanf](https://github.com/knadh/koanf) -- v2, lightweight config management
-- [dgraph-io/ristretto](https://github.com/dgraph-io/ristretto) -- v2.0.0, generics-aware cache
-- [VictoriaMetrics: Graceful Shutdown in Go](https://victoriametrics.com/blog/go-graceful-shutdown/) -- Daemon shutdown patterns
-- [Supervisor/Restart Pattern in Go](https://compositecode.blog/2025/06/26/go-concurrency-patternssupervisor-restart-pattern/) -- Worker supervision patterns
-- [CVE-2026-33252](https://advisories.gitlab.com/pkg/golang/github.com/modelcontextprotocol/go-sdk/CVE-2026-33252/) -- MCP Go SDK HTTP Origin fix in v1.4.1
+- MCP Go SDK v1.5.0 source in module cache (`go/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.5.0/mcp/`) -- verified `InMemoryTransport`, `Client`, `ClientSession.CallTool()`, `NewInMemoryTransports()` API directly. HIGH confidence.
+- MCP Go SDK `mcp_test.go` line 61-64 -- confirmed `NewInMemoryTransports()` + `Client.Connect()` + `CallTool` end-to-end test pattern. HIGH confidence.
+- MCP Go SDK `transport.go` lines 120-143 -- `InMemoryTransport` implementation using `net.Pipe()`. HIGH confidence.
+- Existing Serena `internal/daemon/daemon_integration_test.go` -- confirmed in-process daemon construction, `skill.InitAll()`, `ExecuteTool()`, lifecycle testing patterns. HIGH confidence.
+- Serena `go.mod` -- verified all dependency versions and existing transitive deps. HIGH confidence.
+- [The Synctest Package (Go 1.25)](https://appliedgo.net/spotlight/go-1.25-the-synctest-package/) -- synctest GA status confirmed. HIGH confidence.
+- [Testing concurrent code with testing/synctest](https://go.dev/blog/synctest) -- official Go blog on synctest design. HIGH confidence.
+- [Gopls integration test framework](https://pkg.go.dev/golang.org/x/tools/gopls/internal/test/integration) -- txtar fixture pattern reference. MEDIUM confidence.
+- [txtar package](https://pkg.go.dev/golang.org/x/tools/txtar) -- format specification. HIGH confidence.
+- Legacy fixture repos at `legacy/test/resources/repos/` -- verified 45 language directories on disk. HIGH confidence.
+- [Golden file testing in Go](https://ieftimov.com/posts/testing-in-go-golden-files/) -- `-update` flag pattern. HIGH confidence.
+
+---
+*Stack research for: Integration testing of Go MCP server with multi-language LSP fixtures*
+*Researched: 2026-04-08*

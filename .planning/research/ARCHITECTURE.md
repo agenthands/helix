@@ -1,457 +1,414 @@
-# Architecture Patterns
+# Architecture Research: Integration Testing for Daemon-Based MCP Server
 
-**Domain:** Go daemon-based MCP server with LSP worker management
-**Researched:** 2026-04-07
-**Overall confidence:** HIGH (gopls patterns well-documented, Go MCP SDKs stable)
+**Domain:** End-to-end integration testing for a daemon-based MCP code intelligence platform
+**Researched:** 2026-04-08
+**Confidence:** HIGH (based on direct codebase analysis + MCP Go SDK v1.5.0 source)
 
-## Recommended Architecture
-
-### The gopls Model, Adapted
-
-The architecture directly adapts the gopls daemon/forwarder/cache/session/view/snapshot hierarchy to an MCP server that manages **multiple** language servers instead of being one.
+## System Overview: Test Architecture Layered on Existing System
 
 ```
-                        MCP Clients
-                    (Claude Code, Codex, IDE)
-                           |
-              +------------+------------+
-              |                         |
-      stdio forwarder          Streamable HTTP
-      (tiny proxy binary)      (embedded in daemon)
-              |                         |
-              +------- Unix socket -----+
-                           |
-                    +------+------+
-                    |   DAEMON    |
-                    |             |
-                    | MCP Runtime |  <-- Layer 0
-                    | (sessions,  |
-                    |  transport, |
-                    |  registry)  |
-                    +------+------+
-                           |
-                    +------+------+
-                    |   KERNEL    |
-                    |             |
-                    | Workspace   |  <-- Layer 1
-                    | Cache/View/ |
-                    | Snapshot    |
-                    +------+------+
-                           |
-              +------------+------------+
-              |            |            |
-         LS Worker    LS Worker    LS Worker
-         (gopls)      (pyright)   (typescript)
-         [child proc] [child proc] [child proc]
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     TEST ORCHESTRATION LAYER (NEW)                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────────┐   │
+│  │ Test Harness │  │  Fixture     │  │  Assertion                  │   │
+│  │ (testharness │  │  Manager     │  │  Helpers                    │   │
+│  │  package)    │  │  (fixtures/) │  │  (tool result validators)   │   │
+│  └──────┬───────┘  └──────┬───────┘  └──────────────┬──────────────┘   │
+│         │                 │                          │                  │
+├─────────┴─────────────────┴──────────────────────────┴──────────────────┤
+│                     MCP CLIENT LAYER (NEW)                              │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  mcpsdk.Client + StreamableClientTransport (from MCP Go SDK)   │    │
+│  │  Connects via HTTP to test daemon instance                      │    │
+│  └────────────────────────────┬────────────────────────────────────┘    │
+│                               │ HTTP /mcp                              │
+├───────────────────────────────┴─────────────────────────────────────────┤
+│              EXISTING DAEMON (unmodified, started by harness)           │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐    │
+│  │MCP Srvr │  │ Kernel  │  │LS Pool  │  │ Skills  │  │ Profiles │    │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  └──────────┘    │
+├─────────────────────────────────────────────────────────────────────────┤
+│              FIXTURE PROJECTS (NEW, on disk)                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────────┐      │
+│  │ Go (self)│  │ Python   │  │TypeScript│  │ Rust / Java       │      │
+│  │ dogfood  │  │ fixture  │  │ fixture  │  │ fixtures          │      │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────────────┘      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Insight from gopls
+## Component Responsibilities
 
-gopls uses a **Cache > Session > View > Snapshot** hierarchy where:
-- **Cache** lives for the process lifetime, shared across all sessions
-- **Session** represents one client connection (one editor)
-- **View** represents one workspace folder with specific build config
-- **Snapshot** is an immutable point-in-time view of all files after an edit
+### New Components
 
-For Serena 2.0, adapt this to:
-- **Cache** = shared LS worker pool + parsed symbol indices + file content cache
-- **Session** = one MCP client connection with its mode/profile/tool set
-- **View** = one workspace (repo root + language) binding to warm LS workers
-- **Snapshot** = workspace state including dirty buffer overlays for a session
+| Component | Responsibility | Location |
+|-----------|----------------|----------|
+| **Test Harness** | Daemon lifecycle (start/stop), MCP client management, workspace activation | `internal/testharness/` |
+| **Fixture Manager** | Copy/setup/teardown fixture projects in temp dirs | `internal/testharness/fixtures.go` |
+| **Assertion Helpers** | Validate MCP tool responses (CallToolResult parsing, error checking) | `internal/testharness/assert.go` |
+| **Fixture Projects** | Small projects with known symbols, references, diagnostics | `testdata/fixtures/{go,python,typescript,rust,java}/` |
+| **E2E Test Suites** | Actual test files exercising tool categories | `tests/e2e/` |
+| **Dogfood Suite** | Tests exercising all tools against Serena's own codebase | `tests/e2e/dogfood_test.go` |
 
-### Component Boundaries
+### Existing Components (unmodified except two accessor methods)
 
-| Component | Responsibility | Talks To | Layer |
-|-----------|---------------|----------|-------|
-| **stdio forwarder** | Thin proxy, connects to daemon via Unix socket | Daemon (Unix socket) | Edge |
-| **HTTP adapter** | Streamable HTTP MCP endpoint | Daemon (in-process) | Edge |
-| **MCP Runtime** | Transport, JSON-RPC dispatch, session lifecycle, tool registry, capability negotiation | Sessions, Tool Registry | L0 |
-| **Session Manager** | Per-client state, mode/profile binding, dirty buffer overlays | MCP Runtime, Views | L0 |
-| **Tool Registry** | Dynamic tool registration, skill pack loading, per-session tool filtering | Sessions, Skills | L0 |
-| **Workspace Manager** | Workspace key resolution, view creation, cache sharing policy | Sessions, LS Pool | L1 |
-| **LS Pool** | Child process lifecycle, warm/idle/circuit-broken states, TTL eviction | Workspace Manager, LS Adapters | L1 |
-| **LS Adapter** | Generic LSP client (JSON-RPC over stdio to child LS), language-specific quirk handling | LS Pool, individual LS processes | L1 |
-| **Symbol Graph** | References, definitions, rename, symbol overview from LS responses | LS Adapter, Skills | L1 |
-| **Edit Planner** | Deterministic edit planning + verification, conflict detection | Symbol Graph, File Cache | L1 |
-| **File Cache** | File content, overlay management (saved vs unsaved), file watching | Workspace Manager, Skills | L1 |
-| **Skills** | Pluggable tool implementations (semantic retrieval, editing, memory, onboarding) | Tool Registry, Kernel components | L2 |
-| **Agent Profiles** | Tool set presets, mode defaults, capability negotiation hints | Session Manager, Tool Registry | L3 |
+| Component | Role in Testing |
+|-----------|----------------|
+| `daemon.New()` + `daemon.Run()` | Started by harness; provides full MCP server |
+| `mcpsdk.Server` + `HTTPHandler()` | Serves MCP protocol over HTTP for test client |
+| `kernel.Kernel` | Activates workspace, manages LS workers for fixture projects |
+| `lspool.Pool` | Spawns real language servers for fixture languages |
+| `skill.*` | All skills exercised end-to-end through MCP client |
+| `profile.*` | Profile filtering tested via client tool list assertions |
 
-### Data Flow
-
-#### Read Operation (e.g., "find symbol Foo")
+## Recommended Project Structure
 
 ```
-1. MCP Client sends tools/call via stdio or HTTP
-2. Edge adapter forwards JSON-RPC to daemon
-3. MCP Runtime dispatches to session
-4. Session resolves tool from registry (filtered by profile/mode)
-5. Skill handler receives call
-6. Skill calls Kernel: SymbolGraph.FindSymbol(workspace, "Foo")
-7. Kernel checks Cache for existing result
-8. Cache miss -> Kernel routes to LS Adapter for workspace's language
-9. LS Adapter sends textDocument/documentSymbol to warm LS worker
-10. LS Worker responds with symbols
-11. Kernel caches result, returns to Skill
-12. Skill formats MCP response
-13. Response flows back: Session -> MCP Runtime -> Edge -> Client
+internal/
+└── testharness/              # NEW: reusable test infrastructure
+    ├── harness.go            # TestDaemon struct: start, stop, client access
+    ├── client.go             # MCP client helpers: CallTool, ListTools wrappers
+    ├── fixtures.go           # Fixture project copy/setup/teardown
+    ├── assert.go             # Tool result assertion helpers
+    └── harness_test.go       # Self-tests for the harness itself
+
+testdata/
+└── fixtures/                 # NEW: small projects with known symbols
+    ├── go/                   # Go fixture: go.mod, main.go, pkg/
+    ├── python/               # Python fixture: pyproject.toml, src/
+    ├── typescript/            # TypeScript fixture: tsconfig.json, src/
+    ├── rust/                  # Rust fixture: Cargo.toml, src/
+    └── java/                  # Java fixture: pom.xml, src/
+
+tests/
+└── e2e/                      # NEW: end-to-end test suites
+    ├── suite_test.go         # TestMain with shared daemon setup
+    ├── symbols_test.go       # Symbol retrieval tool tests
+    ├── edit_test.go          # Symbol editing tool tests
+    ├── fileops_test.go       # File operation tool tests
+    ├── diag_test.go          # Diagnostic tool tests
+    ├── memory_test.go        # Memory skill tool tests
+    ├── workflow_test.go      # Workflow skill tool tests
+    ├── profile_test.go       # Profile/mode switching tests
+    └── dogfood_test.go       # All tools against Serena's own codebase
 ```
 
-#### Write Operation (e.g., "replace function body")
+### Structure Rationale
 
-```
-1-5. Same as read
-6. Skill calls Kernel: EditPlanner.ReplaceBody(symbol, newCode)
-7. EditPlanner acquires workspace write lock (serialized mutations)
-8. EditPlanner resolves symbol location via SymbolGraph
-9. EditPlanner computes edit, applies to overlay in FileCache
-10. FileCache notifies LS Adapter of didChange
-11. LS Worker re-indexes (diagnostics flow back async)
-12. EditPlanner verifies edit (no parse errors from LS)
-13. Release write lock
-14. Response flows back with success + diagnostics
-```
+- **`internal/testharness/`:** Reusable across test suites. Keeps daemon lifecycle logic out of individual test files. Internal package prevents external consumption of test infrastructure.
+- **`testdata/fixtures/`:** Go convention for test data. Each fixture is a self-contained project that language servers can index. Committed to repo, never modified by tests (copied to temp dirs).
+- **`tests/e2e/`:** Separate from unit tests. Run with build tag `//go:build e2e` so `go test ./...` skips them by default (they need real language servers installed). `TestMain` shares one daemon instance across all tests in the package.
 
-#### Concurrency Model
+## Architectural Patterns
 
-- **Parallel reads**: Multiple sessions can read from same workspace concurrently
-- **Serialized writes**: One write at a time per workspace (mutex or channel-based serialization)
-- **Cross-session isolation**: Dirty buffers are session-scoped overlays; clean state is shared
-- **LS communication**: Each LS worker has a dedicated goroutine pair (reader + writer) for JSON-RPC
+### Pattern 1: Shared Daemon Per Test Package (httptest.Server pattern)
 
-## Go Package Layout
+**What:** Start one daemon + HTTP server in `TestMain`, share across all tests in the package. Each test gets its own MCP client session.
+**When to use:** All E2E tests. Daemon startup is expensive (skill init, pool creation).
+**Trade-offs:** Faster (one daemon per package run), but tests must not interfere with each other's state. Workspace activation is per-session, so each test can activate a different fixture.
 
-Use the gopls-proven `cmd/` + `internal/` pattern. No `pkg/` directory -- this is a self-contained binary, not a library.
-
-```
-serena/
-  cmd/
-    serena/              # Main daemon binary
-      main.go            # Flag parsing, daemon startup
-    serena-forwarder/    # Thin stdio-to-socket proxy
-      main.go
-  internal/
-    daemon/              # Daemon lifecycle, signal handling, socket listener
-      daemon.go
-      forwarder.go       # Forwarder connection handling (daemon side)
-    mcp/                 # Layer 0: MCP Runtime
-      server.go          # MCP server (wraps official SDK or mcp-go)
-      session.go         # Session lifecycle, per-client state
-      transport.go       # Transport abstraction (stdio, HTTP, socket)
-      registry.go        # Dynamic tool registry
-      negotiate.go       # Capability negotiation
-    kernel/              # Layer 1: Code Intelligence Kernel
-      workspace.go       # Workspace manager, view creation
-      cache.go           # Shared cache (gopls Cache analog)
-      snapshot.go        # Immutable workspace snapshot
-      overlay.go         # Dirty buffer overlay management
-      filewatcher.go     # File system watching, invalidation
-    kernel/lspool/       # LS worker pool
-      pool.go            # Worker lifecycle, TTL, circuit breaking
-      worker.go          # Single LS worker (child process + JSON-RPC)
-      adapter.go         # Generic LSP client protocol
-      quirks.go          # Language-specific LSP quirk registry
-    kernel/symbols/      # Symbol operations
-      graph.go           # Symbol graph (refs, defs, rename)
-      edit.go            # Edit planner and verifier
-      search.go          # Pattern search across workspace
-    skills/              # Layer 2: Pluggable skills
-      skill.go           # Skill interface definition
-      retrieval/         # Semantic retrieval workflows
-      editing/           # Targeted editing workflows
-      memory/            # Project memory persistence
-      onboarding/        # Repo understanding
-    profiles/            # Layer 3: Agent profiles
-      profile.go         # Profile interface
-      claude.go          # Claude Code preset
-      codex.go           # Codex preset
-      ide.go             # IDE assistant preset
-    protocol/            # LSP protocol types (generated or vendored)
-      lsp.go
-      types.go
-    config/              # Configuration loading
-      config.go
-      project.go         # Per-project .serena/ config
-```
-
-**Key conventions:**
-- `internal/` enforces that nothing is importable outside the module
-- Each `cmd/` produces one binary
-- Package names match directory names (Go convention)
-- No circular imports: daemon -> mcp -> kernel -> (skills use kernel interfaces, not vice versa)
-
-## Interface Design
-
-### Core Interfaces
-
+**Example:**
 ```go
-// Tool is what skills expose to the MCP layer
-type Tool interface {
-    Name() string
-    Description() string
-    InputSchema() json.RawMessage
-    Execute(ctx context.Context, session *Session, input json.RawMessage) (*ToolResult, error)
-}
+// tests/e2e/suite_test.go
+package e2e_test
 
-// Skill is a pluggable pack of related tools
-type Skill interface {
-    Name() string
-    Tools() []Tool
-    // Init is called once when the skill is loaded
-    Init(kernel Kernel) error
-}
-
-// Kernel is what skills call to access code intelligence
-type Kernel interface {
-    // Workspace operations
-    Workspace(ctx context.Context, root string) (*Workspace, error)
-    
-    // Symbol operations (read path)
-    FindSymbol(ctx context.Context, ws *Workspace, query SymbolQuery) ([]Symbol, error)
-    GetReferences(ctx context.Context, ws *Workspace, sym Symbol) ([]Location, error)
-    GetDefinition(ctx context.Context, ws *Workspace, sym Symbol) (*Location, error)
-    SymbolOverview(ctx context.Context, ws *Workspace, path string) ([]Symbol, error)
-    
-    // Edit operations (write path, serialized)
-    ReplaceBody(ctx context.Context, ws *Workspace, sym Symbol, newBody string) (*EditResult, error)
-    InsertBefore(ctx context.Context, ws *Workspace, sym Symbol, code string) (*EditResult, error)
-    InsertAfter(ctx context.Context, ws *Workspace, sym Symbol, code string) (*EditResult, error)
-    Rename(ctx context.Context, ws *Workspace, sym Symbol, newName string) (*EditResult, error)
-    
-    // File operations
-    ReadFile(ctx context.Context, ws *Workspace, path string) ([]byte, error)
-    SearchPattern(ctx context.Context, ws *Workspace, pattern string) ([]Match, error)
-}
-
-// LSWorker manages a single language server child process
-type LSWorker interface {
-    Language() string
-    Healthy() bool
-    Request(ctx context.Context, method string, params interface{}) (json.RawMessage, error)
-    Notify(ctx context.Context, method string, params interface{}) error
-    Shutdown(ctx context.Context) error
-}
-
-// Profile defines agent-specific tool/mode defaults
-type Profile interface {
-    Name() string
-    DefaultMode() string
-    ToolFilter() func(Tool) bool  // Which tools this profile exposes
-    MaxConcurrentReads() int
-}
-```
-
-### Dependency Direction (strict)
-
-```
-profiles -> skills -> kernel -> lspool -> protocol
-              |                    |
-              +-----> mcp <--------+  (mcp depends on nothing below kernel)
-                       |
-                    daemon
-```
-
-Skills depend on the Kernel interface, never on concrete LS workers. The Kernel interface is the stability boundary -- everything above it can change independently of LS implementation details.
-
-## Process Supervision Patterns
-
-### Daemon Lifecycle
-
-```go
-func main() {
-    ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-    defer cancel()
-    
-    daemon := daemon.New(config)
-    
-    // Start subsystems
-    g, gctx := errgroup.WithContext(ctx)
-    g.Go(func() error { return daemon.ListenSocket(gctx, socketPath) })
-    g.Go(func() error { return daemon.ListenHTTP(gctx, httpAddr) })
-    g.Go(func() error { return daemon.RunHealthChecks(gctx) })
-    g.Go(func() error { return daemon.RunIdleReaper(gctx) })
-    
-    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-        log.Fatal(err)
-    }
-    
-    // Graceful shutdown: drain sessions, stop LS workers
-    daemon.Shutdown(shutdownCtx)
-}
-```
-
-### LS Worker Supervision
-
-```go
-type WorkerState int
-const (
-    WorkerStarting WorkerState = iota
-    WorkerReady                        // Initialized, serving requests
-    WorkerIdle                         // No active requests, TTL counting
-    WorkerCircuitOpen                  // Too many crashes, backing off
-    WorkerShutdown                     // Graceful shutdown in progress
+import (
+    "os"
+    "testing"
+    "github.com/postfix/serena/internal/testharness"
 )
 
-type WorkerPolicy struct {
-    IdleTTL         time.Duration   // How long idle before retirement (e.g., 5m)
-    MaxRestarts     int             // Before circuit breaking (e.g., 3)
-    RestartBackoff  time.Duration   // Exponential backoff base (e.g., 1s)
-    CircuitTimeout  time.Duration   // How long circuit stays open (e.g., 30s)
-    InitTimeout     time.Duration   // Max time for LS initialize handshake (e.g., 30s)
-    RequestTimeout  time.Duration   // Default per-request timeout (e.g., 10s)
+var harness *testharness.TestDaemon
+
+func TestMain(m *testing.M) {
+    var err error
+    harness, err = testharness.Start(testharness.Options{
+        Profile:  "full",
+        HTTPAddr: "127.0.0.1:0", // random port
+    })
+    if err != nil {
+        panic(err)
+    }
+    code := m.Run()
+    harness.Stop()
+    os.Exit(code)
 }
 ```
 
-### Child Process Management
+### Pattern 2: Per-Test MCP Client Sessions
 
-- Use `exec.CommandContext(ctx, ...)` so context cancellation kills the child
-- Set `Setpgid: true` in `SysProcAttr` to isolate process groups
-- Dedicated goroutine per worker: reads stdout (JSON-RPC responses), writes stdin (requests)
-- Use `cmd.Wait()` in a goroutine to detect unexpected exits and trigger restart logic
-- On daemon SIGTERM: send `shutdown` LSP request to each worker, wait up to N seconds, then SIGKILL stragglers
+**What:** Each test function creates a fresh MCP client session via `StreamableClientTransport`. The client connects to the shared daemon's HTTP endpoint. Tests call `activate_project` to set their fixture as the active workspace.
+**When to use:** Every individual E2E test. Ensures session isolation.
+**Trade-offs:** Slight overhead per test for MCP handshake (~10ms), but ensures clean session state (mode, workspace).
 
-### Two-Phase Shutdown
+**Example:**
+```go
+func TestGoToDefinition(t *testing.T) {
+    ctx := context.Background()
+    fixture := harness.PrepareFixture(t, "go")
+    session := harness.NewSession(t, ctx)
+    defer session.Close()
+
+    session.ActivateProject(t, fixture.Root)
+    session.WaitForLS(t, "go", 30*time.Second)
+
+    result := session.CallTool(t, "go_to_definition", map[string]any{
+        "file_path":   "main.go",
+        "symbol_name": "Greet",
+    })
+
+    testharness.AssertNoError(t, result)
+    testharness.AssertContains(t, result, "greet.go")
+}
+```
+
+### Pattern 3: Fixture-as-Snapshot (Copy-on-Use)
+
+**What:** Fixture projects in `testdata/fixtures/` are pristine templates. The harness copies them to `t.TempDir()` before each test (or test group) so that editing tests can modify files without affecting other tests.
+**When to use:** All tests that activate a project. Critical for editing tests that mutate files.
+**Trade-offs:** Disk I/O per test, but temp dirs are fast and `t.TempDir()` auto-cleans. For read-only tests, an optimization can share one copy across a subtest group.
+
+### Pattern 4: Build Tag Gating for CI Control
+
+**What:** E2E tests use `//go:build e2e` so they only run when explicitly requested: `go test -tags e2e ./tests/e2e/...`. This prevents CI failures when language servers are not installed.
+**When to use:** All E2E tests. Unit tests (`go test ./...`) must remain fast and self-contained.
+**Trade-offs:** Developers must remember to run with `-tags e2e`. Mitigated by Makefile target: `make test-e2e`.
+
+### Pattern 5: LS Readiness Polling
+
+**What:** After `activate_project`, language servers need time to initialize and index. The harness must wait for LS readiness before running assertions. Use a polling approach: call a cheap LSP operation (like `search_symbols` with a known symbol) until it succeeds or times out.
+**When to use:** Any test that exercises kernel tools (symbols, edit, diag). Not needed for memory/workflow/profile tests.
+**Trade-offs:** Adds latency to tests. Use short poll intervals (100ms) with a generous timeout (30-60s for first LS init, 5s for subsequent).
+
+## Data Flow
+
+### E2E Test Request Flow
 
 ```
-Phase 1 (graceful): Stop accepting new sessions, drain active requests,
-                     send LSP shutdown to all workers, save caches to disk
-Phase 2 (forced):   After timeout, SIGKILL remaining workers, close sockets
+Test Function
+    |
+    v
+testharness.Session.CallTool("go_to_definition", args)
+    |
+    v
+mcpsdk.ClientSession.CallTool(ctx, &CallToolParams{Name: ..., Arguments: ...})
+    |
+    v (HTTP POST /mcp, Streamable HTTP transport)
+    |
+mcpsdk.Server (MCP SDK) -> ProfileFilterMiddleware -> Tool Handler
+    |
+    v
+symbols.GoToDefinition handler
+    |
+    v
+kernel.GetRuntime(wsKey) -> WorkspaceRuntime.AcquireSession -> Pool.AcquireLease
+    |
+    v
+Worker (gopls process) <- LSP textDocument/definition request
+    |
+    v (LSP response)
+    |
+CallToolResult{Content: [TextContent{Text: "..."}]}
+    |
+    v (HTTP response, SSE stream)
+    |
+testharness.Session -> test assertions
 ```
 
-## Patterns to Follow
+### Daemon Lifecycle in Tests
 
-### Pattern 1: Immutable Snapshots for Request Consistency
+```
+TestMain:
+    testharness.Start()
+        -> config.SerenaConfig{HTTPAddr: ":0"}
+        -> daemon.New(cfg, logger)
+        -> httptest.NewServer(daemon.MCPServer().HTTPHandler())
+        -> daemon.KernelInstance().Run(ctx) in background goroutine
+        -> return TestDaemon{URL, cancel}
 
-**What:** Each MCP tool call operates against an immutable snapshot of workspace state, taken at request start. No concurrent edits can invalidate the data mid-request.
+Each Test:
+    harness.PrepareFixture(t, "go")
+        -> copies testdata/fixtures/go/ to t.TempDir()
+        -> returns FixtureProject{Root: tmpDir}
 
-**Why:** Eliminates an entire class of race conditions. gopls proves this works at scale.
+    harness.NewSession(t, ctx)
+        -> mcpsdk.NewClient(impl, nil)
+        -> client.Connect(ctx, &StreamableClientTransport{Endpoint: harness.URL})
+        -> returns Session{clientSession}
 
-**Implementation:** Snapshot holds references to cached file contents and LS responses. New edits create a new snapshot; old ones are GC'd when no requests reference them.
+    session.ActivateProject(t, root)
+        -> clientSession.CallTool(ctx, "activate_project", {repo_path: root})
+        -> daemon activates workspace, detects languages, pool ready
 
-### Pattern 2: Workspace Key for Cache Identity
+    session.CallTool(t, toolName, args)
+        -> clientSession.CallTool(ctx, params)
+        -> returns parsed result
 
-**What:** `WorkspaceKey = hash(repoRoot, language, toolchainVersion)`. Two sessions hitting the same workspace key share cache and LS workers.
+TestMain cleanup:
+    harness.Stop()
+        -> cancel context
+        -> daemon.shutdown() (kernel shutdown -> pool drain -> workers stop)
+        -> httptest.Server.Close()
+```
 
-**Why:** Avoids duplicate LS startup for the same repo. The key must include toolchain version because different Go/Python/TS versions produce different type information.
+### LS Worker Lifecycle During Tests
 
-### Pattern 3: Overlay Promotion
+```
+First test activating Go fixture:
+    activate_project -> kernel.ActivateWorkspace -> DetectLanguages(["go"])
+    First CallTool(symbol tool) -> Pool.AcquireLease -> no worker exists
+        -> Pool.spawnWorker("go", fixtureRoot) -> exec gopls
+        -> LSP initialize/initialized handshake
+        -> Worker state: Ready
+        -> Process request, return result
 
-**What:** Clean sessions share a base LS worker. When a session modifies files (unsaved edits), those edits live in a session-scoped overlay. If overlays diverge significantly, promote to a dedicated LS view.
+Subsequent tests reusing Go (share-until-dirty):
+    Pool.AcquireLease -> existing worker is clean -> reuse
+    (No new gopls process needed)
 
-**Why:** Balances sharing (most sessions are read-heavy) with correctness (divergent edits need isolated type checking).
+Editing test (marks worker dirty):
+    replace_symbol_body -> worker marked dirty
+    Next AcquireLease -> dirty worker evicted, new worker spawned
+    (Or: next test activates fresh fixture copy, new workspace key)
 
-### Pattern 4: Skill as Plugin, Not as Monolith
+Shutdown:
+    harness.Stop() -> kernel.Shutdown -> pool drains all workers
+    -> gopls processes receive shutdown/exit LSP messages
+    -> Worker state: Stopped
+```
 
-**What:** Skills register tools dynamically. The daemon core knows nothing about "find symbol" or "memory" -- those are skill-provided tools discovered at startup via a skill registry.
+## Integration Points: New Components to Existing Architecture
 
-**Why:** Prevents Layer 0-1 from accreting feature code. Skills can be developed, tested, and versioned independently.
+### Where New Code Touches Existing Code
 
-## Anti-Patterns to Avoid
+| New Component | Existing Component | Integration Type | Notes |
+|---------------|-------------------|------------------|-------|
+| TestDaemon.Start() | `daemon.New()` | Direct constructor call | Uses same config struct, no modifications needed |
+| TestDaemon.Start() | `daemon.Run()` | Partial -- skip Run(), use HTTP handler directly | Run() manages socket + signals. Tests only need HTTP. Use `httptest.NewServer(d.MCPServer().HTTPHandler())` instead of `d.Run()`. Kernel.Run() must still be called for pool lifecycle. |
+| Session.CallTool() | `mcpsdk.ClientSession.CallTool()` | Thin wrapper | Adds test-friendly assertion sugar |
+| FixtureManager | `kernel.ActivateWorkspace()` | Via MCP protocol (activate_project tool) | No direct kernel access -- pure E2E via MCP client |
+| LS Readiness | `lspool.Pool` | Indirect -- poll via MCP tools | No new pool APIs needed; readiness detected by tool success |
+| Dogfood suite | Serena's own repo root | `activate_project` with repo root path | Tests run from repo root; gopls indexes the full project |
 
-### Anti-Pattern 1: Global Mutable State
+### Critical Integration Decision: httptest vs Full daemon.Run()
 
-**What:** Shared mutable maps/slices accessed from multiple goroutines without synchronization.
-**Why bad:** Race conditions that manifest only under load. Go's race detector catches some, not all.
-**Instead:** Immutable snapshots + message passing via channels. Use `sync.RWMutex` only at cache boundaries.
+**Recommendation: httptest.NewServer + manual kernel.Run().**
 
-### Anti-Pattern 2: Direct LS Protocol in Skills
+`daemon.Run()` does three things: (1) starts kernel pool in errgroup, (2) listens on Unix socket, (3) optionally listens on HTTP. For tests, we need (1) and a test-controlled HTTP server, but NOT (2) -- Unix socket paths are fragile in tests, and gRPC forwarder testing is a separate concern.
 
-**What:** Skill code constructing raw LSP requests (e.g., `textDocument/hover` JSON).
-**Why bad:** Couples skills to LSP protocol details, language-specific quirks, and LS lifecycle.
-**Instead:** Skills call the Kernel interface. Kernel handles LSP translation and quirk normalization.
+The harness should:
+1. Call `daemon.New(cfg, logger)` to get a fully wired daemon
+2. Start `daemon.KernelInstance().Run(ctx)` in a background goroutine for pool lifecycle
+3. Use `httptest.NewServer(daemon.MCPServer().HTTPHandler())` for the MCP endpoint
 
-### Anti-Pattern 3: Synchronous LS Initialization in Request Path
+**Modification needed in existing code:** Add two accessor methods to `internal/daemon/daemon.go`:
+```go
+func (d *Daemon) MCPServer() *serenaMCP.SerenaMCPServer { return d.mcpServer }
+func (d *Daemon) KernelInstance() *kernel.Kernel { return d.kernel }
+```
 
-**What:** First request to a workspace blocks while LS starts up (can be 5-30 seconds).
-**Why bad:** MCP tool call timeout (typically 30s-60s) easily exceeded. User perceives hang.
-**Instead:** Workspace activation is async. Return "workspace initializing" status. Background goroutine warms the LS. Subsequent requests succeed once ready.
+This is the **only change** to existing production code. Everything else is additive.
 
-### Anti-Pattern 4: One goroutine per MCP request for LS communication
+### Internal Boundaries
 
-**What:** Spawning a new goroutine per tool call that directly talks to the LS.
-**Why bad:** Unbounded concurrency to a single-threaded LS process causes request queuing and timeout cascading.
-**Instead:** LS worker has a request channel with bounded concurrency. Reads are parallelized up to LS capacity; writes are serialized.
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Test harness <-> Daemon | Go API (constructor + accessors) | Harness creates daemon in-process, not as subprocess |
+| Test <-> MCP Server | HTTP (Streamable HTTP MCP transport) | Full protocol stack exercised |
+| MCP Server <-> Kernel | In-process function calls (existing) | Unchanged |
+| Kernel <-> Language Servers | stdio (LSP JSON-RPC) | Real LS processes; must be installed on test machine |
+| Fixture Manager <-> Filesystem | os.CopyFS / file copy | Pristine fixtures copied to t.TempDir() |
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Subprocess Daemon
+
+**What people do:** Start the daemon as a child process (`exec.Command("serena", "daemon")`), connect to its socket.
+**Why it's wrong:** Adds process management complexity, port coordination, flaky cleanup on test failure, cannot debug daemon internals, slow startup.
+**Do this instead:** In-process daemon via `daemon.New()` + `httptest.NewServer`. Same code path, but test-controllable.
+
+### Anti-Pattern 2: Mocking the Kernel or Pool
+
+**What people do:** Create mock workers, fake LSP responses, stub the pool.
+**Why it's wrong:** Defeats the purpose of E2E integration testing. You want to prove that real gopls/pyright/typescript-language-server produce correct results through the full Serena stack.
+**Do this instead:** Use real language servers against real (small) fixture projects. Reserve mocking for unit tests only.
+
+### Anti-Pattern 3: Shared Mutable Fixture
+
+**What people do:** Point all tests at the same fixture directory without copying.
+**Why it's wrong:** Editing tests mutate files, corrupting state for subsequent tests. Test ordering becomes fragile.
+**Do this instead:** Copy fixtures to `t.TempDir()` per test. For read-only test groups, can share one copy per subtest.
+
+### Anti-Pattern 4: No LS Readiness Check
+
+**What people do:** Call `activate_project` then immediately call symbol tools.
+**Why it's wrong:** gopls needs seconds to index even a small project. Tests fail intermittently.
+**Do this instead:** Poll a known symbol operation with retry + timeout. The harness encapsulates this as `session.WaitForLS()`.
+
+### Anti-Pattern 5: One Daemon Per Test
+
+**What people do:** Start and stop a fresh daemon for every test function.
+**Why it's wrong:** Daemon startup includes skill.InitAll(), language registry creation, profile resolution. Takes ~50-100ms per startup. With 50+ tests, this wastes minutes and skills use init()-based registration that only runs once per process.
+**Do this instead:** Share one daemon per test package via `TestMain`. Each test gets a fresh MCP session.
 
 ## Suggested Build Order
 
 Based on dependency analysis, build bottom-up:
 
-### Phase 1: Daemon Skeleton + MCP Runtime (Layer 0)
-**Dependencies:** None (foundational)
+### Phase 1: Test Harness Foundation
 **Build:**
-1. `cmd/serena/main.go` -- daemon startup, signal handling, socket listener
-2. `internal/daemon/` -- lifecycle, socket accept loop
-3. `internal/mcp/` -- wrap official Go MCP SDK, session management, tool registry
-4. `cmd/serena-forwarder/` -- thin stdio proxy to Unix socket
-5. Integration: stdio forwarder -> daemon -> MCP handshake
+1. Add `MCPServer()` and `KernelInstance()` accessor methods to `daemon.go`
+2. `internal/testharness/harness.go` -- TestDaemon with Start/Stop using httptest + kernel.Run
+3. `internal/testharness/client.go` -- Session wrapper around mcpsdk.ClientSession
+4. Self-test: harness starts daemon, connects client, calls `ping` tool
 
-**Why first:** Everything else plugs into this. You can test with dummy tools before any LS integration.
-
-### Phase 2: LS Worker Pool + Single Language (Layer 1 foundation)
-**Dependencies:** Phase 1 (daemon to host the pool)
+### Phase 2: Fixture Infrastructure + File Ops
 **Build:**
-1. `internal/kernel/lspool/worker.go` -- single LS child process management
-2. `internal/kernel/lspool/adapter.go` -- generic LSP JSON-RPC client
-3. `internal/kernel/lspool/pool.go` -- pool lifecycle, TTL, circuit breaking
-4. `internal/kernel/workspace.go` -- workspace key, view creation
-5. Start with gopls as first LS (dog-food Go analysis on Go code)
+1. `testdata/fixtures/go/` -- minimal Go project with known symbols
+2. `internal/testharness/fixtures.go` -- copy fixture to temp dir
+3. `internal/testharness/assert.go` -- CallToolResult parsing helpers
+4. `tests/e2e/fileops_test.go` -- file ops (read_file, list_directory, search_in_files) against Go fixture
 
-**Why second:** The LS pool is the hardest novel component. Get it stable before building on top.
-
-### Phase 3: Kernel Operations (Layer 1 complete)
-**Dependencies:** Phase 2 (needs LS workers to query)
+### Phase 3: Go Dogfood (Symbols + Diagnostics)
 **Build:**
-1. `internal/kernel/symbols/` -- symbol graph, find/refs/defs via LSP
-2. `internal/kernel/symbols/edit.go` -- edit planner with write serialization
-3. `internal/kernel/cache.go` + `snapshot.go` -- caching layer, immutable snapshots
-4. `internal/kernel/overlay.go` -- dirty buffer management
-5. Wire Kernel interface to expose operations to skills
+1. `tests/e2e/symbols_test.go` -- go_to_definition, find_references, get_symbol_overview against fixture
+2. `tests/e2e/diag_test.go` -- get_diagnostics, format_code against fixture
+3. `tests/e2e/dogfood_test.go` -- all read-only tools against Serena's own repo
 
-**Why third:** Kernel operations are the core value. Having the LS pool stable lets you focus on correctness of symbol resolution and edit planning.
-
-### Phase 4: Core Skills (Layer 2)
-**Dependencies:** Phase 3 (Kernel interface)
+### Phase 4: Editing + Multi-Language
 **Build:**
-1. `internal/skills/retrieval/` -- find_symbol, symbol_overview, get_references
-2. `internal/skills/editing/` -- replace_body, insert_before, rename
-3. `internal/skills/skill.go` -- skill loading, tool registration
-4. File operations skills (read, search, list)
+1. `tests/e2e/edit_test.go` -- replace_symbol_body, insert_before_symbol, rename_symbol against fixture copies
+2. `testdata/fixtures/{python,typescript}/` -- multi-language fixtures
+3. Multi-language variants of symbol/edit tests
 
-**Why fourth:** Skills are the user-facing tools. They're straightforward once the Kernel interface is solid.
-
-### Phase 5: Multi-Language + Profiles (Layer 1 expansion + Layer 3)
-**Dependencies:** Phase 4 (working single-language system)
+### Phase 5: Skills + Profiles
 **Build:**
-1. `internal/kernel/lspool/quirks.go` -- language-specific quirk registry
-2. Add pyright, typescript-language-server, etc.
-3. `internal/profiles/` -- agent profiles, tool filtering
-4. `internal/skills/memory/` -- project memory persistence
-5. `internal/skills/onboarding/` -- repo understanding
+1. `tests/e2e/memory_test.go` -- write/read/search/delete memory via MCP
+2. `tests/e2e/workflow_test.go` -- onboard_project, prepare_for_new_conversation
+3. `tests/e2e/profile_test.go` -- mode switching, tool filtering, profile-specific behavior
 
-**Why last:** Multi-language is configuration, not architecture. Profiles are thin filtering layers. Memory/onboarding are independent skill packs.
+## Performance Expectations
 
-## MCP SDK Choice
-
-**Use the official Go SDK** (`github.com/modelcontextprotocol/go-sdk`) because:
-- Maintained by MCP project + Google -- will track spec changes fastest
-- Follows Go conventions (struct tags for schema generation)
-- The project's identity is MCP-native; being on the official SDK reduces spec drift risk
-- mcp-go (mark3labs) is more popular today but community-maintained; for a long-lived daemon, official backing matters more
-
-If the official SDK lacks a needed feature (e.g., session-scoped tool registration is easier in mcp-go), wrap it. The MCP layer is a thin wrapper either way.
+| Operation | Expected Duration |
+|-----------|------------------|
+| Daemon startup (in-process) | ~50-100ms |
+| First gopls initialization for small fixture | ~2-5s |
+| Subsequent gopls reuse (share-until-dirty) | ~0ms (existing worker) |
+| MCP client connect + initialize | ~10ms |
+| Single tool call round-trip | ~50-200ms |
+| Full dogfood suite (38 tools against self) | ~30-60s |
+| Full E2E suite (all languages) | ~2-5min |
 
 ## Sources
 
-- [gopls daemon documentation](https://go.dev/gopls/daemon)
-- [gopls daemon design (GitHub)](https://github.com/golang/tools/blob/master/gopls/doc/daemon.md)
-- [gopls implementation design](https://github.com/golang/tools/blob/master/gopls/doc/design/implementation.md)
-- [gopls cache package](https://pkg.go.dev/golang.org/x/tools/gopls/internal/cache)
-- [gopls lsprpc package](https://pkg.go.dev/golang.org/x/tools/gopls/internal/lsp/lsprpc)
-- [gopls architecture (DeepWiki)](https://deepwiki.com/golang/tools/3-gopls-language-server)
-- [Official MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk)
-- [mcp-go community SDK](https://github.com/mark3labs/mcp-go)
-- [mcp-go architecture (DeepWiki)](https://deepwiki.com/mark3labs/mcp-go)
-- [Go project layout](https://go.dev/doc/modules/layout)
-- [Graceful shutdown patterns in Go](https://victoriametrics.com/blog/go-graceful-shutdown/)
-- [HashiCorp consul-template child process management](https://github.com/hashicorp/consul-template/blob/main/child/child.go)
-- [go-child-process-manager](https://github.com/AgustinSRG/go-child-process-manager)
+- MCP Go SDK v1.5.0 source: `StreamableClientTransport`, `Client.Connect()`, `ClientSession.CallTool()` patterns verified in module cache
+- Existing test patterns: `internal/daemon/daemon_integration_test.go` (E2E memory/mode/shutdown tests using direct skill executor calls)
+- Existing bootstrap tests: `internal/daemon/bootstrap_test.go` (tool registration count verification)
+- Daemon architecture: `internal/daemon/daemon.go` (New/Run/shutdown lifecycle, private fields needing accessors)
+- MCP server: `internal/mcp/server.go` (HTTPHandler, AddSkillTool, activate_project callback)
+- Kernel: `internal/kernel/kernel.go` (ActivateWorkspace, Run, Pool)
+- Worker pool: `internal/kernel/lspool/pool.go` (AcquireLease, share-until-dirty, Run lifecycle)
+- Workspace runtime: `internal/kernel/workspace.go` (DetectLanguages, AcquireSession, NextDocVersion)
+
+---
+*Architecture research for: Integration testing of daemon-based MCP code intelligence platform*
+*Researched: 2026-04-08*

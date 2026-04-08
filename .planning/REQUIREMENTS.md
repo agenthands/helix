@@ -65,11 +65,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Memory & Knowledge
 
-- [ ] **MEM-01**: User can write project-scoped memories (markdown files)
-- [ ] **MEM-02**: User can read memories by name
-- [ ] **MEM-03**: User can list and search stored memories
-- [ ] **MEM-04**: User can rename, edit, and delete memories
-- [ ] **MEM-05**: Global memories persist across projects; project memories are scoped
+- [x] **MEM-01**: User can write project-scoped memories (markdown files)
+- [x] **MEM-02**: User can read memories by name
+- [x] **MEM-03**: User can list and search stored memories
+- [x] **MEM-04**: User can rename, edit, and delete memories
+- [x] **MEM-05**: Global memories persist across projects; project memories are scoped
 
 ### Multi-Language LSP Support
 
@@ -188,11 +188,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | FIL-04 | Phase 2 | Complete |
 | FIL-05 | Phase 2 | Complete |
 | FIL-06 | Phase 2 | Complete |
-| MEM-01 | Phase 3 | Pending |
-| MEM-02 | Phase 3 | Pending |
-| MEM-03 | Phase 3 | Pending |
-| MEM-04 | Phase 3 | Pending |
-| MEM-05 | Phase 3 | Pending |
+| MEM-01 | Phase 3 | Complete |
+| MEM-02 | Phase 3 | Complete |
+| MEM-03 | Phase 3 | Complete |
+| MEM-04 | Phase 3 | Complete |
+| MEM-05 | Phase 3 | Complete |
 | LNG-01 | Phase 3 | Pending |
 | LNG-02 | Phase 3 | Pending |
 | LNG-03 | Phase 3 | Pending |

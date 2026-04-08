@@ -71,7 +71,7 @@ Plans:
 - [x] 03-01-PLAN.md — Language registry with 40+ embedded entries, YAML override, and three-tier installer
 - [x] 03-02-PLAN.md — Memory system with markdown storage, SQLite FTS5 index, and file watcher
 - [x] 03-03-PLAN.md — Skill interface with Skill/ToolProvider/WorkflowProvider and Caddy-style registration
-- [ ] 03-04-PLAN.md — QuirkAdapter interface evolution and pool integration with language registry
+- [x] 03-04-PLAN.md — QuirkAdapter interface evolution and pool integration with language registry
 - [x] 03-05-PLAN.md — Memory skill (7 MCP tools) and workflow skill (onboarding + session handoff)
 
 ### Phase 4: Agent Profiles and Configuration

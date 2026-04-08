@@ -55,7 +55,11 @@ Plans:
   2. Insert before/after, rename, and safe-delete operations produce correct file state verified by re-reading symbols
   3. Each of 4 language fixtures (Python, TypeScript, Java, Rust) has known symbols that symbol retrieval tools resolve correctly
   4. Cross-file reference chains in multi-file fixtures return the expected reference sets
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 07-01-PLAN.md — Edit tool integration tests (replace, insert, rename, safe delete, verify) against Go fixture
+- [ ] 07-02-PLAN.md — Python + TypeScript fixtures and symbol/edit integration tests
+- [ ] 07-03-PLAN.md — Java + Rust fixtures and symbol/edit integration tests
 
 ### Phase 8: Advanced Testing
 **Goal**: Developers can verify that profile filtering, mode visibility, concurrency, and error handling all behave correctly under test
@@ -81,5 +85,5 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 4. Agent Profiles and Configuration | v1.0 | 3/3 | Complete | 2026-04-08 |
 | 5. Daemon Bootstrap Integration | v1.0 | 3/3 | Complete | 2026-04-08 |
 | 6. Test Harness + Go Dogfooding | v1.1 | 3/4 | In Progress | - |
-| 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 0/? | Not started | - |
+| 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 0/3 | Not started | - |
 | 8. Advanced Testing | v1.1 | 0/? | Not started | - |

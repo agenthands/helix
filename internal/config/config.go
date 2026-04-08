@@ -11,6 +11,12 @@ type SerenaConfig struct {
 	Defaults ProjectDefaults `koanf:"defaults"`
 	// Worker pool settings for LS process management
 	WorkerPool WorkerPoolConfig `koanf:"worker_pool"`
+	// Profile is the active agent profile name (default: "full").
+	// Precedence: CLI --profile > project config > user config > default (D-10, PRF-05).
+	Profile string `koanf:"profile"`
+	// Mode is the initial operational mode override.
+	// Empty means use the profile's DefaultMode.
+	Mode string `koanf:"mode"`
 }
 
 // WorkerPoolConfig holds configuration for the LS worker pool.

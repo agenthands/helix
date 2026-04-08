@@ -11,6 +11,8 @@ import (
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+
+	"github.com/postfix/serena/internal/profile"
 )
 
 // Load builds a SerenaConfig from layered sources in precedence order:
@@ -71,4 +73,27 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 func DefaultSocketPath() string {
 	uid := strconv.Itoa(int(syscall.Getuid()))
 	return filepath.Join(os.TempDir(), "serena-"+uid, "daemon.sock")
+}
+
+// ResolveProfile loads the ProfileStore and returns the active profile based on
+// the config's Profile field. The profile name flows through koanf precedence
+// (CLI > project > global > default "full"); the profile content comes from
+// the ProfileStore (embedded + overrides from globalDir).
+func ResolveProfile(cfg *SerenaConfig, globalDir string) (*profile.ProfileStore, *profile.Profile, error) {
+	store, err := profile.LoadEmbedded()
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading embedded profiles: %w", err)
+	}
+
+	// Apply overrides from the global Serena directory if available.
+	if globalDir != "" {
+		_ = profile.LoadOverrides(store, filepath.Join(globalDir, "profiles"), filepath.Join(globalDir, "modes"))
+	}
+
+	p, ok := store.Profile(cfg.Profile)
+	if !ok {
+		// Fall back to the "full" default profile.
+		return store, store.DefaultProfile(), nil
+	}
+	return store, p, nil
 }

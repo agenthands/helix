@@ -37,6 +37,8 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.Flags().String("http-addr", ":8080", "HTTP listen address for Streamable HTTP transport")
 	// Config file override
 	rootCmd.Flags().String("config", "", "Path to config file")
+	// Agent profile
+	rootCmd.Flags().String("profile", "", "Agent profile (claude-code, codex, ide-assistant, ci-bot, full)")
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
@@ -93,6 +95,7 @@ func runDaemon(cmd *cobra.Command) error {
 	socketPath, _ := cmd.Flags().GetString("socket")
 	httpAddr, _ := cmd.Flags().GetString("http-addr")
 	configPath, _ := cmd.Flags().GetString("config")
+	profileName, _ := cmd.Flags().GetString("profile")
 
 	// Set up logger (D-16, D-17: stderr + configurable format)
 	var handler slog.Handler
@@ -110,6 +113,9 @@ func runDaemon(cmd *cobra.Command) error {
 	}
 	if httpAddr != "" {
 		overrides["daemon.http_addr"] = httpAddr
+	}
+	if profileName != "" {
+		overrides["profile"] = profileName
 	}
 
 	cfg, err := config.Load("", configPath, overrides)

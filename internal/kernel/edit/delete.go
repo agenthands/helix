@@ -24,12 +24,17 @@ func SafeDelete(ctx context.Context, lease *lspool.WorkerLease, uri string, symb
 	if err != nil {
 		return nil, fmt.Errorf("plan edit: %w", err)
 	}
+	return SafeDeleteWithPlan(ctx, lease, lease, plan, force)
+}
 
-	// Unless force, check references.
+// SafeDeleteWithPlan executes a safe delete using a pre-computed plan.
+// readLease is used for reference lookups (can be clean/shared), writeLease for file mutation.
+func SafeDeleteWithPlan(ctx context.Context, readLease, writeLease *lspool.WorkerLease, plan *EditPlan, force bool) (*DeleteResult, error) {
+	// Unless force, check references using the read lease.
 	if !force {
 		// Use the selection range start (identifier position) for reference lookup.
-		refs, err := symbols.FindReferences(ctx, lease, uri,
-			int(plan.Range.Start.Line), int(plan.Range.Start.Character), false)
+		refs, err := symbols.FindReferences(ctx, readLease, plan.URI,
+			int(plan.SelectionRange.Start.Line), int(plan.SelectionRange.Start.Character), false)
 		if err != nil {
 			return nil, fmt.Errorf("find references: %w", err)
 		}
@@ -44,7 +49,7 @@ func SafeDelete(ctx context.Context, lease *lspool.WorkerLease, uri string, symb
 	}
 
 	// Safe to delete: remove the symbol from the file.
-	filePath := uriToPath(uri)
+	filePath := uriToPath(plan.URI)
 	source, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s: %w", filePath, err)
@@ -65,7 +70,7 @@ func SafeDelete(ctx context.Context, lease *lspool.WorkerLease, uri string, symb
 		return nil, fmt.Errorf("write file %s: %w", filePath, err)
 	}
 
-	if err := notifyDidChange(ctx, lease, uri, string(result)); err != nil {
+	if err := notifyDidChange(ctx, writeLease, plan.URI, string(result)); err != nil {
 		return nil, fmt.Errorf("didChange notification: %w", err)
 	}
 

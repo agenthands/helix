@@ -85,9 +85,12 @@ func errorResult(msg string) *mcpsdk.CallToolResult {
 	}
 }
 
-func filePathToURI(path string) string {
+func filePathToURI(root, path string) string {
 	if strings.HasPrefix(path, "file://") {
 		return path
+	}
+	if !strings.HasPrefix(path, "/") && root != "" {
+		path = root + "/" + path
 	}
 	return "file://" + path
 }
@@ -134,17 +137,28 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		Name:        "replace_symbol_body",
 		Description: "Replace a symbol's body with new content using tree-sitter for precise extraction",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
-		rt, err := k.GetRuntime(wsKeyFn())
+		wsKey := wsKeyFn()
+		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
 		}
-		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true for mutation
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
+		lang := detectLang(args.Path)
+		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
+		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+		}
+		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeReplaceBody, args.NewBody)
+		if err != nil {
+			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+		}
+		// Phase 2: execute mutation on dirty lease using the plan's range.
+		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		uri := filePathToURI(args.Path)
-		lang := detectLang(args.Path)
-		if err := ReplaceBody(ctx, lease, extractor, uri, args.SymbolName, args.NewBody, lang); err != nil {
+		if err := ReplaceBodyWithPlan(ctx, dirtyLease, extractor, plan, lang); err != nil {
 			return errorResult(fmt.Sprintf("replace body: %v", err)), nil, nil
 		}
 		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
@@ -159,16 +173,27 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		Name:        "insert_before_symbol",
 		Description: "Insert content immediately before a symbol",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
-		rt, err := k.GetRuntime(wsKeyFn())
+		wsKey := wsKeyFn()
+		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
 		}
-		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
+		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
+		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+		}
+		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertBefore, args.Content)
+		if err != nil {
+			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+		}
+		// Phase 2: execute mutation on dirty lease.
+		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		uri := filePathToURI(args.Path)
-		if err := InsertBefore(ctx, lease, uri, args.SymbolName, args.Content); err != nil {
+		if err := InsertBeforeWithPlan(ctx, dirtyLease, plan); err != nil {
 			return errorResult(fmt.Sprintf("insert before: %v", err)), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content before %q in %s", args.SymbolName, args.Path)
@@ -183,16 +208,27 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		Name:        "insert_after_symbol",
 		Description: "Insert content immediately after a symbol",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
-		rt, err := k.GetRuntime(wsKeyFn())
+		wsKey := wsKeyFn()
+		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
 		}
-		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
+		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
+		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+		}
+		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertAfter, args.Content)
+		if err != nil {
+			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+		}
+		// Phase 2: execute mutation on dirty lease.
+		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		uri := filePathToURI(args.Path)
-		if err := InsertAfter(ctx, lease, uri, args.SymbolName, args.Content); err != nil {
+		if err := InsertAfterWithPlan(ctx, dirtyLease, plan); err != nil {
 			return errorResult(fmt.Sprintf("insert after: %v", err)), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content after %q in %s", args.SymbolName, args.Path)
@@ -207,7 +243,8 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		Name:        "rename_symbol",
 		Description: "Rename a symbol across all files in the workspace",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
-		rt, err := k.GetRuntime(wsKeyFn())
+		wsKey := wsKeyFn()
+		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
 		}
@@ -215,7 +252,7 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		uri := filePathToURI(args.Path)
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Convert from 1-indexed (user-facing) to 0-indexed (LSP).
 		result, err := RenameSymbol(ctx, lease, uri, args.Line-1, args.Col-1, args.NewName)
 		if err != nil {
@@ -234,16 +271,27 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		Name:        "safe_delete_symbol",
 		Description: "Delete a symbol if it has no references; reports reference count if blocked",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
-		rt, err := k.GetRuntime(wsKeyFn())
+		wsKey := wsKeyFn()
+		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
 		}
-		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
+		// Phase 1: plan on clean (shared) lease for accurate symbol ranges and references.
+		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
+		if err != nil {
+			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+		}
+		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeDelete, "")
+		if err != nil {
+			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+		}
+		// Phase 2: check references on clean lease, execute on dirty lease.
+		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		uri := filePathToURI(args.Path)
-		result, err := SafeDelete(ctx, lease, uri, args.SymbolName, args.Force)
+		result, err := SafeDeleteWithPlan(ctx, cleanLease, dirtyLease, plan, args.Force)
 		if err != nil {
 			return errorResult(fmt.Sprintf("safe delete: %v", err)), nil, nil
 		}
@@ -269,7 +317,7 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 		Name:        "verify_edit",
 		Description: "Check for compilation errors after an edit; returns diagnostic summary",
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args VerifyEditArgs) (*mcpsdk.CallToolResult, any, error) {
-		uri := filePathToURI(args.Path)
+		uri := filePathToURI(wsKeyFn().RepoRoot, args.Path)
 		result, err := VerifyEdit(ctx, diagStore, uri)
 		if err != nil {
 			return errorResult(fmt.Sprintf("verify: %v", err)), nil, nil

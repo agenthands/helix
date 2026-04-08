@@ -21,14 +21,16 @@ const (
 
 // EditPlan describes a resolved edit ready for execution.
 type EditPlan struct {
-	URI        string
-	SymbolName string
-	EditType   string    // one of EditType* constants
-	Range      gen.Range // computed edit range
-	NewContent string    // content to insert/replace
+	URI            string
+	SymbolName     string
+	EditType       string    // one of EditType* constants
+	Range          gen.Range // computed edit range (full symbol extent)
+	SelectionRange gen.Range // identifier range (for cursor positioning)
+	NewContent     string    // content to insert/replace
 }
 
 // PlanEdit resolves a symbol via documentSymbol and produces an EditPlan.
+// Should be called on a warm (indexed) lease for accurate symbol ranges.
 func PlanEdit(ctx context.Context, lease *lspool.WorkerLease, uri string, symbolName string, editType string, content string) (*EditPlan, error) {
 	outlines, err := symbols.GetSymbolOverview(ctx, lease, uri)
 	if err != nil {
@@ -41,11 +43,12 @@ func PlanEdit(ctx context.Context, lease *lspool.WorkerLease, uri string, symbol
 	}
 
 	return &EditPlan{
-		URI:        uri,
-		SymbolName: symbolName,
-		EditType:   editType,
-		Range:      outline.Range,
-		NewContent: content,
+		URI:            uri,
+		SymbolName:     symbolName,
+		EditType:       editType,
+		Range:          outline.Range,
+		SelectionRange: outline.SelectionRange,
+		NewContent:     content,
 	}, nil
 }
 

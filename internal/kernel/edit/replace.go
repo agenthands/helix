@@ -14,24 +14,27 @@ import (
 // Per D-14: tree-sitter-first for body surgery, LSP-assisted for discovery.
 // Per D-15: falls back to full symbol range replacement when tree-sitter unavailable.
 func ReplaceBody(ctx context.Context, lease *lspool.WorkerLease, extractor *BodyExtractor, uri string, symbolName string, newBody string, lang string) error {
-	filePath := uriToPath(uri)
+	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeReplaceBody, newBody)
+	if err != nil {
+		return fmt.Errorf("plan edit: %w", err)
+	}
+	return ReplaceBodyWithPlan(ctx, lease, extractor, plan, lang)
+}
+
+// ReplaceBodyWithPlan executes a body replacement using a pre-computed plan.
+func ReplaceBodyWithPlan(ctx context.Context, lease *lspool.WorkerLease, extractor *BodyExtractor, plan *EditPlan, lang string) error {
+	filePath := uriToPath(plan.URI)
 
 	source, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("read file %s: %w", filePath, err)
 	}
 
-	// Get DocumentSymbol via LSP to find symbol range.
-	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeReplaceBody, newBody)
-	if err != nil {
-		return fmt.Errorf("plan edit: %w", err)
-	}
-
 	var startByte, endByte uint
 
 	// Try tree-sitter body extraction first (D-14).
 	if extractor != nil && extractor.SupportsLanguage(lang) {
-		startByte, endByte, err = extractor.ExtractBody(source, lang, symbolName, plan.Range)
+		startByte, endByte, err = extractor.ExtractBody(source, lang, plan.SymbolName, plan.Range)
 		if err != nil {
 			// Fall back to full symbol range (D-15).
 			startByte, endByte = rangeToByteOffsets(source, plan.Range)
@@ -48,7 +51,7 @@ func ReplaceBody(ctx context.Context, lease *lspool.WorkerLease, extractor *Body
 	// Replace bytes from startByte to endByte with newBody.
 	var result []byte
 	result = append(result, source[:startByte]...)
-	result = append(result, []byte(newBody)...)
+	result = append(result, []byte(plan.NewContent)...)
 	result = append(result, source[endByte:]...)
 
 	// Atomic write.
@@ -57,7 +60,7 @@ func ReplaceBody(ctx context.Context, lease *lspool.WorkerLease, extractor *Body
 	}
 
 	// Notify language server of change.
-	if err := notifyDidChange(ctx, lease, uri, string(result)); err != nil {
+	if err := notifyDidChange(ctx, lease, plan.URI, string(result)); err != nil {
 		return fmt.Errorf("didChange notification: %w", err)
 	}
 

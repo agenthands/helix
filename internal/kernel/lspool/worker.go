@@ -182,7 +182,14 @@ func (w *Worker) Start(ctx context.Context) error {
 	initParams := gen.InitializeParams{}
 	initParams.RootUri = rootURI
 	initParams.ProcessId = int32(processID())
-	initParams.Capabilities = gen.ClientCapabilities{}
+	trueVal := true
+	initParams.Capabilities = gen.ClientCapabilities{
+		TextDocument: &gen.TextDocumentClientCapabilities{
+			DocumentSymbol: &gen.DocumentSymbolClientCapabilities{
+				HierarchicalDocumentSymbolSupport: &trueVal,
+			},
+		},
+	}
 	initParams.InitializationOptions = initOptions
 	initParams.WorkspaceFolders = []gen.WorkspaceFolder{
 		{URI: rootURI, Name: w.workDir},

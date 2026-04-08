@@ -10,10 +10,11 @@ import (
 
 // SymbolOutline represents a symbol in the document outline tree.
 type SymbolOutline struct {
-	Name     string
-	Kind     string
-	Range    gen.Range
-	Children []SymbolOutline
+	Name           string
+	Kind           string
+	Range          gen.Range
+	SelectionRange gen.Range // The identifier range (for cursor positioning in references/rename).
+	Children       []SymbolOutline
 }
 
 // GetSymbolOverview sends textDocument/documentSymbol and returns a hierarchical outline.
@@ -34,10 +35,11 @@ func mapDocumentSymbols(symbols []gen.DocumentSymbol) []SymbolOutline {
 	out := make([]SymbolOutline, len(symbols))
 	for i, sym := range symbols {
 		out[i] = SymbolOutline{
-			Name:     sym.Name,
-			Kind:     SymbolKindName(sym.Kind),
-			Range:    sym.Range,
-			Children: mapDocumentSymbols(sym.Children),
+			Name:           sym.Name,
+			Kind:           SymbolKindName(sym.Kind),
+			Range:          sym.Range,
+			SelectionRange: sym.SelectionRange,
+			Children:       mapDocumentSymbols(sym.Children),
 		}
 	}
 	return out

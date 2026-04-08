@@ -2,6 +2,7 @@ package edit
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -46,6 +47,41 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 			result.FilesChanged++
 			result.EditsApplied += len(edits)
 			result.Files = append(result.Files, fileURI)
+		}
+	}
+
+	// Also handle DocumentChanges (gopls and many LSP servers prefer this format).
+	if len(wsEdit.DocumentChanges) > 0 && result.FilesChanged == 0 {
+		for _, dc := range wsEdit.DocumentChanges {
+			// DocumentChanges entries are union types; try to extract TextDocumentEdit.
+			raw, err := json.Marshal(dc.Value)
+			if err != nil {
+				continue
+			}
+			var tde gen.TextDocumentEdit
+			if err := json.Unmarshal(raw, &tde); err != nil || tde.TextDocument.URI == "" {
+				continue
+			}
+			// Extract TextEdits from the union-typed edits.
+			var edits []gen.TextEdit
+			for _, e := range tde.Edits {
+				eRaw, err := json.Marshal(e.Value)
+				if err != nil {
+					continue
+				}
+				var te gen.TextEdit
+				if err := json.Unmarshal(eRaw, &te); err == nil {
+					edits = append(edits, te)
+				}
+			}
+			if len(edits) > 0 {
+				if err := applyTextEdits(tde.TextDocument.URI, edits); err != nil {
+					return nil, fmt.Errorf("apply edits to %s: %w", tde.TextDocument.URI, err)
+				}
+				result.FilesChanged++
+				result.EditsApplied += len(edits)
+				result.Files = append(result.Files, tde.TextDocument.URI)
+			}
 		}
 	}
 

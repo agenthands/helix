@@ -292,7 +292,7 @@ func defaultTestConfig(t *testing.T) *config.SerenaConfig {
 	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
-	cfg.WorkerPool.MaxWorkers = 2
+	cfg.WorkerPool.MaxWorkers = 4
 	cfg.WorkerPool.BaseTTL = 30
 	return cfg
 }

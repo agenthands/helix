@@ -13,6 +13,72 @@ func InstallMiddleware(server *mcpsdk.Server, logger *slog.Logger) {
 	server.AddReceivingMiddleware(loggingMiddleware(logger))
 }
 
+// ProfileResolver provides profile information for middleware filtering.
+// This interface avoids a circular import between mcp and profile packages.
+type ProfileResolver interface {
+	// ToolDescriptionOverrides returns the description override map for the named profile.
+	// Returns nil if the profile has no overrides or is not found.
+	ToolDescriptionOverrides(profileName string) map[string]string
+}
+
+// ProfileFilterMiddleware creates middleware that filters tool listings based on
+// the active session's AllowedTools and applies description overrides from the
+// profile (PRF-03). For tools/list requests it filters and rewrites descriptions;
+// all other methods pass through unchanged.
+func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) mcpsdk.Middleware {
+	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
+		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			result, err := next(ctx, method, req)
+			if err != nil {
+				return result, err
+			}
+
+			if method != "tools/list" {
+				return result, nil
+			}
+
+			session := getSession(ctx)
+			if session == nil {
+				return result, nil
+			}
+
+			listResult, ok := result.(*mcpsdk.ListToolsResult)
+			if !ok {
+				return result, nil
+			}
+
+			// Apply AllowedTools filtering if the session has a whitelist.
+			if session.AllowedTools != nil {
+				allowed := make(map[string]bool, len(session.AllowedTools))
+				for _, name := range session.AllowedTools {
+					allowed[name] = true
+				}
+				filtered := make([]*mcpsdk.Tool, 0, len(listResult.Tools))
+				for _, tool := range listResult.Tools {
+					if allowed[tool.Name] {
+						filtered = append(filtered, tool)
+					}
+				}
+				listResult.Tools = filtered
+			}
+
+			// Apply description overrides from the profile.
+			if resolver != nil {
+				overrides := resolver.ToolDescriptionOverrides(session.Profile)
+				if len(overrides) > 0 {
+					for _, tool := range listResult.Tools {
+						if desc, ok := overrides[tool.Name]; ok {
+							tool.Description = desc
+						}
+					}
+				}
+			}
+
+			return listResult, nil
+		}
+	}
+}
+
 // loggingMiddleware logs every request with method, duration, and error status.
 func loggingMiddleware(logger *slog.Logger) mcpsdk.Middleware {
 	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {

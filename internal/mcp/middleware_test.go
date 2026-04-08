@@ -12,8 +12,21 @@ import (
 	"github.com/postfix/serena/internal/profile"
 )
 
+// profileStoreResolver adapts profile.ProfileStore to the mcp.ProfileResolver interface.
+type profileStoreResolver struct {
+	store *profile.ProfileStore
+}
+
+func (r *profileStoreResolver) ToolDescriptionOverrides(profileName string) map[string]string {
+	p, ok := r.store.Profile(profileName)
+	if !ok {
+		return nil
+	}
+	return p.ToolDescriptionOverrides
+}
+
 func TestProfileFilterMiddleware_FiltersToolsList(t *testing.T) {
-	store := buildTestStore(t)
+	resolver := buildTestResolver(t)
 
 	// Session with an AllowedTools whitelist
 	session := &mcp.SessionInfo{
@@ -24,7 +37,7 @@ func TestProfileFilterMiddleware_FiltersToolsList(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	mw := mcp.ProfileFilterMiddleware(store, func(ctx context.Context) *mcp.SessionInfo {
+	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
 	}, logger)
 
@@ -62,7 +75,7 @@ func TestProfileFilterMiddleware_FiltersToolsList(t *testing.T) {
 }
 
 func TestProfileFilterMiddleware_AppliesDescriptionOverrides(t *testing.T) {
-	store := buildTestStore(t)
+	resolver := buildTestResolver(t)
 
 	session := &mcp.SessionInfo{
 		SessionID:    "test-2",
@@ -72,7 +85,7 @@ func TestProfileFilterMiddleware_AppliesDescriptionOverrides(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	mw := mcp.ProfileFilterMiddleware(store, func(ctx context.Context) *mcp.SessionInfo {
+	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
 	}, logger)
 
@@ -104,10 +117,10 @@ func TestProfileFilterMiddleware_AppliesDescriptionOverrides(t *testing.T) {
 }
 
 func TestProfileFilterMiddleware_PassesThroughNonToolsMethods(t *testing.T) {
-	store := buildTestStore(t)
+	resolver := buildTestResolver(t)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	mw := mcp.ProfileFilterMiddleware(store, func(ctx context.Context) *mcp.SessionInfo {
+	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return nil
 	}, logger)
 
@@ -128,10 +141,10 @@ func TestProfileFilterMiddleware_PassesThroughNonToolsMethods(t *testing.T) {
 }
 
 func TestProfileFilterMiddleware_NilSession(t *testing.T) {
-	store := buildTestStore(t)
+	resolver := buildTestResolver(t)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	mw := mcp.ProfileFilterMiddleware(store, func(ctx context.Context) *mcp.SessionInfo {
+	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return nil
 	}, logger)
 
@@ -157,7 +170,7 @@ func TestProfileFilterMiddleware_NilSession(t *testing.T) {
 }
 
 func TestProfileFilterMiddleware_NilAllowedToolsPassesAll(t *testing.T) {
-	store := buildTestStore(t)
+	resolver := buildTestResolver(t)
 
 	// Session with nil AllowedTools = all tools allowed
 	session := &mcp.SessionInfo{
@@ -168,7 +181,7 @@ func TestProfileFilterMiddleware_NilAllowedToolsPassesAll(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	mw := mcp.ProfileFilterMiddleware(store, func(ctx context.Context) *mcp.SessionInfo {
+	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
 	}, logger)
 
@@ -193,8 +206,8 @@ func TestProfileFilterMiddleware_NilAllowedToolsPassesAll(t *testing.T) {
 	}
 }
 
-// buildTestStore creates a ProfileStore with test profiles for middleware tests.
-func buildTestStore(t *testing.T) *profile.ProfileStore {
+// buildTestResolver creates a ProfileResolver backed by embedded profiles + test overrides.
+func buildTestResolver(t *testing.T) mcp.ProfileResolver {
 	t.Helper()
 	store, err := profile.LoadEmbedded()
 	if err != nil {
@@ -208,5 +221,5 @@ func buildTestStore(t *testing.T) *profile.ProfileStore {
 		},
 	})
 
-	return store
+	return &profileStoreResolver{store: store}
 }

@@ -26,3 +26,8 @@ func (d *DemoStruct) Value() int {
 func UsingHelper() {
 	Helper()
 }
+
+// UnusedFunc is never called -- used for safe_delete tests.
+func UnusedFunc() {
+	fmt.Println("I am unused")
+}

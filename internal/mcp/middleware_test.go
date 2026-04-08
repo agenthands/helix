@@ -9,20 +9,18 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/profile"
 )
 
-// profileStoreResolver adapts profile.ProfileStore to the mcp.ProfileResolver interface.
-type profileStoreResolver struct {
-	store *profile.ProfileStore
+// mockProfileResolver is a test-only ProfileResolver that avoids importing the profile package.
+type mockProfileResolver struct {
+	overrides map[string]map[string]string // profileName -> toolName -> description
 }
 
-func (r *profileStoreResolver) ToolDescriptionOverrides(profileName string) map[string]string {
-	p, ok := r.store.Profile(profileName)
-	if !ok {
+func (r *mockProfileResolver) ToolDescriptionOverrides(profileName string) map[string]string {
+	if r.overrides == nil {
 		return nil
 	}
-	return p.ToolDescriptionOverrides
+	return r.overrides[profileName]
 }
 
 func TestProfileFilterMiddleware_FiltersToolsList(t *testing.T) {
@@ -206,20 +204,14 @@ func TestProfileFilterMiddleware_NilAllowedToolsPassesAll(t *testing.T) {
 	}
 }
 
-// buildTestResolver creates a ProfileResolver backed by embedded profiles + test overrides.
+// buildTestResolver creates a mock ProfileResolver for testing without importing the profile package.
 func buildTestResolver(t *testing.T) mcp.ProfileResolver {
 	t.Helper()
-	store, err := profile.LoadEmbedded()
-	if err != nil {
-		t.Fatalf("failed to load embedded profiles: %v", err)
-	}
-
-	// Add a test-specific profile with description overrides
-	store.SetProfile("test-override", &profile.Profile{
-		ToolDescriptionOverrides: map[string]string{
-			"find_symbol": "Find a symbol with overridden description",
+	return &mockProfileResolver{
+		overrides: map[string]map[string]string{
+			"test-override": {
+				"find_symbol": "Find a symbol with overridden description",
+			},
 		},
-	})
-
-	return &profileStoreResolver{store: store}
+	}
 }

@@ -3,6 +3,8 @@ package skill
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/postfix/serena/internal/mcp"
@@ -169,4 +171,162 @@ func TestDuplicateRegistration(t *testing.T) {
 	got, ok := Get("dup")
 	require.True(t, ok)
 	assert.Equal(t, "second", got.Description(), "last registration should win")
+}
+
+// --- Spec tests ---
+
+func TestResolveToolsWithRegisteredSkill(t *testing.T) {
+	Reset()
+	defer Reset()
+
+	tp := &mockToolProvider{
+		mockSkill: mockSkill{name: "file-ops"},
+		tools: []*mcp.ToolDef{
+			{Name: "read_file", Description: "Read a file"},
+			{Name: "write_file", Description: "Write a file"},
+		},
+	}
+	Register(tp)
+
+	tools := ResolveTools([]string{"file-ops"}, nil, nil)
+	require.Len(t, tools, 2)
+
+	names := make(map[string]bool)
+	for _, td := range tools {
+		names[td.Name] = true
+	}
+	assert.True(t, names["read_file"])
+	assert.True(t, names["write_file"])
+}
+
+func TestResolveToolsExclude(t *testing.T) {
+	Reset()
+	defer Reset()
+
+	tp := &mockToolProvider{
+		mockSkill: mockSkill{name: "file-ops"},
+		tools: []*mcp.ToolDef{
+			{Name: "read_file", Description: "Read a file"},
+			{Name: "write_file", Description: "Write a file"},
+			{Name: "delete_file", Description: "Delete a file"},
+		},
+	}
+	Register(tp)
+
+	tools := ResolveTools([]string{"file-ops"}, nil, []string{"delete_file"})
+	require.Len(t, tools, 2)
+
+	names := make(map[string]bool)
+	for _, td := range tools {
+		names[td.Name] = true
+	}
+	assert.True(t, names["read_file"])
+	assert.True(t, names["write_file"])
+	assert.False(t, names["delete_file"])
+}
+
+func TestResolveToolsIncludeFromOtherSkill(t *testing.T) {
+	Reset()
+	defer Reset()
+
+	tp1 := &mockToolProvider{
+		mockSkill: mockSkill{name: "core"},
+		tools:     []*mcp.ToolDef{{Name: "ping", Description: "Ping"}},
+	}
+	tp2 := &mockToolProvider{
+		mockSkill: mockSkill{name: "extra"},
+		tools:     []*mcp.ToolDef{{Name: "special", Description: "Special tool"}},
+	}
+	Register(tp1)
+	Register(tp2)
+
+	// Only activate "core" skill, but explicitly include "special" from extra.
+	tools := ResolveTools([]string{"core"}, []string{"special"}, nil)
+	require.Len(t, tools, 2)
+
+	names := make(map[string]bool)
+	for _, td := range tools {
+		names[td.Name] = true
+	}
+	assert.True(t, names["ping"])
+	assert.True(t, names["special"])
+}
+
+func TestLoadContextSpecs(t *testing.T) {
+	yamlContent := `contexts:
+  - name: agent
+    description: "Agent context for Claude Code"
+    skills:
+      - file-ops
+      - symbol-ops
+    tools:
+      - ping
+    exclude_tools:
+      - dangerous_tool
+  - name: ide
+    description: "IDE assistant context"
+    skills:
+      - file-ops
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "contexts.yml")
+	require.NoError(t, os.WriteFile(path, []byte(yamlContent), 0644))
+
+	specs, err := LoadContextSpecs(path)
+	require.NoError(t, err)
+	require.Len(t, specs, 2)
+
+	assert.Equal(t, "agent", specs[0].Name)
+	assert.Equal(t, "Agent context for Claude Code", specs[0].Description)
+	assert.Equal(t, []string{"file-ops", "symbol-ops"}, specs[0].Skills)
+	assert.Equal(t, []string{"ping"}, specs[0].Tools)
+	assert.Equal(t, []string{"dangerous_tool"}, specs[0].ExcludeTools)
+
+	assert.Equal(t, "ide", specs[1].Name)
+	assert.Equal(t, []string{"file-ops"}, specs[1].Skills)
+}
+
+func TestLoadModeSpecs(t *testing.T) {
+	yamlContent := `modes:
+  - name: planning
+    description: "Planning mode"
+    skills:
+      - memory
+    tools: []
+    exclude_tools:
+      - write_file
+    prompts:
+      system: "You are in planning mode"
+  - name: editing
+    description: "Editing mode"
+    skills:
+      - file-ops
+      - symbol-ops
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "modes.yml")
+	require.NoError(t, os.WriteFile(path, []byte(yamlContent), 0644))
+
+	specs, err := LoadModeSpecs(path)
+	require.NoError(t, err)
+	require.Len(t, specs, 2)
+
+	assert.Equal(t, "planning", specs[0].Name)
+	assert.Equal(t, "Planning mode", specs[0].Description)
+	assert.Equal(t, []string{"memory"}, specs[0].Skills)
+	assert.Equal(t, []string{"write_file"}, specs[0].ExcludeTools)
+	assert.Equal(t, map[string]string{"system": "You are in planning mode"}, specs[0].Prompts)
+
+	assert.Equal(t, "editing", specs[1].Name)
+	assert.Equal(t, []string{"file-ops", "symbol-ops"}, specs[1].Skills)
+}
+
+func TestLoadContextSpecsFileNotFound(t *testing.T) {
+	_, err := LoadContextSpecs("/nonexistent/path.yml")
+	require.Error(t, err)
+}
+
+func TestLoadModeSpecsFileNotFound(t *testing.T) {
+	_, err := LoadModeSpecs("/nonexistent/path.yml")
+	require.Error(t, err)
 }

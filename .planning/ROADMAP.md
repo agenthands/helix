@@ -44,7 +44,7 @@ Plans:
 - [x] 06-01-PLAN.md — Test harness infrastructure: daemon accessors, MCP client wiring, Go fixture, self-test
 - [x] 06-02-PLAN.md — Symbol retrieval (9 tools), file operations (6 tools), diagnostics (3 tools) integration tests
 - [x] 06-03-PLAN.md — Memory (7 tools), workflow (2 tools), profile (2 tools) integration tests + HTTP transport smoke
-- [ ] 06-04-PLAN.md — Gap closure: fix Language field bug in workspace key, update tests to strict assertions
+- [x] 06-04-PLAN.md — Gap closure: fix Language field bug in workspace key, update tests to strict assertions
 
 ### Phase 7: Symbol Editing + Multi-Language Fixtures
 **Goal**: Developers can verify that edit operations are correct round-trips and that symbol tools work identically across Python, TypeScript, Java, and Rust fixture projects

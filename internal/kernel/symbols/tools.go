@@ -108,9 +108,12 @@ func errorResult(msg string) *mcpsdk.CallToolResult {
 	}
 }
 
-func pathToURI(path string) string {
+func pathToURI(root, path string) string {
 	if strings.HasPrefix(path, "file://") {
 		return path
+	}
+	if !strings.HasPrefix(path, "/") && root != "" {
+		path = root + "/" + path
 	}
 	return "file://" + path
 }
@@ -187,7 +190,7 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		locs, err := GoToDefinition(ctx, lease, pathToURI(args.Path), args.Line, args.Col)
+		locs, err := GoToDefinition(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
 			return errorResult(fmt.Sprintf("definition: %v", err)), nil, nil
 		}
@@ -209,7 +212,7 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		locs, err := FindReferences(ctx, lease, pathToURI(args.Path), args.Line, args.Col, args.IncludeDecl)
+		locs, err := FindReferences(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, args.IncludeDecl)
 		if err != nil {
 			return errorResult(fmt.Sprintf("references: %v", err)), nil, nil
 		}
@@ -231,7 +234,7 @@ func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, ws
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		outlines, err := GetSymbolOverview(ctx, lease, pathToURI(args.Path))
+		outlines, err := GetSymbolOverview(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path))
 		if err != nil {
 			return errorResult(fmt.Sprintf("documentSymbol: %v", err)), nil, nil
 		}
@@ -278,7 +281,7 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		result, err := GetHover(ctx, lease, pathToURI(args.Path), args.Line, args.Col)
+		result, err := GetHover(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
 			return errorResult(fmt.Sprintf("hover: %v", err)), nil, nil
 		}
@@ -303,7 +306,7 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		locs, err := FindImplementations(ctx, lease, pathToURI(args.Path), args.Line, args.Col)
+		locs, err := FindImplementations(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
 			return errorResult(fmt.Sprintf("implementation: %v", err)), nil, nil
 		}
@@ -329,7 +332,7 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		if direction == "" {
 			direction = "both"
 		}
-		nodes, err := GetCallHierarchy(ctx, lease, pathToURI(args.Path), args.Line, args.Col, direction)
+		nodes, err := GetCallHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
 		if err != nil {
 			return errorResult(fmt.Sprintf("callHierarchy: %v", err)), nil, nil
 		}
@@ -358,7 +361,7 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		if direction == "" {
 			direction = "both"
 		}
-		nodes, err := GetTypeHierarchy(ctx, lease, pathToURI(args.Path), args.Line, args.Col, direction)
+		nodes, err := GetTypeHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
 		if err != nil {
 			return errorResult(fmt.Sprintf("typeHierarchy: %v", err)), nil, nil
 		}
@@ -383,7 +386,7 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 		if err != nil {
 			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
 		}
-		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(args.Path), args.Line, args.Col)
+		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
 			return errorResult(fmt.Sprintf("blast radius: %v", err)), nil, nil
 		}

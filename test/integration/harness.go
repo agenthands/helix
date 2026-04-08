@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,6 +53,29 @@ type TestDaemon struct {
 // and triggers pool.stopAll to shut down all LS worker processes.
 func (td *TestDaemon) Stop() {
 	td.cancel()
+}
+
+// NewHTTPSession creates an MCP client session over HTTP transport.
+// Uses httptest.NewServer + StreamableClientTransport to validate the full
+// HTTP serialization path (D-03/D-04).
+func (td *TestDaemon) NewHTTPSession(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+
+	ts := httptest.NewServer(td.daemon.MCPServer().HTTPHandler())
+	t.Cleanup(ts.Close)
+
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "test-http",
+		Version: "1.0",
+	}, nil)
+	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+		Endpoint: ts.URL,
+	}, nil)
+	if err != nil {
+		t.Fatalf("HTTP client Connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
 }
 
 // StartTestDaemon creates a daemon in-process, wires an MCP client via

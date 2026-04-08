@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-04-08T09:04:50.634Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-04-08T09:05:00.038Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 4
@@ -93,6 +93,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Used gopkg.in/yaml.v3 for skill spec YAML loading (already indirect dep)
 - [Phase 03]: Caddy-style init() registration with last-wins duplicate semantics for skill composability
 - [Phase 03-02]: Used FTS5 content sync triggers for simpler upsert; modernc.org/sqlite (CGO-free); 300ms debounce for watcher; index is disposable, rebuilds from markdown files
+- [Phase 03-multi-language-and-skills]: 52 language entries embedded in binary from legacy Python adapters; gopkg.in/yaml.v3 for YAML override
+- [Phase 03-multi-language-and-skills]: Three-tier LS resolution: PATH lookup, managed download (npm/pip/cargo/gem/dotnet/binary), helpful error
 
 ### Pending Todos
 
@@ -105,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T09:04:41.224Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-04-08T09:05:00.033Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None

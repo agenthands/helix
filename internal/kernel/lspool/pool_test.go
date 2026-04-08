@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/postfix/serena/internal/langregistry"
 	"github.com/postfix/serena/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,6 +43,12 @@ func testPoolConfig() PoolConfig {
 		RSSHardCapMB:          2048,
 		PressureCheckInterval: 1,
 	}
+}
+
+// testRegistry returns a language registry for pool tests.
+func testRegistry() *langregistry.Registry {
+	reg, _ := langregistry.NewRegistry()
+	return reg
 }
 
 func TestCircuitBreaker_RecordFailure_ExponentialBackoff(t *testing.T) {
@@ -165,13 +172,18 @@ func TestWorkerState_String(t *testing.T) {
 	assert.Equal(t, "stopped", WorkerStopped.String())
 }
 
-func TestQuirks_DefaultLanguages(t *testing.T) {
-	// Per D-16: Phase 2 ships with 4 languages.
+func TestQuirks_RegistryLanguages(t *testing.T) {
+	// Verify that common languages are available via the registry.
+	reg := testRegistry()
 	languages := []string{"go", "python", "typescript", "rust"}
 	for _, lang := range languages {
-		q, ok := DefaultQuirks[lang]
-		assert.True(t, ok, "missing quirks for %s", lang)
-		assert.NotEmpty(t, q.Command, "empty command for %s", lang)
+		entry, ok := reg.Get(lang)
+		assert.True(t, ok, "missing registry entry for %s", lang)
+		assert.NotEmpty(t, entry.Command, "empty command for %s", lang)
+
+		// Verify GetQuirkAdapter returns a valid adapter.
+		adapter := GetQuirkAdapter(entry)
+		assert.NotNil(t, adapter, "nil adapter for %s", lang)
 	}
 }
 
@@ -187,7 +199,7 @@ func TestPoolConfig_Defaults(t *testing.T) {
 func TestPool_NewPool(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, pressure, testLogger())
+	pool := NewPool(cfg, testRegistry(), pressure, testLogger())
 	require.NotNil(t, pool)
 	assert.Equal(t, 0, pool.WorkerCount())
 	assert.Equal(t, 0, pool.LeaseCount())
@@ -263,7 +275,7 @@ func TestWorkerMetrics_ConcurrentReuse(t *testing.T) {
 func TestPool_RunAndShutdown(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, pressure, testLogger())
+	pool := NewPool(cfg, testRegistry(), pressure, testLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 

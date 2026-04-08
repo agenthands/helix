@@ -128,6 +128,7 @@ type Worker struct {
 	workDir      string
 	lsCommand    string
 	lsArgs       []string
+	quirks       QuirkAdapter
 	process      *ProcessHandle
 	state        atomic.Int32
 	metrics      WorkerMetrics
@@ -158,18 +159,12 @@ func (w *Worker) Start(ctx context.Context) error {
 	// Set state to Starting.
 	w.state.Store(int32(WorkerStarting))
 
-	// Apply language quirks.
+	// Apply language quirks via QuirkAdapter.
 	command := w.lsCommand
 	args := w.lsArgs
 	var initOptions interface{}
-	if q, ok := DefaultQuirks[w.language]; ok {
-		if command == "" {
-			command = q.Command
-		}
-		if len(args) == 0 {
-			args = q.Args
-		}
-		initOptions = q.InitOptions
+	if w.quirks != nil {
+		initOptions = w.quirks.InitOptions(w.workDir)
 	}
 
 	// Start the process.
@@ -209,6 +204,14 @@ func (w *Worker) Start(ctx context.Context) error {
 	// Send initialized notification.
 	if err := w.process.Conn().Notify(ctx, "initialized", gen.InitializedParams{}); err != nil {
 		w.logger.Warn("initialized notification failed", "error", err)
+	}
+
+	// Call PostInitialize hook if quirks adapter is set.
+	if w.quirks != nil {
+		adapter := NewLSAdapter(w)
+		if err := w.quirks.PostInitialize(ctx, adapter); err != nil {
+			w.logger.Warn("PostInitialize hook failed", "error", err)
+		}
 	}
 
 	// Replay buffered didOpen notifications.
@@ -328,6 +331,19 @@ func (w *Worker) Pid() int {
 		return w.process.Pid()
 	}
 	return -1
+}
+
+// SetQuirks sets the QuirkAdapter for this worker. Must be called before Start.
+func (w *Worker) SetQuirks(q QuirkAdapter) {
+	w.quirks = q
+}
+
+// NormalizeSymbolName delegates symbol name normalization to the QuirkAdapter.
+func (w *Worker) NormalizeSymbolName(name string) string {
+	if w.quirks != nil {
+		return w.quirks.NormalizeSymbolName(name)
+	}
+	return name
 }
 
 // processID returns the current process ID for the LSP initialize handshake.

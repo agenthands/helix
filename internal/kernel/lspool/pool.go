@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/postfix/serena/internal/langregistry"
 	"github.com/postfix/serena/internal/workspace"
 )
 
@@ -43,6 +44,7 @@ type Pool struct {
 	workers  map[string]*Worker        // keyed by worker ID
 	leases   map[string]*WorkerLease   // keyed by session ID
 	circuits map[string]*CircuitBreaker // keyed by language
+	registry *langregistry.Registry
 	pressure MemoryPressure
 	config   PoolConfig
 	logger   *slog.Logger
@@ -51,11 +53,13 @@ type Pool struct {
 }
 
 // NewPool creates a new LS worker pool.
-func NewPool(cfg PoolConfig, pressure MemoryPressure, logger *slog.Logger) *Pool {
+// The registry provides language server resolution for worker creation.
+func NewPool(cfg PoolConfig, registry *langregistry.Registry, pressure MemoryPressure, logger *slog.Logger) *Pool {
 	return &Pool{
 		workers:  make(map[string]*Worker),
 		leases:   make(map[string]*WorkerLease),
 		circuits: make(map[string]*CircuitBreaker),
+		registry: registry,
 		pressure: pressure,
 		config:   cfg,
 		logger:   logger.With("component", "lspool"),
@@ -228,17 +232,15 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	p.nextID++
 	id := fmt.Sprintf("w-%s-%d", wsKey.Language, p.nextID)
 
-	// Look up quirks for LS command.
-	var command string
-	var args []string
-	if q, ok := DefaultQuirks[wsKey.Language]; ok {
-		command = q.Command
-		args = q.Args
-	} else {
+	// Resolve LS binary from the language registry.
+	entry, ok := p.registry.Get(wsKey.Language)
+	if !ok {
 		return nil, fmt.Errorf("no language server configured for %s", wsKey.Language)
 	}
 
-	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger)
+	quirks := GetQuirkAdapter(entry)
+	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, entry.Command, entry.Args, p.logger)
+	worker.SetQuirks(quirks)
 
 	// Start the worker (releases lock temporarily for potentially long init).
 	p.mu.Unlock()

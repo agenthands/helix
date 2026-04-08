@@ -1,12 +1,12 @@
-# Serena 2.0
+# Serena
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Full rewrite of the Python-based Serena, shipping as a single Go binary. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
+A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 38+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
 
 ## Core Value
 
-Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools — without the lifecycle/timeout/asyncio pain of the Python version.
+Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
 
 ## Requirements
 
@@ -42,7 +42,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 ### Out of Scope
 
 - JetBrains plugin backend — dropped, LSP-only going forward
-- Python compatibility layer — clean Go rewrite, no Python interop
+- Python compatibility layer — native Go, no Python interop
 - Mobile/embedded targets — server-side only
 - Custom language server implementations — wrap existing LSP servers, don't reimplement
 - Knowledge graphs — CodeGraphContext/GitNexus own this space
@@ -57,20 +57,19 @@ Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-
 
 Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. All layers wired via centralized daemon bootstrap with fail-fast core / degraded-optional startup.
 
-Python Serena preserved in `legacy/` as reference.
+The `legacy/` directory contains the original Python-based prototype as a reference.
 
 ## Constraints
 
 - **Language**: Go — single binary, native concurrency
 - **Protocol**: MCP (Model Context Protocol) — primary interface
 - **LSP only**: No JetBrains or proprietary backends
-- **Repo**: Same repo, Python in `legacy/`
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Go rewrite | Runtime/lifecycle correctness is the foundation problem | ✓ Good — clean single binary, native concurrency |
+| Go implementation | Runtime/lifecycle correctness is the foundation problem | ✓ Good — clean single binary, native concurrency |
 | Daemon + edge adapters (gopls pattern) | Warm cache, multi-client, reconnect | ✓ Good — worker pool with adaptive TTL |
 | Drop JetBrains backend | Simplify to LSP-only | ✓ Good — 52 languages via LSP |
 | 4-layer architecture | Prevents monolith; skills as plugins | ✓ Good — clean separation |

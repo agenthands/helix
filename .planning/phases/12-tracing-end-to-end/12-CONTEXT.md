@@ -66,7 +66,7 @@ Propagate distributed traces from forwarder through daemon into kernel tool exec
 ## Canonical References
 
 ### Milestone Research
-- `.planning/research/STACK.md` — `go.opentelemetry.io/otel` v1.38.x + OTLP/gRPC + otelgrpc StatsHandler + otelslog bridge
+- `.planning/research/STACK.md` — `go.opentelemetry.io/otel` v1.43.0 (Research correction 2026-04-08: actual current stable; was v1.38.x in draft) + OTLP/gRPC + otelgrpc StatsHandler + otelslog bridge
 - `.planning/research/ARCHITECTURE.md` — Explicit provider wiring, 3-span tree, degraded-optional lifecycle
 - `.planning/research/PITFALLS.md` — #4 flush race (separate shutdown ctx), #7 OTel overhead (low sampler default), ctx propagation audit
 
@@ -86,10 +86,10 @@ Propagate distributed traces from forwarder through daemon into kernel tool exec
 - `internal/daemon/daemon.go` — where `otelgrpc.NewServerHandler` goes
 
 ### External
-- [opentelemetry-go releases](https://github.com/open-telemetry/opentelemetry-go/releases) — v1.38.x pin
+- [opentelemetry-go releases](https://github.com/open-telemetry/opentelemetry-go/releases) — v1.43.0 (Research correction 2026-04-08: actual current stable; was v1.38.x in draft) pin
 - [otelgrpc StatsHandler](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc)
 - [OTel Go sampling](https://opentelemetry.io/docs/languages/go/sampling/)
-- [otelslog bridge](https://pkg.go.dev/go.opentelemetry.io/contrib/bridges/otelslog)
+- ~~otelslog bridge~~ (NOT used — Phase 10 ContextHandler is more efficient; replacing spanContextFromContext stub achieves the same outcome at zero alloc cost)
 
 </canonical_refs>
 

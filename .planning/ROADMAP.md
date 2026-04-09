@@ -41,7 +41,7 @@
 **Ordering Constraint (Non-Negotiable):** Phases execute strictly sequentially. The critical meta-pitfall is that observing the thing you are benchmarking taints the benchmark. Phase 9 must publish the pre-instrumentation baseline before any observability code lands. Each subsequent phase publishes a benchstat delta vs. the previous phase's baseline as a delta gate (>10% time or >20% allocs at p<0.05 blocks close-out).
 
 - [ ] **Phase 9: Benchmark Harness & v1.1 Baseline** — Capture pre-instrumentation performance baseline with `testing.B.Loop`, benchstat CI gate, and committed v1.1 numbers
-- [ ] **Phase 10: Observability Foundation** — `internal/obs/` shim, trace-aware slog handler, dedicated loopback admin listener with health endpoints and gated pprof
+- [x] **Phase 10: Observability Foundation** — `internal/obs/` shim, trace-aware slog handler, dedicated loopback admin listener with health endpoints and gated pprof (completed 2026-04-09)
 - [ ] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint
 - [ ] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter
 - [ ] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT`
@@ -78,7 +78,7 @@
 **Plans**: 3 plans
 - [x] 10-01-PLAN.md — Create internal/obs/ package (Noop provider, ContextHandler, SpanContext stub) + ObservabilityConfig schema + --admin-addr CLI flag (OBS-01, OBS-02)
 - [x] 10-02-PLAN.md — Admin listener: telemetry.go with loopback validation, /healthz + /readyz + gated /debug/pprof/*, non-fatal errgroup wiring, ready atomic (OBS-03, OBS-04, OBS-05)
-- [ ] 10-03-PLAN.md — OBS-06 benchmark proof: slog hot-path bench + v1.2-phase10 baseline committed, benchgate delta gate against Phase 9 baseline (OBS-06)
+- [x] 10-03-PLAN.md — OBS-06 benchmark proof: slog hot-path bench + v1.2-phase10 baseline committed, benchgate delta gate against Phase 9 baseline (OBS-06)
 
 ### Phase 11: Metrics
 **Goal**: Expose Prometheus-scrapeable RED metrics for tools and lspool health with a bounded-label contract that cannot silently explode cardinality
@@ -137,7 +137,7 @@
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 3/3 | Complete | 2026-04-09 |
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
-| 10. Observability Foundation | v1.2 | 2/3 | In Progress|  |
+| 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
 | 11. Metrics | v1.2 | 0/? | Not started | - |
 | 12. Tracing End-to-End | v1.2 | 0/? | Not started | - |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |

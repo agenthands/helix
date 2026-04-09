@@ -1,0 +1,115 @@
+# Serena benchmark regression gate (Phase 9, D-01 PR tier).
+#
+# Runs the full bench suite on every PR against main, plus manual
+# `workflow_dispatch`, and invokes benchgate to compare results against
+# the committed v1.1 baseline. See test/bench/baselines/README.md for
+# the three-step rollout (placeholder → warn-only → blocking).
+#
+# Mitigations folded into this workflow:
+#   - Pitfall 4 (gopls drift): gopls pinned to an explicit version.
+#   - Pitfall 5 (env noise):   GOMAXPROCS pinned to 4 on ubuntu-latest.
+#   - Pitfall 8 (artifact bloat): heap snapshots uploaded as artifacts
+#                                 only — never committed per PR.
+#   - Pitfall 9 (benchstat text): benchgate parses benchfmt via the
+#                                 Go library, not benchstat text.
+#   - Pitfall 11 (full-repo smoke): -short skips BenchmarkFullRepoSmoke.
+name: bench
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Least privilege — this job reads the repo, runs benches, and uploads
+# artifacts. It MUST NOT need write access to contents or packages.
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: PR benchmark gate (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Pitfall 5 mitigation: pin GOMAXPROCS to reduce noise from
+      # variable core counts on shared GitHub-hosted runners.
+      GOMAXPROCS: "4"
+      # Pitfall 4 mitigation: pin gopls to an explicit version so
+      # cold-start/warm-reuse metrics are not tainted by upstream drift.
+      # Bump deliberately in a re-baseline PR per
+      # test/bench/baselines/README.md refresh policy.
+      GOPLS_VERSION: v0.17.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 2 gives benchstat enough git context for
+          # future "compare against merge-base" extensions without
+          # pulling the full history.
+          fetch-depth: 2
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Install pinned gopls
+        run: go install golang.org/x/tools/gopls@${GOPLS_VERSION}
+
+      - name: Install benchstat
+        # TODO: pin to a commit SHA once the first successful CI run
+        # establishes a known-good version. Upstream releases rarely
+        # break format but "@latest" is a small supply-chain risk we
+        # accept for the warn-only rollout window.
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Run benchmark suite
+        # -short skips BenchmarkFullRepoSmoke per Pitfall 11 — the full
+        # Serena codebase smoke is too slow for PR gating and runs only
+        # on the release-tier self-hosted runner (future, D-02).
+        # -count=10 is the D-03 PR-tier minimum for Welch's t-test.
+        run: |
+          set -euo pipefail
+          go test -short -bench=. -benchmem -count=10 -run=^$ \
+            ./test/bench/... | tee /tmp/bench-new.txt
+
+      - name: Print benchstat summary
+        # Human-readable diff for reviewers; benchgate does the actual
+        # gating below using the benchfmt library path (Pitfall 9).
+        run: |
+          benchstat -alpha 0.05 \
+            test/bench/baselines/v1.1-github-hosted.txt \
+            /tmp/bench-new.txt
+
+      # WARN-ONLY: first CI run captures the real baseline without
+      # blocking PRs. A follow-up re-baseline PR removes --warn-only to
+      # flip to blocking mode once test/bench/baselines/v1.1-github-hosted.txt
+      # has been seeded from the artifact this run uploads. See
+      # test/bench/baselines/README.md for the three-step rollout.
+      - name: Run benchgate (WARN-ONLY during baseline rollout)
+        run: |
+          go run ./test/bench/cmd/benchgate \
+            --warn-only \
+            --baseline test/bench/baselines/v1.1-github-hosted.txt \
+            --new /tmp/bench-new.txt
+
+      - name: Upload baseline candidate + heap snapshots
+        # Always upload, even on earlier failure, so reviewers can see
+        # what the run produced. During the warn-only rollout the
+        # benchfmt output IS the baseline candidate; a human downloads
+        # it to seed v1.1-github-hosted.txt via a dedicated re-baseline
+        # PR (step C in test/bench/baselines/README.md).
+        #
+        # Heap snapshots (test/bench/pprof/s*.pb.gz) come from
+        # BenchmarkMemory per Plan 09-05; they are NEVER committed per
+        # PR (Pitfall 8) — only uploaded as artifacts for inspection.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-artifacts-${{ github.run_id }}
+          path: |
+            /tmp/bench-new.txt
+            test/bench/pprof/s*.pb.gz
+          if-no-files-found: warn
+          retention-days: 30

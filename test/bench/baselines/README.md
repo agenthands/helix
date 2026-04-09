@@ -24,7 +24,7 @@ the previous PR" is unsafe — drift compounds silently across PRs. A
 committed baseline gives every PR a stable anchor and makes any
 intentional re-baselining explicit in git history.
 
-## Two-step rollout (addresses revision BLOCKER 4)
+## Two-step rollout (two-step, addresses revision BLOCKER 4)
 
 Benchmark numbers are architecture-, kernel-, and runner-specific.
 Capturing the initial baseline on a developer machine (e.g. darwin/arm64)
@@ -65,7 +65,7 @@ We therefore roll out in three steps:
 - From that point on, `benchgate` enforces the D-01 tiered thresholds
   and any significant regression blocks merge.
 
-## Baseline capture command (CI only)
+## Baseline capture procedure (CI only)
 
 This is the exact command the workflow runs. **Do not run it on a
 developer machine**; only CI captures are authoritative.

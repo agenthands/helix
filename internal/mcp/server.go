@@ -58,8 +58,10 @@ func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *Se
 		logger:   logger,
 	}
 
-	// Install middleware for logging (MCP-04)
-	InstallMiddleware(server, logger)
+	// Middleware (TelemetryMiddleware for METRIC-02 + logging, and optional
+	// ProfileFilterMiddleware) is installed by the daemon after the profile
+	// and session wiring are resolved. The test-only constructor here leaves
+	// the chain empty.
 
 	// Register dummy tools
 	s.registerPingTool()

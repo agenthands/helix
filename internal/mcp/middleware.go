@@ -2,15 +2,171 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/obs"
 )
 
-// InstallMiddleware adds receiving middleware for logging and error structuring (MCP-04).
-func InstallMiddleware(server *mcpsdk.Server, logger *slog.Logger) {
-	server.AddReceivingMiddleware(loggingMiddleware(logger))
+// InstallMiddleware wires Serena's receiving middleware onto the MCP SDK server
+// (MCP-04 + METRIC-02).
+//
+// TelemetryMiddleware absorbs the previous Phase 8 logging closure: it
+// preserves the structured log lines for every method AND emits RED metrics
+// for method == "tools/call". It fully replaces the Phase 8 log-only
+// middleware.
+//
+// NOTE: ProfileFilterMiddleware only touches tools/list; TelemetryMiddleware
+// only emits metrics on tools/call. Ordering between the two is independent,
+// so callers may install them in either order. The D-06 "before ProfileFilter"
+// constraint from CONTEXT.md was written assuming ProfileFilter had a deny
+// path at tool-call time; since it does not in v1.2, that ordering constraint
+// is obsolete here.
+func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) {
+	server.AddReceivingMiddleware(TelemetryMiddleware(provider, getSession, logger))
+	if resolver != nil {
+		server.AddReceivingMiddleware(ProfileFilterMiddleware(resolver, getSession, logger))
+	}
+}
+
+// Outcome enum for the "outcome" metric label on serena_tool_calls_total.
+//
+// NOTE: a deny-outcome bucket is intentionally absent. ProfileFilterMiddleware
+// only filters tools/list in v1.2; there is no rejection path at tools/call
+// time. Reintroduce a deny bucket here if per-call filtering lands in v1.3.
+//
+// Finer-grained classification (invalid_args, not_found, ls_crash) is a v1.3
+// concern and requires typed errors from the kernel. For v1.2 the hot path
+// only produces {success, timeout, circuit_open, internal}; the remaining
+// enum values are pre-declared so downstream dashboards can rely on the
+// closed vocabulary.
+const (
+	outcomeSuccess     = "success"
+	outcomeInvalidArgs = "invalid_args" // TODO v1.3: wire from typed validation errors
+	outcomeNotFound    = "not_found"    // TODO v1.3: wire from symbol-lookup misses
+	outcomeCircuitOpen = "circuit_open"
+	outcomeLSCrash     = "ls_crash" // TODO v1.3: wire from lspool crash signals
+	outcomeTimeout     = "timeout"
+	outcomeInternal    = "internal"
+)
+
+// outcomeEnum is the authoritative closed-enum list for CI assertions and tests.
+var outcomeEnum = []string{
+	outcomeSuccess,
+	outcomeInvalidArgs,
+	outcomeNotFound,
+	outcomeCircuitOpen,
+	outcomeLSCrash,
+	outcomeTimeout,
+	outcomeInternal,
+}
+
+// classifyOutcome maps a (result, err) pair to one of the 7 closed enum values.
+// Hot path: no allocations and no err.Error() text ever reaches the label.
+//
+// Check order matters: timeout wins over circuit_open wins over generic error
+// wins over IsError result. This keeps the cheapest checks first and ensures
+// context-cancellation errors do not get buried under the generic "internal"
+// bucket.
+func classifyOutcome(result mcpsdk.Result, err error) string {
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return outcomeTimeout
+		}
+		if errors.Is(err, lspool.ErrCircuitOpen) {
+			return outcomeCircuitOpen
+		}
+		return outcomeInternal
+	}
+	if ctr, ok := result.(*mcpsdk.CallToolResult); ok && ctr != nil && ctr.IsError {
+		// v1.2: without typed errors from tool handlers we cannot distinguish
+		// invalid_args / not_found / ls_crash here. Bucket as "internal" and
+		// refine in v1.3.
+		return outcomeInternal
+	}
+	return outcomeSuccess
+}
+
+// extractToolName pulls the tool name out of a tools/call request. Falls back
+// to "unknown" if the request is not a *CallToolRequest or its Params are nil.
+func extractToolName(req mcpsdk.Request) string {
+	ctr, ok := req.(*mcpsdk.CallToolRequest)
+	if !ok || ctr == nil || ctr.Params == nil {
+		return "unknown"
+	}
+	return ctr.Params.Name
+}
+
+// TelemetryMiddleware emits RED metrics for every tools/call and preserves the
+// Phase 8 structured log lines for all methods. The Phase 8 log closure has
+// been absorbed here so we only traverse the middleware chain once per request.
+//
+// Metric emission is gated on method == "tools/call"; tools/list, initialize,
+// and all other methods are pure log pass-through. This matches the v1.2
+// scope: RED metrics are per-tool-call only (T-11-09 "accept" disposition).
+func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) mcpsdk.Middleware {
+	m := provider.Metrics() // closure-captured once; Metrics() is never nil per obs.Noop
+	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
+		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			start := time.Now()
+			result, err := next(ctx, method, req)
+			duration := time.Since(start)
+
+			// Preserve Phase 8 logging behavior for ALL methods (regression
+			// guard: the old log closure was merged in, not deleted in behavior).
+			if err != nil {
+				logger.Warn("request failed",
+					"method", method,
+					"duration", duration,
+					"error", err,
+				)
+			} else {
+				logger.Info("request handled",
+					"method", method,
+					"duration", duration,
+				)
+			}
+
+			// Metric emission is scoped to tools/call in v1.2.
+			if method != "tools/call" {
+				return result, err
+			}
+
+			toolName := extractToolName(req)
+			outcome := classifyOutcome(result, err)
+
+			var profile, mode, language string
+			if sess := getSession(ctx); sess != nil {
+				// Snapshot holds RLock over all field reads so profile/mode/
+				// language come from one point in time even under concurrent
+				// SetLanguage / switch_mode (T-11-07 mitigation).
+				snap := sess.Snapshot()
+				profile, mode, language = snap.Profile, snap.Mode, snap.Language
+			}
+
+			m.ToolCalls.WithLabelValues(toolName, profile, mode, language, outcome).Inc()
+			m.ToolDuration.WithLabelValues(toolName, profile, mode, language).Observe(duration.Seconds())
+
+			return result, err
+		}
+	}
+}
+
+// ClassifyOutcomeForTest exposes classifyOutcome to the _test package.
+func ClassifyOutcomeForTest(result mcpsdk.Result, err error) string {
+	return classifyOutcome(result, err)
+}
+
+// OutcomeEnumForTest returns a copy of the closed outcome enum for test
+// assertions that the 7-value vocabulary is preserved.
+func OutcomeEnumForTest() []string {
+	out := make([]string, len(outcomeEnum))
+	copy(out, outcomeEnum)
+	return out
 }
 
 // ProfileResolver provides profile information for middleware filtering.
@@ -80,31 +236,6 @@ func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx conte
 			}
 
 			return listResult, nil
-		}
-	}
-}
-
-// loggingMiddleware logs every request with method, duration, and error status.
-func loggingMiddleware(logger *slog.Logger) mcpsdk.Middleware {
-	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
-		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
-			start := time.Now()
-			result, err := next(ctx, method, req)
-			duration := time.Since(start)
-
-			if err != nil {
-				logger.Warn("request failed",
-					"method", method,
-					"duration", duration,
-					"error", err,
-				)
-			} else {
-				logger.Info("request handled",
-					"method", method,
-					"duration", duration,
-				)
-			}
-			return result, err
 		}
 	}
 }

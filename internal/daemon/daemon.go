@@ -222,15 +222,23 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		ps.SetSessionProvider(sessionProvider)
 	}
 
-	// 13. Install ProfileFilterMiddleware on the MCP server.
+	// 13. Observability provider (Phase 10 slog ContextHandler + Phase 11 metrics).
+	// Noop wires a trace-aware slog handler and pre-registers the Prometheus
+	// vectors on an owned registry; /metrics on the admin listener reads it.
+	observability := obs.Noop(logger.Handler())
+
+	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
+	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
+	// because telemetry emits on tools/call and profile filter only touches
+	// tools/list.
 	getSessionFn := func(ctx context.Context) *serenaMCP.SessionInfo {
 		return sessionProvider.CurrentSession()
 	}
-	mcpServer.SDK().AddReceivingMiddleware(
-		serenaMCP.ProfileFilterMiddleware(profileStore, getSessionFn, logger),
-	)
+	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, logger)
 
-	// 14. Update activate_project to also activate workspace in kernel.
+	// 15. Update activate_project to also activate workspace in kernel. The
+	// callback also publishes the resolved primary language into the session
+	// so TelemetryMiddleware can surface it as the "language" metric label.
 	mcpServer.SetActivateCallback(func(ctx context.Context, repoPath string) error {
 		rt, err := k.ActivateWorkspace(ctx, repoPath)
 		if err != nil {
@@ -240,17 +248,15 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		if langs := rt.Languages(); len(langs) > 0 {
 			activeWSLang = langs[0]
 		}
+		if sess := sessionProvider.CurrentSession(); sess != nil {
+			sess.SetLanguage(activeWSLang)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
 		)
 		return nil
 	})
-
-	// Observability provider (Phase 10 slog ContextHandler + Phase 11 metrics).
-	// Noop wires a trace-aware slog handler and pre-registers the Prometheus
-	// vectors on an owned registry; /metrics on the admin listener reads it.
-	observability := obs.Noop(logger.Handler())
 
 	return &Daemon{
 		config:        cfg,

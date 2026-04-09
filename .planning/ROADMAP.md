@@ -70,7 +70,12 @@ Plans:
   2. Each of 4 modes filters tool visibility to match its mode definition
   3. Concurrent tool calls from multiple goroutines complete without races (passes `go test -race`) or deadlocks
   4. Calling a tool before workspace activation, on a nonexistent file, or for an unknown symbol returns a structured MCP error (not a panic or hang)
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 08-01-PLAN.md — Wave 1 foundation: extend harness Options (Profile/Mode/MaxWorkers), add listSessionTools helper, create golden.go with -update flag
+- [ ] 08-02-PLAN.md — ADV-01 + ADV-02 profile and mode contract tests via golden files, plus mode-switch freshness and excluded-tool-invocability security tests
+- [ ] 08-03-PLAN.md — ADV-03 three-tier concurrency: scenario stress + pool saturation fan-out + synctest pool unit test + Makefile test-stress target
+- [ ] 08-04-PLAN.md — ADV-04 three-band error coverage: representative category matrix, exhaustive destructive tool matrix, read-only smoke
 
 ## Progress
 
@@ -86,4 +91,4 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 5. Daemon Bootstrap Integration | v1.0 | 3/3 | Complete | 2026-04-08 |
 | 6. Test Harness + Go Dogfooding | v1.1 | 3/4 | In Progress | - |
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 0/3 | Not started | - |
-| 8. Advanced Testing | v1.1 | 0/? | Not started | - |
+| 8. Advanced Testing | v1.1 | 0/4 | Not started | - |

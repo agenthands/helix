@@ -16,8 +16,8 @@
 
 ### Observability Foundation
 
-- [ ] **OBS-01**: `internal/obs/` package with noop-default provider
-- [ ] **OBS-02**: Trace-aware slog handler that injects trace_id/span_id from context
+- [x] **OBS-01**: `internal/obs/` package with noop-default provider
+- [x] **OBS-02**: Trace-aware slog handler that injects trace_id/span_id from context
 - [ ] **OBS-03**: Dedicated admin listener on loopback (configurable port, default disabled)
 - [ ] **OBS-04**: `/healthz` and `/readyz` endpoints on admin listener
 - [ ] **OBS-05**: Gated `/debug/pprof/*` endpoints (admin profile only)
@@ -99,8 +99,8 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 | BENCH-04 | Phase 9 | Complete |
 | BENCH-05 | Phase 9 | Pending |
 | BENCH-06 | Phase 9 | Pending |
-| OBS-01 | Phase 10 | Pending |
-| OBS-02 | Phase 10 | Pending |
+| OBS-01 | Phase 10 | Complete |
+| OBS-02 | Phase 10 | Complete |
 | OBS-03 | Phase 10 | Pending |
 | OBS-04 | Phase 10 | Pending |
 | OBS-05 | Phase 10 | Pending |

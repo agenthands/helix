@@ -75,7 +75,10 @@
   2. An operator can enable the loopback admin listener on a configured port and hit `/healthz` and `/readyz` to check daemon liveness and readiness
   3. Log records emitted during a traced request carry `trace_id` and `span_id` fields injected from context without manual plumbing at call sites
   4. `/debug/pprof/*` endpoints are reachable on the admin listener only when the active profile grants admin scope
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 10-01-PLAN.md — Create internal/obs/ package (Noop provider, ContextHandler, SpanContext stub) + ObservabilityConfig schema + --admin-addr CLI flag (OBS-01, OBS-02)
+- [ ] 10-02-PLAN.md — Admin listener: telemetry.go with loopback validation, /healthz + /readyz + gated /debug/pprof/*, non-fatal errgroup wiring, ready atomic (OBS-03, OBS-04, OBS-05)
+- [ ] 10-03-PLAN.md — OBS-06 benchmark proof: slog hot-path bench + v1.2-phase10 baseline committed, benchgate delta gate against Phase 9 baseline (OBS-06)
 
 ### Phase 11: Metrics
 **Goal**: Expose Prometheus-scrapeable RED metrics for tools and lspool health with a bounded-label contract that cannot silently explode cardinality
@@ -134,7 +137,7 @@
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 3/3 | Complete | 2026-04-09 |
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
-| 10. Observability Foundation | v1.2 | 0/? | Not started | - |
+| 10. Observability Foundation | v1.2 | 0/3 | Planned | - |
 | 11. Metrics | v1.2 | 0/? | Not started | - |
 | 12. Tracing End-to-End | v1.2 | 0/? | Not started | - |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |

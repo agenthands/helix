@@ -39,6 +39,13 @@ type Options struct {
 	SkipLS bool
 	// LSTimeout is the maximum time to wait for LS readiness (default 30s).
 	LSTimeout time.Duration
+	// Profile overrides cfg.Profile (default "full" preserves existing behavior).
+	Profile string
+	// Mode, if non-empty, triggers a switch_mode call after session connect.
+	// Default "" uses the profile's default_mode (no switch).
+	Mode string
+	// MaxWorkers overrides cfg.WorkerPool.MaxWorkers (default 2 preserves existing behavior).
+	MaxWorkers int
 }
 
 // TestDaemon wraps a daemon instance with an MCP client session for integration tests.
@@ -84,6 +91,12 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	t.Helper()
 
 	cfg := defaultTestConfig(t)
+	if opts.Profile != "" {
+		cfg.Profile = opts.Profile
+	}
+	if opts.MaxWorkers > 0 {
+		cfg.WorkerPool.MaxWorkers = opts.MaxWorkers
+	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	// Initialize skills with temp dirs.
@@ -146,6 +159,20 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	}
 
 	t.Cleanup(td.Stop)
+
+	// Apply mode switch before workspace activation so it works even without a workspace.
+	if opts.Mode != "" {
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "switch_mode",
+			Arguments: map[string]any{"mode": opts.Mode},
+		})
+		if err != nil {
+			t.Fatalf("switch_mode %s: %v", opts.Mode, err)
+		}
+		if result.IsError {
+			t.Fatalf("switch_mode %s failed: %s", opts.Mode, textContent(result))
+		}
+	}
 
 	// Activate workspace if requested.
 	if opts.WorkspaceDir != "" {

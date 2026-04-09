@@ -1,0 +1,42 @@
+# Phase 10 Observability Foundation baseline — captured 2026-04-08
+# Host: local dev (darwin/arm64, Apple M4 Pro) — placeholder until first CI capture
+# Go: go1.25.1 darwin/arm64
+# Delta vs v1.1: slog hot-path 0 -> 0 allocs/op (+0)
+#
+# This file is the Phase 10 reference for Phase 11 to measure against.
+# Phase 9's v1.1-github-hosted.txt remains the frozen pre-instrumentation
+# baseline; only the Phase 10 slog hot-path benchmarks are captured here.
+# Full 38-tool rerun is deferred to the first CI capture on ubuntu-latest
+# (two-step rollout per test/bench/baselines/README.md).
+#
+# OBS-06 contract: the WithContextHandler variant must show <= +1 alloc/op
+# vs the Baseline variant. Measured delta: 0 allocs/op (fast path is fully
+# zero-overhead because the Phase 10 spanContextFromContext stub always
+# returns false).
+
+goos: darwin
+goarch: arm64
+pkg: github.com/postfix/serena/test/bench
+cpu: Apple M4 Pro
+BenchmarkSlogHotPath_Baseline-14              	 3003234	       398.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3017144	       391.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3163856	       383.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3195094	       379.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3108254	       390.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 2883361	       411.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3040840	       389.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3098001	       415.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3032739	       385.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3067868	       392.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3105481	       391.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3026950	       391.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3089475	       389.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3130195	       385.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3076724	       391.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3123166	       384.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3100623	       386.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3121360	       387.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3109563	       386.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 2990365	       390.2 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/postfix/serena/test/bench	24.425s

@@ -1,119 +1,203 @@
-# Feature Landscape
+# Feature Landscape: v1.2 Performance & Production Hardening
 
-**Domain:** Integration testing for MCP code intelligence platform (Serena v1.1)
+**Domain:** Production MCP/LSP gateway — benchmarks, observability, graceful degradation, user docs
 **Researched:** 2026-04-08
+**Scope:** Only features needed for the v1.2 milestone. Existing v1.0/v1.1 capabilities (38 tools, 52 languages, worker pool with circuit breaker/pressure eviction, integration test harness) are the baseline; this milestone adds the observability/perf/docs layer on top.
 
 ## Table Stakes
 
-Features that must exist for the integration test suite to be credible and useful. Missing any of these means the test suite cannot fulfill its purpose.
+Features users (agent runtimes, platform teams deploying Serena) expect. Missing these makes the product feel unfinished for a "v1.2 production hardening" release.
 
-| Feature | Why Expected | Complexity | Dependencies |
-|---------|--------------|------------|--------------|
-| MCP round-trip test harness | Core deliverable: spin up daemon, connect MCP client, call tools via `CallTool`, assert responses. Without this, nothing else works. | Med | Official MCP Go SDK `NewInMemoryTransports()` for in-process, or HTTP transport for out-of-process |
-| Daemon lifecycle management in tests | Tests must start/stop the daemon cleanly. Already partially done in `daemon_integration_test.go` but needs extraction into reusable `testutil` package. | Low | Existing `daemon.New()` + `daemon.Run()` |
-| Go dogfooding suite (self-test) | Exercise all 38+ tools against Serena's own codebase. The project has ~25,500 lines of Go with known symbols (`Daemon`, `SerenaMCPServer`, `Kernel`, etc.) -- the richest fixture available. | Med | gopls installed in test env, daemon harness |
-| Multi-language fixture projects | Small projects with known symbols for Go, Python, TypeScript, Rust, Java. Legacy already has fixture repos under `test/resources/repos/` for 40+ languages -- port the 4-5 most important ones. | Med | Language servers installed (gopls, pyright/pylsp, tsserver, rust-analyzer, jdtls) |
-| Tool correctness assertions | Each of the 38+ tools must have at least one test calling the tool against a known fixture and verifying the response shape and content. Not snapshot testing -- explicit assertions on known symbols. | High | Fixtures with stable, known symbol names/positions |
-| Build tag / test tag separation | Integration tests are slow (real language servers). Must use `//go:build integration` so `go test ./...` skips them by default but CI runs them with `-tags integration`. | Low | None |
-| Timeout and cleanup handling | LSP servers can hang. Tests need per-test timeouts, context cancellation, and process cleanup to avoid zombie language servers. | Low | Go `t.Deadline()`, `context.WithTimeout` |
-| CI-compatible test execution | Tests must run in GitHub Actions with language servers installable via apt/brew/go install. Must handle missing LS gracefully (skip, not fail). | Med | `testing.Short()` or build tags, conditional skip logic |
+### Benchmarks
+
+| Feature | Why Expected | Complexity | Depends On |
+|---------|--------------|------------|------------|
+| Tool response latency bench (p50/p95/p99) for all 38 tools | Primary SLO unit for MCP clients; agents time out on slow tools | Medium | v1.1 test harness (`test/` package), InMemory transport |
+| LSP indexing throughput (LOC/sec, files/sec, time-to-first-query) | Warm-up cost is the #1 user complaint for LSP gateways (see gopls issues) | Medium | Worker pool, language registry, multi-lang fixtures from v1.1 |
+| Memory profile: baseline (daemon idle), per-workspace, per-LS-worker | LSP servers are the dominant memory cost; users need sizing guidance | Medium | `runtime/metrics`, pressure eviction telemetry |
+| Go `testing.B` benchmarks checked into repo | Standard Go practice; enables `go test -bench` and benchstat locally | Low | Existing test infrastructure |
+| `benchstat`-based regression comparison (HEAD vs base) | Benchmarks without diffing are decorative | Low | `golang.org/x/perf/cmd/benchstat` |
+| CI benchmark gate with threshold alerting | Prevents perf regressions from landing unnoticed | Medium | GitHub Actions, benchstat or `benchmark-action/github-action-benchmark` |
+| Cold-start vs warm-start separation in indexing benches | Share-until-dirty claims need to be measured, not asserted | Medium | Worker pool metrics |
+
+### Observability
+
+| Feature | Why Expected | Complexity | Depends On |
+|---------|--------------|------------|------------|
+| `log/slog` structured logging (stdlib, JSON handler) | Go 1.21+ standard; replaces whatever ad-hoc logging exists today | Low | Go stdlib only |
+| Request/trace ID propagation through `context.Context` | Correlating a single MCP tool call across kernel -> pool -> LS is impossible without it | Medium | MCP middleware, kernel call sites |
+| Per-tool span timing (even without full OTel) | `tool=find_symbol duration_ms=142 workspace=X` is the minimum viable trace | Medium | Middleware in `internal/mcp/` |
+| Prometheus `/metrics` endpoint on HTTP transport | De facto standard; everyone scrapes Prometheus | Low | `prometheus/client_golang`, existing HTTP server |
+| Core RED metrics: Rate, Errors, Duration per tool (histograms) | Prometheus table stakes for any RPC-style service | Low | client_golang histogram |
+| LS worker pool gauges: workers alive, idle, busy, evictions, restarts, circuit state | Operators need visibility into the thing most likely to misbehave | Medium | Instrument existing pool in `internal/kernel/lspool/` |
+| Process/runtime metrics (goroutines, heap, GC pause, open FDs) | `client_golang` provides these out of the box via `collectors.NewGoCollector` | Low | client_golang |
+| Readiness and liveness endpoints (`/healthz`, `/readyz`) | Kubernetes and systemd expect these | Low | HTTP transport |
+| Log-trace correlation: slog attrs include trace_id/span_id | Enables jumping from a log line to the full request trace | Low | slog handler wrapper |
+
+### Graceful Degradation
+
+| Feature | Why Expected | Complexity | Depends On |
+|---------|--------------|------------|------------|
+| Per-tool timeout budgets (default + per-tool overrides) | Agents enforce their own budgets; the server must respect them so it can't wedge | Medium | Config layer, kernel dispatch |
+| Context deadline propagation from MCP call -> LSP request | Cancelling a slow `find_references` must actually cancel the LSP RPC | Medium | JSON-RPC codec, pool call paths |
+| Circuit breaker telemetry + tuning knobs exposed in config | Circuit breaker already exists; v1.2 makes it observable and tunable | Low | Existing `internal/kernel/lspool/` |
+| LS crash recovery: auto-restart with exponential backoff + restart budget | Share-until-dirty workers die; pool must not thrash respawning them | Medium | Worker lifecycle code, backoff jitter |
+| OOM/pressure degraded mode: shed to fewer workers, refuse new workspaces with clear error | Pressure eviction exists; degraded mode makes it a first-class state instead of an eviction loop | Medium | Pressure eviction code in pool |
+| Structured error responses distinguishing timeout / circuit open / LS crash / pressure | MCP clients need to know whether to retry, back off, or surface to the user | Medium | MCP error envelope, kernel error types |
+| `GOMEMLIMIT` soft memory limit support (Go 1.19+) | Pairs with pressure eviction; prevents runaway heap before OS kills the process | Low | Go runtime + docs |
+| Graceful shutdown: drain in-flight, refuse new, close LS workers in order | Signal-first lifecycle already exists — verify and document for production operators | Low | Existing daemon lifecycle |
+
+### Documentation (README.md and USAGE.md)
+
+| Feature | Why Expected | Complexity | Depends On |
+|---------|--------------|------------|------------|
+| README: one-paragraph pitch, capability bullets, install, quickstart | First-impression file; if it's bad, nothing else matters | Low | — |
+| README: supported languages table (52) with LS installer tier | Users immediately ask "is my language supported?" | Low | `internal/langregistry/` |
+| README: supported MCP clients with copy-pasteable config blocks | Claude Code, Codex, Zed, Cursor, generic stdio — each has a different config schema | Low | Profile docs |
+| README: single-binary install (go install, release binaries, homebrew later) | Zero-friction install is the bar set by other Go tools | Low | GoReleaser or manual release |
+| README: architecture diagram (forwarder -> daemon -> pool -> LS) | One picture answers half the "how does this work" questions | Low | — |
+| USAGE: client setup for Claude Code (stdio + HTTP) | Primary target audience | Low | Profile configs |
+| USAGE: client setup for Codex | Second target audience | Low | Profile configs |
+| USAGE: client setup for generic IDE assistants / `ide-assistant` profile | Third target audience | Low | Profile configs |
+| USAGE: profile + mode reference (what each profile exposes, how modes work) | Unique to Serena; not obvious from tool listings | Low | `internal/profile/` |
+| USAGE: config precedence walkthrough (CLI > project > user > profile) | Four layers is one more than most tools; confusing without examples | Low | `internal/config/` |
+| USAGE: onboarding/handoff workflow guide | Differentiator features, poorly discoverable without docs | Low | Workflow skills |
+| USAGE: troubleshooting — LS install failures, timeout errors, permission issues | The top 5 support questions, answered once in docs | Low | — |
+| USAGE: observability quickstart (Prometheus scrape, log format, trace IDs) | Pairs with the new v1.2 observability features | Low | v1.2 observability work |
+| USAGE: performance tuning (pool sizing, TTL, `GOMEMLIMIT`) | Pairs with new benchmarks/degradation features | Low | v1.2 perf work |
+| CHANGELOG.md with v1.0/v1.1/v1.2 entries | Standard OSS hygiene; users need to know what's new | Low | — |
 
 ## Differentiators
 
-Features that elevate the test suite beyond basic correctness. Not expected for v1.1 MVP but high value.
+Not expected, but elevate Serena above "another MCP server."
 
-| Feature | Value Proposition | Complexity | Dependencies |
-|---------|-------------------|------------|--------------|
-| MCP client-level e2e tests (full protocol) | Current tests use `ExecuteTool()` bypassing MCP wire protocol. True e2e calls `tools/call` via MCP client through `mcp.NewInMemoryTransports()` to verify JSON schema, arg parsing, error codes. | Med | Official MCP SDK client, in-memory transport |
-| Snapshot / golden file testing for output stability | Capture tool outputs as golden files. Detect unintended response format changes. Legacy uses syrupy for this. Go equivalent: `testutil/golden` pattern or `go-cmp`. | Med | `go-cmp` (already in MCP SDK deps) or custom golden file helper |
-| Profile-filtered tool visibility tests | Verify each profile (claude-code, codex, ci-bot, ide-assistant, full) exposes exactly the expected tool subset. Already partially tested in `TestE2EProfileConfigLayering`. | Low | Existing profile system |
-| Worker pool stress testing | Start multiple concurrent tool calls against the same workspace. Verify share-until-dirty semantics, no races, no deadlocks. | High | `t.Parallel()`, `-race` flag |
-| Cross-file reference chain testing | Call `find_symbol` -> get definition -> call `find_references` -> verify bidirectional link. Multi-file fixture needed. | Med | Multi-file fixtures with known cross-references |
-| Edit round-trip testing | `get_symbol_overview` -> `replace_symbol_body` -> `get_symbol_overview` again -> verify edit took effect. Tests the full read-edit-read cycle. | Med | Tree-sitter body extraction, writable temp fixture copies |
-| Diagnostic tool testing | Call `get_diagnostics` against a fixture with known errors. Verify error locations and messages. | Med | Fixtures with intentional syntax/type errors |
-| Memory + workflow cross-skill integration | Write memory -> onboard project -> verify onboarding incorporates written memory. | Low | Existing memory/workflow skills |
-| Transport-level tests (HTTP + gRPC) | Test MCP over Streamable HTTP and gRPC forwarder, not just in-memory. Catches serialization bugs. | High | HTTP server startup, gRPC forwarder startup |
-| Language server availability checks | Auto-detect which language servers are installed, generate skip reasons. Follow legacy pattern from `conftest.py` `_determine_disabled_languages()`. | Low | `exec.LookPath()` checks |
+| Feature | Value Proposition | Complexity | Depends On |
+|---------|-------------------|------------|------------|
+| Per-workspace metric labels (without high cardinality explosion) | Operators running multi-tenant Serena need to attribute cost; most MCP servers are single-workspace so this is uncommon | Medium | Label allowlist, workspace ID hashing |
+| `serena doctor` CLI command: checks LS binaries, permissions, config, port binds, memory headroom | Turns "it doesn't work" bug reports into self-diagnosis; rare in MCP ecosystem | Medium | `internal/langregistry/installer`, config validation |
+| Benchmark results published to repo (`bench/results/`) with history graph | Public perf claims beat private ones; github-action-benchmark renders this for free | Low | CI + gh-pages |
+| Tool latency budgets declared in profile YAML (`max_duration_ms`) | Lets platform teams set SLOs declaratively per profile | Medium | Profile schema, middleware |
+| Built-in pprof endpoints (`/debug/pprof/`) gated by admin mode | Go-native perf debugging; trivial to add, high value during incidents | Low | `net/http/pprof` |
+| Trace export to OTLP (optional, off by default) | For teams already running OpenTelemetry collectors; keeps core dep-light | Medium | `go.opentelemetry.io/otel` (optional build tag or dep) |
+| USAGE: a real "day in the life" example — Claude Code onboarding a repo, editing, handing off | Narrative docs outperform reference docs for adoption | Low | — |
+| Degraded-mode banner in tool responses when pool is under pressure | Clients see `"status": "degraded", "reason": "memory_pressure"` in metadata, can adapt | Medium | MCP response envelope |
+| Memory sizing calculator in USAGE.md (per language, per workspace) | Based on real v1.2 bench data; answers "how much RAM do I need?" | Low | v1.2 memory profiles |
 
 ## Anti-Features
 
-Features to explicitly NOT build for v1.1.
+Features to explicitly NOT build in this milestone. Either out of scope per PROJECT.md or premature for v1.2.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Testing all 52 languages | Combinatorial explosion. Most LS behaviors are identical -- testing 52 languages adds CI cost with diminishing returns. | Test 5 representative languages: Go (dogfood), Python, TypeScript, Rust, Java. These cover the 4 tree-sitter-supported languages plus the most popular LS. |
-| Mock language servers | Mocking LSP defeats the purpose. Integration tests must hit real language servers to catch real bugs (initialization sequences, capability negotiation, encoding quirks). | Use real language servers against small fixture projects. Mocks already exist in `retrieval_test.go` for unit tests. |
-| Snapshot testing as primary strategy | Snapshots are brittle with LSP -- line numbers shift, URIs change, LS versions change output format. Updates become meaningless noise. | Use structural assertions: "response contains symbol named X at file Y" not "response equals this exact JSON blob". Use snapshots only for output format stability monitoring. |
-| Performance benchmarking suite | Wrong milestone. v1.1 is about correctness, not performance. | Defer to v1.2 or later. Benchmarks need stable correctness tests first. |
-| Fuzzing MCP inputs | Premature. Need working correctness tests before adversarial testing. | Defer. Focus on happy-path and known-error-path coverage. |
-| Testing legacy Python code | Legacy is a reference, not active code. Testing it wastes effort. | Only port fixture repos and test patterns from legacy. Do not test Python Serena itself. |
-| End-to-end agent conversation tests | Testing an LLM calling Serena tools in a loop is non-deterministic and expensive. | Test individual tool calls with deterministic inputs/outputs. |
-| Per-tool unit test duplication | Existing unit tests (mock-based) in `retrieval_test.go`, `edit_test.go`, `fileops_test.go` already cover component logic. | Integration tests should focus on real LS round-trips. Do not duplicate what unit tests already verify. |
+| Full OpenTelemetry as a mandatory dependency | Heavy dep graph (`otel-sdk` pulls ~20 modules); most users don't need distributed tracing | Optional exporter behind build tag or config flag; default to slog + Prometheus only |
+| Custom metrics DSL or framework | Reinventing Prometheus | Use `prometheus/client_golang` directly |
+| Jaeger/Zipkin native exporters | OTLP is the standard; vendors ingest OTLP | If exporting traces at all, export OTLP only |
+| APM agent integration (Datadog, New Relic SDKs) | Vendor lock-in; bloats binary | Prometheus scrape + OTLP exporter covers these vendors |
+| In-process distributed tracing UI | Not Serena's job | Link to Jaeger/Tempo/Grafana in USAGE |
+| Grafana dashboard JSON shipped as core artifact | Maintenance burden; Grafana versions drift | Ship a single example dashboard as optional contrib; document the metrics schema so anyone can build their own |
+| Alert rules (PromQL) shipped in repo | Same reason — every org has different SLOs | Document the metrics; let users write their own alerts |
+| Load testing harness / traffic replay tool | Benchmarks use `testing.B` and fixtures; load testing is a different tool (`k6`, `vegeta`) | Document "how to load test Serena with k6" in USAGE |
+| Auto-scaling / horizontal pod autoscaler logic | Single-binary daemon; scaling is the operator's concern | Document memory/CPU characteristics so HPA can be configured externally |
+| A dedicated "admin web UI" for metrics | Adds web framework, auth, templating — scope explosion | `/metrics` + pprof + logs; use Grafana for visualization |
+| Benchmark against other MCP servers | Apples-to-oranges; political | Benchmark against self over time (regression gate) |
+| Per-request hedging | Cuts p99 but doubles LS load; worker pool is already the bottleneck | Defer; revisit if benches show p99 >> p95 after v1.2 |
+| Configurable retry policies inside the daemon | Clients own retries; server owns timeouts and circuit breakers | Document that clients should retry idempotent tools |
+| Video tutorials / GIF-heavy docs | Rots fast, hard to maintain | Text-first docs with copy-pasteable commands |
+| Docs site generator (Docusaurus, mkdocs) | README.md + USAGE.md in-repo is enough for v1.2 | Markdown in repo, rendered by GitHub |
+| Localized docs (i18n) | Zero demand signal; massive maintenance | English-only |
+| Knowledge graphs, vector search, git operations | Explicitly Out of Scope in PROJECT.md | — |
 
 ## Feature Dependencies
 
 ```
-Build tags + test separation ──> Everything else (all integration tests need this)
+slog structured logging
+    +-> trace ID context propagation
+            +-> per-tool span timing (middleware)
+                    +-> log-trace correlation in slog attrs
+                    +-> OTLP trace export (optional differentiator)
 
-Daemon lifecycle testutil ──> MCP round-trip harness ──> All tool tests
-                          ──> Go dogfooding suite
-                          ──> Multi-language fixture tests
+Prometheus client_golang
+    +-> /metrics endpoint on HTTP transport
+    +-> RED metrics per tool (histograms)
+    +-> LS pool gauges
+    +-> Go runtime collector
+    +-> per-workspace labels (differentiator)
 
-Multi-language fixtures ──> Tool correctness assertions (for non-Go languages)
-                       ──> Cross-file reference testing
-                       ──> Edit round-trip testing
-                       ──> Diagnostic tool testing
+testing.B benchmarks
+    +-> tool latency p50/p95/p99
+    +-> indexing throughput (cold vs warm)
+    +-> memory profiles (runtime/metrics)
+    +-> benchstat regression
+            +-> CI gate (GitHub Actions)
+                    +-> published bench history (differentiator)
 
-Go dogfooding (self-test) ──> No fixture dependency (uses Serena's own codebase)
-                          ──> Depends on: daemon harness, gopls availability
+Timeout budgets
+    +-> context deadline propagation to LSP
+    +-> structured timeout errors
+    +-> per-profile max_duration_ms (differentiator)
 
-MCP client-level e2e ──> mcp.NewInMemoryTransports() from SDK v1.5.0
-                     ──> Daemon harness (to register tools on server side)
+Circuit breaker (existing)
+    +-> telemetry (gauges above)
+    +-> config-exposed tuning knobs
+    +-> structured "circuit_open" error responses
 
-Profile visibility tests ──> Existing profile system (no new deps)
+Pressure eviction (existing)
+    +-> GOMEMLIMIT integration
+    +-> degraded-mode state machine
+    +-> degraded-mode response banner (differentiator)
 
-Edit round-trip tests ──> Temp dir fixture copies (writes must not mutate fixtures)
-                      ──> Tree-sitter (already a dependency)
-
-Worker pool stress ──> Daemon harness + multiple concurrent clients
+README.md
+    +-> USAGE.md
+            +-> client setup pages
+            +-> profile/mode reference
+            +-> troubleshooting
+            +-> observability quickstart (depends on obs work landing first)
+            +-> perf tuning (depends on bench work landing first)
 ```
+
+**Key ordering constraint:** Observability instrumentation must land before or alongside benchmarks — you want benches producing the same metrics the prod server emits so regression triage is frictionless. Docs for obs/perf should be the last thing written, after the features stabilize.
 
 ## MVP Recommendation
 
-### Phase 1: Foundation (must ship)
+If v1.2 had to ship in minimum viable form, prioritize in this order:
 
-1. **Test harness with daemon lifecycle** -- Extract `newE2EConfig` pattern from `daemon_integration_test.go` into `internal/testutil/` package. Add `StartTestDaemon(t, opts)` that returns a connected test context with `ExecuteTool()` capability. Add `RequireLanguageServer(t, "gopls")` helper.
-2. **Build tag separation** -- `//go:build integration` on all integration test files. Makefile target `make test-integration`. Keep existing unit tests running with plain `go test ./...`.
-3. **Go dogfooding suite** -- Test all 38 tools against Serena's own Go codebase. This is the highest-value test because it uses the actual project (no fixture needed) and exercises gopls (the most critical LS). Covers: symbol retrieval (find `Daemon`, `Kernel`, `SerenaMCPServer`), symbol editing (replace body in temp copy), file ops (read/list/search own source), diagnostics (format own code), memory (write/read/delete), workflow (onboard own project), profile (switch modes, list tools).
-4. **CI skip logic** -- `t.Skip("gopls not available")` when a required LS is missing. Tests degrade gracefully -- skip, never fail. Follow legacy pattern from `_determine_disabled_languages()`.
+1. **slog + trace IDs + per-tool span timing** (foundational; unlocks everything else)
+2. **Prometheus `/metrics` with RED + pool gauges + Go runtime collector** (standard observability contract)
+3. **Tool latency benchmarks (p50/p95/p99) + indexing throughput + memory profiles** (measurable performance claims)
+4. **benchstat + CI regression gate** (keep gains, prevent regressions)
+5. **Timeout budgets + deadline propagation + structured error taxonomy** (degradation behavior)
+6. **LS crash recovery with restart budget + OOM degraded mode** (fault tolerance)
+7. **README.md** (install, capabilities, client configs, supported languages)
+8. **USAGE.md** (client setup, profiles/modes, troubleshooting, obs/perf tuning)
+9. **CHANGELOG.md** (standard hygiene)
 
-### Phase 2: Multi-language + correctness
+Differentiators to consider pulling in if schedule allows: `serena doctor` CLI (high UX value), pprof endpoints (near-free), published bench history (near-free via github-action-benchmark), memory sizing calculator in USAGE (reuses bench data).
 
-5. **Port 4 fixture repos from legacy** -- Python, TypeScript, Rust, Java mini-projects from `legacy/test/resources/repos/`. Place in `testdata/fixtures/{lang}/`. Each fixture must have: known symbol names, known cross-file references, known parent-child relationships.
-6. **Tool correctness assertions per language** -- One test per tool category (symbols, editing, fileops, diagnostics) per fixture language. Structural assertions: "definition of `Helper` is at `main.go`", "references to `DemoStruct` include `main.go` and `usage.go`".
-7. **Cross-file reference testing** -- Multi-file fixtures where symbol A in file1 references symbol B in file2. Verify `find_references` returns both files. Verify `find_implementations` works for interfaces.
+**Defer:** OTLP trace export (optional differentiator, behind a flag), per-workspace label cardinality work (only matters at multi-tenant scale), hedging (wait for bench data first).
 
-### Phase 3: Protocol-level + advanced
+## Dependencies on Existing v1.0/v1.1 Capabilities
 
-8. **MCP client-level e2e** -- Use `mcp.NewInMemoryTransports()` to test the full MCP wire protocol. Call `tools/call` through the SDK client, verify JSON-RPC framing, arg validation, error codes.
-9. **Edit round-trip testing** -- Copy fixture to temp dir, call `replace_symbol_body`, re-read symbol, verify the edit. Tests tree-sitter body surgery end-to-end.
-10. **Profile visibility tests** -- Each of 5 profiles exposes exactly the expected tool subset. Each of 4 modes filters correctly. Extend existing `TestE2EProfileConfigLayering`.
-
-### Defer to v1.2+
-
-- Snapshot / golden file testing: Add after correctness suite stabilizes and output formats settle.
-- Worker pool stress tests: Needs correctness suite as baseline.
-- Transport-level tests (HTTP/gRPC): Catches serialization issues, but MCP round-trip harness covers 90% of value.
-- Performance benchmarks: Requires stable test infrastructure.
-- Diagnostic tool testing with known errors: Requires crafted error fixtures per language.
+- **v1.1 integration test harness** (`test/` package, InMemory + HTTP transports, multi-language fixtures) -> reused wholesale as the benchmark substrate. `testing.B` functions live alongside the existing `testing.T` functions, share fixture setup.
+- **Centralized daemon bootstrap** (`internal/daemon/daemon.go`) -> the single place where slog handler, Prometheus registry, and middleware get wired. Already the registration choke point, extending it is the natural path.
+- **ProfileFilterMiddleware** -> add a sibling `ObservabilityMiddleware` that wraps every tool call with start/stop timing, error classification, and trace-ID injection. Same pattern, same layer.
+- **Worker pool** (`internal/kernel/lspool/`) -> already has circuit breaker, adaptive TTL, pressure eviction. v1.2 adds telemetry taps, restart budgets, degraded-mode state, and config-exposed tuning knobs. No structural rewrite.
+- **JSON-RPC codec** (`internal/kernel/jsonrpc/`) -> needs to honor `ctx.Done()` on request cancellation so deadline propagation actually cancels in-flight LSP calls. Small but critical change.
+- **MCP error envelope** -> needs structured error codes (`timeout`, `circuit_open`, `ls_crash`, `pressure`). Today errors are likely untyped per the `TODO(#typed-errors)` note in PROJECT.md Key Decisions — v1.2 is a good moment to partially address that for degradation taxonomy without doing the full typed-error migration.
+- **Language registry + installer** -> already has the data for the README supported-languages table and for `serena doctor`. Just needs a formatter.
+- **Memory subsystem (SQLite FTS5)** -> not touched by v1.2 observability except for exposing a gauge on index size.
 
 ## Sources
 
-- Existing integration tests: `internal/daemon/daemon_integration_test.go` -- 6 e2e tests covering memory, mode switching, token budget, shutdown, profile layering, onboarding
-- Legacy test infrastructure: `legacy/test/conftest.py` -- language-parameterized fixtures, LS lifecycle management, `_determine_disabled_languages()` skip logic, session-scoped LS fixtures
-- Legacy fixture repos: `legacy/test/resources/repos/` -- 40+ language mini-projects with known symbols (Go fixture has `main`, `Helper`, `DemoStruct`, `Value`)
-- Legacy snapshot tests: `legacy/test/serena/test_symbol_editing.py` -- syrupy-based snapshot testing for edit operations
-- Official MCP Go SDK v1.5.0: `mcp.NewInMemoryTransports()` for in-process client-server testing, `mcp.NewClient()` + `c.Connect()` for client-side test setup
-- Official MCP Go SDK examples: `mcp/client_example_test.go` -- shows roots, sampling, elicitation patterns via in-memory transport
-- Existing unit tests: `internal/kernel/symbols/retrieval_test.go` -- mock-based LSP response testing with `testLease` pattern
-- Go testing conventions: `//go:build integration` tags, `testdata/` directories, `testutil` helper packages, `t.Helper()`, `t.Cleanup()`
+- [Scaling gopls for the growing Go ecosystem](https://go.dev/blog/gopls-scalability) — indexing/memory patterns, "per-package index" model, HIGH confidence
+- [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) — CI regression gate pattern, HIGH confidence
+- [cob: Continuous Benchmark for Go](https://github.com/knqyf263/cob) — HEAD vs HEAD~1 benchstat pattern, MEDIUM confidence
+- [Continuous benchmarking with Go and GitHub Actions](https://dev.to/vearutop/continuous-benchmarking-with-go-and-github-actions-41ok) — practical benchstat + CI walkthrough, MEDIUM confidence
+- [Statistics Behind Latency Metrics: p90/p95/p99](https://medium.com/tuanhdotnet/statistics-behind-latency-metrics-understanding-p90-p95-and-p99-dc87420d505d) — percentile guidance (p50/p95 as budgets, p99 as warning), MEDIUM confidence
+- [How to Define and Enforce Performance Budgets Using OpenTelemetry P50/P95/P99](https://oneuptime.com/blog/post/2026-02-06-otel-performance-budgets-latency-histograms/view) — hard vs soft budget split, MEDIUM confidence
+- [Structured Logging in Go with slog for Observability and Alerting](https://dev.to/rosgluk/structured-logging-in-go-with-slog-for-observability-and-alerting-3fnm) — stdlib slog as baseline, HIGH confidence
+- [OpenTelemetry Slog [otelslog]: Go Bridge](https://uptrace.dev/guides/opentelemetry-slog) — log-trace correlation via slog handler, MEDIUM confidence
+- [How to Build Fault-Tolerant Services with Graceful Degradation in Go](https://oneuptime.com/blog/post/2026-01-25-fault-tolerant-graceful-degradation-go/view) — timeout budgets, circuit breaker, fallback patterns in Go, MEDIUM confidence
+- [API Gateway Resilience and Fault Tolerance (Zuplo)](https://zuplo.com/learning-center/api-gateway-resilience-fault-tolerance) — layered resilience pattern stack, MEDIUM confidence
+- [Circuit Breaker Pattern — Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) — canonical three-state model, HIGH confidence
+- [github/github-mcp-server installation guides](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/README.md) — reference for multi-client install doc structure, HIGH confidence
+- [modelcontextprotocol/servers README](https://github.com/modelcontextprotocol/servers) — ecosystem conventions for MCP server READMEs, HIGH confidence

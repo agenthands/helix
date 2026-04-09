@@ -1,170 +1,259 @@
-# Stack Research
+# Technology Stack — v1.2 Performance & Production Hardening
 
-**Domain:** Integration testing for Go MCP server with multi-language LSP fixtures
+**Project:** Serena (Go MCP code intelligence platform)
+**Milestone:** v1.2 — Benchmarks, observability, graceful degradation, documentation
 **Researched:** 2026-04-08
-**Confidence:** HIGH
+**Go version:** 1.25.1
 
-## Recommended Stack
+## Philosophy
 
-### Core Technologies
+Serena v1.0/v1.1 shipped a lean, opinionated dependency set (MCP SDK, koanf, modernc/sqlite, tree-sitter, gRPC). v1.2 adds **observability and benchmark tooling only** — no new frameworks, no runtime abstractions, no logging libraries that compete with `log/slog`. Every addition must justify itself against "use stdlib instead."
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `testing/synctest` | Go 1.25 stdlib | Deterministic concurrent test execution | GA in Go 1.25. Virtualizes time, controls goroutine scheduling. The MCP Go SDK itself uses it in `mcp_test.go`. Eliminates flaky timer-based waits in daemon lifecycle tests. Already available -- Go 1.25.1 is in use. |
-| `mcp.NewInMemoryTransports()` | MCP Go SDK v1.5.0 | In-process MCP client-server transport | Already in go.mod. Returns paired transports connected via `net.Pipe()`. Connect server to one, client to the other -- full MCP protocol round-trips without sockets or HTTP. Zero new dependencies. |
-| `mcp.Client` + `ClientSession.CallTool()` | MCP Go SDK v1.5.0 | MCP client for tool invocation in tests | The SDK's own client. `ClientSession.CallTool()` returns `*CallToolResult` with typed `Content` (TextContent, etc). Already a dependency. The SDK's `TestEndToEnd` uses exactly this pattern. |
-| `github.com/stretchr/testify` | v1.11.1 | Test assertions and requirements | Already in go.mod at this version. `require` for fatal checks, `assert` for soft checks. No suite -- Go subtests suffice. |
-| `github.com/google/go-cmp` | v0.7.0 | Deep structural comparison with readable diffs | Already in go.sum as transitive dependency via MCP SDK. Promote to direct test dependency. Use for comparing complex tool result structures (symbol trees, reference lists) where testify's `Equal` produces unreadable output. |
+**Hard rules:**
+- No new logging framework. `log/slog` (stdlib, since Go 1.21) is the logger.
+- No new benchmark runner. `testing.B` (stdlib) is the runner.
+- No APM SaaS clients. OTLP-only for tracing/metrics export; users BYO collector.
+- No doc generators for README/USAGE — human-authored Markdown.
 
-### Supporting Libraries
+---
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `golang.org/x/tools/txtar` | latest | Text-based file archive for fixture definitions | Optional. When multi-file workspace fixtures need to be self-contained in a single test file. Gopls uses this pattern extensively. Lightweight -- just a parser, no framework. Consider only if fixture management becomes unwieldy. |
-| `testing/fstest.MapFS` | Go 1.25 stdlib | In-memory filesystem for unit-level tests | For config/registry tests that don't need real disk. Not for LSP tests (language servers need real files on disk). |
+## Recommended Stack Additions
 
-### Development Tools
+### 1. Benchmarks & CI Regression Detection
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `go test -run TestIntegration -timeout 120s` | Run integration tests with adequate timeout | LSP startup takes 5-15s per language. Default 30s timeout will fail. Use `-short` flag to skip integration tests in quick dev loops. |
-| `go test -count=1` | Disable test caching for integration tests | Tests with external LS processes should not be cached -- LS state is not deterministic across runs. |
-| `-update` flag (custom) | Golden file update for tool output snapshots | Implement `var update = flag.Bool("update", false, "update golden files")` at package level. Standard Go pattern used by gopls, stdlib. |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `testing` (stdlib) | Go 1.25 | Benchmark runner via `testing.B` | Built-in, no dep. Already used for tests. |
+| `golang.org/x/perf/cmd/benchstat` | latest | A/B statistical comparison of benchmark runs | Canonical Go benchmark tool. Confidence intervals, multi-run median, projections/filtering (2023 rewrite). Used by Go core team. |
+| GitHub Actions workflow | n/a | CI gate: run benchmarks, compare with `benchstat`, fail on regression | No third-party action dependency. Shell + `benchstat` only. |
 
-## Integration Architecture
+**Integration point:** New directory `internal/kernel/bench/` and/or `test/bench/` for benchmark files following Go convention (`*_test.go` with `func BenchmarkXxx(b *testing.B)`). Benchmarks exercise the same public kernel APIs the integration tests use — no separate harness.
 
-### Test Harness Wiring
-
-The MCP Go SDK provides everything needed for the primary test pattern:
-
-```
-Test func --> mcp.Client --> InMemoryTransport --> SerenaMCPServer --> Daemon (kernel, pool, skills)
+**CI pattern:**
+```bash
+# On PR: run benchmarks on base and head, compare
+go test -bench=. -benchmem -count=10 -run=^$ ./... > head.txt
+git checkout main && go test -bench=. -benchmem -count=10 -run=^$ ./... > base.txt
+benchstat base.txt head.txt
+# Gate: fail if any benchmark regresses >10% at p<0.05 (parse benchstat output)
 ```
 
-1. `mcp.NewInMemoryTransports()` creates a paired pipe (server transport, client transport)
-2. Server transport connects to `SerenaMCPServer` via `Server.Connect()`
-3. Client transport connects via `Client.Connect()`
-4. `ClientSession.CallTool()` sends MCP requests, receives typed `*CallToolResult`
-5. No sockets, no HTTP, no gRPC -- pure in-process with real MCP protocol framing
+**Rejected alternatives:**
 
-This is the exact pattern the MCP SDK uses for its own `TestEndToEnd`.
+| Alternative | Why not |
+|-------------|---------|
+| `bobheadxi/gobenchdata` | Adds webapp + data store overhead. We want CI gate only. |
+| `knqyf263/cob` | Less maintained. `benchstat` handles comparison natively. |
+| `benchmark-action/github-action-benchmark` | Third-party action, stores data in gh-pages. Too much ceremony for a CI gate. |
+| Custom regression scripts | Reinventing `benchstat`'s statistics (Mann-Whitney U, confidence intervals). |
 
-### Process Management for Language Servers
+---
 
-Language servers are real external processes (gopls, pyright, jdtls, rust-analyzer). No new dependencies needed:
+### 2. Observability: Metrics (Prometheus-compatible)
 
-| Concern | Approach | Why |
-|---------|----------|-----|
-| LS lifecycle | Let existing `lspool` manage LS processes | The worker pool already handles spawn, health check, circuit breaking, TTL. Don't reinvent for tests. |
-| LS availability | `testing.Short()` skip + `exec.LookPath()` | Skip multi-language tests when LS not installed. Fail gracefully with `t.Skip("gopls not found")`. |
-| Parallel safety | `t.Parallel()` with separate temp workspaces | Each test gets `t.TempDir()`. Pool handles concurrent LS access via share-until-dirty. |
-| Cleanup | `t.Cleanup()` for daemon shutdown | Register cleanup in test setup. Daemon's existing signal-first shutdown handles kernel-first ordering. |
-| Timeout | Per-test `context.WithTimeout` | 30s per tool call, 120s per test function. LS initialization is the bottleneck. |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `github.com/prometheus/client_golang/prometheus` | v1.23.x (latest stable) | Metric types (Counter, Histogram, Gauge), registry | De facto Go Prometheus client. Exposition format is the *standard* — grafana, alertmanager, datadog, victoriametrics all consume it. |
+| `github.com/prometheus/client_golang/prometheus/promhttp` | same module | `/metrics` HTTP handler | Native integration with existing HTTP transport. Single line to wire. |
+| `github.com/prometheus/client_golang/prometheus/collectors` | same module | `NewGoCollector`, `NewProcessCollector` | Free runtime + process metrics (goroutines, GC, RSS, fds). Mandatory for "memory profiles" requirement. |
 
-### Fixture Strategy
+**Integration point:** New package `internal/observ/metrics/` exposes a `Registry` constructed in `daemon.Bootstrap`. Kernel/lspool/memory instrument their hot paths via injected `*prometheus.Registry` (no globals). Exposed on Streamable HTTP transport at `/metrics` (already serving HTTP) and via optional sidecar listener for stdio mode.
 
-**Reuse legacy fixtures.** `legacy/test/resources/repos/` contains 45 language fixture repos with known symbols. Copy the 4 target languages plus dogfood against Serena itself:
+**Metric taxonomy (minimum):**
+- `serena_lsp_request_duration_seconds{lang,method}` — histogram (tool response times p50/p95/p99)
+- `serena_lsp_indexing_loc_total{lang}` — counter (for LOC/sec derivation)
+- `serena_worker_pool_active{lang}` — gauge (worker lifecycle)
+- `serena_worker_pool_evictions_total{reason}` — counter (pressure/ttl/crash)
+- `serena_circuit_breaker_state{worker}` — gauge (0/1/2 closed/open/half)
+- `serena_mcp_tool_calls_total{tool,profile,status}` — counter
+- Plus default Go/process collectors.
 
-| Fixture Source | Language | What It Provides |
-|----------------|----------|------------------|
-| Serena's own codebase | Go | Dogfooding. 25,500 lines, 21 packages. Known symbols for every tool category. |
-| `legacy/test/resources/repos/python/test_repo/` | Python | Models, services, utils with known class/function hierarchy. |
-| `legacy/test/resources/repos/typescript/` | TypeScript | Type definitions, interfaces, modules. |
-| `legacy/test/resources/repos/java/` | Java | Classes, interfaces, inheritance. |
-| `legacy/test/resources/repos/rust/` | Rust | Structs, traits, impls. |
+**Rejected alternatives:**
 
-Copy to `testdata/fixtures/{lang}/` within the Go test package. Go's `testdata/` convention ensures `go build` ignores these files while `go test` can access them via relative paths.
+| Alternative | Why not |
+|-------------|---------|
+| OpenTelemetry metrics (`go.opentelemetry.io/otel/metric`) | Requirement wording is **Prometheus-compatible export**. OTel metrics requires either a collector or a Prometheus exporter bridge — added hops for zero benefit. Prom client is direct and battle-tested. |
+| `go.opentelemetry.io/otel/exporters/prometheus` bridge | Two APIs to learn, same output. Unjustified indirection. |
+| `expvar` (stdlib) | Not Prometheus format. No histograms. Not consumable by standard tooling. |
+| `rcrowley/go-metrics` | Unmaintained; inferior to client_golang. |
 
-## Installation
+**Note on OTel vs Prom for metrics:** If OTel metrics *also* lands later, Prometheus can still scrape via the OTel collector's Prometheus receiver. The reverse is also true. Starting with `client_golang` is the lower-risk path for v1.2 and does not foreclose future OTel adoption.
+
+---
+
+### 3. Observability: Structured Logging & Tracing
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `log/slog` (stdlib) | Go 1.25 | Structured logging, JSON/text handlers, levels, context propagation | Stdlib since Go 1.21. Zero-allocation hot path. Already the Go ecosystem default. No third-party alternative is justifiable in 2026. |
+| `go.opentelemetry.io/otel` | v1.38.x (stable) | Tracing API + span context | Stable v1. Industry standard. Backend-agnostic. |
+| `go.opentelemetry.io/otel/sdk` | v1.38.x | SDK: tracer provider, samplers, batch processor | Stable v1. |
+| `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc` | v1.38.x | OTLP/gRPC trace exporter | Single export format. Users point at any OTLP collector (Jaeger, Tempo, Honeycomb, Datadog, etc.). Reuses existing gRPC dep. |
+| `go.opentelemetry.io/contrib/bridges/otelslog` | v0.13.x | slog → OTel trace context auto-injection | Official OTel bridge. Auto-adds `trace_id`/`span_id` to every log record when `InfoContext(ctx, ...)` is used. Enables log↔trace correlation with zero per-call code. |
+
+**Integration point:** New package `internal/observ/` with two submodules:
+- `internal/observ/log/` — slog handler factory (JSON for stdio/http, text for dev), level from config, wraps `otelslog` when tracing is enabled.
+- `internal/observ/trace/` — OTel tracer provider init, OTLP gRPC exporter, `ParentBasedTraceIDRatio` sampler, shutdown hook registered in daemon lifecycle.
+
+**Request ID / trace flow:**
+1. MCP handler (in `internal/mcp/`) starts a span per tool call → injects `trace_id` into `context.Context`.
+2. Kernel, lspool, memory all use `slog.InfoContext(ctx, ...)` — `otelslog` handler automatically stamps trace/span IDs.
+3. LSP request timing via `prometheus` histogram + OTel span events.
+4. Log output is JSON by default; `trace_id` field enables jumping from logs → traces in any backend.
+
+**Config additions (koanf):**
+```yaml
+observability:
+  log:
+    level: info          # debug|info|warn|error
+    format: json         # json|text
+  metrics:
+    enabled: true
+    listen: ":9090"      # separate port or reuse http transport
+  tracing:
+    enabled: false       # off by default
+    endpoint: ""         # OTLP gRPC endpoint (e.g. localhost:4317)
+    sample_ratio: 0.01   # 1% default when enabled
+    insecure: true
+```
+
+**Rejected alternatives:**
+
+| Alternative | Why not |
+|-------------|---------|
+| `uber-go/zap` | Predates slog. No reason to take a new dep in 2026. slog matches zap perf for our workload. |
+| `rs/zerolog` | Same. slog is stdlib. |
+| `sirupsen/logrus` | Slower, in maintenance mode. |
+| Direct OTel log bridge (`go.opentelemetry.io/otel/log`) | Still recent; slog + `otelslog` is the mature path. Logs-over-OTLP can be added later without changing application code. |
+| Jaeger-native client (`jaegertracing/jaeger-client-go`) | Deprecated in favor of OTel. |
+| DataDog tracer | Vendor lock-in. OTLP is the vendor-neutral answer. |
+
+---
+
+### 4. Graceful Degradation
+
+**No new libraries required.** This is an architectural/tuning milestone leveraging what's already shipping:
+
+| Existing component | Role in v1.2 |
+|--------------------|--------------|
+| `internal/kernel/lspool/` circuit breaker | Tune thresholds, expose `serena_circuit_breaker_state` metric, log state transitions |
+| `internal/kernel/lspool/` pressure eviction | Instrument evictions, expose `serena_worker_pool_evictions_total{reason=...}` |
+| `golang.org/x/sync/errgroup` (already used) | Daemon shutdown ordering (already correct) |
+| `context` (stdlib) | Timeout budgets per tool call — pass ctx with deadline from MCP layer through kernel |
+| `runtime/debug.SetMemoryLimit` (stdlib, Go 1.19+) | Soft memory ceiling for OOM avoidance. Verify current wiring in daemon and expose via config. |
+
+**What NOT to add:**
+- `sony/gobreaker`, `afex/hystrix-go` — we already have a circuit breaker in lspool.
+- `uber-go/ratelimit` — no rate limiting requirement for v1.2.
+- `cenkalti/backoff` — existing backoff implementation in lspool.
+
+---
+
+### 5. Documentation (README.md, USAGE.md)
+
+**No tooling stack.** Hand-authored Markdown. Rejected:
+
+| Alternative | Why not |
+|-------------|---------|
+| `mkdocs`, `docusaurus`, `hugo` | Adds a build step + JS/Python dep for two files. Overkill. GitHub renders Markdown natively. |
+| `godoc`/`pkgsite` auto-gen | Already works for Go API docs. README/USAGE are *user-facing*, not API-facing. |
+| `terraform-docs`-style generators | No schema to generate from. |
+
+The only tooling question is whether `USAGE.md` needs **generated** tool reference tables. Recommendation:
+- Write a small internal helper (`cmd/serena tools --format=markdown`) that dumps the tool registry with descriptions — zero new deps, reuses existing registry. Pipe its output into a `<!-- BEGIN:tools -->` block in USAGE.md and verify in CI that the block is current (simple `diff` gate). This keeps the tool inventory honest without a doc framework.
+
+---
+
+## Complete go.mod Delta
 
 ```bash
-# Promote go-cmp from transitive to direct test dependency
-go get github.com/google/go-cmp@v0.7.0
+# Metrics
+go get github.com/prometheus/client_golang@latest
 
-# Everything else is already in go.mod:
-# - github.com/modelcontextprotocol/go-sdk v1.5.0 (Client, InMemoryTransport)
-# - github.com/stretchr/testify v1.11.1
-# - golang.org/x/sync v0.20.0 (errgroup for parallel fixture setup)
+# Tracing
+go get go.opentelemetry.io/otel@latest
+go get go.opentelemetry.io/otel/sdk@latest
+go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@latest
+go get go.opentelemetry.io/contrib/bridges/otelslog@latest
 
-# Optional, only if txtar fixtures are adopted:
-# go get golang.org/x/tools/txtar@latest
+# Benchmark comparison (CI only, not a runtime dep — install in CI)
+go install golang.org/x/perf/cmd/benchstat@latest
 ```
 
-## Alternatives Considered
+**Net dependency additions at runtime:** 1 (prometheus/client_golang) + 4 (OTel modules, all from the same monorepo and versioned together). `benchstat` is a CI-only binary, not a module import.
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| `mcp.InMemoryTransport` | Streamable HTTP transport | When testing HTTP-specific behavior (CORS, session headers, auth). Not needed for tool correctness. |
-| `mcp.InMemoryTransport` | Stdio transport via `os/exec` | When testing the full forwarder-daemon flow end-to-end. Slower, harder to debug. Use only for a single smoke test. |
-| Go stdlib `testing` + subtests | `testify/suite` | Never for this project. Go subtests (`t.Run`) with table-driven patterns are simpler, more idiomatic, and match existing codebase conventions. |
-| `testing/synctest` | Manual `time.Sleep` waits | Never. synctest eliminates flaky timing in concurrent tests. |
-| Custom 20-line golden file helper | `sebdah/goldie` v2 | Only if golden file management becomes complex (50+ fixtures). Start simple. |
-| Copy legacy fixtures to `testdata/` | Generate fixtures at test time | Only if fixtures need dynamic content (e.g., version-specific syntax). Static fixtures are simpler and reproducible. |
-| `google/go-cmp` | `reflect.DeepEqual` | Never. go-cmp provides readable diffs, custom comparers for ignoring volatile fields (timestamps, IDs). |
+**Transitive weight:** `client_golang` pulls `prometheus/common`, `prometheus/procfs`, `cespare/xxhash`, `beorn7/perks`, `golang/protobuf` — all well-maintained, small, no CGO. OTel pulls `go.opentelemetry.io/proto/otlp` and reuses existing gRPC/protobuf.
 
-## What NOT to Use
+---
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `testcontainers-go` | Language servers are local binaries, not containers. Docker adds setup cost, CI complexity, no benefit for LSP testing. | Direct `lspool` management with `exec.LookPath` availability checks. |
-| `rogpeppe/go-internal/testscript` | Designed for CLI command testing with shell scripts. MCP tool invocation is programmatic Go API calls, not shell commands. | Go subtests calling `ClientSession.CallTool()` directly. |
-| `gomock` / `mockgen` | Integration tests must exercise real subsystems. Mocking the kernel or LS defeats the purpose of e2e testing. | Wire real daemon with real kernel. Skip when LS unavailable. |
-| Custom JSON-RPC MCP client | Reimplementing MCP protocol framing is error-prone and unnecessary. | `mcp.Client` from the SDK speaks the exact protocol. |
-| `httptest.Server` | HTTP layer complexity when in-memory transport exists. | `mcp.InMemoryTransport` -- zero network, real protocol. |
-| `TestMain` re-exec pattern | Complex subprocess management for daemon startup. | In-process `daemon.New()` + InMemoryTransport. Existing `daemon_integration_test.go` proves this works. |
-| `dgraph-io/ristretto` | Considered in v1.0 research but not adopted. Don't add for tests. | Standard `sync.Map` or mutex-guarded maps for any test-local caching. |
+## Integration with Existing Stack
 
-## Stack Patterns by Test Type
+| Existing | Interaction |
+|----------|-------------|
+| MCP Go SDK v1.5.0 | Tool middleware wraps calls with OTel spans + metrics counters. No SDK changes. |
+| koanf v2 config | New `observability:` section, resolved in `internal/config/` with profile-level overrides. |
+| gRPC (forwarder↔daemon) | Reuse gRPC infrastructure; OTLP exporter uses its own client to keep control-plane and telemetry cleanly separated. |
+| `internal/daemon/` bootstrap | New `InitObservability(cfg)` step before skill InitAll, shutdown hooked via existing errgroup pattern. |
+| `internal/kernel/lspool/` | Instrument at pool boundaries; no API change to callers. |
+| `internal/mcp/` profile middleware | Add tracing middleware *after* profile filter so filtered tools don't show up as spans. |
+| stretchr/testify | Benchmarks don't need testify — use `testing.B` idioms. |
 
-**Tool correctness tests (primary -- 38 tools):**
-- `InMemoryTransport` + `Client.CallTool()` + `assert` on result content
-- Fastest feedback loop, no process management, real MCP framing
-- One daemon instance per test function, tools called sequentially
+---
 
-**Daemon lifecycle tests (shutdown, reconnect, goroutine leaks):**
-- `daemon.New()` + `daemon.Run()` with `context.WithCancel` + goroutine counting
-- Existing `TestE2ECleanShutdown` pattern, extend for reconnect scenarios
-- Use `testing/synctest` for deterministic timing
+## What NOT to Add
 
-**Multi-language fixture tests:**
-- `testing.Short()` guard + `exec.LookPath()` for LS detection
-- Table-driven: iterate languages, skip unavailable, test same tool matrix
-- Separate `testdata/fixtures/{lang}/` directories
+This list exists to protect the dependency budget during v1.2:
 
-**Profile/mode filtering tests:**
-- In-process `skill.ResolveTools()` assertions (no LS needed)
-- Pure logic, no LSP round-trips, fast
-- Already proven in `TestE2EProfileConfigLayering`
+- **No new logger.** slog only.
+- **No service mesh / proxy libs** (envoy, linkerd clients).
+- **No health-check frameworks.** A single `/healthz` handler in the HTTP transport suffices.
+- **No feature-flag libraries.** Config already does this.
+- **No profiler UIs.** `net/http/pprof` (stdlib) is sufficient — expose behind the HTTP transport gated by admin profile.
+- **No error-tracking SaaS clients** (sentry, rollbar). Errors go to logs → collector.
+- **No YAML/JSON schema validators for docs.** Markdown is Markdown.
+- **No benchmark dashboards.** CI gate + artifact storage in GitHub Actions is enough for v1.2.
 
-**Dogfooding tests (Serena's own codebase):**
-- Point workspace at repo root, activate, exercise all 38 tools
-- Requires gopls available -- skip with `testing.Short()`
-- Golden file snapshots for symbol overview outputs
+---
 
-## Version Compatibility
+## Confidence Assessment
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| MCP Go SDK v1.5.0 | Go 1.25+ | Uses `testing/synctest` in its own tests. `InMemoryTransport` is stable API. `Client.Connect()` + `CallTool()` are the public testing surface. |
-| `testing/synctest` | Go 1.25+ | Was experimental in 1.24 (`GOEXPERIMENT=synctest`). GA in 1.25 with `Test()` replacing `Run()`. |
-| stretchr/testify v1.11.1 | Go 1.25 | Already in use across all existing test files. |
-| google/go-cmp v0.7.0 | Go 1.25 | Already transitive dependency via MCP SDK. Promote to direct. |
-| golang.org/x/tools/txtar | Go 1.25 | Minimal dependency (parser only). Optional. |
+| Decision | Confidence | Basis |
+|----------|------------|-------|
+| `prometheus/client_golang` for metrics | HIGH | Official Prometheus project, stable v1.x, direct match for requirement wording ("Prometheus-compatible"). |
+| `log/slog` for logging | HIGH | Stdlib since Go 1.21; Go 1.25 in use. No competitor justified. |
+| OTel Go SDK v1.38.x for tracing | HIGH | Trace SDK is stable v1. Official. OTLP is vendor-neutral. |
+| `otelslog` bridge for log/trace correlation | HIGH | Official OTel contrib bridge. Minimal surface. |
+| `benchstat` for CI regression | HIGH | Canonical Go tool, used by Go core. 2023 rewrite is mature. |
+| `testing.B` for benchmarks | HIGH | Stdlib. Already used ecosystem-wide. |
+| Rejecting OTel metrics in favor of Prom client | MEDIUM | Defensible given requirement wording; revisit if v1.3 adds full OTel pipeline. |
+| No doc framework | HIGH | Two files; Markdown on GitHub renders natively. |
+| Tool-registry-dump helper for USAGE.md | MEDIUM | Pattern is sound but requires small design work; could defer to hand-maintained tables. |
+
+---
+
+## Pre-Implementation Checklist
+
+Before Phase 1 of v1.2 starts, verify:
+
+- [ ] `runtime/debug.SetMemoryLimit` — confirm current wiring in `internal/daemon/`
+- [ ] HTTP transport port policy — reuse for `/metrics` and `/healthz` or separate listener?
+- [ ] Profile gating — does `admin` profile gate pprof, `/metrics`, and `/healthz`? Document in FEATURES.md.
+- [ ] Context propagation audit — does every kernel tool accept and forward `ctx`? (Required for trace propagation to work.)
+- [ ] Benchmark fixture strategy — reuse `test/` integration fixtures or create `test/bench/` with larger corpora?
+
+---
 
 ## Sources
 
-- MCP Go SDK v1.5.0 source in module cache (`go/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.5.0/mcp/`) -- verified `InMemoryTransport`, `Client`, `ClientSession.CallTool()`, `NewInMemoryTransports()` API directly. HIGH confidence.
-- MCP Go SDK `mcp_test.go` line 61-64 -- confirmed `NewInMemoryTransports()` + `Client.Connect()` + `CallTool` end-to-end test pattern. HIGH confidence.
-- MCP Go SDK `transport.go` lines 120-143 -- `InMemoryTransport` implementation using `net.Pipe()`. HIGH confidence.
-- Existing Serena `internal/daemon/daemon_integration_test.go` -- confirmed in-process daemon construction, `skill.InitAll()`, `ExecuteTool()`, lifecycle testing patterns. HIGH confidence.
-- Serena `go.mod` -- verified all dependency versions and existing transitive deps. HIGH confidence.
-- [The Synctest Package (Go 1.25)](https://appliedgo.net/spotlight/go-1.25-the-synctest-package/) -- synctest GA status confirmed. HIGH confidence.
-- [Testing concurrent code with testing/synctest](https://go.dev/blog/synctest) -- official Go blog on synctest design. HIGH confidence.
-- [Gopls integration test framework](https://pkg.go.dev/golang.org/x/tools/gopls/internal/test/integration) -- txtar fixture pattern reference. MEDIUM confidence.
-- [txtar package](https://pkg.go.dev/golang.org/x/tools/txtar) -- format specification. HIGH confidence.
-- Legacy fixture repos at `legacy/test/resources/repos/` -- verified 45 language directories on disk. HIGH confidence.
-- [Golden file testing in Go](https://ieftimov.com/posts/testing-in-go-golden-files/) -- `-update` flag pattern. HIGH confidence.
-
----
-*Stack research for: Integration testing of Go MCP server with multi-language LSP fixtures*
-*Researched: 2026-04-08*
+- [prometheus/client_golang on pkg.go.dev](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus)
+- [prometheus/client_golang releases](https://github.com/prometheus/client_golang/releases)
+- [Instrumenting a Go application for Prometheus](https://prometheus.io/docs/guides/go-application/)
+- [benchstat on pkg.go.dev](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat)
+- [Leveraging benchstat Projections — bwplotka, 2024](https://www.bwplotka.dev/2024/go-microbenchmarks-benchstat/)
+- [Continuous benchmarking with Go and GitHub Actions](https://dev.to/vearutop/continuous-benchmarking-with-go-and-github-actions-41ok)
+- [opentelemetry-go releases](https://github.com/open-telemetry/opentelemetry-go/releases)
+- [OpenTelemetry Go documentation](https://opentelemetry.io/docs/languages/go/)
+- [otelslog bridge on pkg.go.dev](https://pkg.go.dev/go.opentelemetry.io/contrib/bridges/otelslog)
+- [OpenTelemetry Slog setup — Uptrace](https://uptrace.dev/guides/opentelemetry-slog)
+- [Distributed Tracing with OpenTelemetry in Go (2026)](https://dev.to/young_gao/distributed-tracing-with-opentelemetry-a-practical-guide-for-go-services-pep)
+- [Go structured logging with OpenTelemetry (2026)](https://oneuptime.com/blog/post/2026-01-07-go-structured-logging-opentelemetry/view)

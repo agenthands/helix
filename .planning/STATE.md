@@ -1,34 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Integration Testing
-status: executing
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-04-09T08:51:57.469Z"
+milestone: v1.2
+milestone_name: Performance & Production Hardening
+status: defining-requirements
+stopped_at: Milestone v1.2 started
+last_updated: "2026-04-09T00:00:00.000Z"
 last_activity: 2026-04-09
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-08)
+See: .planning/PROJECT.md (updated 2026-04-09)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 07 — Symbol Editing + Multi-Language Fixtures
+**Current focus:** Defining requirements for v1.2 Performance & Production Hardening
 
 ## Current Position
 
-Phase: 08
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-09
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-09 — Milestone v1.2 started
 
 Progress: [░░░░░░░░░░] 0%
 

@@ -44,7 +44,24 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(None — define for next milestone via `/gsd-new-milestone`)
+- README.md with capabilities and install instructions — v1.2
+- USAGE.md with full usage guide (client setup, profiles, workflows, troubleshooting) — v1.2
+- LSP indexing throughput benchmarks (LOC/sec) — v1.2
+- Tool response time benchmarks (p50/p95/p99) — v1.2
+- Memory profiles (baseline, per-workspace, per-LS-worker) — v1.2
+- Structured observability (logging, tracing IDs, span timing) — v1.2
+- Prometheus-compatible metrics export — v1.2
+- Graceful degradation (timeout budgets, circuit breaker tuning, OOM/crash recovery) — v1.2
+
+## Current Milestone: v1.2 Performance & Production Hardening
+
+**Goal:** Make Serena production-ready with measurable performance, observability, and graceful failure handling — plus comprehensive user-facing documentation.
+
+**Target features:**
+- Documentation: README.md (capabilities + install) and USAGE.md (client setup, workflows, troubleshooting)
+- Performance benchmarks: indexing throughput, tool response times, memory profiles, CI regression gate
+- Observability: structured logging, request tracing, Prometheus metrics
+- Graceful degradation: timeout budgets, circuit breaker tuning, OOM recovery, LS crash recovery
 
 ### Out of Scope
 

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -316,13 +317,33 @@ func (d *Daemon) Run(ctx context.Context) error {
 		})
 	}
 
+	// Admin listener (OBS-03). Non-fatal per D-04 — bind failure is logged
+	// and the daemon continues. listenAdmin is a no-op when AdminAddr == "".
+	g.Go(func() error {
+		if err := d.listenAdmin(gctx); err != nil && !errors.Is(err, context.Canceled) {
+			d.logger.Error("admin listener failed, continuing without observability",
+				"error", err,
+				"addr", d.config.Observability.AdminAddr)
+		}
+		return nil // NEVER propagate — observability is instrumentation, not product
+	})
+
 	d.logger.Info("daemon started",
 		"socket", d.config.Daemon.SocketPath,
 		"http_addr", d.config.Daemon.HTTPAddr,
+		"admin_addr", d.config.Observability.AdminAddr,
 		"workspaces", d.workspaces.WorkspaceCount(),
 	)
 
+	// Flip readiness AFTER kernel/socket/http/admin goroutines are spawned and
+	// the profile is resolved (profile resolution happens during daemon.New, so
+	// by the time Run reaches this point the profile state is stable — Q3).
+	// /readyz starts returning 200 from here. Pitfall #3 mitigation.
+	ready.Store(1)
+
 	err := g.Wait()
+	// Reset ready so repeated Run invocations (tests) start from ready=0.
+	ready.Store(0)
 	d.shutdown()
 	return err
 }

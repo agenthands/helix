@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Performance & Production Hardening
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-04-09T15:51:41.129Z"
+stopped_at: Completed 09-05-PLAN.md
+last_updated: "2026-04-09T16:30:07.711Z"
 last_activity: 2026-04-09 -- Phase 09 planning complete
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0% (0/6 v1.2 phases complete)
 | slog hot-path allocs/op | TBD (Phase 9) | — | — |
 
 *Updated after each plan completion*
+| Phase 09 P05 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work:
 - [Roadmap v1.2]: Admin surface is a dedicated loopback listener, not the MCP mux; bind failure is non-fatal
 - [Roadmap v1.2]: Observability is noop-default — metrics, tracing sampler, OTLP exporter all opt-in
 - [Roadmap v1.2]: v1.2 introduces exactly one typed error (`lspool.ErrCircuitOpen`); full typed-error migration deferred to v1.3+
+- [Phase 09]: Plan 09-05: heap_snapshot helper lives in _test.go because package bench_test; BenchmarkMemory dual-RSS via ReadMemStats + rss.CurrentRSS; pprof artifacts git-ignored except baseline-*.pb.gz per Pitfall 8
 
 ### Pending Todos
 
@@ -97,6 +99,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T15:18:22.952Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-benchmark-harness-v1-1-baseline/09-CONTEXT.md
+Last session: 2026-04-09T16:30:07.709Z
+Stopped at: Completed 09-05-PLAN.md
+Resume file: None

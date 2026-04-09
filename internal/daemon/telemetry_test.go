@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -241,6 +240,3 @@ func TestListenAdmin_PprofGated(t *testing.T) {
 		t.Fatalf("pprof enabled: got %d, want 200", code)
 	}
 }
-
-// Sanity check that the package-level test hook type is what we expect.
-var _ atomic.Pointer[string] = adminListenerAddr

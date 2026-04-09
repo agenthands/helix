@@ -125,8 +125,9 @@ func (s *profileSkill) ExecuteSwitchMode(targetMode string) (*SwitchModeResult, 
 		return nil, fmt.Errorf("no active session")
 	}
 
-	currentMode := sess.Mode
-	profileName := sess.Profile
+	snapshot := sess.Snapshot()
+	currentMode := snapshot.Mode
+	profileName := snapshot.Profile
 
 	if err := validateModeTransition(s.store, profileName, currentMode, targetMode); err != nil {
 		return nil, err
@@ -166,8 +167,11 @@ func (s *profileSkill) ExecuteSwitchMode(targetMode string) (*SwitchModeResult, 
 	for i, t := range resolved {
 		toolNames[i] = t.Name
 	}
+	// Order matters: set the new tool whitelist before advertising the mode
+	// transition so any concurrent reader that sees Mode=targetMode also sees
+	// the matching AllowedTools (threat T-08-08 mitigation).
+	sess.SetAllowedTools(toolNames)
 	sess.RecordModeTransition(currentMode, targetMode)
-	sess.AllowedTools = toolNames
 
 	return &SwitchModeResult{
 		PreviousMode:   currentMode,
@@ -278,11 +282,12 @@ func (s *profileSkill) ExecuteGetTokenBudget(profileName, modeName, format strin
 		if s.session != nil {
 			sess := s.session.CurrentSession()
 			if sess != nil {
+				snap := sess.Snapshot()
 				if profileName == "" {
-					profileName = sess.Profile
+					profileName = snap.Profile
 				}
 				if modeName == "" {
-					modeName = sess.Mode
+					modeName = snap.Mode
 				}
 			}
 		}

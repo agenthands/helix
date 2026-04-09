@@ -47,10 +47,15 @@ func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx conte
 				return result, nil
 			}
 
+			// Take a consistent snapshot so AllowedTools and Profile come from
+			// the same point in time even if a concurrent switch_mode is racing
+			// with this tools/list (threat T-08-08 mitigation).
+			snap := session.Snapshot()
+
 			// Apply AllowedTools filtering if the session has a whitelist.
-			if session.AllowedTools != nil {
-				allowed := make(map[string]bool, len(session.AllowedTools))
-				for _, name := range session.AllowedTools {
+			if snap.AllowedTools != nil {
+				allowed := make(map[string]bool, len(snap.AllowedTools))
+				for _, name := range snap.AllowedTools {
 					allowed[name] = true
 				}
 				filtered := make([]*mcpsdk.Tool, 0, len(listResult.Tools))
@@ -64,7 +69,7 @@ func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx conte
 
 			// Apply description overrides from the profile.
 			if resolver != nil {
-				overrides := resolver.ToolDescriptionOverrides(session.Profile)
+				overrides := resolver.ToolDescriptionOverrides(snap.Profile)
 				if len(overrides) > 0 {
 					for _, tool := range listResult.Tools {
 						if desc, ok := overrides[tool.Name]; ok {

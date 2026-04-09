@@ -42,7 +42,7 @@
 
 - [ ] **Phase 9: Benchmark Harness & v1.1 Baseline** — Capture pre-instrumentation performance baseline with `testing.B.Loop`, benchstat CI gate, and committed v1.1 numbers
 - [x] **Phase 10: Observability Foundation** — `internal/obs/` shim, trace-aware slog handler, dedicated loopback admin listener with health endpoints and gated pprof (completed 2026-04-09)
-- [ ] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint
+- [x] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint (completed 2026-04-09)
 - [ ] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter
 - [ ] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT`
 - [ ] **Phase 14: Documentation** — README.md, USAGE.md, CHANGELOG.md with auto-generated tool/language tables and executable examples
@@ -93,7 +93,7 @@
 - [x] 11-01-PLAN.md — obs.Metrics scaffold + label allowlist CI lint + /metrics handler on admin listener (METRIC-01, METRIC-04, METRIC-05)
 - [x] 11-02-PLAN.md — TelemetryMiddleware (RED metrics) before ProfileFilterMiddleware + SessionInfo.Language (METRIC-02, resolves A1/A2)
 - [x] 11-03-PLAN.md — lspool MetricsSink interface + pool/circuit hook wiring (METRIC-03)
-- [ ] 11-04-PLAN.md — BenchmarkTelemetryMiddleware + Phase 11 baseline + benchgate (≤ +3 allocs/op budget, resolves A4)
+- [x] 11-04-PLAN.md — BenchmarkTelemetryMiddleware + Phase 11 baseline + benchgate (≤ +3 allocs/op budget, resolves A4)
 
 ### Phase 12: Tracing End-to-End
 **Goal**: Propagate traces from forwarder through daemon into kernel tool execution, off by default, with OTLP export as an opt-in flag
@@ -142,7 +142,7 @@
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
-| 11. Metrics | v1.2 | 3/4 | In Progress|  |
+| 11. Metrics | v1.2 | 4/4 | Complete   | 2026-04-09 |
 | 12. Tracing End-to-End | v1.2 | 0/? | Not started | - |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |
 | 14. Documentation | v1.2 | 0/? | Not started | - |

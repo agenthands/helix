@@ -8,7 +8,7 @@
 ### Benchmarks
 
 - [ ] **BENCH-01**: Benchmark harness in `test/bench/` using `testing.B.Loop` (Go 1.25)
-- [ ] **BENCH-02**: Tool response time benchmarks for all 38 tools (p50/p95/p99)
+- [x] **BENCH-02**: Tool response time benchmarks for all 38 tools (p50/p95/p99)
 - [ ] **BENCH-03**: LSP indexing throughput benchmarks (cold and warm) for Go fixture
 - [x] **BENCH-04**: Memory profile benchmarks (baseline, per-workspace, per-LS-worker)
 - [ ] **BENCH-05**: CI benchstat regression gate with tiered thresholds per 09-CONTEXT.md D-01 — PR tier (GitHub-hosted, relaxed): >15% time / >25% allocs at p<0.05; release tier (self-hosted, tight): >10% time / >20% allocs at p<0.05
@@ -94,7 +94,7 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | BENCH-01 | Phase 9 | Pending |
-| BENCH-02 | Phase 9 | Pending |
+| BENCH-02 | Phase 9 | Complete |
 | BENCH-03 | Phase 9 | Pending |
 | BENCH-04 | Phase 9 | Complete |
 | BENCH-05 | Phase 9 | Pending |

@@ -61,7 +61,7 @@
 **Plans**: 6 plans
 - [x] 09-01-PLAN.md — Refactor test/integration harness.go + helpers.go to testing.TB (Wave 0 blocker; unblocks bench reuse)
 - [x] 09-02-PLAN.md — Scaffold test/bench/ package (rss, bench_helpers, TestMain, 38-tool manifest)
-- [ ] 09-03-PLAN.md — BenchmarkTools: all 38 MCP tools with b.Loop + 3-call warmup (BENCH-02)
+- [x] 09-03-PLAN.md — BenchmarkTools: all 38 MCP tools with b.Loop + 3-call warmup (BENCH-02)
 - [x] 09-04-PLAN.md — LSP indexing cold/warm benches + full-repo smoke (BENCH-03)
 - [x] 09-05-PLAN.md — BenchmarkMemory 4 D-06 scenarios + pprof heap snapshots + dual RSS (BENCH-04)
 - [ ] 09-06-PLAN.md — benchgate wrapper + v1.1 baseline + GitHub Actions workflow + Make targets (BENCH-05, BENCH-06)

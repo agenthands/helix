@@ -53,7 +53,7 @@ type TestDaemon struct {
 	daemon  *daemon.Daemon
 	Session *mcp.ClientSession
 	cancel  context.CancelFunc
-	t       *testing.T
+	tb      testing.TB
 }
 
 // Stop cancels the daemon context, which stops the kernel Run goroutine
@@ -65,6 +65,10 @@ func (td *TestDaemon) Stop() {
 // NewHTTPSession creates an MCP client session over HTTP transport.
 // Uses httptest.NewServer + StreamableClientTransport to validate the full
 // HTTP serialization path (D-03/D-04).
+//
+// NOTE: This intentionally keeps *testing.T (not testing.TB). Its callers are
+// always tests (subtest-scoped HTTP transport smoke), never benchmarks, and
+// its t.Cleanup semantics are tied to the concrete *testing.T lifecycle.
 func (td *TestDaemon) NewHTTPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
@@ -87,10 +91,10 @@ func (td *TestDaemon) NewHTTPSession(t *testing.T) *mcp.ClientSession {
 
 // StartTestDaemon creates a daemon in-process, wires an MCP client via
 // InMemoryTransports, and optionally activates a workspace with LS readiness wait.
-func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
-	t.Helper()
+func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
+	tb.Helper()
 
-	cfg := defaultTestConfig(t)
+	cfg := defaultTestConfig(tb)
 	if opts.Profile != "" {
 		cfg.Profile = opts.Profile
 	}
@@ -106,14 +110,14 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	// Initialize skills with temp dirs.
-	tmpDir := t.TempDir()
+	tmpDir := tb.TempDir()
 	projectDir := filepath.Join(tmpDir, ".serena")
 	globalDir := filepath.Join(tmpDir, ".serena-global")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
-		t.Fatalf("creating project dir: %v", err)
+		tb.Fatalf("creating project dir: %v", err)
 	}
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
-		t.Fatalf("creating global dir: %v", err)
+		tb.Fatalf("creating global dir: %v", err)
 	}
 	deps := skill.SkillDeps{
 		ProjectDir: projectDir,
@@ -121,12 +125,12 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 		Logger:     logger,
 	}
 	if err := skill.InitAll(deps); err != nil {
-		t.Fatalf("skill.InitAll: %v", err)
+		tb.Fatalf("skill.InitAll: %v", err)
 	}
 
 	d, err := daemon.New(cfg, logger)
 	if err != nil {
-		t.Fatalf("daemon.New: %v", err)
+		tb.Fatalf("daemon.New: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -143,7 +147,7 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	_, err = d.MCPServer().SDK().Connect(ctx, serverTransport, nil)
 	if err != nil {
 		cancel()
-		t.Fatalf("server Connect: %v", err)
+		tb.Fatalf("server Connect: %v", err)
 	}
 
 	// Create and connect client.
@@ -154,17 +158,17 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	session, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		cancel()
-		t.Fatalf("client Connect: %v", err)
+		tb.Fatalf("client Connect: %v", err)
 	}
 
 	td := &TestDaemon{
 		daemon:  d,
 		Session: session,
 		cancel:  cancel,
-		t:       t,
+		tb:      tb,
 	}
 
-	t.Cleanup(td.Stop)
+	tb.Cleanup(td.Stop)
 
 	// Activate workspace if requested.
 	if opts.WorkspaceDir != "" {
@@ -173,10 +177,10 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 			Arguments: map[string]any{"repo_path": opts.WorkspaceDir},
 		})
 		if err != nil {
-			t.Fatalf("activate_project: %v", err)
+			tb.Fatalf("activate_project: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("activate_project failed: %s", textContent(result))
+			tb.Fatalf("activate_project failed: %s", textContent(result))
 		}
 
 		if !opts.SkipLS {
@@ -184,7 +188,7 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 			if timeout == 0 {
 				timeout = 30 * time.Second
 			}
-			WaitForLS(t, session, timeout)
+			WaitForLS(tb, session, timeout)
 		}
 	}
 
@@ -193,8 +197,8 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 
 // WaitForLS polls search_symbols until the language server has indexed the workspace.
 // It fails the test if the timeout is exceeded.
-func WaitForLS(t *testing.T, session *mcp.ClientSession, timeout time.Duration) {
-	t.Helper()
+func WaitForLS(tb testing.TB, session *mcp.ClientSession, timeout time.Duration) {
+	tb.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -206,7 +210,7 @@ func WaitForLS(t *testing.T, session *mcp.ClientSession, timeout time.Duration) 
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("LS readiness timeout after %v (last: %s)", timeout, lastErr)
+			tb.Fatalf("LS readiness timeout after %v (last: %s)", timeout, lastErr)
 		case <-ticker.C:
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{
 				Name:      "search_symbols",
@@ -223,7 +227,7 @@ func WaitForLS(t *testing.T, session *mcp.ClientSession, timeout time.Duration) 
 			// Check that we got actual symbol results, not "(no results)".
 			text := textContent(result)
 			if len(result.Content) > 0 && text != "" && text != "(no results)" {
-				t.Logf("LS ready: %s", text[:min(len(text), 80)])
+				tb.Logf("LS ready: %s", text[:min(len(text), 80)])
 				return
 			}
 			lastErr = fmt.Sprintf("no results yet: %q", text)
@@ -232,20 +236,20 @@ func WaitForLS(t *testing.T, session *mcp.ClientSession, timeout time.Duration) 
 }
 
 // requireGopls skips the test if gopls is not installed.
-func requireGopls(t *testing.T) {
-	t.Helper()
+func requireGopls(tb testing.TB) {
+	tb.Helper()
 	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not installed, skipping LSP integration test")
+		tb.Skip("gopls not installed, skipping LSP integration test")
 	}
 }
 
 // PrepareFixture copies testdata/fixtures/{lang}/ to a temp directory and returns
 // the destination path. Each test gets its own copy to prevent cross-test contamination.
-func PrepareFixture(t *testing.T, lang string) string {
-	t.Helper()
+func PrepareFixture(tb testing.TB, lang string) string {
+	tb.Helper()
 
 	srcDir := filepath.Join(projectRoot(), "testdata", "fixtures", lang)
-	dstDir := filepath.Join(t.TempDir(), lang)
+	dstDir := filepath.Join(tb.TempDir(), lang)
 
 	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -266,7 +270,7 @@ func PrepareFixture(t *testing.T, lang string) string {
 		return os.WriteFile(dst, data, 0o644)
 	})
 	if err != nil {
-		t.Fatalf("PrepareFixture(%s): %v", lang, err)
+		tb.Fatalf("PrepareFixture(%s): %v", lang, err)
 	}
 
 	return dstDir
@@ -284,9 +288,9 @@ func projectRoot() string {
 }
 
 // defaultTestConfig creates a minimal config for integration tests.
-func defaultTestConfig(t *testing.T) *config.SerenaConfig {
-	t.Helper()
-	tmpDir := t.TempDir()
+func defaultTestConfig(tb testing.TB) *config.SerenaConfig {
+	tb.Helper()
+	tmpDir := tb.TempDir()
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
 	cfg.Daemon.HTTPAddr = ""

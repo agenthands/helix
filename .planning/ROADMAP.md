@@ -58,7 +58,13 @@
   2. The v1.1 baseline numbers are committed under `test/bench/baselines/` and serve as the reference point for all v1.2 delta gates
   3. A CI job runs benchstat against the committed baseline and fails any PR that regresses >10% time or >20% allocs at p<0.05
   4. All benchmarks use `testing.B.Loop` so the Go compiler cannot elide the hot path
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 09-01-PLAN.md — Refactor test/integration harness.go + helpers.go to testing.TB (Wave 0 blocker; unblocks bench reuse)
+- [ ] 09-02-PLAN.md — Scaffold test/bench/ package (rss, bench_helpers, TestMain, 38-tool manifest)
+- [ ] 09-03-PLAN.md — BenchmarkTools: all 38 MCP tools with b.Loop + 3-call warmup (BENCH-02)
+- [ ] 09-04-PLAN.md — LSP indexing cold/warm benches + full-repo smoke (BENCH-03)
+- [ ] 09-05-PLAN.md — BenchmarkMemory 4 D-06 scenarios + pprof heap snapshots + dual RSS (BENCH-04)
+- [ ] 09-06-PLAN.md — benchgate wrapper + v1.1 baseline + GitHub Actions workflow + Make targets (BENCH-05, BENCH-06)
 
 ### Phase 10: Observability Foundation
 **Goal**: Stand up the observability plumbing (package, logging, admin surface) with near-zero hot-path cost so later phases can plug metrics and tracing into a single shim
@@ -127,7 +133,7 @@
 | 6. Test Harness + Go Dogfooding | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 3/3 | Complete | 2026-04-09 |
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
-| 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/? | Not started | - |
+| 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
 | 10. Observability Foundation | v1.2 | 0/? | Not started | - |
 | 11. Metrics | v1.2 | 0/? | Not started | - |
 | 12. Tracing End-to-End | v1.2 | 0/? | Not started | - |

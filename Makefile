@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt
+.PHONY: build clean proto test vet fmt test-stress
 
 BINARY=serena
 GO=go
@@ -22,3 +22,8 @@ vet:
 
 fmt:
 	gofmt -w .
+
+test-stress: ## Run concurrency stress tests with elevated count under -race
+	$(GO) test -tags integration ./test/integration/... \
+		-run '^TestConcurrency' \
+		-race -count=5 -timeout=10m

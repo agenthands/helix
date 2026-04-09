@@ -1,113 +1,107 @@
-# Requirements: Serena v1.1 Integration Testing
+# Requirements: Serena v1.2 Performance & Production Hardening
 
-**Defined:** 2026-04-08
+**Defined:** 2026-04-09
 **Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
 
-## v1.1 Requirements
+## v1.2 Requirements
 
-Requirements for integration testing milestone. Each maps to roadmap phases.
+### Benchmarks
 
-### Test Harness Infrastructure
+- [ ] **BENCH-01**: Benchmark harness in `test/bench/` using `testing.B.Loop` (Go 1.25)
+- [ ] **BENCH-02**: Tool response time benchmarks for all 38 tools (p50/p95/p99)
+- [ ] **BENCH-03**: LSP indexing throughput benchmarks (cold and warm) for Go fixture
+- [ ] **BENCH-04**: Memory profile benchmarks (baseline, per-workspace, per-LS-worker)
+- [ ] **BENCH-05**: CI benchstat regression gate (fails on >10% time or >20% allocs at p<0.05)
+- [ ] **BENCH-06**: v1.1 baselines committed to `test/bench/baselines/`
 
-- [ ] **HARN-01**: Integration tests use `//go:build integration` tag so `go test ./...` skips them by default
-- [ ] **HARN-02**: Reusable test harness starts daemon in-process via `daemon.New()` and returns connected test context
-- [ ] **HARN-03**: Test harness supports full MCP protocol round-trips via `NewInMemoryTransports()` or `StreamableClientTransport`
-- [ ] **HARN-04**: Tests skip gracefully when required language server is not installed (`t.Skip`)
-- [ ] **HARN-05**: Tests enforce per-test timeouts and clean up LS worker processes on teardown
-- [ ] **HARN-06**: LS readiness polling waits for language server to finish indexing before assertions
+### Observability Foundation
 
-### Go Dogfooding
+- [ ] **OBS-01**: `internal/obs/` package with noop-default provider
+- [ ] **OBS-02**: Trace-aware slog handler that injects trace_id/span_id from context
+- [ ] **OBS-03**: Dedicated admin listener on loopback (configurable port, default disabled)
+- [ ] **OBS-04**: `/healthz` and `/readyz` endpoints on admin listener
+- [ ] **OBS-05**: Gated `/debug/pprof/*` endpoints (admin profile only)
+- [ ] **OBS-06**: slog hot-path allocation budget ≤ +1 alloc/op vs Phase 9 baseline
 
-- [ ] **DOG-01**: All 9 symbol retrieval tools return correct results against Serena's own Go codebase
-- [ ] **DOG-02**: All 6 file operation tools work correctly against Serena's own source files
-- [ ] **DOG-03**: All 3 diagnostic tools return valid results against Serena's own Go code
-- [ ] **DOG-04**: Memory tools (write, read, list, search, edit, rename, delete) work end-to-end
-- [ ] **DOG-05**: Workflow tools (onboard, prepare handoff) execute successfully against own codebase
-- [ ] **DOG-06**: Profile tools (switch mode, get token budget) function correctly
+### Metrics
 
-### Symbol Editing
+- [ ] **METRIC-01**: `/metrics` endpoint on admin listener (Prometheus format)
+- [ ] **METRIC-02**: RED histograms per tool (rate, errors, duration) with tuned buckets
+- [ ] **METRIC-03**: lspool gauges (workers, evictions, restarts, circuit state)
+- [ ] **METRIC-04**: Go runtime collectors (goroutines, GC, memory)
+- [ ] **METRIC-05**: Bounded-label contract enforced by CI lint (allowlist: tool_name, profile, mode, language, outcome)
 
-- [ ] **EDIT-01**: Edit round-trip works: read symbol → replace body → re-read → verify change took effect
-- [ ] **EDIT-02**: Insert before/after symbol places content at correct position
-- [ ] **EDIT-03**: Rename symbol updates all references across files
-- [ ] **EDIT-04**: Safe delete blocks when references exist and succeeds when unreferenced
+### Tracing
 
-### Multi-Language Fixtures
+- [ ] **TRACE-01**: `otelgrpc` StatsHandlers on forwarder↔daemon gRPC
+- [ ] **TRACE-02**: Telemetry middleware replacing logging middleware; runs before profile filter
+- [ ] **TRACE-03**: Per-tool sub-spans for kernel operations
+- [ ] **TRACE-04**: Optional OTLP exporter behind config flag
+- [ ] **TRACE-05**: Default sampler `ParentBased(TraceIDRatioBased(0.0))` — off by default
 
-- [ ] **LANG-01**: Python fixture project with known symbols exercised by symbol retrieval tools
-- [ ] **LANG-02**: TypeScript fixture project with known symbols exercised by symbol retrieval tools
-- [ ] **LANG-03**: Java fixture project with known symbols exercised by symbol retrieval tools
-- [ ] **LANG-04**: Rust fixture project with known symbols exercised by symbol retrieval tools
-- [ ] **LANG-05**: Cross-file reference chains verified across multi-file fixtures
+### Graceful Degradation
 
-### Advanced Testing
+- [ ] **DEGRADE-01**: `internal/degrade/` package with per-class timeout budgets (read 5s / search 15s / edit 10s / index 120s / diagnostics 20s)
+- [ ] **DEGRADE-02**: Deadline propagation from forwarder → daemon → kernel → LS
+- [ ] **DEGRADE-03**: Typed `lspool.ErrCircuitOpen` error with structured envelope
+- [ ] **DEGRADE-04**: Circuit breaker tuning with decorrelated jitter and single-probe half-open
+- [ ] **DEGRADE-05**: LS crash recovery with restart budget
+- [ ] **DEGRADE-06**: `runtime/debug.SetMemoryLimit` wired from config
+- [ ] **DEGRADE-07**: Graceful shutdown integration test (SIGTERM mid-request, spans flushed)
 
-- [ ] **ADV-01**: Each of 5 agent profiles exposes exactly the expected tool subset
-- [ ] **ADV-02**: Each of 4 modes filters tool visibility correctly
-- [x] **ADV-03**: Worker pool handles concurrent tool calls without races or deadlocks
-- [x] **ADV-04**: Error paths tested — tool called before workspace activation, file not found, symbol not found
+### Documentation
+
+- [ ] **DOC-01**: README.md with project pitch, install instructions, capabilities overview
+- [ ] **DOC-02**: README.md includes full 38-tool table (auto-generated from registry)
+- [ ] **DOC-03**: README.md includes 52-language table with LS install commands
+- [ ] **DOC-04**: README.md includes client configs for Claude Code, Codex, IDE assistants
+- [ ] **DOC-05**: USAGE.md with profile/mode reference and config precedence
+- [ ] **DOC-06**: USAGE.md with common workflow examples (onboarding, refactoring, code review)
+- [ ] **DOC-07**: USAGE.md with troubleshooting guide (LS not starting, cache issues, mode restrictions)
+- [ ] **DOC-08**: USAGE.md with observability quickstart (enable metrics, view traces)
+- [ ] **DOC-09**: USAGE.md with performance tuning guide (memory limits, worker pool sizing)
+- [ ] **DOC-10**: CHANGELOG.md with v1.0, v1.1, v1.2 entries
 
 ## Future Requirements
 
-Deferred to v1.2+. Tracked but not in current roadmap.
+Deferred to v1.3+. Tracked but not in current roadmap.
 
-### Stability & Performance
+### Production UX
 
-- **STAB-01**: Snapshot / golden file testing for output format stability
-- **STAB-02**: Performance benchmarking suite for tool response times
-- **STAB-03**: Transport-level tests (Streamable HTTP + gRPC forwarder)
+- **DOCTOR-01**: `serena doctor` CLI command (LS availability, config sanity, perf hints)
+- **METRIC-06**: Native histograms (Prometheus 2.40+) for bucket-tuning-free latency
+- **OBS-07**: Auth on admin listener (currently loopback-only)
 
-### Adversarial
+### Typed Errors
 
-- **ADV-05**: Fuzz testing of MCP tool inputs
-- **ADV-06**: Malformed JSON-RPC request handling
+- **ERR-01**: Full typed-error migration across kernel tools (v1.2 introduces only `ErrCircuitOpen`)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Testing all 52 languages | Combinatorial explosion — 5 representative languages cover the value |
-| Mock language servers | Defeats purpose — integration tests must hit real LS |
-| Snapshot testing as primary strategy | Brittle with LSP — line numbers shift, LS versions change output |
-| Testing legacy Python code | Legacy is reference only, not active code |
-| End-to-end agent conversation tests | Non-deterministic LLM interactions, not testable |
-| Per-tool unit test duplication | Existing unit tests already cover component logic with mocks |
+| Mandatory OTel pipeline | Heavy dep graph; tracing must be opt-in |
+| Vendor APM clients (Datadog, New Relic) | OTLP is the vendor-neutral path |
+| Docs site generator (mkdocs, hugo) | Markdown in repo is sufficient for v1.2 |
+| Shipped Grafana dashboards | Operator concern, not platform concern |
+| Load test harness | v1.2 focuses on benchmarking, not stress testing |
+| Admin web UI | CLI + metrics scrape sufficient |
+| Request hedging / retries | Belongs in client, not server |
+| Full typed-errors migration | v1.2 introduces only `ErrCircuitOpen`; rest deferred |
 
 ## Traceability
 
+Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HARN-01 | Phase 6 | Pending |
-| HARN-02 | Phase 6 | Pending |
-| HARN-03 | Phase 6 | Pending |
-| HARN-04 | Phase 6 | Pending |
-| HARN-05 | Phase 6 | Pending |
-| HARN-06 | Phase 6 | Pending |
-| DOG-01 | Phase 6 | Pending |
-| DOG-02 | Phase 6 | Pending |
-| DOG-03 | Phase 6 | Pending |
-| DOG-04 | Phase 6 | Pending |
-| DOG-05 | Phase 6 | Pending |
-| DOG-06 | Phase 6 | Pending |
-| EDIT-01 | Phase 7 | Pending |
-| EDIT-02 | Phase 7 | Pending |
-| EDIT-03 | Phase 7 | Pending |
-| EDIT-04 | Phase 7 | Pending |
-| LANG-01 | Phase 7 | Pending |
-| LANG-02 | Phase 7 | Pending |
-| LANG-03 | Phase 7 | Pending |
-| LANG-04 | Phase 7 | Pending |
-| LANG-05 | Phase 7 | Pending |
-| ADV-01 | Phase 8 | Pending |
-| ADV-02 | Phase 8 | Pending |
-| ADV-03 | Phase 8 | Complete |
-| ADV-04 | Phase 8 | Complete |
+| | | |
 
 **Coverage:**
-- v1.1 requirements: 25 total
-- Mapped to phases: 25
-- Unmapped: 0
+- v1.2 requirements: 38 total
+- Mapped to phases: 0
+- Unmapped: 38 ⚠️
 
 ---
-*Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after roadmap creation*
+*Requirements defined: 2026-04-09*
+*Last updated: 2026-04-09 after initial definition*

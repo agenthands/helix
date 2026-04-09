@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Performance & Production Hardening
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-04-09T19:32:29.183Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-04-09T19:38:16.605Z"
 last_activity: 2026-04-09
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 40
-  completed_plans: 38
-  percent: 95
+  completed_plans: 39
+  percent: 98
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 10 (Observability Foundation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-09
 
@@ -71,6 +71,7 @@ Progress: [░░░░░░░░░░] 0% (0/6 v1.2 phases complete)
 | Phase 09 P05 | 6min | 2 tasks | 4 files |
 | Phase 09 P03 | 25 | 1 tasks | 3 files |
 | Phase 10 P01 | 8min | 2 tasks | 9 files |
+| Phase 10 P02 | 18min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,7 @@ Recent decisions affecting current work:
 - [Roadmap v1.2]: v1.2 introduces exactly one typed error (`lspool.ErrCircuitOpen`); full typed-error migration deferred to v1.3+
 - [Phase 09]: Plan 09-05: heap_snapshot helper lives in _test.go because package bench_test; BenchmarkMemory dual-RSS via ReadMemStats + rss.CurrentRSS; pprof artifacts git-ignored except baseline-*.pb.gz per Pitfall 8
 - [Phase 10]: Plan 10-01: obs package stdlib-only with Provider struct (not interface); ContextHandler installed in cli/root.go to avoid daemon.New signature churn; spanContextFromContext unexported as Phase 12 migration pin; zero-alloc fast path verified by benchmark (0 B/op, 0 allocs/op)
+- [Phase 10]: Plan 10-02: admin listener uses package-level ready atomic + adminListenerAddr test hook; non-fatal errgroup goroutine (D-04); loopback-only with v1.3 hint (Pitfall 6); ready.Store(1) after 'daemon started' log, ready.Store(0) after g.Wait()
 
 ### Pending Todos
 
@@ -103,6 +105,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T19:32:29.181Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-04-09T19:38:10.582Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None

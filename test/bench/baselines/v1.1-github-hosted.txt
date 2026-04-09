@@ -1,0 +1,24 @@
+# PLACEHOLDER — populated by the first ubuntu-latest CI run.
+#
+# DO NOT use this file for any comparison until CI has replaced it with a
+# real capture. The numbers below are intentionally absent: capturing on
+# a developer machine (especially darwin/arm64) would produce
+# architecture-specific values that the ubuntu-latest GitHub-hosted gate
+# would misinterpret as regressions on every subsequent run.
+#
+# Rollout (see test/bench/baselines/README.md for full context):
+#
+#   Step A (this commit): commit the placeholder so the gate code and
+#     CI workflow can reference a real path on disk.
+#   Step B (first CI run): .github/workflows/bench.yml runs in
+#     --warn-only mode, uploads the captured benchfmt output as the
+#     artifact "v1.1-baseline-candidate.txt", and never blocks a PR.
+#   Step C (re-baseline PR): a human downloads that artifact, reviews
+#     it, commits it verbatim to this path, and flips bench.yml from
+#     --warn-only to blocking mode.
+#
+# From Step C onward benchgate enforces the D-01 tiered thresholds
+# (PR 15%/25%, release 10%/20%) at p<0.05 using Welch's t-test.
+goos: linux
+goarch: amd64
+pkg: github.com/postfix/serena/test/bench

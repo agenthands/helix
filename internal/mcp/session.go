@@ -29,6 +29,7 @@ type SessionInfo struct {
 	WorkspaceKey string   // hash of workspace.WorkspaceKey
 	Mode         string   // current operational mode (D-07) — read/write via accessors after bootstrap
 	Profile      string   // active profile name
+	Language     string   // active workspace primary language (A2: Phase 11 metric label)
 	AllowedTools []string // tools available in current mode/profile (nil = all)
 
 	// ModeHistory records all mode transitions for auditability (D-07).
@@ -43,6 +44,7 @@ type SessionSnapshot struct {
 	WorkspaceKey string
 	Mode         string
 	Profile      string
+	Language     string   // A2: v1.2 metric label — empty string is a valid Prometheus label value
 	AllowedTools []string // defensive copy; safe to iterate without locking
 }
 
@@ -61,8 +63,18 @@ func (s *SessionInfo) Snapshot() SessionSnapshot {
 		WorkspaceKey: s.WorkspaceKey,
 		Mode:         s.Mode,
 		Profile:      s.Profile,
+		Language:     s.Language,
 		AllowedTools: allowed,
 	}
+}
+
+// SetLanguage updates the session's active workspace language under the write
+// lock. Symmetric with SetAllowedTools — the Phase 11 TelemetryMiddleware reads
+// this via Snapshot() to populate the "language" metric label (A2).
+func (s *SessionInfo) SetLanguage(lang string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Language = lang
 }
 
 // SetAllowedTools replaces the session's tool whitelist under the write lock.

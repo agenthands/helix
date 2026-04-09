@@ -89,6 +89,59 @@ func TestLoad_DefaultProfile(t *testing.T) {
 	}
 }
 
+func TestLoad_ObservabilityDefaults(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Observability.AdminAddr != "" {
+		t.Errorf("expected empty default admin_addr, got %q", cfg.Observability.AdminAddr)
+	}
+	if cfg.Observability.EnablePprof {
+		t.Errorf("expected default enable_pprof=false, got true")
+	}
+}
+
+func TestLoad_ObservabilityOverride(t *testing.T) {
+	overrides := map[string]interface{}{
+		"observability.admin_addr":   "127.0.0.1:9090",
+		"observability.enable_pprof": true,
+	}
+	cfg, err := Load("/nonexistent/global.yml", "", overrides)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Observability.AdminAddr != "127.0.0.1:9090" {
+		t.Errorf("expected admin_addr 127.0.0.1:9090, got %q", cfg.Observability.AdminAddr)
+	}
+	if !cfg.Observability.EnablePprof {
+		t.Errorf("expected enable_pprof=true, got false")
+	}
+}
+
+// TestLoad_EmptyAdminAddrOverrideIsNotApplied documents the runDaemon guard
+// (Pitfall #5): callers must not put an empty string into the overrides map
+// for observability.admin_addr, otherwise a project config value would be
+// silently wiped. This test exercises the *absence* of the override — i.e.
+// when the guard is correctly applied upstream, a project-supplied value
+// survives.
+func TestLoad_EmptyAdminAddrOverrideIsNotApplied(t *testing.T) {
+	dir := t.TempDir()
+	projectPath := filepath.Join(dir, "project.yml")
+	os.WriteFile(projectPath, []byte("observability:\n  admin_addr: \"127.0.0.1:7777\"\n"), 0600)
+
+	// Simulate the runDaemon guard: adminAddr flag is empty, so NOTHING is
+	// placed in the overrides map for observability.admin_addr.
+	overrides := map[string]interface{}{}
+	cfg, err := Load("/nonexistent/global.yml", projectPath, overrides)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Observability.AdminAddr != "127.0.0.1:7777" {
+		t.Errorf("expected project admin_addr 127.0.0.1:7777 to survive empty CLI flag, got %q", cfg.Observability.AdminAddr)
+	}
+}
+
 func TestResolveProfile_KnownProfile(t *testing.T) {
 	cfg := &SerenaConfig{Profile: "claude-code"}
 	store, prof, err := ResolveProfile(cfg, "")

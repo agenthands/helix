@@ -23,13 +23,13 @@ Expose Prometheus-scrapeable RED metrics for all 38 MCP tools and lspool health 
 - **D-05:** NO runtime panic wrapper — the list is known at compile time; CI catches drift before merge. Simpler and faster than defense-in-depth.
 
 ### Middleware Placement
-- **D-06:** Central `TelemetryMiddleware` in `internal/mcp/middleware.go` wraps ALL tool calls. Runs BEFORE `ProfileFilterMiddleware` so denied calls still emit spans/metrics with `outcome=denied`.
+- **D-06:** Central `TelemetryMiddleware` in `internal/mcp/middleware.go` wraps ALL `tools/call` requests. Originally specified as running BEFORE `ProfileFilterMiddleware` so denied calls would still emit metrics — but post-revision investigation confirmed ProfileFilterMiddleware only filters `tools/list` in v1.2 (no deny path at tool-call time). Middleware ordering between Telemetry and ProfileFilter is therefore INDEPENDENT and documented as such in code.
 - **D-07:** Middleware resolves all 5 labels: `tool_name` from request, `profile`+`mode` from session, `language` from active workspace, `outcome` from result status.
 - **D-08:** lspool emits its OWN gauges directly via `obs.Provider` — `internal/kernel/lspool/metrics.go` registers workers/evictions/restarts/circuit-state gauges. Colocated with pool internals. Middleware doesn't peek through accessors.
 
 ### RED Metrics
 - **D-09:** Rate: implicit from histogram count
-- **D-10:** Errors: `serena_tool_calls_total{tool_name, profile, mode, language, outcome}` counter where `outcome` ∈ `{success, denied, invalid_args, not_found, circuit_open, ls_crash, timeout, internal}`
+- **D-10:** Errors: `serena_tool_calls_total{tool_name, profile, mode, language, outcome}` counter where `outcome` ∈ `{success, invalid_args, not_found, circuit_open, ls_crash, timeout, internal}` (7 values; `denied` removed post-revision — ProfileFilterMiddleware only filters tools/list in v1.2, so there is no deny path at tool-call time. Reintroduce in v1.3 if per-call filtering lands.)
 - **D-11:** Duration: `serena_tool_duration_seconds{tool_name, profile, mode, language}` histogram
 
 ### lspool Gauges

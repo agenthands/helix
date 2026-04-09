@@ -89,7 +89,11 @@
   2. Tool latency histograms use SLO-tuned buckets that resolve p50/p95/p99 for the actual response-time distribution captured in Phase 9
   3. A CI lint step rejects any new metric whose label set falls outside the allowlist (`tool_name`, `profile`, `mode`, `language`, `outcome`)
   4. Enabling metrics produces no regression beyond the Phase 10 delta gate on the benchmark suite
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 11-01-PLAN.md — obs.Metrics scaffold + label allowlist CI lint + /metrics handler on admin listener (METRIC-01, METRIC-04, METRIC-05)
+- [ ] 11-02-PLAN.md — TelemetryMiddleware (RED metrics) before ProfileFilterMiddleware + SessionInfo.Language (METRIC-02, resolves A1/A2)
+- [ ] 11-03-PLAN.md — lspool MetricsSink interface + pool/circuit hook wiring (METRIC-03)
+- [ ] 11-04-PLAN.md — BenchmarkTelemetryMiddleware + Phase 11 baseline + benchgate (≤ +3 allocs/op budget, resolves A4)
 
 ### Phase 12: Tracing End-to-End
 **Goal**: Propagate traces from forwarder through daemon into kernel tool execution, off by default, with OTLP export as an opt-in flag
@@ -138,7 +142,7 @@
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
-| 11. Metrics | v1.2 | 0/? | Not started | - |
+| 11. Metrics | v1.2 | 0/4 | Not started | - |
 | 12. Tracing End-to-End | v1.2 | 0/? | Not started | - |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |
 | 14. Documentation | v1.2 | 0/? | Not started | - |

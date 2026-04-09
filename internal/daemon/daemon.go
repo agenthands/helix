@@ -138,8 +138,17 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		poolCfg = lspool.DefaultPoolConfig()
 	}
 
-	// 5. Create kernel (fail-fast).
-	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger)
+	// 5. Observability provider (Phase 10 slog ContextHandler + Phase 11
+	// metrics). Constructed before the kernel so the lspool worker pool can
+	// emit LSPool* metrics via obs.Metrics satisfying lspool.MetricsSink
+	// (plan 11-03). Noop wires a trace-aware slog handler and pre-registers
+	// the Prometheus vectors on an owned registry; /metrics on the admin
+	// listener reads it.
+	observability := obs.Noop(logger.Handler())
+
+	// 6. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
+	// the compile-time check lives in internal/daemon/wiring_test.go.
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics())
 
 	// 6. Create diagnostic store and body extractor.
 	diagStore := diag.NewDiagnosticStore()
@@ -221,11 +230,6 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 	if ps := profile.GetProfileSkill(); ps != nil {
 		ps.SetSessionProvider(sessionProvider)
 	}
-
-	// 13. Observability provider (Phase 10 slog ContextHandler + Phase 11 metrics).
-	// Noop wires a trace-aware slog handler and pre-registers the Prometheus
-	// vectors on an owned registry; /metrics on the admin listener reads it.
-	observability := obs.Noop(logger.Handler())
 
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent

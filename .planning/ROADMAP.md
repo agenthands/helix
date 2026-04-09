@@ -64,7 +64,7 @@
 - [x] 09-03-PLAN.md — BenchmarkTools: all 38 MCP tools with b.Loop + 3-call warmup (BENCH-02)
 - [x] 09-04-PLAN.md — LSP indexing cold/warm benches + full-repo smoke (BENCH-03)
 - [x] 09-05-PLAN.md — BenchmarkMemory 4 D-06 scenarios + pprof heap snapshots + dual RSS (BENCH-04)
-- [ ] 09-06-PLAN.md — benchgate wrapper + v1.1 baseline + GitHub Actions workflow + Make targets (BENCH-05, BENCH-06)
+- [x] 09-06-PLAN.md — benchgate wrapper + v1.1 baseline + GitHub Actions workflow + Make targets (BENCH-05, BENCH-06)
 
 ### Phase 10: Observability Foundation
 **Goal**: Stand up the observability plumbing (package, logging, admin surface) with near-zero hot-path cost so later phases can plug metrics and tracing into a single shim

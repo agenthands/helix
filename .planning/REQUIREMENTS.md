@@ -44,7 +44,7 @@ Requirements for integration testing milestone. Each maps to roadmap phases.
 
 - [ ] **ADV-01**: Each of 5 agent profiles exposes exactly the expected tool subset
 - [ ] **ADV-02**: Each of 4 modes filters tool visibility correctly
-- [ ] **ADV-03**: Worker pool handles concurrent tool calls without races or deadlocks
+- [x] **ADV-03**: Worker pool handles concurrent tool calls without races or deadlocks
 - [x] **ADV-04**: Error paths tested — tool called before workspace activation, file not found, symbol not found
 
 ## Future Requirements
@@ -100,7 +100,7 @@ Deferred to v1.2+. Tracked but not in current roadmap.
 | LANG-05 | Phase 7 | Pending |
 | ADV-01 | Phase 8 | Pending |
 | ADV-02 | Phase 8 | Pending |
-| ADV-03 | Phase 8 | Pending |
+| ADV-03 | Phase 8 | Complete |
 | ADV-04 | Phase 8 | Complete |
 
 **Coverage:**

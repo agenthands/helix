@@ -610,34 +610,37 @@ bench-gate: bench
 
 **User confirmation needed for:** A6 (LOC count for time budgeting), A7 (whether BENCH-02 must cover memory/workflow tools that aren't code-operation tools in the same way).
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does BENCH-02 "all 38 tools" include memory + workflow tools?**
+> All open questions were resolved during phase planning. Inline `(RESOLVED: ...)` annotations below cite the 09-CONTEXT.md decision or 09-PLAN decision that closed each question.
+
+
+1. **Does BENCH-02 "all 38 tools" include memory + workflow tools?** (RESOLVED: Yes. D-04 locks all 38; Plan 09-02 Task 3 tools_manifest covers all skill tools with args that produce real work or a documented no-op. Registry-parity assertion in TestBenchToolsManifestMatchesRegistry enforces this.)
    - What we know: D-04 says all 38. The 38 tools span kernel (24: 9 symbols + 6 edit + 6 fileops + 3 diag) + skills (7 memory + ~7 workflow).
    - What's unclear: memory tools operate on a markdown store, not the Go fixture. Workflow tools (onboarding, handoff) have side effects and may not be latency-sensitive at all.
    - Recommendation: benchmark them, but allow `outcome=skip` cases documented in the manifest. Confirm during planning that "skip with rationale" counts as "benchmarked."
 
-2. **How do we handle the self-hosted runner provisioning in Phase 9?**
+2. **How do we handle the self-hosted runner provisioning in Phase 9?** (RESOLVED: D-02 non-blocking. Phase 9 ships GitHub-hosted only; release-tier self-hosted runbook deferred to a v1.2 follow-up. bench.yml targets `ubuntu-latest` exclusively.)
    - What we know: D-02 says self-hosted is documented but non-blocking for Phase 9 ship.
    - What's unclear: whether "documented" means a markdown runbook, a Terraform script, or nothing at all.
    - Recommendation: ship a `docs/bench-runner-setup.md` with manual steps (cpupower, GOMAXPROCS, benchstat install, disable turbo). Cloud VM vs local hardware is a later decision.
 
-3. **Where does the benchstat-gating wrapper live?**
+3. **Where does the benchstat-gating wrapper live?** (RESOLVED: Go binary under `test/bench/cmd/benchgate/`, built on `golang.org/x/perf/benchfmt`. Plan 09-06 Task 1 implements this.)
    - What we know: benchstat itself doesn't enforce thresholds.
    - What's unclear: separate Go binary under `test/bench/cmd/benchgate/`, or a shell script, or a Make target with awk.
    - Recommendation: Go binary — testable, can use `golang.org/x/perf/benchfmt` directly, aligns with CLAUDE.md "Language: Go" constraint.
 
-4. **Should cold-start LSP bench use `b.StopTimer`/`b.StartTimer` or sub-benchmarks?**
+4. **Should cold-start LSP bench use `b.StopTimer`/`b.StartTimer` or sub-benchmarks?** (RESOLVED: StopTimer/StartTimer with `-benchtime=1x` per phase Q4 and Plan 09-04 Task 1. Pattern 4 codified.)
    - What we know: `testing.B.Loop` auto-excludes pre-loop setup but not per-iteration setup.
    - What's unclear: whether mixing StopTimer with b.Loop introduces artifacts.
    - Recommendation: test during implementation; if artifacts appear, fall back to one-shot benchmarks (`-benchtime=1x`) and report LSP cold-start as a fixed measurement rather than an averaged sample.
 
-5. **What's the p99 treatment in the gate?**
+5. **What's the p99 treatment in the gate?** (RESOLVED: Reported by benchstat for trend watching but NOT gated. benchgate enforces only mean time and allocs deltas per D-01. Phase Q5 codified.)
    - What we know: PITFALLS flags p99 as noisy.
    - What's unclear: CONTEXT.md says "use as warning, not gate" but doesn't specify how to *display* p99 without gating on it.
    - Recommendation: report p99 in a separate section of the benchstat report titled "Trend watch — non-gating" so humans see it without CI failing on it.
 
-6. **Do the 38-tool benchmarks need per-tool warmup calls?**
+6. **Do the 38-tool benchmarks need per-tool warmup calls?** (RESOLVED: Yes — exactly 3 warmup calls per sub-benchmark before `b.Loop()` per phase Q6 and Plan 09-03 Task 1.)
    - What we know: share-until-dirty means the first call to any tool on a workspace pays indexing cost.
    - What's unclear: whether per-tool setup drop + `b.Loop` double-counts the indexing.
    - Recommendation: single pre-loop warmup call (`callToolB(b, ..., "find_symbol", warmArgs)`) to guarantee the index is hot before any `b.Loop()` runs. Document the warm assumption in each bench.

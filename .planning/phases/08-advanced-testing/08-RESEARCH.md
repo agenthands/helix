@@ -492,31 +492,33 @@ func TestMode_Contract_Golden(t *testing.T) {
 | A4 | `testing/synctest.Test` signature and behavior in Go 1.25.1 matches docs | Pattern 4 Tier 3 | [CITED docs] but signature may have subtle differences. **Mitigation:** Keep Tier 3 scope small; Tier 1+2 provide primary coverage. |
 | A5 | Destructive tool errors (edit/6, rename_symbol, safe_delete_symbol, write_memory) return `IsError=true` rather than panic | D-08 band 2 | If any tool panics on edge case, that's an ADV-04 bug the tests must surface. This IS the purpose of the test — but the harness must not crash. **Mitigation:** Use `defer recover()` in a custom wrapper for band-2 tests OR rely on `testing`'s built-in panic recovery. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How many profile × mode combinations actually need golden files?**
+All open questions were resolved during planning (Plans 08-01 through 08-04). Resolutions are annotated inline below; see the referenced plans/tasks for the binding decisions.
+
+1. **How many profile × mode combinations actually need golden files?** (RESOLVED)
    - What we know: 5 profiles × 4 modes = 20 theoretical files, but CONTEXT says "some combinations may be redundant."
    - What's unclear: Does each profile support all 4 modes, or are some locked out via `allowed_mode_transitions`?
-   - Recommendation: **Planner should have a small task up front to enumerate valid (profile, mode) pairs by reading each profile's YAML.** Then generate one golden file per valid pair. Likely 14-18 files, not 20.
+   - **RESOLUTION (Plan 08-02 Task 1 Step A):** The planner emits a Step A at the top of Task 1 that reads every profile YAML's `allowed_mode_transitions` and `default_mode`, building `profileDefaultMode` and `profileModePairs` tables directly in `mode_golden_test.go`. Only combinations actually allowed by each profile's `allowed_mode_transitions` become golden files. If a profile YAML omits `allowed_mode_transitions`, default to all 4 modes.
 
-2. **Where should `testing/synctest` tests live?**
+2. **Where should `testing/synctest` tests live?** (RESOLVED)
    - What we know: Tier 3 targets internal pool logic.
    - What's unclear: `test/integration/` (uses `//go:build integration`) or `internal/kernel/lspool/` (regular unit tests)?
-   - Recommendation: `internal/kernel/lspool/pool_synctest_test.go` — they're unit tests of internal logic, not end-to-end MCP tests. No build tag needed. Keeps them fast (run on every `go test ./...`).
+   - **RESOLUTION (Plan 08-03 Task 2):** `internal/kernel/lspool/pool_synctest_test.go` as a regular unit test (package `lspool`, no `//go:build integration` tag). Runs on every `go test ./...`, keeps Tier 3 fast and scoped to pool internals.
 
-3. **Does the MCP Go SDK emit a `listChanged` notification on `switch_mode`?**
+3. **Does the MCP Go SDK emit a `listChanged` notification on `switch_mode`?** (RESOLVED)
    - What we know: `ExecuteSwitchMode` updates `sess.AllowedTools` in-place.
    - What's unclear: Does the middleware trigger a `notifications/tools/list_changed` push to the client?
-   - Recommendation: **Explicit test** — list tools, switch mode, list tools again, assert diff. If no notification fires, document it as an A1-related known behavior, not a bug.
+   - **RESOLUTION (Plan 08-02 `TestMode_SwitchRefreshesToolList`):** An explicit test performs list → switch → list and asserts the tool list changed (and shrank from admin → read). This pins the behavior observably regardless of whether a `listChanged` notification is wired. If the SDK ever starts caching client-side, this test fails loudly rather than producing false greens.
 
-4. **Should `-update` regenerate ALL golden files or only those whose tests ran?**
+4. **Should `-update` regenerate ALL golden files or only those whose tests ran?** (RESOLVED)
    - What we know: Standard Go pattern only regenerates files touched by `t.Run`.
-   - Recommendation: Go with the standard — users must run full suite + `-update` to regenerate all. Add a `make goldens-update` target: `go test -tags integration ./test/integration/... -run Golden -update`.
+   - **RESOLUTION (Plan 08-01 Task 3 + Plan 08-02 Task 2):** Standard Go pattern — `-update` only touches files whose tests ran. To regenerate all, run the full `Golden` suite with `-update`: `go test -tags integration ./test/integration/... -run Golden -update -count=1`. A dedicated `make goldens-update` target is deferred as optional; the canonical command is baked into `assertGoldenTools`'s mismatch error message.
 
-5. **Error matrix: assert on what, exactly?**
+5. **Error matrix: assert on what, exactly?** (RESOLVED — pragmatic path)
    - What we know: D-10 says "error type/code, not message text."
    - What's unclear: Current kernel tools return `fmt.Errorf` with wrapped strings (see `internal/kernel/edit/replace.go:21-61`). There are no typed errors like `ErrNotFound` defined in the kernel.
-   - Recommendation: **Two-track approach:** (a) Assert on `result.IsError == true` + category via structured content field if present; (b) file a follow-up issue to introduce typed errors (`var ErrFileNotFound = errors.New(...)`) in kernel tools. For Phase 8 tests, accept message-substring as a temporary bridge but tag each assertion with a `// TODO: typed error` comment. **Alternatively**, introduce typed errors as Wave 0 of the phase — small refactor, unblocks brittle-free assertions. Let the planner decide based on scope budget.
+   - **RESOLUTION (Plan 08-04, option (a) selected during revision):** Accept the structured `CallToolResult.IsError == true` oracle as the contract for Phase 8. The kernel does not yet expose typed errors, so introducing them would be a full Wave 0 refactor out of phase scope. Plan 08-04 therefore asserts `result.IsError == true` on every error case and tags each assertion site (and `must_haves.truths`) to make the drift from D-10's literal wording explicit. Typed errors (`ErrFileNotFound`, `ErrSymbolNotFound`, etc.) are deferred to a follow-up issue tracked at the `// TODO(#typed-errors)` markers in `errors_test.go`. When those land, Plan 08-04's assertions upgrade in place from `IsError` to `errors.Is`/structured-content field checks without restructuring the harness.
 
 ## Environment Availability
 

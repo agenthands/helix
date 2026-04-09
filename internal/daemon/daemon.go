@@ -26,6 +26,7 @@ import (
 	"github.com/postfix/serena/internal/kernel/symbols"
 	"github.com/postfix/serena/internal/langregistry"
 	serenaMCP "github.com/postfix/serena/internal/mcp"
+	"github.com/postfix/serena/internal/obs"
 	"github.com/postfix/serena/internal/profile"
 	"github.com/postfix/serena/internal/skill"
 	"github.com/postfix/serena/internal/workspace"
@@ -91,6 +92,7 @@ func resolveAllowedToolsForMode(store *profile.ProfileStore, prof *profile.Profi
 type Daemon struct {
 	config         *config.SerenaConfig
 	logger         *slog.Logger
+	obs            *obs.Provider
 	workspaces     *workspace.Registry
 	mcpServer      *serenaMCP.SerenaMCPServer
 	grpcServer     *grpc.Server
@@ -245,9 +247,15 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		return nil
 	})
 
+	// Observability provider (Phase 10 slog ContextHandler + Phase 11 metrics).
+	// Noop wires a trace-aware slog handler and pre-registers the Prometheus
+	// vectors on an owned registry; /metrics on the admin listener reads it.
+	observability := obs.Noop(logger.Handler())
+
 	return &Daemon{
 		config:        cfg,
 		logger:        logger,
+		obs:           observability,
 		workspaces:    workspaces,
 		mcpServer:     mcpServer,
 		kernel:        k,

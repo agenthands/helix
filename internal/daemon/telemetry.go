@@ -15,6 +15,8 @@ import (
 	nhpprof "net/http/pprof"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // ready is flipped to 1 at the end of Daemon.Run setup (after kernel.Run
@@ -59,6 +61,20 @@ func (d *Daemon) listenAdmin(ctx context.Context) error {
 	if d.config.Observability.EnablePprof {
 		registerPprof(mux)
 		d.logger.Info("pprof endpoints enabled", "addr", bound)
+	}
+
+	// /metrics (Phase 11 METRIC-01): always mounted on the admin listener.
+	// Independent of EnablePprof — metrics is a separate opt-in surface
+	// gated only by AdminAddr being set. d.obs.Metrics() is never nil
+	// (obs.Noop guarantees a working sink).
+	if d.obs != nil && d.obs.Metrics() != nil {
+		mux.Handle("/metrics", promhttp.HandlerFor(
+			d.obs.Metrics().Registry(),
+			promhttp.HandlerOpts{
+				ErrorHandling: promhttp.ContinueOnError,
+			},
+		))
+		d.logger.Info("metrics endpoint enabled", "addr", bound, "path", "/metrics")
 	}
 
 	server := &http.Server{Handler: mux}

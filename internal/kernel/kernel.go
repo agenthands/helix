@@ -29,8 +29,10 @@ type Kernel struct {
 
 // NewKernel creates a new kernel with the given workspace registry, language registry, and configuration.
 // The installer provides three-tier LS resolution (PATH/download/error).
-func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, installer *langregistry.Installer, cfg KernelConfig, pressure lspool.MemoryPressure, logger *slog.Logger) *Kernel {
-	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger)
+// metrics is the lspool.MetricsSink receiving worker lifecycle events; pass
+// lspool.NoopSink{} (or nil) to disable.
+func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, installer *langregistry.Installer, cfg KernelConfig, pressure lspool.MemoryPressure, logger *slog.Logger, metrics lspool.MetricsSink) *Kernel {
+	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics)
 	return &Kernel{
 		workspaces: make(map[string]*WorkspaceRuntime),
 		pool:       pool,

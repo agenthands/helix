@@ -52,7 +52,7 @@ func testRegistry() *langregistry.Registry {
 }
 
 func TestCircuitBreaker_RecordFailure_ExponentialBackoff(t *testing.T) {
-	cb := NewCircuitBreaker(1 * time.Minute)
+	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
 
 	// Initially can attempt.
 	assert.True(t, cb.CanAttempt())
@@ -77,7 +77,7 @@ func TestCircuitBreaker_RecordFailure_ExponentialBackoff(t *testing.T) {
 }
 
 func TestCircuitBreaker_RecordSuccess_ResetsBackoff(t *testing.T) {
-	cb := NewCircuitBreaker(1 * time.Minute)
+	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
 
 	cb.RecordFailure()
 	cb.RecordFailure()
@@ -91,7 +91,7 @@ func TestCircuitBreaker_RecordSuccess_ResetsBackoff(t *testing.T) {
 
 func TestCircuitBreaker_NeverFullyBreaks(t *testing.T) {
 	// Per D-06: circuit breaker never fully breaks, always retries after backoff.
-	cb := NewCircuitBreaker(100 * time.Millisecond)
+	cb := NewCircuitBreaker("go", 100*time.Millisecond, NoopSink{})
 
 	// Record many failures.
 	for i := 0; i < 10; i++ {
@@ -199,7 +199,7 @@ func TestPoolConfig_Defaults(t *testing.T) {
 func TestPool_NewPool(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger())
+	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{})
 	require.NotNil(t, pool)
 	assert.Equal(t, 0, pool.WorkerCount())
 	assert.Equal(t, 0, pool.LeaseCount())
@@ -232,7 +232,7 @@ func TestLease_ConcurrencyControl(t *testing.T) {
 }
 
 func TestCircuitBreaker_Concurrent(t *testing.T) {
-	cb := NewCircuitBreaker(1 * time.Minute)
+	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
 	var wg sync.WaitGroup
 
 	// Concurrent failures and success checks.
@@ -275,7 +275,7 @@ func TestWorkerMetrics_ConcurrentReuse(t *testing.T) {
 func TestPool_RunAndShutdown(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger())
+	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 

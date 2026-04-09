@@ -41,14 +41,15 @@ var ErrCircuitOpen = errors.New("circuit breaker is open; retry after backoff")
 // Pool manages a pool of LS workers with TTL, pressure eviction, and share-until-dirty policy.
 type Pool struct {
 	mu        sync.RWMutex
-	workers   map[string]*Worker        // keyed by worker ID
-	leases    map[string]*WorkerLease   // keyed by session ID
+	workers   map[string]*Worker         // keyed by worker ID
+	leases    map[string]*WorkerLease    // keyed by session ID
 	circuits  map[string]*CircuitBreaker // keyed by language
 	registry  *langregistry.Registry
 	installer *langregistry.Installer
 	pressure  MemoryPressure
 	config    PoolConfig
 	logger    *slog.Logger
+	metrics   MetricsSink
 	nextID    int
 	done      chan struct{}
 	runCtx    context.Context // lifecycle context from Run(); workers use this instead of request ctx
@@ -57,7 +58,12 @@ type Pool struct {
 // NewPool creates a new LS worker pool.
 // The registry provides language server resolution for worker creation.
 // The installer uses three-tier resolution (PATH/download/error) to find LS binaries.
-func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger) *Pool {
+// metrics is the MetricsSink receiving worker lifecycle and circuit state
+// events; pass NoopSink{} (or nil, which is converted) to disable.
+func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger, metrics MetricsSink) *Pool {
+	if metrics == nil {
+		metrics = NoopSink{}
+	}
 	return &Pool{
 		workers:   make(map[string]*Worker),
 		leases:    make(map[string]*WorkerLease),
@@ -67,6 +73,7 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 		pressure:  pressure,
 		config:    cfg,
 		logger:    logger.With("component", "lspool"),
+		metrics:   metrics,
 		done:      make(chan struct{}),
 	}
 }
@@ -273,6 +280,15 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	}
 
 	p.workers[id] = worker
+	// METRIC-03: worker gauge +1 on spawn.
+	p.metrics.LSPoolWorkersSet(worker.Language(), +1)
+	// If the circuit for this language has recorded failures, treat this spawn
+	// as a restart after a crash (D-15). RecordSuccess will reset the counter
+	// immediately after, so the order matters: emit before the success signal
+	// that the caller issues.
+	if cb, ok := p.circuits[wsKey.Language]; ok && cb.Failures() > 0 {
+		p.metrics.LSPoolRestart(wsKey.Language)
+	}
 	return worker, nil
 }
 
@@ -281,7 +297,7 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 func (p *Pool) circuitForLanguage(language string) *CircuitBreaker {
 	cb, ok := p.circuits[language]
 	if !ok {
-		cb = NewCircuitBreaker(5 * time.Minute)
+		cb = NewCircuitBreaker(language, 5*time.Minute, p.metrics)
 		p.circuits[language] = cb
 	}
 	return cb
@@ -318,8 +334,12 @@ func (p *Pool) checkTTLs() {
 		idle := w.Metrics().IdleDuration()
 		if idle >= time.Duration(ttl)*time.Second {
 			p.logger.Info("retiring idle worker", "worker", id, "idle", idle, "ttl", ttl)
+			lang := w.Language()
 			go w.Stop(context.Background())
 			delete(p.workers, id)
+			// METRIC-03: idle-TTL retirement path.
+			p.metrics.LSPoolWorkersSet(lang, -1)
+			p.metrics.LSPoolEviction(lang, EvictIdle)
 		}
 	}
 }
@@ -360,7 +380,7 @@ func (p *Pool) checkPressure() {
 		}
 		if rss > hardCapBytes {
 			p.logger.Warn("evicting worker: RSS exceeds hard cap", "worker", id, "rss_mb", rss/1024/1024)
-			p.evictWorkerLocked(id, w)
+			p.evictWorkerLocked(id, w, EvictPressure)
 			return // Evict one at a time.
 		}
 	}
@@ -370,7 +390,10 @@ func (p *Pool) checkPressure() {
 		state := w.State()
 		if state != WorkerReady && state != WorkerStarting && state != WorkerInitializing && state != WorkerShuttingDown && state != WorkerStopped {
 			p.logger.Warn("evicting unhealthy worker", "worker", id, "state", state.String())
-			p.evictWorkerLocked(id, w)
+			// Unhealthy state reached outside the normal transition graph is
+			// how crashes surface in the current pool: the LS process is
+			// gone but the worker record remains. Book it as a crash.
+			p.evictWorkerLocked(id, w, EvictCrash)
 			return
 		}
 	}
@@ -386,7 +409,7 @@ func (p *Pool) checkPressure() {
 		m.mu.Unlock()
 		if score < 0.01 {
 			p.logger.Warn("evicting zero-score worker", "worker", id)
-			p.evictWorkerLocked(id, w)
+			p.evictWorkerLocked(id, w, EvictPressure)
 			return
 		}
 	}
@@ -406,12 +429,15 @@ func (p *Pool) checkPressure() {
 	}
 	if oldestID != "" {
 		p.logger.Warn("evicting oldest idle worker", "worker", oldestID, "idle", oldestIdle)
-		p.evictWorkerLocked(oldestID, p.workers[oldestID])
+		p.evictWorkerLocked(oldestID, p.workers[oldestID], EvictPressure)
 	}
 }
 
 // evictWorkerLocked stops and removes a worker. Must be called with p.mu held.
-func (p *Pool) evictWorkerLocked(id string, w *Worker) {
+// reason is one of EvictIdle / EvictPressure / EvictCrash / EvictShutdown and
+// is emitted on the evictions counter (D-13).
+func (p *Pool) evictWorkerLocked(id string, w *Worker, reason string) {
+	lang := w.Language()
 	// Remove any leases for this worker.
 	for sid, lease := range p.leases {
 		if lease.Worker.ID() == id {
@@ -420,20 +446,30 @@ func (p *Pool) evictWorkerLocked(id string, w *Worker) {
 	}
 	delete(p.workers, id)
 	go w.Stop(context.Background())
+	// METRIC-03: worker gauge -1 + reasoned eviction counter.
+	p.metrics.LSPoolWorkersSet(lang, -1)
+	p.metrics.LSPoolEviction(lang, reason)
 }
 
 // stopAll stops all workers.
 func (p *Pool) stopAll(ctx context.Context) {
 	p.mu.Lock()
-	workers := make([]*Worker, 0, len(p.workers))
+	type snap struct {
+		w    *Worker
+		lang string
+	}
+	workers := make([]snap, 0, len(p.workers))
 	for _, w := range p.workers {
-		workers = append(workers, w)
+		workers = append(workers, snap{w: w, lang: w.Language()})
 	}
 	p.workers = make(map[string]*Worker)
 	p.leases = make(map[string]*WorkerLease)
 	p.mu.Unlock()
 
-	for _, w := range workers {
-		_ = w.Stop(ctx)
+	for _, s := range workers {
+		_ = s.w.Stop(ctx)
+		// METRIC-03: shutdown path — gauge -1 + reasoned eviction counter.
+		p.metrics.LSPoolWorkersSet(s.lang, -1)
+		p.metrics.LSPoolEviction(s.lang, EvictShutdown)
 	}
 }

@@ -91,17 +91,53 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 
 ## Traceability
 
-Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| | | |
+| BENCH-01 | Phase 9 | Pending |
+| BENCH-02 | Phase 9 | Pending |
+| BENCH-03 | Phase 9 | Pending |
+| BENCH-04 | Phase 9 | Pending |
+| BENCH-05 | Phase 9 | Pending |
+| BENCH-06 | Phase 9 | Pending |
+| OBS-01 | Phase 10 | Pending |
+| OBS-02 | Phase 10 | Pending |
+| OBS-03 | Phase 10 | Pending |
+| OBS-04 | Phase 10 | Pending |
+| OBS-05 | Phase 10 | Pending |
+| OBS-06 | Phase 10 | Pending |
+| METRIC-01 | Phase 11 | Pending |
+| METRIC-02 | Phase 11 | Pending |
+| METRIC-03 | Phase 11 | Pending |
+| METRIC-04 | Phase 11 | Pending |
+| METRIC-05 | Phase 11 | Pending |
+| TRACE-01 | Phase 12 | Pending |
+| TRACE-02 | Phase 12 | Pending |
+| TRACE-03 | Phase 12 | Pending |
+| TRACE-04 | Phase 12 | Pending |
+| TRACE-05 | Phase 12 | Pending |
+| DEGRADE-01 | Phase 13 | Pending |
+| DEGRADE-02 | Phase 13 | Pending |
+| DEGRADE-03 | Phase 13 | Pending |
+| DEGRADE-04 | Phase 13 | Pending |
+| DEGRADE-05 | Phase 13 | Pending |
+| DEGRADE-06 | Phase 13 | Pending |
+| DEGRADE-07 | Phase 13 | Pending |
+| DOC-01 | Phase 14 | Pending |
+| DOC-02 | Phase 14 | Pending |
+| DOC-03 | Phase 14 | Pending |
+| DOC-04 | Phase 14 | Pending |
+| DOC-05 | Phase 14 | Pending |
+| DOC-06 | Phase 14 | Pending |
+| DOC-07 | Phase 14 | Pending |
+| DOC-08 | Phase 14 | Pending |
+| DOC-09 | Phase 14 | Pending |
+| DOC-10 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 38 total
-- Mapped to phases: 0
-- Unmapped: 38 ⚠️
+- Mapped to phases: 38
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-09*
-*Last updated: 2026-04-09 after initial definition*
+*Last updated: 2026-04-09 — traceability populated at roadmap creation*

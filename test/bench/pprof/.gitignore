@@ -1,0 +1,4 @@
+# Pitfall 8: heap snapshots are CI artifacts, not committed per-PR.
+# Committed baseline snapshots are added explicitly during release re-baseline PRs.
+*.pb.gz
+!baseline-*.pb.gz

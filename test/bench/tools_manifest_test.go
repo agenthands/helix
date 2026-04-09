@@ -202,15 +202,25 @@ var benchTools = []benchCase{
 	{name: "prepare_for_new_conversation", args: map[string]any{}},
 
 	// === Profile (2) =========================================================
+	// switch_mode: "full" profile disallows read->read self-transitions; use
+	// "edit" as a stable target that exists in the allowed-targets set.
+	// Plan 09-03 fix: original "read" target triggered
+	// "transition from \"read\" to \"read\" not allowed".
 	{name: "switch_mode", args: map[string]any{
-		"target_mode": "read",
+		"target_mode": "edit",
 	}},
 	{name: "get_token_budget", args: map[string]any{}},
 
 	// === Built-in (3) ========================================================
-	{name: "ping", args: map[string]any{}},
-	{name: "echo", args: map[string]any{
+	// ping takes a required Message arg (PingArgs in internal/mcp/server.go).
+	// Plan 09-03 fix: original empty args triggered schema validation error.
+	{name: "ping", args: map[string]any{
 		"message": "bench",
+	}},
+	// echo takes Text, not Message (EchoArgs in internal/mcp/server.go).
+	// Plan 09-03 fix: original "message" key was rejected as additional.
+	{name: "echo", args: map[string]any{
+		"text": "bench",
 	}},
 	{name: "activate_project", args: map[string]any{
 		// repo_path is supplied at bench time by activateWorkspaceB; the

@@ -155,8 +155,14 @@ func defaultBenchConfig(tb testing.TB) *config.SerenaConfig {
 	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
-	cfg.WorkerPool.MaxWorkers = 2
-	cfg.WorkerPool.BaseTTL = 30
+	// MaxWorkers must accommodate the edit-tool sub-benchmarks in Plan 09-03,
+	// which re-activate a fresh fixture copy per iteration. Each activation
+	// can hold an LS worker until the previous workspace's worker is evicted
+	// by adaptive TTL; a ceiling of 2 exhausts the pool almost immediately
+	// when -benchtime=Nx grows past the smoke value. 50 gives headroom for
+	// baseline -count=10 runs while still bounding resource use.
+	cfg.WorkerPool.MaxWorkers = 256
+	cfg.WorkerPool.BaseTTL = 5
 	return cfg
 }
 

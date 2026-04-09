@@ -34,16 +34,17 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Dynamic tool registry with pluggable skill packs — v1.0
 - ✓ Centralized daemon bootstrap with 38+ callable MCP tools — v1.0 Phase 5
 - ✓ Kernel tool skill adapters for uniform composition model — v1.0 Phase 5
+- ✓ Integration test harness — end-to-end MCP round-trips (InMemory + HTTP) — v1.1 Phase 6
+- ✓ Go dogfooding suite — all 38 tools tested against own codebase — v1.1 Phase 6
+- ✓ Multi-language test fixtures — Python, TypeScript, Java, Rust — v1.1 Phase 7
+- ✓ Symbol editing round-trip tests — all 6 edit tools — v1.1 Phase 7
+- ✓ Profile/mode contract tests — golden file pattern with 19 goldens — v1.1 Phase 8
+- ✓ Three-tier concurrency tests — scenarios + fan-out + testing/synctest — v1.1 Phase 8
+- ✓ Three-band error path coverage — 30 cases across categories and destructive tools — v1.1 Phase 8
 
 ### Active
 
-- ✓ Integration test harness — end-to-end MCP round-trips against real daemon — v1.1 Phase 6
-- ✓ Dogfooding suite — exercise all 38 tools against Serena's own Go codebase — v1.1 Phase 6
-- ✓ Multi-language test fixtures — Python, TypeScript, Java, Rust projects with known symbols — v1.1 Phase 7
-- ✓ Symbol editing round-trip tests — read → edit → verify cycle for all 6 edit tools — v1.1 Phase 7
-- ✓ Profile/mode contract tests — golden file pattern for tool visibility per profile/mode — v1.1 Phase 8
-- ✓ Three-tier concurrency tests — scenario stress + fan-out + testing/synctest — v1.1 Phase 8
-- ✓ Three-band error path coverage — category + destructive exhaustive + read-only smoke — v1.1 Phase 8
+(None — define for next milestone via `/gsd-new-milestone`)
 
 ### Out of Scope
 
@@ -55,23 +56,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Vector/embedding search — Augment Context Engine does this better
 - Git operations — GitHub MCP Server handles git comprehensively
 
-## Current Milestone: v1.1 Integration Testing
-
-**Goal:** Prove all 38 MCP tools work end-to-end by testing against Serena's own codebase and multi-language fixtures.
-
-**Target features:**
-- End-to-end integration test harness — spin up daemon, connect MCP client, call tools, verify responses
-- Dogfooding test suite — exercise all tool categories (symbols, editing, file ops, diagnostics, memory, workflow, profile) against Serena's own Go code
-- Multi-language test fixtures — small projects with known symbols/references for Python, TypeScript, Java, Rust
-- Tool correctness assertions — verify each tool returns expected results against known fixture state
-
 ## Context
 
-Shipped v1.0 with ~25,500 lines of Go across 21 packages. Single binary, 52 languages, 38+ MCP tools fully wired.
+Shipped v1.0 (25,779 LOC, 38 MCP tools, 52 languages) and v1.1 Integration Testing (~12K additional LOC, comprehensive test suite). Single binary, 4-layer architecture, persistent daemon.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC.
 
 Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. All layers wired via centralized daemon bootstrap with fail-fast core / degraded-optional startup.
+
+**v1.1 dogfooding results:** Integration testing against own codebase exposed 10 production bugs (access control gap in ProfileFilterMiddleware, SessionInfo data race, Language field routing, 5 edit tool bugs, worker lifecycle context, symbol URI resolution). All fixed. Test suite now covers all 38 tools with structured assertions.
 
 The `legacy/` directory contains the original Python-based prototype as a reference.
 
@@ -96,6 +89,13 @@ The `legacy/` directory contains the original Python-based prototype as a refere
 | Caddy-style skill registration | Compiled-in plugins without go-plugin overhead | ✓ Good — clean init() pattern |
 | Centralized daemon bootstrap | Daemon owns all MCP registration; skills describe, daemon binds | ✓ Good — 38 tools registered, profile filtering, clean shutdown |
 | Kernel tools as skill adapters | Uniform ToolProvider interface for profiles and modes | ✓ Good — 4 thin adapters, consistent composition model |
+| Integration tests in top-level `test/` package | Black-box testing through public API only | ✓ Good — forced daemon accessor exports, cleaner API |
+| Both InMemory + HTTP transports in test harness | InMemory for speed, HTTP smoke for serialization path | ✓ Good — catches both protocol and wire bugs |
+| Tiered Go fixture + codebase smoke | Small testdata for deterministic assertions, own codebase for scale | ✓ Good — both layers found real bugs |
+| Golden file pattern for profile/mode contracts | Independent oracle from production YAML prevents self-approving bad changes | ✓ Good — 19 goldens, diff-reviewable updates |
+| Three-tier concurrency (scenarios + fan-out + synctest) | Layered coverage: realistic + targeted + deterministic | ✓ Good — caught SessionInfo data race |
+| Three-band error coverage (category + destructive + read-only) | Risk-weighted testing per Google/OWASP guidance | ✓ Good — 30 cases with low duplication |
+| Structured IsError oracle (defer typed errors) | Kernel lacks typed errors yet, tracked as TODO(#typed-errors) | ⚠ Revisit — acceptable short-term, needs upgrade path |
 
 ## Evolution
 

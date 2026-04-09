@@ -11,6 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// requireLS skips the test if the given language server binary is not in PATH.
+func requireLS(t *testing.T, binary string) {
+	t.Helper()
+	if _, err := exec.LookPath(binary); err != nil {
+		t.Skipf("%s not installed, skipping integration test", binary)
+	}
+}
+
 // textContent extracts the text from the first TextContent element in a CallToolResult.
 // Returns empty string if no TextContent is found.
 func textContent(r *mcp.CallToolResult) string {
@@ -34,12 +42,18 @@ func callTool(t *testing.T, session *mcp.ClientSession, name string, args map[st
 	return result
 }
 
-// requireLS skips the test if the given language server binary is not on PATH.
-func requireLS(t *testing.T, binary string) {
+// listSessionTools returns the names of all tools visible to the current MCP session.
+// Goes through the MCP client's tools/list so ProfileFilterMiddleware is exercised
+// end-to-end — this is the oracle used by profile/mode contract tests (D-02, D-03).
+func listSessionTools(t *testing.T, session *mcp.ClientSession) []string {
 	t.Helper()
-	if _, err := exec.LookPath(binary); err != nil {
-		t.Skipf("%s not installed, skipping integration test", binary)
+	result, err := session.ListTools(context.Background(), &mcp.ListToolsParams{})
+	require.NoError(t, err, "tools/list")
+	names := make([]string, 0, len(result.Tools))
+	for _, tool := range result.Tools {
+		names = append(names, tool.Name)
 	}
+	return names
 }
 
 // callToolExpectError invokes an MCP tool and asserts it returns an error result.

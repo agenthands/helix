@@ -1,0 +1,220 @@
+package bench_test
+
+// tools_manifest.go enumerates the 38-tool bench manifest locked by D-04.
+//
+// Every entry is a benchCase with:
+//   - name: exact MCP tool name (canonical source: internal/daemon/bootstrap_test.go)
+//   - args: a map[string]any tuned to work against testdata/fixtures/go/
+//   - needsCopy: true when the tool mutates files, signalling Plan 09-03 that
+//     the sub-benchmark must use prepareGoFixtureCopyB(b) instead of
+//     prepareGoFixtureB(b) to avoid corrupting the shared read-only fixture
+//
+// The total count MUST equal 38 — enforced by TestBenchToolsManifestMatchesRegistry
+// in main_test.go, which also asserts bidirectional name parity with the live
+// MCP registry (no manifest-only names, no registry-only names).
+//
+// Breakdown (9 + 6 + 6 + 3 + 7 + 2 + 2 + 3 = 38):
+//   - Symbol (9): 09-RESEARCH.md Pattern 1 symbol retrieval tools
+//   - Edit (6): mutating tools — Plan 09-03 must use prepareGoFixtureCopyB
+//   - File ops (6): read/list/find/search/create/replace
+//   - Diagnostics (3): diagnostics, code actions, formatting
+//   - Memory (7): TestMain seeds "bench-manifest" memory for parity coverage
+//   - Workflow (2): onboard_project, prepare_for_new_conversation
+//   - Profile (2): switch_mode, get_token_budget
+//   - Built-in (3): ping, echo, activate_project
+//
+// Hardcoded offsets in testdata/fixtures/go/main.go (verified at plan time):
+//
+//	line 11 col 6 -> func Helper    (go_to_definition, find_references target)
+//	line 16 col 6 -> type DemoStruct
+//	line 21 col 13 -> method Value on *DemoStruct
+//
+// Symbol tools use 0-indexed line/column per internal/kernel/symbols/tools.go
+// jsonschema tags. Edit tools (rename_symbol) use 1-indexed per
+// internal/kernel/edit/tools.go jsonschema tags.
+
+// benchCase describes a single tool invocation for the bench manifest.
+type benchCase struct {
+	name      string
+	args      map[string]any
+	needsCopy bool // true for edit tools that mutate files
+}
+
+// benchMemoryName is the memory seeded by TestMain so that read_memory,
+// search_memories, rename_memory, edit_memory, and delete_memory all have
+// something to operate on when their sub-benches run.
+const benchMemoryName = "bench-manifest"
+
+// benchTools is the canonical 38-tool manifest. Count and names are locked by
+// D-04 and asserted against the live registry in
+// TestBenchToolsManifestMatchesRegistry.
+var benchTools = []benchCase{
+	// === Symbol (9) ==========================================================
+	// Target: Helper at main.go line 11 col 6 (0-indexed: line 10 col 5)
+	{name: "go_to_definition", args: map[string]any{
+		"path":   "main.go",
+		"line":   6, // main() body reference to Helper() at line 7 col 2 (0-indexed 6/1)
+		"column": 1,
+	}},
+	{name: "find_references", args: map[string]any{
+		"path":   "main.go",
+		"line":   10, // 0-indexed line of `func Helper()`
+		"column": 5,
+	}},
+	{name: "get_symbol_overview", args: map[string]any{
+		"path": "main.go",
+	}},
+	{name: "search_symbols", args: map[string]any{
+		"query": "Helper",
+	}},
+	{name: "get_hover_info", args: map[string]any{
+		"path":   "main.go",
+		"line":   10,
+		"column": 5,
+	}},
+	{name: "find_implementations", args: map[string]any{
+		"path":   "main.go",
+		"line":   15, // DemoStruct type declaration
+		"column": 5,
+	}},
+	{name: "get_call_hierarchy", args: map[string]any{
+		"path":      "main.go",
+		"line":      10,
+		"column":    5,
+		"direction": "both",
+	}},
+	{name: "get_type_hierarchy", args: map[string]any{
+		"path":      "main.go",
+		"line":      15,
+		"column":    5,
+		"direction": "both",
+	}},
+	{name: "analyze_blast_radius", args: map[string]any{
+		"path":   "main.go",
+		"line":   10,
+		"column": 5,
+	}},
+
+	// === Edit (6) ============================================================
+	// ALL edit tools MUTATE files — needsCopy=true. Plan 09-03 must call
+	// prepareGoFixtureCopyB(b) for every edit sub-benchmark so the mutations
+	// land in a tb.TempDir() copy, not the shared read-only fixture.
+	{name: "replace_symbol_body", needsCopy: true, args: map[string]any{
+		"path":        "main.go",
+		"symbol_name": "UnusedFunc",
+		"new_body":    "{\n\tfmt.Println(\"replaced\")\n}",
+	}},
+	{name: "insert_before_symbol", needsCopy: true, args: map[string]any{
+		"path":        "main.go",
+		"symbol_name": "UnusedFunc",
+		"content":     "// Inserted before UnusedFunc.\n",
+	}},
+	{name: "insert_after_symbol", needsCopy: true, args: map[string]any{
+		"path":        "main.go",
+		"symbol_name": "UnusedFunc",
+		"content":     "\n// Inserted after UnusedFunc.\n",
+	}},
+	{name: "rename_symbol", needsCopy: true, args: map[string]any{
+		// rename_symbol uses 1-indexed line/column per edit/tools.go schema.
+		"path":     "main.go",
+		"line":     11,
+		"column":   6,
+		"new_name": "HelperRenamed",
+	}},
+	{name: "safe_delete_symbol", needsCopy: true, args: map[string]any{
+		"path":        "main.go",
+		"symbol_name": "UnusedFunc",
+		"force":       true,
+	}},
+	{name: "verify_edit", needsCopy: true, args: map[string]any{
+		"path": "main.go",
+	}},
+
+	// === File ops (6) ========================================================
+	{name: "read_file", args: map[string]any{
+		"path": "main.go",
+	}},
+	{name: "create_file", needsCopy: true, args: map[string]any{
+		"path":    "bench_created.txt",
+		"content": "bench manifest create_file invocation\n",
+	}},
+	{name: "list_directory", args: map[string]any{
+		"path": ".",
+	}},
+	{name: "find_files", args: map[string]any{
+		"pattern": "**/*.go",
+	}},
+	{name: "search_in_files", args: map[string]any{
+		"pattern":      "Helper",
+		"include_glob": "*.go",
+		"max_results":  50,
+	}},
+	{name: "replace_in_file", needsCopy: true, args: map[string]any{
+		"path":        "main.go",
+		"pattern":     "Hello, Go!",
+		"replacement": "Hello, Bench!",
+	}},
+
+	// === Diagnostics (3) =====================================================
+	{name: "get_diagnostics", args: map[string]any{
+		"path": "main.go",
+	}},
+	{name: "get_code_actions", args: map[string]any{
+		"path":   "main.go",
+		"line":   11,
+		"column": 6,
+	}},
+	{name: "format_code", needsCopy: true, args: map[string]any{
+		"path":       "main.go",
+		"tab_size":   4,
+		"use_spaces": false,
+	}},
+
+	// === Memory (7) ==========================================================
+	// TestMain seeds a benchMemoryName memory before sub-benches run so
+	// read/search/rename/edit/delete have state to operate on.
+	{name: "write_memory", args: map[string]any{
+		"name":    benchMemoryName + "-w",
+		"content": "bench manifest write_memory payload",
+	}},
+	{name: "read_memory", args: map[string]any{
+		"name": benchMemoryName,
+	}},
+	{name: "list_memories", args: map[string]any{}},
+	{name: "search_memories", args: map[string]any{
+		"query": "manifest",
+	}},
+	{name: "rename_memory", args: map[string]any{
+		"old_name": benchMemoryName + "-rename-src",
+		"new_name": benchMemoryName + "-rename-dst",
+	}},
+	{name: "edit_memory", args: map[string]any{
+		"name":    benchMemoryName,
+		"search":  "payload",
+		"replace": "PAYLOAD",
+	}},
+	{name: "delete_memory", args: map[string]any{
+		"name": benchMemoryName + "-delete",
+	}},
+
+	// === Workflow (2) ========================================================
+	{name: "onboard_project", args: map[string]any{}},
+	{name: "prepare_for_new_conversation", args: map[string]any{}},
+
+	// === Profile (2) =========================================================
+	{name: "switch_mode", args: map[string]any{
+		"target_mode": "read",
+	}},
+	{name: "get_token_budget", args: map[string]any{}},
+
+	// === Built-in (3) ========================================================
+	{name: "ping", args: map[string]any{}},
+	{name: "echo", args: map[string]any{
+		"message": "bench",
+	}},
+	{name: "activate_project", args: map[string]any{
+		// repo_path is supplied at bench time by activateWorkspaceB; the
+		// manifest entry is for parity counting only.
+		"repo_path": ".",
+	}},
+}

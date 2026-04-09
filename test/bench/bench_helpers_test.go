@@ -60,6 +60,14 @@ func (bd *benchDaemon) Stop() {
 	bd.cancel()
 }
 
+// RegistryNames returns the unfiltered list of tool names registered with the
+// daemon's MCP server. This is the canonical 38-tool set and bypasses the
+// ProfileFilterMiddleware that hides tools based on mode AllowedTools.
+// TestBenchToolsManifestMatchesRegistry uses this to assert D-04 parity.
+func (bd *benchDaemon) RegistryNames() []string {
+	return bd.daemon.MCPServer().Registry().Names()
+}
+
 // startBenchDaemon creates a daemon in-process, wires an MCP client via
 // InMemoryTransports, and registers cleanup via tb.Cleanup. Callers MUST NOT
 // invoke this inside a b.Loop() body — one daemon per bench function, shared

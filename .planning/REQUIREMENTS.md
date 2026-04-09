@@ -26,7 +26,7 @@
 ### Metrics
 
 - [x] **METRIC-01**: `/metrics` endpoint on admin listener (Prometheus format)
-- [ ] **METRIC-02**: RED histograms per tool (rate, errors, duration) with tuned buckets
+- [x] **METRIC-02**: RED histograms per tool (rate, errors, duration) with tuned buckets
 - [ ] **METRIC-03**: lspool gauges (workers, evictions, restarts, circuit state)
 - [x] **METRIC-04**: Go runtime collectors (goroutines, GC, memory)
 - [x] **METRIC-05**: Bounded-label contract enforced by CI lint (allowlist: tool_name, profile, mode, language, outcome)
@@ -106,7 +106,7 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 | OBS-05 | Phase 10 | Complete |
 | OBS-06 | Phase 10 | Pending |
 | METRIC-01 | Phase 11 | Complete |
-| METRIC-02 | Phase 11 | Pending |
+| METRIC-02 | Phase 11 | Complete |
 | METRIC-03 | Phase 11 | Pending |
 | METRIC-04 | Phase 11 | Complete |
 | METRIC-05 | Phase 11 | Complete |

@@ -15,7 +15,9 @@ func DefaultConfig() map[string]interface{} {
 		"logging.format":          "text",
 		"logging.level":           "info",
 		"logging.dir":             filepath.Join(homeDir, ".serena", "logs"),
-		"profile":                 "full", // default profile is the neutral escape hatch (D-02)
-		"mode":                    "",     // empty = use profile's default_mode
+		"profile":                    "full", // default profile is the neutral escape hatch (D-02)
+		"mode":                       "",     // empty = use profile's default_mode
+		"observability.admin_addr":   "",     // empty = admin listener disabled (D-02, D-05)
+		"observability.enable_pprof": false,  // zero attack surface by default (D-12)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/postfix/serena/internal/config"
 	"github.com/postfix/serena/internal/daemon"
 	"github.com/postfix/serena/internal/forwarder"
+	"github.com/postfix/serena/internal/obs"
 )
 
 // NewRootCommand creates the root cobra command with all flags.
@@ -39,6 +40,9 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.Flags().String("config", "", "Path to config file")
 	// Agent profile
 	rootCmd.Flags().String("profile", "", "Agent profile (claude-code, codex, ide-assistant, ci-bot, full)")
+	// Admin listener bind address (Phase 10 observability). Empty = disabled.
+	// Must be loopback (127.0.0.1/localhost/::1); non-loopback deferred to v1.3 auth.
+	rootCmd.Flags().String("admin-addr", "", "Loopback admin listener address (e.g. 127.0.0.1:9090); empty = disabled")
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
@@ -79,6 +83,10 @@ func runForwarder(cmd *cobra.Command) error {
 	} else {
 		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	}
+	// Wrap base handler with obs.ContextHandler so future traced requests
+	// automatically get trace_id/span_id fields. Phase 10 fast-path is pure
+	// forwarding (spanContextFromContext stub always returns false).
+	handler = obs.NewContextHandler(handler)
 	logger := slog.New(handler)
 
 	// Use default socket path if not specified
@@ -96,6 +104,7 @@ func runDaemon(cmd *cobra.Command) error {
 	httpAddr, _ := cmd.Flags().GetString("http-addr")
 	configPath, _ := cmd.Flags().GetString("config")
 	profileName, _ := cmd.Flags().GetString("profile")
+	adminAddr, _ := cmd.Flags().GetString("admin-addr")
 
 	// Set up logger (D-16, D-17: stderr + configurable format)
 	var handler slog.Handler
@@ -104,6 +113,10 @@ func runDaemon(cmd *cobra.Command) error {
 	} else {
 		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	}
+	// Wrap base handler with obs.ContextHandler so future traced requests
+	// automatically get trace_id/span_id fields. Phase 10 fast-path is pure
+	// forwarding (spanContextFromContext stub always returns false).
+	handler = obs.NewContextHandler(handler)
 	logger := slog.New(handler)
 
 	// Load config with CLI overrides
@@ -116,6 +129,11 @@ func runDaemon(cmd *cobra.Command) error {
 	}
 	if profileName != "" {
 		overrides["profile"] = profileName
+	}
+	// Pitfall #5: only apply the --admin-addr override when non-empty so a
+	// blank CLI invocation cannot wipe a project config value.
+	if adminAddr != "" {
+		overrides["observability.admin_addr"] = adminAddr
 	}
 
 	cfg, err := config.Load("", configPath, overrides)

@@ -17,6 +17,19 @@ type SerenaConfig struct {
 	// Mode is the initial operational mode override.
 	// Empty means use the profile's DefaultMode.
 	Mode string `koanf:"mode"`
+	// Observability holds admin listener + pprof gating settings (Phase 10).
+	Observability ObservabilityConfig `koanf:"observability"`
+}
+
+// ObservabilityConfig holds admin listener + pprof gating settings (Phase 10).
+// AdminAddr empty = disabled. Must be loopback (127.0.0.1/localhost/::1) — v1.3 adds auth.
+type ObservabilityConfig struct {
+	// AdminAddr is the loopback bind address for the admin listener.
+	// Empty string disables the listener (D-02, D-05).
+	AdminAddr string `koanf:"admin_addr"`
+	// EnablePprof registers /debug/pprof/* handlers on the admin listener when true (D-10).
+	// Default false: zero attack surface when disabled (D-12).
+	EnablePprof bool `koanf:"enable_pprof"`
 }
 
 // WorkerPoolConfig holds configuration for the LS worker pool.

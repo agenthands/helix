@@ -39,8 +39,11 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 - ✓ Integration test harness — end-to-end MCP round-trips against real daemon — v1.1 Phase 6
 - ✓ Dogfooding suite — exercise all 38 tools against Serena's own Go codebase — v1.1 Phase 6
-- Multi-language test fixtures — small projects with known symbols for Python, TypeScript, Java, Rust — v1.1
-- Tool correctness assertions — verify each tool returns expected results against known fixture state — v1.1
+- ✓ Multi-language test fixtures — Python, TypeScript, Java, Rust projects with known symbols — v1.1 Phase 7
+- ✓ Symbol editing round-trip tests — read → edit → verify cycle for all 6 edit tools — v1.1 Phase 7
+- ✓ Profile/mode contract tests — golden file pattern for tool visibility per profile/mode — v1.1 Phase 8
+- ✓ Three-tier concurrency tests — scenario stress + fan-out + testing/synctest — v1.1 Phase 8
+- ✓ Three-band error path coverage — category + destructive exhaustive + read-only smoke — v1.1 Phase 8
 
 ### Out of Scope
 
@@ -112,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after Phase 6 (test harness + Go dogfooding)*
+*Last updated: 2026-04-09 — v1.1 Integration Testing milestone complete (Phases 6-8)*

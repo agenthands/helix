@@ -79,7 +79,7 @@ func TestMode_SwitchRefreshesToolList(t *testing.T) {
 	adminTools := listSessionTools(t, td.Session)
 
 	// Switch to read mode via the tool.
-	callTool(t, td.Session, "switch_mode", map[string]any{"mode": "read"})
+	callTool(t, td.Session, "switch_mode", map[string]any{"target_mode": "read"})
 	readTools := listSessionTools(t, td.Session)
 
 	assert.NotEqual(t, adminTools, readTools,

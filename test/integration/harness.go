@@ -94,6 +94,12 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	if opts.Profile != "" {
 		cfg.Profile = opts.Profile
 	}
+	if opts.Mode != "" {
+		// Set initial mode via config to bypass switch_mode transition rules.
+		// switch_mode enforces allowed_mode_transitions (e.g., admin is unreachable),
+		// but tests need to exercise every valid (profile, mode) seed state.
+		cfg.Mode = opts.Mode
+	}
 	if opts.MaxWorkers > 0 {
 		cfg.WorkerPool.MaxWorkers = opts.MaxWorkers
 	}
@@ -159,20 +165,6 @@ func StartTestDaemon(t *testing.T, opts Options) *TestDaemon {
 	}
 
 	t.Cleanup(td.Stop)
-
-	// Apply mode switch before workspace activation so it works even without a workspace.
-	if opts.Mode != "" {
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "switch_mode",
-			Arguments: map[string]any{"mode": opts.Mode},
-		})
-		if err != nil {
-			t.Fatalf("switch_mode %s: %v", opts.Mode, err)
-		}
-		if result.IsError {
-			t.Fatalf("switch_mode %s failed: %s", opts.Mode, textContent(result))
-		}
-	}
 
 	// Activate workspace if requested.
 	if opts.WorkspaceDir != "" {

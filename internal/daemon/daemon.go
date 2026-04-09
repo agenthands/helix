@@ -45,6 +45,45 @@ func (p *daemonSessionProvider) CurrentSession() *serenaMCP.SessionInfo {
 	return p.session
 }
 
+// resolveAllowedToolsForMode returns the tool name whitelist for the given
+// profile + mode by merging skill, include, and exclude lists from both specs.
+// Mirrors profileSkill.ExecuteSwitchMode's resolution logic so the initial
+// session state matches what a switch_mode call would produce.
+func resolveAllowedToolsForMode(store *profile.ProfileStore, prof *profile.Profile, modeName string) []string {
+	if store == nil || prof == nil {
+		return nil
+	}
+	mode, ok := store.Mode(modeName)
+	if !ok {
+		return nil
+	}
+
+	skillSet := make(map[string]bool)
+	for _, sk := range prof.Skills {
+		skillSet[sk] = true
+	}
+	for _, sk := range mode.Skills {
+		skillSet[sk] = true
+	}
+	skillNames := make([]string, 0, len(skillSet))
+	for sk := range skillSet {
+		skillNames = append(skillNames, sk)
+	}
+
+	includeTools := append([]string{}, prof.Tools...)
+	includeTools = append(includeTools, mode.Tools...)
+
+	excludeTools := append([]string{}, prof.ExcludeTools...)
+	excludeTools = append(excludeTools, mode.ExcludeTools...)
+
+	resolved := skill.ResolveTools(skillNames, includeTools, excludeTools)
+	names := make([]string, len(resolved))
+	for i, t := range resolved {
+		names[i] = t.Name
+	}
+	return names
+}
+
 // Daemon is the persistent supervisor process (DMN-01).
 // It manages workspace registry, MCP server, kernel, skills, listeners,
 // and survives client disconnects (DMN-02).
@@ -158,14 +197,22 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 	}
 
 	// 12. Wire profile skill session provider.
-	defaultMode := activeProfile.DefaultMode
-	if defaultMode == "" {
-		defaultMode = "edit"
+	// Initial mode precedence: cfg.Mode override > profile.DefaultMode > "edit" fallback.
+	initialMode := activeProfile.DefaultMode
+	if initialMode == "" {
+		initialMode = "edit"
 	}
+	if cfg.Mode != "" {
+		initialMode = cfg.Mode
+	}
+	// Resolve initial AllowedTools from profile + initial mode so that tools/list
+	// is filtered from session start (not only after the first switch_mode call).
+	initialAllowedTools := resolveAllowedToolsForMode(profileStore, activeProfile, initialMode)
 	sessionProvider := &daemonSessionProvider{
 		session: &serenaMCP.SessionInfo{
-			Profile: cfg.Profile,
-			Mode:    defaultMode,
+			Profile:      cfg.Profile,
+			Mode:         initialMode,
+			AllowedTools: initialAllowedTools,
 		},
 	}
 	if ps := profile.GetProfileSkill(); ps != nil {

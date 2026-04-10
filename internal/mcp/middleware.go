@@ -7,6 +7,8 @@ import (
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/obs"
@@ -109,15 +111,41 @@ func extractToolName(req mcpsdk.Request) string {
 // and all other methods are pure log pass-through. This matches the v1.2
 // scope: RED metrics are per-tool-call only (T-11-09 "accept" disposition).
 func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) mcpsdk.Middleware {
-	m := provider.Metrics() // closure-captured once; Metrics() is never nil per obs.Noop
+	m := provider.Metrics()     // closure-captured once; Metrics() is never nil per obs.Noop
+	tracer := provider.Tracer() // captured once — noop when tracing is off, cheap on the hot path (D-01: never otel.GetTracerProvider)
 	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
 		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			// Non-tool methods: existing log/metrics path unchanged — NO span.
+			if method != "tools/call" {
+				start := time.Now()
+				result, err := next(ctx, method, req)
+				duration := time.Since(start)
+
+				// Preserve Phase 8 logging behavior for ALL methods.
+				if err != nil {
+					logger.Warn("request failed",
+						"method", method,
+						"duration", duration,
+						"error", err,
+					)
+				} else {
+					logger.Info("request handled",
+						"method", method,
+						"duration", duration,
+					)
+				}
+				return result, err
+			}
+
+			// tools/call: create a tracing span (TRACE-02).
+			ctx, span := tracer.Start(ctx, "daemon.mcp.tools.call")
+			defer span.End()
+
 			start := time.Now()
 			result, err := next(ctx, method, req)
 			duration := time.Since(start)
 
-			// Preserve Phase 8 logging behavior for ALL methods (regression
-			// guard: the old log closure was merged in, not deleted in behavior).
+			// Preserve Phase 8 logging behavior.
 			if err != nil {
 				logger.Warn("request failed",
 					"method", method,
@@ -129,11 +157,6 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 					"method", method,
 					"duration", duration,
 				)
-			}
-
-			// Metric emission is scoped to tools/call in v1.2.
-			if method != "tools/call" {
-				return result, err
 			}
 
 			toolName := extractToolName(req)
@@ -148,6 +171,23 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 				profile, mode, language = snap.Profile, snap.Mode, snap.Language
 			}
 
+			// Gate attribute setting behind IsRecording — avoids attribute
+			// allocation when tracing is off (D-17 budget protection).
+			if span.IsRecording() {
+				span.SetAttributes(
+					attribute.String("tool_name", toolName),
+					attribute.String("profile", profile),
+					attribute.String("mode", mode),
+					attribute.String("language", language),
+					attribute.String("outcome", outcome),
+				)
+				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
+				}
+			}
+
+			// Metrics emission byte-for-byte identical to Phase 11.
 			m.ToolCalls.WithLabelValues(toolName, profile, mode, language, outcome).Inc()
 			m.ToolDuration.WithLabelValues(toolName, profile, mode, language).Observe(duration.Seconds())
 

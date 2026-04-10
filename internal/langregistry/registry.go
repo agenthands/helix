@@ -92,6 +92,20 @@ func (r *Registry) Languages() []string {
 	return langs
 }
 
+// Entries returns a copy of all registered entries sorted by language key.
+func (r *Registry) Entries() []LSEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]LSEntry, 0, len(r.entries))
+	for _, e := range r.entries {
+		result = append(result, e)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Language < result[j].Language
+	})
+	return result
+}
+
 // ByExtension returns all entries whose FileExts contain the given extension.
 // The extension should include the dot (e.g. ".py").
 func (r *Registry) ByExtension(ext string) []LSEntry {

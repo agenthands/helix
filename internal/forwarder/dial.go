@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
@@ -18,9 +20,11 @@ import (
 )
 
 // connectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
-func connectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
+// The tp parameter provides an explicit TracerProvider for the otelgrpc client handler
+// (D-01: no global TracerProvider).
+func connectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
 	// Try connecting to existing daemon
-	conn, client, err := tryConnect(ctx, socketPath)
+	conn, client, err := tryConnect(ctx, socketPath, tp)
 	if err == nil {
 		logger.Info("connected to existing daemon", "socket", socketPath)
 		return client, conn, nil
@@ -33,11 +37,12 @@ func connectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.L
 	}
 
 	// Poll for daemon readiness (up to 10 seconds)
-	return waitForDaemon(ctx, socketPath, 10*time.Second)
+	return waitForDaemon(ctx, socketPath, 10*time.Second, tp)
 }
 
 // tryConnect attempts to connect to a daemon at the given socket path.
-func tryConnect(_ context.Context, socketPath string) (*grpc.ClientConn, serenav1.ForwarderServiceClient, error) {
+// The tp parameter provides an explicit TracerProvider for the otelgrpc stats handler.
+func tryConnect(_ context.Context, socketPath string, tp trace.TracerProvider) (*grpc.ClientConn, serenav1.ForwarderServiceClient, error) {
 	// Check socket exists
 	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("socket not found: %s", socketPath)
@@ -59,6 +64,13 @@ func tryConnect(_ context.Context, socketPath string) (*grpc.ClientConn, serenav
 			Timeout:             5 * time.Second,
 			PermitWithoutStream: true,
 		}),
+		// Phase 12: otelgrpc client handler for trace propagation (D-01, D-12).
+		// WithTracerProvider is MANDATORY — without it otelgrpc falls back to the
+		// OTel global, violating the no-global rule. Pitfall 5: only one
+		// WithStatsHandler call (gRPC silently overwrites duplicates).
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
+			otelgrpc.WithTracerProvider(tp),
+		)),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -89,7 +101,7 @@ func startDaemon(socketPath string) error {
 }
 
 // waitForDaemon polls for daemon readiness up to the given timeout.
-func waitForDaemon(ctx context.Context, socketPath string, timeout time.Duration) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
+func waitForDaemon(ctx context.Context, socketPath string, timeout time.Duration, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		select {
@@ -101,7 +113,7 @@ func waitForDaemon(ctx context.Context, socketPath string, timeout time.Duration
 		// Check if socket file appeared
 		if _, err := os.Stat(socketPath); err == nil {
 			// Try connecting
-			conn, client, err := tryConnect(ctx, socketPath)
+			conn, client, err := tryConnect(ctx, socketPath, tp)
 			if err == nil {
 				return client, conn, nil
 			}

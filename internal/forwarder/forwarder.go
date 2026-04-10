@@ -10,12 +10,18 @@ import (
 	"os"
 
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
+	"github.com/postfix/serena/internal/obs"
 )
 
 // RunForwarder starts the stdio-to-gRPC forwarder (DMN-03).
 // It reads JSON-RPC from stdin, sends via gRPC to daemon, and writes responses to stdout.
 func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) error {
-	client, conn, err := connectOrStartDaemon(ctx, socketPath, logger)
+	// Phase 12: forwarder provider -- noop-only for v1.2.
+	// The daemon's SDK TracerProvider catches spans via otelgrpc traceparent
+	// propagation; the forwarder does NOT need its own OTLP endpoint.
+	fwdProvider := obs.Noop(logger.Handler())
+
+	client, conn, err := connectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}

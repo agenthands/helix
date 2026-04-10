@@ -110,6 +110,30 @@ type Daemon struct {
 // New creates a new Daemon with the given config and logger.
 // Fail-fast for core subsystems per D-06; degrade gracefully for optional ones per D-07.
 func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
+	// Build the observability provider from config. When TracingEndpoint is
+	// configured, WithTracing creates a real SDK TracerProvider with an
+	// OTLP/gRPC exporter; otherwise Noop uses tracenoop (D-17 budget).
+	var observability *obs.Provider
+	if cfg.Observability.TracingEndpoint != "" {
+		observability = obs.WithTracing(logger.Handler(), obs.TracingConfig{
+			Endpoint:    cfg.Observability.TracingEndpoint,
+			ServiceName: cfg.Observability.ServiceName,
+			SampleRatio: cfg.Observability.TracingSampleRatio,
+		}, logger)
+	} else {
+		observability = obs.Noop(logger.Handler())
+	}
+	return newDaemon(cfg, logger, observability)
+}
+
+// NewWithObsProvider creates a Daemon with a pre-built obs.Provider. Intended
+// for tests that need to inject a tracetest-backed provider for span assertions.
+func NewWithObsProvider(cfg *config.SerenaConfig, logger *slog.Logger, provider *obs.Provider) (*Daemon, error) {
+	return newDaemon(cfg, logger, provider)
+}
+
+// newDaemon is the shared daemon construction logic.
+func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs.Provider) (*Daemon, error) {
 	workspaces := workspace.NewRegistry()
 
 	// 1. Language registry (fail-fast).
@@ -140,28 +164,12 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		poolCfg = lspool.DefaultPoolConfig()
 	}
 
-	// 5. Observability provider (Phase 10 slog ContextHandler + Phase 11
-	// metrics + Phase 12 tracing). Constructed before the kernel so the
-	// lspool worker pool can emit LSPool* metrics via obs.Metrics satisfying
-	// lspool.MetricsSink (plan 11-03). When TracingEndpoint is configured,
-	// WithTracing creates a real SDK TracerProvider with an OTLP/gRPC
-	// exporter; otherwise Noop uses tracenoop (D-17 hot-path budget).
-	var observability *obs.Provider
-	if cfg.Observability.TracingEndpoint != "" {
-		observability = obs.WithTracing(logger.Handler(), obs.TracingConfig{
-			Endpoint:    cfg.Observability.TracingEndpoint,
-			ServiceName: cfg.Observability.ServiceName,
-			SampleRatio: cfg.Observability.TracingSampleRatio,
-		}, logger)
-	} else {
-		observability = obs.Noop(logger.Handler())
-	}
-
-	// 6. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
+	// 5. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
 	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
 
 	// 6. Create diagnostic store and body extractor.
+	// NOTE: step numbering preserved from original New() for git-blame continuity.
 	diagStore := diag.NewDiagnosticStore()
 	bodyExtractor := edit.NewBodyExtractor()
 
@@ -293,6 +301,10 @@ func (d *Daemon) MCPServer() *serenaMCP.SerenaMCPServer { return d.mcpServer }
 
 // KernelInstance returns the kernel for lifecycle management in tests.
 func (d *Daemon) KernelInstance() *kernel.Kernel { return d.kernel }
+
+// ObsProvider returns the observability provider for test assertions (e.g.,
+// ShutdownTracing flush verification in trace_shutdown_test.go).
+func (d *Daemon) ObsProvider() *obs.Provider { return d.obs }
 
 // registerSkillTools registers all tools from a ToolProvider with the MCP server.
 // Skills with ExecuteTool (memory, workflow) get live handlers; others are catalog-only.

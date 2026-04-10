@@ -45,7 +45,7 @@
 - [x] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint (completed 2026-04-09)
 - [x] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter (completed 2026-04-10)
 - [x] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT` (completed 2026-04-10)
-- [ ] **Phase 14: Documentation** — README.md, USAGE.md, CHANGELOG.md with auto-generated tool/language tables and executable examples
+- [x] **Phase 14: Documentation** — README.md, USAGE.md, CHANGELOG.md with auto-generated tool/language tables and executable examples (completed 2026-04-10)
 
 ## Phase Details
 
@@ -137,9 +137,9 @@ Plans:
   4. CHANGELOG.md records v1.0, v1.1, and v1.2 with dated entries and links to the milestone summaries
 **Plans**: 3 plans
 Plans:
-- [ ] 14-01-PLAN.md -- README.md: project pitch, install, capabilities, tool table, language table, client configs (DOC-01, DOC-02, DOC-03, DOC-04)
-- [ ] 14-02-PLAN.md -- USAGE.md: profile/mode reference, workflows, troubleshooting, observability, performance tuning (DOC-05, DOC-06, DOC-07, DOC-08, DOC-09)
-- [ ] 14-03-PLAN.md -- CHANGELOG.md: v1.0, v1.1, v1.2 entries (DOC-10)
+- [x] 14-01-PLAN.md -- README.md: project pitch, install, capabilities, tool table, language table, client configs (DOC-01, DOC-02, DOC-03, DOC-04)
+- [x] 14-02-PLAN.md -- USAGE.md: profile/mode reference, workflows, troubleshooting, observability, performance tuning (DOC-05, DOC-06, DOC-07, DOC-08, DOC-09)
+- [x] 14-03-PLAN.md -- CHANGELOG.md: v1.0, v1.1, v1.2 entries (DOC-10)
 
 ### Phase 15: Benchmark Gate Hardening
 **Goal**: Complete the partial BENCH-05/BENCH-06 requirements — make the CI benchstat gate enforce real thresholds against real baseline numbers
@@ -170,5 +170,5 @@ Plans:
 | 11. Metrics | v1.2 | 4/4 | Complete    | 2026-04-09 |
 | 12. Tracing End-to-End | v1.2 | 5/5 | Complete    | 2026-04-10 |
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete    | 2026-04-10 |
-| 14. Documentation | v1.2 | 0/3 | Not started | - |
+| 14. Documentation | v1.2 | 3/3 | Complete    | 2026-04-10 |
 | 15. Benchmark Gate Hardening | v1.2 | 0/1 | Not started | - |

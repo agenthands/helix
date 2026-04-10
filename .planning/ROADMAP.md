@@ -44,7 +44,7 @@
 - [x] **Phase 10: Observability Foundation** — `internal/obs/` shim, trace-aware slog handler, dedicated loopback admin listener with health endpoints and gated pprof (completed 2026-04-09)
 - [x] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint (completed 2026-04-09)
 - [x] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter (completed 2026-04-10)
-- [ ] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT`
+- [x] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT` (completed 2026-04-10)
 - [ ] **Phase 14: Documentation** — README.md, USAGE.md, CHANGELOG.md with auto-generated tool/language tables and executable examples
 
 ## Phase Details
@@ -122,9 +122,9 @@
   4. Sending SIGTERM mid-request drains in-flight calls, flushes telemetry exporters within a separate 5s shutdown context, and exits cleanly — validated by the graceful shutdown integration test
 **Plans**: 3 plans
 Plans:
-- [ ] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
-- [ ] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
-- [ ] 13-03-PLAN.md -- SetMemoryLimit wiring, graceful shutdown integration test (DEGRADE-06, DEGRADE-07)
+- [x] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
+- [x] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
+- [x] 13-03-PLAN.md -- SetMemoryLimit wiring, graceful shutdown integration test (DEGRADE-06, DEGRADE-07)
 
 ### Phase 14: Documentation
 **Goal**: Ship the user-facing docs (README, USAGE, CHANGELOG) so external users can install, configure, operate, and troubleshoot Serena without reading source
@@ -137,9 +137,9 @@ Plans:
   4. CHANGELOG.md records v1.0, v1.1, and v1.2 with dated entries and links to the milestone summaries
 **Plans**: 3 plans
 Plans:
-- [ ] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
-- [ ] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
-- [ ] 13-03-PLAN.md -- SetMemoryLimit wiring, graceful shutdown integration test (DEGRADE-06, DEGRADE-07)
+- [x] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
+- [x] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
+- [x] 13-03-PLAN.md -- SetMemoryLimit wiring, graceful shutdown integration test (DEGRADE-06, DEGRADE-07)
 
 ## Progress
 
@@ -157,5 +157,5 @@ Plans:
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
 | 11. Metrics | v1.2 | 4/4 | Complete    | 2026-04-09 |
 | 12. Tracing End-to-End | v1.2 | 5/5 | Complete    | 2026-04-10 |
-| 13. Graceful Degradation | v1.2 | 0/3 | Not started | - |
+| 13. Graceful Degradation | v1.2 | 3/3 | Complete    | 2026-04-10 |
 | 14. Documentation | v1.2 | 0/? | Not started | - |

@@ -19,6 +19,19 @@ type SerenaConfig struct {
 	Mode string `koanf:"mode"`
 	// Observability holds admin listener + pprof gating settings (Phase 10).
 	Observability ObservabilityConfig `koanf:"observability"`
+	// Degradation holds timeout budgets and resilience settings (Phase 13).
+	Degradation DegradationConfig `koanf:"degradation"`
+}
+
+// DegradationConfig holds timeout budgets and resilience settings (Phase 13).
+type DegradationConfig struct {
+	TimeoutRead        int `koanf:"timeout_read"`        // seconds, default 5
+	TimeoutSearch      int `koanf:"timeout_search"`      // seconds, default 15
+	TimeoutEdit        int `koanf:"timeout_edit"`        // seconds, default 10
+	TimeoutIndex       int `koanf:"timeout_index"`       // seconds, default 120
+	TimeoutDiagnostics int `koanf:"timeout_diagnostics"` // seconds, default 20
+	MemoryLimitMB      int `koanf:"memory_limit_mb"`     // 0 = don't set (use GOMEMLIMIT env if present)
+	RestartBudget      int `koanf:"restart_budget"`      // default 3, consecutive crashes before circuit stays open
 }
 
 // ObservabilityConfig holds admin listener, pprof gating, and tracing settings.

@@ -88,5 +88,6 @@ func WithTracing(inner slog.Handler, cfg TracingConfig, logger *slog.Logger) *Pr
 	}
 
 	p.tracerProvider = tp
+	logger.Info("tracing enabled", "endpoint", cfg.Endpoint, "sample_ratio", cfg.SampleRatio, "service", cfg.ServiceName)
 	return p
 }

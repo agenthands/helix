@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -136,6 +137,18 @@ func NewWithObsProvider(cfg *config.SerenaConfig, logger *slog.Logger, provider 
 // newDaemon is the shared daemon construction logic.
 func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs.Provider) (*Daemon, error) {
 	workspaces := workspace.NewRegistry()
+
+	// Wire soft memory limit from config (D-09). Only call SetMemoryLimit when
+	// the config value is positive; zero means "don't set" and lets the
+	// GOMEMLIMIT env var (if any) take effect undisturbed (Pitfall 4).
+	if cfg.Degradation.MemoryLimitMB > 0 {
+		limit := int64(cfg.Degradation.MemoryLimitMB) * 1024 * 1024
+		debug.SetMemoryLimit(limit)
+		logger.Info("soft memory limit set",
+			"limit_mb", cfg.Degradation.MemoryLimitMB,
+			"limit_bytes", limit,
+		)
+	}
 
 	// 1. Language registry (fail-fast).
 	langReg, err := langregistry.NewRegistry()

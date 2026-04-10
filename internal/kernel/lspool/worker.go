@@ -10,6 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/postfix/serena/internal/kernel/jsonrpc"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -62,13 +65,13 @@ type pendingDidOpen struct {
 
 // WorkerMetrics tracks usage statistics for adaptive TTL computation.
 type WorkerMetrics struct {
-	mu           sync.Mutex
-	StartedAt    time.Time
-	LastUsedAt   time.Time
-	UseCount     int64
-	ReuseTimes   []time.Time // last N reuse timestamps for gap calculation
-	ReuseScore   float64     // decaying score per D-03
-	ColdStartMs  int64       // time from Start to Ready in milliseconds
+	mu          sync.Mutex
+	StartedAt   time.Time
+	LastUsedAt  time.Time
+	UseCount    int64
+	ReuseTimes  []time.Time // last N reuse timestamps for gap calculation
+	ReuseScore  float64     // decaying score per D-03
+	ColdStartMs int64       // time from Start to Ready in milliseconds
 }
 
 const maxReuseTimes = 20
@@ -248,13 +251,27 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 // Request sends a request to the LS, gated on Ready state.
+// When the calling context carries a recording span (i.e. tracing is sampled),
+// an "ls.request" span event is emitted with lsp.method, lsp.language, and
+// lsp.duration_ms attributes. Gated on span.IsRecording() so the tracing-off
+// path allocates nothing (D-17 budget). This is a span EVENT, not a child
+// span, per D-06.
 func (w *Worker) Request(ctx context.Context, method string, params interface{}, result interface{}) error {
 	if WorkerState(w.state.Load()) != WorkerReady {
 		return ErrWorkerNotReady
 	}
+	start := time.Now()
 	err := w.process.Conn().Call(ctx, method, params, result)
+	duration := time.Since(start)
 	if err == nil {
 		w.metrics.OnReuse()
+	}
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		span.AddEvent("ls.request", trace.WithAttributes(
+			attribute.String("lsp.method", method),
+			attribute.String("lsp.language", w.language),
+			attribute.Int64("lsp.duration_ms", duration.Milliseconds()),
+		))
 	}
 	return err
 }

@@ -197,7 +197,7 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 
 	symbols.RegisterTools(mcpServer, k, wsKeyFn)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
-	fileops.RegisterTools(mcpServer, workspaceRootFn)
+	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer())
 
 	// Diag lease provider.
 	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
@@ -207,7 +207,7 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 		}
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
-	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn)
+	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
 
 	// 11. Register skill-provided tools with MCP SDK.
 	for _, tp := range skill.ToolProviders() {

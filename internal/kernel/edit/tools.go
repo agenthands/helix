@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
@@ -57,13 +58,16 @@ type VerifyEditArgs struct {
 }
 
 // RegisterTools registers all 6 symbol editing tools with the MCP server.
+// Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
+// sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
 func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
-	registerReplaceBody(server, k, extractor, diagStore, wsKeyFn)
-	registerInsertBefore(server, k, diagStore, wsKeyFn)
-	registerInsertAfter(server, k, diagStore, wsKeyFn)
-	registerRenameSymbol(server, k, diagStore, wsKeyFn)
-	registerSafeDelete(server, k, diagStore, wsKeyFn)
-	registerVerifyEdit(server, diagStore, wsKeyFn)
+	tracer := k.Tracer()
+	registerReplaceBody(server, k, extractor, diagStore, wsKeyFn, tracer)
+	registerInsertBefore(server, k, diagStore, wsKeyFn, tracer)
+	registerInsertAfter(server, k, diagStore, wsKeyFn, tracer)
+	registerRenameSymbol(server, k, diagStore, wsKeyFn, tracer)
+	registerSafeDelete(server, k, diagStore, wsKeyFn, tracer)
+	registerVerifyEdit(server, diagStore, wsKeyFn, tracer)
 }
 
 // --- helpers ---
@@ -132,11 +136,11 @@ func appendVerifyInfo(ctx context.Context, diagStore *diag.DiagnosticStore, uri 
 
 // --- tool registrations ---
 
-func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "replace_symbol_body",
 		Description: "Replace a symbol's body with new content using tree-sitter for precise extraction",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "replace_symbol_body", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -164,15 +168,15 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction"})
 }
 
-func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "insert_before_symbol",
 		Description: "Insert content immediately before a symbol",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "insert_before_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -199,15 +203,15 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		text := fmt.Sprintf("Inserted content before %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "insert_before_symbol", Description: "Insert content immediately before a symbol"})
 }
 
-func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "insert_after_symbol",
 		Description: "Insert content immediately after a symbol",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "insert_after_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -234,15 +238,15 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		text := fmt.Sprintf("Inserted content after %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol"})
 }
 
-func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "rename_symbol",
 		Description: "Rename a symbol across all files in the workspace",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "rename_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -262,15 +266,15 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 			args.NewName, result.FilesChanged, result.EditsApplied, strings.Join(result.Files, ", "))
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "rename_symbol", Description: "Rename a symbol across all files in the workspace"})
 }
 
-func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "safe_delete_symbol",
 		Description: "Delete a symbol if it has no references; reports reference count if blocked",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "safe_delete_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -308,15 +312,15 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		text := fmt.Sprintf("Deleted %q from %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "safe_delete_symbol", Description: "Delete a symbol if it has no references; reports reference count if blocked"})
 }
 
-func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "verify_edit",
 		Description: "Check for compilation errors after an edit; returns diagnostic summary",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args VerifyEditArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "verify_edit", func(ctx context.Context, req *mcpsdk.CallToolRequest, args VerifyEditArgs) (*mcpsdk.CallToolResult, any, error) {
 		uri := filePathToURI(wsKeyFn().RepoRoot, args.Path)
 		result, err := VerifyEdit(ctx, diagStore, uri)
 		if err != nil {
@@ -331,6 +335,6 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 			sb.WriteString(fmt.Sprintf("  L%d:%d [%s] %s\n", e.Line, e.Col, e.Source, e.Message))
 		}
 		return textResult(sb.String()), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "verify_edit", Description: "Check for compilation errors after an edit; returns diagnostic summary"})
 }

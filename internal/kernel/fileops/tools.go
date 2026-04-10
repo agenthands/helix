@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/mcp"
 )
 
@@ -52,13 +54,15 @@ type ReplaceInFileArgs struct {
 
 // RegisterTools registers all file operation tools with the MCP tool registry.
 // The workspaceRoot function provides the active workspace root path.
-func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string) {
-	registerReadFile(server, workspaceRoot)
-	registerCreateFile(server, workspaceRoot)
-	registerListDirectory(server, workspaceRoot)
-	registerFindFiles(server, workspaceRoot)
-	registerSearchInFiles(server, workspaceRoot)
-	registerReplaceInFile(server, workspaceRoot)
+// Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
+// sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
+func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string, tracer trace.Tracer) {
+	registerReadFile(server, workspaceRoot, tracer)
+	registerCreateFile(server, workspaceRoot, tracer)
+	registerListDirectory(server, workspaceRoot, tracer)
+	registerFindFiles(server, workspaceRoot, tracer)
+	registerSearchInFiles(server, workspaceRoot, tracer)
+	registerReplaceInFile(server, workspaceRoot, tracer)
 }
 
 func textResult(text string) *mcpsdk.CallToolResult {
@@ -78,11 +82,11 @@ func errorResult(msg string) *mcpsdk.CallToolResult {
 	}
 }
 
-func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "read_file",
 		Description: "Read a file's content, optionally a specific line range",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReadFileArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "read_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReadFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -101,15 +105,15 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string) {
 			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(content), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range"})
 }
 
-func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "create_file",
 		Description: "Create a new file with content (errors if file already exists)",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args CreateFileArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "create_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args CreateFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -119,15 +123,15 @@ func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string) {
 			return errorResult(err.Error()), nil, nil
 		}
 		return textResult("created: " + args.Path), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "create_file", Description: "Create a new file with content (errors if file already exists)"})
 }
 
-func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "list_directory",
 		Description: "List directory contents with file type, size, and modification time",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ListDirectoryArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "list_directory", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ListDirectoryArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -150,15 +154,15 @@ func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string) {
 			return textResult("(empty directory)"), nil, nil
 		}
 		return textResult(sb.String()), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "list_directory", Description: "List directory contents with file type, size, and modification time"})
 }
 
-func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "find_files",
 		Description: "Find files matching a glob pattern (supports ** for recursive matching)",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindFilesArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "find_files", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindFilesArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -173,15 +177,15 @@ func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
 			return textResult("no files found matching: " + args.Pattern), nil, nil
 		}
 		return textResult(strings.Join(files, "\n")), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "find_files", Description: "Find files matching a glob pattern (supports ** for recursive matching)"})
 }
 
-func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "search_in_files",
 		Description: "Search for a regex pattern across the codebase, with optional context lines",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchInFilesArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "search_in_files", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchInFilesArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -214,15 +218,15 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string) {
 			}
 		}
 		return textResult(sb.String()), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines"})
 }
 
-func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string) {
+func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "replace_in_file",
 		Description: "Replace all occurrences of a pattern in a file (literal or regex)",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "replace_in_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace — activate a project first"), nil, nil
@@ -234,6 +238,6 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string) {
 		}
 
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)"})
 }

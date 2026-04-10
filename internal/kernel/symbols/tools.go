@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/mcp"
@@ -77,16 +78,19 @@ type BlastRadiusArgs struct {
 }
 
 // RegisterTools registers all 9 symbol retrieval tools with the MCP server.
+// Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
+// sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
 func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
-	registerGoToDefinition(server, k, wsKeyFn)
-	registerFindReferences(server, k, wsKeyFn)
-	registerGetSymbolOverview(server, k, wsKeyFn)
-	registerSearchSymbols(server, k, wsKeyFn)
-	registerGetHoverInfo(server, k, wsKeyFn)
-	registerFindImplementations(server, k, wsKeyFn)
-	registerGetCallHierarchy(server, k, wsKeyFn)
-	registerGetTypeHierarchy(server, k, wsKeyFn)
-	registerAnalyzeBlastRadius(server, k, wsKeyFn)
+	tracer := k.Tracer()
+	registerGoToDefinition(server, k, wsKeyFn, tracer)
+	registerFindReferences(server, k, wsKeyFn, tracer)
+	registerGetSymbolOverview(server, k, wsKeyFn, tracer)
+	registerSearchSymbols(server, k, wsKeyFn, tracer)
+	registerGetHoverInfo(server, k, wsKeyFn, tracer)
+	registerFindImplementations(server, k, wsKeyFn, tracer)
+	registerGetCallHierarchy(server, k, wsKeyFn, tracer)
+	registerGetTypeHierarchy(server, k, wsKeyFn, tracer)
+	registerAnalyzeBlastRadius(server, k, wsKeyFn, tracer)
 }
 
 // --- helpers ---
@@ -177,11 +181,11 @@ func formatHierarchy(nodes []HierarchyNode, indent int) string {
 
 // --- tool registrations ---
 
-func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "go_to_definition",
 		Description: "Go to the definition of a symbol at a given position",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args GoToDefinitionArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "go_to_definition", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GoToDefinitionArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -195,15 +199,15 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 			return errorResult(fmt.Sprintf("definition: %v", err)), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "go_to_definition", Description: "Go to the definition of a symbol at a given position"})
 }
 
-func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "find_references",
 		Description: "Find all references to a symbol at a given position",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindReferencesArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "find_references", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindReferencesArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -217,15 +221,15 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 			return errorResult(fmt.Sprintf("references: %v", err)), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "find_references", Description: "Find all references to a symbol at a given position"})
 }
 
-func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_symbol_overview",
 		Description: "Get a hierarchical outline of all symbols in a file",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SymbolOverviewArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_symbol_overview", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SymbolOverviewArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -242,15 +246,15 @@ func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, ws
 			return textResult("(no symbols found)"), nil, nil
 		}
 		return textResult(formatOutline(outlines, 0)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "get_symbol_overview", Description: "Get a hierarchical outline of all symbols in a file"})
 }
 
-func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "search_symbols",
 		Description: "Search for symbols across the workspace by name",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchSymbolsArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "search_symbols", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchSymbolsArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -264,15 +268,15 @@ func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyF
 			return errorResult(fmt.Sprintf("workspace/symbol: %v", err)), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "search_symbols", Description: "Search for symbols across the workspace by name"})
 }
 
-func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_hover_info",
 		Description: "Get hover/type information for a symbol at a given position",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args HoverArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_hover_info", func(ctx context.Context, req *mcpsdk.CallToolRequest, args HoverArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -289,15 +293,15 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 			return textResult("(no hover information available)"), nil, nil
 		}
 		return textResult(result.Content), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "get_hover_info", Description: "Get hover/type information for a symbol at a given position"})
 }
 
-func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "find_implementations",
 		Description: "Find all implementations of an interface or abstract method",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindImplementationsArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "find_implementations", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindImplementationsArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -311,15 +315,15 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 			return errorResult(fmt.Sprintf("implementation: %v", err)), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "find_implementations", Description: "Find all implementations of an interface or abstract method"})
 }
 
-func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_call_hierarchy",
 		Description: "Get call hierarchy (callers and/or callees) for a symbol",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args CallHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_call_hierarchy", func(ctx context.Context, req *mcpsdk.CallToolRequest, args CallHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -340,15 +344,15 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 			return textResult("(no call hierarchy available)"), nil, nil
 		}
 		return textResult(formatHierarchy(nodes, 0)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "get_call_hierarchy", Description: "Get call hierarchy (callers and/or callees) for a symbol"})
 }
 
-func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_type_hierarchy",
 		Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args TypeHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_type_hierarchy", func(ctx context.Context, req *mcpsdk.CallToolRequest, args TypeHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -369,15 +373,15 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 			return textResult("(no type hierarchy available)"), nil, nil
 		}
 		return textResult(formatHierarchy(nodes, 0)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "get_type_hierarchy", Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol"})
 }
 
-func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "analyze_blast_radius",
 		Description: "Analyze the blast radius (impact) of changing a symbol",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args BlastRadiusArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "analyze_blast_radius", func(ctx context.Context, req *mcpsdk.CallToolRequest, args BlastRadiusArgs) (*mcpsdk.CallToolResult, any, error) {
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -391,7 +395,7 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 			return errorResult(fmt.Sprintf("blast radius: %v", err)), nil, nil
 		}
 		return textResult(formatBlastRadius(br)), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "analyze_blast_radius", Description: "Analyze the blast radius (impact) of changing a symbol"})
 }
 

@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/mcp"
 	gen "github.com/postfix/serena/protocol/gen"
@@ -38,10 +40,12 @@ type FormatCodeArgs struct {
 type LeaseProvider func(ctx context.Context, uri string) (*lspool.WorkerLease, error)
 
 // RegisterTools registers the 3 diagnostic MCP tools with the server.
-func RegisterTools(server *mcp.SerenaMCPServer, store *DiagnosticStore, workspaceRoot func() string, leaseFn LeaseProvider) {
-	registerGetDiagnostics(server, store, workspaceRoot)
-	registerGetCodeActions(server, workspaceRoot, leaseFn)
-	registerFormatCode(server, workspaceRoot, leaseFn)
+// Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
+// sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
+func RegisterTools(server *mcp.SerenaMCPServer, store *DiagnosticStore, workspaceRoot func() string, leaseFn LeaseProvider, tracer trace.Tracer) {
+	registerGetDiagnostics(server, store, workspaceRoot, tracer)
+	registerGetCodeActions(server, workspaceRoot, leaseFn, tracer)
+	registerFormatCode(server, workspaceRoot, leaseFn, tracer)
 }
 
 func textResult(text string) *mcpsdk.CallToolResult {
@@ -68,11 +72,11 @@ func fileURI(root, path string) string {
 	return "file://" + root + "/" + path
 }
 
-func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore, rootFn func() string) {
+func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_diagnostics",
 		Description: "Returns current diagnostics (errors, warnings) for a file, formatted as severity:line:col: message",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetDiagnosticsArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_diagnostics", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetDiagnosticsArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace - activate a project first"), nil, nil
@@ -92,18 +96,18 @@ func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore,
 			sb.WriteString(fmt.Sprintf("%s:%d:%d: %s\n", sev, line, col, d.Message))
 		}
 		return textResult(sb.String()), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{
 		Name:        "get_diagnostics",
 		Description: "Returns current diagnostics (errors, warnings) for a file",
 	})
 }
 
-func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, leaseFn LeaseProvider) {
+func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, leaseFn LeaseProvider, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_code_actions",
 		Description: "Returns available code actions/quick fixes for a position or range in a file",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetCodeActionsArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "get_code_actions", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetCodeActionsArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace - activate a project first"), nil, nil
@@ -145,18 +149,18 @@ func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, l
 			sb.WriteString(fmt.Sprintf("%d. [%s] %s%s\n", i+1, a.Kind, a.Title, pref))
 		}
 		return textResult(sb.String()), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{
 		Name:        "get_code_actions",
 		Description: "Returns available code actions/quick fixes for a position or range",
 	})
 }
 
-func registerFormatCode(server *mcp.SerenaMCPServer, rootFn func() string, leaseFn LeaseProvider) {
+func registerFormatCode(server *mcp.SerenaMCPServer, rootFn func() string, leaseFn LeaseProvider, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "format_code",
 		Description: "Formats a file via the language server and writes the result",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args FormatCodeArgs) (*mcpsdk.CallToolResult, any, error) {
+	}, kernel.WrapToolSpan(tracer, "format_code", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FormatCodeArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
 			return errorResult("no active workspace - activate a project first"), nil, nil
@@ -198,7 +202,7 @@ func registerFormatCode(server *mcp.SerenaMCPServer, rootFn func() string, lease
 		}
 
 		return textResult(fmt.Sprintf("formatted %s (%d edits applied)", args.Path, len(edits))), nil, nil
-	})
+	}))
 	server.Registry().Register(&mcp.ToolDef{
 		Name:        "format_code",
 		Description: "Formats a file via the language server and writes the result",

@@ -27,6 +27,19 @@ func (d *Daemon) shutdown() {
 		}
 	}
 
+	// Phase 1.5: Flush tracing BEFORE listener close, with a DEDICATED
+	// context (NOT the cancelled errgroup ctx — PITFALLS #4 flush race).
+	// sdktrace.TracerProvider.Shutdown panics on double-call (Pitfall 6);
+	// this block runs exactly once per daemon lifecycle via the single-shot
+	// shutdown() call from Daemon.Run.
+	if d.obs != nil {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := d.obs.ShutdownTracing(flushCtx); err != nil {
+			d.logger.Warn("trace exporter shutdown error", "error", err)
+		}
+		flushCancel()
+	}
+
 	// Phase 2: Close listeners.
 	if d.socketListener != nil {
 		d.socketListener.Close()

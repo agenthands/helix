@@ -16,6 +16,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
 	"github.com/postfix/serena/internal/config"
 	"github.com/postfix/serena/internal/kernel"
@@ -139,12 +141,21 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 	}
 
 	// 5. Observability provider (Phase 10 slog ContextHandler + Phase 11
-	// metrics). Constructed before the kernel so the lspool worker pool can
-	// emit LSPool* metrics via obs.Metrics satisfying lspool.MetricsSink
-	// (plan 11-03). Noop wires a trace-aware slog handler and pre-registers
-	// the Prometheus vectors on an owned registry; /metrics on the admin
-	// listener reads it.
-	observability := obs.Noop(logger.Handler())
+	// metrics + Phase 12 tracing). Constructed before the kernel so the
+	// lspool worker pool can emit LSPool* metrics via obs.Metrics satisfying
+	// lspool.MetricsSink (plan 11-03). When TracingEndpoint is configured,
+	// WithTracing creates a real SDK TracerProvider with an OTLP/gRPC
+	// exporter; otherwise Noop uses tracenoop (D-17 hot-path budget).
+	var observability *obs.Provider
+	if cfg.Observability.TracingEndpoint != "" {
+		observability = obs.WithTracing(logger.Handler(), obs.TracingConfig{
+			Endpoint:    cfg.Observability.TracingEndpoint,
+			ServiceName: cfg.Observability.ServiceName,
+			SampleRatio: cfg.Observability.TracingSampleRatio,
+		}, logger)
+	} else {
+		observability = obs.Noop(logger.Handler())
+	}
 
 	// 6. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
@@ -375,8 +386,14 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	d.socketListener = ln
 	d.logger.Info("unix socket listener started", "path", d.config.Daemon.SocketPath)
 
-	// Create and register gRPC server
-	d.grpcServer = grpc.NewServer()
+	// Create and register gRPC server with OTel tracing propagation (D-12).
+	// WithTracerProvider is MANDATORY — omitting it falls back to the OTel
+	// global which D-01 forbids.
+	d.grpcServer = grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler(
+			otelgrpc.WithTracerProvider(d.obs.TracerProvider()),
+		)),
+	)
 	serenav1.RegisterForwarderServiceServer(d.grpcServer, &forwarderServiceHandler{
 		mcpServer: d.mcpServer,
 		logger:    d.logger,

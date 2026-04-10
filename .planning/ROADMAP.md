@@ -148,6 +148,6 @@
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
 | 11. Metrics | v1.2 | 4/4 | Complete    | 2026-04-09 |
-| 12. Tracing End-to-End | v1.2 | 5/5 | Complete   | 2026-04-10 |
+| 12. Tracing End-to-End | v1.2 | 5/5 | Complete    | 2026-04-10 |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |
 | 14. Documentation | v1.2 | 0/? | Not started | - |

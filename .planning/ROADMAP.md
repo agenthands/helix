@@ -43,7 +43,7 @@
 - [ ] **Phase 9: Benchmark Harness & v1.1 Baseline** — Capture pre-instrumentation performance baseline with `testing.B.Loop`, benchstat CI gate, and committed v1.1 numbers
 - [x] **Phase 10: Observability Foundation** — `internal/obs/` shim, trace-aware slog handler, dedicated loopback admin listener with health endpoints and gated pprof (completed 2026-04-09)
 - [x] **Phase 11: Metrics** — Prometheus `/metrics`, RED histograms per tool, lspool gauges, bounded-label contract enforced by CI lint (completed 2026-04-09)
-- [ ] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter
+- [x] **Phase 12: Tracing End-to-End** — `otelgrpc` gRPC propagation, telemetry middleware, per-tool sub-spans, off-by-default sampler, optional OTLP exporter (completed 2026-04-10)
 - [ ] **Phase 13: Graceful Degradation** — `internal/degrade/` with per-class budgets, deadline propagation, circuit tuning, typed `ErrCircuitOpen`, `GOMEMLIMIT`
 - [ ] **Phase 14: Documentation** — README.md, USAGE.md, CHANGELOG.md with auto-generated tool/language tables and executable examples
 
@@ -105,11 +105,11 @@
   3. An operator can point Serena at an OTLP/gRPC collector via a config flag and see traces arrive without code changes
   4. The telemetry middleware runs before the profile filter so denied calls are still observable
 **Plans**: 5 plans
-- [ ] 12-01-PLAN.md — obs package tracing foundation: Provider.Tracer(), WithTracing degraded-optional, real spanContextFromContext, config fields, TRACE-04/05 unit tests (Wave 1)
-- [ ] 12-02-PLAN.md — Daemon wiring: otelgrpc.NewServerHandler, TelemetryMiddleware span, dedicated 5s shutdown flush (Wave 2, TRACE-01 server / TRACE-02)
-- [ ] 12-03-PLAN.md — Forwarder provider + otelgrpc.NewClientHandler + forwarder.tools.call root span (Wave 2, TRACE-01 client)
-- [ ] 12-04-PLAN.md — Kernel tracer plumbing, WrapToolSpan helper across 24 tools, ls.request span events in lspool worker (Wave 3, TRACE-03)
-- [ ] 12-05-PLAN.md — Hot-path bench (D-17 ≤ +2 allocs/op), end-to-end integration tests (3-span tree + shutdown flush), Phase 12 baseline commit (Wave 3)
+- [x] 12-01-PLAN.md — obs package tracing foundation: Provider.Tracer(), WithTracing degraded-optional, real spanContextFromContext, config fields, TRACE-04/05 unit tests (Wave 1)
+- [x] 12-02-PLAN.md — Daemon wiring: otelgrpc.NewServerHandler, TelemetryMiddleware span, dedicated 5s shutdown flush (Wave 2, TRACE-01 server / TRACE-02)
+- [x] 12-03-PLAN.md — Forwarder provider + otelgrpc.NewClientHandler + forwarder.tools.call root span (Wave 2, TRACE-01 client)
+- [x] 12-04-PLAN.md — Kernel tracer plumbing, WrapToolSpan helper across 24 tools, ls.request span events in lspool worker (Wave 3, TRACE-03)
+- [x] 12-05-PLAN.md — Hot-path bench (D-17 ≤ +2 allocs/op), end-to-end integration tests (3-span tree + shutdown flush), Phase 12 baseline commit (Wave 3)
 
 ### Phase 13: Graceful Degradation
 **Goal**: Make Serena survive slow LS workers, crashes, and memory pressure with typed errors, bounded budgets, and clean shutdown
@@ -148,6 +148,6 @@
 | 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
 | 11. Metrics | v1.2 | 4/4 | Complete    | 2026-04-09 |
-| 12. Tracing End-to-End | v1.2 | 0/5 | Not started | - |
+| 12. Tracing End-to-End | v1.2 | 5/5 | Complete   | 2026-04-10 |
 | 13. Graceful Degradation | v1.2 | 0/? | Not started | - |
 | 14. Documentation | v1.2 | 0/? | Not started | - |

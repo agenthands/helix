@@ -189,7 +189,7 @@ func TestPool_stopAll_EmitsShutdownEvictions(t *testing.T) {
 
 func TestCircuit_stateReport(t *testing.T) {
 	sink := &recordingSink{}
-	cb := NewCircuitBreaker("go", 10*time.Millisecond, sink)
+	cb := NewCircuitBreaker("go", 10*time.Millisecond, 3, sink)
 
 	// Construction emits initial closed state.
 	_, _, states, _ := sink.snapshot()
@@ -217,7 +217,7 @@ func TestCircuit_stateReport(t *testing.T) {
 
 func TestCircuit_nilSinkReplacedWithNoop(t *testing.T) {
 	// Should not panic despite nil sink argument.
-	cb := NewCircuitBreaker("go", time.Second, nil)
+	cb := NewCircuitBreaker("go", time.Second, 3, nil)
 	cb.RecordFailure()
 	cb.RecordSuccess()
 	assert.True(t, cb.CanAttempt())

@@ -160,6 +160,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		MaxWorkers:            cfg.WorkerPool.MaxWorkers,
 		RSSHardCapMB:          cfg.WorkerPool.RSSHardCapMB,
 		PressureCheckInterval: cfg.WorkerPool.PressureCheckInterval,
+		RestartBudget:         cfg.Degradation.RestartBudget,
 	}
 	if poolCfg.BaseTTL == 0 {
 		poolCfg = lspool.DefaultPoolConfig()

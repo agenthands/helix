@@ -19,6 +19,7 @@ type PoolConfig struct {
 	MaxWorkers            int // default 10
 	RSSHardCapMB          int // default 2048
 	PressureCheckInterval int // seconds, default 10
+	RestartBudget         int // default 3, consecutive crashes before circuit stays open (D-05)
 }
 
 // DefaultPoolConfig returns the default pool configuration.
@@ -126,7 +127,7 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 	// Need a new worker. Check circuit breaker first.
 	cb := p.circuitForLanguage(wsKey.Language)
 	if !cb.CanAttempt() {
-		return nil, fmt.Errorf("%w: backoff %v for language %s", ErrCircuitOpen, cb.BackoffDuration(), wsKey.Language)
+		return nil, cb.CircuitOpenErr()
 	}
 
 	// Check max workers limit.
@@ -186,7 +187,7 @@ func (p *Pool) PromoteToDirty(ctx context.Context, sessionID string) (*WorkerLea
 	// Check circuit breaker.
 	cb := p.circuitForLanguage(wsKey.Language)
 	if !cb.CanAttempt() {
-		return nil, fmt.Errorf("%w: backoff %v", ErrCircuitOpen, cb.BackoffDuration())
+		return nil, cb.CircuitOpenErr()
 	}
 
 	// Check max workers.
@@ -297,7 +298,7 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 func (p *Pool) circuitForLanguage(language string) *CircuitBreaker {
 	cb, ok := p.circuits[language]
 	if !ok {
-		cb = NewCircuitBreaker(language, 5*time.Minute, p.metrics)
+		cb = NewCircuitBreaker(language, 5*time.Minute, p.config.RestartBudget, p.metrics)
 		p.circuits[language] = cb
 	}
 	return cb

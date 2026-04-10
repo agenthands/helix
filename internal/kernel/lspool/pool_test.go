@@ -51,33 +51,39 @@ func testRegistry() *langregistry.Registry {
 	return reg
 }
 
-func TestCircuitBreaker_RecordFailure_ExponentialBackoff(t *testing.T) {
-	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
+func TestCircuitBreaker_RecordFailure_JitteredBackoff(t *testing.T) {
+	cb := NewCircuitBreaker("go", 1*time.Minute, 10, NoopSink{})
 
 	// Initially can attempt.
 	assert.True(t, cb.CanAttempt())
 
-	// Record first failure: backoff = 1s.
+	// Record first failure: backoff in [1s, 3s] (decorrelated jitter).
 	cb.RecordFailure()
 	assert.Equal(t, 1, cb.Failures())
-	assert.Equal(t, 1*time.Second, cb.BackoffDuration())
+	b := cb.BackoffDuration()
+	assert.GreaterOrEqual(t, b, 1*time.Second)
+	assert.LessOrEqual(t, b, 3*time.Second)
 
 	// Should not be able to attempt immediately.
 	assert.False(t, cb.CanAttempt())
 
-	// Record second failure: backoff = 2s.
+	// Record second failure: backoff in [1s, prevSleep*3] capped at maxBackoff.
 	cb.RecordFailure()
 	assert.Equal(t, 2, cb.Failures())
-	assert.Equal(t, 2*time.Second, cb.BackoffDuration())
+	b2 := cb.BackoffDuration()
+	assert.GreaterOrEqual(t, b2, 1*time.Second)
+	assert.LessOrEqual(t, b2, 1*time.Minute)
 
-	// Record third failure: backoff = 4s.
+	// Record third failure.
 	cb.RecordFailure()
 	assert.Equal(t, 3, cb.Failures())
-	assert.Equal(t, 4*time.Second, cb.BackoffDuration())
+	b3 := cb.BackoffDuration()
+	assert.GreaterOrEqual(t, b3, 1*time.Second)
+	assert.LessOrEqual(t, b3, 1*time.Minute)
 }
 
 func TestCircuitBreaker_RecordSuccess_ResetsBackoff(t *testing.T) {
-	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
+	cb := NewCircuitBreaker("go", 1*time.Minute, 3, NoopSink{})
 
 	cb.RecordFailure()
 	cb.RecordFailure()
@@ -89,22 +95,21 @@ func TestCircuitBreaker_RecordSuccess_ResetsBackoff(t *testing.T) {
 	assert.True(t, cb.CanAttempt())
 }
 
-func TestCircuitBreaker_NeverFullyBreaks(t *testing.T) {
-	// Per D-06: circuit breaker never fully breaks, always retries after backoff.
-	cb := NewCircuitBreaker("go", 100*time.Millisecond, NoopSink{})
+func TestCircuitBreaker_RetriesAfterBackoff(t *testing.T) {
+	// With a budget higher than failures, circuit retries after backoff.
+	cb := NewCircuitBreaker("go", 10*time.Millisecond, 100, NoopSink{})
 
-	// Record many failures.
-	for i := 0; i < 10; i++ {
-		cb.RecordFailure()
-	}
+	// Record a couple failures (within budget).
+	cb.RecordFailure()
+	cb.RecordFailure()
 
 	// Backoff should be capped at maxBackoff.
-	assert.Equal(t, 100*time.Millisecond, cb.BackoffDuration())
+	assert.LessOrEqual(t, cb.BackoffDuration(), 10*time.Millisecond)
 
 	// Wait for backoff to expire.
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
-	// Should be able to attempt again.
+	// Should be able to attempt again (single probe).
 	assert.True(t, cb.CanAttempt())
 }
 
@@ -232,7 +237,7 @@ func TestLease_ConcurrencyControl(t *testing.T) {
 }
 
 func TestCircuitBreaker_Concurrent(t *testing.T) {
-	cb := NewCircuitBreaker("go", 1*time.Minute, NoopSink{})
+	cb := NewCircuitBreaker("go", 1*time.Minute, 3, NoopSink{})
 	var wg sync.WaitGroup
 
 	// Concurrent failures and success checks.

@@ -116,23 +116,15 @@ func BenchmarkContextHandler_Handle(b *testing.B) {
 	}
 }
 
-// Test 5: spanContextFromContext(Background) returns (zero, false) — this
-// documents the Phase 10 stub so Phase 12 can safely flip it.
-func TestSpanContextFromContext_Phase10Stub(t *testing.T) {
+// Test 5: spanContextFromContext(Background) returns (zero, false) when
+// no OTel span is active on the context. Phase 12 replaced the Phase 10
+// stub with a real extractor backed by trace.SpanContextFromContext.
+func TestSpanContextFromContext_NoSpan(t *testing.T) {
 	sc, ok := spanContextFromContext(context.Background())
 	if ok {
-		t.Fatalf("expected Phase 10 stub to always return false, got ok=true with %+v", sc)
+		t.Fatalf("expected false for background context with no span, got ok=true with %+v", sc)
 	}
 	if sc != (SpanContext{}) {
 		t.Fatalf("expected zero SpanContext, got %+v", sc)
-	}
-
-	// Even with a SpanContext set via the exported helper, Phase 10 stub
-	// should *still* return false (the stub is intentionally blind). This
-	// pins the contract so Phase 12's replacement is a visible diff.
-	ctx := WithSpanContext(context.Background(), SpanContext{TraceID: "t", SpanID: "s"})
-	sc2, ok2 := spanContextFromContext(ctx)
-	if ok2 {
-		t.Fatalf("Phase 10 stub must always return false, got ok=true with %+v", sc2)
 	}
 }

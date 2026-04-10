@@ -21,7 +21,7 @@ type SerenaConfig struct {
 	Observability ObservabilityConfig `koanf:"observability"`
 }
 
-// ObservabilityConfig holds admin listener + pprof gating settings (Phase 10).
+// ObservabilityConfig holds admin listener, pprof gating, and tracing settings.
 // AdminAddr empty = disabled. Must be loopback (127.0.0.1/localhost/::1) — v1.3 adds auth.
 type ObservabilityConfig struct {
 	// AdminAddr is the loopback bind address for the admin listener.
@@ -30,6 +30,17 @@ type ObservabilityConfig struct {
 	// EnablePprof registers /debug/pprof/* handlers on the admin listener when true (D-10).
 	// Default false: zero attack surface when disabled (D-12).
 	EnablePprof bool `koanf:"enable_pprof"`
+
+	// Phase 12: Tracing
+	// TracingEndpoint is the OTLP/gRPC collector endpoint.
+	// Empty string disables tracing entirely (D-11).
+	TracingEndpoint string `koanf:"tracing_endpoint"`
+	// TracingSampleRatio is the TraceIDRatioBased fraction.
+	// 0.0 = off (default), 1.0 = sample everything (D-11).
+	TracingSampleRatio float64 `koanf:"tracing_sample_ratio"`
+	// ServiceName is the OTel resource service.name attribute.
+	// Default: "serena" (D-11).
+	ServiceName string `koanf:"service_name"`
 }
 
 // WorkerPoolConfig holds configuration for the LS worker pool.

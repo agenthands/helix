@@ -24,7 +24,7 @@ the previous PR" is unsafe — drift compounds silently across PRs. A
 committed baseline gives every PR a stable anchor and makes any
 intentional re-baselining explicit in git history.
 
-## Two-step rollout (two-step, addresses revision BLOCKER 4)
+## Three-step rollout (COMPLETED)
 
 Benchmark numbers are architecture-, kernel-, and runner-specific.
 Capturing the initial baseline on a developer machine (e.g. darwin/arm64)
@@ -32,38 +32,30 @@ and enforcing it on `ubuntu-latest` would produce meaningless deltas and
 PR failures on every run. The baseline **must** be captured on the same
 runner class that will later enforce the gate.
 
-We therefore roll out in three steps:
+The rollout completed in three steps:
 
-### Step A — commit the placeholder (this phase)
+### Step A — commit the placeholder
 
-- `v1.1-github-hosted.txt` is committed as a placeholder with a
+- `v1.1-github-hosted.txt` was committed as a placeholder with a
   header stanza only (no `Benchmark` lines).
 - `benchgate` and `.github/workflows/bench.yml` both reference this
   real on-disk path so everything builds and runs.
-- Developer machines **must not** regenerate this file locally. The
-  placeholder carries a prominent `PLACEHOLDER` marker to discourage
-  accidental `go test -bench` captures.
 
 ### Step B — first CI run in `--warn-only` mode
 
-- `bench.yml` runs the full bench suite on `ubuntu-latest` with
+- `bench.yml` ran the full bench suite on `ubuntu-latest` with
   `GOMAXPROCS=4`, `-count=10`, `-short` (skipping `BenchmarkFullRepoSmoke`
   per Pitfall 11).
-- The captured benchfmt output is uploaded as the artifact
-  `v1.1-baseline-candidate.txt`.
-- `benchgate` is invoked with `--warn-only`, which prints the full
-  delta report but **always exits 0** — no PR is ever blocked during
-  this phase.
-- A human downloads the artifact, eyeballs it for sanity (no zeroes,
-  no obvious cold-start outliers, expected benchmarks present), and
-  commits it to this directory as a dedicated re-baseline PR titled
-  `bench: seed v1.1 baseline from first CI capture`.
+- `benchgate` was invoked with `--warn-only`, which printed the full
+  delta report but always exited 0 — no PR was blocked during this phase.
 
-### Step C — flip to blocking mode
+### Step C — flip to blocking mode (automated via capture-baseline.yml)
 
-- A follow-up PR removes `--warn-only` from `bench.yml`.
-- From that point on, `benchgate` enforces the D-01 tiered thresholds
-  and any significant regression blocks merge.
+- `--warn-only` has been removed from `bench.yml` (Phase 15).
+- `benchgate` now enforces the D-01 tiered thresholds and any
+  significant regression blocks merge.
+- Re-baselining is automated via the `capture-baseline.yml` workflow
+  — no manual artifact download/commit needed.
 
 ## Baseline capture procedure (CI only)
 
@@ -97,11 +89,37 @@ Welch's t-test (`benchmath.AssumeNormal.Compare`). p99 is reported by
 benchstat for trend-watching but is deliberately **not** gated per
 phase Q5 + Pitfall 10 (p99 is too noisy for a hard gate).
 
+## Re-baseline workflow
+
+Per D-04, baselines are **refreshed per milestone** using the dedicated
+`capture-baseline.yml` workflow. This replaces the manual
+download-and-commit process from the original three-step rollout.
+
+**How to re-baseline:**
+
+1. Go to **Actions > capture-baseline > Run workflow**.
+2. Enter the milestone tag (e.g., `v1.2`) and select the target branch.
+3. The workflow runs the full bench suite on `ubuntu-latest` with the
+   same env/flags as `bench.yml`, verifies the output, and auto-commits
+   the results to the triggering branch.
+4. No manual download or commit needed — the workflow handles everything.
+
+**When to re-baseline:**
+
+- At the start of each new milestone, to refresh numbers for the new
+  development cycle.
+- After intentional performance changes that shift the baseline
+  (e.g., algorithm improvements, dependency upgrades).
+- After Go version bumps or gopls version bumps that affect benchmark
+  characteristics.
+
 ## Refresh policy
 
 Per `.planning/phases/09-benchmark-harness-v1-1-baseline/09-RESEARCH.md`
-Pitfall 8, baselines are **refreshed only on intentional re-baseline
-PRs** during release cuts. A re-baseline PR must:
+Pitfall 8, baselines are **refreshed only intentionally** — never
+automatically on every PR. Use the `capture-baseline.yml` workflow to
+capture new numbers. For manual re-baseline PRs (e.g., when the capture
+workflow cannot be used), the PR must:
 
 1. Be titled `bench: re-baseline <reason>`.
 2. Include the raw CI artifact that produced the new numbers.
@@ -110,6 +128,6 @@ PRs** during release cuts. A re-baseline PR must:
 4. Be reviewed by someone other than the PR author.
 
 **The committed file IS the v1.1 reference.** Do not modify it without
-an intentional re-baseline PR with measurement justification. Developer
-machines **must not** regenerate this file locally — only CI captures
-are authoritative.
+an intentional re-baseline via the capture workflow or a dedicated PR
+with measurement justification. Developer machines **must not**
+regenerate this file locally — only CI captures are authoritative.

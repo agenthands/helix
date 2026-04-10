@@ -52,6 +52,15 @@ func Noop(inner slog.Handler) *Provider {
 	}
 }
 
+// NewForTest constructs a Provider with the given TracerProvider. Intended for
+// test code that needs to inject a tracetest-backed provider. The slog handler
+// and metrics sink are noop-initialised.
+func NewForTest(tp trace.TracerProvider) *Provider {
+	p := Noop(slog.Default().Handler())
+	p.tracerProvider = tp
+	return p
+}
+
 // SlogHandler returns the slog.Handler that should be passed to slog.New()
 // at daemon and forwarder startup. Never returns nil.
 func (p *Provider) SlogHandler() slog.Handler { return p.slogHandler }

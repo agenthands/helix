@@ -38,7 +38,7 @@ jobs:
       # cold-start/warm-reuse metrics are not tainted by upstream drift.
       # Bump deliberately in a re-baseline PR per
       # test/bench/baselines/README.md refresh policy.
-      GOPLS_VERSION: v0.17.1
+      GOPLS_VERSION: v0.21.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4

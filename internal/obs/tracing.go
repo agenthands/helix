@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 )
 
 // TracingConfig is the package-local copy of tracing configuration fields.
@@ -48,12 +48,10 @@ func newTracerProvider(ctx context.Context, cfg TracingConfig) (*sdktrace.Tracer
 		return nil, fmt.Errorf("otlptrace exporter: %w", err)
 	}
 
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(cfg.ServiceName),
-		),
+	res, err := resource.New(context.Background(),
+		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithAttributes(semconv.ServiceName(cfg.ServiceName)),
+		resource.WithHost(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("otel resource: %w", err)

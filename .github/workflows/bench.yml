@@ -3,7 +3,7 @@
 # Runs the full bench suite on every PR against main, plus manual
 # `workflow_dispatch`, and invokes benchgate to compare results against
 # the committed v1.1 baseline. See test/bench/baselines/README.md for
-# the three-step rollout (placeholder → warn-only → blocking).
+# the three-step rollout (now in blocking mode).
 #
 # Mitigations folded into this workflow:
 #   - Pitfall 4 (gopls drift): gopls pinned to an explicit version.
@@ -58,10 +58,8 @@ jobs:
         run: go install golang.org/x/tools/gopls@${GOPLS_VERSION}
 
       - name: Install benchstat
-        # TODO: pin to a commit SHA once the first successful CI run
-        # establishes a known-good version. Upstream releases rarely
-        # break format but "@latest" is a small supply-chain risk we
-        # accept for the warn-only rollout window.
+        # TODO: pin to a commit SHA for supply-chain hardening.
+        # Upstream releases rarely break format.
         run: go install golang.org/x/perf/cmd/benchstat@latest
 
       - name: Run benchmark suite
@@ -82,25 +80,17 @@ jobs:
             test/bench/baselines/v1.1-github-hosted.txt \
             /tmp/bench-new.txt
 
-      # WARN-ONLY: first CI run captures the real baseline without
-      # blocking PRs. A follow-up re-baseline PR removes --warn-only to
-      # flip to blocking mode once test/bench/baselines/v1.1-github-hosted.txt
-      # has been seeded from the artifact this run uploads. See
-      # test/bench/baselines/README.md for the three-step rollout.
-      - name: Run benchgate (WARN-ONLY during baseline rollout)
+      # Blocking mode: benchgate enforces D-01 tiered thresholds
+      # (PR: >15% time / >25% allocs at p<0.05). Re-baseline via
+      # capture-baseline.yml workflow when numbers need refreshing.
+      - name: Run benchgate
         run: |
           go run ./test/bench/cmd/benchgate \
-            --warn-only \
             --baseline test/bench/baselines/v1.1-github-hosted.txt \
             --new /tmp/bench-new.txt
 
-      - name: Upload baseline candidate + heap snapshots
-        # Always upload, even on earlier failure, so reviewers can see
-        # what the run produced. During the warn-only rollout the
-        # benchfmt output IS the baseline candidate; a human downloads
-        # it to seed v1.1-github-hosted.txt via a dedicated re-baseline
-        # PR (step C in test/bench/baselines/README.md).
-        #
+      - name: Upload bench output + heap snapshots
+        # Upload bench output + heap snapshots for inspection.
         # Heap snapshots (test/bench/pprof/s*.pb.gz) come from
         # BenchmarkMemory per Plan 09-05; they are NEVER committed per
         # PR (Pitfall 8) — only uploaded as artifacts for inspection.

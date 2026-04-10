@@ -41,7 +41,7 @@ func TestTelemetryMiddleware_toolsCallEmitsMetric(t *testing.T) {
 	sess := &mcp.SessionInfo{Profile: "claude-code", Mode: "edit", Language: "go"}
 	getSession := func(ctx context.Context) *mcp.SessionInfo { return sess }
 
-	mw := mcp.TelemetryMiddleware(provider, getSession, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, getSession, nil, discardLogger())
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.CallToolResult{}, nil
 	}
@@ -67,7 +67,7 @@ func TestTelemetryMiddleware_toolsCallEmitsMetric(t *testing.T) {
 func TestTelemetryMiddleware_timeout(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	sess := &mcp.SessionInfo{Profile: "p", Mode: "m", Language: "l"}
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return nil, context.DeadlineExceeded
@@ -84,7 +84,7 @@ func TestTelemetryMiddleware_timeout(t *testing.T) {
 func TestTelemetryMiddleware_circuitOpen(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	sess := &mcp.SessionInfo{Profile: "p", Mode: "m", Language: "l"}
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return nil, lspool.ErrCircuitOpen
@@ -101,7 +101,7 @@ func TestTelemetryMiddleware_circuitOpen(t *testing.T) {
 func TestTelemetryMiddleware_internalError(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	sess := &mcp.SessionInfo{Profile: "p", Mode: "m", Language: "l"}
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return nil, errors.New("boom")
@@ -118,7 +118,7 @@ func TestTelemetryMiddleware_internalError(t *testing.T) {
 func TestTelemetryMiddleware_toolResultIsError(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	sess := &mcp.SessionInfo{Profile: "p", Mode: "m", Language: "l"}
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.CallToolResult{IsError: true}, nil
@@ -136,7 +136,7 @@ func TestTelemetryMiddleware_skipsNonToolsCall(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return nil }, logger)
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return nil }, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.ListToolsResult{}, nil
@@ -164,7 +164,7 @@ func TestTelemetryMiddleware_initializeMethod(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return nil }, logger)
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return nil }, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return nil, nil
@@ -227,7 +227,7 @@ func TestClassifyOutcome_AllSevenEnumValuesExist(t *testing.T) {
 func TestTelemetryMiddleware_usesSnapshot_race(t *testing.T) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	sess := &mcp.SessionInfo{Profile: "p", Mode: "m", Language: "go"}
-	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, discardLogger())
+	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.CallToolResult{}, nil
 	}

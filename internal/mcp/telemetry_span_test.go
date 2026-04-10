@@ -55,7 +55,7 @@ func TestTelemetryMiddlewareSpan_ToolCallCreatesSpan(t *testing.T) {
 
 	mw := mcp.TelemetryMiddleware(provider, func(_ context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.CallToolResult{}, nil
@@ -90,7 +90,7 @@ func TestTelemetryMiddlewareSpan_NonToolMethodNoSpan(t *testing.T) {
 
 	mw := mcp.TelemetryMiddleware(provider, func(_ context.Context) *mcp.SessionInfo {
 		return nil
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.InitializeResult{}, nil
@@ -112,7 +112,7 @@ func TestTelemetryMiddlewareSpan_ErrorRecorded(t *testing.T) {
 
 	mw := mcp.TelemetryMiddleware(provider, func(_ context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	testErr := errors.New("tool execution failed")
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
@@ -150,7 +150,7 @@ func TestTelemetryMiddlewareSpan_NoopTracerZeroCost(t *testing.T) {
 
 	mw := mcp.TelemetryMiddleware(provider, func(_ context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.CallToolResult{}, nil

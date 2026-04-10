@@ -28,8 +28,14 @@ import (
 // constraint from CONTEXT.md was written assuming ProfileFilter had a deny
 // path at tool-call time; since it does not in v1.2, that ordering constraint
 // is obsolete here.
-func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) {
-	server.AddReceivingMiddleware(TelemetryMiddleware(provider, getSession, logger))
+// BudgetFunc returns the timeout budget for a tool name. A nil BudgetFunc
+// disables deadline injection (all calls pass through without a timeout).
+// Wired from degrade.BudgetFor in daemon.go to avoid an import cycle
+// (mcp -> config -> profile -> mcp).
+type BudgetFunc func(toolName string) time.Duration
+
+func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, budgetFn BudgetFunc, logger *slog.Logger) {
+	server.AddReceivingMiddleware(TelemetryMiddleware(provider, getSession, budgetFn, logger))
 	if resolver != nil {
 		server.AddReceivingMiddleware(ProfileFilterMiddleware(resolver, getSession, logger))
 	}
@@ -110,7 +116,7 @@ func extractToolName(req mcpsdk.Request) string {
 // Metric emission is gated on method == "tools/call"; tools/list, initialize,
 // and all other methods are pure log pass-through. This matches the v1.2
 // scope: RED metrics are per-tool-call only (T-11-09 "accept" disposition).
-func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) mcpsdk.Middleware {
+func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Context) *SessionInfo, budgetFn BudgetFunc, logger *slog.Logger) mcpsdk.Middleware {
 	m := provider.Metrics()     // closure-captured once; Metrics() is never nil per obs.Noop
 	tracer := provider.Tracer() // captured once — noop when tracing is off, cheap on the hot path (D-01: never otel.GetTracerProvider)
 	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
@@ -137,6 +143,17 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 				return result, err
 			}
 
+			// D-01: inject per-class deadline BEFORE the tracing span so the
+			// timeout covers both the span and the handler execution.
+			toolName := extractToolName(req)
+			if budgetFn != nil {
+				if budget := budgetFn(toolName); budget > 0 {
+					var budgetCancel context.CancelFunc
+					ctx, budgetCancel = context.WithTimeout(ctx, budget)
+					defer budgetCancel()
+				}
+			}
+
 			// tools/call: create a tracing span (TRACE-02).
 			ctx, span := tracer.Start(ctx, "daemon.mcp.tools.call")
 			defer span.End()
@@ -159,7 +176,6 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 				)
 			}
 
-			toolName := extractToolName(req)
 			outcome := classifyOutcome(result, err)
 
 			var profile, mode, language string

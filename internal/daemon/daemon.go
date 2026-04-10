@@ -20,6 +20,7 @@ import (
 
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
 	"github.com/postfix/serena/internal/config"
+	"github.com/postfix/serena/internal/degrade"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/kernel/edit"
@@ -257,7 +258,11 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	getSessionFn := func(ctx context.Context) *serenaMCP.SessionInfo {
 		return sessionProvider.CurrentSession()
 	}
-	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, logger)
+	degradeCfg := cfg.Degradation
+	budgetFn := serenaMCP.BudgetFunc(func(toolName string) time.Duration {
+		return degrade.BudgetFor(toolName, degradeCfg)
+	})
+	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, logger)
 
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session

@@ -135,7 +135,7 @@ Plans:
   2. USAGE.md gives an operator a complete reference for profiles, modes, config precedence, workflow examples, troubleshooting, observability quickstart, and performance tuning
   3. The 38-tool table in README and the 52-language table are generated from the registry, so they cannot drift from the code
   4. CHANGELOG.md records v1.0, v1.1, and v1.2 with dated entries and links to the milestone summaries
-**Plans**: TBD
+**Plans**: 3 plans
 Plans:
 - [ ] 14-01-PLAN.md -- README.md: project pitch, install, capabilities, tool table, language table, client configs (DOC-01, DOC-02, DOC-03, DOC-04)
 - [ ] 14-02-PLAN.md -- USAGE.md: profile/mode reference, workflows, troubleshooting, observability, performance tuning (DOC-05, DOC-06, DOC-07, DOC-08, DOC-09)
@@ -149,7 +149,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `bench.yml` invokes benchgate WITHOUT `--warn-only` — the CI gate actually blocks PRs that regress beyond thresholds
   2. `test/bench/baselines/v1.1-github-hosted.txt` contains real benchmark numbers from an ubuntu-latest CI run, replacing the PLACEHOLDER content
-**Plans**: TBD
+**Plans**: 3 plans
 Plans:
 - [ ] 15-01-PLAN.md -- Remove --warn-only from bench.yml, commit real v1.1 baseline numbers (BENCH-05, BENCH-06)
 

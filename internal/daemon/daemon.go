@@ -159,7 +159,7 @@ func New(cfg *config.SerenaConfig, logger *slog.Logger) (*Daemon, error) {
 
 	// 6. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
-	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics())
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
 
 	// 6. Create diagnostic store and body extractor.
 	diagStore := diag.NewDiagnosticStore()

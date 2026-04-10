@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"sync"
 
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/langregistry"
 	"github.com/postfix/serena/internal/workspace"
@@ -24,6 +27,7 @@ type Kernel struct {
 	registry   *workspace.Registry // Phase 1 workspace registry
 	config     KernelConfig
 	logger     *slog.Logger
+	tracer     trace.Tracer // Phase 12: plumbed via constructor, noop-safe
 	mu         sync.RWMutex
 }
 
@@ -31,7 +35,10 @@ type Kernel struct {
 // The installer provides three-tier LS resolution (PATH/download/error).
 // metrics is the lspool.MetricsSink receiving worker lifecycle events; pass
 // lspool.NoopSink{} (or nil) to disable.
-func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, installer *langregistry.Installer, cfg KernelConfig, pressure lspool.MemoryPressure, logger *slog.Logger, metrics lspool.MetricsSink) *Kernel {
+func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, installer *langregistry.Installer, cfg KernelConfig, pressure lspool.MemoryPressure, logger *slog.Logger, metrics lspool.MetricsSink, tracer trace.Tracer) *Kernel {
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("kernel-fallback")
+	}
 	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics)
 	return &Kernel{
 		workspaces: make(map[string]*WorkspaceRuntime),
@@ -39,8 +46,13 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 		registry:   registry,
 		config:     cfg,
 		logger:     logger.With("component", "kernel"),
+		tracer:     tracer,
 	}
 }
+
+// Tracer returns the kernel's trace.Tracer. Never nil — the constructor
+// falls back to a noop tracer when none is provided.
+func (k *Kernel) Tracer() trace.Tracer { return k.tracer }
 
 // ActivateWorkspace detects languages and creates a WorkspaceRuntime for a project root.
 // Per WRK-02: auto-detects languages. Per WRK-03: supports multiple projects.

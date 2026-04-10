@@ -1,24 +1,439 @@
-# PLACEHOLDER — populated by the first ubuntu-latest CI run.
-#
-# DO NOT use this file for any comparison until CI has replaced it with a
-# real capture. The numbers below are intentionally absent: capturing on
-# a developer machine (especially darwin/arm64) would produce
-# architecture-specific values that the ubuntu-latest GitHub-hosted gate
-# would misinterpret as regressions on every subsequent run.
-#
-# Rollout (see test/bench/baselines/README.md for full context):
-#
-#   Step A (this commit): commit the placeholder so the gate code and
-#     CI workflow can reference a real path on disk.
-#   Step B (first CI run): .github/workflows/bench.yml runs in
-#     --warn-only mode, uploads the captured benchfmt output as the
-#     artifact "v1.1-baseline-candidate.txt", and never blocks a PR.
-#   Step C (re-baseline PR): a human downloads that artifact, reviews
-#     it, commits it verbatim to this path, and flips bench.yml from
-#     --warn-only to blocking mode.
-#
-# From Step C onward benchgate enforces the D-01 tiered thresholds
-# (PR 15%/25%, release 10%/20%) at p<0.05 using Welch's t-test.
-goos: linux
-goarch: amd64
+goos: darwin
+goarch: arm64
 pkg: github.com/postfix/serena/test/bench
+cpu: Apple M4 Pro
+BenchmarkLSPIndex_Cold-14                     	       7	 159452512 ns/op	  770584 B/op	    1733 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 158930649 ns/op	  711564 B/op	    1069 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 158612500 ns/op	  728720 B/op	    1075 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 157762417 ns/op	  715264 B/op	    1071 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 158064411 ns/op	  713340 B/op	    1065 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 156684994 ns/op	  720457 B/op	    1075 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 156739107 ns/op	  709460 B/op	    1066 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 157768512 ns/op	  712817 B/op	    1064 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 156584869 ns/op	  718457 B/op	    1065 allocs/op
+BenchmarkLSPIndex_Cold-14                     	       7	 158488083 ns/op	  711026 B/op	    1055 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     874	   1193399 ns/op	  319080 B/op	     274 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     874	   1196666 ns/op	  318913 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     907	   1193945 ns/op	  318880 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     871	   1195274 ns/op	  318918 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     991	   1203135 ns/op	  318904 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     993	   1199696 ns/op	  318866 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	     991	   1204983 ns/op	  318849 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	    1003	   1190587 ns/op	  318884 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	    1002	   1195952 ns/op	  318812 B/op	     273 allocs/op
+BenchmarkLSPIndex_Warm-14                     	    1000	   1192205 ns/op	  318846 B/op	     273 allocs/op
+BenchmarkMemory-14                            	       3	 386917069 ns/op	  81418520 s1_idle_go_sys_B	 136151040 s1_idle_kernel_B	  81418520 s2_workspace_go_sys_B	 136151040 s2_workspace_kernel_B	  81418520 s3_first_call_go_sys_B	 136151040 s3_first_call_kernel_B	  81418520 s4_post_100_calls_go_sys_B	 136151040 s4_post_100_calls_kernel_B	43473184 B/op	   78622 allocs/op
+BenchmarkMemory-14                            	       3	 382255208 ns/op	  81418520 s1_idle_go_sys_B	 139132928 s1_idle_kernel_B	  81418520 s2_workspace_go_sys_B	 139132928 s2_workspace_kernel_B	  81418520 s3_first_call_go_sys_B	 139132928 s3_first_call_kernel_B	  81418520 s4_post_100_calls_go_sys_B	 139722752 s4_post_100_calls_kernel_B	43635829 B/op	   79593 allocs/op
+BenchmarkMemory-14                            	       3	 378658792 ns/op	  81418520 s1_idle_go_sys_B	 142114816 s1_idle_kernel_B	  81418520 s2_workspace_go_sys_B	 142114816 s2_workspace_kernel_B	  81418520 s3_first_call_go_sys_B	 142114816 s3_first_call_kernel_B	  85612824 s4_post_100_calls_go_sys_B	 143065088 s4_post_100_calls_kernel_B	43727114 B/op	   80499 allocs/op
+BenchmarkMemory-14                            	       3	 387193403 ns/op	  85612824 s1_idle_go_sys_B	 145948672 s1_idle_kernel_B	  85612824 s2_workspace_go_sys_B	 145965056 s2_workspace_kernel_B	  85612824 s3_first_call_go_sys_B	 145965056 s3_first_call_kernel_B	  89807128 s4_post_100_calls_go_sys_B	 146636800 s4_post_100_calls_kernel_B	43802429 B/op	   81228 allocs/op
+BenchmarkMemory-14                            	       3	 387639875 ns/op	  89807128 s1_idle_go_sys_B	 149028864 s1_idle_kernel_B	  89807128 s2_workspace_go_sys_B	 149028864 s2_workspace_kernel_B	  89807128 s3_first_call_go_sys_B	 149028864 s3_first_call_kernel_B	  89807128 s4_post_100_calls_go_sys_B	 149258240 s4_post_100_calls_kernel_B	43897765 B/op	   81755 allocs/op
+BenchmarkMemory-14                            	       3	 389085694 ns/op	  89807128 s1_idle_go_sys_B	 151666688 s1_idle_kernel_B	  89807128 s2_workspace_go_sys_B	 151666688 s2_workspace_kernel_B	  89807128 s3_first_call_go_sys_B	 151666688 s3_first_call_kernel_B	  89807128 s4_post_100_calls_go_sys_B	 152862720 s4_post_100_calls_kernel_B	43950808 B/op	   82277 allocs/op
+BenchmarkMemory-14                            	       3	 379363625 ns/op	  89807128 s1_idle_go_sys_B	 155041792 s1_idle_kernel_B	  89807128 s2_workspace_go_sys_B	 155041792 s2_workspace_kernel_B	  89807128 s3_first_call_go_sys_B	 155041792 s3_first_call_kernel_B	  89807128 s4_post_100_calls_go_sys_B	 155713536 s4_post_100_calls_kernel_B	44435840 B/op	   82875 allocs/op
+BenchmarkMemory-14                            	       3	 386634278 ns/op	  94001432 s1_idle_go_sys_B	 158679040 s1_idle_kernel_B	  94001432 s2_workspace_go_sys_B	 158679040 s2_workspace_kernel_B	  94001432 s3_first_call_go_sys_B	 158679040 s3_first_call_kernel_B	  94263576 s4_post_100_calls_go_sys_B	 159236096 s4_post_100_calls_kernel_B	44707576 B/op	   83186 allocs/op
+BenchmarkMemory-14                            	       3	 387717861 ns/op	  94263576 s1_idle_go_sys_B	 160956416 s1_idle_kernel_B	  94263576 s2_workspace_go_sys_B	 160972800 s2_workspace_kernel_B	  94263576 s3_first_call_go_sys_B	 160972800 s3_first_call_kernel_B	  94263576 s4_post_100_calls_go_sys_B	 161153024 s4_post_100_calls_kernel_B	44717522 B/op	   83600 allocs/op
+BenchmarkMemory-14                            	       3	 388330236 ns/op	  94263576 s1_idle_go_sys_B	 163528704 s1_idle_kernel_B	  94263576 s2_workspace_go_sys_B	 163561472 s2_workspace_kernel_B	  94263576 s3_first_call_go_sys_B	 163577856 s3_first_call_kernel_B	  94263576 s4_post_100_calls_go_sys_B	 164069376 s4_post_100_calls_kernel_B	44756144 B/op	   83977 allocs/op
+BenchmarkBaselineMiddleware-14                	68745745	        17.47 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	68192151	        17.36 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	69740749	        17.47 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	68019498	        17.63 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	67129264	        17.45 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	66738811	        17.53 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	67669170	        17.55 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	66865870	        17.54 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	66133009	        17.87 ns/op	      80 B/op	       1 allocs/op
+BenchmarkBaselineMiddleware-14                	66963974	        17.94 ns/op	      80 B/op	       1 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1859967	       641.7 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1885899	       635.4 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1860427	       642.1 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1861261	       642.2 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1864015	       643.8 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1887291	       635.2 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1860133	       651.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1884138	       635.2 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1886266	       646.7 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware-14               	 1876561	       649.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2504494	       478.0 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2507848	       476.7 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2493631	       487.1 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2478343	       489.6 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2467047	       485.6 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2446530	       490.6 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2397578	       497.6 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2424274	       498.7 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2457368	       497.7 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTelemetryMiddleware_ToolsList-14     	 2447985	       487.0 ns/op	      96 B/op	       2 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3085449	       387.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3177417	       376.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3170094	       376.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3200029	       376.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3140136	       378.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3107934	       380.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3174512	       379.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3184776	       377.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3175120	       378.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_Baseline-14              	 3159465	       378.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3025300	       396.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3047046	       404.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3003127	       402.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3035828	       395.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3020247	       395.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3016179	       396.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3030235	       396.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3046138	       393.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3050876	       393.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogHotPath_WithContextHandler-14    	 3057504	       392.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTools/go_to_definition-14            	    1742	    685159 ns/op	  307585 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1738	    692099 ns/op	  307578 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1788	    689343 ns/op	  307585 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1728	    704281 ns/op	  307572 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1764	    695661 ns/op	  307549 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1792	    700436 ns/op	  307569 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1777	    705844 ns/op	  307584 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1706	    714488 ns/op	  307629 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1666	    712923 ns/op	  307586 B/op	     248 allocs/op
+BenchmarkTools/go_to_definition-14            	    1690	    730770 ns/op	  307595 B/op	     248 allocs/op
+BenchmarkTools/find_references-14             	     925	   1326336 ns/op	  309460 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     931	   1305479 ns/op	  309459 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     926	   1310084 ns/op	  309453 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     946	   1309230 ns/op	  309441 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     912	   1323145 ns/op	  309454 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     922	   1310876 ns/op	  309520 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     902	   1320972 ns/op	  309465 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     907	   1335760 ns/op	  309447 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     922	   1306750 ns/op	  309472 B/op	     257 allocs/op
+BenchmarkTools/find_references-14             	     938	   1353058 ns/op	  309444 B/op	     257 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    8518	    170612 ns/op	  315237 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    7027	    171634 ns/op	  315228 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    7426	    172861 ns/op	  315235 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    6291	    212434 ns/op	  315218 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    3936	    267786 ns/op	  315234 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    6435	    172181 ns/op	  315233 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    6626	    171816 ns/op	  315249 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    6730	    173319 ns/op	  315235 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    7284	    172121 ns/op	  315229 B/op	     269 allocs/op
+BenchmarkTools/get_symbol_overview-14         	    6780	    174656 ns/op	  315224 B/op	     269 allocs/op
+BenchmarkTools/search_symbols-14              	     854	   1268239 ns/op	  318884 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	    1040	   1263907 ns/op	  318886 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	    1022	   1248666 ns/op	  318825 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     918	   1281911 ns/op	  318874 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	    1024	   1249251 ns/op	  318870 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     908	   1260275 ns/op	  318815 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     910	   1264937 ns/op	  318812 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     904	   1254722 ns/op	  318829 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     910	   1256318 ns/op	  318808 B/op	     274 allocs/op
+BenchmarkTools/search_symbols-14              	     919	   1248179 ns/op	  318825 B/op	     274 allocs/op
+BenchmarkTools/get_hover_info-14              	     835	   1383360 ns/op	  309252 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     938	   1361191 ns/op	  309192 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     980	   1354007 ns/op	  309176 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     855	   1368962 ns/op	  309211 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     949	   1347416 ns/op	  309189 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     960	   1352372 ns/op	  309186 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     841	   1360463 ns/op	  309200 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     957	   1354144 ns/op	  309195 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     954	   1364603 ns/op	  309256 B/op	     252 allocs/op
+BenchmarkTools/get_hover_info-14              	     972	   1365855 ns/op	  309215 B/op	     252 allocs/op
+BenchmarkTools/find_implementations-14        	     693	   1702688 ns/op	  305618 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     696	   1680514 ns/op	  305646 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     795	   1657297 ns/op	  305628 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     705	   1698051 ns/op	  305637 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     708	   1688551 ns/op	  305634 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     697	   1697712 ns/op	  305631 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     782	   1694652 ns/op	  305709 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     691	   1706683 ns/op	  305629 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     742	   1706319 ns/op	  305639 B/op	     228 allocs/op
+BenchmarkTools/find_implementations-14        	     687	   1674771 ns/op	  305610 B/op	     228 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      50	  25762194 ns/op	  346852 B/op	     667 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      45	  25836290 ns/op	  347007 B/op	     667 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      45	  25764105 ns/op	  347023 B/op	     668 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      45	  25969146 ns/op	  347077 B/op	     668 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      49	  25761449 ns/op	  348081 B/op	     670 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      51	  25656471 ns/op	  346858 B/op	     667 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      51	  25729437 ns/op	  346852 B/op	     667 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      45	  25873472 ns/op	  347074 B/op	     668 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      45	  25699176 ns/op	  347024 B/op	     668 allocs/op
+BenchmarkTools/get_call_hierarchy-14          	      51	  25777331 ns/op	  346877 B/op	     667 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     292	   4104908 ns/op	  313512 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     292	   4069465 ns/op	  313664 B/op	     347 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     270	   4151069 ns/op	  313448 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     308	   4023703 ns/op	  313485 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     292	   4140986 ns/op	  313472 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     291	   4045275 ns/op	  313483 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     297	   4120123 ns/op	  313503 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     292	   4065984 ns/op	  313504 B/op	     346 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     295	   4120330 ns/op	  313518 B/op	     347 allocs/op
+BenchmarkTools/get_type_hierarchy-14          	     306	   4056631 ns/op	  313454 B/op	     346 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     171	   6920073 ns/op	  337030 B/op	     545 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     174	   6872913 ns/op	  336532 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     174	   6839291 ns/op	  336573 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     172	   6888923 ns/op	  336540 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     172	   6912646 ns/op	  336688 B/op	     545 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     171	   6957144 ns/op	  336604 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     178	   6940354 ns/op	  336567 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     176	   6827478 ns/op	  336488 B/op	     544 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     164	   7004634 ns/op	  336946 B/op	     545 allocs/op
+BenchmarkTools/analyze_blast_radius-14        	     171	   6966051 ns/op	  336537 B/op	     544 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5060532124 ns/op	  452792 B/op	    1146 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5060181791 ns/op	  453952 B/op	    1163 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5066856416 ns/op	  399096 B/op	    1028 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5062090041 ns/op	  399576 B/op	    1033 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5065966125 ns/op	  399112 B/op	    1028 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5061493000 ns/op	  404528 B/op	    1043 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5067754041 ns/op	  402584 B/op	    1030 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5057733626 ns/op	  453952 B/op	    1163 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5062980833 ns/op	  454048 B/op	    1164 allocs/op
+BenchmarkTools/replace_symbol_body-14         	       1	5067010750 ns/op	  456504 B/op	    1185 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5062765667 ns/op	  450208 B/op	     912 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5065484542 ns/op	  450208 B/op	     912 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5068461041 ns/op	  396152 B/op	     778 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5061789959 ns/op	  401912 B/op	     779 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5066278750 ns/op	  396248 B/op	     779 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5062117084 ns/op	  401416 B/op	     785 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5061796000 ns/op	  451200 B/op	     915 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5091148541 ns/op	  452448 B/op	     917 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5083512833 ns/op	  451744 B/op	     917 allocs/op
+BenchmarkTools/insert_before_symbol-14        	       1	5070113750 ns/op	  452352 B/op	     916 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5068923250 ns/op	  450336 B/op	     911 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5057715166 ns/op	  395544 B/op	     777 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5077898959 ns/op	  406872 B/op	     792 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5080648875 ns/op	  398280 B/op	     783 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5069562792 ns/op	  396344 B/op	     778 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5063470416 ns/op	  450768 B/op	     912 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5071541750 ns/op	  450336 B/op	     911 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5066608333 ns/op	  472184 B/op	     935 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5070744583 ns/op	  453216 B/op	     919 allocs/op
+BenchmarkTools/insert_after_symbol-14         	       1	5072229999 ns/op	  397288 B/op	     780 allocs/op
+BenchmarkTools/rename_symbol-14               	       1	5211987541 ns/op	  404408 B/op	     948 allocs/op
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/rename_symbol-14               	--- FAIL: BenchmarkTools/rename_symbol
+BenchmarkTools/read_file-14                   	   10932	    105773 ns/op	  317289 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    105788 ns/op	  317274 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    104018 ns/op	  317277 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   11565	    103787 ns/op	  317277 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    105837 ns/op	  317261 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    105587 ns/op	  317285 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    104163 ns/op	  317273 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    104237 ns/op	  317278 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    104652 ns/op	  317281 B/op	     253 allocs/op
+BenchmarkTools/read_file-14                   	   10000	    106748 ns/op	  317284 B/op	     253 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101545 ns/op	  314245 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101035 ns/op	  314240 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101471 ns/op	  314239 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101763 ns/op	  314235 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101191 ns/op	  314240 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    102566 ns/op	  314248 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    101382 ns/op	  314240 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   12100	     99225 ns/op	  314239 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    100538 ns/op	  314236 B/op	     281 allocs/op
+BenchmarkTools/list_directory-14              	   10000	    102018 ns/op	  314239 B/op	     281 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    113788 ns/op	  313346 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    115596 ns/op	  313348 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    112787 ns/op	  313340 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    113816 ns/op	  313346 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    114520 ns/op	  313358 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	    9756	    114955 ns/op	  313351 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    112539 ns/op	  313350 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    113350 ns/op	  313350 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    114174 ns/op	  313349 B/op	     270 allocs/op
+BenchmarkTools/find_files-14                  	   10000	    114656 ns/op	  313346 B/op	     270 allocs/op
+BenchmarkTools/search_in_files-14             	    5742	    184834 ns/op	  335371 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6787	    182533 ns/op	  335323 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6115	    187760 ns/op	  335312 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6602	    180462 ns/op	  335346 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6811	    181249 ns/op	  335327 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6337	    180902 ns/op	  335295 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6262	    178797 ns/op	  335227 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    5570	    180666 ns/op	  335373 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6640	    177321 ns/op	  335325 B/op	     410 allocs/op
+BenchmarkTools/search_in_files-14             	    6626	    179227 ns/op	  335367 B/op	     410 allocs/op
+BenchmarkTools/get_diagnostics-14             	   23617	     50015 ns/op	  302576 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   24376	     50088 ns/op	  302581 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25388	     47185 ns/op	  302576 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25257	     48104 ns/op	  302576 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25406	     47618 ns/op	  302575 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25348	     48031 ns/op	  302575 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   24793	     48850 ns/op	  302570 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25034	     48104 ns/op	  302571 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   25118	     48226 ns/op	  302575 B/op	     153 allocs/op
+BenchmarkTools/get_diagnostics-14             	   23767	     52283 ns/op	  302587 B/op	     153 allocs/op
+BenchmarkTools/get_code_actions-14            	    1184	    984477 ns/op	  326746 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1550	    846471 ns/op	  326683 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1212	    869730 ns/op	  326742 B/op	     425 allocs/op
+BenchmarkTools/get_code_actions-14            	    1544	    859198 ns/op	  326697 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1514	    850577 ns/op	  326688 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1629	    853583 ns/op	  326718 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1598	    850268 ns/op	  326702 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1548	    862477 ns/op	  326760 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1610	    842526 ns/op	  326697 B/op	     424 allocs/op
+BenchmarkTools/get_code_actions-14            	    1197	    860899 ns/op	  326732 B/op	     424 allocs/op
+BenchmarkTools/write_memory-14                	    6108	    192150 ns/op	  310362 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    6722	    190223 ns/op	  310338 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7418	    184082 ns/op	  310338 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7164	    176416 ns/op	  310244 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7627	    180280 ns/op	  310269 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7326	    183743 ns/op	  310216 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7516	    184286 ns/op	  310251 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7248	    177064 ns/op	  310230 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7563	    181866 ns/op	  310350 B/op	     200 allocs/op
+BenchmarkTools/write_memory-14                	    7675	    191418 ns/op	  310367 B/op	     200 allocs/op
+BenchmarkTools/read_memory-14                 	   17288	     69224 ns/op	  308390 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17293	     69103 ns/op	  308388 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17312	     69494 ns/op	  308392 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17175	     69721 ns/op	  308389 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17080	     70130 ns/op	  308390 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17434	     69600 ns/op	  308390 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17130	     69755 ns/op	  308389 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17202	     69990 ns/op	  308385 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17337	     69441 ns/op	  308384 B/op	     159 allocs/op
+BenchmarkTools/read_memory-14                 	   17352	     69993 ns/op	  308389 B/op	     159 allocs/op
+BenchmarkTools/list_memories-14               	   12423	     96751 ns/op	  321405 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12362	     97570 ns/op	  321406 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12423	     96358 ns/op	  321400 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12423	     96180 ns/op	  321395 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12638	     95118 ns/op	  321403 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12660	     95393 ns/op	  321394 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12186	     97744 ns/op	  321409 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12446	     96496 ns/op	  321405 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12499	     95716 ns/op	  321394 B/op	     243 allocs/op
+BenchmarkTools/list_memories-14               	   12214	     97778 ns/op	  321412 B/op	     243 allocs/op
+BenchmarkTools/search_memories-14             	    9326	    129452 ns/op	  321643 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    9519	    128517 ns/op	  321633 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    9247	    130055 ns/op	  321637 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    7956	    130215 ns/op	  321643 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	   10000	    130024 ns/op	  321648 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    8412	    130655 ns/op	  321636 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	   10000	    129108 ns/op	  321639 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    8323	    128988 ns/op	  321648 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    9351	    128530 ns/op	  321630 B/op	     257 allocs/op
+BenchmarkTools/search_memories-14             	    9542	    127999 ns/op	  321635 B/op	     257 allocs/op
+BenchmarkTools/rename_memory-14               	    3708	    272699 ns/op	  312302 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4531	    269764 ns/op	  312411 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4497	    274426 ns/op	  312370 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4185	    270784 ns/op	  312311 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4514	    270087 ns/op	  312182 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4466	    274943 ns/op	  312353 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4560	    269460 ns/op	  312277 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4456	    271787 ns/op	  312290 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4396	    270683 ns/op	  312313 B/op	     213 allocs/op
+BenchmarkTools/rename_memory-14               	    4370	    278792 ns/op	  312207 B/op	     213 allocs/op
+BenchmarkTools/edit_memory-14                 	    6398	    194323 ns/op	  311546 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6093	    193694 ns/op	  311549 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6020	    195963 ns/op	  311598 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6020	    195367 ns/op	  311501 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6292	    193516 ns/op	  311541 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    5718	    204184 ns/op	  311542 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6231	    192533 ns/op	  311517 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6114	    192584 ns/op	  311504 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6188	    194675 ns/op	  311525 B/op	     224 allocs/op
+BenchmarkTools/edit_memory-14                 	    6132	    195378 ns/op	  311469 B/op	     224 allocs/op
+BenchmarkTools/delete_memory-14               	    8646	    150661 ns/op	  307956 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    8146	    140855 ns/op	  307952 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    7642	    143103 ns/op	  307950 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    8738	    146490 ns/op	  307957 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    7994	    153121 ns/op	  307950 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    7107	    203970 ns/op	  307952 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    6836	    207083 ns/op	  307963 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    8452	    221335 ns/op	  307952 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    4476	    381686 ns/op	  307962 B/op	     164 allocs/op
+BenchmarkTools/delete_memory-14               	    8230	    253927 ns/op	  307964 B/op	     164 allocs/op
+BenchmarkTools/onboard_project-14             	    7058	    189475 ns/op	  334055 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6494	    184560 ns/op	  334047 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6958	    178168 ns/op	  334041 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6585	    185947 ns/op	  334055 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6045	    189916 ns/op	  334046 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6477	    187727 ns/op	  334032 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6657	    186626 ns/op	  334038 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6471	    187050 ns/op	  334039 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    5683	    189244 ns/op	  334052 B/op	     296 allocs/op
+BenchmarkTools/onboard_project-14             	    6429	    188806 ns/op	  334049 B/op	     296 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19257	     62469 ns/op	  313386 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19262	     62413 ns/op	  313377 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19162	     62695 ns/op	  313372 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19491	     61169 ns/op	  313374 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19284	     62450 ns/op	  313379 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19498	     61272 ns/op	  313380 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19310	     61460 ns/op	  313378 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19161	     62827 ns/op	  313386 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19465	     62438 ns/op	  313380 B/op	     146 allocs/op
+BenchmarkTools/prepare_for_new_conversation-14         	   19060	     62962 ns/op	  313383 B/op	     146 allocs/op
+BenchmarkTools/switch_mode-14                          	   21460	     55924 ns/op	  315779 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   21547	     55449 ns/op	  315553 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   21952	     54271 ns/op	  315302 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22066	     54558 ns/op	  315772 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22173	     54465 ns/op	  315294 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22216	     54025 ns/op	  316038 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22154	     53685 ns/op	  315285 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22430	     53329 ns/op	  315284 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22198	     53390 ns/op	  315286 B/op	     213 allocs/op
+BenchmarkTools/switch_mode-14                          	   22719	     52638 ns/op	  315281 B/op	     213 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23155	     51724 ns/op	  318544 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23499	     51316 ns/op	  318543 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   22483	     52149 ns/op	  318543 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23259	     51199 ns/op	  318538 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23160	     51099 ns/op	  318541 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23830	     50879 ns/op	  318544 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   22870	     51404 ns/op	  318546 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   24241	     50375 ns/op	  318547 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   23403	     50638 ns/op	  318546 B/op	     256 allocs/op
+BenchmarkTools/get_token_budget-14                     	   24225	     50549 ns/op	  318546 B/op	     256 allocs/op
+BenchmarkTools/ping-14                                 	   28411	     41536 ns/op	  302234 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   29439	     41365 ns/op	  302230 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   28749	     41656 ns/op	  302230 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   29558	     41451 ns/op	  302230 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   28534	     41654 ns/op	  302232 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   28315	     42308 ns/op	  302236 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   28968	     41490 ns/op	  302231 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   28298	     41507 ns/op	  302227 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   29367	     41947 ns/op	  302233 B/op	     151 allocs/op
+BenchmarkTools/ping-14                                 	   29244	     42042 ns/op	  302230 B/op	     151 allocs/op
+BenchmarkTools/echo-14                                 	   28729	     41799 ns/op	  302166 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29869	     40941 ns/op	  302163 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   28498	     42199 ns/op	  302168 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29374	     41389 ns/op	  302166 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29608	     40866 ns/op	  302163 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29055	     41157 ns/op	  302165 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29592	     41253 ns/op	  302164 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   27111	     42300 ns/op	  302168 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   29124	     41344 ns/op	  302165 B/op	     150 allocs/op
+BenchmarkTools/echo-14                                 	   20922	     49208 ns/op	  302170 B/op	     150 allocs/op
+BenchmarkTools/activate_project-14                     	   26932	     43822 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27090	     44354 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27384	     44238 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27676	     44004 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27489	     44327 ns/op	  302725 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27394	     44079 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   26834	     43601 ns/op	  302726 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   28164	     43010 ns/op	  302724 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   27206	     43390 ns/op	  302728 B/op	     163 allocs/op
+BenchmarkTools/activate_project-14                     	   26611	     44489 ns/op	  302727 B/op	     163 allocs/op
+BenchmarkTracingOffPath-14                             	 1822538	       658.1 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1845172	       654.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1840489	       650.9 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1846484	       648.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1846675	       648.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1855178	       645.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1858176	       641.5 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1860624	       646.4 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1848206	       647.3 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOffPath-14                             	 1844425	       648.8 ns/op	     144 B/op	       3 allocs/op
+BenchmarkTracingOnPath-14                              	  872721	      1505 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  869175	      1502 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  863107	      1509 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  859280	      1502 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  869163	      1511 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  830386	      1515 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  872563	      1499 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  864236	      1493 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  871309	      1498 ns/op	    2656 B/op	      10 allocs/op
+BenchmarkTracingOnPath-14                              	  879969	      1496 ns/op	    2656 B/op	      10 allocs/op
+FAIL
+FAIL	github.com/postfix/serena/test/bench	1629.725s
+ok  	github.com/postfix/serena/test/bench/cmd/benchgate	0.560s
+ok  	github.com/postfix/serena/test/bench/rss	0.405s
+FAIL

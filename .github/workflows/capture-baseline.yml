@@ -30,6 +30,7 @@ jobs:
       # Must match bench.yml exactly (Pitfall 1).
       GOMAXPROCS: "4"
       GOPLS_VERSION: v0.17.1
+      MILESTONE: ${{ inputs.milestone }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,11 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           go test -short -bench=. -benchmem -count=10 -run=^$ \
-            ./test/bench/... | tee test/bench/baselines/${{ inputs.milestone }}-github-hosted.txt
+            ./test/bench/... | tee test/bench/baselines/${MILESTONE}-github-hosted.txt
 
       - name: Verify capture
         run: |
-          LINES=$(grep -c "^Benchmark" test/bench/baselines/${{ inputs.milestone }}-github-hosted.txt || true)
+          LINES=$(grep -c "^Benchmark" test/bench/baselines/${MILESTONE}-github-hosted.txt || true)
           echo "Captured ${LINES} benchmark lines"
           if [ "${LINES}" -lt 5 ]; then
             echo "ERROR: Expected at least 5 benchmark lines, got ${LINES}"

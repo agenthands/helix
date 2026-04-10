@@ -132,4 +132,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-09 — v1.1 Integration Testing milestone complete (Phases 6-8)*
+*Last updated: 2026-04-10 — Phase 13 (Graceful Degradation) complete: per-class timeout budgets, deadline propagation, typed circuit breaker errors, memory limit wiring, graceful shutdown tests. v1.2 milestone Phase 13/14 done.*

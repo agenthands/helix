@@ -56,7 +56,7 @@
 **Success Criteria** (what must be TRUE):
   1. A developer can run `go test -bench=. ./test/bench/...` and get reproducible p50/p95/p99 numbers for all 38 tools, cold/warm LSP indexing throughput, and memory profiles
   2. The v1.1 baseline numbers are committed under `test/bench/baselines/` and serve as the reference point for all v1.2 delta gates
-  3. A CI job runs benchstat against the committed baseline and fails any PR that regresses >10% time or >20% allocs at p<0.05
+  3. A CI job runs benchstat against the committed baseline and fails any PR that regresses beyond tiered thresholds (PR: >15% time / >25% allocs; release: >10% time / >20% allocs) at p<0.05
   4. All benchmarks use `testing.B.Loop` so the Go compiler cannot elide the hot path
 **Plans**: 6 plans
 - [x] 09-01-PLAN.md — Refactor test/integration harness.go + helpers.go to testing.TB (Wave 0 blocker; unblocks bench reuse)
@@ -151,7 +151,7 @@ Plans:
   2. `test/bench/baselines/v1.1-github-hosted.txt` contains real benchmark numbers from an ubuntu-latest CI run, replacing the PLACEHOLDER content
 **Plans**: 1 plan
 Plans:
-- [ ] 15-01-PLAN.md -- Create capture-baseline.yml workflow, remove --warn-only from bench.yml, update baselines README (BENCH-05, BENCH-06)
+- [x] 15-01-PLAN.md -- Create capture-baseline.yml workflow, remove --warn-only from bench.yml, update baselines README (BENCH-05, BENCH-06)
 
 ## Progress
 
@@ -171,4 +171,4 @@ Plans:
 | 12. Tracing End-to-End | v1.2 | 5/5 | Complete    | 2026-04-10 |
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete    | 2026-04-10 |
 | 14. Documentation | v1.2 | 3/3 | Complete    | 2026-04-10 |
-| 15. Benchmark Gate Hardening | v1.2 | 0/1 | Not started | - |
+| 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete   | 2026-04-10 |

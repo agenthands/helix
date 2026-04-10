@@ -2,12 +2,15 @@ package forwarder
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	cryptoRand "crypto/rand"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+
+	"go.opentelemetry.io/otel/trace"
 
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
 	"github.com/postfix/serena/internal/obs"
@@ -38,18 +41,31 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 
 	errCh := make(chan error, 2)
 
+	tracer := fwdProvider.Tracer()
+
 	// Goroutine: stdin -> gRPC (send client messages to daemon)
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		// MCP messages can be large
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
 		for scanner.Scan() {
+			payload := append([]byte(nil), scanner.Bytes()...)
 			msg := &serenav1.MCPMessage{
-				Payload:   append([]byte(nil), scanner.Bytes()...),
+				Payload:   payload,
 				SessionId: sessionID,
 			}
-			if err := stream.Send(msg); err != nil {
-				errCh <- fmt.Errorf("sending to daemon: %w", err)
+
+			// Phase 12: create root span for tools/call only.
+			// With noop tracer (default) this is a no-op function call.
+			// Non-tools/call methods skip span creation (hot path untouched).
+			var sendErr error
+			if isToolsCall(payload) {
+				sendErr = sendWithSpan(ctx, tracer, stream, msg)
+			} else {
+				sendErr = stream.Send(msg)
+			}
+			if sendErr != nil {
+				errCh <- fmt.Errorf("sending to daemon: %w", sendErr)
 				return
 			}
 		}
@@ -96,4 +112,33 @@ func generateSessionID() string {
 	b := make([]byte, 16)
 	_, _ = io.ReadFull(cryptoRand.Reader, b)
 	return fmt.Sprintf("%x", b)
+}
+
+// toolsCallMethod is the JSON-RPC method substring used to detect tools/call messages.
+// Checking for the byte pattern avoids full JSON parsing on the hot path.
+var toolsCallMethod = []byte(`"method":"tools/call"`)
+
+// toolsCallMethodSpaced matches the variant with spaces around the colon.
+var toolsCallMethodSpaced = []byte(`"method": "tools/call"`)
+
+// isToolsCall returns true if the JSON-RPC payload is a tools/call request.
+// Uses substring matching rather than full JSON parsing to stay allocation-free
+// on the forwarding hot path.
+func isToolsCall(payload []byte) bool {
+	return bytes.Contains(payload, toolsCallMethod) ||
+		bytes.Contains(payload, toolsCallMethodSpaced)
+}
+
+// sendWithSpan wraps a gRPC Send in a forwarder.tools.call root span.
+// The span is the first node in the 3-span tree:
+//
+//	forwarder.tools.call -> daemon.mcp.tools.call -> kernel.tool.{name}
+//
+// With a noop tracer (v1.2 default), Start returns a non-recording span and
+// End is a no-op — overhead is bounded to one function call per tools/call.
+func sendWithSpan(ctx context.Context, tracer trace.Tracer, stream serenav1.ForwarderService_StreamMCPClient, msg *serenav1.MCPMessage) error {
+	_, span := tracer.Start(ctx, "forwarder.tools.call")
+	err := stream.Send(msg)
+	span.End()
+	return err
 }

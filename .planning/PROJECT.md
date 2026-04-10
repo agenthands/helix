@@ -42,26 +42,21 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Three-tier concurrency tests — scenarios + fan-out + testing/synctest — v1.1 Phase 8
 - ✓ Three-band error path coverage — 30 cases across categories and destructive tools — v1.1 Phase 8
 
+- ✓ README.md with capabilities, install, auto-generated tool/language tables — v1.2 Phase 14
+- ✓ USAGE.md with profiles, workflows, troubleshooting, observability, performance tuning — v1.2 Phase 14
+- ✓ CHANGELOG.md with v1.0, v1.1, v1.2 entries — v1.2 Phase 14
+- ✓ Benchmark harness with testing.B.Loop, CI benchstat gate, baseline capture workflow — v1.2 Phase 9, 15
+- ✓ Tool response time benchmarks (p50/p95/p99) for all 38 tools — v1.2 Phase 9
+- ✓ LSP indexing throughput benchmarks (cold/warm) — v1.2 Phase 9
+- ✓ Memory profiles (4 scenarios with dual Go/kernel RSS + pprof) — v1.2 Phase 9
+- ✓ Observability foundation (internal/obs/, trace-aware slog, admin listener) — v1.2 Phase 10
+- ✓ Prometheus /metrics with RED histograms, lspool gauges, bounded labels — v1.2 Phase 11
+- ✓ End-to-end tracing (otelgrpc, telemetry middleware, per-tool spans, OTLP exporter) — v1.2 Phase 12
+- ✓ Graceful degradation (per-class budgets, deadline propagation, ErrCircuitOpen, GOMEMLIMIT) — v1.2 Phase 13
+
 ### Active
 
-- README.md with capabilities and install instructions — v1.2
-- USAGE.md with full usage guide (client setup, profiles, workflows, troubleshooting) — v1.2
-- LSP indexing throughput benchmarks (LOC/sec) — v1.2
-- Tool response time benchmarks (p50/p95/p99) — v1.2
-- Memory profiles (baseline, per-workspace, per-LS-worker) — v1.2
-- Structured observability (logging, tracing IDs, span timing) — v1.2
-- Prometheus-compatible metrics export — v1.2
-- Graceful degradation (timeout budgets, circuit breaker tuning, OOM/crash recovery) — v1.2
-
-## Current Milestone: v1.2 Performance & Production Hardening
-
-**Goal:** Make Serena production-ready with measurable performance, observability, and graceful failure handling — plus comprehensive user-facing documentation.
-
-**Target features:**
-- Documentation: README.md (capabilities + install) and USAGE.md (client setup, workflows, troubleshooting)
-- Performance benchmarks: indexing throughput, tool response times, memory profiles, CI regression gate
-- Observability: structured logging, request tracing, Prometheus metrics
-- Graceful degradation: timeout budgets, circuit breaker tuning, OOM recovery, LS crash recovery
+(None — next milestone requirements TBD via `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -75,13 +70,13 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 38 MCP tools, 52 languages) and v1.1 Integration Testing (~12K additional LOC, comprehensive test suite). Single binary, 4-layer architecture, persistent daemon.
+Shipped v1.0 (25,779 LOC, 38 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), and v1.2 Performance & Production Hardening (35.7K total Go LOC). Single binary, 4-layer architecture, persistent daemon.
 
-Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC.
+Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
-Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. All layers wired via centralized daemon bootstrap with fail-fast core / degraded-optional startup.
+Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. All layers wired via centralized daemon bootstrap with fail-fast core / degraded-optional startup. Observability: noop-default provider with opt-in Prometheus metrics and OTLP tracing. Dedicated admin listener for /healthz, /readyz, /metrics, /debug/pprof.
 
-**v1.1 dogfooding results:** Integration testing against own codebase exposed 10 production bugs (access control gap in ProfileFilterMiddleware, SessionInfo data race, Language field routing, 5 edit tool bugs, worker lifecycle context, symbol URI resolution). All fixed. Test suite now covers all 38 tools with structured assertions.
+**v1.2 known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. `capture-baseline.yml` workflow ready for re-capture once resolved. benchstat@latest unpinned.
 
 The `legacy/` directory contains the original Python-based prototype as a reference.
 
@@ -113,6 +108,12 @@ The `legacy/` directory contains the original Python-based prototype as a refere
 | Three-tier concurrency (scenarios + fan-out + synctest) | Layered coverage: realistic + targeted + deterministic | ✓ Good — caught SessionInfo data race |
 | Three-band error coverage (category + destructive + read-only) | Risk-weighted testing per Google/OWASP guidance | ✓ Good — 30 cases with low duplication |
 | Structured IsError oracle (defer typed errors) | Kernel lacks typed errors yet, tracked as TODO(#typed-errors) | ⚠ Revisit — acceptable short-term, needs upgrade path |
+| Benchmarks-first ordering | Observing-the-benchmarked-thing taints results; Phase 9 baseline before any obs code | ✓ Good — clean pre-instrumentation baseline |
+| Noop-default observability | Metrics/tracing opt-in, zero overhead when disabled | ✓ Good — 0 allocs/op on fast path |
+| Tiered benchmark thresholds | PR tier (15%/25%) relaxed for CI noise; release tier (10%/20%) tight | ✓ Good — reduces false positives |
+| Dedicated admin listener | Separate from MCP mux; bind failure non-fatal | ✓ Good — clean separation of concerns |
+| Decoupled MetricsSink interface | lspool has zero imports of internal/obs | ✓ Good — compile-time assertion enforces |
+| Single typed error (ErrCircuitOpen) | Full migration deferred to v1.3+ | — Pending |
 
 ## Evolution
 
@@ -132,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-10 — Phase 14 (Documentation) complete: cmd/docgen codegen tool, auto-generated README tables, USAGE.md operator guide, Go-only CHANGELOG.md. v1.2 milestone Phase 14/15 done.*
+*Last updated: 2026-04-10 after v1.2 milestone — Performance & Production Hardening shipped (7 phases, 25 plans, 35.7K Go LOC)*

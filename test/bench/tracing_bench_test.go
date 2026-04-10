@@ -41,7 +41,7 @@ func BenchmarkTracingOffPath(b *testing.B) {
 	}
 	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, logger)
+	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := &mcpsdk.CallToolRequest{
 		Params: &mcpsdk.CallToolParamsRaw{
@@ -77,7 +77,7 @@ func BenchmarkTracingOnPath(b *testing.B) {
 	}
 	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, logger)
+	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := &mcpsdk.CallToolRequest{
 		Params: &mcpsdk.CallToolParamsRaw{

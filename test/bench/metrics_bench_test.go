@@ -96,7 +96,7 @@ func BenchmarkTelemetryMiddleware(b *testing.B) {
 	}
 	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, logger)
+	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := newBenchCallToolReq("find_symbol")
 	ctx := context.Background()
@@ -123,7 +123,7 @@ func BenchmarkTelemetryMiddleware_ToolsList(b *testing.B) {
 	}
 	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, logger)
+	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := newBenchCallToolReq("find_symbol")
 	ctx := context.Background()

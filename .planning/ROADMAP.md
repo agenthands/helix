@@ -75,7 +75,7 @@
   2. An operator can enable the loopback admin listener on a configured port and hit `/healthz` and `/readyz` to check daemon liveness and readiness
   3. Log records emitted during a traced request carry `trace_id` and `span_id` fields injected from context without manual plumbing at call sites
   4. `/debug/pprof/*` endpoints are reachable on the admin listener only when the active profile grants admin scope
-**Plans**: 3 plans
+**Plans**: 1 plan
 - [x] 10-01-PLAN.md — Create internal/obs/ package (Noop provider, ContextHandler, SpanContext stub) + ObservabilityConfig schema + --admin-addr CLI flag (OBS-01, OBS-02)
 - [x] 10-02-PLAN.md — Admin listener: telemetry.go with loopback validation, /healthz + /readyz + gated /debug/pprof/*, non-fatal errgroup wiring, ready atomic (OBS-03, OBS-04, OBS-05)
 - [x] 10-03-PLAN.md — OBS-06 benchmark proof: slog hot-path bench + v1.2-phase10 baseline committed, benchgate delta gate against Phase 9 baseline (OBS-06)
@@ -120,7 +120,7 @@
   2. When the lspool circuit is open, callers receive a typed `lspool.ErrCircuitOpen` with a structured envelope, and the half-open state admits exactly one probe with decorrelated jitter backoff
   3. A crashed language server is restarted within its restart budget; repeated crashes trip the circuit rather than looping
   4. Sending SIGTERM mid-request drains in-flight calls, flushes telemetry exporters within a separate 5s shutdown context, and exits cleanly — validated by the graceful shutdown integration test
-**Plans**: 3 plans
+**Plans**: 1 plan
 Plans:
 - [x] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
 - [x] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
@@ -135,7 +135,7 @@ Plans:
   2. USAGE.md gives an operator a complete reference for profiles, modes, config precedence, workflow examples, troubleshooting, observability quickstart, and performance tuning
   3. The 38-tool table in README and the 52-language table are generated from the registry, so they cannot drift from the code
   4. CHANGELOG.md records v1.0, v1.1, and v1.2 with dated entries and links to the milestone summaries
-**Plans**: 3 plans
+**Plans**: 1 plan
 Plans:
 - [x] 14-01-PLAN.md -- README.md: project pitch, install, capabilities, tool table, language table, client configs (DOC-01, DOC-02, DOC-03, DOC-04)
 - [x] 14-02-PLAN.md -- USAGE.md: profile/mode reference, workflows, troubleshooting, observability, performance tuning (DOC-05, DOC-06, DOC-07, DOC-08, DOC-09)
@@ -149,9 +149,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `bench.yml` invokes benchgate WITHOUT `--warn-only` — the CI gate actually blocks PRs that regress beyond thresholds
   2. `test/bench/baselines/v1.1-github-hosted.txt` contains real benchmark numbers from an ubuntu-latest CI run, replacing the PLACEHOLDER content
-**Plans**: 3 plans
+**Plans**: 1 plan
 Plans:
-- [ ] 15-01-PLAN.md -- Remove --warn-only from bench.yml, commit real v1.1 baseline numbers (BENCH-05, BENCH-06)
+- [ ] 15-01-PLAN.md -- Create capture-baseline.yml workflow, remove --warn-only from bench.yml, update baselines README (BENCH-05, BENCH-06)
 
 ## Progress
 

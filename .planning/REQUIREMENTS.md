@@ -7,9 +7,9 @@
 
 ### Benchmarks
 
-- [ ] **BENCH-01**: Benchmark harness in `test/bench/` using `testing.B.Loop` (Go 1.25)
+- [x] **BENCH-01**: Benchmark harness in `test/bench/` using `testing.B.Loop` (Go 1.25)
 - [x] **BENCH-02**: Tool response time benchmarks for all 38 tools (p50/p95/p99)
-- [ ] **BENCH-03**: LSP indexing throughput benchmarks (cold and warm) for Go fixture
+- [x] **BENCH-03**: LSP indexing throughput benchmarks (cold and warm) for Go fixture
 - [x] **BENCH-04**: Memory profile benchmarks (baseline, per-workspace, per-LS-worker)
 - [ ] **BENCH-05**: CI benchstat regression gate with tiered thresholds per 09-CONTEXT.md D-01 — PR tier (GitHub-hosted, relaxed): >15% time / >25% allocs at p<0.05; release tier (self-hosted, tight): >10% time / >20% allocs at p<0.05
 - [ ] **BENCH-06**: v1.1 baselines committed to `test/bench/baselines/`
@@ -21,7 +21,7 @@
 - [x] **OBS-03**: Dedicated admin listener on loopback (configurable port, default disabled)
 - [x] **OBS-04**: `/healthz` and `/readyz` endpoints on admin listener
 - [x] **OBS-05**: Gated `/debug/pprof/*` endpoints (admin profile only)
-- [ ] **OBS-06**: slog hot-path allocation budget ≤ +1 alloc/op vs Phase 9 baseline
+- [x] **OBS-06**: slog hot-path allocation budget ≤ +1 alloc/op vs Phase 9 baseline
 
 ### Metrics
 
@@ -33,21 +33,21 @@
 
 ### Tracing
 
-- [ ] **TRACE-01**: `otelgrpc` StatsHandlers on forwarder↔daemon gRPC
-- [ ] **TRACE-02**: Telemetry middleware replacing logging middleware; runs before profile filter
-- [ ] **TRACE-03**: Per-tool sub-spans for kernel operations
-- [ ] **TRACE-04**: Optional OTLP exporter behind config flag
-- [ ] **TRACE-05**: Default sampler `ParentBased(TraceIDRatioBased(0.0))` — off by default
+- [x] **TRACE-01**: `otelgrpc` StatsHandlers on forwarder↔daemon gRPC
+- [x] **TRACE-02**: Telemetry middleware replacing logging middleware; runs before profile filter
+- [x] **TRACE-03**: Per-tool sub-spans for kernel operations
+- [x] **TRACE-04**: Optional OTLP exporter behind config flag
+- [x] **TRACE-05**: Default sampler `ParentBased(TraceIDRatioBased(0.0))` — off by default
 
 ### Graceful Degradation
 
-- [ ] **DEGRADE-01**: `internal/degrade/` package with per-class timeout budgets (read 5s / search 15s / edit 10s / index 120s / diagnostics 20s)
-- [ ] **DEGRADE-02**: Deadline propagation from forwarder → daemon → kernel → LS
-- [ ] **DEGRADE-03**: Typed `lspool.ErrCircuitOpen` error with structured envelope
-- [ ] **DEGRADE-04**: Circuit breaker tuning with decorrelated jitter and single-probe half-open
-- [ ] **DEGRADE-05**: LS crash recovery with restart budget
-- [ ] **DEGRADE-06**: `runtime/debug.SetMemoryLimit` wired from config
-- [ ] **DEGRADE-07**: Graceful shutdown integration test (SIGTERM mid-request, spans flushed)
+- [x] **DEGRADE-01**: `internal/degrade/` package with per-class timeout budgets (read 5s / search 15s / edit 10s / index 120s / diagnostics 20s)
+- [x] **DEGRADE-02**: Deadline propagation from forwarder → daemon → kernel → LS
+- [x] **DEGRADE-03**: Typed `lspool.ErrCircuitOpen` error with structured envelope
+- [x] **DEGRADE-04**: Circuit breaker tuning with decorrelated jitter and single-probe half-open
+- [x] **DEGRADE-05**: LS crash recovery with restart budget
+- [x] **DEGRADE-06**: `runtime/debug.SetMemoryLimit` wired from config
+- [x] **DEGRADE-07**: Graceful shutdown integration test (SIGTERM mid-request, spans flushed)
 
 ### Documentation
 
@@ -93,35 +93,35 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BENCH-01 | Phase 9 | Pending |
+| BENCH-01 | Phase 9 | Complete |
 | BENCH-02 | Phase 9 | Complete |
-| BENCH-03 | Phase 9 | Pending |
+| BENCH-03 | Phase 9 | Complete |
 | BENCH-04 | Phase 9 | Complete |
-| BENCH-05 | Phase 9 | Pending |
-| BENCH-06 | Phase 9 | Pending |
+| BENCH-05 | Phase 15 | Pending |
+| BENCH-06 | Phase 15 | Pending |
 | OBS-01 | Phase 10 | Complete |
 | OBS-02 | Phase 10 | Complete |
 | OBS-03 | Phase 10 | Complete |
 | OBS-04 | Phase 10 | Complete |
 | OBS-05 | Phase 10 | Complete |
-| OBS-06 | Phase 10 | Pending |
+| OBS-06 | Phase 10 | Complete |
 | METRIC-01 | Phase 11 | Complete |
 | METRIC-02 | Phase 11 | Complete |
 | METRIC-03 | Phase 11 | Complete |
 | METRIC-04 | Phase 11 | Complete |
 | METRIC-05 | Phase 11 | Complete |
-| TRACE-01 | Phase 12 | Pending |
-| TRACE-02 | Phase 12 | Pending |
-| TRACE-03 | Phase 12 | Pending |
-| TRACE-04 | Phase 12 | Pending |
-| TRACE-05 | Phase 12 | Pending |
-| DEGRADE-01 | Phase 13 | Pending |
-| DEGRADE-02 | Phase 13 | Pending |
-| DEGRADE-03 | Phase 13 | Pending |
-| DEGRADE-04 | Phase 13 | Pending |
-| DEGRADE-05 | Phase 13 | Pending |
-| DEGRADE-06 | Phase 13 | Pending |
-| DEGRADE-07 | Phase 13 | Pending |
+| TRACE-01 | Phase 12 | Complete |
+| TRACE-02 | Phase 12 | Complete |
+| TRACE-03 | Phase 12 | Complete |
+| TRACE-04 | Phase 12 | Complete |
+| TRACE-05 | Phase 12 | Complete |
+| DEGRADE-01 | Phase 13 | Complete |
+| DEGRADE-02 | Phase 13 | Complete |
+| DEGRADE-03 | Phase 13 | Complete |
+| DEGRADE-04 | Phase 13 | Complete |
+| DEGRADE-05 | Phase 13 | Complete |
+| DEGRADE-06 | Phase 13 | Complete |
+| DEGRADE-07 | Phase 13 | Complete |
 | DOC-01 | Phase 14 | Pending |
 | DOC-02 | Phase 14 | Pending |
 | DOC-03 | Phase 14 | Pending |
@@ -135,9 +135,11 @@ Deferred to v1.3+. Tracked but not in current roadmap.
 
 **Coverage:**
 - v1.2 requirements: 38 total
+- Complete: 26 (BENCH-01..04, OBS-01..06, METRIC-01..05, TRACE-01..05, DEGRADE-01..07)
+- Pending: 12 (BENCH-05..06 → Phase 15, DOC-01..10 → Phase 14)
 - Mapped to phases: 38
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-09*
-*Last updated: 2026-04-09 — traceability populated at roadmap creation*
+*Last updated: 2026-04-10 — gap closure phases assigned, 15 stale checkboxes fixed*

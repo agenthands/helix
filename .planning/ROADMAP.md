@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-5 (shipped 2026-04-08)
 - ✅ **v1.1 Integration Testing** — Phases 6-8 (shipped 2026-04-09)
-- 🚧 **v1.2 Performance & Production Hardening** — Phases 9-14 (in progress)
+- 🚧 **v1.2 Performance & Production Hardening** — Phases 9-15 (in progress)
 
 ## Phases
 
@@ -32,11 +32,11 @@
 
 </details>
 
-### 🚧 v1.2 Performance & Production Hardening (Phases 9-14)
+### 🚧 v1.2 Performance & Production Hardening (Phases 9-15)
 
 **Goal:** Make Serena production-ready with measurable performance, observability, and graceful failure handling — plus comprehensive user-facing documentation.
 
-**Granularity:** coarse · **Phases:** 6 · **Requirements mapped:** 38/38
+**Granularity:** coarse · **Phases:** 7 · **Requirements mapped:** 38/38
 
 **Ordering Constraint (Non-Negotiable):** Phases execute strictly sequentially. The critical meta-pitfall is that observing the thing you are benchmarking taints the benchmark. Phase 9 must publish the pre-instrumentation baseline before any observability code lands. Each subsequent phase publishes a benchstat delta vs. the previous phase's baseline as a delta gate (>10% time or >20% allocs at p<0.05 blocks close-out).
 
@@ -135,11 +135,23 @@ Plans:
   2. USAGE.md gives an operator a complete reference for profiles, modes, config precedence, workflow examples, troubleshooting, observability quickstart, and performance tuning
   3. The 38-tool table in README and the 52-language table are generated from the registry, so they cannot drift from the code
   4. CHANGELOG.md records v1.0, v1.1, and v1.2 with dated entries and links to the milestone summaries
-**Plans**: 3 plans
+**Plans**: TBD
 Plans:
-- [x] 13-01-PLAN.md -- internal/degrade/ package with tool-class map, DegradationConfig (DEGRADE-01)
-- [x] 13-02-PLAN.md -- Deadline propagation in middleware, typed ErrCircuitOpen, circuit breaker enhancements (DEGRADE-02, DEGRADE-03, DEGRADE-04, DEGRADE-05)
-- [x] 13-03-PLAN.md -- SetMemoryLimit wiring, graceful shutdown integration test (DEGRADE-06, DEGRADE-07)
+- [ ] 14-01-PLAN.md -- README.md: project pitch, install, capabilities, tool table, language table, client configs (DOC-01, DOC-02, DOC-03, DOC-04)
+- [ ] 14-02-PLAN.md -- USAGE.md: profile/mode reference, workflows, troubleshooting, observability, performance tuning (DOC-05, DOC-06, DOC-07, DOC-08, DOC-09)
+- [ ] 14-03-PLAN.md -- CHANGELOG.md: v1.0, v1.1, v1.2 entries (DOC-10)
+
+### Phase 15: Benchmark Gate Hardening
+**Goal**: Complete the partial BENCH-05/BENCH-06 requirements — make the CI benchstat gate enforce real thresholds against real baseline numbers
+**Depends on**: Phase 9 (benchmark harness must exist)
+**Requirements**: BENCH-05, BENCH-06
+**Gap Closure:** Closes partial gaps from v1.2 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. `bench.yml` invokes benchgate WITHOUT `--warn-only` — the CI gate actually blocks PRs that regress beyond thresholds
+  2. `test/bench/baselines/v1.1-github-hosted.txt` contains real benchmark numbers from an ubuntu-latest CI run, replacing the PLACEHOLDER content
+**Plans**: TBD
+Plans:
+- [ ] 15-01-PLAN.md -- Remove --warn-only from bench.yml, commit real v1.1 baseline numbers (BENCH-05, BENCH-06)
 
 ## Progress
 
@@ -153,9 +165,10 @@ Plans:
 | 6. Test Harness + Go Dogfooding | v1.1 | 4/4 | Complete | 2026-04-09 |
 | 7. Symbol Editing + Multi-Language Fixtures | v1.1 | 3/3 | Complete | 2026-04-09 |
 | 8. Advanced Testing | v1.1 | 4/4 | Complete | 2026-04-09 |
-| 9. Benchmark Harness & v1.1 Baseline | v1.2 | 0/6 | Not started | - |
+| 9. Benchmark Harness & v1.1 Baseline | v1.2 | 6/6 | Complete    | 2026-04-09 |
 | 10. Observability Foundation | v1.2 | 3/3 | Complete    | 2026-04-09 |
 | 11. Metrics | v1.2 | 4/4 | Complete    | 2026-04-09 |
 | 12. Tracing End-to-End | v1.2 | 5/5 | Complete    | 2026-04-10 |
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete    | 2026-04-10 |
-| 14. Documentation | v1.2 | 0/? | Not started | - |
+| 14. Documentation | v1.2 | 0/3 | Not started | - |
+| 15. Benchmark Gate Hardening | v1.2 | 0/1 | Not started | - |

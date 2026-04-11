@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Documentation Catchup
 status: planning
-stopped_at: Phase 16 context gathered
-last_updated: "2026-04-11T08:23:26.926Z"
+stopped_at: Phase 17 context gathered
+last_updated: "2026-04-11T08:44:35.652Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 2
@@ -52,6 +52,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T07:58:55.841Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-core-documentation-update/16-CONTEXT.md
+Last session: 2026-04-11T08:44:35.650Z
+Stopped at: Phase 17 context gathered
+Resume file: .planning/phases/17-usage-install-guides/17-CONTEXT.md

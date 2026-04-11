@@ -111,7 +111,13 @@ Plans:
   3. Read mode blocks edit tool calls, admin mode grants all tools, and mode switching updates tool visibility correctly across concurrent sessions
   4. Worker pool survives sustained load with circuit breaker trips, pressure eviction, and share-until-dirty under concurrent edits; clean shutdown drains work with no goroutine leaks
   5. Selective LS/memory/skill failure injection causes degraded startup (not crash), and affected tools report status honestly
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — Create fixture matrix (polyglot, unsupported, collision) and runtime oracle stub
+- [ ] 20-02-PLAN.md — Multi-step agent workflow scenarios (Go, Python, TS, polyglot, unsupported, collision, degraded)
+- [ ] 20-03-PLAN.md — Profile/mode behavior tests and deferred CONT-03 error categories
+- [ ] 20-04-PLAN.md — Runtime stress (pool, shutdown, degraded subsystem injection)
 
 ### Phase 21: LLM Behavioral & Judge
 **Goal**: An LLM client can correctly select, disambiguate, and interpret results from every Serena tool
@@ -150,5 +156,5 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 18. Harness Extraction & Foundation | v1.4 | 2/2 | Complete    | 2026-04-11 |
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete    | 2026-04-11 |
-| 20. Scenarios & Runtime | v1.4 | 0/0 | Not started | - |
+| 20. Scenarios & Runtime | v1.4 | 0/4 | Not started | - |
 | 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

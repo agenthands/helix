@@ -582,6 +582,53 @@ go tool pprof http://127.0.0.1:9100/debug/pprof/heap
 curl http://127.0.0.1:9100/debug/pprof/goroutine?debug=2
 ```
 
+### Benchmarks
+
+Serena ships a benchmark suite in `test/bench/` for measuring tool response times, LSP indexing throughput, observability overhead, and memory usage. Benchmarks require `gopls` installed and use `testing.B.Loop` (Go 1.24+).
+
+**Run all benchmarks:**
+
+```bash
+go test -bench=. ./test/bench/ -timeout 300s
+```
+
+**Run a specific suite:**
+
+```bash
+go test -bench=BenchmarkTools ./test/bench/ -timeout 300s
+```
+
+**With memory allocation stats:**
+
+```bash
+go test -bench=. -benchmem ./test/bench/ -timeout 300s
+```
+
+**Comparing runs with benchstat:**
+
+Run benchmarks multiple times for statistical significance, then compare:
+
+```bash
+# Install benchstat
+go install golang.org/x/perf/cmd/benchstat@latest
+
+# Capture before and after (5+ runs recommended)
+go test -bench=. -benchmem -count=5 ./test/bench/ -timeout 300s > bench-before.txt
+# ... make changes ...
+go test -bench=. -benchmem -count=5 ./test/bench/ -timeout 300s > bench-after.txt
+
+# Compare
+benchstat bench-before.txt bench-after.txt
+```
+
+benchstat reports per-benchmark deltas with confidence intervals. A `~` result means no statistically significant change; `+` or `-` indicates a measurable regression or improvement.
+
+**Tips:**
+
+- Use `-short` to skip `BenchmarkFullRepoSmoke` (the longest-running suite)
+- Use `GOMAXPROCS=4` to reduce noise on machines with many cores
+- For CI benchmark gate details, see [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## Performance Tuning
 
 ### Worker Pool Sizing

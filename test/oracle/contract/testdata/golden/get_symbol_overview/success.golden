@@ -1,0 +1,7 @@
+Function main (line 5)
+Function Helper (line 11)
+Struct DemoStruct (line 16)
+  Field Field (line 17)
+Method (*DemoStruct).Value (line 21)
+Function UsingHelper (line 26)
+Function UnusedFunc (line 31)

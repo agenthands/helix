@@ -1,0 +1,9 @@
+main.go:5: func main() {
+main.go:10: // Helper is a top-level function used for go_to_definition and find_references tests.
+main.go:11: func Helper() {
+main.go:12: 	fmt.Println("Helper function called")
+main.go:21: func (d *DemoStruct) Value() int {
+main.go:26: func UsingHelper() {
+main.go:31: func UnusedFunc() {
+pkg/greeter.go:14: func (s *SimpleGreeter) Greet(name string) string {
+pkg/greeter.go:19: func NewGreeter() Greeter {

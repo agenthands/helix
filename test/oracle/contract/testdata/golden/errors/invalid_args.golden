@@ -1,0 +1,1 @@
+validating "arguments": validating root: required: missing properties: ["query"]

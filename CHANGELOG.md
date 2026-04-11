@@ -36,6 +36,11 @@ All notable changes to Serena (Go) are documented here.
 - USAGE.md: profiles, modes, tutorials, troubleshooting, observability quickstart, performance tuning
 - This changelog
 
+### Benchmark Gate Hardening
+- `capture-baseline.yml` workflow for on-demand baseline capture on GitHub-hosted runners
+- Benchstat CI gate enforces blocking thresholds (removed `--warn-only` flag)
+- Real ubuntu-latest baseline numbers committed to `test/bench/baselines/`
+
 ## v1.1 — Integration Testing (2026-04-09)
 
 ### Test Harness & Dogfooding

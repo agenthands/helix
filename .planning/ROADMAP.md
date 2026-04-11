@@ -78,7 +78,11 @@
   1. A new test file in `test/oracle/protocol/` can import `test/harness` and call `StartTestDaemon`, `PrepareFixture`, `callTool`, and golden helpers without compilation errors
   2. Running `go test ./...` (no tags) skips all integration/llm/llmjudge tests; running with `-tags integration` includes oracle tests but not LLM tests
   3. Existing v1.1 tests in `test/integration/` continue to pass unchanged
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Extract test/harness/ package with evolved API and self-tests
+- [ ] 18-02-PLAN.md — Create oracle directory stubs and smoke test for build tag taxonomy
 
 ### Phase 19: Protocol & Contract Oracles
 **Goal**: Every MCP protocol interaction and every exposed tool has deterministic correctness assertions
@@ -139,7 +143,7 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
 | 16. Core Documentation Update | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
-| 18. Harness Extraction & Foundation | v1.4 | 0/0 | Not started | - |
+| 18. Harness Extraction & Foundation | v1.4 | 0/2 | Planning | - |
 | 19. Protocol & Contract Oracles | v1.4 | 0/0 | Not started | - |
 | 20. Scenarios & Runtime | v1.4 | 0/0 | Not started | - |
 | 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

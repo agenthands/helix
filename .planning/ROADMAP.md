@@ -64,7 +64,7 @@
 **Milestone Goal:** Prove Serena-Go is protocol-correct, contract-stable, runtime-safe, and genuinely usable by LLM clients through a multi-oracle test harness.
 
 - [x] **Phase 18: Harness Extraction & Foundation** - Extract importable test harness and establish build tag taxonomy (completed 2026-04-11)
-- [ ] **Phase 19: Protocol & Contract Oracles** - Validate MCP protocol compliance and per-tool contract stability
+- [x] **Phase 19: Protocol & Contract Oracles** - Validate MCP protocol compliance and per-tool contract stability (completed 2026-04-11)
 - [ ] **Phase 20: Scenarios & Runtime** - Multi-step agent workflows, polyglot honesty, profile/mode behavior, and runtime stress
 - [ ] **Phase 21: LLM Behavioral & Judge** - LLM tool selection accuracy, disambiguation, output interpretation, and judge scoring
 
@@ -94,12 +94,12 @@ Plans:
   3. Two concurrent sessions with different workspaces and modes do not observe each other's state or side effects
   4. A disconnected client can reconnect and resume without worker leakage or stale state
   5. Every exposed MCP tool has a golden output file and error responses assert stable error class/code per category
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 19-01-PLAN.md — Protocol oracle: handshake, tools/list, session isolation, reconnect
-- [ ] 19-02-PLAN.md — Contract oracle: schema meta-validation and selectability heuristics
-- [ ] 19-03-PLAN.md — Contract oracle: golden output files and error category contracts
+- [x] 19-01-PLAN.md — Protocol oracle: handshake, tools/list, session isolation, reconnect
+- [x] 19-02-PLAN.md — Contract oracle: schema meta-validation and selectability heuristics
+- [x] 19-03-PLAN.md — Contract oracle: golden output files and error category contracts
 
 ### Phase 20: Scenarios & Runtime
 **Goal**: Realistic agent workflows pass across diverse repository shapes, and the runtime survives stress and degraded conditions
@@ -149,6 +149,6 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 16. Core Documentation Update | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 18. Harness Extraction & Foundation | v1.4 | 2/2 | Complete    | 2026-04-11 |
-| 19. Protocol & Contract Oracles | v1.4 | 0/3 | Planning | - |
+| 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete    | 2026-04-11 |
 | 20. Scenarios & Runtime | v1.4 | 0/0 | Not started | - |
 | 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

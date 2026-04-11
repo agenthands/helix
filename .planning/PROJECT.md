@@ -56,7 +56,16 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(None — next milestone requirements TBD via `/gsd:new-milestone`)
+## Current Milestone: v1.3 Documentation Catchup
+
+**Goal:** Update all project documentation to accurately reflect v1.2 capabilities (observability, metrics, tracing, graceful degradation, benchmarks).
+
+**Target features:**
+- README.md — update capabilities, architecture, tool counts, install instructions
+- USAGE.md — add observability config, Prometheus metrics, OTLP tracing, admin listener, graceful degradation tuning
+- CHANGELOG.md — verify v1.2 entry completeness
+- CONTRIBUTING.md — update dev workflow, test commands, benchmark workflow
+- llms-install.md — update install/config instructions for current state
 
 ### Out of Scope
 
@@ -133,4 +142,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-10 after v1.2 milestone — Performance & Production Hardening shipped (7 phases, 25 plans, 35.7K Go LOC)*
+*Last updated: 2026-04-11 after v1.3 milestone start — Documentation Catchup*

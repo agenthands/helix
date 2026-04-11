@@ -20,7 +20,7 @@ more complex codebases.
 
 ## How Serena Works
 
-Serena provides 38+ MCP tools for coding workflows, backed by real language servers.
+Serena provides 35+ MCP tools for coding workflows, backed by real language servers.
 An LLM orchestrates these tools to navigate, understand, and edit code.
 
 Serena runs as a **persistent daemon** that keeps language servers warm between sessions.

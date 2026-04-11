@@ -1,111 +1,174 @@
-# Research Synthesis: Serena v1.2 Performance & Production Hardening
+# Project Research Summary
 
-**Researched:** 2026-04-09
+**Project:** Serena
+**Domain:** Multi-oracle integration test harness for MCP/LSP code intelligence platform
+**Researched:** 2026-04-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Serena v1.0/v1.1 already shipped the hard parts — 4-layer platform, worker pool with circuit breaker/adaptive TTL/pressure eviction, 38 tools, 52 languages, integration harness. **v1.2 is a hardening milestone, not a feature milestone**: observability, benchmarking, degradation tuning, and user docs. All four research files converge on stdlib-first (`log/slog`, `testing.B`, `benchstat`) plus one Prom client and one OTel SDK, funneled through a new `internal/obs/` shim.
+Serena v1.4 is a test-only milestone layering a multi-oracle integration test harness on top of the proven v1.1 test infrastructure (23 test files, 19 golden files, multi-language fixtures). The approach is conservative: only 2 new Go module dependencies (`santhosh-tekuri/jsonschema/v6` for schema validation, `anthropics/anthropic-sdk-go` for LLM behavioral tests), five oracle layers as separate packages with independent build tags, and a strict "extend, don't replace" rule for the existing harness.
 
-The approach is a thin additive delta: `prometheus/client_golang` + 4 OTel modules, a new `internal/obs/` package holding the trace-aware slog handler and pre-registered metric vectors, a **dedicated loopback admin listener** (`/metrics`, `/healthz`, `/readyz`, gated pprof) separate from the MCP transport, and an `internal/degrade/` package centralizing per-class timeout budgets. Existing lspool circuit breaker, pressure eviction, and errgroup shutdown are **instrumented and tuned**, not rewritten.
+The dominant risk is breaking existing regression coverage while restructuring. The critical prerequisite is extracting shared harness code from `test/integration/` (which uses an external test package and can't be imported) into an importable `test/harness/` package. All five oracle layers depend on this extraction. The architecture research identifies a strict dependency chain: harness extraction → protocol oracle → contract oracle + fixtures → scenario oracle → CI pipeline → LLM behavioral → LLM judge.
 
-The dominant risk is a meta-pitfall: **observing the thing you are benchmarking taints the benchmark**. This single concern drives the phase ordering decision below.
+The pitfalls research converges on four critical warnings: (1) don't modify existing harness API signatures, (2) separate LLM tests from deterministic tests via build tags from day one, (3) don't apply golden files to every tool×language combination (use assertion-based tests for dynamic outputs), and (4) don't over-engineer — "multi-oracle" is a mental model for file organization, not a runtime framework.
 
 ## Key Findings
 
-### Stack Choices
-- **`log/slog`** (stdlib) — use `slog.LogAttrs` on hot paths to avoid boxing
-- **`prometheus/client_golang` v1.23.x** — chosen over OTel metrics SDK (requirement says "Prometheus-compatible")
-- **`go.opentelemetry.io/otel` v1.38.x + OTLP/gRPC exporter** — tracing off by default
-- **`otelslog` bridge** — auto-injects trace_id/span_id into slog records
-- **`otelgrpc` StatsHandler** — forwarder↔daemon traceparent propagation
-- **`testing.B` + `benchstat`** — use Go 1.24+ `testing.B.Loop` to prevent elision
+### Recommended Stack
 
-Net runtime additions: 1 Prom + 4 OTel modules. No CGO.
+Only 2 new direct dependencies needed. Everything else extends existing infrastructure.
 
-### Feature Landscape
+**Core technologies:**
+- `santhosh-tekuri/jsonschema/v6` v6.0.2: JSON Schema Draft 2020-12 validation for tool contract testing — structured `ValidationError` output for clear test failure messages
+- `anthropics/anthropic-sdk-go` v1.28.0+: Official Anthropic Go SDK for LLM behavioral tests — native `tool_use` support, build-tag gated (`//go:build llm`)
+- `gotestsum` (CI-only): Structured JUnit XML reporting for CI pipeline — install in workflow, not in go.mod
 
-**Table stakes:**
-- Benchmarks: p50/p95/p99 for 38 tools, LSP indexing throughput, memory profiles, benchstat CI gate
-- Structured logging: slog JSON, trace-ID propagation, log↔trace correlation
-- Metrics: `/metrics`, RED per tool, pool gauges, Go runtime collectors, `/healthz`/`/readyz`
-- Degradation: per-tool timeout budgets, deadline propagation, structured error taxonomy, LS crash recovery, `GOMEMLIMIT`, graceful drain
-- Docs: README (pitch, install, 52-lang table, client configs), USAGE.md (client setup, profile/mode reference, troubleshooting, observability quickstart), CHANGELOG
+**No new libraries needed for:**
+- Test framework (stdlib `testing.T` + `testify` sufficient)
+- Golden file management (extend existing `golden.go` pattern)
+- Fixture management (extend existing `PrepareFixture`)
+- MCP client testing (existing MCP SDK `NewInMemoryTransports()`)
 
-**Differentiators:** `serena doctor` CLI, pprof admin endpoints, optional OTLP exporter, memory sizing calculator
+### Expected Features
 
-**Anti-features:** mandatory OTel pipeline, vendor APM, docs site generator, shipped Grafana dashboards, load-test harness, admin web UI, full typed-errors migration (v1.2 introduces exactly one: `lspool.ErrCircuitOpen`)
+**Must have (table stakes):**
+- Protocol compliance tests (MCP init, tool listing, session isolation, reconnect)
+- Per-tool contract tests with golden outputs and schema validation
+- Error shape assertions with categories (extend existing `errCase`)
+- Data-driven scenario matrix across 7+ repository shapes
+- Polyglot honesty rules (no fake cross-language links, no silent omissions)
+- Profile/mode behavior tests (mode gating actually blocks/allows correctly)
+- 5-stage CI pipeline (fast deterministic → scenarios → -race → LLM behavioral → LLM judge)
+- Build tag separation (`integration`, `llm`, `llmjudge`)
+
+**Should have (differentiators):**
+- LLM behavioral tests (tool selection accuracy, disambiguation, output interpretation)
+- LLM-as-judge transcript scoring with structured rubrics
+- Worker pool stress scenarios (sustained load, circuit breaker trips, pressure eviction)
+- Degraded subsystem simulation (selective LS/memory/skill failure injection)
+- Test coverage matrix report
+
+**Defer:**
+- LLM score regression tracking over time
+- Multiple LLM providers for judge
+- Full MCPAgentBench reproduction
 
 ### Architecture Approach
 
-Additive, not restructured. No kernel/skill signature changes.
+Five oracle layers as separate Go sub-packages under `test/oracle/{protocol,contract,scenario,behavioral,judge}/`, each with its own build tag. No oracle layer imports another; all import from `test/harness/` (extracted from existing `test/integration/`). YAML-driven scenarios use `filepath.Glob` auto-discovery. Golden files scale via hierarchical subdirectories. LLM layers use double gating (build tag + env var).
 
-1. **`internal/obs/`** (new) — shim over OTel + Prom. Noop by default.
-2. **Dedicated admin listener** (`internal/daemon/telemetry.go`) — separate net.Listener on `127.0.0.1:0`, hosts `/metrics`, `/healthz`, `/readyz`, gated pprof. **Not shared with MCP mux.** Bind failure is non-fatal.
-3. **Telemetry middleware** replaces logging middleware; runs **before** profile filter.
-4. **`internal/degrade/`** (new) — per-class budgets (read 5s / search 15s / edit 10s / index 120s / diagnostics 20s); applied at tool handler entry.
-5. **lspool instrumentation** — lease wait/hold histograms, eviction reason labels, circuit state gauge, crash counters, RSS gauge.
-6. **Trace propagation** — `otelgrpc` StatsHandlers on forwarder↔daemon gRPC; kernel tools add sub-spans.
-7. **`test/bench/`** — macro benches as `package bench_test`; micro benches co-located.
+**Major components:**
+1. `test/harness/` — Importable shared infrastructure (extracted from `test/integration/`)
+2. `test/oracle/protocol/` — MCP session lifecycle tests (no LS dependency)
+3. `test/oracle/contract/` — Per-tool schema validation, golden outputs, error shapes
+4. `test/oracle/scenario/` — YAML-driven multi-step scenarios across repo shapes
+5. `test/oracle/behavioral/` — LLM tool selection and output interpretation tests
+6. `test/oracle/judge/` — LLM-as-judge transcript scoring with rubrics
+7. `testdata/fixtures/` — Extended with polyglot, unsupported, collision, degraded fixtures
+8. `.github/workflows/integration-v2.yml` — 5-stage CI pipeline
 
 ### Critical Pitfalls
 
-1. **Meta-pitfall: observing the benchmarked thing** — mitigate via strict ordering (benchmarks first) + per-phase delta reports
-2. **Prometheus cardinality explosion** — bounded-label contract in the same PR as the first metric
-3. **Benchmark compiler elision** — mandate `testing.B.Loop`, `-count=10`, benchstat at p<0.05
-4. **Flush lost on SIGTERM** — separate shutdown context (5s) for exporters
-5. **Circuit breaker thundering herd** — decorrelated jitter on probes, exactly one probe in half-open
-6. **Timeout budgets double-count** — propagate deadlines, not durations
-7. **OTel overhead** (~20-35% CPU reported) — mitigate with low default sampler
-8. **slog hot-path allocations** — enforce `slog.LogAttrs` with typed attrs
-9. **Docs rot** — executable examples in CI, code-generated tool/profile tables
+1. **Breaking v1.1 tests by restructuring harness** — Extract to `test/harness/` as a copy-and-adapt, keep `test/integration/` untouched until extraction proven
+2. **Mixing LLM and deterministic tests in CI** — Three build tags (`integration`, `llm`, `llmjudge`) and 5 separate CI jobs from day one
+3. **Golden file explosion** — Use goldens only for stable contract boundaries (tool lists, error shapes, response structure); assertion-based tests for dynamic outputs
+4. **Over-engineering the framework** — No oracle registry, no plugin interfaces, no abstract factories. Helper functions + table tests + `testing.T` is the ceiling
+5. **MCP SDK version brittleness** — Assert on behavior ("tool call succeeded with text containing X"), not on Go struct types
 
 ## Implications for Roadmap
 
-### Phase Ordering — Resolved Tension
+### Phase 1: Harness Extraction & Foundation
+**Rationale:** Critical prerequisite — existing `test/integration/` is an external test package that can't be imported by new oracle packages
+**Delivers:** `test/harness/` with exported `StartTestDaemon`, `PrepareFixture`, `callTool`, golden helpers; build tag taxonomy; naming conventions
+**Avoids:** Pitfall #1 (breaking v1.1 tests) by extracting, not modifying
 
-**Tension:** FEATURES recommended logging → metrics → benchmarks → degradation → docs. PITFALLS recommended benchmarks → logging → metrics → tracing → degradation → docs.
+### Phase 2: Protocol Oracle
+**Rationale:** No LS dependency, fast, validates the extracted infrastructure works
+**Delivers:** MCP init/shutdown, tools/list schema validation, session isolation, reconnect tests
+**Uses:** `test/harness/`, existing InMemory + HTTP transports
 
-**Recommendation: follow PITFALLS ordering** — the meta-pitfall is the only one-way door in v1.2. Once observability lands, you cannot retroactively measure the pre-instrumentation baseline.
+### Phase 3: Contract Oracle & Fixtures
+**Rationale:** Builds on protocol layer; establishes golden vs assertion boundary for all downstream work
+**Delivers:** Per-tool contracts, error shape assertions, 5 new fixture directories (polyglot, unsupported, collision, degraded, empty)
+**Uses:** `santhosh-tekuri/jsonschema/v6`, existing golden infrastructure
 
-### Suggested Phase Structure (6 phases)
+### Phase 4: Scenario Oracle
+**Rationale:** Depends on fixtures + contract assertions as building blocks
+**Delivers:** YAML-driven multi-step scenarios, polyglot honesty rules, degraded mode tests, profile/mode behavior tests
+**Avoids:** Pitfall #3 (golden explosion) by using assertion-based tests for scenarios
 
-**Phase 9 — Benchmark Harness & v1.1 Baseline** (must be first)
-Delivers: `test/bench/` + micro benches, `testing.B.Loop`, baselines committed, CI benchstat gate.
+### Phase 5: CI Pipeline
+**Rationale:** Needs all deterministic layers to exist before staging them
+**Delivers:** 5-stage GitHub Actions workflow, build tag gating, first signal under 3 minutes
 
-**Phase 10 — Observability Foundation**
-Delivers: `internal/obs/` package, trace-aware slog handler, admin listener with `/healthz`/`/readyz`/gated pprof.
-Delta gate: slog hot-path ≤ +1 alloc/op vs Phase 9 baseline.
+### Phase 6: LLM Behavioral Oracle
+**Rationale:** Needs all deterministic layers stable; API key gated, non-blocking
+**Delivers:** Tool selection tests, disambiguation tests, output interpretation tests
+**Uses:** `anthropics/anthropic-sdk-go`
+**Avoids:** Pitfall #2 (LLM flakiness killing CI) via `//go:build llm` + env var skip
 
-**Phase 11 — Metrics**
-Delivers: `/metrics` on admin listener, RED histograms per tool with SLO-tuned buckets, lspool gauges, bounded-label contract + CI lint.
+### Phase 7: LLM Judge Oracle
+**Rationale:** Depends on behavioral tests producing transcripts; manual trigger only
+**Delivers:** Structured rubric scoring, transcript quality assessment
+**Avoids:** Pitfall #4 (over-engineering) by keeping judge simple
 
-**Phase 12 — Tracing End-to-End**
-Delivers: `otelgrpc` StatsHandlers, telemetry middleware, per-tool-package sub-spans, `ParentBased(TraceIDRatioBased(0.0))` default, optional OTLP exporter.
+### Phase Ordering Rationale
 
-**Phase 13 — Graceful Degradation**
-Delivers: `internal/degrade/` with per-class budgets, deadline-propagation audit, circuit breaker tuning, typed `lspool.ErrCircuitOpen`, `GOMEMLIMIT`, chaos test.
+- Harness extraction must be first — it's the foundation everything else builds on
+- Protocol oracle validates infrastructure before adding complexity
+- Contract + fixtures can partially parallelize but establish patterns for scenarios
+- Scenarios consume fixtures + contracts, so they follow
+- CI pipeline stages what exists
+- LLM layers are last because they depend on stable deterministic layers and must never block earlier work
 
-**Phase 14 — Documentation** (drafting can parallelize)
-Delivers: README.md (capabilities, install, 52-lang table, client configs), USAGE.md (client setup, profile/mode reference, troubleshooting, observability quickstart, perf tuning), CHANGELOG.md, executable example smoke tests.
+### Research Flags
+
+Phases likely needing deeper research during planning:
+- **Phase 4:** YAML assertion vocabulary design, multi-step scenario state management
+- **Phase 6:** Non-deterministic test strategies, LLM response caching, Claude model selection (Haiku vs Sonnet)
+
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** Mechanical refactor, well-understood Go package patterns
+- **Phase 2:** Standard protocol testing, MCP spec is well-documented
+- **Phase 3:** Extends existing golden file patterns
+- **Phase 5:** Standard GitHub Actions workflow
 
 ## Confidence Assessment
 
-| Area | Confidence |
-|---|---|
-| Stack | HIGH |
-| Features | HIGH |
-| Architecture | HIGH |
-| Pitfalls | MEDIUM-HIGH |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | Only 2 new deps, both verified on pkg.go.dev |
+| Features | HIGH | Clear spec from user, v1.1 patterns to extend |
+| Architecture | HIGH | Direct codebase analysis of 23 existing test files |
+| Pitfalls | MEDIUM-HIGH | Codebase-specific risks well-analyzed; LLM test flakiness less certain |
 
-**Overall: HIGH**
+**Overall confidence:** HIGH
 
 ### Gaps to Address
-- Phase 9: benchmark runner strategy (self-hosted vs GitHub-hosted)
-- Phase 10: admin profile gating for pprof/metrics
-- Phase 12: otelgrpc import path verification; ctx-propagation audit
-- Phase 11: cardinality headroom review
+
+- YAML scenario assertion vocabulary: exact assertion types need design during Phase 4 planning
+- LLM behavioral test statistical assertions: how many runs constitute passing (3/5? 4/5?)
+- Polyglot fixture design: which languages in monorepo fixture (Go + Python + TypeScript is safest)
+- Build tag interaction with `go test ./...`: verify all tags compose correctly
+- Claude model for behavioral tests: Haiku 4.5 (cheap/fast) vs Sonnet 4.6 (accurate)
+
+## Sources
+
+### Primary (HIGH confidence)
+- Serena codebase analysis: 23 test files, harness patterns, golden file infrastructure
+- MCP Specification 2025-11-25: Protocol reference for compliance tests
+- Go Wiki: TableDrivenTests: Canonical Go testing pattern
+
+### Secondary (MEDIUM confidence)
+- MCPAgentBench (arXiv 2512.24565): LLM agent MCP tool use metrics
+- Langfuse/Arize LLM-as-judge: Judge patterns, 80-90% human agreement
+- Janix-ai/mcp-validator: MCP protocol compliance testing reference
+- Specmatic: MCP servers lying about schemas — motivation for schema validation
+
+### Tertiary (LOW confidence)
+- MCPVerse (arXiv 2508.16260v2): Expanded MCP benchmark — less directly applicable
 
 ---
-
-*Synthesized: 2026-04-09*
+*Research completed: 2026-04-11*
+*Ready for roadmap: yes*

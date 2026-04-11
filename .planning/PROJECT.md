@@ -59,6 +59,9 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ CHANGELOG.md v1.2 entry completed (Phase 15 gap filled) — v1.3 Phase 16
 - ✓ USAGE.md accuracy gaps fixed (6 metrics, service_name config, PromQL examples, benchmarks subsection) — v1.3 Phase 17
 - ✓ INSTALL.md created with per-agent MCP config for 6 coding agents + HTTP mode — v1.3 Phase 17
+- ✓ Test harness extraction (test/harness/ package with Runner, tools, golden, fixture helpers) — v1.4 Phase 18
+- ✓ Protocol oracle tests (handshake, tools/list, session isolation, reconnect) — v1.4 Phase 19
+- ✓ Contract oracle tests (schema meta-validation, selectability heuristics, golden outputs, error contracts) — v1.4 Phase 19
 
 ### Active
 
@@ -153,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after v1.4 milestone started — Integration Testing v2*
+*Last updated: 2026-04-11 after Phase 19 complete — Protocol & Contract Oracles*

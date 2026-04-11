@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Integration Testing v2
 status: executing
-stopped_at: Phase 19 context gathered
-last_updated: "2026-04-11T16:46:08.722Z"
+stopped_at: Phase 20 context gathered
+last_updated: "2026-04-11T17:23:02.259Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 4
@@ -78,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T15:09:21.587Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-protocol-contract-oracles/19-CONTEXT.md
+Last session: 2026-04-11T17:23:02.256Z
+Stopped at: Phase 20 context gathered
+Resume file: .planning/phases/20-scenarios-runtime/20-CONTEXT.md

@@ -6,6 +6,7 @@
 - ✅ **v1.1 Integration Testing** — Phases 6-8 (shipped 2026-04-09)
 - ✅ **v1.2 Performance & Production Hardening** — Phases 9-15 (shipped 2026-04-10)
 - ✅ **v1.3 Documentation Catchup** — Phases 16-17 (shipped 2026-04-11)
+- 🚧 **v1.4 Integration Testing v2** — Phases 18-21 (in progress)
 
 ## Phases
 
@@ -58,10 +59,66 @@
 
 </details>
 
+### 🚧 v1.4 Integration Testing v2 (In Progress)
+
+**Milestone Goal:** Prove Serena-Go is protocol-correct, contract-stable, runtime-safe, and genuinely usable by LLM clients through a multi-oracle test harness.
+
+- [ ] **Phase 18: Harness Extraction & Foundation** - Extract importable test harness and establish build tag taxonomy
+- [ ] **Phase 19: Protocol & Contract Oracles** - Validate MCP protocol compliance and per-tool contract stability
+- [ ] **Phase 20: Scenarios & Runtime** - Multi-step agent workflows, polyglot honesty, profile/mode behavior, and runtime stress
+- [ ] **Phase 21: LLM Behavioral & Judge** - LLM tool selection accuracy, disambiguation, output interpretation, and judge scoring
+
+## Phase Details
+
+### Phase 18: Harness Extraction & Foundation
+**Goal**: New oracle packages can import shared test infrastructure and run under correct build tags
+**Depends on**: Phase 17 (v1.3 complete)
+**Requirements**: FOUND-01, FOUND-02
+**Success Criteria** (what must be TRUE):
+  1. A new test file in `test/oracle/protocol/` can import `test/harness` and call `StartTestDaemon`, `PrepareFixture`, `callTool`, and golden helpers without compilation errors
+  2. Running `go test ./...` (no tags) skips all integration/llm/llmjudge tests; running with `-tags integration` includes oracle tests but not LLM tests
+  3. Existing v1.1 tests in `test/integration/` continue to pass unchanged
+**Plans**: TBD
+
+### Phase 19: Protocol & Contract Oracles
+**Goal**: Every MCP protocol interaction and every exposed tool has deterministic correctness assertions
+**Depends on**: Phase 18
+**Requirements**: PROTO-01, PROTO-02, PROTO-03, PROTO-04, CONT-01, CONT-02, CONT-03, CONT-04
+**Success Criteria** (what must be TRUE):
+  1. MCP initialize/shutdown handshake succeeds on both InMemory and HTTP transports with correct capabilities, protocol version, and server info
+  2. `tools/list` returns tools with unique names, non-empty descriptions, and schemas that pass JSON Schema Draft 2020-12 validation
+  3. Two concurrent sessions with different workspaces and modes do not observe each other's state or side effects
+  4. A disconnected client can reconnect and resume without worker leakage or stale state
+  5. Every exposed MCP tool has a golden output file and error responses assert stable error class/code per category
+**Plans**: TBD
+
+### Phase 20: Scenarios & Runtime
+**Goal**: Realistic agent workflows pass across diverse repository shapes, and the runtime survives stress and degraded conditions
+**Depends on**: Phase 19
+**Requirements**: SCEN-01, SCEN-02, SCEN-03, SCEN-04, RUNT-01, RUNT-02, RUNT-03
+**Success Criteria** (what must be TRUE):
+  1. Multi-step agent workflows (activate, search, read, edit, verify) pass against Go, Python, TypeScript, polyglot monorepo, unsupported language, degraded capability, and name collision fixtures
+  2. Polyglot scenarios produce no fake cross-language symbol links, no silent omissions, and unsupported languages fail with clear errors
+  3. Read mode blocks edit tool calls, admin mode grants all tools, and mode switching updates tool visibility correctly across concurrent sessions
+  4. Worker pool survives sustained load with circuit breaker trips, pressure eviction, and share-until-dirty under concurrent edits; clean shutdown drains work with no goroutine leaks
+  5. Selective LS/memory/skill failure injection causes degraded startup (not crash), and affected tools report status honestly
+**Plans**: TBD
+
+### Phase 21: LLM Behavioral & Judge
+**Goal**: An LLM client can correctly select, disambiguate, and interpret results from every Serena tool
+**Depends on**: Phase 20
+**Requirements**: LLM-01, LLM-02, LLM-03, LLM-04
+**Success Criteria** (what must be TRUE):
+  1. Given a task description for every exposed tool, Claude selects the correct tool based on tool descriptions alone
+  2. Claude distinguishes similar tool pairs (search_symbols vs find_references, get_symbol_overview vs explain_symbol) and selects appropriately based on context
+  3. Claude correctly interprets tool results -- distinguishes success from failure, does not hallucinate capabilities the tool output does not support
+  4. LLM judge scores transcripts via structured rubrics and runs only on manual trigger, never blocking merge
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 16 → 17
+Phases execute in numeric order: 18 → 19 → 20 → 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -80,5 +137,9 @@ Phases execute in numeric order: 16 → 17
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 14. Documentation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
-| 16. Core Documentation Update | v1.3 | 2/2 | Complete    | 2026-04-11 |
-| 17. Usage & Install Guides | v1.3 | 2/2 | Complete   | 2026-04-11 |
+| 16. Core Documentation Update | v1.3 | 2/2 | Complete | 2026-04-11 |
+| 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
+| 18. Harness Extraction & Foundation | v1.4 | 0/0 | Not started | - |
+| 19. Protocol & Contract Oracles | v1.4 | 0/0 | Not started | - |
+| 20. Scenarios & Runtime | v1.4 | 0/0 | Not started | - |
+| 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

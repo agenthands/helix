@@ -78,33 +78,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | — | Pending |
-| FOUND-02 | — | Pending |
-| PROTO-01 | — | Pending |
-| PROTO-02 | — | Pending |
-| PROTO-03 | — | Pending |
-| PROTO-04 | — | Pending |
-| CONT-01 | — | Pending |
-| CONT-02 | — | Pending |
-| CONT-03 | — | Pending |
-| CONT-04 | — | Pending |
-| SCEN-01 | — | Pending |
-| SCEN-02 | — | Pending |
-| SCEN-03 | — | Pending |
-| SCEN-04 | — | Pending |
-| RUNT-01 | — | Pending |
-| RUNT-02 | — | Pending |
-| RUNT-03 | — | Pending |
-| LLM-01 | — | Pending |
-| LLM-02 | — | Pending |
-| LLM-03 | — | Pending |
-| LLM-04 | — | Pending |
+| FOUND-01 | Phase 18 | Pending |
+| FOUND-02 | Phase 18 | Pending |
+| PROTO-01 | Phase 19 | Pending |
+| PROTO-02 | Phase 19 | Pending |
+| PROTO-03 | Phase 19 | Pending |
+| PROTO-04 | Phase 19 | Pending |
+| CONT-01 | Phase 19 | Pending |
+| CONT-02 | Phase 19 | Pending |
+| CONT-03 | Phase 19 | Pending |
+| CONT-04 | Phase 19 | Pending |
+| SCEN-01 | Phase 20 | Pending |
+| SCEN-02 | Phase 20 | Pending |
+| SCEN-03 | Phase 20 | Pending |
+| SCEN-04 | Phase 20 | Pending |
+| RUNT-01 | Phase 20 | Pending |
+| RUNT-02 | Phase 20 | Pending |
+| RUNT-03 | Phase 20 | Pending |
+| LLM-01 | Phase 21 | Pending |
+| LLM-02 | Phase 21 | Pending |
+| LLM-03 | Phase 21 | Pending |
+| LLM-04 | Phase 21 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21 ⚠️
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-11*
-*Last updated: 2026-04-11 after initial definition*
+*Last updated: 2026-04-11 after roadmap creation*

@@ -63,7 +63,7 @@
 
 **Milestone Goal:** Prove Serena-Go is protocol-correct, contract-stable, runtime-safe, and genuinely usable by LLM clients through a multi-oracle test harness.
 
-- [ ] **Phase 18: Harness Extraction & Foundation** - Extract importable test harness and establish build tag taxonomy
+- [x] **Phase 18: Harness Extraction & Foundation** - Extract importable test harness and establish build tag taxonomy (completed 2026-04-11)
 - [ ] **Phase 19: Protocol & Contract Oracles** - Validate MCP protocol compliance and per-tool contract stability
 - [ ] **Phase 20: Scenarios & Runtime** - Multi-step agent workflows, polyglot honesty, profile/mode behavior, and runtime stress
 - [ ] **Phase 21: LLM Behavioral & Judge** - LLM tool selection accuracy, disambiguation, output interpretation, and judge scoring
@@ -78,11 +78,11 @@
   1. A new test file in `test/oracle/protocol/` can import `test/harness` and call `StartTestDaemon`, `PrepareFixture`, `callTool`, and golden helpers without compilation errors
   2. Running `go test ./...` (no tags) skips all integration/llm/llmjudge tests; running with `-tags integration` includes oracle tests but not LLM tests
   3. Existing v1.1 tests in `test/integration/` continue to pass unchanged
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 18-01-PLAN.md — Extract test/harness/ package with evolved API and self-tests
-- [ ] 18-02-PLAN.md — Create oracle directory stubs and smoke test for build tag taxonomy
+- [x] 18-01-PLAN.md — Extract test/harness/ package with evolved API and self-tests
+- [x] 18-02-PLAN.md — Create oracle directory stubs and smoke test for build tag taxonomy
 
 ### Phase 19: Protocol & Contract Oracles
 **Goal**: Every MCP protocol interaction and every exposed tool has deterministic correctness assertions
@@ -143,7 +143,7 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
 | 16. Core Documentation Update | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
-| 18. Harness Extraction & Foundation | v1.4 | 0/2 | Planning | - |
+| 18. Harness Extraction & Foundation | v1.4 | 2/2 | Complete    | 2026-04-11 |
 | 19. Protocol & Contract Oracles | v1.4 | 0/0 | Not started | - |
 | 20. Scenarios & Runtime | v1.4 | 0/0 | Not started | - |
 | 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

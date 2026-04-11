@@ -40,6 +40,42 @@ Agents connect via the **model context protocol (MCP)** through:
 | **Performance** | Re-read files every session | Warm language server cache, shared across sessions |
 | **Scale** | Degrades in large codebases | Symbol-level operations stay fast regardless of codebase size |
 
+## Production & Observability
+
+Serena ships with built-in production infrastructure — metrics, tracing, health checks, and graceful degradation — so you can deploy it as a long-running service with confidence.
+
+### Metrics & Monitoring
+
+- Prometheus `/metrics` endpoint with RED histograms (rate, errors, duration) per tool
+- lspool health gauges: active workers, evictions, restarts, circuit state
+- Bounded-label contract (allowlist: `tool_name`, `profile`, `mode`, `language`, `outcome`) enforced by CI lint
+
+### Distributed Tracing
+
+- End-to-end trace propagation: forwarder -> daemon -> kernel -> language server via `otelgrpc`
+- Per-tool sub-spans in telemetry middleware
+- Optional OTLP/gRPC exporter — off by default (`ParentBased(TraceIDRatioBased(0.0))`)
+
+### Admin Endpoints
+
+A dedicated loopback admin listener, isolated from MCP traffic, exposes:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/healthz` | Daemon liveness |
+| `/readyz` | Readiness (language servers initialized) |
+| `/metrics` | Prometheus scrape target |
+| `/debug/pprof/*` | Go profiling, gated behind admin profile scope |
+
+### Graceful Degradation
+
+- Per-class timeout budgets: read 5s, search 15s, edit 10s, index 120s, diagnostics 20s
+- Deadline propagation from forwarder through daemon and kernel to language server
+- Circuit breaker with decorrelated jitter backoff and single-probe half-open
+- LS crash recovery with configurable restart budget
+- `GOMEMLIMIT` support via `runtime/debug.SetMemoryLimit` for memory-constrained environments
+- Clean shutdown: SIGTERM drains in-flight calls, flushes telemetry within 5s
+
 ## Programming Language Support
 
 Serena supports **52 programming languages** via Language Server Protocol (LSP):
@@ -232,6 +268,8 @@ Agent Profiles (5 profiles, 4 modes, token budget, layered config)
 ```
 
 The **persistent daemon** keeps language servers warm between sessions. The **worker pool** uses share-until-dirty semantics with adaptive TTL, circuit breaking for crashy servers, and platform-aware memory pressure eviction.
+
+The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus metrics, and gated pprof on a dedicated loopback port.
 
 ## Acknowledgements
 

@@ -268,6 +268,7 @@ Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--p
 | `observability.enable_pprof` | bool | `false` | Enable pprof endpoints (requires admin mode) |
 | `observability.tracing_endpoint` | string | (disabled) | OTLP/gRPC collector endpoint for distributed tracing |
 | `observability.tracing_sample_ratio` | float | `0.0` | Tracing sample ratio (0.0 to 1.0) |
+| `observability.service_name` | string | `serena` | Service name used in tracing span attributes (OTel `service.name`) |
 
 #### Degradation Settings
 
@@ -313,6 +314,7 @@ worker_pool:
 observability:
   admin_addr: "127.0.0.1:9100"
   enable_pprof: false
+  service_name: "my-serena-instance"
 
 # Graceful degradation
 degradation:
@@ -510,10 +512,12 @@ Key metrics to monitor:
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `serena_tool_duration_seconds` | histogram | RED metrics per tool (labels: `tool_name`, `outcome`) |
-| `serena_lspool_workers` | gauge | Current active language server worker count |
-| `serena_lspool_evictions_total` | counter | Total worker evictions due to memory pressure or TTL |
-| `serena_lspool_circuit_state` | gauge | Circuit breaker state per language (0=closed, 1=half-open, 2=open) |
+| `serena_tool_duration_seconds` | histogram | MCP tool call latency in seconds (labels: `tool_name`, `profile`, `mode`, `language`) |
+| `serena_tool_calls_total` | counter | Total MCP tool calls by outcome (labels: `tool_name`, `profile`, `mode`, `language`, `outcome`) |
+| `serena_lspool_workers` | gauge | Active language server workers per language (labels: `language`) |
+| `serena_lspool_evictions_total` | counter | Total worker evictions (labels: `language`, `reason`). Reason values: `idle`, `pressure`, `crash`, `shutdown` |
+| `serena_lspool_circuit_state` | gauge | Circuit breaker state per language (0=closed, 1=half-open, 2=open) (labels: `language`) |
+| `serena_lspool_restarts_total` | counter | Language server worker restarts per language (labels: `language`) |
 
 Example Prometheus scrape config:
 
@@ -523,6 +527,22 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:9100"]
     scrape_interval: 15s
+```
+
+**Metric labels:** The `serena_tool_duration_seconds` and `serena_tool_calls_total` metrics share four label dimensions: `tool_name`, `profile`, `mode`, and `language`. The `serena_tool_calls_total` counter adds a fifth label, `outcome`, for error tracking. Use these for targeted queries:
+
+```promql
+# Error rate per tool (last 5 minutes)
+rate(serena_tool_calls_total{outcome="error"}[5m])
+
+# p95 tool latency
+histogram_quantile(0.95, rate(serena_tool_duration_seconds_bucket[5m]))
+
+# Active workers by language
+serena_lspool_workers
+
+# Eviction rate by reason
+rate(serena_lspool_evictions_total[5m])
 ```
 
 ### Enable Tracing

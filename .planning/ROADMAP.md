@@ -52,7 +52,7 @@
 
 **Milestone Goal:** Update all project documentation to accurately reflect v1.2 capabilities (observability, metrics, tracing, graceful degradation, benchmarks).
 
-- [ ] **Phase 16: Core Documentation Update** - Update README, CHANGELOG, and CONTRIBUTING to reflect current project state
+- [x] **Phase 16: Core Documentation Update** - Update README, CHANGELOG, and CONTRIBUTING to reflect current project state (completed 2026-04-11)
 - [ ] **Phase 17: Usage & Install Guides** - Add observability/degradation docs to USAGE, overhaul install guide for multi-agent setup
 
 ## Phase Details
@@ -68,8 +68,8 @@
   4. CONTRIBUTING documents the current build/test/vet/benchmark workflow and explains how to run integration tests and the benchmark harness
 **Plans**: 2 plans
 Plans:
-- [ ] 16-01-PLAN.md — Update README with Production & Observability section, regenerate auto-generated tables (README-01, README-02, README-03)
-- [ ] 16-02-PLAN.md — Rewrite CONTRIBUTING as Go-native guide, fill CHANGELOG v1.2 gaps (CONTR-01, CONTR-02, CHLOG-01)
+- [x] 16-01-PLAN.md — Update README with Production & Observability section, regenerate auto-generated tables (README-01, README-02, README-03)
+- [x] 16-02-PLAN.md — Rewrite CONTRIBUTING as Go-native guide, fill CHANGELOG v1.2 gaps (CONTR-01, CONTR-02, CHLOG-01)
 
 ### Phase 17: Usage & Install Guides
 **Goal**: Users can configure and tune Serena's production features using USAGE docs, and coding agents can be set up using the install guide
@@ -104,5 +104,5 @@ Phases execute in numeric order: 16 → 17
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 14. Documentation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
-| 16. Core Documentation Update | v1.3 | 0/2 | Not started | - |
+| 16. Core Documentation Update | v1.3 | 2/2 | Complete   | 2026-04-11 |
 | 17. Usage & Install Guides | v1.3 | 0/? | Not started | - |

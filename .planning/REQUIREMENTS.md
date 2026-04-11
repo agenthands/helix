@@ -51,23 +51,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| README-01 | TBD | Pending |
-| README-02 | TBD | Pending |
-| README-03 | TBD | Pending |
-| USAGE-01 | TBD | Pending |
-| USAGE-02 | TBD | Pending |
-| USAGE-03 | TBD | Pending |
-| CHLOG-01 | TBD | Pending |
-| CONTR-01 | TBD | Pending |
-| CONTR-02 | TBD | Pending |
-| INST-01 | TBD | Pending |
-| INST-02 | TBD | Pending |
+| README-01 | Phase 16 | Pending |
+| README-02 | Phase 16 | Pending |
+| README-03 | Phase 16 | Pending |
+| USAGE-01 | Phase 17 | Pending |
+| USAGE-02 | Phase 17 | Pending |
+| USAGE-03 | Phase 17 | Pending |
+| CHLOG-01 | Phase 16 | Pending |
+| CONTR-01 | Phase 16 | Pending |
+| CONTR-02 | Phase 16 | Pending |
+| INST-01 | Phase 17 | Pending |
+| INST-02 | Phase 17 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-11*
-*Last updated: 2026-04-11 after initial definition*
+*Last updated: 2026-04-11 after roadmap creation*

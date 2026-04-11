@@ -1,203 +1,207 @@
-# Feature Landscape: v1.2 Performance & Production Hardening
+# Feature Landscape: v1.4 Multi-Oracle Integration Test Harness
 
-**Domain:** Production MCP/LSP gateway — benchmarks, observability, graceful degradation, user docs
-**Researched:** 2026-04-08
-**Scope:** Only features needed for the v1.2 milestone. Existing v1.0/v1.1 capabilities (38 tools, 52 languages, worker pool with circuit breaker/pressure eviction, integration test harness) are the baseline; this milestone adds the observability/perf/docs layer on top.
+**Domain:** Multi-oracle integration test harness for MCP/LSP code intelligence server
+**Researched:** 2026-04-11
+**Scope:** Only features needed for the v1.4 milestone. Existing v1.1 test infrastructure (InMemory + HTTP harness, 38-tool dogfooding, multi-language fixtures, 19 profile goldens, three-tier concurrency, three-band error coverage) is the baseline; this milestone extends it with protocol, contract, scenario, behavioral, and judge oracle layers.
 
 ## Table Stakes
 
-Features users (agent runtimes, platform teams deploying Serena) expect. Missing these makes the product feel unfinished for a "v1.2 production hardening" release.
+Features the test harness must have. Missing any of these means the multi-oracle architecture is incomplete.
 
-### Benchmarks
+### Protocol Compliance Testing
 
-| Feature | Why Expected | Complexity | Depends On |
-|---------|--------------|------------|------------|
-| Tool response latency bench (p50/p95/p99) for all 38 tools | Primary SLO unit for MCP clients; agents time out on slow tools | Medium | v1.1 test harness (`test/` package), InMemory transport |
-| LSP indexing throughput (LOC/sec, files/sec, time-to-first-query) | Warm-up cost is the #1 user complaint for LSP gateways (see gopls issues) | Medium | Worker pool, language registry, multi-lang fixtures from v1.1 |
-| Memory profile: baseline (daemon idle), per-workspace, per-LS-worker | LSP servers are the dominant memory cost; users need sizing guidance | Medium | `runtime/metrics`, pressure eviction telemetry |
-| Go `testing.B` benchmarks checked into repo | Standard Go practice; enables `go test -bench` and benchstat locally | Low | Existing test infrastructure |
-| `benchstat`-based regression comparison (HEAD vs base) | Benchmarks without diffing are decorative | Low | `golang.org/x/perf/cmd/benchstat` |
-| CI benchmark gate with threshold alerting | Prevents perf regressions from landing unnoticed | Medium | GitHub Actions, benchstat or `benchmark-action/github-action-benchmark` |
-| Cold-start vs warm-start separation in indexing benches | Share-until-dirty claims need to be measured, not asserted | Medium | Worker pool metrics |
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| MCP initialize/shutdown handshake tests | Protocol correctness is non-negotiable; Janix-ai/mcp-validator proves community demands this | Low | Existing InMemory + HTTP harness | Test capabilities negotiation, server info, protocol version in response. Both transports |
+| tools/list schema validation | Specmatic research shows MCP servers commonly lie about their schemas; must validate all 38 tool inputSchemas match actual accepted args | Medium | Existing harness, tool registry | Parse tools/list response, validate each tool's inputSchema is valid JSON Schema Draft 2020-12, cross-reference against actual tool acceptance |
+| Session isolation tests | Multiple clients must not see each other's state; critical for daemon model | Medium | Existing InMemory transport | Two concurrent sessions: activate different workspaces, verify tool results are scoped correctly |
+| Reconnect/session lifecycle tests | Daemon survives client disconnects; core value prop needs testing | Medium | Existing harness | Connect, call tool, disconnect, reconnect, verify warm cache still works. Test both clean and abrupt disconnect |
+| Error envelope shape validation | MCP spec defines error format; all errors must conform | Low | Existing error tests (30 cases) | Extend existing errCase to validate JSON-RPC error code, message structure, not just IsError bool |
 
-### Observability
+### Per-Tool Contract Testing
 
-| Feature | Why Expected | Complexity | Depends On |
-|---------|--------------|------------|------------|
-| `log/slog` structured logging (stdlib, JSON handler) | Go 1.21+ standard; replaces whatever ad-hoc logging exists today | Low | Go stdlib only |
-| Request/trace ID propagation through `context.Context` | Correlating a single MCP tool call across kernel -> pool -> LS is impossible without it | Medium | MCP middleware, kernel call sites |
-| Per-tool span timing (even without full OTel) | `tool=find_symbol duration_ms=142 workspace=X` is the minimum viable trace | Medium | Middleware in `internal/mcp/` |
-| Prometheus `/metrics` endpoint on HTTP transport | De facto standard; everyone scrapes Prometheus | Low | `prometheus/client_golang`, existing HTTP server |
-| Core RED metrics: Rate, Errors, Duration per tool (histograms) | Prometheus table stakes for any RPC-style service | Low | client_golang histogram |
-| LS worker pool gauges: workers alive, idle, busy, evictions, restarts, circuit state | Operators need visibility into the thing most likely to misbehave | Medium | Instrument existing pool in `internal/kernel/lspool/` |
-| Process/runtime metrics (goroutines, heap, GC pause, open FDs) | `client_golang` provides these out of the box via `collectors.NewGoCollector` | Low | client_golang |
-| Readiness and liveness endpoints (`/healthz`, `/readyz`) | Kubernetes and systemd expect these | Low | HTTP transport |
-| Log-trace correlation: slog attrs include trace_id/span_id | Enables jumping from a log line to the full request trace | Low | slog handler wrapper |
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| Golden output files for all 38 tools | Existing 19 profile goldens prove the pattern works; extending to tool response shapes catches regression | Medium | Existing `golden.go`, `-update` flag infrastructure | One `.golden` per (tool, fixture, scenario) triple. Reuse assertGolden + updateGolden pattern. Focus on structural shape, not dynamic content (paths, timestamps) |
+| Response schema validation | Every tool response must match its declared output type (text content, structured data) | Medium | tools/list schema from protocol tests | Validate content type (text vs structured), field presence, nested structure. Use JSON Schema where structured output is declared |
+| Error shape assertions with categories | v1.1 uses IsError bool; v1.4 must assert error categories (no_workspace, not_found, invalid_args, timeout, circuit_open) | Low | Existing `errCase` + `runErrCases` | Extend errCase struct with expectedErrCode/expectedErrSubstring fields. Foundation for future typed errors (TODO(#typed-errors)) |
+| Idempotency contracts for read tools | Read tools (search_symbols, get_hover_info, etc.) must return identical results on repeated calls | Low | Existing tool tests | Call each read tool twice with same args, assert results match. Catches state leaks |
 
-### Graceful Degradation
+### Data-Driven Scenario Matrix
 
-| Feature | Why Expected | Complexity | Depends On |
-|---------|--------------|------------|------------|
-| Per-tool timeout budgets (default + per-tool overrides) | Agents enforce their own budgets; the server must respect them so it can't wedge | Medium | Config layer, kernel dispatch |
-| Context deadline propagation from MCP call -> LSP request | Cancelling a slow `find_references` must actually cancel the LSP RPC | Medium | JSON-RPC codec, pool call paths |
-| Circuit breaker telemetry + tuning knobs exposed in config | Circuit breaker already exists; v1.2 makes it observable and tunable | Low | Existing `internal/kernel/lspool/` |
-| LS crash recovery: auto-restart with exponential backoff + restart budget | Share-until-dirty workers die; pool must not thrash respawning them | Medium | Worker lifecycle code, backoff jitter |
-| OOM/pressure degraded mode: shed to fewer workers, refuse new workspaces with clear error | Pressure eviction exists; degraded mode makes it a first-class state instead of an eviction loop | Medium | Pressure eviction code in pool |
-| Structured error responses distinguishing timeout / circuit open / LS crash / pressure | MCP clients need to know whether to retry, back off, or surface to the user | Medium | MCP error envelope, kernel error types |
-| `GOMEMLIMIT` soft memory limit support (Go 1.19+) | Pairs with pressure eviction; prevents runaway heap before OS kills the process | Low | Go runtime + docs |
-| Graceful shutdown: drain in-flight, refuse new, close LS workers in order | Signal-first lifecycle already exists — verify and document for production operators | Low | Existing daemon lifecycle |
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| YAML/Go-struct scenario definitions | Go table-driven pattern is standard; scenario files make the matrix reviewable and extensible | Medium | Existing table-driven patterns (errCase, symbols_test.go) | Each scenario: repo shape + tool sequence + expected outcomes. Go structs for type safety, YAML for large matrices |
+| 7+ repository shape fixtures | v1.1 has 5 language fixtures; v1.4 needs polyglot monorepo, unsupported-language, name collisions, empty/malformed repos | Medium | Existing `testdata/fixtures/` + `PrepareFixture()` | New fixtures: polyglot-monorepo (Go+Python+TS), unsupported-only (e.g., Fortran), symbol-collision (same names across files), degraded-no-ls (fixture where required LS is absent), empty-repo |
+| Cross-fixture tool coverage matrix | Every tool must be tested against every applicable fixture | Low | Scenario definitions + fixtures | Matrix of (tool x fixture x expected_outcome). Identifies coverage gaps during development |
+| Multi-step scenario composition | Test realistic agent workflows: activate -> search -> read -> edit -> verify | Medium | All individual tool contracts stable | 5-10 realistic workflows as scenarios. Each is a sequence of tool calls with intermediate assertions. Catches state leaks between operations |
 
-### Documentation (README.md and USAGE.md)
+### Profile/Mode Contract Independence
 
-| Feature | Why Expected | Complexity | Depends On |
-|---------|--------------|------------|------------|
-| README: one-paragraph pitch, capability bullets, install, quickstart | First-impression file; if it's bad, nothing else matters | Low | — |
-| README: supported languages table (52) with LS installer tier | Users immediately ask "is my language supported?" | Low | `internal/langregistry/` |
-| README: supported MCP clients with copy-pasteable config blocks | Claude Code, Codex, Zed, Cursor, generic stdio — each has a different config schema | Low | Profile docs |
-| README: single-binary install (go install, release binaries, homebrew later) | Zero-friction install is the bar set by other Go tools | Low | GoReleaser or manual release |
-| README: architecture diagram (forwarder -> daemon -> pool -> LS) | One picture answers half the "how does this work" questions | Low | — |
-| USAGE: client setup for Claude Code (stdio + HTTP) | Primary target audience | Low | Profile configs |
-| USAGE: client setup for Codex | Second target audience | Low | Profile configs |
-| USAGE: client setup for generic IDE assistants / `ide-assistant` profile | Third target audience | Low | Profile configs |
-| USAGE: profile + mode reference (what each profile exposes, how modes work) | Unique to Serena; not obvious from tool listings | Low | `internal/profile/` |
-| USAGE: config precedence walkthrough (CLI > project > user > profile) | Four layers is one more than most tools; confusing without examples | Low | `internal/config/` |
-| USAGE: onboarding/handoff workflow guide | Differentiator features, poorly discoverable without docs | Low | Workflow skills |
-| USAGE: troubleshooting — LS install failures, timeout errors, permission issues | The top 5 support questions, answered once in docs | Low | — |
-| USAGE: observability quickstart (Prometheus scrape, log format, trace IDs) | Pairs with the new v1.2 observability features | Low | v1.2 observability work |
-| USAGE: performance tuning (pool sizing, TTL, `GOMEMLIMIT`) | Pairs with new benchmarks/degradation features | Low | v1.2 perf work |
-| CHANGELOG.md with v1.0/v1.1/v1.2 entries | Standard OSS hygiene; users need to know what's new | Low | — |
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| Mode-gated behavior tests | v1.1 goldens validate tool lists; v1.4 must validate that read-mode blocks edit calls, admin grants all | Medium | 19 existing golden files, mode_golden_test.go | Call blocked tools, assert proper rejection. Call allowed tools, assert success. Test mode transition rules |
+| Profile-independent golden expectations | Golden files must be independent from runtime YAML to avoid self-approving bad changes | Low | Existing golden pattern (documented in D-01/D-02) | Already implemented in v1.1; v1.4 extends to tool response goldens with same independence principle |
+
+### Polyglot Correctness Testing
+
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| Cross-language honesty rules | Unique to Serena: verify no fake cross-language links, no silent omissions when LS is degraded | Medium | Multi-language fixtures, degraded-mode fixture | Test: when gopls absent, Go tools report degraded (not empty). When Python LS absent, no phantom Go symbols appear in Python fixture results |
+| Degraded mode reporting | When LS unavailable, tools must explicitly report degraded status, not silently return partial/empty results | Medium | Degraded-no-ls fixture, daemon bootstrap | Verify error messages contain actionable information (which LS missing, how to install). No silent failures |
+| Unsupported language handling | Tools called against unsupported language must fail clearly, not crash or hang | Low | Unsupported-only fixture | Test all tools against Fortran/COBOL fixture. Expect clean error, not panic |
+
+### CI Pipeline Staging
+
+| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
+|---------|--------------|------------|-------------------|-------|
+| 5-stage pipeline definition | Mixed deterministic + non-deterministic tests need staging to prevent flaky-test fatigue and wasted CI budget | Medium | Existing bench.yml, pytest.yml | Stage 1: protocol+contract (always, fast). Stage 2: scenario matrix (always). Stage 3: -race concurrency (always). Stage 4: LLM behavioral (API-key gated). Stage 5: LLM judge (optional, report-only, never blocks merge) |
+| Build tag separation for test tiers | `//go:build integration` already exists; add tags for `llm` and `llmjudge` | Low | Existing build tag pattern | `//go:build llm` for behavioral tests, `//go:build llmjudge` for judge tests. CI stages select by tag |
+| API key gating for LLM stages | LLM tests must skip gracefully when ANTHROPIC_API_KEY (or equivalent) is absent | Low | LLM test infrastructure | `t.Skip("ANTHROPIC_API_KEY not set")` pattern. CI secret injection for authorized runs |
 
 ## Differentiators
 
-Not expected, but elevate Serena above "another MCP server."
+Features that set the test harness apart. Not expected in typical MCP server test suites, but high value for Serena.
 
-| Feature | Value Proposition | Complexity | Depends On |
-|---------|-------------------|------------|------------|
-| Per-workspace metric labels (without high cardinality explosion) | Operators running multi-tenant Serena need to attribute cost; most MCP servers are single-workspace so this is uncommon | Medium | Label allowlist, workspace ID hashing |
-| `serena doctor` CLI command: checks LS binaries, permissions, config, port binds, memory headroom | Turns "it doesn't work" bug reports into self-diagnosis; rare in MCP ecosystem | Medium | `internal/langregistry/installer`, config validation |
-| Benchmark results published to repo (`bench/results/`) with history graph | Public perf claims beat private ones; github-action-benchmark renders this for free | Low | CI + gh-pages |
-| Tool latency budgets declared in profile YAML (`max_duration_ms`) | Lets platform teams set SLOs declaratively per profile | Medium | Profile schema, middleware |
-| Built-in pprof endpoints (`/debug/pprof/`) gated by admin mode | Go-native perf debugging; trivial to add, high value during incidents | Low | `net/http/pprof` |
-| Trace export to OTLP (optional, off by default) | For teams already running OpenTelemetry collectors; keeps core dep-light | Medium | `go.opentelemetry.io/otel` (optional build tag or dep) |
-| USAGE: a real "day in the life" example — Claude Code onboarding a repo, editing, handing off | Narrative docs outperform reference docs for adoption | Low | — |
-| Degraded-mode banner in tool responses when pool is under pressure | Clients see `"status": "degraded", "reason": "memory_pressure"` in metadata, can adapt | Medium | MCP response envelope |
-| Memory sizing calculator in USAGE.md (per language, per workspace) | Based on real v1.2 bench data; answers "how much RAM do I need?" | Low | v1.2 memory profiles |
+| Feature | Value Proposition | Complexity | Depends On (v1.1) | Notes |
+|---------|-------------------|------------|-------------------|-------|
+| LLM behavioral tests (tool selection accuracy) | Proves Serena's tool descriptions are machine-readable: given a coding task, does the LLM pick the right tool? MCPAgentBench shows this is frontier research | High | All 38 tools registered, profile system | Present task descriptions to an LLM, check it selects correct tool(s). Test disambiguation (search_symbols vs find_references). Metrics: invocation accuracy, tool selection accuracy. Non-deterministic, gated CI stage |
+| LLM disambiguation tests | When multiple tools could apply, test that descriptions disambiguate correctly | High | LLM behavioral infrastructure | Pairs like (search_symbols vs get_symbol_overview), (find_references vs go_to_definition), (read_file vs get_hover_info). The LLM should choose correctly based on descriptions alone |
+| LLM output interpretation tests | Test that tool outputs are LLM-parseable: given a tool result, can the LLM extract the answer? | High | LLM behavioral infrastructure | Feed real tool outputs to LLM, ask structured questions about them. Validates output format is machine-friendly |
+| LLM-as-judge transcript scoring | Structured rubrics score end-to-end tool usage transcripts for quality (correctness, efficiency, completeness) | High | LLM behavioral tests producing transcripts | Point-wise rubric: Did agent use right tools? Avoid unnecessary calls? Interpret results correctly? 80-90% human agreement per Langfuse/Arize research. Never replaces deterministic assertions |
+| Rubric-based scoring dimensions | Separate scoring for: tool_selection, argument_correctness, result_interpretation, efficiency, error_handling | Medium | LLM judge infrastructure | Each dimension scored 1-5 with reasoning. Aggregated per-tool and per-scenario. Drift tracking over time |
+| Worker pool stress scenarios | Beyond v1.1's three-tier concurrency: sustained load with circuit breaker trips, pressure eviction, adaptive TTL | Medium | Existing concurrency_test.go | Scenarios: all workers busy + new request, circuit breaker open + recovery, memory pressure trigger, share-until-dirty under concurrent edits |
+| Degraded subsystem simulation | Selectively disable LS, memory, or skills to verify graceful degradation | Medium | Daemon bootstrap, fail-fast/degraded-optional split | Inject failures: LS not found, memory DB corrupt, skill init failure. Verify daemon starts, tools report degraded status, no panics |
+| Test coverage matrix report | Generate matrix showing (tool x fixture x scenario) coverage, identifying gaps | Low | Scenario + fixture infrastructure | Custom TestMain reporter or Go test output parser. Shows which tools lack polyglot coverage, which fixtures lack error cases |
+| Regression snapshot for LLM scores | Track LLM judge scores over time to detect tool description quality regressions | Medium | LLM judge producing scores | Store scores as JSON per commit. Alert when any dimension drops > 1 point. Non-blocking but informative |
 
 ## Anti-Features
 
-Features to explicitly NOT build in this milestone. Either out of scope per PROJECT.md or premature for v1.2.
+Features to explicitly NOT build.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Full OpenTelemetry as a mandatory dependency | Heavy dep graph (`otel-sdk` pulls ~20 modules); most users don't need distributed tracing | Optional exporter behind build tag or config flag; default to slog + Prometheus only |
-| Custom metrics DSL or framework | Reinventing Prometheus | Use `prometheus/client_golang` directly |
-| Jaeger/Zipkin native exporters | OTLP is the standard; vendors ingest OTLP | If exporting traces at all, export OTLP only |
-| APM agent integration (Datadog, New Relic SDKs) | Vendor lock-in; bloats binary | Prometheus scrape + OTLP exporter covers these vendors |
-| In-process distributed tracing UI | Not Serena's job | Link to Jaeger/Tempo/Grafana in USAGE |
-| Grafana dashboard JSON shipped as core artifact | Maintenance burden; Grafana versions drift | Ship a single example dashboard as optional contrib; document the metrics schema so anyone can build their own |
-| Alert rules (PromQL) shipped in repo | Same reason — every org has different SLOs | Document the metrics; let users write their own alerts |
-| Load testing harness / traffic replay tool | Benchmarks use `testing.B` and fixtures; load testing is a different tool (`k6`, `vegeta`) | Document "how to load test Serena with k6" in USAGE |
-| Auto-scaling / horizontal pod autoscaler logic | Single-binary daemon; scaling is the operator's concern | Document memory/CPU characteristics so HPA can be configured externally |
-| A dedicated "admin web UI" for metrics | Adds web framework, auth, templating — scope explosion | `/metrics` + pprof + logs; use Grafana for visualization |
-| Benchmark against other MCP servers | Apples-to-oranges; political | Benchmark against self over time (regression gate) |
-| Per-request hedging | Cuts p99 but doubles LS load; worker pool is already the bottleneck | Defer; revisit if benches show p99 >> p95 after v1.2 |
-| Configurable retry policies inside the daemon | Clients own retries; server owns timeouts and circuit breakers | Document that clients should retry idempotent tools |
-| Video tutorials / GIF-heavy docs | Rots fast, hard to maintain | Text-first docs with copy-pasteable commands |
-| Docs site generator (Docusaurus, mkdocs) | README.md + USAGE.md in-repo is enough for v1.2 | Markdown in repo, rendered by GitHub |
-| Localized docs (i18n) | Zero demand signal; massive maintenance | English-only |
-| Knowledge graphs, vector search, git operations | Explicitly Out of Scope in PROJECT.md | — |
+| LLM tests as merge gates | Non-deterministic, API-key dependent, expensive ($0.10-1.00/run), flaky by nature. Would destroy CI reliability | Run LLM tests in gated stage, report-only, never block merge. Only deterministic stages block |
+| Custom test framework / DSL | Go's testing package + testify is sufficient. Custom DSL adds learning curve and maintenance burden | Use table-driven Go tests with Go struct scenario definitions. YAML only for large data matrices |
+| Mock language servers | Mocking LSP defeats Serena's core purpose -- real LS integration is the value prop. Mocks pass while real servers fail | Use real language servers with fixture repos. Skip tests when LS not installed (existing `requireGopls` pattern) |
+| Snapshot testing for all tool outputs | Tool outputs contain timestamps, absolute paths, line numbers that change per environment. Snapshotting everything = constant golden churn | Use golden files only for stable outputs (tool lists, error shapes, response structure). Use structural assertions (contains, field presence, count) for dynamic outputs |
+| Vendoring external MCP validators | Janix-ai/mcp-validator is Python-based, covers different protocol versions, adds external dependency. Would add complexity without proportional value | Build Serena-specific protocol tests in Go, covering the MCP operations Serena actually uses. Simpler, faster, type-safe |
+| Fuzzing MCP inputs | Diminishing returns for a server consumed by trusted LLM clients, not adversarial web requests | Focus on contract testing with well-defined scenarios. Revisit if Serena ever faces untrusted input |
+| Cross-process daemon testing | Running daemon as separate process adds IPC complexity, port conflicts, cleanup headaches in CI | Continue using in-process `StartTestDaemon` pattern from v1.1. HTTP transport smoke covers wire format |
+| Full MCPAgentBench reproduction | Academic benchmark with 250+ tasks, custom sandbox, Docker orchestration. Overkill for validating 38 tools | Build targeted behavioral tests: 10-20 carefully chosen scenarios exercising Serena's actual tool descriptions and disambiguation edges |
+| Multiple LLM providers for judge | Running judge with GPT-4, Claude, Gemini for comparison adds 3x cost and complexity | Use single LLM (Claude Sonnet) as judge. Switch if needed. One provider gives consistent scoring baseline |
+| Human-in-the-loop test approval | Manual review gates for LLM test results block automation | LLM tests are fully automated with score thresholds. Human review only for score regressions flagged in PR comments |
 
 ## Feature Dependencies
 
 ```
-slog structured logging
-    +-> trace ID context propagation
-            +-> per-tool span timing (middleware)
-                    +-> log-trace correlation in slog attrs
-                    +-> OTLP trace export (optional differentiator)
-
-Prometheus client_golang
-    +-> /metrics endpoint on HTTP transport
-    +-> RED metrics per tool (histograms)
-    +-> LS pool gauges
-    +-> Go runtime collector
-    +-> per-workspace labels (differentiator)
-
-testing.B benchmarks
-    +-> tool latency p50/p95/p99
-    +-> indexing throughput (cold vs warm)
-    +-> memory profiles (runtime/metrics)
-    +-> benchstat regression
-            +-> CI gate (GitHub Actions)
-                    +-> published bench history (differentiator)
-
-Timeout budgets
-    +-> context deadline propagation to LSP
-    +-> structured timeout errors
-    +-> per-profile max_duration_ms (differentiator)
-
-Circuit breaker (existing)
-    +-> telemetry (gauges above)
-    +-> config-exposed tuning knobs
-    +-> structured "circuit_open" error responses
-
-Pressure eviction (existing)
-    +-> GOMEMLIMIT integration
-    +-> degraded-mode state machine
-    +-> degraded-mode response banner (differentiator)
-
-README.md
-    +-> USAGE.md
-            +-> client setup pages
-            +-> profile/mode reference
-            +-> troubleshooting
-            +-> observability quickstart (depends on obs work landing first)
-            +-> perf tuning (depends on bench work landing first)
+Protocol compliance tests (no deps -- uses existing harness directly)
+    |
+    v
+Per-tool contract tests + golden outputs (needs protocol layer stable)
+    |
+    +---> Error shape assertions upgrade (extends existing errCase, parallel work)
+    |
+    +---> Profile/mode behavior tests (extends existing goldens, parallel work)
+    |
+    v
+Data-driven scenario matrix + new fixtures (needs contract tests as building blocks)
+    |
+    +---> Repository fixture management (parallel -- new fixtures feed scenarios)
+    |         |
+    |         +---> polyglot-monorepo fixture
+    |         +---> unsupported-only fixture
+    |         +---> symbol-collision fixture
+    |         +---> degraded-no-ls fixture
+    |         +---> empty-repo fixture
+    |
+    v
+Multi-step scenario composition (needs scenarios + fixtures stable)
+    |
+    v
+Polyglot honesty rules (needs multi-language fixtures + degraded simulation)
+    |
+    v
+Degraded subsystem simulation (needs polyglot honesty as validation layer)
+    |
+    v
+Build tags + CI stage 1-3 (needs all deterministic tests to exist)
+    |
+    v
+LLM behavioral tests -- tool selection + disambiguation (needs deterministic layers stable)
+    |
+    v
+LLM output interpretation tests (needs behavioral infra)
+    |
+    v
+LLM-as-judge transcript scoring + rubrics (needs behavioral test transcripts)
+    |
+    v
+5-stage CI pipeline complete (needs all test types to stage properly)
 ```
-
-**Key ordering constraint:** Observability instrumentation must land before or alongside benchmarks — you want benches producing the same metrics the prod server emits so regression triage is frictionless. Docs for obs/perf should be the last thing written, after the features stabilize.
 
 ## MVP Recommendation
 
-If v1.2 had to ship in minimum viable form, prioritize in this order:
+Prioritize (first 2-3 phases of milestone):
 
-1. **slog + trace IDs + per-tool span timing** (foundational; unlocks everything else)
-2. **Prometheus `/metrics` with RED + pool gauges + Go runtime collector** (standard observability contract)
-3. **Tool latency benchmarks (p50/p95/p99) + indexing throughput + memory profiles** (measurable performance claims)
-4. **benchstat + CI regression gate** (keep gains, prevent regressions)
-5. **Timeout budgets + deadline propagation + structured error taxonomy** (degradation behavior)
-6. **LS crash recovery with restart budget + OOM degraded mode** (fault tolerance)
-7. **README.md** (install, capabilities, client configs, supported languages)
-8. **USAGE.md** (client setup, profiles/modes, troubleshooting, obs/perf tuning)
-9. **CHANGELOG.md** (standard hygiene)
+1. **Protocol compliance tests** -- Foundation layer. Validates MCP session lifecycle, tool listing schema, session isolation, reconnect. Low risk, high value, existing harness supports it directly. ~400 LOC.
+2. **Per-tool contract tests with golden outputs** -- Extend existing golden infrastructure to cover all 38 tools' response shapes. Catches schema drift and regression. ~800 LOC.
+3. **Error shape assertions upgrade** -- Low-cost extension of existing errCase to assert error categories/codes, not just IsError bool. ~200 LOC.
+4. **Data-driven scenario matrix with new fixtures** -- YAML/struct-driven test cases across 7+ repository shapes. Reuses and extends existing table-driven patterns. ~600 LOC + fixture files.
+5. **Polyglot honesty rules** -- Medium complexity but unique to Serena's value proposition. Proves cross-language integrity. No fake links, no silent omissions. ~500 LOC.
+6. **Profile/mode behavior tests** -- Validate that mode gating actually works (read blocks edits, admin grants all). ~300 LOC.
 
-Differentiators to consider pulling in if schedule allows: `serena doctor` CLI (high UX value), pprof endpoints (near-free), published bench history (near-free via github-action-benchmark), memory sizing calculator in USAGE (reuses bench data).
+Defer to later phases:
 
-**Defer:** OTLP trace export (optional differentiator, behind a flag), per-workspace label cardinality work (only matters at multi-tenant scale), hedging (wait for bench data first).
+- **LLM behavioral tests**: Phase 3+. Requires all deterministic layers stable first. Needs API key infrastructure, cost management, non-deterministic test handling. HIGH value but HIGH complexity and long dependency chain. ~800 LOC.
+- **LLM-as-judge scoring**: Phase 4+. Depends on behavioral tests existing and producing transcripts. Rubric design is research-heavy. Should never block earlier phases. ~600 LOC.
+- **Worker pool stress scenarios**: Can be built incrementally on existing concurrency tests. Not blocking for harness MVP.
+- **Test coverage matrix report**: Nice-to-have, build after the matrix exists to report on.
+- **LLM score regression tracking**: Only meaningful after several LLM test runs exist.
 
-## Dependencies on Existing v1.0/v1.1 Capabilities
+## Complexity Budget
 
-- **v1.1 integration test harness** (`test/` package, InMemory + HTTP transports, multi-language fixtures) -> reused wholesale as the benchmark substrate. `testing.B` functions live alongside the existing `testing.T` functions, share fixture setup.
-- **Centralized daemon bootstrap** (`internal/daemon/daemon.go`) -> the single place where slog handler, Prometheus registry, and middleware get wired. Already the registration choke point, extending it is the natural path.
-- **ProfileFilterMiddleware** -> add a sibling `ObservabilityMiddleware` that wraps every tool call with start/stop timing, error classification, and trace-ID injection. Same pattern, same layer.
-- **Worker pool** (`internal/kernel/lspool/`) -> already has circuit breaker, adaptive TTL, pressure eviction. v1.2 adds telemetry taps, restart budgets, degraded-mode state, and config-exposed tuning knobs. No structural rewrite.
-- **JSON-RPC codec** (`internal/kernel/jsonrpc/`) -> needs to honor `ctx.Done()` on request cancellation so deadline propagation actually cancels in-flight LSP calls. Small but critical change.
-- **MCP error envelope** -> needs structured error codes (`timeout`, `circuit_open`, `ls_crash`, `pressure`). Today errors are likely untyped per the `TODO(#typed-errors)` note in PROJECT.md Key Decisions — v1.2 is a good moment to partially address that for degradation taxonomy without doing the full typed-error migration.
-- **Language registry + installer** -> already has the data for the README supported-languages table and for `serena doctor`. Just needs a formatter.
-- **Memory subsystem (SQLite FTS5)** -> not touched by v1.2 observability except for exposing a gauge on index size.
+| Feature | Estimated LOC | New Test Files | New Fixtures | CI Changes |
+|---------|--------------|----------------|--------------|------------|
+| Protocol compliance | ~400 | 1 | 0 | 0 |
+| Per-tool contracts + goldens | ~800 | 1-2 | 0 (uses existing) | 0 |
+| Error shape upgrade | ~200 | 0 (extends existing) | 0 | 0 |
+| Scenario matrix + driver | ~600 | 1 + scenario data | 3-5 new fixture dirs | 0 |
+| Polyglot honesty | ~500 | 1 | 2 (degraded, collision) | 0 |
+| Profile/mode behavior | ~300 | 1 (extends existing) | 0 | 0 |
+| Build tags + CI stages 1-3 | ~100 | 0 (tag existing) | 0 | 1 workflow |
+| LLM behavioral | ~800 | 1-2 | 0 | 1 CI stage |
+| LLM judge + rubrics | ~600 | 1 | 0 | 1 CI stage |
+| CI pipeline (5-stage) | ~200 | 0 | 0 | 1 workflow |
+| **Total** | **~4,500** | **8-10 new files** | **5-7 new fixtures** | **2-3 CI files** |
+
+## Dependencies on Existing v1.1 Test Infrastructure
+
+| v1.1 Asset | How v1.4 Uses It | Extension Needed |
+|------------|------------------|-----------------|
+| `test/integration/harness.go` (StartTestDaemon, Options, TestDaemon) | Foundation for all v1.4 tests. Protocol, contract, scenario tests all start a TestDaemon | Add options for degraded-mode simulation (e.g., `DisableMemory`, `BlockLS`) |
+| `test/integration/golden.go` (assertGoldenTools, -update flag) | Pattern reused for tool response goldens | Generalize to `assertGolden(t, name, actual string)` beyond just tool lists |
+| `test/integration/harness.go` (PrepareFixture, projectRoot) | Fixture management for new repo shapes | No change needed; just add new fixture directories |
+| `testdata/fixtures/{go,python,typescript,java,rust}` | Baseline language fixtures | Add 5 new fixtures alongside existing ones |
+| `testdata/profiles/*.tools.golden` | Profile contract oracle | Extend pattern to `testdata/contracts/*.response.golden` for tool responses |
+| `test/integration/errors_test.go` (errCase, runErrCases) | Error testing pattern | Extend errCase struct with `expectedErrCode` and `expectedErrSubstring` |
+| `test/integration/helpers.go` (callTool, textContent) | Tool invocation helpers | No change needed |
+| `test/integration/concurrency_test.go` | Concurrency test baseline | Optional: add stress scenarios alongside |
+| `.github/workflows/bench.yml` | CI pipeline pattern | New workflow for integration test staging |
+| InMemory + HTTP transports | Both transport paths | Protocol compliance tests must cover both |
 
 ## Sources
 
-- [Scaling gopls for the growing Go ecosystem](https://go.dev/blog/gopls-scalability) — indexing/memory patterns, "per-package index" model, HIGH confidence
-- [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) — CI regression gate pattern, HIGH confidence
-- [cob: Continuous Benchmark for Go](https://github.com/knqyf263/cob) — HEAD vs HEAD~1 benchstat pattern, MEDIUM confidence
-- [Continuous benchmarking with Go and GitHub Actions](https://dev.to/vearutop/continuous-benchmarking-with-go-and-github-actions-41ok) — practical benchstat + CI walkthrough, MEDIUM confidence
-- [Statistics Behind Latency Metrics: p90/p95/p99](https://medium.com/tuanhdotnet/statistics-behind-latency-metrics-understanding-p90-p95-and-p99-dc87420d505d) — percentile guidance (p50/p95 as budgets, p99 as warning), MEDIUM confidence
-- [How to Define and Enforce Performance Budgets Using OpenTelemetry P50/P95/P99](https://oneuptime.com/blog/post/2026-02-06-otel-performance-budgets-latency-histograms/view) — hard vs soft budget split, MEDIUM confidence
-- [Structured Logging in Go with slog for Observability and Alerting](https://dev.to/rosgluk/structured-logging-in-go-with-slog-for-observability-and-alerting-3fnm) — stdlib slog as baseline, HIGH confidence
-- [OpenTelemetry Slog [otelslog]: Go Bridge](https://uptrace.dev/guides/opentelemetry-slog) — log-trace correlation via slog handler, MEDIUM confidence
-- [How to Build Fault-Tolerant Services with Graceful Degradation in Go](https://oneuptime.com/blog/post/2026-01-25-fault-tolerant-graceful-degradation-go/view) — timeout budgets, circuit breaker, fallback patterns in Go, MEDIUM confidence
-- [API Gateway Resilience and Fault Tolerance (Zuplo)](https://zuplo.com/learning-center/api-gateway-resilience-fault-tolerance) — layered resilience pattern stack, MEDIUM confidence
-- [Circuit Breaker Pattern — Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) — canonical three-state model, HIGH confidence
-- [github/github-mcp-server installation guides](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/README.md) — reference for multi-client install doc structure, HIGH confidence
-- [modelcontextprotocol/servers README](https://github.com/modelcontextprotocol/servers) — ecosystem conventions for MCP server READMEs, HIGH confidence
+- [Janix-ai/mcp-validator](https://github.com/Janix-ai/mcp-validator) -- MCP protocol compliance testing reference, validates against 2025-06-18 spec
+- [Specmatic: MCP servers lying about schemas](https://specmatic.io/demonstration/exposed-mcp-servers-are-lying-about-their-schemas/) -- Motivation for schema validation of tool declarations
+- [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25) -- Protocol reference for compliance tests
+- [MCPAgentBench](https://arxiv.org/abs/2512.24565) -- LLM agent MCP tool use benchmark with tool selection metrics
+- [MCPVerse](https://arxiv.org/html/2508.16260v2) -- Expanded MCP benchmark covering Oracle/Standard/Max-Scale modes
+- [Langfuse LLM-as-judge](https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge) -- Judge patterns: point-wise scoring, rubric decomposition
+- [Arize LLM-as-judge](https://arize.com/llm-as-a-judge/) -- Production deployment patterns for observation-level evaluators
+- [Monte Carlo: LLM-as-Judge 7 Best Practices](https://www.montecarlodata.com/blog-llm-as-judge/) -- Criteria decomposition, bias mitigation, calibration
+- [Confident AI: LLM Agent Evaluation](https://www.confident-ai.com/blog/llm-agent-evaluation-complete-guide) -- Tool selection accuracy, invocation accuracy, retrieval accuracy metrics
+- [Go Wiki: TableDrivenTests](https://go.dev/wiki/TableDrivenTests) -- Canonical Go testing pattern
+- [Eli Bendersky: File-driven testing in Go](https://eli.thegreenplace.net/2022/file-driven-testing-in-go/) -- Golden file and data-driven patterns
+- [Parallel Table-Driven Tests in Go](https://www.glukhov.org/post/2025/12/parallel-table-driven-tests-in-go/) -- Loop variable capture, parallel subtest patterns
+- [Berkeley Function Calling Leaderboard (BFCL) V4](https://gorilla.cs.berkeley.edu/leaderboard.html) -- Tool calling accuracy benchmarks for LLMs

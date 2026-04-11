@@ -1,449 +1,590 @@
-# Architecture: Observability, Graceful Degradation, Benchmarks
+# Architecture Patterns
 
-**Milestone:** v1.2 Performance & Production Hardening
-**Scope:** How NEW features (metrics, logs, traces, graceful degradation, benchmarks) integrate with the existing 4-layer Go MCP platform.
-**Researched:** 2026-04-08
-**Confidence:** HIGH for Go stdlib/OTel/Prom patterns; MEDIUM for MCP SDK middleware specifics (verified via existing code).
+**Domain:** Multi-oracle integration test harness for Go MCP platform
+**Researched:** 2026-04-11
 
----
+## Recommended Architecture
 
-## 1. Guiding Principles
+### Design Principle: Extend, Don't Replace
 
-1. **Single binary, single process.** No sidecars. Observability runs inside the daemon.
-2. **One context, one trace.** `context.Context` is already threaded daemon -> MCP -> kernel -> lspool. Trace IDs ride that context; do not invent a parallel carrier.
-3. **Slog stays the ingress.** Existing `slog.Logger` is passed everywhere. Do NOT rip it out — wrap its handler so every log line gets trace/span IDs for free.
-4. **Additive, not invasive.** No kernel/skill signatures change. New wiring happens in `internal/daemon/daemon.go` bootstrap and via new middleware / handler decorators.
-5. **Cheap-by-default.** Metrics are always-on (sub-percent overhead). Tracing is sampled (default 0% remote, on-demand). Profiling endpoints gated behind admin profile.
-6. **Never break error paths.** Telemetry failures are swallowed and logged. A dropped span must not propagate to tool callers.
+The existing `test/integration/` package is well-structured with battle-tested patterns (harness, golden files, helpers, build tags). The multi-oracle architecture layers on top of it rather than replacing it. The existing `StartTestDaemon`, `PrepareFixture`, `assertGoldenTools`, and `callTool` helpers become the shared foundation that all five oracle layers consume.
 
----
-
-## 2. Current-State Recap (what we're integrating with)
-
-Verified from code (`internal/daemon/daemon.go`, `internal/mcp/middleware.go`, `internal/kernel/lspool/`):
-
-| Layer | Existing surface | Relevant for v1.2 |
-|-------|------------------|-------------------|
-| Forwarder | `internal/forwarder/dial.go` uses `grpc.NewClient` | Client-side gRPC interceptor injection point |
-| Daemon gRPC | `grpc.NewServer()` in `daemon.listenSocket` | Server-side gRPC interceptor injection point |
-| HTTP transport | `http.ServeMux` at `/mcp` in `daemon.listenHTTP` | Add new `/metrics`, `/debug/pprof/*`, `/healthz` routes OR new mux on new listener |
-| MCP server | `mcpsdk.AddReceivingMiddleware` used for logging + profile filter | Single chain point for request-level telemetry |
-| Errgroup | `daemon.Run` orchestrates kernel + socket + HTTP | Add metrics listener as new `g.Go(...)` sibling |
-| Worker pool | `lspool.Pool.AcquireLease`, circuit breaker in `lspool/circuit.go` | Already has degradation primitives; v1.2 wires metrics to them, adds tuning knobs |
-| Logger | `slog.Logger` passed by value from daemon to every subsystem | Replace the root `slog.Handler` with a trace-aware wrapper |
-
-Current logging middleware (`mcp/middleware.go:88-110`) logs method + duration + error. It is the obvious seed for the telemetry middleware; v1.2 expands it in place rather than adding a second chain.
-
----
-
-## 3. New Components
-
-### 3.1 `internal/obs/` (new package)
-
-Small, dependency-light shim over OpenTelemetry + Prometheus. All subsystems import from here; nothing else imports OTel/Prom directly. This keeps vendoring swap-out cheap and prevents a metrics rewrite from touching 30 files.
+### Component Layout
 
 ```
-internal/obs/
-|-- obs.go          # Provider: holds tracer, meter, prom registry, slog handler
-|-- handler.go      # slog.Handler wrapper that injects trace_id/span_id from ctx
-|-- meter.go        # Typed metric constructors (counters/histograms) + registry
-|-- tracer.go       # Tracer factory + noop fallback
-|-- config.go       # ObsConfig (port, sampler, exporter type, enabled flags)
-`-- testing.go      # In-memory exporter for unit tests
+test/
+  integration/                  # EXISTING - stays as-is, becomes "foundation layer"
+    harness.go                  # StartTestDaemon, PrepareFixture, WaitForLS
+    golden.go                   # assertGoldenTools, -update flag
+    helpers.go                  # callTool, textContent, listSessionTools
+    a_doc.go                    # Package doc
+    *_test.go                   # EXISTING tests (keep, don't migrate)
+
+  harness/                      # NEW - importable test infrastructure (extracted)
+    harness.go                  # StartTestDaemon, Options, TestDaemon (exported)
+    fixture.go                  # PrepareFixture, projectRoot, FixtureRegistry
+    golden.go                   # assertGolden*, -update flag, hierarchical goldens
+    helpers.go                  # callTool, textContent, listSessionTools
+    doc.go                      # Package doc
+
+  oracle/                       # NEW - multi-oracle test harness
+    doc.go                      # Package doc, build tag explanation
+    shared.go                   # Cross-oracle helpers, YAML loader
+
+    protocol/                   # Oracle Layer 1: Protocol correctness
+      protocol_test.go          # //go:build integration
+
+    contract/                   # Oracle Layer 2: Per-tool contracts
+      contract_test.go          # //go:build integration
+      schema.go                 # Schema validation + error shape assertions
+
+    scenario/                   # Oracle Layer 3: Repository scenarios
+      scenario_test.go          # //go:build integration && scenario
+      loader.go                 # YAML scenario file loader
+      runner.go                 # Data-driven scenario executor
+
+    behavioral/                 # Oracle Layer 4: LLM behavioral
+      behavioral_test.go        # //go:build llmtest
+      client.go                 # Claude API client wrapper
+      rubric.go                 # Scoring rubrics
+
+    judge/                      # Oracle Layer 5: LLM judge
+      judge_test.go             # //go:build llmjudge
+      scorer.go                 # Structured judge prompts + parsing
+
+testdata/
+  fixtures/                     # EXISTING fixtures stay
+    go/                         # EXISTING
+    python/                     # EXISTING
+    typescript/                 # EXISTING
+    java/                       # EXISTING
+    rust/                       # EXISTING
+    polyglot/                   # NEW - multi-language monorepo fixture
+    unsupported/                # NEW - language with no LS available
+    degraded/                   # NEW - valid project with broken LS config
+    collisions/                 # NEW - name collision scenarios
+
+  profiles/                     # EXISTING golden files stay
+    *.tools.golden              # EXISTING 19 goldens
+
+  oracle/                       # NEW - oracle-specific test data
+    protocol/                   # Protocol test expectations
+      init_sequence.golden
+      tool_listing.golden
+      reconnect.golden
+
+    contracts/                  # Per-tool contract goldens
+      go/                       # Organized by fixture language
+        search_symbols.golden
+        go_to_definition.golden
+        get_symbol_overview.golden
+        ...
+      python/
+        ...
+      typescript/
+        ...
+      error_shapes/             # Error response shape goldens
+        no_workspace.golden
+        symbol_not_found.golden
+        invalid_args.golden
+
+    scenarios/                  # YAML scenario definitions
+      go_basic.yaml
+      python_basic.yaml
+      typescript_basic.yaml
+      polyglot_cross_lang.yaml
+      unsupported_graceful.yaml
+      degraded_fallback.yaml
+      collision_disambiguation.yaml
+
+    behavioral/                 # LLM behavioral test data
+      tool_selection/
+      disambiguation/
+      output_interpretation/
+
+    judge/                      # Judge rubrics
+      rubrics/
+        tool_selection.yaml
+        output_quality.yaml
 ```
 
-**Key decisions:**
+### Component Boundaries
 
-- **Tracing library:** `go.opentelemetry.io/otel` + `otel/sdk/trace`. Industry standard, MCP/LSP have no alternative. HIGH confidence.
-- **Metrics library:** Prometheus native (`prometheus/client_golang`) directly — NOT via OTel metrics bridge. Rationale: OTel metrics SDK is still heavier and noisier than prom client; our target is a `/metrics` endpoint, not OTLP metrics push. We already own the Prom endpoint. MEDIUM confidence — revisit if we need OTLP metrics push later.
-- **No global state.** `obs.Provider` is constructed in `daemon.New()` and passed explicitly, same pattern as `logger`. Avoids the OTel `otel.SetTracerProvider` global footgun which breaks tests that run in parallel.
-- **Noop by default.** If `cfg.Observability.Enabled == false` or init fails, `Provider` returns noop tracers/meters. Downstream code never branches on `if provider != nil`.
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `test/harness/` (NEW, extracted) | Importable daemon lifecycle, fixture prep, golden helpers | All oracle layers + existing `test/integration/` |
+| `test/integration/` (EXISTING) | Existing regression tests, thin wrappers over harness | `test/harness/` |
+| `test/oracle/protocol/` | MCP init, tool listing, session isolation, reconnect | `test/harness/` |
+| `test/oracle/contract/` | Per-tool input/output contracts, schema validation, error shapes | `test/harness/` + `testdata/oracle/contracts/` goldens |
+| `test/oracle/scenario/` | Data-driven multi-step scenarios from YAML | `test/harness/` + `testdata/oracle/scenarios/` YAML |
+| `test/oracle/behavioral/` | LLM tool selection, disambiguation, output interpretation | Claude API + `testdata/oracle/behavioral/` |
+| `test/oracle/judge/` | LLM-as-judge scoring with structured rubrics | Claude API + `testdata/oracle/judge/rubrics/` |
+| `testdata/fixtures/` | Repository fixtures (code to test against) | `PrepareFixture()` in harness |
+| `testdata/oracle/` | Golden files, scenarios, rubrics | Oracle layers read these |
 
-### 3.2 `internal/daemon/telemetry.go` (new file)
-
-Thin wiring file. Creates the obs provider, registers runtime/process collectors (Go GC stats, goroutine count, RSS), exposes `/metrics` + `/healthz` + `/debug/pprof/*` on a **dedicated admin listener** (see section 4.1).
-
-### 3.3 `internal/mcp/telemetry_middleware.go` (new file, or fold into `middleware.go`)
-
-Replaces `loggingMiddleware` with `telemetryMiddleware(provider)`. Single pass: start span -> record duration histogram -> increment counter -> log. Existing `InstallMiddleware` signature grows one parameter or accepts a `Provider` struct.
-
-### 3.4 `internal/kernel/lspool/metrics.go` (new file)
-
-Pool-internal Prom metrics: lease acquire latency, lease queue depth, worker startup time, circuit breaker state gauge, crashes total, pressure evictions total, RSS per worker. Pool already holds a logger; now also holds a `*obs.Meter`. No external API change.
-
-### 3.5 `test/bench/` (new directory, top-level, public-API only)
-
-Benchmarks follow the existing `test/integration/` black-box precedent — external package (`package bench_test`) driving the daemon through its public API via the in-process MCP harness. See section 6.
-
-### 3.6 `internal/degrade/` (new package, small)
-
-Home for timeout budgets and deadline propagation helpers. Separates policy (what timeout for what operation class) from mechanism (`context.WithTimeout`). Lets us tune budgets in one file without grepping the codebase.
+### Data Flow
 
 ```
-internal/degrade/
-|-- budget.go       # Per-operation-class timeouts (read / edit / search / index)
-|-- deadline.go     # EnsureBudget(ctx, class) helper — applies budget if none set
-`-- classify.go     # Map tool names -> operation classes
+                    YAML Scenarios
+                         |
+                         v
+  +-----------+    +-----------+    +----------------+
+  | Fixture   | -> | Harness   | -> | Oracle Layer   |
+  | (testdata)|    | (test/    |    | (protocol/     |
+  |           |    | harness/) |    |  contract/     |
+  |           |    |           |    |  scenario)     |
+  +-----------+    +-----------+    +----------------+
+                         |                  |
+                         v                  v
+                   +----------+     +---------------+
+                   | MCP      |     | Golden Files  |
+                   | Session  |     | (testdata/    |
+                   | (tool    |     |  oracle/)     |
+                   | calls)   |     +---------------+
+                   +----------+
+                         |
+            +------------+------------+
+            |                         |
+            v                         v
+  +------------------+    +-------------------+
+  | LLM Behavioral   |    | LLM Judge         |
+  | (Claude API,     |    | (structured       |
+  |  //go:build      |    |  rubric scoring,  |
+  |  llmtest)        |    |  //go:build       |
+  +------------------+    |  llmjudge)        |
+                          +-------------------+
 ```
 
-Existing circuit breaker stays in `lspool/circuit.go` — v1.2 just exposes its state via metrics and adds config-driven tuning knobs.
+## Critical Prerequisite: Harness Extraction (Pattern 0)
 
----
+The existing `test/integration/` uses `package integration_test` (external test package). External test packages CANNOT be imported by other packages. The helpers (`StartTestDaemon`, `PrepareFixture`, `callTool`, etc.) must be importable by oracle layers.
 
-## 4. Component Diagram (v1.2 additions highlighted with *)
+**Solution:** Create `test/harness/` as `package harness` (proper importable package). Move shared infrastructure there. Existing `test/integration/` becomes a thin consumer that imports `test/harness/`.
 
+**Migration path:**
+1. Create `test/harness/` with the shared types and functions.
+2. Update `test/integration/*_test.go` to import from `test/harness/`.
+3. All existing tests must pass unchanged.
+4. Oracle layers import `test/harness/` directly.
+
+**Build tag consideration:** The existing harness files all have `//go:build integration`. The extracted `test/harness/` should also use `//go:build integration` because oracle tests should never compile without that tag active. LLM layers (build tags `llmtest`/`llmjudge`) should use `integration || llmtest || llmjudge` to also compile the harness, OR the harness should have NO build tag and rely on consumers to be tag-gated. The latter is simpler and matches Go convention (importable packages are unconditionally compilable; consumers control when they compile).
+
+**Recommendation:** `test/harness/` has NO build tags. It is a library. Consumers (`test/integration/`, `test/oracle/*/`) each have their own build tags.
+
+## Patterns to Follow
+
+### Pattern 1: YAML-Driven Scenario Files
+
+**What:** Scenario definitions in YAML, loaded by a Go test runner that iterates them as subtests.
+
+**When:** Oracle Layer 3 (scenarios) -- multi-step tool call sequences with assertions.
+
+**Why:** Adding a new scenario requires only a YAML file, not Go code. This scales to hundreds of scenarios and enables non-Go-developers to contribute test cases. Go's `filepath.Glob` auto-discovers new YAML files.
+
+**Example YAML:**
+```yaml
+# testdata/oracle/scenarios/go_basic.yaml
+name: "Go basic symbol operations"
+fixture: "go"
+requires_ls: "gopls"
+steps:
+  - tool: "search_symbols"
+    args:
+      query: "Helper"
+    assert:
+      not_error: true
+      contains: "Helper"
+      min_lines: 1
+
+  - tool: "go_to_definition"
+    args:
+      path: "main.go"
+      line: 6
+      column: 1
+    assert:
+      not_error: true
+      contains: "main.go"
+
+  - tool: "get_symbol_overview"
+    args:
+      path: "main.go"
+    assert:
+      not_error: true
+      contains_all: ["Helper", "DemoStruct"]
 ```
-                       +-------------------------------+
- mcp client --stdio--> |   internal/forwarder          |
-                       |   + gRPC client interceptor * |  (trace propagation)
-                       +---------------+---------------+
-                                       | gRPC (unix socket)
-                       +---------------v---------------+
-                       |   internal/daemon             |
-                       |                               |
-                       |   errgroup:                   |
-                       |   |- kernel.Run               |
-                       |   |- listenSocket (gRPC)      |
-                       |   |  + server interceptor *   |
-                       |   |- listenHTTP  (MCP)        |
-                       |   |- listenAdmin *  <-- NEW   |-- /metrics, /healthz, /readyz, /debug/pprof/*
-                       |   `- telemetry.Shutdown *     |
-                       |                               |
-                       |   +-------------------------+ |
-                       |   | MCP server              | |
-                       |   |  middleware chain:      | |
-                       |   |   1. telemetry * (was   | |
-                       |   |      logging)           | |
-                       |   |   2. profile filter     | |
-                       |   +----------+--------------+ |
-                       |              | ctx w/ span    |
-                       |   +----------v--------------+ |
-                       |   | kernel / skills         | |
-                       |   |  + tool-scoped spans *  | |
-                       |   |  + degrade.EnsureBudget*| |
-                       |   +----------+--------------+ |
-                       |              |                |
-                       |   +----------v--------------+ |
-                       |   | lspool                  | |
-                       |   |  + metrics *            | |
-                       |   |  + breaker gauge *      | |
-                       |   +----------+--------------+ |
-                       +--------------+----------------+
-                                      | JSON-RPC/stdio
-                                      v
-                              language servers
-```
 
-### 4.1 Metrics endpoint placement — **dedicated listener, not shared**
-
-Three options were considered:
-
-| Option | Pros | Cons | Verdict |
-|--------|------|------|---------|
-| A. Share MCP HTTP mux (`/metrics` alongside `/mcp`) | Zero new config, one port | MCP transport and admin surface share auth/ACL/rate limits; scraping noise competes with tool traffic; any panic on `/metrics` takes down the MCP handler's ServeMux; profile filter middleware shouldn't apply to Prom scraping | no |
-| B. Separate `net.Listener` on dedicated admin addr | Clean separation, distinct bind address means ops can firewall it internally, pprof/healthz live with metrics naturally, cannot be scraped by random MCP clients, no middleware cross-talk | One extra config field | **chosen** |
-| C. Push-only (OTLP/Pushgateway) | No listener | Requires external infra, breaks single-binary story, hurts local-dev onboarding | no |
-
-**Decision:** New `cfg.Observability.AdminAddr` (default `127.0.0.1:0` — off unless configured, bound to loopback when enabled). New `g.Go(d.listenAdmin)` sibling in `Daemon.Run`. Hosts:
-
-- `/metrics` — Prom exposition
-- `/healthz` — liveness (always 200 if process alive)
-- `/readyz` — readiness (200 once kernel + profile resolved + at least one listener up)
-- `/debug/pprof/*` — gated: only mounted if `cfg.Observability.Pprof == true` AND active profile has admin mode available
-
-Rationale for loopback default: avoids accidental public exposure; operators who want remote scraping opt in explicitly. Matches gopls/etcd/CockroachDB conventions. HIGH confidence — this is standard Go service hygiene.
-
-### 4.2 Trace propagation forwarder -> daemon -> kernel -> LS
-
-**Forwarder -> daemon (gRPC):**
-
-Add interceptors to the existing `grpc.NewServer()` in `daemon.listenSocket` and `grpc.NewClient` in `forwarder/dial.go`:
-
+**Example runner:**
 ```go
-// daemon side
-d.grpcServer = grpc.NewServer(
-    grpc.StatsHandler(otelgrpc.NewServerHandler()),
+// test/oracle/scenario/runner.go
+//go:build integration && scenario
+
+package scenario
+
+import (
+    "os"
+    "path/filepath"
+    "testing"
+
+    "gopkg.in/yaml.v3"
+    "github.com/postfix/serena/test/harness"
 )
-// forwarder side
-conn, err := grpc.NewClient(addr,
-    grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-    ...,
-)
-```
 
-`otelgrpc` (from `go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc`) auto-extracts W3C traceparent from gRPC metadata and establishes a span on the server side. The MCP SDK's stream handler runs under that span's context, so everything downstream inherits it without code changes. HIGH confidence — `otelgrpc` is the canonical integration and the correct API surface is `StatsHandler` (not the older deprecated `UnaryInterceptor`/`StreamInterceptor`). Verify exact import path via Context7 at implementation time.
+type Scenario struct {
+    Name       string  `yaml:"name"`
+    Fixture    string  `yaml:"fixture"`
+    RequiresLS string  `yaml:"requires_ls"`
+    Steps      []Step  `yaml:"steps"`
+}
 
-**Daemon MCP middleware -> kernel:**
+type Step struct {
+    Tool   string         `yaml:"tool"`
+    Args   map[string]any `yaml:"args"`
+    Assert Assertion      `yaml:"assert"`
+}
 
-The telemetry middleware starts a child span keyed on `method` (e.g., `mcp.tools/call`) and, for `tools/call`, also annotates with `tool.name`. Kernel tools that do meaningful work create sub-spans using `provider.Tracer("serena.kernel").Start(ctx, "symbols.find_references")`. Attributes: `workspace.lang`, `workspace.root` (hash, not path — PII), `result.size`, `cache.hit`.
+type Assertion struct {
+    NotError    bool     `yaml:"not_error"`
+    IsError     bool     `yaml:"is_error"`
+    Contains    string   `yaml:"contains"`
+    ContainsAll []string `yaml:"contains_all"`
+    MinLines    int      `yaml:"min_lines"`
+    Golden      string   `yaml:"golden"`
+}
 
-**Kernel -> LS (JSON-RPC):**
-
-LS processes do not speak OTel. Tracing stops at the JSON-RPC boundary. Instead, we record a **span event** `"ls.request"` with attributes `ls.method`, `ls.duration_ms`, `ls.language`, `ls.worker_id`. This gives us LS latency visibility without pretending LS is OTel-aware. If someday LSP gains trace context extensions, we extend the JSON-RPC codec — until then, span events are the right abstraction.
-
-### 4.3 Logs <-> traces correlation
-
-Wrap the existing `slog.Handler` once in `daemon.New()`:
-
-```go
-baseHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
-handler := obs.NewContextHandler(baseHandler) // injects trace_id, span_id from ctx
-logger := slog.New(handler)
-```
-
-`obs.NewContextHandler` implements `slog.Handler` and overrides `Handle(ctx, r)` to pull the active span from `ctx` and append `trace_id` / `span_id` attributes. Zero changes at call sites — every existing `logger.Info("...", ...)` that receives a ctx-bearing call path (via the middleware) automatically gains correlation IDs. HIGH confidence — this is the documented slog extension pattern.
-
-**Caveat:** many existing log calls in lspool/kernel use `logger.Info(...)` without a ctx. The handler just omits the IDs in those cases — no panic, no error. We do NOT do a big sweep to pipe ctx into every log call. Incremental: high-value paths (request lifecycle, tool execution, worker lease) get ctx-aware logging; background chatter stays ctx-free.
-
-### 4.4 Error paths — non-negotiable invariants
-
-1. **Span recording failures are swallowed.** `otelgrpc` and the SDK's exporter handle this; obs provider uses `otel.SetErrorHandler` to route internal OTel errors to slog at `Warn` level, never propagated.
-2. **Metric increment is allocation-free on hot path.** Use pre-registered labeled instruments. No `WithLabelValues` on hot path without pre-computed vectors.
-3. **Telemetry middleware never swallows tool errors.** Record the error on the span (`span.RecordError(err); span.SetStatus(codes.Error, ...)`), then return it unchanged. Existing error behavior at `mcp/middleware.go:95-100` is preserved byte-for-byte; only the log line grows attributes.
-4. **Admin listener failure is non-fatal.** If `/metrics` listener fails to bind, log ERROR and continue. `g.Go` would otherwise cancel the errgroup and take down the MCP daemon — unacceptable. Wrap the admin goroutine so its return value is always nil:
-
-```go
-g.Go(func() error {
-    if err := d.listenAdmin(gctx); err != nil && !errors.Is(err, context.Canceled) {
-        d.logger.Error("admin listener failed, continuing without metrics", "error", err)
+func RunScenario(t *testing.T, s Scenario) {
+    t.Helper()
+    if s.RequiresLS != "" {
+        harness.RequireLS(t, s.RequiresLS)
     }
-    return nil
-})
+    fixture := harness.PrepareFixture(t, s.Fixture)
+    td := harness.StartTestDaemon(t, harness.Options{WorkspaceDir: fixture})
+
+    for i, step := range s.Steps {
+        t.Run(fmt.Sprintf("step_%d_%s", i, step.Tool), func(t *testing.T) {
+            if step.Assert.IsError {
+                result := harness.CallToolExpectError(t, td.Session, step.Tool, step.Args)
+                applyAssertions(t, result, step.Assert)
+            } else {
+                result := harness.CallTool(t, td.Session, step.Tool, step.Args)
+                applyAssertions(t, result, step.Assert)
+            }
+        })
+    }
+}
 ```
 
-This is a deliberate deviation from the kernel/socket/HTTP listeners which MUST fail the group. Rationale: observability is instrumentation, not product.
+### Pattern 2: Hierarchical Golden File Organization
 
----
+**What:** Golden files organized by `testdata/oracle/{layer}/{fixture-lang}/{tool}.golden` with auto-discovery.
 
-## 5. Graceful Degradation Integration
+**When:** Scaling from 19 profile goldens to hundreds of contract/scenario goldens.
 
-### 5.1 Timeout budgets
+**Why:** The existing flat `testdata/profiles/*.tools.golden` pattern works at 19 files but becomes unnavigable at 100+. Subdirectories per fixture language and per oracle layer keep things organized.
 
-New `internal/degrade` package defines per-tool-class budgets:
-
-| Class | Default | Rationale |
-|-------|---------|-----------|
-| read (hover, definition, symbol overview) | 5s | LSP reads are usually <500ms; 5s catches pathological gopls indexing |
-| search (find_symbol, search_for_pattern) | 15s | Ripgrep-style fan-out |
-| edit (all 6 edit tools) | 10s | Includes tree-sitter + LS validate roundtrip |
-| index (activate_project) | 120s | Cold jdtls/rust-analyzer are slow; must exceed LS bootstrap |
-| diagnostics | 20s | Includes publishDiagnostics settle time |
-
-`degrade.EnsureBudget(ctx, class)` returns a derived context with the budget applied if none is already set. Called at tool handler entry. If caller already set a deadline, respect the shorter.
-
-**Integration point:** kernel tool `RegisterTools` functions (in `internal/kernel/symbols`, `edit`, `fileops`, `diag`) wrap each handler. Alternative considered: put it in the MCP middleware. Rejected because middleware doesn't know the operation class without a classifier table — and a classifier table in middleware reintroduces coupling the kernel tool packages were designed to avoid. Doing it at tool registration keeps class info colocated with the tool definition. MEDIUM confidence on placement — this is a judgment call, will revisit after implementation.
-
-### 5.2 Circuit breaker tuning
-
-Existing `lspool/circuit.go` has the breaker. v1.2 additions:
-
-1. Expose state via metric: `serena_lspool_circuit_state{lang,reason}` gauge (0=closed, 1=half-open, 2=open).
-2. Config-driven thresholds in `cfg.WorkerPool.Circuit` (new struct): `FailureThreshold`, `CooldownDuration`, `HalfOpenProbes`.
-3. New counter: `serena_lspool_circuit_trips_total{lang,reason}`.
-4. Breaker-open errors become a typed error `lspool.ErrCircuitOpen` so the telemetry middleware can tag spans with `breaker_open=true` without string matching. Feeds into the deferred typed-errors TODO(#typed-errors) noted in v1.1.
-
-No behavioral change in the breaker algorithm itself — v1.2 is observability + tuning.
-
-### 5.3 OOM / crash recovery
-
-Pool already does pressure eviction (`pressure_{linux,darwin}.go`). New work:
-
-1. **Crash detection metric:** `serena_lspool_worker_crashes_total{lang,signal}` — incremented in the existing worker supervision goroutine when the LS process exits abnormally.
-2. **Eviction reason labels:** `serena_lspool_evictions_total{reason=pressure|ttl|circuit|shutdown}`. The pool's existing eviction paths each get a call-site constant. No logic change; just labeling.
-3. **RSS gauge:** per-worker RSS sampled on the existing pressure check tick. Emitted as `serena_lspool_worker_rss_bytes{lang,worker_id}`.
-4. **Daemon-level watchdog:** a `runtime.ReadMemStats`-fed gauge exposed alongside Go runtime collector (`prometheus/client_golang/prometheus/collectors`).
-
-No new goroutines — piggyback on existing pressure tick to avoid adding scheduler noise.
-
-### 5.4 LS crash recovery
-
-Already handled by worker supervision; v1.2 adds:
-
-- Structured log event `lspool.worker_crashed` with `signal`, `exit_code`, `stderr_tail` (last 4KB).
-- Automatic restart still bounded by circuit breaker — if the breaker opens, no restart storm.
-- New `serena_lspool_restarts_total` counter.
-
----
-
-## 6. Benchmarks: access pattern decision
-
-**Question:** where do benchmarks live and how do they see internal APIs?
-
-**Options:**
-
-| Option | Location | Package | Access |
-|--------|----------|---------|--------|
-| A. Co-located `_test.go` under `internal/...` | `internal/kernel/lspool/pool_bench_test.go` | `package lspool` | Full internal access |
-| B. Top-level `test/bench/` | `test/bench/` | `package bench_test` | Public API only |
-| C. `benchmark/` top-level with internal imports | `benchmark/` | various | Allowed to import `internal/*` because it's same module |
-| D. Hybrid | A + B | — | Micro-benches internal; macro-benches black-box |
-
-**Chosen: D (hybrid), weighted toward B.**
-
-Rationale:
-
-- **Integration precedent** (v1.1) put macro-scale tests in top-level `test/integration/` as `package *_test` to force clean public-API exports. Benchmarks that measure "tool response times p50/p95/p99" and "indexing throughput" are exactly the same shape: they must exercise the full daemon, which is the v1.2 benchmarking target from PROJECT.md. These live in `test/bench/` and reuse the existing harness (`test/integration/harness.go`).
-- **Micro-benchmarks** for hot-path primitives (JSON-RPC codec decode, tree-sitter body extraction, FTS5 query) benefit from internal access and need to be in the package under test. These live as `*_bench_test.go` files alongside the code. Go's `go test -bench` convention handles this natively.
-- **Memory profiles** (PROJECT.md line 51) are macro: they need a full workspace activation. `test/bench/memory_bench_test.go` using `testing.B.ReportAllocs()` + manual `runtime.ReadMemStats` snapshots around phases.
-- **CI regression gate:** CI runs `go test -bench=. -benchmem -run=^$ ./test/bench/... ./internal/...` and pipes through `benchstat` against a baseline committed at `test/bench/baselines/`. A failing comparison fails CI.
-
-**Why not C (`benchmark/` importing `internal/*`):** same-module internal imports are legal but defeat the point of `internal`. The v1.1 decision explicitly moved integration tests to top-level to force public-API hygiene. Benchmarks are a downstream consumer of the same API contract — same rule applies. HIGH confidence — consistent with existing repo conventions.
-
-**New directory layout:**
-
+**Naming convention:**
 ```
-test/bench/
-|-- harness.go                # Re-exports or thin wrapper over test/integration harness
-|-- tools_bench_test.go       # p50/p95/p99 per tool, all 38 tools
-|-- indexing_bench_test.go    # LOC/sec against testdata/python/go/ts/rust/java fixtures
-|-- memory_bench_test.go      # baseline / per-workspace / per-worker RSS snapshots
-|-- baselines/
-|   |-- tools.txt             # benchstat input — committed
-|   `-- indexing.txt
-`-- fixtures/                 # link to test/integration/testdata where possible
+testdata/oracle/contracts/{lang}/{tool}.golden          # happy path
+testdata/oracle/contracts/{lang}/{tool}.{variant}.golden # variant
+testdata/oracle/contracts/error_shapes/{category}.golden # error shapes
+testdata/oracle/protocol/{aspect}.golden                 # protocol
 ```
 
-Micro-benchmarks stay alongside source:
-- `internal/kernel/jsonrpc/codec_bench_test.go`
-- `internal/kernel/edit/body_extract_bench_test.go`
-- `internal/memory/fts_bench_test.go`
-- `internal/kernel/lspool/pool_bench_test.go`
+**Update mechanism:** Extend the existing `-update` flag pattern. The flag is already wired as `flag.Bool("update", ...)` and checks `GOLDEN_UPDATE=1`. New oracle golden helpers respect the same flag.
 
----
+### Pattern 3: Build Tag Layering for CI Stages
 
-## 7. Data Flow: a traced `find_references` call
+**What:** Multiple build tags control which oracle layers run, mapping to CI pipeline stages.
+
+**Tag design:**
+
+| Build Tag | Oracle Layers | What Runs |
+|-----------|--------------|-----------|
+| `integration` | Protocol + Contract (layers 1-2) | All deterministic non-LS tests |
+| `integration` + LS installed | Protocol + Contract with LS | Deterministic LS-dependent tests (skip if LS absent) |
+| `scenario` (implies `integration`) | Scenario (layer 3) | YAML-driven multi-step scenarios |
+| `llmtest` | Behavioral (layer 4) | Claude API tool selection tests |
+| `llmjudge` | Judge (layer 5) | Claude API judge scoring |
+
+**CI stage mapping:**
+
+```bash
+# Stage 1: Fast deterministic (protocol + contract, ~30s)
+go test -tags integration ./test/oracle/protocol/... ./test/oracle/contract/...
+
+# Stage 2: Scenarios (needs LS installed, ~2-5min)
+go test -tags "integration scenario" ./test/oracle/scenario/...
+
+# Stage 3: Race detection on deterministic + scenarios (~5-10min)
+go test -tags "integration scenario" -race ./test/oracle/...
+
+# Stage 4: LLM behavioral (needs ANTHROPIC_API_KEY, ~1-3min)
+go test -tags llmtest ./test/oracle/behavioral/...
+
+# Stage 5: Optional LLM judge (needs ANTHROPIC_API_KEY, ~2-5min)
+go test -tags llmjudge ./test/oracle/judge/...
+```
+
+**Stage dependency chain:**
+```
+Stage 1 (fast) -> Stage 2 (scenarios) -> Stage 3 (race)
+                                              |
+                                              v
+                                      Stage 4 (LLM behavioral)
+                                              |
+                                              v
+                                      Stage 5 (LLM judge, optional)
+```
+
+Stages 1-3 are blocking for merge. Stage 4 is informational (fail does not block). Stage 5 is optional/manual.
+
+### Pattern 4: Environment-Gated LLM Tests
+
+**What:** LLM tests gated by both build tag AND environment variable.
+
+**Why:** Build tags prevent compilation (no Claude SDK import in deterministic builds). Environment variable provides runtime skip when API key is absent. Double gating prevents accidental CI cost.
+
+```go
+//go:build llmtest
+
+package behavioral_test
+
+func TestToolSelection_SearchIntent(t *testing.T) {
+    apiKey := os.Getenv("ANTHROPIC_API_KEY")
+    if apiKey == "" {
+        t.Skip("ANTHROPIC_API_KEY not set")
+    }
+    // ... test with Claude API
+}
+```
+
+### Pattern 5: Fixture Registry
+
+**What:** A registry mapping fixture names to metadata (language, required LS binary, capabilities).
+
+**When:** Scenario loader needs to know which LS to check for.
+
+**Why:** Avoids hardcoding `requireGopls`-style checks per test file. Scenarios declare `fixture: "go"` and the registry handles LS availability checks.
+
+```go
+// test/harness/fixtures.go
+type FixtureMeta struct {
+    Name       string
+    Language   string
+    LSBinary   string   // e.g., "gopls", "pylsp"
+    Supports   []string // e.g., ["symbols", "edit", "diagnostics"]
+    Degraded   bool     // true for fixtures testing degraded behavior
+}
+
+var Fixtures = map[string]FixtureMeta{
+    "go":          {Name: "go", Language: "go", LSBinary: "gopls",
+                    Supports: []string{"symbols", "edit", "diagnostics"}},
+    "python":      {Name: "python", Language: "python", LSBinary: "pylsp",
+                    Supports: []string{"symbols", "diagnostics"}},
+    "typescript":  {Name: "typescript", Language: "typescript",
+                    LSBinary: "typescript-language-server",
+                    Supports: []string{"symbols", "edit", "diagnostics"}},
+    "polyglot":    {Name: "polyglot", Language: "multi", LSBinary: "",
+                    Supports: []string{"symbols"}},
+    "unsupported": {Name: "unsupported", Language: "brainfuck", LSBinary: "",
+                    Supports: []string{}},
+    "degraded":    {Name: "degraded", Language: "go", LSBinary: "gopls",
+                    Degraded: true},
+    "collisions":  {Name: "collisions", Language: "go", LSBinary: "gopls",
+                    Supports: []string{"symbols"}},
+}
+```
+
+### Pattern 6: Oracle Layer Independence
+
+**What:** Each oracle layer is a separate Go package with its own build tag. No oracle layer imports another oracle layer.
+
+**When:** Always. This prevents cascading failures and keeps build times predictable.
+
+**Why:** If the LLM behavioral layer imported scenario infrastructure directly, a broken scenario package would prevent LLM tests from compiling. Instead, shared infrastructure lives in `test/harness/` and each oracle layer imports only from there.
 
 ```
-claude-code
-   `-> stdio -> forwarder
-         |       `- new OTel span "forwarder.stream"
-         |          traceparent -> gRPC metadata
-         `-> gRPC (unix socket)
-                `-> daemon.grpcServer (otelgrpc StatsHandler extracts traceparent)
-                      `-> MCP SDK stream handler (ctx carries span)
-                            `-> telemetry middleware
-                                  | span "mcp.tools/call" attrs={tool="find_references"}
-                                  | hist serena_mcp_request_duration_seconds{method,tool}
-                                  | counter serena_mcp_requests_total{method,tool,status}
-                                  `-> profile filter middleware (passthrough for tools/call)
-                                        `-> symbols.findReferencesHandler
-                                              | degrade.EnsureBudget(ctx, "read") -> ctx w/ 5s deadline
-                                              | span "symbols.find_references" attrs={lang,sym_count_est}
-                                              `-> kernel.Pool.AcquireLease
-                                                    | hist serena_lspool_lease_wait_seconds
-                                                    | hist serena_lspool_lease_hold_seconds
-                                                    | counter serena_lspool_lease_acquired_total{lang,reused}
-                                                    `-> LSWorker.Request (textDocument/references)
-                                                          span event "ls.request" attrs={method,duration_ms}
-                                                          (no span — LSP doesn't speak OTel)
+test/harness/     <-- shared foundation (no build tag)
+     ^    ^    ^
+     |    |    |
+     |    |    +-- test/oracle/protocol/   (//go:build integration)
+     |    +------- test/oracle/contract/   (//go:build integration)
+     |    +------- test/oracle/scenario/   (//go:build integration && scenario)
+     +------------ test/oracle/behavioral/ (//go:build llmtest)
+     +------------ test/oracle/judge/      (//go:build llmjudge)
 ```
 
-Every log line emitted during this path automatically carries `trace_id`/`span_id` via the context slog handler. Operators can pivot from a slow-request log in Loki/ES to the full span in Jaeger/Tempo with zero copy-paste.
+## Anti-Patterns to Avoid
 
----
+### Anti-Pattern 1: Monolithic Oracle Package
 
-## 8. Integration Points Summary
+**What:** All five oracle layers in a single `test/oracle/` package with conditional compilation.
 
-| Component | Change type | File(s) |
-|-----------|------------|---------|
-| `internal/obs/` | NEW package | all files new |
-| `internal/degrade/` | NEW package | all files new |
-| `internal/daemon/daemon.go` | MODIFY | construct obs provider, install trace-aware slog, add admin listener goroutine, pass provider to MCP + kernel |
-| `internal/daemon/telemetry.go` | NEW | admin listener, health, pprof gating, runtime collector registration |
-| `internal/mcp/middleware.go` | MODIFY | telemetryMiddleware replaces loggingMiddleware (same install call, new param) |
-| `internal/mcp/server.go` | MODIFY (minimal) | accept optional provider in `NewSerenaMCPServer` — pass-through to middleware install |
-| `internal/forwarder/dial.go` | MODIFY | add `otelgrpc` client StatsHandler |
-| `internal/kernel/lspool/pool.go` | MODIFY | accept `*obs.Meter`, instrument lease acquire / breaker / eviction |
-| `internal/kernel/lspool/circuit.go` | MODIFY | state gauge emission, new typed error `ErrCircuitOpen` |
-| `internal/kernel/lspool/metrics.go` | NEW | metric definitions for pool |
-| `internal/kernel/symbols,edit,fileops,diag` | MODIFY (mechanical) | wrap handlers with `degrade.EnsureBudget` + span start |
-| `internal/config` | MODIFY | add `ObservabilityConfig`, `WorkerPool.Circuit`, `WorkerPool.Budgets` |
-| `test/bench/` | NEW | macro benchmarks + baselines |
-| `internal/**/*_bench_test.go` | NEW (selective) | hot-path micro-benchmarks |
-| `legacy/` | UNTOUCHED | — |
+**Why bad:** Build tag interactions become unpredictable. LLM dependencies leak into deterministic test compilation. `go test -tags integration ./test/oracle/...` would try to compile LLM code.
 
-Files explicitly NOT changed:
+**Instead:** Separate sub-packages per oracle layer.
 
-- `internal/skill/*` — skills receive a ctx and logger like today. If a skill wants a span it can ask the logger's handler (via obs helper), but we do not force an API break on the skill interface. The session handoff and onboarding skills have no hot-path concerns.
-- `protocol/gen/*` — generated LSP code stays untouched.
-- `api/proto/serena/v1/*` — proto schema unchanged. Traceparent rides gRPC metadata, not our proto.
+### Anti-Pattern 2: Duplicating Harness Code
 
----
+**What:** Copying `StartTestDaemon` into oracle packages.
 
-## 9. Suggested Build Order
+**Why bad:** Two sources of truth for daemon lifecycle. Harness changes don't propagate.
 
-Phases are sized so each delivers standalone value and is independently testable. Dependencies are strict; later phases assume earlier phases are in.
+**Instead:** Extract to `test/harness/` and import.
 
-**Phase A — Observability foundation** *(prereq for everything else)*
-1. Create `internal/obs/` package with provider, noop defaults, slog context handler, in-memory test exporter.
-2. Wire `obs.Provider` construction into `daemon.New`; wrap existing slog handler.
-3. Add `cfg.Observability` koanf schema with safe defaults (admin addr loopback, metrics off unless addr set, tracing sampler=never).
-4. Unit tests for the context slog handler (trace ID injection) and noop provider.
+### Anti-Pattern 3: Exact String Matching in YAML Scenarios
 
-**Phase B — Metrics + admin listener**
-1. Add `internal/daemon/telemetry.go` with admin listener, `/healthz`, `/readyz`, `/metrics`, gated pprof.
-2. Add listener to `daemon.Run` errgroup with non-fatal error wrapper.
-3. Register Go runtime collectors + process collector.
-4. Instrument MCP middleware: request counter + duration histogram.
-5. Instrument `lspool`: lease wait/hold, worker count, restarts.
-6. Integration test: hit `/metrics`, assert expected metric names present.
+**What:** Putting exact expected output strings in scenario YAML files.
 
-**Phase C — Tracing end-to-end**
-1. Add `otelgrpc` StatsHandlers to forwarder client + daemon gRPC server.
-2. Replace logging middleware with telemetry middleware (spans + metrics + log).
-3. Add kernel-level sub-spans in symbol/edit handlers (one per tool package, mechanical).
-4. Add span events at LS request boundary in `lspool/worker.go`.
-5. Integration test with in-memory exporter asserting trace continuity across forwarder->daemon->kernel.
+**Why bad:** Expected outputs change with LS versions, formatting. YAML becomes fragile.
 
-**Phase D — Graceful degradation**
-1. Create `internal/degrade/` with budget table and `EnsureBudget`.
-2. Apply at all 38 tool handler entries.
-3. Add `cfg.WorkerPool.Circuit` tuning knobs, wire into existing breaker.
-4. Add `lspool.ErrCircuitOpen` typed error; update middleware to tag spans.
-5. Add crash/eviction reason labels on existing metrics.
-6. Chaos test: kill LS workers, assert breaker opens, metrics update, no tool calls hang past budget.
+**Instead:** Use assertion types (contains, min_lines, not_error, golden file reference). Reserve exact matching for golden files which have the `-update` workflow.
 
-**Phase E — Benchmarks + CI gate**
-1. Create `test/bench/` harness reusing integration harness.
-2. Tool response time benchmarks (all 38 tools).
-3. Indexing throughput benchmarks (per-language fixtures).
-4. Memory profile benchmarks.
-5. Micro-benchmarks in internal packages for JSON-RPC codec, tree-sitter extract, FTS5 query.
-6. Commit baselines to `test/bench/baselines/`.
-7. CI job: `benchstat` comparison with configurable regression threshold (suggest 10% for time, 20% for allocs).
+### Anti-Pattern 4: LLM Tests Blocking Deterministic CI
 
-**Phase F — Documentation** *(can run in parallel with E)*
-1. README.md: capabilities, install, quick start, link to USAGE.
-2. USAGE.md: client setup (Claude Code, Codex, IDE), profiles, workflows, troubleshooting, metrics reference, trace interpretation guide.
+**What:** Running LLM tests in the same CI job as protocol/contract tests.
 
-**Phase ordering constraints:**
-- A before B, C, D (everyone imports obs).
-- B before C (metrics listener must exist before we produce interesting span data to visualize alongside).
-- C before D only weakly — D can proceed on B, but typed errors in D are nicer to wire once spans exist to tag.
-- E depends on B at minimum (benchmarks want to capture Go runtime metrics to correlate with p99 spikes).
-- F depends on all — operator docs can't describe metrics/traces/degradation that don't exist.
+**Why bad:** API failures, rate limits, or cost spikes block feedback on deterministic tests.
 
-**Parallelization opportunities:**
-- Phase D and Phase E can proceed in parallel after C lands.
-- Phase F can start drafting during any phase, final sections filled as features land.
+**Instead:** Separate CI stages. LLM stages are informational/optional.
 
----
+### Anti-Pattern 5: Golden Files Without `-update` Workflow
 
-## 10. Open Questions / Flags for Implementation
+**What:** Golden files that must be manually edited when expectations change.
 
-1. **OTel contrib version pinning.** `otelgrpc` tracks both OTel core and gRPC versions; pin explicitly and verify via Context7 when implementing Phase C. MEDIUM confidence on exact import path.
-2. **Prom client cardinality.** `tool` label has 38 values, `lang` has up to 52. 38x52 = ~2K series per histogram — acceptable but watch for multiplication when we add `status`. Decision rule: any label that multiplies existing cardinality >5x needs a design review before merging.
-3. **Sampler default.** Recommend `ParentBased(TraceIDRatioBased(0.0))` — respects parent decision, samples nothing on its own. Operators enable via config. Avoids log-spam from v1.1 integration test suite turning into trace spam.
-4. **Admin listener auth.** v1.2 relies on loopback binding. If operators want remote scraping, they expose via reverse proxy. Do NOT add a built-in auth layer in v1.2 — that's a v1.3+ concern and every minute spent on it is a minute not spent on actual observability coverage.
-5. **Typed errors scope.** v1.1 deferred typed errors (TODO(#typed-errors)). v1.2 introduces exactly one: `lspool.ErrCircuitOpen`. We do NOT attempt a full typed-error sweep; that remains a separate milestone. Rationale: scope discipline.
+**Why bad:** At hundreds of files, manual edits are error-prone and demoralizing.
 
----
+**Instead:** Every golden regenerable via `go test -tags "integration scenario" ./test/oracle/... -update`.
+
+### Anti-Pattern 6: Sharing Daemon Instances Across Oracle Layers
+
+**What:** One `TestMain`-scoped daemon serving all oracle tests to "save startup time."
+
+**Why bad:** Cross-contamination between test cases. One test's workspace activation affects another's. The existing pattern of per-test `StartTestDaemon` with `t.Cleanup(td.Stop)` is correct.
+
+**Instead:** Each test case gets its own daemon. The startup cost (~10ms without LS) is negligible for protocol/contract tests. For scenario tests with LS, share per-scenario (one daemon per YAML file, not per step).
+
+## Integration Points with Existing Architecture
+
+### What Stays Unchanged
+
+| Component | Status | Rationale |
+|-----------|--------|-----------|
+| `test/integration/*_test.go` | Keep all tests | Existing regression coverage; v1.4 adds, not replaces |
+| `test/bench/` | Untouched | Benchmarks orthogonal to oracle layers |
+| `testdata/fixtures/{go,python,typescript,java,rust}/` | Keep as-is | Reused by scenario oracle |
+| `testdata/profiles/*.tools.golden` | Keep as-is | Profile contract goldens remain |
+| `//go:build integration` tag | Keep | Foundation tag for all deterministic tests |
+
+### What Gets Modified
+
+| Component | Change | Rationale |
+|-----------|--------|-----------|
+| `test/integration/harness.go` | Functions duplicated to `test/harness/`; original becomes thin import wrapper OR stays as-is if oracle layers import harness directly | Enable oracle layer imports |
+| `test/integration/golden.go` | Core logic moves to `test/harness/golden.go`; extended with hierarchical support | Shared golden infrastructure |
+| `test/integration/helpers.go` | Core logic moves to `test/harness/helpers.go` | Shared helper functions |
+| `Makefile` | Add targets: `test-oracle`, `test-scenario`, `test-llm` | Developer convenience |
+
+### What Gets Created
+
+| Component | Purpose |
+|-----------|---------|
+| `test/harness/` | Importable test infrastructure package |
+| `test/oracle/{protocol,contract,scenario,behavioral,judge}/` | Five oracle layer packages |
+| `testdata/fixtures/{polyglot,unsupported,degraded,collisions}/` | New fixture repositories |
+| `testdata/oracle/{protocol,contracts,scenarios,behavioral,judge}/` | Oracle-specific test data |
+
+## Build Order
+
+Dependencies between oracle layers dictate strict build order:
+
+### Phase 0: Harness Extraction (prerequisite)
+
+Extract `test/harness/` from `test/integration/`. Mechanical refactor. All existing tests pass unchanged.
+
+- **Input:** Existing `test/integration/{harness,golden,helpers}.go`
+- **Output:** `test/harness/` importable package
+- **Depends on:** Nothing
+- **Blocks:** Everything else
+- **Risk:** LOW -- pure refactor, no behavioral change
+
+### Phase 1: Protocol Oracle (Layer 1)
+
+MCP init sequence, tool listing shape, session isolation, reconnect. No LS needed (SkipLS: true). Fast, deterministic.
+
+- **Tests:** Init handshake fields, tool list schema, session state after reconnect
+- **Depends on:** Phase 0
+- **Blocks:** Nothing directly (validates infrastructure)
+- **Risk:** LOW -- no LS dependency
+
+### Phase 2: New Fixtures + Fixture Registry
+
+Create polyglot, unsupported, degraded, collision fixtures. Build fixture registry in `test/harness/`.
+
+- **Output:** 4 new `testdata/fixtures/` directories + `test/harness/fixtures.go`
+- **Depends on:** Phase 0
+- **Blocks:** Phase 4 (scenarios need fixtures)
+- **Risk:** LOW for fixture creation, MEDIUM for polyglot fixture design (needs multiple language files in one repo)
+
+### Phase 3: Contract Oracle (Layer 2)
+
+Per-tool golden contracts. Start with Go fixture + gopls. One golden per tool per fixture language. Error shape goldens.
+
+- **Tests:** Each tool's output against golden file, error response shapes
+- **Golden files:** `testdata/oracle/contracts/{lang}/{tool}.golden`
+- **Depends on:** Phase 0, Phase 1 (infrastructure confidence)
+- **Blocks:** Phase 4 (scenarios build on contract assertion patterns)
+- **Risk:** MEDIUM -- golden file content depends on LS version; needs `-update` workflow from day 1
+
+### Phase 4: Scenario Oracle (Layer 3)
+
+YAML-driven scenarios. Loader, runner, assertion engine. Fixture registry integration. `scenario` build tag.
+
+- **Tests:** Multi-step tool call sequences from YAML, cross-fixture scenarios
+- **Depends on:** Phase 2 (fixtures), Phase 3 (assertion patterns)
+- **Blocks:** Phase 6 (LLM behavioral reuses scenario infrastructure for setup)
+- **Risk:** MEDIUM -- YAML schema design is the critical decision
+
+### Phase 5: CI Pipeline
+
+GitHub Actions workflow with 5 stages. Wire build tags to stages. Define pass/fail criteria.
+
+- **Output:** `.github/workflows/oracle.yml`
+- **Depends on:** Phases 1-4 (deterministic layers exist)
+- **Blocks:** Nothing (can be done incrementally)
+- **Risk:** LOW
+
+### Phase 6: LLM Behavioral Oracle (Layer 4)
+
+Claude API integration. Tool selection tests, disambiguation, output interpretation. `llmtest` build tag. Environment variable gating.
+
+- **Depends on:** Phase 4 (scenario setup infrastructure)
+- **Blocks:** Phase 7
+- **Risk:** MEDIUM -- non-deterministic outputs need statistical assertions (pass 4/5 runs)
+
+### Phase 7: LLM Judge Oracle (Layer 5)
+
+Structured rubric scoring. `llmjudge` build tag. Optional/informational only.
+
+- **Depends on:** Phase 6 (Claude client wrapper)
+- **Blocks:** Nothing
+- **Risk:** LOW -- purely optional/informational
+
+## Scalability Considerations
+
+| Concern | At 19 goldens (current) | At 100 goldens | At 500+ goldens |
+|---------|------------------------|----------------|-----------------|
+| File organization | Flat directory works | Subdirectories by lang/layer needed | Auto-discovery essential |
+| Update workflow | Manual `-update` flag | Same flag, per-layer targeting | CI job that auto-updates on LS version bump |
+| CI runtime | ~30s | ~2min (parallel subtests) | ~5min (parallel + LS caching) |
+| Golden review | PR diff readable | Manageable with directory grouping | Consider golden diff summary tool |
+| Fixture management | 5 fixtures, manual | 10 fixtures, registry | Registry + CI matrix for LS versions |
 
 ## Sources
 
-- Existing code: `internal/daemon/daemon.go`, `internal/mcp/middleware.go`, `internal/kernel/lspool/`, `internal/forwarder/dial.go` (HIGH — direct read).
-- Go stdlib `log/slog` Handler extension pattern (HIGH — stdlib docs).
-- `go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc` StatsHandler API (MEDIUM — verify exact import path at implementation time via Context7).
-- `prometheus/client_golang` best practices for pre-registered labeled vectors (HIGH — library docs).
-- Go service convention for loopback-default admin endpoints: gopls, etcd, CockroachDB (HIGH — cross-project pattern).
-- v1.1 repo convention: top-level `test/` package for black-box public-API testing (HIGH — PROJECT.md key decisions table).
+- Existing codebase: `test/integration/harness.go`, `golden.go`, `helpers.go`, `mode_golden_test.go`, `concurrency_test.go`, `errors_test.go` -- HIGH confidence (direct code read)
+- [Go Wiki: TableDrivenTests](https://go.dev/wiki/TableDrivenTests) -- HIGH confidence
+- [File-driven testing in Go - Eli Bendersky](https://eli.thegreenplace.net/2022/file-driven-testing-in-go/) -- HIGH confidence (auto-discovery pattern)
+- [Extending go test for LLM Evaluation - Mattermost](https://mattermost.com/blog/extending-go-test-for-llm-evaluation/) -- MEDIUM confidence (env-var gating pattern)
+- [Go build tags for CI - DEV Community](https://dev.to/enbis/how-to-use-build-tags-to-control-go-testing-with-a-gitlab-ci-use-case-584b) -- HIGH confidence
+- [Beyond Traditional Testing: Non-Deterministic Software - AWS](https://dev.to/aws/beyond-traditional-testing-addressing-the-challenges-of-non-deterministic-software-583a) -- MEDIUM confidence
+- [goldie - Golden file testing for Go](https://github.com/sebdah/goldie) -- HIGH confidence (pattern reference, not recommending as dependency)

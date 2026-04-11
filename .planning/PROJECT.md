@@ -62,7 +62,21 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(No active milestone — planning next)
+## Current Milestone: v1.4 Integration Testing v2
+
+**Goal:** Prove Serena-Go is protocol-correct, contract-stable, runtime-safe, profile-correct, polyglot-honest, and genuinely usable by LLM clients — through a multi-oracle test harness.
+
+**Target features:**
+- Multi-oracle test architecture (deterministic protocol/contract/scenario + LLM behavioral/judge)
+- Protocol correctness testing (MCP init, tool listing, session isolation, reconnect)
+- Per-tool contract testing with golden outputs, schema validation, error shape assertions
+- Profile/mode golden expectations independent from runtime YAML
+- Runtime testing (startup/shutdown, worker pool stress, timeout/cancellation, degraded subsystems)
+- Repository scenario matrix (Go, Python, TypeScript, polyglot monorepo, unsupported language, degraded capability, name collisions)
+- Polyglot honesty rules (no fake cross-language links, no silent omissions)
+- LLM behavioral testing (tool selection, disambiguation, output interpretation)
+- Optional LLM judge scoring (structured rubrics, never replacing deterministic layers)
+- 5-stage CI pipeline (fast deterministic → scenarios → concurrency/-race → LLM behavioral → optional judge)
 
 ### Out of Scope
 
@@ -76,7 +90,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities.
+Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities. v1.4 targets a multi-oracle integration test harness replacing/extending v1.1 tests with protocol, contract, scenario, LLM behavioral, and judge oracle layers.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
@@ -139,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after v1.3 milestone completion — Documentation Catchup shipped*
+*Last updated: 2026-04-11 after v1.4 milestone started — Integration Testing v2*

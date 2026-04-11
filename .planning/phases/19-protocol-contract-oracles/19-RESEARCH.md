@@ -409,22 +409,22 @@ func TestSelectability_Disambiguation(t *testing.T) {
 | A3 | Session isolation via separate StartRunner instances is sufficient for PROTO-03 | Pitfalls (Pitfall 3) | If the intent is to test same-daemon multi-session isolation, approach needs redesign |
 | A4 | xeipuuv/gojsonschema does not support draft 2020-12 | Alternatives Considered | Low risk -- well-known limitation |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Session isolation scope (PROTO-03)**
    - What we know: D-02 says "workspace + mode isolation". Current daemon is single-workspace.
    - What's unclear: Whether to test two separate daemons (true isolation) or same daemon with mode-only differences.
-   - Recommendation: Two separate StartRunner instances for full workspace isolation. Same daemon for mode-only isolation (one session in edit, another session connects and operates in read mode -- verifying tool visibility differs).
+   - RESOLVED: Two separate StartRunner instances for full workspace isolation. Same daemon for mode-only isolation (one session in edit, another session connects and operates in read mode -- verifying tool visibility differs).
 
 2. **OutputSchema coverage**
    - What we know: D-08 says validate outputSchema when declared. MCP SDK Tool has OutputSchema field.
    - What's unclear: How many tools currently declare outputSchema (may be none -- Serena tools mostly return text content).
-   - Recommendation: Iterate tools in the schema test, validate outputSchema only when non-nil. If none have it, the test still passes (no false failures).
+   - RESOLVED: Iterate tools in the schema test, validate outputSchema only when non-nil. If none have it, the test still passes (no false failures).
 
 3. **Error category coverage for timeout/circuit_open/unsupported**
    - What we know: D-06 lists 6 categories. Current error tests only cover no_workspace, not_found, invalid_args.
    - What's unclear: Whether timeout and circuit_open can be triggered deterministically in tests without LS load.
-   - Recommendation: Implement deterministic categories (no_workspace, not_found, invalid_args, unsupported) first. Mark timeout and circuit_open as needing runtime/scenario infrastructure from Phase 20 if they can't be triggered deterministically.
+   - RESOLVED: Implement deterministic categories (no_workspace, not_found, invalid_args, unsupported) first. Mark timeout and circuit_open as needing runtime/scenario infrastructure from Phase 20 if they can't be triggered deterministically.
 
 ## Validation Architecture
 

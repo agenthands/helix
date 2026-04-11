@@ -1,0 +1,2 @@
+// Utility file
+function helper() { return 42 }

@@ -104,5 +104,5 @@ Phases execute in numeric order: 16 → 17
 | 13. Graceful Degradation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 14. Documentation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
-| 16. Core Documentation Update | v1.3 | 2/2 | Complete   | 2026-04-11 |
+| 16. Core Documentation Update | v1.3 | 2/2 | Complete    | 2026-04-11 |
 | 17. Usage & Install Guides | v1.3 | 0/? | Not started | - |

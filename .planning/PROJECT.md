@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 38+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
+A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 35+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
 
 ## Core Value
 
@@ -54,18 +54,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ End-to-end tracing (otelgrpc, telemetry middleware, per-tool spans, OTLP exporter) — v1.2 Phase 12
 - ✓ Graceful degradation (per-class budgets, deadline propagation, ErrCircuitOpen, GOMEMLIMIT) — v1.2 Phase 13
 
+- ✓ README.md updated with Production & Observability section, corrected tool count to 35+ — v1.3 Phase 16
+- ✓ CONTRIBUTING.md rewritten as Go-native contributor guide — v1.3 Phase 16
+- ✓ CHANGELOG.md v1.2 entry completed (Phase 15 gap filled) — v1.3 Phase 16
+- ✓ USAGE.md accuracy gaps fixed (6 metrics, service_name config, PromQL examples, benchmarks subsection) — v1.3 Phase 17
+- ✓ INSTALL.md created with per-agent MCP config for 6 coding agents + HTTP mode — v1.3 Phase 17
+
 ### Active
 
-## Current Milestone: v1.3 Documentation Catchup
-
-**Goal:** Update all project documentation to accurately reflect v1.2 capabilities (observability, metrics, tracing, graceful degradation, benchmarks).
-
-**Target features:**
-- README.md — update capabilities, architecture, tool counts, install instructions
-- USAGE.md — add observability config, Prometheus metrics, OTLP tracing, admin listener, graceful degradation tuning
-- CHANGELOG.md — verify v1.2 entry completeness
-- CONTRIBUTING.md — update dev workflow, test commands, benchmark workflow
-- llms-install.md — update install/config instructions for current state
+(No active milestone — planning next)
 
 ### Out of Scope
 
@@ -79,7 +76,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 38 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), and v1.2 Performance & Production Hardening (35.7K total Go LOC). Single binary, 4-layer architecture, persistent daemon.
+Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
@@ -142,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after v1.3 milestone start — Documentation Catchup*
+*Last updated: 2026-04-11 after v1.3 milestone completion — Documentation Catchup shipped*

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Documentation Catchup
-status: executing
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-04-11T09:06:54.387Z"
-last_activity: 2026-04-11 -- Completed 17-01-PLAN.md (USAGE.md accuracy + benchmarks)
+status: milestone_complete
+stopped_at: v1.3 milestone archived
+last_updated: "2026-04-11T10:45:00.000Z"
+last_activity: 2026-04-11 -- v1.3 milestone complete and archived
 progress:
   total_phases: 2
   completed_phases: 2
@@ -21,28 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 16 — Core Documentation Update
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 17 of 17 (usage & install guides)
-Plan: 1 of 2 complete
-Status: Executing
-Last activity: 2026-04-11 -- Completed 17-01-PLAN.md (USAGE.md accuracy + benchmarks)
+Milestone: v1.3 Documentation Catchup — SHIPPED 2026-04-11
+Status: Archived
+Last activity: 2026-04-11 -- v1.3 milestone complete and archived
 
-Progress: [█████░░░░░] 50% (v1.3 milestone, phase 17)
+Progress: [██████████] 100% (v1.3 shipped)
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v1.2 Phase 14]: Initial README/USAGE/CHANGELOG created — v1.3 updates these
-- [v1.2]: Benchmark baselines captured locally (darwin/arm64) due to gopls CI compat issue
-- [Phase 17]: INSTALL.md uses per-agent MCP config sections with correct JSON formats (OpenCode uses mcp key with array command)
-- [Phase 17]: Corrected serena_tool_duration_seconds labels to match actual source (4 labels, not 2)
 
 ### Pending Todos
 
@@ -54,6 +47,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T09:06:54.384Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-04-11T10:45:00.000Z
+Stopped at: v1.3 milestone archived
 Resume file: None

@@ -1,5 +1,18 @@
 # Milestones
 
+## v1.3 Documentation Catchup (Shipped: 2026-04-11)
+
+**Phases completed:** 2 phases, 4 plans, 7 tasks
+
+**Key accomplishments:**
+
+- 1. [Rule 1 - Bug] Fixed inaccurate tool count claim
+- Commit:
+- 1. [Rule 1 - Bug] Corrected serena_tool_duration_seconds label documentation
+- Go binary install guide with per-agent MCP config sections for Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Antigravity, and HTTP mode
+
+---
+
 ## v1.2 Performance & Production Hardening (Shipped: 2026-04-10)
 
 **Phases completed:** 15 phases, 56 plans, 78 tasks

@@ -15,9 +15,9 @@ Requirements for documentation catchup. Each maps to roadmap phases.
 
 ### USAGE
 
-- [ ] **USAGE-01**: USAGE documents observability configuration (Prometheus, OTLP, admin listener)
-- [ ] **USAGE-02**: USAGE documents graceful degradation settings (budgets, GOMEMLIMIT, circuit breaker)
-- [ ] **USAGE-03**: USAGE documents performance tuning and benchmark workflow
+- [x] **USAGE-01**: USAGE documents observability configuration (Prometheus, OTLP, admin listener)
+- [x] **USAGE-02**: USAGE documents graceful degradation settings (budgets, GOMEMLIMIT, circuit breaker)
+- [x] **USAGE-03**: USAGE documents performance tuning and benchmark workflow
 
 ### CHANGELOG
 
@@ -54,9 +54,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | README-01 | Phase 16 | Pending |
 | README-02 | Phase 16 | Pending |
 | README-03 | Phase 16 | Pending |
-| USAGE-01 | Phase 17 | Pending |
-| USAGE-02 | Phase 17 | Pending |
-| USAGE-03 | Phase 17 | Pending |
+| USAGE-01 | Phase 17 | Complete |
+| USAGE-02 | Phase 17 | Complete |
+| USAGE-03 | Phase 17 | Complete |
 | CHLOG-01 | Phase 16 | Pending |
 | CONTR-01 | Phase 16 | Pending |
 | CONTR-02 | Phase 16 | Pending |

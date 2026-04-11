@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Documentation Catchup
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-04-11T09:06:34.872Z"
-last_activity: 2026-04-11 -- Phase 17 planning complete
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-04-11T09:06:54.387Z"
+last_activity: 2026-04-11 -- Completed 17-01-PLAN.md (USAGE.md accuracy + benchmarks)
 progress:
   total_phases: 2
   completed_phases: 2
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-11)
 ## Current Position
 
 Phase: 17 of 17 (usage & install guides)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-11 -- Phase 17 planning complete
+Plan: 1 of 2 complete
+Status: Executing
+Last activity: 2026-04-11 -- Completed 17-01-PLAN.md (USAGE.md accuracy + benchmarks)
 
-Progress: [░░░░░░░░░░] 0% (v1.3 milestone)
+Progress: [█████░░░░░] 50% (v1.3 milestone, phase 17)
 
 ## Accumulated Context
 
@@ -42,6 +42,7 @@ Recent decisions affecting current work:
 - [v1.2 Phase 14]: Initial README/USAGE/CHANGELOG created — v1.3 updates these
 - [v1.2]: Benchmark baselines captured locally (darwin/arm64) due to gopls CI compat issue
 - [Phase 17]: INSTALL.md uses per-agent MCP config sections with correct JSON formats (OpenCode uses mcp key with array command)
+- [Phase 17]: Corrected serena_tool_duration_seconds labels to match actual source (4 labels, not 2)
 
 ### Pending Todos
 
@@ -53,6 +54,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T09:06:30.643Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-04-11T09:06:54.384Z
+Stopped at: Completed 17-01-PLAN.md
 Resume file: None

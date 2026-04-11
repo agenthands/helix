@@ -129,7 +129,9 @@ func StartRunner(tb testing.TB, opts RunnerOptions) *Runner {
 
 	// Start kernel in background goroutine.
 	go func() {
-		_ = d.KernelInstance().Run(ctx)
+		if err := d.KernelInstance().Run(ctx); err != nil && ctx.Err() == nil {
+			tb.Errorf("kernel.Run exited with error: %v", err)
+		}
 	}()
 
 	// Create in-memory transports for MCP protocol.

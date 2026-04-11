@@ -5,15 +5,22 @@ package harness
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 )
 
+// toolTimeout is the default timeout for MCP tool calls in tests.
+// Prevents indefinite hangs in CI if a tool or LS deadlocks.
+const toolTimeout = 30 * time.Second
+
 // CallTool invokes an MCP tool and asserts success.
 func CallTool(tb testing.TB, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	tb.Helper()
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
+	defer cancel()
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,
 		Arguments: args,
 	})
@@ -36,7 +43,9 @@ func TextContent(r *mcp.CallToolResult) string {
 // CallToolExpectError invokes an MCP tool and asserts it returns an error result.
 func CallToolExpectError(tb testing.TB, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	tb.Helper()
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
+	defer cancel()
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,
 		Arguments: args,
 	})
@@ -49,7 +58,9 @@ func CallToolExpectError(tb testing.TB, session *mcp.ClientSession, name string,
 // Goes through the MCP client's tools/list so ProfileFilterMiddleware is exercised end-to-end.
 func ListSessionTools(tb testing.TB, session *mcp.ClientSession) []string {
 	tb.Helper()
-	result, err := session.ListTools(context.Background(), &mcp.ListToolsParams{})
+	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
+	defer cancel()
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
 	require.NoError(tb, err, "tools/list")
 	names := make([]string, 0, len(result.Tools))
 	for _, tool := range result.Tools {

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Documentation Catchup
-status: planning
-stopped_at: Phase 17 context gathered
-last_updated: "2026-04-11T08:44:35.652Z"
-last_activity: 2026-04-11
+status: executing
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-04-11T09:06:34.872Z"
+last_activity: 2026-04-11 -- Phase 17 planning complete
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-04-11)
 
 Phase: 17 of 17 (usage & install guides)
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-11
+Status: Ready to execute
+Last activity: 2026-04-11 -- Phase 17 planning complete
 
 Progress: [░░░░░░░░░░] 0% (v1.3 milestone)
 
@@ -41,6 +41,7 @@ Recent decisions affecting current work:
 
 - [v1.2 Phase 14]: Initial README/USAGE/CHANGELOG created — v1.3 updates these
 - [v1.2]: Benchmark baselines captured locally (darwin/arm64) due to gopls CI compat issue
+- [Phase 17]: INSTALL.md uses per-agent MCP config sections with correct JSON formats (OpenCode uses mcp key with array command)
 
 ### Pending Todos
 
@@ -52,6 +53,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T08:44:35.650Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-usage-install-guides/17-CONTEXT.md
+Last session: 2026-04-11T09:06:30.643Z
+Stopped at: Completed 17-02-PLAN.md
+Resume file: None

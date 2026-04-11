@@ -30,8 +30,8 @@ Requirements for documentation catchup. Each maps to roadmap phases.
 
 ### Install Guide
 
-- [ ] **INST-01**: Rename llms-install.md to agent-focused install guide (targets coding assistants, not "LLMs")
-- [ ] **INST-02**: Install guide covers Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Antigravity setup
+- [x] **INST-01**: Rename llms-install.md to agent-focused install guide (targets coding assistants, not "LLMs")
+- [x] **INST-02**: Install guide covers Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Antigravity setup
 
 ## Future Requirements
 
@@ -60,8 +60,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHLOG-01 | Phase 16 | Pending |
 | CONTR-01 | Phase 16 | Pending |
 | CONTR-02 | Phase 16 | Pending |
-| INST-01 | Phase 17 | Pending |
-| INST-02 | Phase 17 | Pending |
+| INST-01 | Phase 17 | Complete |
+| INST-02 | Phase 17 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 11 total

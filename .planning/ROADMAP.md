@@ -53,7 +53,7 @@
 **Milestone Goal:** Update all project documentation to accurately reflect v1.2 capabilities (observability, metrics, tracing, graceful degradation, benchmarks).
 
 - [x] **Phase 16: Core Documentation Update** - Update README, CHANGELOG, and CONTRIBUTING to reflect current project state (completed 2026-04-11)
-- [ ] **Phase 17: Usage & Install Guides** - Add observability/degradation docs to USAGE, overhaul install guide for multi-agent setup
+- [x] **Phase 17: Usage & Install Guides** - Add observability/degradation docs to USAGE, overhaul install guide for multi-agent setup (completed 2026-04-11)
 
 ## Phase Details
 
@@ -82,8 +82,8 @@ Plans:
   4. Install guide is renamed from llms-install.md to an agent-focused name and covers setup for Claude Code, Codex, OpenCode, Cursor, Gemini CLI, and Antigravity
 **Plans**: 2 plans
 Plans:
-- [ ] 17-01-PLAN.md — Update USAGE.md accuracy (observability config, metrics table, benchmark subsection)
-- [ ] 17-02-PLAN.md — Create INSTALL.md with multi-agent setup guide
+- [x] 17-01-PLAN.md — Update USAGE.md accuracy (observability config, metrics table, benchmark subsection)
+- [x] 17-02-PLAN.md — Create INSTALL.md with multi-agent setup guide
 
 ## Progress
 
@@ -108,4 +108,4 @@ Phases execute in numeric order: 16 → 17
 | 14. Documentation | v1.2 | 3/3 | Complete | 2026-04-10 |
 | 15. Benchmark Gate Hardening | v1.2 | 1/1 | Complete | 2026-04-10 |
 | 16. Core Documentation Update | v1.3 | 2/2 | Complete    | 2026-04-11 |
-| 17. Usage & Install Guides | v1.3 | 0/2 | Not started | - |
+| 17. Usage & Install Guides | v1.3 | 2/2 | Complete   | 2026-04-11 |

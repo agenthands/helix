@@ -112,7 +112,7 @@ func DisambiguationUserPrompt(taskDescription string) string {
 }
 
 // FormatToolList formats a list of MCP tools as "- name: description" lines.
-func FormatToolList(tools []mcp.Tool) string {
+func FormatToolList(tools []*mcp.Tool) string {
 	var sb strings.Builder
 	for _, tool := range tools {
 		fmt.Fprintf(&sb, "- %s: %s\n", tool.Name, tool.Description)

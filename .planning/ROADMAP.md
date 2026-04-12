@@ -128,7 +128,11 @@ Plans:
   2. Claude distinguishes similar tool pairs (search_symbols vs find_references, get_symbol_overview vs explain_symbol) and selects appropriately based on context
   3. Claude correctly interprets tool results -- distinguishes success from failure, does not hallucinate capabilities the tool output does not support
   4. LLM judge scores transcripts via structured rubrics and runs only on manual trigger, never blocking merge
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Shared LLM infrastructure + tool selection and disambiguation tests
+- [ ] 21-02-PLAN.md — Output interpretation tests + judge scoring infrastructure
 
 ## Progress
 
@@ -157,4 +161,4 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 18. Harness Extraction & Foundation | v1.4 | 2/2 | Complete    | 2026-04-11 |
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete    | 2026-04-11 |
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete    | 2026-04-12 |
-| 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |
+| 21. LLM Behavioral & Judge | v1.4 | 0/2 | Not started | - |

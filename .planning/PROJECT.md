@@ -62,6 +62,8 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Test harness extraction (test/harness/ package with Runner, tools, golden, fixture helpers) — v1.4 Phase 18
 - ✓ Protocol oracle tests (handshake, tools/list, session isolation, reconnect) — v1.4 Phase 19
 - ✓ Contract oracle tests (schema meta-validation, selectability heuristics, golden outputs, error contracts) — v1.4 Phase 19
+- ✓ Scenario oracle tests (multi-language runtime correctness across Go, Python, TypeScript, polyglot, unsupported, degraded) — v1.4 Phase 20
+- ✓ LLM behavioral tests (tool selection, disambiguation, output interpretation) + judge scoring infrastructure — v1.4 Phase 21
 
 ### Active
 
@@ -93,7 +95,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities. v1.4 targets a multi-oracle integration test harness replacing/extending v1.1 tests with protocol, contract, scenario, LLM behavioral, and judge oracle layers.
+Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities. v1.4 multi-oracle integration test harness complete: protocol, contract, scenario, LLM behavioral, and judge oracle layers all implemented. Phase 21 complete — all 4 milestone phases delivered.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 

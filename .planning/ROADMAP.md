@@ -156,5 +156,5 @@ Phases execute in numeric order: 18 → 19 → 20 → 21
 | 17. Usage & Install Guides | v1.3 | 2/2 | Complete | 2026-04-11 |
 | 18. Harness Extraction & Foundation | v1.4 | 2/2 | Complete    | 2026-04-11 |
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete    | 2026-04-11 |
-| 20. Scenarios & Runtime | v1.4 | 4/4 | Complete   | 2026-04-11 |
+| 20. Scenarios & Runtime | v1.4 | 4/4 | Complete    | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 0/0 | Not started | - |

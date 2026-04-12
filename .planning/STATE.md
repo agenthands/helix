@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Integration Testing v2
 status: executing
-stopped_at: Phase 20 context gathered
-last_updated: "2026-04-12T09:14:12.312Z"
+stopped_at: Phase 21 context gathered
+last_updated: "2026-04-12T14:23:42.900Z"
 last_activity: 2026-04-12
 progress:
   total_phases: 4
@@ -79,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T17:23:02.256Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-scenarios-runtime/20-CONTEXT.md
+Last session: 2026-04-12T14:23:42.898Z
+Stopped at: Phase 21 context gathered
+Resume file: .planning/phases/21-llm-behavioral-judge/21-CONTEXT.md

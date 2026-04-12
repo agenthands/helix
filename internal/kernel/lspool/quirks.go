@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/postfix/serena/internal/langregistry"
+	gen "github.com/postfix/serena/protocol/gen"
 )
 
 // QuirkAdapter provides per-language behavioral hooks for LS workers.
@@ -208,6 +209,71 @@ func (v *VueAdapter) PostInitialize(_ context.Context, _ *LSAdapter) error {
 	return nil
 }
 
+// didOpenFirstFile is a shared helper for LS implementations that require a file
+// to be opened via textDocument/didOpen before workspace/symbol works.
+// tsserver needs it to create a "project", pyright needs it to index workspace files.
+func didOpenFirstFile(ctx context.Context, adapter *LSAdapter, ext string, langID string) {
+	workDir := adapter.worker.workDir
+	entries, err := os.ReadDir(workDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ext) {
+			continue
+		}
+		filePath := filepath.Join(workDir, entry.Name())
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+		uri := "file://" + filePath
+		params := gen.DidOpenTextDocumentParams{
+			TextDocument: gen.TextDocumentItem{
+				URI:        uri,
+				LanguageId: langID,
+				Version:    1,
+				Text:       string(content),
+			},
+		}
+		_ = adapter.worker.Notify(ctx, "textDocument/didOpen", params)
+		return
+	}
+}
+
+// TypeScriptAdapter provides TypeScript-specific quirks for typescript-language-server.
+// tsserver only creates a "project" after a file is opened via didOpen.
+// Without this, workspace/symbol fails with "No Project" until a file is opened.
+type TypeScriptAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (t *TypeScriptAdapter) InitOptions(_ string) map[string]any { return t.Entry.InitOptions }
+func (t *TypeScriptAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (t *TypeScriptAdapter) NormalizeSymbolName(name string) string { return name }
+func (t *TypeScriptAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFile(ctx, adapter, ".ts", "typescript")
+	return nil
+}
+
+// PyrightAdapter provides Python-specific quirks for pyright-langserver.
+// Pyright needs a file opened via didOpen before workspace/symbol returns results.
+type PyrightAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (p *PyrightAdapter) InitOptions(_ string) map[string]any { return p.Entry.InitOptions }
+func (p *PyrightAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (p *PyrightAdapter) NormalizeSymbolName(name string) string { return name }
+func (p *PyrightAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFile(ctx, adapter, ".py", "python")
+	return nil
+}
+
 // adapterFactory maps language keys to QuirkAdapter constructors.
 var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"go":         func(e langregistry.LSEntry) QuirkAdapter { return &GoplsAdapter{Entry: e} },
@@ -216,6 +282,8 @@ var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"cpp":        func(e langregistry.LSEntry) QuirkAdapter { return &ClangdAdapter{Entry: e} },
 	"java":       func(e langregistry.LSEntry) QuirkAdapter { return &JdtlsAdapter{Entry: e} },
 	"vue":        func(e langregistry.LSEntry) QuirkAdapter { return &VueAdapter{Entry: e} },
+	"typescript": func(e langregistry.LSEntry) QuirkAdapter { return &TypeScriptAdapter{Entry: e} },
+	"python":     func(e langregistry.LSEntry) QuirkAdapter { return &PyrightAdapter{Entry: e} },
 }
 
 // GetQuirkAdapter returns the language-specific QuirkAdapter for the given entry.

@@ -4,9 +4,15 @@ package llm
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/postfix/serena/test/harness"
 )
 
 // toolTaskDescriptions maps tool names to natural-language task descriptions
@@ -138,4 +144,127 @@ func DisambiguationTask(toolA, toolB, target string) string {
 	}
 	// Fallback: use the generic tool task description for the target.
 	return ToolTaskDescription(target)
+}
+
+// GoldenCase represents a single golden file loaded for interpretation testing.
+type GoldenCase struct {
+	ToolName string // e.g. "read_file"
+	Scenario string // e.g. "success"
+	Content  string // raw golden file content
+}
+
+// InterpretationSystemPrompt returns the system prompt for output interpretation tests (LLM-03/D-04).
+func InterpretationSystemPrompt() string {
+	return `You are an expert at interpreting MCP tool results. You will be shown the output of an MCP tool call.
+
+Answer the following questions about the output:
+1. STATUS: Did the tool call succeed, fail, or is the outcome unclear? Answer exactly one of: SUCCESS, FAILURE, UNCLEAR.
+2. SUMMARY: In one sentence, what did the tool find or do?
+3. LIMITATIONS: What can you NOT conclude from this output? List specific things the output does NOT tell you.
+4. NEXT_ACTION: What would be a logical next step after seeing this output?
+
+Respond in exactly this format:
+STATUS: <SUCCESS|FAILURE|UNCLEAR>
+SUMMARY: <one sentence>
+LIMITATIONS: <comma-separated list>
+NEXT_ACTION: <one sentence>`
+}
+
+// InterpretationUserPrompt returns the user prompt for output interpretation tests.
+func InterpretationUserPrompt(toolName, goldenContent string) string {
+	return fmt.Sprintf("Tool: %s\nOutput:\n%s", toolName, goldenContent)
+}
+
+// LoadGoldenFiles walks test/oracle/contract/testdata/golden/ and reads each
+// .golden file, returning a slice of GoldenCase. Skips the errors/ subdirectory
+// (use LoadErrorGoldenFiles for those).
+func LoadGoldenFiles(t *testing.T) []GoldenCase {
+	t.Helper()
+
+	goldenRoot := filepath.Join(harness.ProjectRoot(), "test", "oracle", "contract", "testdata", "golden")
+	var cases []GoldenCase
+
+	entries, err := os.ReadDir(goldenRoot)
+	if err != nil {
+		t.Fatalf("reading golden root %s: %v", goldenRoot, err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		// Skip errors/ subdirectory — handled by LoadErrorGoldenFiles.
+		if entry.Name() == "errors" {
+			continue
+		}
+		toolDir := filepath.Join(goldenRoot, entry.Name())
+		files, err := os.ReadDir(toolDir)
+		if err != nil {
+			t.Fatalf("reading golden dir %s: %v", toolDir, err)
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".golden") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(toolDir, f.Name()))
+			if err != nil {
+				t.Fatalf("reading golden file %s/%s: %v", entry.Name(), f.Name(), err)
+			}
+			scenario := strings.TrimSuffix(f.Name(), ".golden")
+			cases = append(cases, GoldenCase{
+				ToolName: entry.Name(),
+				Scenario: scenario,
+				Content:  string(data),
+			})
+		}
+	}
+
+	// Sort for deterministic ordering.
+	sort.Slice(cases, func(i, j int) bool {
+		if cases[i].ToolName != cases[j].ToolName {
+			return cases[i].ToolName < cases[j].ToolName
+		}
+		return cases[i].Scenario < cases[j].Scenario
+	})
+
+	return cases
+}
+
+// LoadErrorGoldenFiles reads golden files from the errors/ subdirectory.
+// These represent failure/error cases for interpretation testing.
+func LoadErrorGoldenFiles(t *testing.T) []GoldenCase {
+	t.Helper()
+
+	errDir := filepath.Join(harness.ProjectRoot(), "test", "oracle", "contract", "testdata", "golden", "errors")
+	var cases []GoldenCase
+
+	files, err := os.ReadDir(errDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatalf("reading error golden dir %s: %v", errDir, err)
+	}
+
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".golden") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(errDir, f.Name()))
+		if err != nil {
+			t.Fatalf("reading error golden file %s: %v", f.Name(), err)
+		}
+		scenario := strings.TrimSuffix(f.Name(), ".golden")
+		cases = append(cases, GoldenCase{
+			ToolName: "errors",
+			Scenario: scenario,
+			Content:  string(data),
+		})
+	}
+
+	sort.Slice(cases, func(i, j int) bool {
+		return cases[i].Scenario < cases[j].Scenario
+	})
+
+	return cases
 }

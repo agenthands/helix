@@ -142,7 +142,11 @@ func (c *ClangdAdapter) NormalizeSymbolName(name string) string {
 	return name
 }
 
-func (c *ClangdAdapter) PostInitialize(_ context.Context, _ *LSAdapter) error {
+func (c *ClangdAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	// clangd requires textDocument/didOpen before any textDocument/* operations.
+	// Without this, documentSymbol/references/hover fail with "trying to get AST for non-added document".
+	didOpenFirstFile(ctx, adapter, ".cpp", "cpp")
+	didOpenFirstFile(ctx, adapter, ".c", "c")
 	return nil
 }
 
@@ -306,6 +310,38 @@ func (p *PyrightAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter)
 	return nil
 }
 
+// ZlsAdapter provides Zig-specific quirks for zls.
+// zls requires textDocument/didOpen before textDocument/* operations work.
+type ZlsAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (z *ZlsAdapter) InitOptions(_ string) map[string]any { return z.Entry.InitOptions }
+func (z *ZlsAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (z *ZlsAdapter) NormalizeSymbolName(name string) string { return name }
+func (z *ZlsAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFileRecursive(ctx, adapter, ".zig", "zig")
+	return nil
+}
+
+// SourceKitAdapter provides Swift-specific quirks for sourcekit-lsp.
+// sourcekit-lsp requires textDocument/didOpen before textDocument/* operations work.
+type SourceKitAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (s *SourceKitAdapter) InitOptions(_ string) map[string]any { return s.Entry.InitOptions }
+func (s *SourceKitAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (s *SourceKitAdapter) NormalizeSymbolName(name string) string { return name }
+func (s *SourceKitAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFileRecursive(ctx, adapter, ".swift", "swift")
+	return nil
+}
+
 // adapterFactory maps language keys to QuirkAdapter constructors.
 var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"go":         func(e langregistry.LSEntry) QuirkAdapter { return &GoplsAdapter{Entry: e} },
@@ -316,6 +352,8 @@ var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"vue":        func(e langregistry.LSEntry) QuirkAdapter { return &VueAdapter{Entry: e} },
 	"typescript": func(e langregistry.LSEntry) QuirkAdapter { return &TypeScriptAdapter{Entry: e} },
 	"python":     func(e langregistry.LSEntry) QuirkAdapter { return &PyrightAdapter{Entry: e} },
+	"zig":        func(e langregistry.LSEntry) QuirkAdapter { return &ZlsAdapter{Entry: e} },
+	"swift":      func(e langregistry.LSEntry) QuirkAdapter { return &SourceKitAdapter{Entry: e} },
 }
 
 // GetQuirkAdapter returns the language-specific QuirkAdapter for the given entry.

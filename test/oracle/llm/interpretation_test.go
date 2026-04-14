@@ -43,22 +43,19 @@ func TestInterpretation(t *testing.T) {
 		successCases = sampled
 	}
 
-	callCount := 0
+	subtestCount := 0
 
 	// Success cases: expect STATUS: SUCCESS.
 	for _, gc := range successCases {
-		if callCount > 0 {
+		if subtestCount > 0 {
 			InterCallDelay()
 		}
 
-		gc := gc // capture
 		t.Run("success/"+gc.ToolName+"/"+gc.Scenario, func(t *testing.T) {
 			user := InterpretationUserPrompt(gc.ToolName, gc.Content)
 
 			response, stopReason, err := AskSingleTurn(ctx, client, model, system, user)
 			require.NoError(t, err, "AskSingleTurn failed for %s/%s", gc.ToolName, gc.Scenario)
-
-			_ = stopReason
 
 			// Assert STATUS: SUCCESS (case-insensitive check).
 			upper := strings.ToUpper(response)
@@ -83,23 +80,20 @@ func TestInterpretation(t *testing.T) {
 				SelfJudged: selfJudged,
 			})
 		})
-		callCount++
+		subtestCount++
 	}
 
 	// Error cases: expect STATUS: FAILURE or STATUS: UNCLEAR (not SUCCESS).
 	for _, gc := range errorCases {
-		if callCount > 0 {
+		if subtestCount > 0 {
 			InterCallDelay()
 		}
 
-		gc := gc // capture
 		t.Run("error/"+gc.ToolName+"/"+gc.Scenario, func(t *testing.T) {
 			user := InterpretationUserPrompt(gc.ToolName, gc.Content)
 
 			response, stopReason, err := AskSingleTurn(ctx, client, model, system, user)
 			require.NoError(t, err, "AskSingleTurn failed for error case %s/%s", gc.ToolName, gc.Scenario)
-
-			_ = stopReason
 
 			// Assert NOT STATUS: SUCCESS — should be FAILURE or UNCLEAR.
 			upper := strings.ToUpper(response)
@@ -126,9 +120,9 @@ func TestInterpretation(t *testing.T) {
 				SelfJudged: selfJudged,
 			})
 		})
-		callCount++
+		subtestCount++
 	}
 
-	t.Logf("Total interpretation API calls: %d (success: %d, error: %d)",
-		callCount, len(successCases), len(errorCases))
+	t.Logf("Total interpretation subtests: %d (success: %d, error: %d)",
+		subtestCount, len(successCases), len(errorCases))
 }

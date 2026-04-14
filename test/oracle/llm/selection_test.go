@@ -38,7 +38,6 @@ func TestSelection(t *testing.T) {
 			InterCallDelay()
 		}
 
-		tool := tool // capture loop variable
 		t.Run(tool.Name, func(t *testing.T) {
 			system := SelectionSystemPrompt(toolListStr)
 			taskDesc := ToolTaskDescription(tool.Name)

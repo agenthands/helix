@@ -91,5 +91,5 @@ func TestJudgeInline(t *testing.T) {
 	}
 	llm.SkipWithoutAPIKey(t)
 
-	t.Log("Inline judge mode: would run behavioral + judge in single pass. Use -tags=llm first, then -tags=llmjudge for canonical offline flow.")
+	t.Skip("Inline judge mode not yet implemented — use -tags=llm first, then -tags=llmjudge for canonical offline flow.")
 }

@@ -71,7 +71,6 @@ func TestDisambiguation(t *testing.T) {
 
 		// Test both directions: select toolA, then select toolB.
 		for _, target := range []string{toolA, toolB} {
-			target := target // capture
 			subtestName := fmt.Sprintf("%s_vs_%s_select_%s", toolA, toolB, target)
 
 			if callCount > 0 {

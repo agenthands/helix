@@ -91,7 +91,10 @@
   2. Every typed error carries structured fields (Kind, Message, Tool, Detail) that serialize to JSON for agent consumption
   3. Wrapping a lower-level error (LSP, filesystem, tree-sitter) in a typed error preserves the full cause chain via errors.Is/As
   4. The existing ErrCircuitOpen is migrated into the new taxonomy without breaking current behavior
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
+- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ### Phase 23: Tool Migration
 **Goal**: All 38+ MCP tools return typed errors instead of raw strings, providing agents with consistent programmatic error handling
@@ -103,7 +106,10 @@
   3. All 6 file operation tools return typed errors with appropriate kinds (file not found, permission denied, path security violation)
   4. All 3 diagnostic tools, all 7 memory tools, all 2 workflow tools, all 2 profile tools, and all 3 MCP core tools return typed errors
   5. No tool in the codebase returns a raw error string -- every error path goes through the typed error constructors
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
+- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ### Phase 24: Validation & Testing
 **Goal**: Tools validate inputs before execution, and the test suite asserts error types rather than string matching
@@ -113,7 +119,10 @@
   1. Passing invalid parameters to any tool (missing required fields, wrong types, empty strings where non-empty required) returns an InvalidArgs typed error before any work begins
   2. The existing three-band error tests assert on error Kind (e.g., errors.Is checks or Kind field comparisons) instead of substring matching on error messages
   3. Golden files capture the full error response shape per error kind, detecting regressions in error structure across releases
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
+- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ## Progress
 
@@ -143,6 +152,6 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete | 2026-04-11 |
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
-| 22. Error Taxonomy | v1.5 | 0/0 | Not started | - |
+| 22. Error Taxonomy | v1.5 | 0/2 | Planning | - |
 | 23. Tool Migration | v1.5 | 0/0 | Not started | - |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

@@ -168,6 +168,10 @@ func (w *Worker) Start(ctx context.Context) error {
 	var initOptions interface{}
 	if w.quirks != nil {
 		initOptions = w.quirks.InitOptions(w.workDir)
+		// Allow quirks to inject extra command-line arguments (e.g., jdtls -data).
+		if am, ok := w.quirks.(ArgsModifier); ok {
+			args = am.ExtraArgs(w.workDir, args)
+		}
 	}
 
 	// Start the process.

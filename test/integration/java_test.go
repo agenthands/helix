@@ -13,7 +13,7 @@ import (
 // TestSymbols_JavaFixture exercises symbol retrieval tools against the Java fixture
 // with jdtls as the language server.
 func TestSymbols_JavaFixture(t *testing.T) {
-	t.Skip("jdtls requires 2+ minutes to initialize; needs async readiness or warm cache strategy")
+	t.Skip("jdtls workspace/symbol needs Maven/Gradle; use oracle scenario test instead")
 	requireLS(t, "jdtls")
 
 	fixture := PrepareFixture(t, "java")
@@ -94,7 +94,7 @@ func TestSymbols_JavaFixture(t *testing.T) {
 
 // TestEdit_JavaFixture exercises representative edit tools against the Java fixture.
 func TestEdit_JavaFixture(t *testing.T) {
-	t.Skip("jdtls requires 2+ minutes to initialize; needs async readiness or warm cache strategy")
+	t.Skip("jdtls workspace/symbol needs Maven/Gradle; use oracle scenario test instead")
 	requireLS(t, "jdtls")
 
 	t.Run("replace_body", func(t *testing.T) {

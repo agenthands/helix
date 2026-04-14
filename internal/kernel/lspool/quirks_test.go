@@ -129,17 +129,18 @@ func TestQuirkAdapter_GetQuirkAdapter_ReturnsDefaultForBash(t *testing.T) {
 	assert.True(t, ok, "expected DefaultQuirkAdapter for bash")
 }
 
-func TestQuirkAdapter_JdtlsEnsureDataDir(t *testing.T) {
+func TestQuirkAdapter_JdtlsExtraArgs(t *testing.T) {
 	tmpDir := t.TempDir()
 	entry := langregistry.LSEntry{Language: "java", Command: "jdtls"}
 	adapter := &JdtlsAdapter{Entry: entry}
 
-	dataDir, err := adapter.EnsureDataDir(tmpDir)
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(tmpDir, ".jdtls-data"), dataDir)
+	args := adapter.ExtraArgs(tmpDir, nil)
+	require.Len(t, args, 2)
+	assert.Equal(t, "-data", args[0])
+	assert.Equal(t, filepath.Join(tmpDir, ".jdtls-data"), args[1])
 
 	// Verify directory was created.
-	info, err := os.Stat(dataDir)
+	info, err := os.Stat(filepath.Join(tmpDir, ".jdtls-data"))
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 }

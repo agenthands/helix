@@ -11,6 +11,12 @@ import (
 	gen "github.com/postfix/serena/protocol/gen"
 )
 
+// ArgsModifier is an optional interface that QuirkAdapters can implement
+// to inject extra command-line arguments when starting the LS process.
+type ArgsModifier interface {
+	ExtraArgs(workDir string, args []string) []string
+}
+
 // QuirkAdapter provides per-language behavioral hooks for LS workers.
 // Languages with no special behavior use DefaultQuirkAdapter.
 type QuirkAdapter interface {
@@ -172,19 +178,18 @@ func (j *JdtlsAdapter) NormalizeSymbolName(name string) string {
 	return name
 }
 
-// PostInitialize creates the jdtls workspace data directory if it doesn't exist.
-func (j *JdtlsAdapter) PostInitialize(_ context.Context, _ *LSAdapter) error {
+// PostInitialize opens a Java file so jdtls indexes the workspace.
+func (j *JdtlsAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFile(ctx, adapter, ".java", "java")
 	return nil
 }
 
-// EnsureDataDir creates the jdtls workspace data directory for the given workDir.
-// Returns the path to the data directory.
-func (j *JdtlsAdapter) EnsureDataDir(workDir string) (string, error) {
+// ExtraArgs injects -data <dir> so jdtls has a workspace-specific data directory.
+// Without this, jdtls may fail to index or conflict across workspaces.
+func (j *JdtlsAdapter) ExtraArgs(workDir string, args []string) []string {
 	dataDir := filepath.Join(workDir, ".jdtls-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return "", err
-	}
-	return dataDir, nil
+	_ = os.MkdirAll(dataDir, 0o755)
+	return append([]string{"-data", dataDir}, args...)
 }
 
 // VueAdapter provides Vue-specific quirks.
@@ -342,6 +347,22 @@ func (s *SourceKitAdapter) PostInitialize(ctx context.Context, adapter *LSAdapte
 	return nil
 }
 
+// IntelephenseAdapter provides PHP-specific quirks for intelephense.
+// Intelephense requires textDocument/didOpen before textDocument/* operations work.
+type IntelephenseAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (i *IntelephenseAdapter) InitOptions(_ string) map[string]any { return i.Entry.InitOptions }
+func (i *IntelephenseAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (i *IntelephenseAdapter) NormalizeSymbolName(name string) string { return name }
+func (i *IntelephenseAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFile(ctx, adapter, ".php", "php")
+	return nil
+}
+
 // adapterFactory maps language keys to QuirkAdapter constructors.
 var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"go":         func(e langregistry.LSEntry) QuirkAdapter { return &GoplsAdapter{Entry: e} },
@@ -354,6 +375,7 @@ var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"python":     func(e langregistry.LSEntry) QuirkAdapter { return &PyrightAdapter{Entry: e} },
 	"zig":        func(e langregistry.LSEntry) QuirkAdapter { return &ZlsAdapter{Entry: e} },
 	"swift":      func(e langregistry.LSEntry) QuirkAdapter { return &SourceKitAdapter{Entry: e} },
+	"php":        func(e langregistry.LSEntry) QuirkAdapter { return &IntelephenseAdapter{Entry: e} },
 }
 
 // GetQuirkAdapter returns the language-specific QuirkAdapter for the given entry.

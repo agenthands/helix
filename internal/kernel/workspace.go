@@ -53,9 +53,11 @@ func (w *WorkspaceRuntime) DetectLanguages(rootPath string) []string {
 		{files: []string{"pyproject.toml", "setup.py", "setup.cfg"}, language: "python"},
 		{files: []string{"tsconfig.json", "package.json", "jsconfig.json"}, language: "typescript"},
 		{files: []string{"Cargo.toml"}, language: "rust"},
+		{files: []string{"pom.xml", "build.gradle", "build.gradle.kts", ".classpath"}, language: "java"},
 		{files: []string{"compile_commands.json", "CMakeLists.txt", ".clangd"}, language: "cpp"},
 		{files: []string{"Package.swift"}, language: "swift"},
 		{files: []string{"build.zig", "build.zig.zon"}, language: "zig"},
+		{files: []string{"composer.json", "composer.lock"}, language: "php"},
 	}
 
 	for _, m := range markers {

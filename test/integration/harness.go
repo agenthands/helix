@@ -39,6 +39,9 @@ type Options struct {
 	SkipLS bool
 	// LSTimeout is the maximum time to wait for LS readiness (default 30s).
 	LSTimeout time.Duration
+	// LSQuery overrides the workspace/symbol query used for readiness detection.
+	// Default "main" works for Go/Java; use "helper" for Python/TypeScript/Rust.
+	LSQuery string
 	// Profile overrides cfg.Profile (default "full" preserves existing behavior).
 	Profile string
 	// Mode, if non-empty, triggers a switch_mode call after session connect.
@@ -188,7 +191,11 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 			if timeout == 0 {
 				timeout = 30 * time.Second
 			}
-			WaitForLS(tb, session, timeout)
+			query := opts.LSQuery
+			if query == "" {
+				query = "main"
+			}
+			WaitForLS(tb, session, timeout, query)
 		}
 	}
 
@@ -196,8 +203,11 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 }
 
 // WaitForLS polls search_symbols until the language server has indexed the workspace.
-// It fails the test if the timeout is exceeded.
-func WaitForLS(tb testing.TB, session *mcp.ClientSession, timeout time.Duration) {
+// Requires non-empty results to ensure the LS has completed indexing — some servers
+// (rust-analyzer) return empty results without error before indexing finishes.
+// The query parameter should match a known symbol in the fixture (e.g. "main" for Go/Java,
+// "helper" for Python/TypeScript/Rust).
+func WaitForLS(tb testing.TB, session *mcp.ClientSession, timeout time.Duration, query string) {
 	tb.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -214,7 +224,7 @@ func WaitForLS(tb testing.TB, session *mcp.ClientSession, timeout time.Duration)
 		case <-ticker.C:
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{
 				Name:      "search_symbols",
-				Arguments: map[string]any{"query": "main"},
+				Arguments: map[string]any{"query": query},
 			})
 			if err != nil {
 				lastErr = fmt.Sprintf("call error: %v", err)

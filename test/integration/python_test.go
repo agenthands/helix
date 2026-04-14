@@ -16,7 +16,7 @@ func TestSymbols_PythonFixture(t *testing.T) {
 	requireLS(t, "pyright-langserver")
 
 	fixture := PrepareFixture(t, "python")
-	td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 45 * time.Second})
+	td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 90 * time.Second, LSQuery: "helper"})
 
 	t.Run("search_symbols", func(t *testing.T) {
 		result := callTool(t, td.Session, "search_symbols", map[string]any{
@@ -39,10 +39,10 @@ func TestSymbols_PythonFixture(t *testing.T) {
 	})
 
 	t.Run("find_references", func(t *testing.T) {
-		// helper() defined at line 4 (0-indexed), col 4 in main.py
+		// helper() defined at line 3 (0-indexed), col 4 in main.py
 		result := callTool(t, td.Session, "find_references", map[string]any{
 			"path":                "main.py",
-			"line":                4,
+			"line":                3,
 			"column":              4,
 			"include_declaration": true,
 		})
@@ -55,7 +55,7 @@ func TestSymbols_PythonFixture(t *testing.T) {
 	t.Run("get_hover_info", func(t *testing.T) {
 		result := callTool(t, td.Session, "get_hover_info", map[string]any{
 			"path":   "main.py",
-			"line":   4,
+			"line":   3,
 			"column": 4,
 		})
 		text := textContent(result)
@@ -83,7 +83,7 @@ func TestEdit_PythonFixture(t *testing.T) {
 
 	t.Run("replace_body", func(t *testing.T) {
 		fixture := PrepareFixture(t, "python")
-		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 45 * time.Second})
+		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 90 * time.Second, LSQuery: "helper"})
 
 		// Replace helper() body
 		callTool(t, td.Session, "replace_symbol_body", map[string]any{
@@ -103,13 +103,12 @@ func TestEdit_PythonFixture(t *testing.T) {
 
 	t.Run("rename", func(t *testing.T) {
 		fixture := PrepareFixture(t, "python")
-		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 45 * time.Second})
+		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 90 * time.Second, LSQuery: "helper"})
 
-		// Rename helper to renamed_helper (line 4, col 4 -- 0-indexed def position)
-		// rename_symbol uses 1-indexed line/column
+		// Rename helper to renamed_helper (line 4, col 5 -- 1-indexed for rename_symbol)
 		callTool(t, td.Session, "rename_symbol", map[string]any{
 			"path":     "main.py",
-			"line":     5,
+			"line":     4,
 			"column":   5,
 			"new_name": "renamed_helper",
 		})

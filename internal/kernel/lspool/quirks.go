@@ -241,6 +241,36 @@ func didOpenFirstFile(ctx context.Context, adapter *LSAdapter, ext string, langI
 	}
 }
 
+// didOpenFirstFileRecursive walks subdirectories to find and open the first file
+// matching ext. Used for languages where source files live in subdirectories
+// (e.g., Rust src/, Java src/main/java/).
+func didOpenFirstFileRecursive(ctx context.Context, adapter *LSAdapter, ext string, langID string) {
+	workDir := adapter.worker.workDir
+	_ = filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ext) {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		uri := "file://" + path
+		params := gen.DidOpenTextDocumentParams{
+			TextDocument: gen.TextDocumentItem{
+				URI:        uri,
+				LanguageId: langID,
+				Version:    1,
+				Text:       string(content),
+			},
+		}
+		_ = adapter.worker.Notify(ctx, "textDocument/didOpen", params)
+		return filepath.SkipAll // stop after first file
+	})
+}
+
 // TypeScriptAdapter provides TypeScript-specific quirks for typescript-language-server.
 // tsserver only creates a "project" after a file is opened via didOpen.
 // Without this, workspace/symbol fails with "No Project" until a file is opened.

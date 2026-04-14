@@ -19,7 +19,7 @@ import (
 
 // ScoreTranscript calls the judge model to score a transcript via the rubric prompt.
 // Retries once if score values are invalid (T-21-05).
-func ScoreTranscript(ctx context.Context, client anthropic.Client, model string, tr *llm.Transcript) (*Score, error) {
+func ScoreTranscript(ctx context.Context, client anthropic.Client, model string, selfJudged bool, tr *llm.Transcript) (*Score, error) {
 	system := RubricPrompt()
 	userPrompt := formatTranscriptForJudge(tr)
 
@@ -34,9 +34,8 @@ func ScoreTranscript(ctx context.Context, client anthropic.Client, model string,
 	}
 
 	// Set metadata before validation.
-	_, selfJudgedFromModel := llm.JudgeModel()
 	score.ScenarioID = tr.ScenarioID
-	score.SelfJudged = tr.SelfJudged || selfJudgedFromModel
+	score.SelfJudged = tr.SelfJudged || selfJudged
 
 	// Validate and retry once if invalid.
 	if valErr := ValidateScoreValues(score); valErr != nil {
@@ -50,7 +49,7 @@ func ScoreTranscript(ctx context.Context, client anthropic.Client, model string,
 			return nil, fmt.Errorf("parsing judge retry response for %s: %w (original error: %v)", tr.ScenarioID, err2, valErr)
 		}
 		score2.ScenarioID = tr.ScenarioID
-		score2.SelfJudged = tr.SelfJudged || selfJudgedFromModel
+		score2.SelfJudged = tr.SelfJudged || selfJudged
 		if valErr2 := ValidateScoreValues(score2); valErr2 != nil {
 			return nil, fmt.Errorf("judge retry still invalid for %s: %w", tr.ScenarioID, valErr2)
 		}

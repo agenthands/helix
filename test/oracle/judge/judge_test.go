@@ -53,29 +53,22 @@ func TestJudge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
+	// Collect scores outside t.Run to avoid future race risk if parallelism is added.
 	var scores []*Score
 	for i, tr := range transcripts {
 		if i > 0 {
 			llm.InterCallDelay()
 		}
 
-		tr := tr // capture
-		t.Run("judge/"+tr.ScenarioID, func(t *testing.T) {
-			score, err := ScoreTranscript(ctx, client, model, tr)
-			if err != nil {
-				// Log error but don't fail — judge is informational.
-				t.Logf("ERROR scoring %s: %v", tr.ScenarioID, err)
-				return
-			}
+		score, err := ScoreTranscript(ctx, client, model, selfJudged, tr)
+		if err != nil {
+			t.Logf("ERROR scoring %s: %v", tr.ScenarioID, err)
+			continue
+		}
 
-			if selfJudged {
-				score.SelfJudged = true
-			}
-
-			WriteScore(t, score)
-			t.Logf("Score for %s: verdict=%s total=%.1f", tr.ScenarioID, score.Verdict, score.Total)
-			scores = append(scores, score)
-		})
+		WriteScore(t, score)
+		t.Logf("Score for %s: verdict=%s total=%.1f", tr.ScenarioID, score.Verdict, score.Total)
+		scores = append(scores, score)
 	}
 
 	// Compute and write aggregate report.

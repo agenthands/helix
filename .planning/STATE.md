@@ -83,6 +83,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260414-e5n | Fix REQUIREMENTS.md checkboxes - check all 21 requirement boxes confirmed satisfied by v1.4 milestone audit | 2026-04-14 | 315b06d7 | [260414-e5n-fix-requirements-md-checkboxes-check-all](./quick/260414-e5n-fix-requirements-md-checkboxes-check-all/) |
+| 260414-gtc | Create fixtures and oracle scenario tests for C++ Swift Zig and JavaScript | 2026-04-14 | 26a02b9b | [260414-gtc-create-fixtures-and-oracle-scenario-test](./quick/260414-gtc-create-fixtures-and-oracle-scenario-test/) |
 
 ## Session Continuity
 

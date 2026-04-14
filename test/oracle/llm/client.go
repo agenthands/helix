@@ -28,7 +28,7 @@ const (
 	// EnvLLMProvider selects the LLM provider: "anthropic" (default) or "deepseek".
 	EnvLLMProvider = "SERENA_LLM_PROVIDER"
 	// DefaultSubjectModel is the cheapest Claude model for behavioral tests (D-11).
-	DefaultSubjectModel = "claude-haiku-4-20250414"
+	DefaultSubjectModel = "claude-haiku-4-5-20251001"
 	// DefaultDeepSeekModel is the default DeepSeek model.
 	DefaultDeepSeekModel = "deepseek-chat"
 )

@@ -1,0 +1,16 @@
+{
+  "total_transcripts": 81,
+  "pass_count": 80,
+  "soft_fail_count": 1,
+  "fail_count": 0,
+  "dimension_averages": {
+    "description_use": 1,
+    "output_interpretation": 0.9938271604938271,
+    "polyglot_reasoning": 0.9938271604938271,
+    "tool_choice": 1,
+    "uncertainty_handling": 0.9938271604938271
+  },
+  "worst_performers": null,
+  "worst_dimensions": null,
+  "self_judged": true
+}

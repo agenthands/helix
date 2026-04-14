@@ -1,0 +1,12 @@
+{
+  "tool_choice": 1,
+  "description_use": 1,
+  "output_interpretation": 1,
+  "uncertainty_handling": 1,
+  "polyglot_reasoning": 1,
+  "total": 5,
+  "verdict": "pass",
+  "failures": null,
+  "self_judged": true,
+  "scenario_id": "disambig-insert_before_symbol-vs-insert_after_symbol-select-insert_after_symbol"
+}

@@ -1,0 +1,12 @@
+{
+  "tool_choice": 1,
+  "description_use": 1,
+  "output_interpretation": 0.5,
+  "uncertainty_handling": 0.5,
+  "polyglot_reasoning": 0.5,
+  "total": 3.5,
+  "verdict": "soft_fail",
+  "failures": null,
+  "self_judged": true,
+  "scenario_id": "interpret-get_type_hierarchy-success-success"
+}

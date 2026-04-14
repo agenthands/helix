@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Integration Testing v2
-status: executing
-stopped_at: Phase 21 context gathered
-last_updated: "2026-04-14T07:11:35.627Z"
+status: completed
+stopped_at: Milestone archived
+last_updated: "2026-04-14T15:30:00.000Z"
 last_activity: 2026-04-14
 progress:
   total_phases: 4
@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-11)
+See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 18 — harness-extraction-foundation
+**Current focus:** Planning next milestone
 
 ## Current Position
 

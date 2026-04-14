@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.4 Integration Testing v2 (Shipped: 2026-04-14)
+
+**Phases completed:** 4 phases (18-21), 11 plans
+**Lines changed:** +5,615 / -51 across 128 files
+**Timeline:** 4 days (2026-04-11 → 2026-04-14)
+
+**Key accomplishments:**
+
+- Extracted importable test harness (`test/harness/`) with Runner, golden store, fixture helpers, and build tag taxonomy (`integration`, `llm`, `llmjudge`)
+- Protocol oracle tests — MCP handshake, tools/list validation, session isolation, reconnect resilience
+- Contract oracle tests — JSON Schema Draft 2020-12 validation, 23 golden output files, 6 error category contracts, tool selectability heuristics
+- Scenario oracle matrix — 14+ full-cycle agent workflow tests across Go, Python, TypeScript, C++, Swift, Zig, JavaScript, PHP, SQL, Markdown, polyglot, unsupported, collision, and degraded fixtures
+- LLM behavioral tests — tool selection (33 tools), disambiguation (11 pairs), output interpretation with multi-provider support (Anthropic + DeepSeek)
+- Judge scoring infrastructure — structured rubrics (5 dimensions), transcript pipeline, aggregate reporting, never blocks merge
+
+---
+
 ## v1.3 Documentation Catchup (Shipped: 2026-04-11)
 
 **Phases completed:** 2 phases, 4 plans, 7 tasks

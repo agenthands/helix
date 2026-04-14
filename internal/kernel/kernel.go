@@ -24,7 +24,8 @@ type KernelConfig struct {
 type Kernel struct {
 	workspaces map[string]*WorkspaceRuntime // keyed by workspace key hash
 	pool       *lspool.Pool
-	registry   *workspace.Registry // Phase 1 workspace registry
+	registry   *workspace.Registry           // Phase 1 workspace registry
+	langReg    *langregistry.Registry         // language registry for extension-based detection
 	config     KernelConfig
 	logger     *slog.Logger
 	tracer     trace.Tracer // Phase 12: plumbed via constructor, noop-safe
@@ -44,6 +45,7 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 		workspaces: make(map[string]*WorkspaceRuntime),
 		pool:       pool,
 		registry:   registry,
+		langReg:    langReg,
 		config:     cfg,
 		logger:     logger.With("component", "kernel"),
 		tracer:     tracer,
@@ -77,7 +79,7 @@ func (k *Kernel) ActivateWorkspace(ctx context.Context, rootPath string) (*Works
 	}
 
 	// Create runtime and detect languages.
-	rt := NewWorkspaceRuntime(baseKey, k.pool)
+	rt := NewWorkspaceRuntime(baseKey, k.pool, k.langReg)
 	langs := rt.DetectLanguages(rootPath)
 
 	k.workspaces[hash] = rt

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/langregistry"
 	"github.com/postfix/serena/internal/workspace"
 )
 
@@ -17,16 +18,18 @@ import (
 type WorkspaceRuntime struct {
 	key         workspace.WorkspaceKey
 	pool        *lspool.Pool
+	langReg     *langregistry.Registry
 	docVersions sync.Map // map[string]*atomic.Int32 -- per Pitfall 5: workspace owns version counters
 	languages   []string // detected languages
 	mu          sync.RWMutex
 }
 
 // NewWorkspaceRuntime creates a new workspace runtime for the given key.
-func NewWorkspaceRuntime(key workspace.WorkspaceKey, pool *lspool.Pool) *WorkspaceRuntime {
+func NewWorkspaceRuntime(key workspace.WorkspaceKey, pool *lspool.Pool, langReg *langregistry.Registry) *WorkspaceRuntime {
 	return &WorkspaceRuntime{
-		key:  key,
-		pool: pool,
+		key:     key,
+		pool:    pool,
+		langReg: langReg,
 	}
 }
 
@@ -65,6 +68,30 @@ func (w *WorkspaceRuntime) DetectLanguages(rootPath string) []string {
 			if _, err := os.Stat(filepath.Join(rootPath, f)); err == nil {
 				langs = append(langs, m.language)
 				break
+			}
+		}
+	}
+
+	// Fallback: if no marker files matched and we have a language registry,
+	// scan top-level files by extension to detect languages like Markdown
+	// that have no project marker files.
+	if len(langs) == 0 && w.langReg != nil {
+		seen := make(map[string]bool)
+		entries, _ := os.ReadDir(rootPath)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			ext := filepath.Ext(e.Name())
+			if ext == "" || seen[ext] {
+				continue
+			}
+			seen[ext] = true
+			for _, le := range w.langReg.ByExtension(ext) {
+				if !seen[le.Language] {
+					seen[le.Language] = true
+					langs = append(langs, le.Language)
+				}
 			}
 		}
 	}

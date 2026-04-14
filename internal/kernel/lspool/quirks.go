@@ -363,6 +363,22 @@ func (i *IntelephenseAdapter) PostInitialize(ctx context.Context, adapter *LSAda
 	return nil
 }
 
+// MarkdownAdapter provides Markdown-specific quirks for marksman.
+// marksman requires textDocument/didOpen before textDocument/* operations work.
+type MarkdownAdapter struct {
+	Entry langregistry.LSEntry
+}
+
+func (m *MarkdownAdapter) InitOptions(_ string) map[string]any { return m.Entry.InitOptions }
+func (m *MarkdownAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
+	return nil
+}
+func (m *MarkdownAdapter) NormalizeSymbolName(name string) string { return name }
+func (m *MarkdownAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	didOpenFirstFile(ctx, adapter, ".md", "markdown")
+	return nil
+}
+
 // adapterFactory maps language keys to QuirkAdapter constructors.
 var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"go":         func(e langregistry.LSEntry) QuirkAdapter { return &GoplsAdapter{Entry: e} },
@@ -376,6 +392,7 @@ var adapterFactory = map[string]func(langregistry.LSEntry) QuirkAdapter{
 	"zig":        func(e langregistry.LSEntry) QuirkAdapter { return &ZlsAdapter{Entry: e} },
 	"swift":      func(e langregistry.LSEntry) QuirkAdapter { return &SourceKitAdapter{Entry: e} },
 	"php":        func(e langregistry.LSEntry) QuirkAdapter { return &IntelephenseAdapter{Entry: e} },
+	"markdown":   func(e langregistry.LSEntry) QuirkAdapter { return &MarkdownAdapter{Entry: e} },
 }
 
 // GetQuirkAdapter returns the language-specific QuirkAdapter for the given entry.

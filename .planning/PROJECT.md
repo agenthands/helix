@@ -62,26 +62,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Test harness extraction (test/harness/ package with Runner, tools, golden, fixture helpers) — v1.4 Phase 18
 - ✓ Protocol oracle tests (handshake, tools/list, session isolation, reconnect) — v1.4 Phase 19
 - ✓ Contract oracle tests (schema meta-validation, selectability heuristics, golden outputs, error contracts) — v1.4 Phase 19
-- ✓ Scenario oracle tests (multi-language runtime correctness across Go, Python, TypeScript, polyglot, unsupported, degraded) — v1.4 Phase 20
+- ✓ Scenario oracle tests (multi-language runtime correctness across 14+ languages/fixtures) — v1.4 Phase 20
 - ✓ LLM behavioral tests (tool selection, disambiguation, output interpretation) + judge scoring infrastructure — v1.4 Phase 21
+- ✓ Multi-provider LLM support (Anthropic + DeepSeek) for behavioral tests — v1.4
+- ✓ Extension-based language detection fallback for marker-free languages (Markdown) — v1.4
+- ✓ Marksman quirk adapter for Markdown LSP support — v1.4
 
 ### Active
 
-## Current Milestone: v1.4 Integration Testing v2
-
-**Goal:** Prove Serena-Go is protocol-correct, contract-stable, runtime-safe, profile-correct, polyglot-honest, and genuinely usable by LLM clients — through a multi-oracle test harness.
-
-**Target features:**
-- Multi-oracle test architecture (deterministic protocol/contract/scenario + LLM behavioral/judge)
-- Protocol correctness testing (MCP init, tool listing, session isolation, reconnect)
-- Per-tool contract testing with golden outputs, schema validation, error shape assertions
-- Profile/mode golden expectations independent from runtime YAML
-- Runtime testing (startup/shutdown, worker pool stress, timeout/cancellation, degraded subsystems)
-- Repository scenario matrix (Go, Python, TypeScript, polyglot monorepo, unsupported language, degraded capability, name collisions)
-- Polyglot honesty rules (no fake cross-language links, no silent omissions)
-- LLM behavioral testing (tool selection, disambiguation, output interpretation)
-- Optional LLM judge scoring (structured rubrics, never replacing deterministic layers)
-- 5-stage CI pipeline (fast deterministic → scenarios → concurrency/-race → LLM behavioral → optional judge)
+(No active milestone — planning next milestone)
 
 ### Out of Scope
 
@@ -95,7 +84,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), and v1.3 Documentation Catchup. Single binary, 4-layer architecture, persistent daemon. All documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG) current as of v1.2 capabilities. v1.4 multi-oracle integration test harness complete: protocol, contract, scenario, LLM behavioral, and judge oracle layers all implemented. Phase 21 complete — all 4 milestone phases delivered.
+Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), v1.3 Documentation Catchup, and v1.4 Integration Testing v2 (4,850 LOC oracle tests). Single binary, 4-layer architecture, persistent daemon. All documentation current as of v1.2 capabilities. Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures), LLM behavioral (multi-provider: Anthropic + DeepSeek), and judge scoring. Extension-based language detection fallback enables marker-free languages like Markdown.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
@@ -133,6 +122,10 @@ The `legacy/` directory contains the original Python-based prototype as a refere
 | Three-tier concurrency (scenarios + fan-out + synctest) | Layered coverage: realistic + targeted + deterministic | ✓ Good — caught SessionInfo data race |
 | Three-band error coverage (category + destructive + read-only) | Risk-weighted testing per Google/OWASP guidance | ✓ Good — 30 cases with low duplication |
 | Structured IsError oracle (defer typed errors) | Kernel lacks typed errors yet, tracked as TODO(#typed-errors) | ⚠ Revisit — acceptable short-term, needs upgrade path |
+| Multi-oracle test architecture | Five oracle layers as separate packages under test/oracle/ | ✓ Good — clean separation of deterministic vs LLM tests |
+| Extension-based language detection fallback | Marker-free languages (Markdown) need file extension scanning | ✓ Good — enables any language with registered extensions |
+| Multi-provider LLM tests (Anthropic + DeepSeek) | DeepSeek as fallback when Anthropic credits unavailable | ✓ Good — 97.4% pass rate with DeepSeek, proves provider-agnostic tool descriptions |
+| LLM tests never block merge | Build-tag gated, informational judge scoring only | ✓ Good — avoids flaky CI from LLM nondeterminism |
 | Benchmarks-first ordering | Observing-the-benchmarked-thing taints results; Phase 9 baseline before any obs code | ✓ Good — clean pre-instrumentation baseline |
 | Noop-default observability | Metrics/tracing opt-in, zero overhead when disabled | ✓ Good — 0 allocs/op on fast path |
 | Tiered benchmark thresholds | PR tier (15%/25%) relaxed for CI noise; release tier (10%/20%) tight | ✓ Good — reduces false positives |
@@ -158,4 +151,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after Phase 19 complete — Protocol & Contract Oracles*
+*Last updated: 2026-04-14 after v1.4 milestone complete — Integration Testing v2*

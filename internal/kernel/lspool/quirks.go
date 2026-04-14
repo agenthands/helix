@@ -284,7 +284,9 @@ func (t *TypeScriptAdapter) NotificationHandlers() map[string]func(params json.R
 }
 func (t *TypeScriptAdapter) NormalizeSymbolName(name string) string { return name }
 func (t *TypeScriptAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	// Try .ts first, fall back to .js for JavaScript-only projects.
 	didOpenFirstFile(ctx, adapter, ".ts", "typescript")
+	didOpenFirstFile(ctx, adapter, ".js", "javascript")
 	return nil
 }
 

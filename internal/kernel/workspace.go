@@ -36,8 +36,9 @@ func (w *WorkspaceRuntime) Key() workspace.WorkspaceKey {
 }
 
 // DetectLanguages scans the root path for language marker files (per WRK-02).
-// Detects: Go (go.mod), Python (pyproject.toml, setup.py), TypeScript (tsconfig.json, package.json),
-// Rust (Cargo.toml).
+// Detects: Go (go.mod), Python (pyproject.toml, setup.py), TypeScript/JavaScript (tsconfig.json,
+// package.json, jsconfig.json), Rust (Cargo.toml), C++ (compile_commands.json, CMakeLists.txt),
+// Swift (Package.swift), Zig (build.zig).
 func (w *WorkspaceRuntime) DetectLanguages(rootPath string) []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -50,8 +51,11 @@ func (w *WorkspaceRuntime) DetectLanguages(rootPath string) []string {
 	}{
 		{files: []string{"go.mod"}, language: "go"},
 		{files: []string{"pyproject.toml", "setup.py", "setup.cfg"}, language: "python"},
-		{files: []string{"tsconfig.json", "package.json"}, language: "typescript"},
+		{files: []string{"tsconfig.json", "package.json", "jsconfig.json"}, language: "typescript"},
 		{files: []string{"Cargo.toml"}, language: "rust"},
+		{files: []string{"compile_commands.json", "CMakeLists.txt", ".clangd"}, language: "cpp"},
+		{files: []string{"Package.swift"}, language: "swift"},
+		{files: []string{"build.zig", "build.zig.zon"}, language: "zig"},
 	}
 
 	for _, m := range markers {

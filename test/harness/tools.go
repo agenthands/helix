@@ -40,6 +40,35 @@ func TextContent(r *mcp.CallToolResult) string {
 	return ""
 }
 
+// WaitForSearchResults polls search_symbols until it returns non-empty results.
+// Use this for LS that need time to index after initialization (clangd, zls, sourcekit-lsp).
+func WaitForSearchResults(tb testing.TB, session *mcp.ClientSession, query string, timeout time.Duration) string {
+	tb.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			tb.Fatalf("search_symbols(%q) returned no results after %v", query, timeout)
+			return ""
+		case <-ticker.C:
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      "search_symbols",
+				Arguments: map[string]any{"query": query},
+			})
+			if err != nil || result.IsError {
+				continue
+			}
+			text := TextContent(result)
+			if text != "" && text != "(no results)" {
+				return text
+			}
+		}
+	}
+}
+
 // CallToolExpectError invokes an MCP tool and asserts it returns an error result.
 func CallToolExpectError(tb testing.TB, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	tb.Helper()

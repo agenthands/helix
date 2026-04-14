@@ -57,7 +57,9 @@ func ScoreTranscript(ctx context.Context, client anthropic.Client, model string,
 		score = score2
 	}
 
-	ComputeVerdict(score)
+	if err := ComputeVerdict(score); err != nil {
+		return nil, fmt.Errorf("computing verdict for %s: %w", tr.ScenarioID, err)
+	}
 	return score, nil
 }
 

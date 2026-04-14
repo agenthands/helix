@@ -59,7 +59,11 @@ func ValidateScoreValues(s *Score) error {
 //   - pass: no zeros AND total >= 4.0
 //   - soft_fail: one zero OR (total >= 2.5 AND total < 4.0)
 //   - fail: two+ zeros OR total < 2.5
-func ComputeVerdict(s *Score) {
+func ComputeVerdict(s *Score) error {
+	if err := ValidateScoreValues(s); err != nil {
+		return fmt.Errorf("ComputeVerdict: %w", err)
+	}
+
 	dims := []struct {
 		name  string
 		value float64
@@ -92,6 +96,7 @@ func ComputeVerdict(s *Score) {
 		// No zeros AND total >= 4.0.
 		s.Verdict = "pass"
 	}
+	return nil
 }
 
 // RubricPrompt returns the full judge system prompt with anchor definitions

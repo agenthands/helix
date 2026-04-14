@@ -77,6 +77,17 @@ func formatTranscriptForJudge(tr *llm.Transcript) string {
 // ParseScoreJSON extracts a Score from a JSON object in the response text.
 // Finds the first { and last } to extract the JSON substring.
 func ParseScoreJSON(text string) (*Score, error) {
+	// Strip common markdown fences before brace matching.
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "```") {
+		if idx := strings.Index(text, "\n"); idx != -1 {
+			text = text[idx+1:]
+		}
+		if idx := strings.LastIndex(text, "```"); idx != -1 {
+			text = text[:idx]
+		}
+	}
+
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start == -1 || end == -1 || end <= start {

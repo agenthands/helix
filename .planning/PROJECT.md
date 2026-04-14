@@ -70,7 +70,16 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(No active milestone — planning next milestone)
+## Current Milestone: v1.5 Typed Errors & Hardening
+
+**Goal:** Every MCP tool returns typed, structured errors — replacing raw strings with a consistent error taxonomy that enables reliable error handling by agents.
+
+**Target features:**
+- Typed error taxonomy (error kinds, categories, structured fields)
+- Migrate all 38+ tools from raw error strings to typed errors
+- Consistent error contracts across kernel, skills, and MCP layer
+- Input validation at tool boundaries (parameter checking before execution)
+- Error path test coverage (extend three-band error tests to use typed assertions)
 
 ### Out of Scope
 
@@ -151,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-14 after v1.4 milestone complete — Integration Testing v2*
+*Last updated: 2026-04-14 after v1.5 milestone started — Typed Errors & Hardening*

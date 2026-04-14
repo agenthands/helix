@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.5
+milestone_name: Typed Errors & Hardening
+status: planning
+stopped_at: Phase 22 context gathered
+last_updated: "2026-04-14T19:47:26.511Z"
+last_activity: 2026-04-14 -- Roadmap created for v1.5
+progress:
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 87
+---
+
 # Project State
 
 ## Project Reference
@@ -67,6 +83,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-14
-Stopped at: v1.5 roadmap created, ready to plan Phase 22
-Resume file: None
+Last session: 2026-04-14T19:47:26.508Z
+Stopped at: Phase 22 context gathered
+Resume file: .planning/phases/22-error-taxonomy/22-CONTEXT.md

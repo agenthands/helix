@@ -1,19 +1,3 @@
----
-gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Typed Errors & Hardening
-status: defining_requirements
-stopped_at: null
-last_updated: "2026-04-14T18:00:00.000Z"
-last_activity: 2026-04-14
-progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
----
-
 # Project State
 
 ## Project Reference
@@ -21,17 +5,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Defining requirements for v1.5
+**Current focus:** v1.5 Typed Errors & Hardening -- Phase 22 (Error Taxonomy)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-14 — Milestone v1.5 started
-Last activity: 2026-04-14 - Completed quick task 260414-e5n: Fix REQUIREMENTS.md checkboxes
+Phase: 22 of 24 (Error Taxonomy)
+Plan: 0 of 0 in current phase
+Status: Ready to plan
+Last activity: 2026-04-14 -- Roadmap created for v1.5
 
-Progress: [==================░░] 85% (17/21 phases)
+Progress: [==================░░] 87% (21/24 phases)
 
 ## Performance Metrics
 
@@ -45,18 +28,15 @@ Progress: [==================░░] 85% (17/21 phases)
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| v1.0 (1-5) | 20 | — | — |
-| v1.1 (6-8) | 11 | — | — |
-| v1.2 (9-15) | 25 | — | — |
-| v1.3 (16-17) | 4 | — | — |
-| 18 | 2 | - | - |
-| 19 | 3 | - | - |
-| 20 | 4 | - | - |
-| 21 | 2 | - | - |
+| v1.0 (1-5) | 20 | -- | -- |
+| v1.1 (6-8) | 11 | -- | -- |
+| v1.2 (9-15) | 25 | -- | -- |
+| v1.3 (16-17) | 4 | -- | -- |
+| v1.4 (18-21) | 11 | -- | -- |
 
 **Recent Trend:**
 
-- v1.3 completed in 4 plans across 2 phases
+- v1.4 completed in 11 plans across 4 phases
 - Trend: Stable
 
 ## Accumulated Context
@@ -66,10 +46,9 @@ Progress: [==================░░] 85% (17/21 phases)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v1.4]: Multi-oracle test architecture — five oracle layers as separate packages under test/oracle/
-- [v1.4]: Extend, don't replace — existing test/integration/ stays untouched, new harness extracted to test/harness/
-- [v1.4]: Only 2 new deps needed (jsonschema/v6, anthropic-sdk-go)
-- [v1.4]: LLM tests are build-tag gated and never block merge
+- [v1.2]: Single typed error (ErrCircuitOpen) -- full migration deferred to v1.5
+- [v1.1]: Structured IsError oracle (defer typed errors) -- tracked as TODO(#typed-errors)
+- [v1.5]: Error taxonomy must support errors.Is/As for cause chain traversal
 
 ### Pending Todos
 
@@ -83,11 +62,11 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 260414-e5n | Fix REQUIREMENTS.md checkboxes - check all 21 requirement boxes confirmed satisfied by v1.4 milestone audit | 2026-04-14 | 315b06d7 | [260414-e5n-fix-requirements-md-checkboxes-check-all](./quick/260414-e5n-fix-requirements-md-checkboxes-check-all/) |
-| 260414-gtc | Create fixtures and oracle scenario tests for C++ Swift Zig and JavaScript | 2026-04-14 | 26a02b9b | [260414-gtc-create-fixtures-and-oracle-scenario-test](./quick/260414-gtc-create-fixtures-and-oracle-scenario-test/) |
+| 260414-e5n | Fix REQUIREMENTS.md checkboxes | 2026-04-14 | 315b06d7 | [260414-e5n](./quick/260414-e5n-fix-requirements-md-checkboxes-check-all/) |
+| 260414-gtc | Create fixtures and oracle scenario tests for C++ Swift Zig and JavaScript | 2026-04-14 | 26a02b9b | [260414-gtc](./quick/260414-gtc-create-fixtures-and-oracle-scenario-test/) |
 
 ## Session Continuity
 
-Last session: 2026-04-12T14:23:42.898Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-llm-behavioral-judge/21-CONTEXT.md
+Last session: 2026-04-14
+Stopped at: v1.5 roadmap created, ready to plan Phase 22
+Resume file: None

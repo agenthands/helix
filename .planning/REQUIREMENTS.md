@@ -32,7 +32,7 @@ Requirements for v1.5 Typed Errors & Hardening. Each maps to roadmap phases.
 
 ## Future Requirements
 
-None deferred — this milestone is focused and self-contained.
+None deferred -- this milestone is focused and self-contained.
 
 ## Out of Scope
 
@@ -49,26 +49,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ERR-01 | — | Pending |
-| ERR-02 | — | Pending |
-| ERR-03 | — | Pending |
-| MIG-01 | — | Pending |
-| MIG-02 | — | Pending |
-| MIG-03 | — | Pending |
-| MIG-04 | — | Pending |
-| MIG-05 | — | Pending |
-| MIG-06 | — | Pending |
-| MIG-07 | — | Pending |
-| MIG-08 | — | Pending |
-| VAL-01 | — | Pending |
-| VAL-02 | — | Pending |
-| VAL-03 | — | Pending |
+| ERR-01 | Phase 22 | Pending |
+| ERR-02 | Phase 22 | Pending |
+| ERR-03 | Phase 22 | Pending |
+| MIG-01 | Phase 23 | Pending |
+| MIG-02 | Phase 23 | Pending |
+| MIG-03 | Phase 23 | Pending |
+| MIG-04 | Phase 23 | Pending |
+| MIG-05 | Phase 23 | Pending |
+| MIG-06 | Phase 23 | Pending |
+| MIG-07 | Phase 23 | Pending |
+| MIG-08 | Phase 23 | Pending |
+| VAL-01 | Phase 24 | Pending |
+| VAL-02 | Phase 24 | Pending |
+| VAL-03 | Phase 24 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-14*
-*Last updated: 2026-04-14 after initial definition*
+*Last updated: 2026-04-14 after roadmap creation*

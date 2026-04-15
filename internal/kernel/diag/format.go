@@ -2,11 +2,11 @@ package diag
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -43,7 +43,7 @@ func FormatDocument(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 
 	var edits []gen.TextEdit
 	if err := lease.Request(ctx, "textDocument/formatting", params, &edits); err != nil {
-		return nil, fmt.Errorf("formatting request: %w", err)
+		return nil, serr.Wrap(serr.Internal, "formatting request", err)
 	}
 
 	results := make([]TextEditResult, 0, len(edits))
@@ -65,7 +65,7 @@ func FormatDocument(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 func ApplyFormatEdits(path string, edits []TextEditResult) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading file: %w", err)
+		return serr.Wrap(serr.Internal, "reading file", err)
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -89,11 +89,11 @@ func ApplyFormatEdits(path string, edits []TextEditResult) error {
 	// Atomic write via temp file.
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("writing temp file: %w", err)
+		return serr.Wrap(serr.Internal, "writing temp file", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("renaming temp file: %w", err)
+		return serr.Wrap(serr.Internal, "renaming temp file", err)
 	}
 	return nil
 }

@@ -160,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-15 after Phase 22 complete — Error Taxonomy package created, sentinels migrated*
+*Last updated: 2026-04-15 after Phase 24 complete — Input validation at all 24 kernel tool boundaries, typed error test harness with Kind assertions, golden files for 4 error kinds*

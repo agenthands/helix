@@ -3,11 +3,11 @@ package edit
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -33,7 +33,7 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 
 	var wsEdit gen.WorkspaceEdit
 	if err := lease.Request(ctx, "textDocument/rename", params, &wsEdit); err != nil {
-		return nil, fmt.Errorf("rename: %w", err)
+		return nil, serr.Wrap(serr.Internal, "rename", err)
 	}
 
 	result := &RenameResult{}
@@ -42,7 +42,7 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 	if wsEdit.Changes != nil {
 		for fileURI, edits := range wsEdit.Changes {
 			if err := applyTextEdits(fileURI, edits); err != nil {
-				return nil, fmt.Errorf("apply edits to %s: %w", fileURI, err)
+				return nil, serr.Wrap(serr.Internal, "apply rename edits", err).WithDetail(fileURI)
 			}
 			result.FilesChanged++
 			result.EditsApplied += len(edits)
@@ -76,7 +76,7 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 			}
 			if len(edits) > 0 {
 				if err := applyTextEdits(tde.TextDocument.URI, edits); err != nil {
-					return nil, fmt.Errorf("apply edits to %s: %w", tde.TextDocument.URI, err)
+					return nil, serr.Wrap(serr.Internal, "apply rename edits", err).WithDetail(tde.TextDocument.URI)
 				}
 				result.FilesChanged++
 				result.EditsApplied += len(edits)
@@ -96,7 +96,7 @@ func applyTextEdits(uri string, edits []gen.TextEdit) error {
 
 	source, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "read file", err).WithDetail(filePath)
 	}
 
 	// Sort edits in reverse document order (later positions first).
@@ -121,7 +121,7 @@ func applyTextEdits(uri string, edits []gen.TextEdit) error {
 	}
 
 	if err := os.WriteFile(filePath, result, 0644); err != nil {
-		return fmt.Errorf("write %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "write file", err).WithDetail(filePath)
 	}
 
 	return nil

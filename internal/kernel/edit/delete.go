@@ -2,9 +2,9 @@ package edit
 
 import (
 	"context"
-	"fmt"
 	"os"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
 )
@@ -22,7 +22,7 @@ func SafeDelete(ctx context.Context, lease *lspool.WorkerLease, uri string, symb
 	// Find symbol via documentSymbol.
 	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeDelete, "")
 	if err != nil {
-		return nil, fmt.Errorf("plan edit: %w", err)
+		return nil, serr.Wrap(serr.Internal, "plan edit", err)
 	}
 	return SafeDeleteWithPlan(ctx, lease, lease, plan, force)
 }
@@ -36,7 +36,7 @@ func SafeDeleteWithPlan(ctx context.Context, readLease, writeLease *lspool.Worke
 		refs, err := symbols.FindReferences(ctx, readLease, plan.URI,
 			int(plan.SelectionRange.Start.Line), int(plan.SelectionRange.Start.Character), false)
 		if err != nil {
-			return nil, fmt.Errorf("find references: %w", err)
+			return nil, serr.Wrap(serr.Internal, "find references", err)
 		}
 
 		if len(refs) > 0 {
@@ -52,7 +52,7 @@ func SafeDeleteWithPlan(ctx context.Context, readLease, writeLease *lspool.Worke
 	filePath := uriToPath(plan.URI)
 	source, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", filePath, err)
+		return nil, serr.Wrap(serr.Internal, "read file", err).WithDetail(filePath)
 	}
 
 	startByte, endByte := rangeToByteOffsets(source, plan.Range)
@@ -67,11 +67,11 @@ func SafeDeleteWithPlan(ctx context.Context, readLease, writeLease *lspool.Worke
 	result = append(result, source[endByte:]...)
 
 	if err := os.WriteFile(filePath, result, 0644); err != nil {
-		return nil, fmt.Errorf("write file %s: %w", filePath, err)
+		return nil, serr.Wrap(serr.Internal, "write file", err).WithDetail(filePath)
 	}
 
 	if err := notifyDidChange(ctx, writeLease, plan.URI, string(result)); err != nil {
-		return nil, fmt.Errorf("didChange notification: %w", err)
+		return nil, serr.Wrap(serr.Internal, "didChange notification", err)
 	}
 
 	return &DeleteResult{Deleted: true}, nil

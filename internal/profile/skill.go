@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/skill"
 )
@@ -81,20 +82,21 @@ func (s *profileSkill) Tools() []*mcp.ToolDef {
 func validateModeTransition(store *ProfileStore, profileName, currentMode, targetMode string) error {
 	// Check target mode exists.
 	if _, ok := store.Mode(targetMode); !ok {
-		return fmt.Errorf("unknown mode %q; available modes: %s",
-			targetMode, strings.Join(store.ModeNames(), ", "))
+		return serr.New(serr.InvalidArgs, "unknown mode").
+			WithDetail(fmt.Sprintf("%s; available modes: %s", targetMode, strings.Join(store.ModeNames(), ", ")))
 	}
 
 	// Look up profile.
 	prof, ok := store.Profile(profileName)
 	if !ok {
-		return fmt.Errorf("unknown profile %q", profileName)
+		return serr.New(serr.InvalidArgs, "unknown profile").WithDetail(profileName)
 	}
 
 	// Check allowed transitions.
 	allowed, exists := prof.AllowedModeTransitions[currentMode]
 	if !exists {
-		return fmt.Errorf("mode %q has no transitions defined in profile %q", currentMode, profileName)
+		return serr.New(serr.InvalidArgs, "mode has no transitions defined").
+			WithDetail(fmt.Sprintf("mode %s in profile %s", currentMode, profileName))
 	}
 
 	for _, a := range allowed {
@@ -103,8 +105,9 @@ func validateModeTransition(store *ProfileStore, profileName, currentMode, targe
 		}
 	}
 
-	return fmt.Errorf("transition from %q to %q not allowed in profile %q; allowed targets: %s",
-		currentMode, targetMode, profileName, strings.Join(allowed, ", "))
+	return serr.New(serr.InvalidArgs, "mode transition not allowed").
+		WithDetail(fmt.Sprintf("from %s to %s in profile %s; allowed: %s",
+			currentMode, targetMode, profileName, strings.Join(allowed, ", ")))
 }
 
 // SwitchModeResult is the response payload for the switch_mode tool.
@@ -118,11 +121,11 @@ type SwitchModeResult struct {
 // Exported for direct testing; the MCP tool handler delegates here.
 func (s *profileSkill) ExecuteSwitchMode(targetMode string) (*SwitchModeResult, error) {
 	if s.session == nil {
-		return nil, fmt.Errorf("no session provider configured")
+		return nil, serr.New(serr.Internal, "no session provider configured")
 	}
 	sess := s.session.CurrentSession()
 	if sess == nil {
-		return nil, fmt.Errorf("no active session")
+		return nil, serr.New(serr.Internal, "no active session")
 	}
 
 	snapshot := sess.Snapshot()
@@ -198,12 +201,12 @@ type ToolTokenInfo struct {
 func computeTokenBudget(store *ProfileStore, profileName, modeName string, detailed bool) (*TokenBudgetResult, error) {
 	prof, ok := store.Profile(profileName)
 	if !ok {
-		return nil, fmt.Errorf("unknown profile %q", profileName)
+		return nil, serr.New(serr.InvalidArgs, "unknown profile").WithDetail(profileName)
 	}
 
 	mode, ok := store.Mode(modeName)
 	if !ok {
-		return nil, fmt.Errorf("unknown mode %q", modeName)
+		return nil, serr.New(serr.InvalidArgs, "unknown mode").WithDetail(modeName)
 	}
 
 	// Merge mode skills with profile skills.
@@ -310,7 +313,7 @@ func (s *profileSkill) ExecuteTool(name string, params map[string]interface{}) (
 	case "switch_mode":
 		targetMode, _ := params["target_mode"].(string)
 		if targetMode == "" {
-			return "", fmt.Errorf("missing required parameter: target_mode")
+			return "", serr.New(serr.InvalidArgs, "missing required parameter: target_mode").WithTool("switch_mode")
 		}
 		result, err := s.ExecuteSwitchMode(targetMode)
 		if err != nil {
@@ -331,7 +334,7 @@ func (s *profileSkill) ExecuteTool(name string, params map[string]interface{}) (
 		return string(data), nil
 
 	default:
-		return "", fmt.Errorf("unknown tool: %s", name)
+		return "", serr.New(serr.InvalidArgs, "unknown tool").WithTool(name)
 	}
 }
 

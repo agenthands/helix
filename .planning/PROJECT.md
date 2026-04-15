@@ -75,7 +75,21 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(None yet — next milestone not started)
+- [ ] RepoMap overview tool — structural map of repo with ranked symbol importance
+- [ ] RepoMap context selection tool — task-focused token-budgeted context with PageRank-style ranking
+- [ ] Hybrid data source — tree-sitter fast path, LSP enrichment when warm, SQLite cache
+- [ ] Fuzzy edit fallback in existing tools — whitespace-normalized matching in replace_symbol_body / replace_content
+- [ ] Standalone fuzzy edit MCP tool — raw text fuzzy matching with strategy reporting
+
+## Current Milestone: v1.6 Context Intelligence & Resilient Editing
+
+**Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
+
+**Target features:**
+- RepoMap overview tool (structural map with ranked importance)
+- RepoMap context selection tool (task-focused, token-budgeted)
+- Fuzzy edit fallback in existing edit tools
+- Standalone fuzzy edit MCP tool
 
 ### Out of Scope
 
@@ -159,4 +173,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-15 after v1.5 milestone complete — Typed error taxonomy (7 kinds), all 38+ tools migrated, inline validation, Kind-level test assertions*
+*Last updated: 2026-04-15 after v1.6 milestone started — Context Intelligence & Resilient Editing*

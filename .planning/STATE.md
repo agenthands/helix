@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Typed Errors & Hardening
-status: completed
-stopped_at: Milestone v1.5 archived
-last_updated: "2026-04-15T19:30:00Z"
+milestone: v1.6
+milestone_name: Context Intelligence & Resilient Editing
+status: active
+stopped_at: null
+last_updated: "2026-04-15T21:00:00Z"
 last_activity: 2026-04-15
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 ## Current Position
 
-Phase: All v1.5 phases complete
-Plan: N/A
-Status: Milestone v1.5 shipped
-Last activity: 2026-04-15
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-15 — Milestone v1.6 started
 
-Progress: [====================] 100% (24/24 phases across 6 milestones)
+Progress: [                    ] 0%
 
 ## Performance Metrics
 
@@ -79,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-15T19:30:00Z
-Stopped at: Milestone v1.5 archived
-Resume file: N/A — start next milestone with /gsd-new-milestone
+Last session: 2026-04-15T21:00:00Z
+Stopped at: Milestone v1.6 started — defining requirements
+Resume file: N/A

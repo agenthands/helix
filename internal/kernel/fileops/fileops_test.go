@@ -1,10 +1,13 @@
 package fileops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // --- ValidatePath tests ---
@@ -14,6 +17,9 @@ func TestValidatePathRejectsOutsideRoot(t *testing.T) {
 	_, err := ValidatePath(root, "/etc/passwd")
 	if err == nil {
 		t.Fatal("expected error for path outside root")
+	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "outside workspace root") {
 		t.Fatalf("unexpected error: %v", err)
@@ -43,6 +49,16 @@ func TestValidatePathAcceptsValidPath(t *testing.T) {
 	}
 }
 
+func TestValidatePathEmptyRoot(t *testing.T) {
+	_, err := ValidatePath("", "test.txt")
+	if err == nil {
+		t.Fatal("expected error for empty root")
+	}
+	if !errors.Is(err, serr.ErrNoWorkspace) {
+		t.Fatalf("expected NoWorkspace error, got: %v", err)
+	}
+}
+
 // --- ReadFile tests ---
 
 func TestReadFileExisting(t *testing.T) {
@@ -65,6 +81,9 @@ func TestReadFileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent file")
 	}
+	if !errors.Is(err, serr.ErrNotFound) {
+		t.Fatalf("expected NotFound error, got: %v", err)
+	}
 	if !strings.Contains(err.Error(), "file not found") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -77,6 +96,9 @@ func TestReadFileDirectory(t *testing.T) {
 	_, err := ReadFile(root, "subdir")
 	if err == nil {
 		t.Fatal("expected error for directory")
+	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "directory") {
 		t.Fatalf("unexpected error: %v", err)
@@ -128,6 +150,9 @@ func TestReadFileRangeOutOfBounds(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for out-of-bounds range")
 	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
+	}
 	if !strings.Contains(err.Error(), "beyond end of file") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,6 +183,9 @@ func TestCreateFileErrorsOnExisting(t *testing.T) {
 	err := CreateFile(root, "exists.txt", "new")
 	if err == nil {
 		t.Fatal("expected error for existing file")
+	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("unexpected error: %v", err)
@@ -240,6 +268,9 @@ func TestListDirectoryNotFound(t *testing.T) {
 	_, err := ListDirectory(root, "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for non-existent directory")
+	}
+	if !errors.Is(err, serr.ErrNotFound) {
+		t.Fatalf("expected NotFound error, got: %v", err)
 	}
 }
 
@@ -378,6 +409,19 @@ func TestSearchPatternIncludeGlob(t *testing.T) {
 	}
 }
 
+func TestSearchPatternInvalidRegex(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "test.txt"), []byte("hello"), 0o644)
+
+	_, err := SearchPattern(root, "[invalid", SearchOpts{})
+	if err == nil {
+		t.Fatal("expected error for invalid regex")
+	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
+	}
+}
+
 // --- ReplaceInFile tests ---
 
 func TestReplaceInFileLiteral(t *testing.T) {
@@ -426,5 +470,18 @@ func TestReplaceInFileNoMatch(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected 0 replacements, got %d", count)
+	}
+}
+
+func TestReplaceInFileInvalidRegex(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "test.txt"), []byte("hello"), 0o644)
+
+	_, err := ReplaceInFile(root, "test.txt", "[invalid", "x", true)
+	if err == nil {
+		t.Fatal("expected error for invalid regex")
+	}
+	if !errors.Is(err, serr.ErrInvalidArgs) {
+		t.Fatalf("expected InvalidArgs error, got: %v", err)
 	}
 }

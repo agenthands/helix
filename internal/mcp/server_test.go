@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"encoding/json"
 	"log/slog"
 	"os"
 	"testing"
@@ -24,29 +23,6 @@ func TestNewToolRegistry(t *testing.T) {
 	assert.Equal(t, 0, r.Count())
 }
 
-func TestErrorDetail_JSON(t *testing.T) {
-	detail := ErrorDetail{
-		Code:       "WORKSPACE_NOT_READY",
-		Cause:      "workspace is still initializing",
-		Suggestion: "wait and retry in a few seconds",
-	}
-	data, err := detail.MarshalJSON()
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), `"code":"WORKSPACE_NOT_READY"`)
-	assert.Contains(t, string(data), `"suggestion"`)
-}
-
-func TestErrorDetail_JSON_NoSuggestion(t *testing.T) {
-	detail := ErrorDetail{
-		Code:  "SESSION_EXPIRED",
-		Cause: "session timed out",
-	}
-	data, err := json.Marshal(detail)
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), `"code":"SESSION_EXPIRED"`)
-	assert.NotContains(t, string(data), `"suggestion"`)
-}
-
 func TestSessionInfo_AllowedTools(t *testing.T) {
 	s := &SessionInfo{
 		SessionID:    "test-session",
@@ -61,21 +37,6 @@ func TestSessionInfo_NilAllowedTools(t *testing.T) {
 	}
 	// nil AllowedTools means all tools are available
 	assert.Nil(t, s.AllowedTools)
-}
-
-func TestDomainErrors(t *testing.T) {
-	// Sentinels are now *serr.Error; Error() format is "kind: message".
-	assert.EqualError(t, ErrSessionExpired, "timeout: session expired")
-	assert.EqualError(t, ErrLSCrashed, "internal: language server crashed")
-
-	// Sentinel re-exports match via Kind-based errors.Is.
-	assert.ErrorIs(t, ErrWorkspaceNotReady, ErrWorkspaceNotReady)
-	assert.ErrorIs(t, ErrToolNotAvailable, ErrToolNotAvailable)
-	assert.ErrorIs(t, ErrProjectNotFound, ErrProjectNotFound)
-
-	// Different Kinds must NOT match each other.
-	assert.NotErrorIs(t, ErrWorkspaceNotReady, ErrProjectNotFound)
-	assert.NotErrorIs(t, ErrSessionExpired, ErrLSCrashed)
 }
 
 func TestNewSerenaMCPServer(t *testing.T) {

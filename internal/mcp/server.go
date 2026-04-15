@@ -7,6 +7,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/workspace"
 )
 
@@ -113,14 +114,11 @@ func (s *SerenaMCPServer) registerActivateProjectTool(workspaces *workspace.Regi
 		}
 		ws, err := workspaces.ActivateWorkspace(key)
 		if err != nil {
-			detail := ErrorDetail{
-				Code:       "WORKSPACE_ACTIVATION_FAILED",
-				Cause:      err.Error(),
-				Suggestion: "Check that the repository path exists and is accessible",
-			}
+			activErr := serr.Wrap(serr.NoWorkspace, "workspace activation failed", err).
+				WithDetail("check that the repository path exists and is accessible")
 			return &mcpsdk.CallToolResult{
 				Content: []mcpsdk.Content{
-					&mcpsdk.TextContent{Text: detail.Cause},
+					&mcpsdk.TextContent{Text: activErr.Error()},
 				},
 				IsError: true,
 			}, nil, nil

@@ -26,16 +26,16 @@ func TestCircuitOpenError_Fields(t *testing.T) {
 
 func TestCircuitOpenError_Is(t *testing.T) {
 	e := serr.New(serr.CircuitOpen, "circuit breaker open").WithDetail("language=go failures=1")
-	if !errors.Is(e, ErrCircuitOpen) {
-		t.Error("errors.Is(serr.New(CircuitOpen, ...), ErrCircuitOpen) should return true")
+	if !errors.Is(e, serr.ErrCircuitOpen) {
+		t.Error("errors.Is(serr.New(CircuitOpen, ...), serr.ErrCircuitOpen) should return true")
 	}
 }
 
 func TestCircuitOpenError_Unwrap(t *testing.T) {
 	inner := serr.New(serr.CircuitOpen, "circuit breaker open").WithDetail("language=rust failures=2")
 	wrapped := fmt.Errorf("%w: extra context", inner)
-	if !errors.Is(wrapped, ErrCircuitOpen) {
-		t.Error("errors.Is on wrapped serr.Error with CircuitOpen should still find ErrCircuitOpen")
+	if !errors.Is(wrapped, serr.ErrCircuitOpen) {
+		t.Error("errors.Is on wrapped serr.Error with CircuitOpen should still find serr.ErrCircuitOpen")
 	}
 	if !containsStr(wrapped.Error(), "extra context") {
 		t.Error("wrapped error should contain extra context")
@@ -154,8 +154,8 @@ func TestCircuitOpenErr_ReturnsSerrError(t *testing.T) {
 	if e.Kind != serr.CircuitOpen {
 		t.Errorf("expected Kind CircuitOpen, got %s", e.Kind)
 	}
-	if !errors.Is(e, ErrCircuitOpen) {
-		t.Error("CircuitOpenErr() result should match ErrCircuitOpen via errors.Is")
+	if !errors.Is(e, serr.ErrCircuitOpen) {
+		t.Error("CircuitOpenErr() result should match serr.ErrCircuitOpen via errors.Is")
 	}
 	if !containsStr(e.Detail, "language=go") {
 		t.Errorf("detail should contain language, got: %s", e.Detail)

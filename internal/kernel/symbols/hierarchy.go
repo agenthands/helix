@@ -2,8 +2,8 @@ package symbols
 
 import (
 	"context"
-	"fmt"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -30,7 +30,7 @@ func GetCallHierarchy(ctx context.Context, lease *lspool.WorkerLease, uri string
 	}
 	var items []gen.CallHierarchyItem
 	if err := lease.Request(ctx, "textDocument/prepareCallHierarchy", prepareParams, &items); err != nil {
-		return nil, fmt.Errorf("prepareCallHierarchy: %w", err)
+		return nil, serr.Wrap(serr.Internal, "prepare call hierarchy", err)
 	}
 	if len(items) == 0 {
 		return nil, nil
@@ -79,7 +79,7 @@ func GetTypeHierarchy(ctx context.Context, lease *lspool.WorkerLease, uri string
 	}
 	var items []gen.TypeHierarchyItem
 	if err := lease.Request(ctx, "textDocument/prepareTypeHierarchy", prepareParams, &items); err != nil {
-		return nil, fmt.Errorf("prepareTypeHierarchy: %w", err)
+		return nil, serr.Wrap(serr.Internal, "prepare type hierarchy", err)
 	}
 	if len(items) == 0 {
 		return nil, nil
@@ -128,7 +128,7 @@ func resolveIncomingCalls(ctx context.Context, lease *lspool.WorkerLease, item g
 	}
 	var calls []gen.CallHierarchyIncomingCall
 	if err := lease.Request(ctx, "callHierarchy/incomingCalls", params, &calls); err != nil {
-		return nil, fmt.Errorf("incomingCalls: %w", err)
+		return nil, serr.Wrap(serr.Internal, "incoming calls", err)
 	}
 	var nodes []HierarchyNode
 	for _, call := range calls {
@@ -152,7 +152,7 @@ func resolveOutgoingCalls(ctx context.Context, lease *lspool.WorkerLease, item g
 	}
 	var calls []gen.CallHierarchyOutgoingCall
 	if err := lease.Request(ctx, "callHierarchy/outgoingCalls", params, &calls); err != nil {
-		return nil, fmt.Errorf("outgoingCalls: %w", err)
+		return nil, serr.Wrap(serr.Internal, "outgoing calls", err)
 	}
 	var nodes []HierarchyNode
 	for _, call := range calls {
@@ -187,7 +187,7 @@ func resolveSubtypes(ctx context.Context, lease *lspool.WorkerLease, item gen.Ty
 	}
 	var items []gen.TypeHierarchyItem
 	if err := lease.Request(ctx, "typeHierarchy/subtypes", params, &items); err != nil {
-		return nil, fmt.Errorf("subtypes: %w", err)
+		return nil, serr.Wrap(serr.Internal, "subtypes", err)
 	}
 	var nodes []HierarchyNode
 	for _, sub := range items {
@@ -211,7 +211,7 @@ func resolveSupertypes(ctx context.Context, lease *lspool.WorkerLease, item gen.
 	}
 	var items []gen.TypeHierarchyItem
 	if err := lease.Request(ctx, "typeHierarchy/supertypes", params, &items); err != nil {
-		return nil, fmt.Errorf("supertypes: %w", err)
+		return nil, serr.Wrap(serr.Internal, "supertypes", err)
 	}
 	var nodes []HierarchyNode
 	for _, sup := range items {

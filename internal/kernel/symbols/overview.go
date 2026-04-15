@@ -2,8 +2,8 @@ package symbols
 
 import (
 	"context"
-	"fmt"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -25,7 +25,7 @@ func GetSymbolOverview(ctx context.Context, lease *lspool.WorkerLease, uri strin
 	}
 	var result []gen.DocumentSymbol
 	if err := lease.Request(ctx, "textDocument/documentSymbol", params, &result); err != nil {
-		return nil, fmt.Errorf("documentSymbol: %w", err)
+		return nil, serr.Wrap(serr.Internal, "document symbol", err)
 	}
 	return mapDocumentSymbols(result), nil
 }

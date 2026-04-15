@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -32,7 +33,7 @@ func GoToDefinition(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 	}
 	var result []gen.Location
 	if err := lease.Request(ctx, "textDocument/definition", params, &result); err != nil {
-		return nil, fmt.Errorf("definition: %w", err)
+		return nil, serr.Wrap(serr.Internal, "definition", err)
 	}
 	return locationsToSymbolLocations(result), nil
 }
@@ -48,7 +49,7 @@ func FindReferences(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 	}
 	var result []gen.Location
 	if err := lease.Request(ctx, "textDocument/references", params, &result); err != nil {
-		return nil, fmt.Errorf("references: %w", err)
+		return nil, serr.Wrap(serr.Internal, "references", err)
 	}
 	return locationsToSymbolLocations(result), nil
 }
@@ -61,7 +62,7 @@ func GetHover(ctx context.Context, lease *lspool.WorkerLease, uri string, line, 
 	}
 	var result gen.Hover
 	if err := lease.Request(ctx, "textDocument/hover", params, &result); err != nil {
-		return nil, fmt.Errorf("hover: %w", err)
+		return nil, serr.Wrap(serr.Internal, "hover", err)
 	}
 	content := extractHoverContent(result)
 	if content == "" {
@@ -78,7 +79,7 @@ func FindImplementations(ctx context.Context, lease *lspool.WorkerLease, uri str
 	}
 	var result []gen.Location
 	if err := lease.Request(ctx, "textDocument/implementation", params, &result); err != nil {
-		return nil, fmt.Errorf("implementation: %w", err)
+		return nil, serr.Wrap(serr.Internal, "implementation", err)
 	}
 	return locationsToSymbolLocations(result), nil
 }

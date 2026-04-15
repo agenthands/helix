@@ -2,8 +2,8 @@ package symbols
 
 import (
 	"context"
-	"fmt"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -16,7 +16,7 @@ func SearchSymbols(ctx context.Context, lease *lspool.WorkerLease, query string)
 	}
 	var result []gen.SymbolInformation
 	if err := lease.Request(ctx, "workspace/symbol", params, &result); err != nil {
-		return nil, fmt.Errorf("workspace/symbol: %w", err)
+		return nil, serr.Wrap(serr.Internal, "workspace symbol", err)
 	}
 	out := make([]SymbolLocation, len(result))
 	for i, sym := range result {

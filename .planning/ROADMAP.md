@@ -76,7 +76,7 @@
 
 **Milestone Goal:** Every MCP tool returns typed, structured errors -- replacing raw strings with a consistent error taxonomy that enables reliable error handling by agents.
 
-- [ ] **Phase 22: Error Taxonomy** - Define typed error kinds, structured fields, and cause-chain wrapping
+- [x] **Phase 22: Error Taxonomy** - Define typed error kinds, structured fields, and cause-chain wrapping (completed 2026-04-15)
 - [ ] **Phase 23: Tool Migration** - Migrate all 38+ tools from raw error strings to typed errors
 - [ ] **Phase 24: Validation & Testing** - Input validation at tool boundaries and typed error test coverage
 
@@ -94,7 +94,7 @@
 **Plans**: 2 plans
 Plans:
 - [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
-- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
+- [x] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ### Phase 23: Tool Migration
 **Goal**: All 38+ MCP tools return typed errors instead of raw strings, providing agents with consistent programmatic error handling
@@ -108,7 +108,7 @@ Plans:
   5. No tool in the codebase returns a raw error string -- every error path goes through the typed error constructors
 **Plans**: 2 plans
 Plans:
-- [ ] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
+- [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
 - [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ### Phase 24: Validation & Testing
@@ -152,6 +152,6 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete | 2026-04-11 |
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
-| 22. Error Taxonomy | v1.5 | 1/2 | In Progress|  |
+| 22. Error Taxonomy | v1.5 | 2/2 | Complete   | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 0/0 | Not started | - |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

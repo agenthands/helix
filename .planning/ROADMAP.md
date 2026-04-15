@@ -78,7 +78,7 @@
 
 - [x] **Phase 22: Error Taxonomy** - Define typed error kinds, structured fields, and cause-chain wrapping (completed 2026-04-15)
 - [x] **Phase 23: Tool Migration** - Migrate all 38+ tools from raw error strings to typed errors (completed 2026-04-15)
-- [ ] **Phase 24: Validation & Testing** - Input validation at tool boundaries and typed error test coverage
+- [x] **Phase 24: Validation & Testing** - Input validation at tool boundaries and typed error test coverage (completed 2026-04-15)
 
 ## Phase Details
 
@@ -128,7 +128,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 24-01-PLAN.md — Add inline validation to all 24 kernel tools (symbols, edit, diag, fileops)
-- [ ] 24-02-PLAN.md — Upgrade three-band error tests with Kind assertions and update error golden files
+- [x] 24-02-PLAN.md — Upgrade three-band error tests with Kind assertions and update error golden files
 
 ## Progress
 
@@ -160,4 +160,4 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete    | 2026-04-15 |
-| 24. Validation & Testing | v1.5 | 1/2 | In Progress|  |
+| 24. Validation & Testing | v1.5 | 2/2 | Complete   | 2026-04-15 |

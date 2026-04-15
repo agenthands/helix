@@ -8,6 +8,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/workspace"
@@ -126,7 +127,7 @@ func acquireLease(ctx context.Context, k *kernel.Kernel, wsKeyFn func() workspac
 	wsKey := wsKeyFn()
 	rt, err := k.GetRuntime(wsKey)
 	if err != nil {
-		return nil, fmt.Errorf("workspace not activated: %w", err)
+		return nil, serr.Wrap(serr.NoWorkspace, "workspace not activated", err)
 	}
 	return rt, nil
 }
@@ -192,11 +193,11 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		locs, err := GoToDefinition(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
-			return errorResult(fmt.Sprintf("definition: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
@@ -214,11 +215,11 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		locs, err := FindReferences(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, args.IncludeDecl)
 		if err != nil {
-			return errorResult(fmt.Sprintf("references: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
@@ -236,11 +237,11 @@ func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, ws
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		outlines, err := GetSymbolOverview(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path))
 		if err != nil {
-			return errorResult(fmt.Sprintf("documentSymbol: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if len(outlines) == 0 {
 			return textResult("(no symbols found)"), nil, nil
@@ -261,11 +262,11 @@ func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyF
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		locs, err := SearchSymbols(ctx, lease, args.Query)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace/symbol: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
@@ -283,11 +284,11 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		result, err := GetHover(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
-			return errorResult(fmt.Sprintf("hover: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if result == nil {
 			return textResult("(no hover information available)"), nil, nil
@@ -308,11 +309,11 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		locs, err := FindImplementations(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
-			return errorResult(fmt.Sprintf("implementation: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
@@ -330,7 +331,7 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		direction := args.Direction
 		if direction == "" {
@@ -338,7 +339,7 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		nodes, err := GetCallHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
 		if err != nil {
-			return errorResult(fmt.Sprintf("callHierarchy: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if len(nodes) == 0 {
 			return textResult("(no call hierarchy available)"), nil, nil
@@ -359,7 +360,7 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		direction := args.Direction
 		if direction == "" {
@@ -367,7 +368,7 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		nodes, err := GetTypeHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
 		if err != nil {
-			return errorResult(fmt.Sprintf("typeHierarchy: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if len(nodes) == 0 {
 			return textResult("(no type hierarchy available)"), nil, nil
@@ -388,11 +389,11 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 		}
 		lease, err := rt.AcquireSession(ctx, "default", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
 		if err != nil {
-			return errorResult(fmt.Sprintf("blast radius: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		return textResult(formatBlastRadius(br)), nil, nil
 	}))

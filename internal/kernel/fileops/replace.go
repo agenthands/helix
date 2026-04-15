@@ -1,9 +1,10 @@
 package fileops
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // ReplaceInFile replaces all occurrences of a pattern in a file.
@@ -28,7 +29,7 @@ func ReplaceInFile(root, path, pattern, replacement string, isRegex bool) (int, 
 	if isRegex {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
-			return 0, fmt.Errorf("invalid regex pattern: %w", err)
+			return 0, serr.Wrap(serr.InvalidArgs, "invalid regex pattern", err)
 		}
 		// Count matches
 		matches := re.FindAllStringIndex(content, -1)
@@ -48,7 +49,7 @@ func ReplaceInFile(root, path, pattern, replacement string, isRegex bool) (int, 
 	// Use atomic write via OverwriteFile (which validates the path again, but that's fine)
 	_ = absPath // path already validated
 	if err := OverwriteFile(root, path, newContent); err != nil {
-		return 0, fmt.Errorf("writing replacement: %w", err)
+		return 0, serr.Wrap(serr.Internal, "writing replacement", err)
 	}
 
 	return count, nil

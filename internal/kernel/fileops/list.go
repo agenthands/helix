@@ -1,10 +1,11 @@
 package fileops
 
 import (
-	"fmt"
 	"os"
 	"sort"
 	"time"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // DirEntry represents a single directory entry.
@@ -25,17 +26,17 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("directory not found: %s", path)
+			return nil, serr.New(serr.NotFound, "directory not found").WithDetail(path)
 		}
-		return nil, fmt.Errorf("stat directory: %w", err)
+		return nil, serr.Wrap(serr.Internal, "stat directory", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("path is not a directory: %s", path)
+		return nil, serr.New(serr.InvalidArgs, "path is not a directory").WithDetail(path)
 	}
 
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading directory: %w", err)
+		return nil, serr.Wrap(serr.Internal, "reading directory", err)
 	}
 
 	result := make([]DirEntry, 0, len(entries))

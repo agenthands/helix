@@ -5,14 +5,16 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // skipDirs contains directory names to skip during file walks.
 var skipDirs = map[string]bool{
-	".git":          true,
-	"node_modules":  true,
-	"__pycache__":   true,
-	".serena":       true,
+	".git":         true,
+	"node_modules": true,
+	"__pycache__":  true,
+	".serena":      true,
 }
 
 // maxFindResults is the maximum number of results from FindFiles.
@@ -61,7 +63,7 @@ func FindFiles(root, pattern string) ([]string, error) {
 
 	// Ignore the "result limit reached" error — it's expected flow control
 	if err != nil && err.Error() != "result limit reached" {
-		return nil, fmt.Errorf("walking directory: %w", err)
+		return nil, serr.Wrap(serr.Internal, "walking directory", err)
 	}
 
 	return results, nil

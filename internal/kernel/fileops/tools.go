@@ -8,6 +8,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/mcp"
 )
@@ -82,6 +83,10 @@ func errorResult(msg string) *mcpsdk.CallToolResult {
 	}
 }
 
+func noWorkspaceError() *mcpsdk.CallToolResult {
+	return errorResult(serr.New(serr.NoWorkspace, "no active workspace").Error())
+}
+
 func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "read_file",
@@ -89,7 +94,7 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer 
 	}, kernel.WrapToolSpan(tracer, "read_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReadFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		if args.StartLine > 0 || args.EndLine > 0 {
@@ -116,7 +121,7 @@ func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, trace
 	}, kernel.WrapToolSpan(tracer, "create_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args CreateFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		if err := CreateFile(root, args.Path, args.Content); err != nil {
@@ -134,7 +139,7 @@ func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	}, kernel.WrapToolSpan(tracer, "list_directory", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ListDirectoryArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		entries, err := ListDirectory(root, args.Path)
@@ -165,7 +170,7 @@ func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 	}, kernel.WrapToolSpan(tracer, "find_files", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindFilesArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		files, err := FindFiles(root, args.Pattern)
@@ -188,7 +193,7 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	}, kernel.WrapToolSpan(tracer, "search_in_files", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchInFilesArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		opts := SearchOpts{
@@ -229,7 +234,7 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	}, kernel.WrapToolSpan(tracer, "replace_in_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace — activate a project first"), nil, nil
+			return noWorkspaceError(), nil, nil
 		}
 
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)

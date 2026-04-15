@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // SearchOpts configures search behavior.
@@ -40,7 +42,7 @@ func SearchPattern(root, pattern string, opts SearchOpts) ([]SearchMatch, error)
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, fmt.Errorf("invalid regex pattern: %w", err)
+		return nil, serr.Wrap(serr.InvalidArgs, "invalid regex pattern", err)
 	}
 
 	maxResults := opts.MaxResults
@@ -100,7 +102,7 @@ func SearchPattern(root, pattern string, opts SearchOpts) ([]SearchMatch, error)
 	})
 
 	if walkErr != nil && walkErr.Error() != "result limit reached" {
-		return nil, fmt.Errorf("walking directory: %w", walkErr)
+		return nil, serr.Wrap(serr.Internal, "walking directory", walkErr)
 	}
 
 	return results, nil

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/skill"
 )
@@ -91,7 +92,7 @@ func (s *WorkflowSkill) ExecuteTool(name string, args map[string]interface{}) (s
 	case "prepare_for_new_conversation":
 		return s.execHandoff(args)
 	default:
-		return "", fmt.Errorf("unknown workflow tool: %s", name)
+		return "", serr.New(serr.InvalidArgs, "unknown workflow tool").WithTool(name)
 	}
 }
 

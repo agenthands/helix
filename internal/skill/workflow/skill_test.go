@@ -1,11 +1,13 @@
 package workflow
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,6 +144,7 @@ func TestWorkflowSkill_UnknownTool(t *testing.T) {
 	s := setupTestWorkflow(t)
 	_, err := s.ExecuteTool("nonexistent", nil)
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs), "expected InvalidArgs kind")
 	assert.Contains(t, err.Error(), "unknown workflow tool")
 }
 

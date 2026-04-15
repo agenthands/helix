@@ -2,19 +2,22 @@ package mcp
 
 import (
 	"encoding/json"
-	"errors"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
-// Domain sentinel errors (D-19) -- use errors.Is/As pattern.
+// Domain sentinel errors -- re-exported from internal/errors for backward compatibility.
+// Callers should migrate to serr.ErrXxx in Phase 23.
 var (
-	ErrSessionExpired    = errors.New("session expired")
-	ErrWorkspaceNotReady = errors.New("workspace not ready")
-	ErrToolNotAvailable  = errors.New("tool not available in current mode")
-	ErrProjectNotFound   = errors.New("project not found at specified path")
-	ErrLSCrashed         = errors.New("language server crashed")
+	ErrSessionExpired    = serr.New(serr.Timeout, "session expired")
+	ErrWorkspaceNotReady = serr.ErrNoWorkspace
+	ErrToolNotAvailable  = serr.ErrUnsupported
+	ErrProjectNotFound   = serr.ErrNotFound
+	ErrLSCrashed         = serr.New(serr.Internal, "language server crashed")
 )
 
-// ErrorDetail provides structured error info for MCP responses (D-18).
+// ErrorDetail provides structured error info for MCP responses.
+// Deprecated: will be superseded by serr.Error in Phase 23.
 type ErrorDetail struct {
 	Code       string `json:"code"`
 	Cause      string `json:"cause"`

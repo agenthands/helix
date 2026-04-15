@@ -64,11 +64,18 @@ func TestSessionInfo_NilAllowedTools(t *testing.T) {
 }
 
 func TestDomainErrors(t *testing.T) {
-	assert.EqualError(t, ErrSessionExpired, "session expired")
-	assert.EqualError(t, ErrWorkspaceNotReady, "workspace not ready")
-	assert.EqualError(t, ErrToolNotAvailable, "tool not available in current mode")
-	assert.EqualError(t, ErrProjectNotFound, "project not found at specified path")
-	assert.EqualError(t, ErrLSCrashed, "language server crashed")
+	// Sentinels are now *serr.Error; Error() format is "kind: message".
+	assert.EqualError(t, ErrSessionExpired, "timeout: session expired")
+	assert.EqualError(t, ErrLSCrashed, "internal: language server crashed")
+
+	// Sentinel re-exports match via Kind-based errors.Is.
+	assert.ErrorIs(t, ErrWorkspaceNotReady, ErrWorkspaceNotReady)
+	assert.ErrorIs(t, ErrToolNotAvailable, ErrToolNotAvailable)
+	assert.ErrorIs(t, ErrProjectNotFound, ErrProjectNotFound)
+
+	// Different Kinds must NOT match each other.
+	assert.NotErrorIs(t, ErrWorkspaceNotReady, ErrProjectNotFound)
+	assert.NotErrorIs(t, ErrSessionExpired, ErrLSCrashed)
 }
 
 func TestNewSerenaMCPServer(t *testing.T) {

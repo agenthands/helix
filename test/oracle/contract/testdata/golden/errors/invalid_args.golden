@@ -1,1 +1,1 @@
-validating "arguments": validating root: required: missing properties: ["query"]
+invalid_args: missing required field: path

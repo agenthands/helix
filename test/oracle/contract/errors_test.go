@@ -1,8 +1,8 @@
 //go:build integration || llm || llmjudge
 
-// TODO(phase-20): Add timeout, circuit_open, and unsupported error category goldens
-// once Phase 20 provides runtime stress infrastructure to trigger these deterministically.
-// Currently covered: no_workspace, not_found, invalid_args.
+// TODO(phase-24): Add timeout, circuit_open, and internal error category goldens
+// once runtime stress infrastructure exists to trigger these deterministically.
+// Currently covered: no_workspace, not_found, invalid_args, unsupported.
 
 // Error category contract tests (CONT-03).
 //
@@ -43,19 +43,29 @@ func errorCategories() []errorCase {
 			args:           map[string]any{"path": "main.go"},
 			needsWorkspace: false,
 		},
-		// not_found: call a file tool on a nonexistent file in an active workspace.
+		// not_found: read a nonexistent file in an active workspace.
 		{
 			category:       "not_found",
 			tool:           "read_file",
 			args:           map[string]any{"path": "nonexistent_file_xyz.go"},
 			needsWorkspace: true,
 		},
-		// invalid_args: call a tool with missing required arguments.
+		// invalid_args: call a tool with empty required field (inline validation from Plan 01).
+		// Uses empty-string path to test the typed error format from inline validation.
 		{
 			category:       "invalid_args",
-			tool:           "search_symbols",
-			args:           map[string]any{},
-			needsWorkspace: false,
+			tool:           "read_file",
+			args:           map[string]any{"path": ""},
+			needsWorkspace: true,
+		},
+		// unsupported: trigger unsupported language server by calling a LS-dependent
+		// tool on a file with an unknown extension. The pool returns a raw error
+		// (not yet typed with serr.Unsupported) so the golden captures the raw text.
+		{
+			category:       "unsupported",
+			tool:           "go_to_definition",
+			args:           map[string]any{"path": "test.unknown", "line": 0, "column": 0},
+			needsWorkspace: true,
 		},
 	}
 }

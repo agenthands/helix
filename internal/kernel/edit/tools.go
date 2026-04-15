@@ -8,6 +8,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/mcp"
@@ -144,26 +145,26 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		lang := detectLang(args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeReplaceBody, args.NewBody)
 		if err != nil {
-			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease using the plan's range.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		if err := ReplaceBodyWithPlan(ctx, dirtyLease, extractor, plan, lang); err != nil {
-			return errorResult(fmt.Sprintf("replace body: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
@@ -180,25 +181,25 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertBefore, args.Content)
 		if err != nil {
-			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		if err := InsertBeforeWithPlan(ctx, dirtyLease, plan); err != nil {
-			return errorResult(fmt.Sprintf("insert before: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content before %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
@@ -215,25 +216,25 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertAfter, args.Content)
 		if err != nil {
-			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		if err := InsertAfterWithPlan(ctx, dirtyLease, plan); err != nil {
-			return errorResult(fmt.Sprintf("insert after: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content after %q in %s", args.SymbolName, args.Path)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
@@ -250,17 +251,17 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Convert from 1-indexed (user-facing) to 0-indexed (LSP).
 		result, err := RenameSymbol(ctx, lease, uri, args.Line-1, args.Col-1, args.NewName)
 		if err != nil {
-			return errorResult(fmt.Sprintf("rename: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Renamed to %q: %d files changed, %d edits applied\nFiles: %s",
 			args.NewName, result.FilesChanged, result.EditsApplied, strings.Join(result.Files, ", "))
@@ -278,26 +279,26 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
-			return errorResult(fmt.Sprintf("workspace not activated: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges and references.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire read session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeDelete, "")
 		if err != nil {
-			return errorResult(fmt.Sprintf("plan edit: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: check references on clean lease, execute on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
-			return errorResult(fmt.Sprintf("acquire session: %v", err)), nil, nil
+			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		result, err := SafeDeleteWithPlan(ctx, cleanLease, dirtyLease, plan, args.Force)
 		if err != nil {
-			return errorResult(fmt.Sprintf("safe delete: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if !result.Deleted {
 			var sb strings.Builder
@@ -324,7 +325,7 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 		uri := filePathToURI(wsKeyFn().RepoRoot, args.Path)
 		result, err := VerifyEdit(ctx, diagStore, uri)
 		if err != nil {
-			return errorResult(fmt.Sprintf("verify: %v", err)), nil, nil
+			return errorResult(err.Error()), nil, nil
 		}
 		if !result.HasErrors {
 			return textResult("No errors found."), nil, nil

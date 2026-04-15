@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/obs"
 )
 
@@ -85,7 +85,7 @@ func classifyOutcome(result mcpsdk.Result, err error) string {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return outcomeTimeout
 		}
-		if errors.Is(err, lspool.ErrCircuitOpen) {
+		if errors.Is(err, serr.ErrCircuitOpen) {
 			return outcomeCircuitOpen
 		}
 		return outcomeInternal

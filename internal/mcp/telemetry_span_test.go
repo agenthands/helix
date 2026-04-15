@@ -3,7 +3,6 @@ package mcp_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/obs"
 )
@@ -114,7 +114,7 @@ func TestTelemetryMiddlewareSpan_ErrorRecorded(t *testing.T) {
 		return session
 	}, nil, logger)
 
-	testErr := errors.New("tool execution failed")
+	testErr := serr.New(serr.Internal, "tool execution failed")
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return nil, testErr
 	}

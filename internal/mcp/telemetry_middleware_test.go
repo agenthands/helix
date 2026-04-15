@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -16,7 +15,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/obs"
 )
@@ -87,7 +86,7 @@ func TestTelemetryMiddleware_circuitOpen(t *testing.T) {
 	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
-		return nil, lspool.ErrCircuitOpen
+		return nil, serr.ErrCircuitOpen
 	}
 	h := mw(inner)
 	_, _ = h(context.Background(), "tools/call", newCallToolReq("t"))
@@ -104,7 +103,7 @@ func TestTelemetryMiddleware_internalError(t *testing.T) {
 	mw := mcp.TelemetryMiddleware(provider, func(ctx context.Context) *mcp.SessionInfo { return sess }, nil, discardLogger())
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
-		return nil, errors.New("boom")
+		return nil, serr.New(serr.Internal, "boom")
 	}
 	h := mw(inner)
 	_, _ = h(context.Background(), "tools/call", newCallToolReq("t"))
@@ -189,8 +188,8 @@ func TestClassifyOutcome(t *testing.T) {
 	}{
 		{"success", &mcpsdk.CallToolResult{}, nil, "success"},
 		{"timeout", nil, context.DeadlineExceeded, "timeout"},
-		{"circuit_open", nil, lspool.ErrCircuitOpen, "circuit_open"},
-		{"internal-error", nil, errors.New("kaboom"), "internal"},
+		{"circuit_open", nil, serr.ErrCircuitOpen, "circuit_open"},
+		{"internal-error", nil, serr.New(serr.Internal, "kaboom"), "internal"},
 		{"tool-iserror", &mcpsdk.CallToolResult{IsError: true}, nil, "internal"},
 	}
 	for _, tc := range cases {

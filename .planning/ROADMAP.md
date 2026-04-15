@@ -106,10 +106,16 @@ Plans:
   3. All 6 file operation tools return typed errors with appropriate kinds (file not found, permission denied, path security violation)
   4. All 3 diagnostic tools, all 7 memory tools, all 2 workflow tools, all 2 profile tools, and all 3 MCP core tools return typed errors
   5. No tool in the codebase returns a raw error string -- every error path goes through the typed error constructors
-**Plans**: 2 plans
+**Plans**: 8 plans
 Plans:
-- [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
-- [x] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
+- [ ] 23-01-PLAN.md — Migrate 9 symbol retrieval tools to typed errors
+- [ ] 23-02-PLAN.md — Migrate 6 symbol editing tools to typed errors
+- [ ] 23-03-PLAN.md — Migrate 6 file operation tools to typed errors
+- [ ] 23-04-PLAN.md — Migrate 3 diagnostic tools to typed errors
+- [ ] 23-05-PLAN.md — Migrate 7 memory tools to typed errors
+- [ ] 23-06-PLAN.md — Migrate 2 workflow tools to typed errors
+- [ ] 23-07-PLAN.md — Migrate 2 profile tools to typed errors
+- [ ] 23-08-PLAN.md — Migrate MCP core tests + remove deprecated sentinel re-exports
 
 ### Phase 24: Validation & Testing
 **Goal**: Tools validate inputs before execution, and the test suite asserts error types rather than string matching
@@ -119,10 +125,7 @@ Plans:
   1. Passing invalid parameters to any tool (missing required fields, wrong types, empty strings where non-empty required) returns an InvalidArgs typed error before any work begins
   2. The existing three-band error tests assert on error Kind (e.g., errors.Is checks or Kind field comparisons) instead of substring matching on error messages
   3. Golden files capture the full error response shape per error kind, detecting regressions in error structure across releases
-**Plans**: 2 plans
-Plans:
-- [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
-- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
+**Plans**: [To be planned]
 
 ## Progress
 
@@ -153,5 +156,5 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
-| 23. Tool Migration | v1.5 | 0/0 | Not started | - |
+| 23. Tool Migration | v1.5 | 0/8 | Not started | - |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

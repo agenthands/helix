@@ -77,7 +77,7 @@
 **Milestone Goal:** Every MCP tool returns typed, structured errors -- replacing raw strings with a consistent error taxonomy that enables reliable error handling by agents.
 
 - [x] **Phase 22: Error Taxonomy** - Define typed error kinds, structured fields, and cause-chain wrapping (completed 2026-04-15)
-- [ ] **Phase 23: Tool Migration** - Migrate all 38+ tools from raw error strings to typed errors
+- [x] **Phase 23: Tool Migration** - Migrate all 38+ tools from raw error strings to typed errors (completed 2026-04-15)
 - [ ] **Phase 24: Validation & Testing** - Input validation at tool boundaries and typed error test coverage
 
 ## Phase Details
@@ -108,7 +108,7 @@ Plans:
   5. No tool in the codebase returns a raw error string -- every error path goes through the typed error constructors
 **Plans**: 8 plans
 Plans:
-- [ ] 23-01-PLAN.md — Migrate 9 symbol retrieval tools to typed errors
+- [x] 23-01-PLAN.md — Migrate 9 symbol retrieval tools to typed errors
 - [x] 23-02-PLAN.md — Migrate 6 symbol editing tools to typed errors
 - [x] 23-03-PLAN.md — Migrate 6 file operation tools to typed errors
 - [x] 23-04-PLAN.md — Migrate 3 diagnostic tools to typed errors
@@ -156,5 +156,5 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
-| 23. Tool Migration | v1.5 | 7/8 | In Progress|  |
+| 23. Tool Migration | v1.5 | 8/8 | Complete    | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

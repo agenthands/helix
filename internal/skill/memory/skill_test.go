@@ -1,11 +1,13 @@
 package memory
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -198,26 +200,33 @@ func TestMemorySkill_ErrorOnMissingParams(t *testing.T) {
 
 	_, err := s.ExecuteTool("write_memory", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 
 	_, err = s.ExecuteTool("read_memory", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 
 	_, err = s.ExecuteTool("search_memories", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 
 	_, err = s.ExecuteTool("rename_memory", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 
 	_, err = s.ExecuteTool("edit_memory", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 
 	_, err = s.ExecuteTool("delete_memory", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 }
 
 func TestMemorySkill_UnknownTool(t *testing.T) {
 	s := setupTestSkill(t)
 	_, err := s.ExecuteTool("nonexistent_tool", map[string]interface{}{})
 	assert.Error(t, err)
+	assert.True(t, errors.Is(err, serr.ErrInvalidArgs))
 	assert.Contains(t, err.Error(), "unknown memory tool")
 }

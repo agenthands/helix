@@ -109,7 +109,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
-- [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
+- [x] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ### Phase 24: Validation & Testing
 **Goal**: Tools validate inputs before execution, and the test suite asserts error types rather than string matching
@@ -121,7 +121,7 @@ Plans:
   3. Golden files capture the full error response shape per error kind, detecting regressions in error structure across releases
 **Plans**: 2 plans
 Plans:
-- [ ] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
+- [x] 22-01-PLAN.md — Create internal/errors/ package with Kind type, Error struct, builders, and tests
 - [ ] 22-02-PLAN.md — Migrate existing sentinels (CircuitOpenError, mcp sentinels) to serr re-exports
 
 ## Progress
@@ -152,6 +152,6 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 19. Protocol & Contract Oracles | v1.4 | 3/3 | Complete | 2026-04-11 |
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
-| 22. Error Taxonomy | v1.5 | 2/2 | Complete   | 2026-04-15 |
+| 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 0/0 | Not started | - |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

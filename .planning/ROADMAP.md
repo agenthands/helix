@@ -125,7 +125,10 @@ Plans:
   1. Passing invalid parameters to any tool (missing required fields, wrong types, empty strings where non-empty required) returns an InvalidArgs typed error before any work begins
   2. The existing three-band error tests assert on error Kind (e.g., errors.Is checks or Kind field comparisons) instead of substring matching on error messages
   3. Golden files capture the full error response shape per error kind, detecting regressions in error structure across releases
-**Plans**: [To be planned]
+**Plans**: 2 plans
+Plans:
+- [ ] 24-01-PLAN.md — Add inline validation to all 24 kernel tools (symbols, edit, diag, fileops)
+- [ ] 24-02-PLAN.md — Upgrade three-band error tests with Kind assertions and update error golden files
 
 ## Progress
 
@@ -157,4 +160,4 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete    | 2026-04-15 |
-| 24. Validation & Testing | v1.5 | 0/0 | Not started | - |
+| 24. Validation & Testing | v1.5 | 0/2 | Not started | - |

@@ -1,590 +1,368 @@
 # Architecture Patterns
 
-**Domain:** Multi-oracle integration test harness for Go MCP platform
-**Researched:** 2026-04-11
+**Domain:** Context Intelligence & Resilient Editing for Go MCP Code Intelligence Platform
+**Researched:** 2026-04-15
 
 ## Recommended Architecture
 
-### Design Principle: Extend, Don't Replace
-
-The existing `test/integration/` package is well-structured with battle-tested patterns (harness, golden files, helpers, build tags). The multi-oracle architecture layers on top of it rather than replacing it. The existing `StartTestDaemon`, `PrepareFixture`, `assertGoldenTools`, and `callTool` helpers become the shared foundation that all five oracle layers consume.
-
-### Component Layout
+Two new subsystems integrate into the existing 4-layer architecture as **kernel-level components** (Layer 1), not skills (Layer 2). Both operate on the same data (source files, tree-sitter ASTs) and share the same lifecycle as existing kernel packages.
 
 ```
-test/
-  integration/                  # EXISTING - stays as-is, becomes "foundation layer"
-    harness.go                  # StartTestDaemon, PrepareFixture, WaitForLS
-    golden.go                   # assertGoldenTools, -update flag
-    helpers.go                  # callTool, textContent, listSessionTools
-    a_doc.go                    # Package doc
-    *_test.go                   # EXISTING tests (keep, don't migrate)
-
-  harness/                      # NEW - importable test infrastructure (extracted)
-    harness.go                  # StartTestDaemon, Options, TestDaemon (exported)
-    fixture.go                  # PrepareFixture, projectRoot, FixtureRegistry
-    golden.go                   # assertGolden*, -update flag, hierarchical goldens
-    helpers.go                  # callTool, textContent, listSessionTools
-    doc.go                      # Package doc
-
-  oracle/                       # NEW - multi-oracle test harness
-    doc.go                      # Package doc, build tag explanation
-    shared.go                   # Cross-oracle helpers, YAML loader
-
-    protocol/                   # Oracle Layer 1: Protocol correctness
-      protocol_test.go          # //go:build integration
-
-    contract/                   # Oracle Layer 2: Per-tool contracts
-      contract_test.go          # //go:build integration
-      schema.go                 # Schema validation + error shape assertions
-
-    scenario/                   # Oracle Layer 3: Repository scenarios
-      scenario_test.go          # //go:build integration && scenario
-      loader.go                 # YAML scenario file loader
-      runner.go                 # Data-driven scenario executor
-
-    behavioral/                 # Oracle Layer 4: LLM behavioral
-      behavioral_test.go        # //go:build llmtest
-      client.go                 # Claude API client wrapper
-      rubric.go                 # Scoring rubrics
-
-    judge/                      # Oracle Layer 5: LLM judge
-      judge_test.go             # //go:build llmjudge
-      scorer.go                 # Structured judge prompts + parsing
-
-testdata/
-  fixtures/                     # EXISTING fixtures stay
-    go/                         # EXISTING
-    python/                     # EXISTING
-    typescript/                 # EXISTING
-    java/                       # EXISTING
-    rust/                       # EXISTING
-    polyglot/                   # NEW - multi-language monorepo fixture
-    unsupported/                # NEW - language with no LS available
-    degraded/                   # NEW - valid project with broken LS config
-    collisions/                 # NEW - name collision scenarios
-
-  profiles/                     # EXISTING golden files stay
-    *.tools.golden              # EXISTING 19 goldens
-
-  oracle/                       # NEW - oracle-specific test data
-    protocol/                   # Protocol test expectations
-      init_sequence.golden
-      tool_listing.golden
-      reconnect.golden
-
-    contracts/                  # Per-tool contract goldens
-      go/                       # Organized by fixture language
-        search_symbols.golden
-        go_to_definition.golden
-        get_symbol_overview.golden
-        ...
-      python/
-        ...
-      typescript/
-        ...
-      error_shapes/             # Error response shape goldens
-        no_workspace.golden
-        symbol_not_found.golden
-        invalid_args.golden
-
-    scenarios/                  # YAML scenario definitions
-      go_basic.yaml
-      python_basic.yaml
-      typescript_basic.yaml
-      polyglot_cross_lang.yaml
-      unsupported_graceful.yaml
-      degraded_fallback.yaml
-      collision_disambiguation.yaml
-
-    behavioral/                 # LLM behavioral test data
-      tool_selection/
-      disambiguation/
-      output_interpretation/
-
-    judge/                      # Judge rubrics
-      rubrics/
-        tool_selection.yaml
-        output_quality.yaml
+Daemon Bootstrap
+  |
+  +-- Kernel
+  |     +-- lspool/         (existing - worker pool)
+  |     +-- symbols/        (existing - 9 retrieval tools)
+  |     +-- edit/           (existing - 6 edit tools, MODIFIED for fuzzy fallback)
+  |     +-- fileops/        (existing - 6 file tools, MODIFIED for fuzzy replace)
+  |     +-- diag/           (existing - 3 diagnostic tools)
+  |     +-- repomap/        (NEW - tag extraction, PageRank graph, map rendering)
+  |     +-- fuzzy/          (NEW - whitespace-normalized matching, DMP patching)
+  |     +-- tagcache/       (NEW - SQLite tag cache with mtime invalidation)
+  |     +-- tagger/         (NEW - tree-sitter tag queries, embedded .scm files)
+  |
+  +-- Skills (unchanged - memory, workflow, profile adapters)
 ```
 
 ### Component Boundaries
 
 | Component | Responsibility | Communicates With |
 |-----------|---------------|-------------------|
-| `test/harness/` (NEW, extracted) | Importable daemon lifecycle, fixture prep, golden helpers | All oracle layers + existing `test/integration/` |
-| `test/integration/` (EXISTING) | Existing regression tests, thin wrappers over harness | `test/harness/` |
-| `test/oracle/protocol/` | MCP init, tool listing, session isolation, reconnect | `test/harness/` |
-| `test/oracle/contract/` | Per-tool input/output contracts, schema validation, error shapes | `test/harness/` + `testdata/oracle/contracts/` goldens |
-| `test/oracle/scenario/` | Data-driven multi-step scenarios from YAML | `test/harness/` + `testdata/oracle/scenarios/` YAML |
-| `test/oracle/behavioral/` | LLM tool selection, disambiguation, output interpretation | Claude API + `testdata/oracle/behavioral/` |
-| `test/oracle/judge/` | LLM-as-judge scoring with structured rubrics | Claude API + `testdata/oracle/judge/rubrics/` |
-| `testdata/fixtures/` | Repository fixtures (code to test against) | `PrepareFixture()` in harness |
-| `testdata/oracle/` | Golden files, scenarios, rubrics | Oracle layers read these |
+| `internal/kernel/tagger/` | Tree-sitter tag extraction (def/ref) using embedded .scm queries. Language-agnostic query runner. | tagcache (writes tags), repomap (provides tags) |
+| `internal/kernel/tagcache/` | SQLite cache for per-file tags with mtime-based invalidation. Separate DB from memory index. | tagger (stores results), repomap (reads cached tags) |
+| `internal/kernel/repomap/` | PageRank graph construction, ranking, token-budgeted map rendering. Two MCP tools. | tagger, tagcache, lspool (optional LSP enrichment) |
+| `internal/kernel/fuzzy/` | Whitespace-normalized matching, diff-match-patch fuzzy application. Pure functions, no state. | edit (called as fallback), fileops (called as fallback) |
 
 ### Data Flow
 
+#### RepoMap Data Flow
+
 ```
-                    YAML Scenarios
-                         |
-                         v
-  +-----------+    +-----------+    +----------------+
-  | Fixture   | -> | Harness   | -> | Oracle Layer   |
-  | (testdata)|    | (test/    |    | (protocol/     |
-  |           |    | harness/) |    |  contract/     |
-  |           |    |           |    |  scenario)     |
-  +-----------+    +-----------+    +----------------+
-                         |                  |
-                         v                  v
-                   +----------+     +---------------+
-                   | MCP      |     | Golden Files  |
-                   | Session  |     | (testdata/    |
-                   | (tool    |     |  oracle/)     |
-                   | calls)   |     +---------------+
-                   +----------+
-                         |
-            +------------+------------+
-            |                         |
-            v                         v
-  +------------------+    +-------------------+
-  | LLM Behavioral   |    | LLM Judge         |
-  | (Claude API,     |    | (structured       |
-  |  //go:build      |    |  rubric scoring,  |
-  |  llmtest)        |    |  //go:build       |
-  +------------------+    |  llmjudge)        |
-                          +-------------------+
+1. Tool invocation (get_repo_map / get_context)
+2. repomap.Builder collects file list from workspace root
+3. For each file:
+   a. tagcache.Get(path) -- check mtime, return cached if fresh
+   b. On cache miss: tagger.Extract(path, lang) -- tree-sitter parse + query
+   c. tagcache.Put(path, mtime, tags) -- persist
+4. Build MultiDiGraph: files as nodes, def->ref edges with weights
+5. Run PageRank with personalization (chat files, mentioned idents)
+6. Render ranked tags into token-budgeted tree output
+7. Return as MCP tool result
 ```
 
-## Critical Prerequisite: Harness Extraction (Pattern 0)
+#### Fuzzy Edit Data Flow
 
-The existing `test/integration/` uses `package integration_test` (external test package). External test packages CANNOT be imported by other packages. The helpers (`StartTestDaemon`, `PrepareFixture`, `callTool`, etc.) must be importable by oracle layers.
+```
+1. Existing tool invoked (replace_symbol_body, replace_content)
+2. Exact match attempted first (current behavior)
+3. On exact match failure:
+   a. fuzzy.NormalizeWhitespace(search, original)
+   b. Attempt normalized exact match
+   c. On failure: fuzzy.DiffMatchPatch(search, replace, original)
+   d. Return result with strategy annotation ("exact" | "normalized" | "fuzzy")
+4. Standalone fuzzy_edit tool: always runs full fuzzy pipeline
+```
 
-**Solution:** Create `test/harness/` as `package harness` (proper importable package). Move shared infrastructure there. Existing `test/integration/` becomes a thin consumer that imports `test/harness/`.
+## Integration Decisions
 
-**Migration path:**
-1. Create `test/harness/` with the shared types and functions.
-2. Update `test/integration/*_test.go` to import from `test/harness/`.
-3. All existing tests must pass unchanged.
-4. Oracle layers import `test/harness/` directly.
+### Q1: Where does the tag/symbol cache live?
 
-**Build tag consideration:** The existing harness files all have `//go:build integration`. The extracted `test/harness/` should also use `//go:build integration` because oracle tests should never compile without that tag active. LLM layers (build tags `llmtest`/`llmjudge`) should use `integration || llmtest || llmjudge` to also compile the harness, OR the harness should have NO build tag and rely on consumers to be tag-gated. The latter is simpler and matches Go convention (importable packages are unconditionally compilable; consumers control when they compile).
+**Decision: New separate SQLite database, NOT the existing memory DB.**
 
-**Recommendation:** `test/harness/` has NO build tags. It is a library. Consumers (`test/integration/`, `test/oracle/*/`) each have their own build tags.
+Rationale:
+- The memory DB (`internal/memory/`) stores user-authored markdown with FTS5 search. Its schema, lifecycle, and watcher are designed for human-written content.
+- The tag cache stores machine-generated data (tree-sitter tag extractions) that is fully rebuildable from source. Different schema: `(file_path, mtime, language, tags_blob)` vs memory's `(name, scope, topic, content, ...)`.
+- Separate DBs means the tag cache can be blown away without affecting user memories.
+- The memory DB uses `modernc.org/sqlite` (CGO-free) -- reuse the same driver, different file.
+- Cache location: `{workspace_root}/.serena/tags.db` (project-scoped, gitignored).
+
+Schema:
+```sql
+CREATE TABLE tags (
+    file_path TEXT PRIMARY KEY,
+    mtime     REAL NOT NULL,
+    language  TEXT NOT NULL,
+    tags      BLOB NOT NULL  -- gob-encoded []Tag
+);
+CREATE INDEX idx_tags_mtime ON tags(mtime);
+```
+
+Follow the same patterns as `internal/memory/index.go`: WAL mode, busy_timeout, mutex-protected access.
+
+### Q2: How does the PageRank graph interact with the LSP worker pool?
+
+**Decision: Tree-sitter first, LSP enrichment optional and lazy.**
+
+The PageRank graph is built entirely from tree-sitter tags (definitions and references), NOT from LSP. This is critical because:
+
+1. **LSP workers are expensive.** The pool has adaptive TTL, circuit breaking, and pressure eviction. Scanning hundreds of files through LSP would flood the pool.
+2. **Tree-sitter is fast and stateless.** Parsing a file takes microseconds, no server startup, no initialization handshake.
+3. **Aider's repomap.py does exactly this.** It uses tree-sitter queries for all tag extraction, with pygments as a fallback for languages where tree-sitter only provides defs (not refs). No LSP involvement.
+
+The LSP pool interaction is limited to:
+- **Optional hover enrichment:** When rendering the map, if an LSP worker is already warm (clean lease available without spin-up), we can enrich symbol entries with type signatures from `textDocument/hover`. This is a quality-of-life improvement, not a requirement.
+- **The existing `symbols/overview.go` tool** provides LSP-based symbol listing. RepoMap complements it with cross-file importance ranking, not replaces it.
+
+Implementation: `repomap.Builder` takes `*lspool.Pool` as an optional dependency. If nil or if lease acquisition fails/times out (100ms deadline), skip enrichment silently.
+
+### Q3: Should tree-sitter queries (.scm files) be embedded or external?
+
+**Decision: Embedded via `//go:embed`, with runtime override path.**
+
+Rationale:
+- Aider ships ~58 `.scm` query files across two directories (31 in tree-sitter-language-pack, 27 in tree-sitter-languages). These are the authoritative tag queries for each language.
+- Embedding via `//go:embed` is the Go-native approach (used for the language registry YAML).
+- Keeps single-binary distribution constraint satisfied.
+- Runtime override: if `{workspace_root}/.serena/queries/{lang}-tags.scm` exists, use it instead. Allows users to customize tag extraction without rebuilding.
+
+The existing `internal/kernel/edit/queries/` directory has 4 `.scm` files for body extraction (different purpose: `@name` + `@body` captures). The tag queries use different capture names (`@name.definition.function`, `@name.reference.call`, etc.). These are separate query sets serving different purposes:
+
+| Query Set | Location | Captures | Purpose |
+|-----------|----------|----------|---------|
+| Body extraction | `internal/kernel/edit/queries/` | `@name`, `@body` | Precise byte-range for body surgery |
+| Tag extraction | `internal/kernel/tagger/queries/` | `@name.definition.*`, `@name.reference.*` | Def/ref identification for graph |
+
+Port the aider `.scm` files from `borrow/aider/aider/queries/tree-sitter-language-pack/` into `internal/kernel/tagger/queries/`. Start with the 4 languages that have tree-sitter grammars compiled in (Go, Python, TypeScript, Rust), expand later.
+
+### Q4: Where does the fuzzy edit logic sit?
+
+**Decision: New `internal/kernel/fuzzy/` package, consumed by both `edit/` and `fileops/`.**
+
+Rationale:
+- The fuzzy matching logic is **pure functions** operating on strings. No state, no LSP, no file I/O.
+- Both `edit/replace.go` (symbol body replacement) and `fileops/replace.go` (content replacement) need fuzzy fallback.
+- Putting it in `edit/` would force `fileops/` to import `edit/` (wrong dependency direction).
+- Putting it in `fileops/` would force `edit/` to import `fileops/` (wrong dependency direction).
+- A shared `fuzzy/` package at the kernel level is the clean solution.
+
+The `fuzzy/` package provides:
+```go
+package fuzzy
+
+// MatchResult describes how a match was found.
+type MatchResult struct {
+    Strategy   string  // "exact", "normalized", "fuzzy"
+    NewText    string  // the result after applying replacement
+    Confidence float64 // 0.0-1.0, from DMP match quality
+}
+
+// NormalizeAndMatch attempts whitespace-normalized exact match.
+func NormalizeAndMatch(search, original string) (start, end int, ok bool)
+
+// FuzzyReplace applies search->replace transformation to original using DMP.
+func FuzzyReplace(search, replace, original string) (*MatchResult, error)
+
+// FlexibleReplace tries exact, then normalized, then DMP fuzzy matching.
+// This is the main entry point for both edit/ and fileops/.
+func FlexibleReplace(search, replace, original string) (*MatchResult, error)
+```
+
+Integration points:
+- `edit/replace.go` `ReplaceBodyWithPlan()`: After tree-sitter body extraction, if the new body doesn't compile, try fuzzy matching the old body against what tree-sitter found.
+- `fileops/replace.go` `ReplaceInFile()`: When exact match returns 0 hits, fall back to `fuzzy.FlexibleReplace()`.
+- New standalone MCP tool `fuzzy_edit` registered in `edit/tools.go` (or its own file in `edit/`).
+
+### Q5: How to handle cache invalidation?
+
+**Decision: Mtime-based invalidation (like aider), NOT file watcher.**
+
+Rationale:
+- Aider's `repomap.py` uses `os.path.getmtime()` -- check mtime on cache read, re-extract on mismatch. Simple, correct, no daemon overhead.
+- The memory system uses fsnotify watcher because memories are edited infrequently and the index must be immediately consistent for search. Tags are different: they are queried in batch (hundreds of files per repomap call), and staleness of a few seconds is acceptable.
+- File watchers for the entire source tree would be expensive (inotify/kqueue limits, especially on large repos).
+- The mtime approach is lazy: only re-extract files that are actually queried AND have changed.
+- Matches the existing pattern in `edit/treesitter.go` where tree-sitter parses are done on-demand per file, not cached.
+
+Implementation in `tagcache/`:
+```go
+func (c *Cache) Get(filePath string) ([]Tag, bool) {
+    mtime := getMtime(filePath)
+    cached := c.lookup(filePath)
+    if cached != nil && cached.Mtime == mtime {
+        return cached.Tags, true  // cache hit
+    }
+    return nil, false  // cache miss, caller should re-extract
+}
+```
+
+The SQLite cache persists across daemon restarts. On cold start, the first repomap call re-validates mtimes but avoids re-parsing unchanged files. This is the same warm-cache benefit the LSP worker pool provides.
 
 ## Patterns to Follow
 
-### Pattern 1: YAML-Driven Scenario Files
+### Pattern 1: Kernel Tool Registration (existing pattern)
 
-**What:** Scenario definitions in YAML, loaded by a Go test runner that iterates them as subtests.
-
-**When:** Oracle Layer 3 (scenarios) -- multi-step tool call sequences with assertions.
-
-**Why:** Adding a new scenario requires only a YAML file, not Go code. This scales to hundreds of scenarios and enables non-Go-developers to contribute test cases. Go's `filepath.Glob` auto-discovers new YAML files.
-
-**Example YAML:**
-```yaml
-# testdata/oracle/scenarios/go_basic.yaml
-name: "Go basic symbol operations"
-fixture: "go"
-requires_ls: "gopls"
-steps:
-  - tool: "search_symbols"
-    args:
-      query: "Helper"
-    assert:
-      not_error: true
-      contains: "Helper"
-      min_lines: 1
-
-  - tool: "go_to_definition"
-    args:
-      path: "main.go"
-      line: 6
-      column: 1
-    assert:
-      not_error: true
-      contains: "main.go"
-
-  - tool: "get_symbol_overview"
-    args:
-      path: "main.go"
-    assert:
-      not_error: true
-      contains_all: ["Helper", "DemoStruct"]
-```
-
-**Example runner:**
-```go
-// test/oracle/scenario/runner.go
-//go:build integration && scenario
-
-package scenario
-
-import (
-    "os"
-    "path/filepath"
-    "testing"
-
-    "gopkg.in/yaml.v3"
-    "github.com/postfix/serena/test/harness"
-)
-
-type Scenario struct {
-    Name       string  `yaml:"name"`
-    Fixture    string  `yaml:"fixture"`
-    RequiresLS string  `yaml:"requires_ls"`
-    Steps      []Step  `yaml:"steps"`
-}
-
-type Step struct {
-    Tool   string         `yaml:"tool"`
-    Args   map[string]any `yaml:"args"`
-    Assert Assertion      `yaml:"assert"`
-}
-
-type Assertion struct {
-    NotError    bool     `yaml:"not_error"`
-    IsError     bool     `yaml:"is_error"`
-    Contains    string   `yaml:"contains"`
-    ContainsAll []string `yaml:"contains_all"`
-    MinLines    int      `yaml:"min_lines"`
-    Golden      string   `yaml:"golden"`
-}
-
-func RunScenario(t *testing.T, s Scenario) {
-    t.Helper()
-    if s.RequiresLS != "" {
-        harness.RequireLS(t, s.RequiresLS)
-    }
-    fixture := harness.PrepareFixture(t, s.Fixture)
-    td := harness.StartTestDaemon(t, harness.Options{WorkspaceDir: fixture})
-
-    for i, step := range s.Steps {
-        t.Run(fmt.Sprintf("step_%d_%s", i, step.Tool), func(t *testing.T) {
-            if step.Assert.IsError {
-                result := harness.CallToolExpectError(t, td.Session, step.Tool, step.Args)
-                applyAssertions(t, result, step.Assert)
-            } else {
-                result := harness.CallTool(t, td.Session, step.Tool, step.Args)
-                applyAssertions(t, result, step.Assert)
-            }
-        })
-    }
-}
-```
-
-### Pattern 2: Hierarchical Golden File Organization
-
-**What:** Golden files organized by `testdata/oracle/{layer}/{fixture-lang}/{tool}.golden` with auto-discovery.
-
-**When:** Scaling from 19 profile goldens to hundreds of contract/scenario goldens.
-
-**Why:** The existing flat `testdata/profiles/*.tools.golden` pattern works at 19 files but becomes unnavigable at 100+. Subdirectories per fixture language and per oracle layer keep things organized.
-
-**Naming convention:**
-```
-testdata/oracle/contracts/{lang}/{tool}.golden          # happy path
-testdata/oracle/contracts/{lang}/{tool}.{variant}.golden # variant
-testdata/oracle/contracts/error_shapes/{category}.golden # error shapes
-testdata/oracle/protocol/{aspect}.golden                 # protocol
-```
-
-**Update mechanism:** Extend the existing `-update` flag pattern. The flag is already wired as `flag.Bool("update", ...)` and checks `GOLDEN_UPDATE=1`. New oracle golden helpers respect the same flag.
-
-### Pattern 3: Build Tag Layering for CI Stages
-
-**What:** Multiple build tags control which oracle layers run, mapping to CI pipeline stages.
-
-**Tag design:**
-
-| Build Tag | Oracle Layers | What Runs |
-|-----------|--------------|-----------|
-| `integration` | Protocol + Contract (layers 1-2) | All deterministic non-LS tests |
-| `integration` + LS installed | Protocol + Contract with LS | Deterministic LS-dependent tests (skip if LS absent) |
-| `scenario` (implies `integration`) | Scenario (layer 3) | YAML-driven multi-step scenarios |
-| `llmtest` | Behavioral (layer 4) | Claude API tool selection tests |
-| `llmjudge` | Judge (layer 5) | Claude API judge scoring |
-
-**CI stage mapping:**
-
-```bash
-# Stage 1: Fast deterministic (protocol + contract, ~30s)
-go test -tags integration ./test/oracle/protocol/... ./test/oracle/contract/...
-
-# Stage 2: Scenarios (needs LS installed, ~2-5min)
-go test -tags "integration scenario" ./test/oracle/scenario/...
-
-# Stage 3: Race detection on deterministic + scenarios (~5-10min)
-go test -tags "integration scenario" -race ./test/oracle/...
-
-# Stage 4: LLM behavioral (needs ANTHROPIC_API_KEY, ~1-3min)
-go test -tags llmtest ./test/oracle/behavioral/...
-
-# Stage 5: Optional LLM judge (needs ANTHROPIC_API_KEY, ~2-5min)
-go test -tags llmjudge ./test/oracle/judge/...
-```
-
-**Stage dependency chain:**
-```
-Stage 1 (fast) -> Stage 2 (scenarios) -> Stage 3 (race)
-                                              |
-                                              v
-                                      Stage 4 (LLM behavioral)
-                                              |
-                                              v
-                                      Stage 5 (LLM judge, optional)
-```
-
-Stages 1-3 are blocking for merge. Stage 4 is informational (fail does not block). Stage 5 is optional/manual.
-
-### Pattern 4: Environment-Gated LLM Tests
-
-**What:** LLM tests gated by both build tag AND environment variable.
-
-**Why:** Build tags prevent compilation (no Claude SDK import in deterministic builds). Environment variable provides runtime skip when API key is absent. Double gating prevents accidental CI cost.
+New repomap tools follow the exact same pattern as `symbols/tools.go` and `edit/tools.go`:
 
 ```go
-//go:build llmtest
-
-package behavioral_test
-
-func TestToolSelection_SearchIntent(t *testing.T) {
-    apiKey := os.Getenv("ANTHROPIC_API_KEY")
-    if apiKey == "" {
-        t.Skip("ANTHROPIC_API_KEY not set")
-    }
-    // ... test with Claude API
+// internal/kernel/repomap/tools.go
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, builder *Builder, wsKeyFn func() workspace.WorkspaceKey) {
+    tracer := k.Tracer()
+    registerGetRepoMap(server, builder, wsKeyFn, tracer)
+    registerGetContext(server, builder, wsKeyFn, tracer)
 }
 ```
 
-### Pattern 5: Fixture Registry
+Registered in daemon bootstrap alongside existing kernel tools:
+```go
+// daemon.go step 10
+repomap.RegisterTools(mcpServer, k, repoBuilder, wsKeyFn)
+```
 
-**What:** A registry mapping fixture names to metadata (language, required LS binary, capabilities).
+### Pattern 2: Gob-Encoded Cache Values
 
-**When:** Scenario loader needs to know which LS to check for.
+Tags are serialized as gob-encoded blobs in SQLite, not as individual rows. This keeps the schema simple and avoids N*M row explosion (N files * M tags per file). The cache is an opaque key-value store, not a queryable index.
 
-**Why:** Avoids hardcoding `requireGopls`-style checks per test file. Scenarios declare `fixture: "go"` and the registry handles LS availability checks.
+### Pattern 3: Tiered Matching Strategy
+
+Both aider's `search_replace.py` and our `fuzzy/` package use a strategy cascade:
+1. Exact string match (fastest, highest confidence)
+2. Whitespace-normalized match (handles indentation drift)
+3. DMP fuzzy match (handles LLM output drift)
+
+Each strategy is tried in order; first success wins. The result reports which strategy succeeded for transparency.
+
+Aider's approach in `flexible_search_and_replace` iterates strategy/preprocessing combinations. We simplify: no git cherry-pick (too heavy, requires git), no relative indent preprocessing initially. Just exact -> normalized -> DMP.
+
+### Pattern 4: Token Budget Binary Search
+
+Aider's `get_ranked_tags_map_uncached` uses binary search to fit the map within `max_map_tokens`. Start with an estimate (`max_map_tokens // 25` tags), render, count tokens, adjust bounds. Replicate this approach.
+
+For token counting without a model dependency, use the 4-chars-per-token heuristic (`len(text) / 4`). This is sufficient for budget fitting.
+
+### Pattern 5: Skill Adapter for Profile Filtering
+
+RepoMap tools need to participate in profile/mode filtering. Follow the existing kernel-tool-as-skill-adapter pattern (like `edit/skill.go`, `symbols/skill.go`):
 
 ```go
-// test/harness/fixtures.go
-type FixtureMeta struct {
-    Name       string
-    Language   string
-    LSBinary   string   // e.g., "gopls", "pylsp"
-    Supports   []string // e.g., ["symbols", "edit", "diagnostics"]
-    Degraded   bool     // true for fixtures testing degraded behavior
+// internal/kernel/repomap/skill.go
+func init() {
+    skill.Register(&repomapSkill{})
 }
 
-var Fixtures = map[string]FixtureMeta{
-    "go":          {Name: "go", Language: "go", LSBinary: "gopls",
-                    Supports: []string{"symbols", "edit", "diagnostics"}},
-    "python":      {Name: "python", Language: "python", LSBinary: "pylsp",
-                    Supports: []string{"symbols", "diagnostics"}},
-    "typescript":  {Name: "typescript", Language: "typescript",
-                    LSBinary: "typescript-language-server",
-                    Supports: []string{"symbols", "edit", "diagnostics"}},
-    "polyglot":    {Name: "polyglot", Language: "multi", LSBinary: "",
-                    Supports: []string{"symbols"}},
-    "unsupported": {Name: "unsupported", Language: "brainfuck", LSBinary: "",
-                    Supports: []string{}},
-    "degraded":    {Name: "degraded", Language: "go", LSBinary: "gopls",
-                    Degraded: true},
-    "collisions":  {Name: "collisions", Language: "go", LSBinary: "gopls",
-                    Supports: []string{"symbols"}},
+type repomapSkill struct{}
+
+func (s *repomapSkill) Name() string        { return "repomap" }
+func (s *repomapSkill) Description() string  { return "Repository map and context selection" }
+func (s *repomapSkill) Init(deps skill.SkillDeps) error { return nil }
+func (s *repomapSkill) Tools() []*mcp.ToolDef {
+    return []*mcp.ToolDef{
+        {Name: "get_repo_map", Description: "..."},
+        {Name: "get_context", Description: "..."},
+    }
 }
-```
-
-### Pattern 6: Oracle Layer Independence
-
-**What:** Each oracle layer is a separate Go package with its own build tag. No oracle layer imports another oracle layer.
-
-**When:** Always. This prevents cascading failures and keeps build times predictable.
-
-**Why:** If the LLM behavioral layer imported scenario infrastructure directly, a broken scenario package would prevent LLM tests from compiling. Instead, shared infrastructure lives in `test/harness/` and each oracle layer imports only from there.
-
-```
-test/harness/     <-- shared foundation (no build tag)
-     ^    ^    ^
-     |    |    |
-     |    |    +-- test/oracle/protocol/   (//go:build integration)
-     |    +------- test/oracle/contract/   (//go:build integration)
-     |    +------- test/oracle/scenario/   (//go:build integration && scenario)
-     +------------ test/oracle/behavioral/ (//go:build llmtest)
-     +------------ test/oracle/judge/      (//go:build llmjudge)
 ```
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Monolithic Oracle Package
+### Anti-Pattern 1: LSP-First Tag Extraction
 
-**What:** All five oracle layers in a single `test/oracle/` package with conditional compilation.
+**What:** Using the LSP worker pool to extract tags for every file in the repo.
+**Why bad:** LSP workers are heavyweight (server process, initialization, memory). Scanning 500 files would require 500 `textDocument/documentSymbol` calls, potentially spinning up and killing workers. Aider explicitly avoids this.
+**Instead:** Tree-sitter-first for tags. LSP only for enrichment on already-warm workers.
 
-**Why bad:** Build tag interactions become unpredictable. LLM dependencies leak into deterministic test compilation. `go test -tags integration ./test/oracle/...` would try to compile LLM code.
+### Anti-Pattern 2: Shared Database with Memory System
 
-**Instead:** Separate sub-packages per oracle layer.
+**What:** Adding tag tables to the existing `internal/memory/` SQLite DB.
+**Why bad:** Different lifecycles (user content vs machine cache), different invalidation strategies (watcher vs mtime), different schemas. Coupling them means tag cache corruption could lose user memories.
+**Instead:** Separate SQLite file per workspace, rebuildable from source.
 
-### Anti-Pattern 2: Duplicating Harness Code
+### Anti-Pattern 3: File Watcher for Tag Cache
 
-**What:** Copying `StartTestDaemon` into oracle packages.
+**What:** Using fsnotify to watch the entire source tree and invalidate tags on change.
+**Why bad:** inotify/kqueue limits (default 8192 on Linux), high overhead on large repos, race conditions with rapid saves, and the daemon already watches memory dirs. Adding another watcher for potentially thousands of source files is expensive.
+**Instead:** Mtime-based lazy invalidation on cache read.
 
-**Why bad:** Two sources of truth for daemon lifecycle. Harness changes don't propagate.
+### Anti-Pattern 4: Fuzzy Logic in Edit Tool Handlers
 
-**Instead:** Extract to `test/harness/` and import.
+**What:** Inlining fuzzy matching logic directly in `edit/tools.go` handlers.
+**Why bad:** Creates code duplication when `fileops/replace.go` needs the same logic. Makes the fuzzy logic untestable in isolation. Mixes concerns.
+**Instead:** `fuzzy/` package with pure functions, consumed by both `edit/` and `fileops/`.
 
-### Anti-Pattern 3: Exact String Matching in YAML Scenarios
+### Anti-Pattern 5: Full Graph Library Dependency
 
-**What:** Putting exact expected output strings in scenario YAML files.
+**What:** Using a full graph library (Go equivalent of networkx) for PageRank.
+**Why bad:** The RepoMap graph is a simple weighted MultiDiGraph with one algorithm (PageRank). A full graph library adds dependency weight for no benefit. Aider uses networkx because it is Python-standard; in Go there is no equivalent standard.
+**Instead:** Use `github.com/alixaxel/pagerank` (weighted PageRank, ~200 LOC, zero deps) or implement PageRank directly (~50 LOC). The graph construction is specific to our tag data structures anyway.
 
-**Why bad:** Expected outputs change with LS versions, formatting. YAML becomes fragile.
+### Anti-Pattern 6: Git-Based Fuzzy Editing
 
-**Instead:** Use assertion types (contains, min_lines, not_error, golden file reference). Reserve exact matching for golden files which have the `-update` workflow.
+**What:** Porting aider's `git_cherry_pick_osr_onto_o` strategy that creates temporary git repos.
+**Why bad:** Requires git binary, creates temp directories, extremely slow per operation (~100ms+). Aider uses it as a last resort. For an MCP tool called in tight loops, this is unacceptable.
+**Instead:** DMP-only fuzzy matching. If DMP fails, report failure and let the agent retry with better input.
 
-### Anti-Pattern 4: LLM Tests Blocking Deterministic CI
+## New Dependencies
 
-**What:** Running LLM tests in the same CI job as protocol/contract tests.
+| Package | Version | Purpose | Why This One |
+|---------|---------|---------|-------------|
+| `github.com/alixaxel/pagerank` | latest | Weighted PageRank computation | Minimal, zero-dep, weighted edges, ~200 LOC |
+| `github.com/sergi/go-diff` | v1.3+ | diff-match-patch for fuzzy editing | Go port of Google's DMP, MIT licensed, mature |
+| `modernc.org/sqlite` | (existing) | Tag cache DB | Already in go.mod for memory FTS5 |
+| `github.com/tree-sitter/go-tree-sitter` | (existing) | Tag extraction parser | Already in go.mod for body extraction |
 
-**Why bad:** API failures, rate limits, or cost spikes block feedback on deterministic tests.
+No new tree-sitter grammar bindings needed initially -- Go, Python, TypeScript, Rust are already compiled in. Additional grammars can be added incrementally.
 
-**Instead:** Separate CI stages. LLM stages are informational/optional.
+## New Files and Modified Files
 
-### Anti-Pattern 5: Golden Files Without `-update` Workflow
+### New Packages
 
-**What:** Golden files that must be manually edited when expectations change.
+| Package | Files | Purpose |
+|---------|-------|---------|
+| `internal/kernel/tagger/` | `tagger.go`, `queries.go`, `tagger_test.go` | Tag extraction with embedded .scm queries |
+| `internal/kernel/tagger/queries/` | `go-tags.scm`, `python-tags.scm`, `typescript-tags.scm`, `rust-tags.scm` | Embedded tree-sitter tag queries (ported from aider) |
+| `internal/kernel/tagcache/` | `cache.go`, `schema.go`, `cache_test.go` | SQLite tag cache with mtime invalidation |
+| `internal/kernel/repomap/` | `builder.go`, `graph.go`, `render.go`, `tools.go`, `skill.go`, `repomap_test.go` | PageRank graph, map rendering, MCP tools |
+| `internal/kernel/fuzzy/` | `match.go`, `dmp.go`, `normalize.go`, `fuzzy_test.go` | Fuzzy matching strategies, DMP wrapper |
 
-**Why bad:** At hundreds of files, manual edits are error-prone and demoralizing.
+### Modified Files
 
-**Instead:** Every golden regenerable via `go test -tags "integration scenario" ./test/oracle/... -update`.
+| File | Change |
+|------|--------|
+| `internal/kernel/edit/replace.go` | Add fuzzy fallback in `ReplaceBodyWithPlan()` when exact match fails |
+| `internal/kernel/edit/tools.go` | Add `fuzzy_edit` standalone tool registration |
+| `internal/kernel/fileops/replace.go` | Add fuzzy fallback in `ReplaceInFile()` when exact match returns 0 |
+| `internal/daemon/daemon.go` | Wire tagcache, tagger, repomap builder; register repomap tools (after step 10) |
+| `internal/daemon/imports.go` | Add blank import for repomap skill adapter |
+| `go.mod` / `go.sum` | Add `alixaxel/pagerank`, `sergi/go-diff` |
 
-### Anti-Pattern 6: Sharing Daemon Instances Across Oracle Layers
+## Build Order (Dependency-Driven)
 
-**What:** One `TestMain`-scoped daemon serving all oracle tests to "save startup time."
+```
+Phase 1: Foundation (no deps on each other)
+  1a. internal/kernel/fuzzy/       -- pure functions, testable in isolation
+  1b. internal/kernel/tagger/      -- tree-sitter queries, needs only go-tree-sitter (existing)
 
-**Why bad:** Cross-contamination between test cases. One test's workspace activation affects another's. The existing pattern of per-test `StartTestDaemon` with `t.Cleanup(td.Stop)` is correct.
+Phase 2: Cache (depends on tagger types)
+  2.  internal/kernel/tagcache/    -- SQLite cache, depends on tagger.Tag type
 
-**Instead:** Each test case gets its own daemon. The startup cost (~10ms without LS) is negligible for protocol/contract tests. For scenario tests with LS, share per-scenario (one daemon per YAML file, not per step).
+Phase 3: RepoMap (depends on tagger, tagcache)
+  3.  internal/kernel/repomap/     -- graph + ranking + rendering + MCP tools
 
-## Integration Points with Existing Architecture
-
-### What Stays Unchanged
-
-| Component | Status | Rationale |
-|-----------|--------|-----------|
-| `test/integration/*_test.go` | Keep all tests | Existing regression coverage; v1.4 adds, not replaces |
-| `test/bench/` | Untouched | Benchmarks orthogonal to oracle layers |
-| `testdata/fixtures/{go,python,typescript,java,rust}/` | Keep as-is | Reused by scenario oracle |
-| `testdata/profiles/*.tools.golden` | Keep as-is | Profile contract goldens remain |
-| `//go:build integration` tag | Keep | Foundation tag for all deterministic tests |
-
-### What Gets Modified
-
-| Component | Change | Rationale |
-|-----------|--------|-----------|
-| `test/integration/harness.go` | Functions duplicated to `test/harness/`; original becomes thin import wrapper OR stays as-is if oracle layers import harness directly | Enable oracle layer imports |
-| `test/integration/golden.go` | Core logic moves to `test/harness/golden.go`; extended with hierarchical support | Shared golden infrastructure |
-| `test/integration/helpers.go` | Core logic moves to `test/harness/helpers.go` | Shared helper functions |
-| `Makefile` | Add targets: `test-oracle`, `test-scenario`, `test-llm` | Developer convenience |
-
-### What Gets Created
-
-| Component | Purpose |
-|-----------|---------|
-| `test/harness/` | Importable test infrastructure package |
-| `test/oracle/{protocol,contract,scenario,behavioral,judge}/` | Five oracle layer packages |
-| `testdata/fixtures/{polyglot,unsupported,degraded,collisions}/` | New fixture repositories |
-| `testdata/oracle/{protocol,contracts,scenarios,behavioral,judge}/` | Oracle-specific test data |
-
-## Build Order
-
-Dependencies between oracle layers dictate strict build order:
-
-### Phase 0: Harness Extraction (prerequisite)
-
-Extract `test/harness/` from `test/integration/`. Mechanical refactor. All existing tests pass unchanged.
-
-- **Input:** Existing `test/integration/{harness,golden,helpers}.go`
-- **Output:** `test/harness/` importable package
-- **Depends on:** Nothing
-- **Blocks:** Everything else
-- **Risk:** LOW -- pure refactor, no behavioral change
-
-### Phase 1: Protocol Oracle (Layer 1)
-
-MCP init sequence, tool listing shape, session isolation, reconnect. No LS needed (SkipLS: true). Fast, deterministic.
-
-- **Tests:** Init handshake fields, tool list schema, session state after reconnect
-- **Depends on:** Phase 0
-- **Blocks:** Nothing directly (validates infrastructure)
-- **Risk:** LOW -- no LS dependency
-
-### Phase 2: New Fixtures + Fixture Registry
-
-Create polyglot, unsupported, degraded, collision fixtures. Build fixture registry in `test/harness/`.
-
-- **Output:** 4 new `testdata/fixtures/` directories + `test/harness/fixtures.go`
-- **Depends on:** Phase 0
-- **Blocks:** Phase 4 (scenarios need fixtures)
-- **Risk:** LOW for fixture creation, MEDIUM for polyglot fixture design (needs multiple language files in one repo)
-
-### Phase 3: Contract Oracle (Layer 2)
-
-Per-tool golden contracts. Start with Go fixture + gopls. One golden per tool per fixture language. Error shape goldens.
-
-- **Tests:** Each tool's output against golden file, error response shapes
-- **Golden files:** `testdata/oracle/contracts/{lang}/{tool}.golden`
-- **Depends on:** Phase 0, Phase 1 (infrastructure confidence)
-- **Blocks:** Phase 4 (scenarios build on contract assertion patterns)
-- **Risk:** MEDIUM -- golden file content depends on LS version; needs `-update` workflow from day 1
-
-### Phase 4: Scenario Oracle (Layer 3)
-
-YAML-driven scenarios. Loader, runner, assertion engine. Fixture registry integration. `scenario` build tag.
-
-- **Tests:** Multi-step tool call sequences from YAML, cross-fixture scenarios
-- **Depends on:** Phase 2 (fixtures), Phase 3 (assertion patterns)
-- **Blocks:** Phase 6 (LLM behavioral reuses scenario infrastructure for setup)
-- **Risk:** MEDIUM -- YAML schema design is the critical decision
-
-### Phase 5: CI Pipeline
-
-GitHub Actions workflow with 5 stages. Wire build tags to stages. Define pass/fail criteria.
-
-- **Output:** `.github/workflows/oracle.yml`
-- **Depends on:** Phases 1-4 (deterministic layers exist)
-- **Blocks:** Nothing (can be done incrementally)
-- **Risk:** LOW
-
-### Phase 6: LLM Behavioral Oracle (Layer 4)
-
-Claude API integration. Tool selection tests, disambiguation, output interpretation. `llmtest` build tag. Environment variable gating.
-
-- **Depends on:** Phase 4 (scenario setup infrastructure)
-- **Blocks:** Phase 7
-- **Risk:** MEDIUM -- non-deterministic outputs need statistical assertions (pass 4/5 runs)
-
-### Phase 7: LLM Judge Oracle (Layer 5)
-
-Structured rubric scoring. `llmjudge` build tag. Optional/informational only.
-
-- **Depends on:** Phase 6 (Claude client wrapper)
-- **Blocks:** Nothing
-- **Risk:** LOW -- purely optional/informational
+Phase 4: Integration (depends on fuzzy, repomap)
+  4a. Modify edit/replace.go       -- fuzzy fallback
+  4b. Modify fileops/replace.go    -- fuzzy fallback
+  4c. Add fuzzy_edit MCP tool      -- standalone tool
+  4d. Wire daemon bootstrap        -- tagcache, repomap builder
+```
 
 ## Scalability Considerations
 
-| Concern | At 19 goldens (current) | At 100 goldens | At 500+ goldens |
-|---------|------------------------|----------------|-----------------|
-| File organization | Flat directory works | Subdirectories by lang/layer needed | Auto-discovery essential |
-| Update workflow | Manual `-update` flag | Same flag, per-layer targeting | CI job that auto-updates on LS version bump |
-| CI runtime | ~30s | ~2min (parallel subtests) | ~5min (parallel + LS caching) |
-| Golden review | PR diff readable | Manageable with directory grouping | Consider golden diff summary tool |
-| Fixture management | 5 fixtures, manual | 10 fixtures, registry | Registry + CI matrix for LS versions |
+| Concern | At 100 files | At 10K files | At 100K files |
+|---------|-------------|-------------|--------------|
+| Tag extraction | <100ms, all in memory | 1-5s first scan, cached after | 10-30s first scan, SQLite cache critical |
+| PageRank | <10ms, trivial graph | 100-500ms, acceptable | 1-5s, may need graph pruning |
+| Tag cache DB size | <1MB | 10-50MB | 100-500MB, consider VACUUM schedule |
+| Token budget rendering | Instant | Binary search 5-10 iterations | Same, binary search is O(log n) |
+| Fuzzy DMP matching | <1ms per match | N/A (per-file, not per-repo) | N/A |
+
+For repos >50K files, consider:
+- Gitignore-aware file filtering (exclude `vendor/`, `node_modules/`, etc.)
+- Incremental graph updates (re-extract only changed files, rebuild graph)
+- Tag cache compaction on daemon startup
 
 ## Sources
 
-- Existing codebase: `test/integration/harness.go`, `golden.go`, `helpers.go`, `mode_golden_test.go`, `concurrency_test.go`, `errors_test.go` -- HIGH confidence (direct code read)
-- [Go Wiki: TableDrivenTests](https://go.dev/wiki/TableDrivenTests) -- HIGH confidence
-- [File-driven testing in Go - Eli Bendersky](https://eli.thegreenplace.net/2022/file-driven-testing-in-go/) -- HIGH confidence (auto-discovery pattern)
-- [Extending go test for LLM Evaluation - Mattermost](https://mattermost.com/blog/extending-go-test-for-llm-evaluation/) -- MEDIUM confidence (env-var gating pattern)
-- [Go build tags for CI - DEV Community](https://dev.to/enbis/how-to-use-build-tags-to-control-go-testing-with-a-gitlab-ci-use-case-584b) -- HIGH confidence
-- [Beyond Traditional Testing: Non-Deterministic Software - AWS](https://dev.to/aws/beyond-traditional-testing-addressing-the-challenges-of-non-deterministic-software-583a) -- MEDIUM confidence
-- [goldie - Golden file testing for Go](https://github.com/sebdah/goldie) -- HIGH confidence (pattern reference, not recommending as dependency)
+- [alixaxel/pagerank - Weighted PageRank in Go](https://github.com/alixaxel/pagerank) -- HIGH confidence (direct library)
+- [sergi/go-diff - Go port of diff-match-patch](https://github.com/sergi/go-diff) -- HIGH confidence (direct library)
+- Aider `repomap.py` (borrow/aider/aider/repomap.py) -- HIGH confidence (direct code read)
+- Aider `search_replace.py` (borrow/aider/aider/coders/search_replace.py) -- HIGH confidence (direct code read)
+- Existing codebase: `internal/kernel/edit/`, `internal/memory/`, `internal/skill/`, `internal/daemon/daemon.go` -- HIGH confidence (direct code read)

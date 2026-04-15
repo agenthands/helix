@@ -1,207 +1,215 @@
-# Feature Landscape: v1.4 Multi-Oracle Integration Test Harness
+# Feature Landscape
 
-**Domain:** Multi-oracle integration test harness for MCP/LSP code intelligence server
-**Researched:** 2026-04-11
-**Scope:** Only features needed for the v1.4 milestone. Existing v1.1 test infrastructure (InMemory + HTTP harness, 38-tool dogfooding, multi-language fixtures, 19 profile goldens, three-tier concurrency, three-band error coverage) is the baseline; this milestone extends it with protocol, contract, scenario, behavioral, and judge oracle layers.
+**Domain:** Codebase Context Intelligence & Resilient Editing for MCP Code Intelligence Platform
+**Researched:** 2026-04-15
+**Scope:** Only features needed for the v1.6 milestone. Existing v1.5 infrastructure (38+ MCP tools, 9 symbol retrieval, 6 symbol editing with tree-sitter body surgery, 6 file ops, 3 diagnostics, memory system, profiles/modes, typed error taxonomy) is the baseline. This milestone adds RepoMap context intelligence and fuzzy edit resilience.
 
 ## Table Stakes
 
-Features the test harness must have. Missing any of these means the multi-oracle architecture is incomplete.
+Features agents expect from a context intelligence / edit platform. Missing = agents fall back to brute-force file reading and fragile exact-match edits.
 
-### Protocol Compliance Testing
+### RepoMap / Codebase Context
 
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| MCP initialize/shutdown handshake tests | Protocol correctness is non-negotiable; Janix-ai/mcp-validator proves community demands this | Low | Existing InMemory + HTTP harness | Test capabilities negotiation, server info, protocol version in response. Both transports |
-| tools/list schema validation | Specmatic research shows MCP servers commonly lie about their schemas; must validate all 38 tool inputSchemas match actual accepted args | Medium | Existing harness, tool registry | Parse tools/list response, validate each tool's inputSchema is valid JSON Schema Draft 2020-12, cross-reference against actual tool acceptance |
-| Session isolation tests | Multiple clients must not see each other's state; critical for daemon model | Medium | Existing InMemory transport | Two concurrent sessions: activate different workspaces, verify tool results are scoped correctly |
-| Reconnect/session lifecycle tests | Daemon survives client disconnects; core value prop needs testing | Medium | Existing harness | Connect, call tool, disconnect, reconnect, verify warm cache still works. Test both clean and abrupt disconnect |
-| Error envelope shape validation | MCP spec defines error format; all errors must conform | Low | Existing error tests (30 cases) | Extend existing errCase to validate JSON-RPC error code, message structure, not just IsError bool |
+| Feature | Why Expected | Complexity | Dependencies (existing) | Notes |
+|---------|--------------|------------|------------------------|-------|
+| Structural overview (file -> symbols with signatures) | Aider proved this is the baseline expectation. Every coding agent needs a condensed view of what exists in a repo without reading every file. | Medium | `GetSymbolOverview` (LSP documentSymbol), tree-sitter grammars (Go/Python/TS/Rust) | Serena has per-file symbol overview. Gap is repo-wide aggregation with cross-file awareness |
+| Token budget control | Agents operate under strict context limits. Map must fit in N tokens. Aider defaults to 1K tokens, scales to 8K when no files selected. | Low | Token budget reporting already exists (`get_token_budget` tool) | Must be a tool parameter, not hardcoded. Agents need per-call budget control |
+| Ranked symbol importance | Without ranking, agents get alphabetical file dumps wasting context on leaf helpers. Aider's PageRank finds transitively-important symbols. Cursor uses embedding similarity. | High | Cross-file reference graph (new), graph ranking algorithm (new) | Core differentiator vs. `tree .` output. PageRank on def/ref graph is the proven approach (no embedding model needed) |
+| Incremental caching with mtime invalidation | Re-parsing entire repo on every call is too slow. Aider uses diskcache with mtime. Continue uses SQLite with tag_catalog. | Medium | modernc.org/sqlite (already a dependency), daemon lifecycle for cache persistence | Daemon architecture gives natural cross-session cache lifetime. Aider's cache is per-session |
+| Multi-language support | Serena targets 52 languages. RepoMap must work across all, not just 4 tree-sitter languages. | Medium | 52-language registry, LSP documentSymbol as fallback | Tree-sitter for fast path (languages with grammars + tags.scm queries), LSP documentSymbol for the rest |
 
-### Per-Tool Contract Testing
+### Fuzzy / Resilient Editing
 
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| Golden output files for all 38 tools | Existing 19 profile goldens prove the pattern works; extending to tool response shapes catches regression | Medium | Existing `golden.go`, `-update` flag infrastructure | One `.golden` per (tool, fixture, scenario) triple. Reuse assertGolden + updateGolden pattern. Focus on structural shape, not dynamic content (paths, timestamps) |
-| Response schema validation | Every tool response must match its declared output type (text content, structured data) | Medium | tools/list schema from protocol tests | Validate content type (text vs structured), field presence, nested structure. Use JSON Schema where structured output is declared |
-| Error shape assertions with categories | v1.1 uses IsError bool; v1.4 must assert error categories (no_workspace, not_found, invalid_args, timeout, circuit_open) | Low | Existing `errCase` + `runErrCases` | Extend errCase struct with expectedErrCode/expectedErrSubstring fields. Foundation for future typed errors (TODO(#typed-errors)) |
-| Idempotency contracts for read tools | Read tools (search_symbols, get_hover_info, etc.) must return identical results on repeated calls | Low | Existing tool tests | Call each read tool twice with same args, assert results match. Catches state leaks |
-
-### Data-Driven Scenario Matrix
-
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| YAML/Go-struct scenario definitions | Go table-driven pattern is standard; scenario files make the matrix reviewable and extensible | Medium | Existing table-driven patterns (errCase, symbols_test.go) | Each scenario: repo shape + tool sequence + expected outcomes. Go structs for type safety, YAML for large matrices |
-| 7+ repository shape fixtures | v1.1 has 5 language fixtures; v1.4 needs polyglot monorepo, unsupported-language, name collisions, empty/malformed repos | Medium | Existing `testdata/fixtures/` + `PrepareFixture()` | New fixtures: polyglot-monorepo (Go+Python+TS), unsupported-only (e.g., Fortran), symbol-collision (same names across files), degraded-no-ls (fixture where required LS is absent), empty-repo |
-| Cross-fixture tool coverage matrix | Every tool must be tested against every applicable fixture | Low | Scenario definitions + fixtures | Matrix of (tool x fixture x expected_outcome). Identifies coverage gaps during development |
-| Multi-step scenario composition | Test realistic agent workflows: activate -> search -> read -> edit -> verify | Medium | All individual tool contracts stable | 5-10 realistic workflows as scenarios. Each is a sequence of tool calls with intermediate assertions. Catches state leaks between operations |
-
-### Profile/Mode Contract Independence
-
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| Mode-gated behavior tests | v1.1 goldens validate tool lists; v1.4 must validate that read-mode blocks edit calls, admin grants all | Medium | 19 existing golden files, mode_golden_test.go | Call blocked tools, assert proper rejection. Call allowed tools, assert success. Test mode transition rules |
-| Profile-independent golden expectations | Golden files must be independent from runtime YAML to avoid self-approving bad changes | Low | Existing golden pattern (documented in D-01/D-02) | Already implemented in v1.1; v1.4 extends to tool response goldens with same independence principle |
-
-### Polyglot Correctness Testing
-
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| Cross-language honesty rules | Unique to Serena: verify no fake cross-language links, no silent omissions when LS is degraded | Medium | Multi-language fixtures, degraded-mode fixture | Test: when gopls absent, Go tools report degraded (not empty). When Python LS absent, no phantom Go symbols appear in Python fixture results |
-| Degraded mode reporting | When LS unavailable, tools must explicitly report degraded status, not silently return partial/empty results | Medium | Degraded-no-ls fixture, daemon bootstrap | Verify error messages contain actionable information (which LS missing, how to install). No silent failures |
-| Unsupported language handling | Tools called against unsupported language must fail clearly, not crash or hang | Low | Unsupported-only fixture | Test all tools against Fortran/COBOL fixture. Expect clean error, not panic |
-
-### CI Pipeline Staging
-
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| 5-stage pipeline definition | Mixed deterministic + non-deterministic tests need staging to prevent flaky-test fatigue and wasted CI budget | Medium | Existing bench.yml, pytest.yml | Stage 1: protocol+contract (always, fast). Stage 2: scenario matrix (always). Stage 3: -race concurrency (always). Stage 4: LLM behavioral (API-key gated). Stage 5: LLM judge (optional, report-only, never blocks merge) |
-| Build tag separation for test tiers | `//go:build integration` already exists; add tags for `llm` and `llmjudge` | Low | Existing build tag pattern | `//go:build llm` for behavioral tests, `//go:build llmjudge` for judge tests. CI stages select by tag |
-| API key gating for LLM stages | LLM tests must skip gracefully when ANTHROPIC_API_KEY (or equivalent) is absent | Low | LLM test infrastructure | `t.Skip("ANTHROPIC_API_KEY not set")` pattern. CI secret injection for authorized runs |
+| Feature | Why Expected | Complexity | Dependencies (existing) | Notes |
+|---------|--------------|------------|------------------------|-------|
+| Whitespace-normalized matching | LLMs routinely produce search blocks with wrong indentation. Every mature tool handles this (Aider, RooCode, Claude Code). | Low | None beyond string processing | Strip/normalize leading whitespace and re-compare. Most common LLM failure mode |
+| Multi-strategy fallback cascade | Exact -> whitespace-normalized -> fuzzy. Single-strategy systems fail 10-30% of the time on real LLM output. | Medium | Similarity algorithm (new) | Aider has 4 strategies (exact, whitespace, dotdotdots, fuzzy-disabled). RooCode has 9 strategies with Levenshtein. Start with 3-4 core strategies |
+| Indentation preservation on replacement | When fuzzy match succeeds, replacement must adopt the original file's indentation, not the LLM's. | Medium | Whitespace analysis of matched region | Critical for Python/YAML where indentation is semantic. RooCode captures original indent and re-applies relative structure |
+| Actionable error messages on match failure | When all strategies fail, return the closest match with similarity score and surrounding context. | Low | Similarity scoring from fuzzy matcher | Aider shows "did you mean this?" with context. Without this, agents retry blindly with the same broken search block |
+| Match uniqueness validation | If search text matches multiple locations, refuse the edit (ambiguous). Agent must provide more context. | Low | None | Prevents silent wrong-location edits. Every mature tool enforces this |
 
 ## Differentiators
 
-Features that set the test harness apart. Not expected in typical MCP server test suites, but high value for Serena.
+Features that set Serena apart. Not expected by agents, but high-value when present.
 
-| Feature | Value Proposition | Complexity | Depends On (v1.1) | Notes |
-|---------|-------------------|------------|-------------------|-------|
-| LLM behavioral tests (tool selection accuracy) | Proves Serena's tool descriptions are machine-readable: given a coding task, does the LLM pick the right tool? MCPAgentBench shows this is frontier research | High | All 38 tools registered, profile system | Present task descriptions to an LLM, check it selects correct tool(s). Test disambiguation (search_symbols vs find_references). Metrics: invocation accuracy, tool selection accuracy. Non-deterministic, gated CI stage |
-| LLM disambiguation tests | When multiple tools could apply, test that descriptions disambiguate correctly | High | LLM behavioral infrastructure | Pairs like (search_symbols vs get_symbol_overview), (find_references vs go_to_definition), (read_file vs get_hover_info). The LLM should choose correctly based on descriptions alone |
-| LLM output interpretation tests | Test that tool outputs are LLM-parseable: given a tool result, can the LLM extract the answer? | High | LLM behavioral infrastructure | Feed real tool outputs to LLM, ask structured questions about them. Validates output format is machine-friendly |
-| LLM-as-judge transcript scoring | Structured rubrics score end-to-end tool usage transcripts for quality (correctness, efficiency, completeness) | High | LLM behavioral tests producing transcripts | Point-wise rubric: Did agent use right tools? Avoid unnecessary calls? Interpret results correctly? 80-90% human agreement per Langfuse/Arize research. Never replaces deterministic assertions |
-| Rubric-based scoring dimensions | Separate scoring for: tool_selection, argument_correctness, result_interpretation, efficiency, error_handling | Medium | LLM judge infrastructure | Each dimension scored 1-5 with reasoning. Aggregated per-tool and per-scenario. Drift tracking over time |
-| Worker pool stress scenarios | Beyond v1.1's three-tier concurrency: sustained load with circuit breaker trips, pressure eviction, adaptive TTL | Medium | Existing concurrency_test.go | Scenarios: all workers busy + new request, circuit breaker open + recovery, memory pressure trigger, share-until-dirty under concurrent edits |
-| Degraded subsystem simulation | Selectively disable LS, memory, or skills to verify graceful degradation | Medium | Daemon bootstrap, fail-fast/degraded-optional split | Inject failures: LS not found, memory DB corrupt, skill init failure. Verify daemon starts, tools report degraded status, no panics |
-| Test coverage matrix report | Generate matrix showing (tool x fixture x scenario) coverage, identifying gaps | Low | Scenario + fixture infrastructure | Custom TestMain reporter or Go test output parser. Shows which tools lack polyglot coverage, which fixtures lack error cases |
-| Regression snapshot for LLM scores | Track LLM judge scores over time to detect tool description quality regressions | Medium | LLM judge producing scores | Store scores as JSON per commit. Alert when any dimension drops > 1 point. Non-blocking but informative |
+### RepoMap / Context Intelligence
+
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| Hybrid tree-sitter + LSP data source | Tree-sitter for fast structural extraction, LSP for semantic enrichment (type info, cross-file references) when the worker pool has warm sessions. No other tool combines both. | High | Existing LSP worker pool, existing tree-sitter BodyExtractor infrastructure | Aider is tree-sitter only. Cursor is embeddings only. Cody is search-API only. Serena can be both structural + semantic |
+| Task-focused context selection tool | Given a task description + file set, return the most relevant symbols ranked by relevance to that task. Personalized PageRank weighted toward the task's file set. | High | RepoMap graph + personalization weights | Aider does this via chat_fnames personalization. Expose as explicit MCP tool parameter. Separate tool from overview |
+| LSP-enriched reference graph | Use textDocument/references from warm LSP sessions to build more accurate cross-file edges than tree-sitter identifier matching alone. | High | Warm LSP pool sessions, existing reference resolution | Tree-sitter refs are approximate (name matching). LSP refs are precise (semantic). Use LSP when available, tree-sitter as baseline |
+| Daemon-persistent cache | RepoMap cache lives as long as the daemon, surviving client reconnects. First call builds, subsequent calls get instant results. | Low | Existing daemon lifecycle | Aider's cache is per-session (diskcache). Cursor requires re-indexing. Serena's daemon gives free cross-session persistence |
+| Scope-aware elided output | Show file structure with class/function signatures but elide bodies, using tree-sitter to determine exact scope boundaries. | Medium | Tree-sitter AST navigation | grep-ast style: show the "shape" of code without the bulk. Continue's repo-map provider does similar AST-based truncation |
+
+### Fuzzy Editing
+
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| Strategy reporting in tool response | Tell the agent which matching strategy succeeded (exact, whitespace-normalized, fuzzy@0.92). Builds agent trust and helps it calibrate future edits. | Low | Fuzzy matcher cascade | No other MCP tool reports this. Agents can learn to provide better search blocks |
+| Symbol-aware fuzzy matching | For replace_symbol_body: use tree-sitter to locate the symbol first, then fuzzy-match within its body. Bounded search = fewer false positives. | Medium | Existing BodyExtractor, fuzzy matcher | Combines Serena's existing tree-sitter body extraction with fuzzy matching. Unique to Serena |
+| Configurable similarity threshold | Let agents control the fuzzy threshold (default 0.8, range 0.6-1.0). Conservative agents use 0.95, aggressive agents use 0.7. | Low | Fuzzy matcher | RooCode does this (default 1.0, configurable down). Most tools hardcode the threshold |
+| Ellipsis/placeholder support | LLMs use `...` to indicate "unchanged code here". Parse and handle this in search blocks. | Medium | Block splitter, per-chunk matching | Aider implements try_dotdotdots(). Reduces token waste when agents only show changed portions |
+| Standalone fuzzy_edit MCP tool | Separate from existing symbol-aware tools. Raw text matching for when agents don't know or care about symbol boundaries. | Medium | Fuzzy matcher (shared with existing tools) | Complements replace_symbol_body (symbol-aware) with a text-level fallback. Lower barrier to use |
 
 ## Anti-Features
 
-Features to explicitly NOT build.
+Features to explicitly NOT build. Each has a reason tied to Serena's architecture or project constraints.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| LLM tests as merge gates | Non-deterministic, API-key dependent, expensive ($0.10-1.00/run), flaky by nature. Would destroy CI reliability | Run LLM tests in gated stage, report-only, never block merge. Only deterministic stages block |
-| Custom test framework / DSL | Go's testing package + testify is sufficient. Custom DSL adds learning curve and maintenance burden | Use table-driven Go tests with Go struct scenario definitions. YAML only for large data matrices |
-| Mock language servers | Mocking LSP defeats Serena's core purpose -- real LS integration is the value prop. Mocks pass while real servers fail | Use real language servers with fixture repos. Skip tests when LS not installed (existing `requireGopls` pattern) |
-| Snapshot testing for all tool outputs | Tool outputs contain timestamps, absolute paths, line numbers that change per environment. Snapshotting everything = constant golden churn | Use golden files only for stable outputs (tool lists, error shapes, response structure). Use structural assertions (contains, field presence, count) for dynamic outputs |
-| Vendoring external MCP validators | Janix-ai/mcp-validator is Python-based, covers different protocol versions, adds external dependency. Would add complexity without proportional value | Build Serena-specific protocol tests in Go, covering the MCP operations Serena actually uses. Simpler, faster, type-safe |
-| Fuzzing MCP inputs | Diminishing returns for a server consumed by trusted LLM clients, not adversarial web requests | Focus on contract testing with well-defined scenarios. Revisit if Serena ever faces untrusted input |
-| Cross-process daemon testing | Running daemon as separate process adds IPC complexity, port conflicts, cleanup headaches in CI | Continue using in-process `StartTestDaemon` pattern from v1.1. HTTP transport smoke covers wire format |
-| Full MCPAgentBench reproduction | Academic benchmark with 250+ tasks, custom sandbox, Docker orchestration. Overkill for validating 38 tools | Build targeted behavioral tests: 10-20 carefully chosen scenarios exercising Serena's actual tool descriptions and disambiguation edges |
-| Multiple LLM providers for judge | Running judge with GPT-4, Claude, Gemini for comparison adds 3x cost and complexity | Use single LLM (Claude Sonnet) as judge. Switch if needed. One provider gives consistent scoring baseline |
-| Human-in-the-loop test approval | Manual review gates for LLM test results block automation | LLM tests are fully automated with score thresholds. Human review only for score regressions flagged in PR comments |
+| Embedding/vector-based semantic search | Requires embedding model, vector DB, GPU or API dependency. Out of scope per PROJECT.md ("Augment Context Engine does this better"). Cursor's approach needs cloud infrastructure. | Structural graph ranking (PageRank on def/ref graph). Works offline, no model dependency, deterministic |
+| Knowledge graph / code graph | Explicit out-of-scope per PROJECT.md ("CodeGraphContext/GitNexus own this space"). | Symbol reference graph for ranking only. Not a queryable knowledge graph |
+| Git-aware context (blame, history, commit messages) | Out of scope per PROJECT.md ("GitHub MCP Server handles git comprehensively"). | RepoMap works on current file state only. Agents compose with git tools |
+| Natural language query over codebase | Requires embeddings or LLM-in-the-loop for retrieval. Serena is a tool provider, not a retrieval agent. | Structured tools: overview, search, references. Agent composes these |
+| Line-number-based edit addressing | Fragile. Lines shift between when agent reads file and when it edits. | Content-based matching (search text) and symbol-based matching (symbol name + body). Both are stable across reads |
+| apply_patch / unified diff format | Model-specific. GPT-5 codex models are trained on apply_patch; Claude is trained on old_string/new_string. Serena serves all agents via MCP. | search/replace with fuzzy fallback. Model-agnostic format that works for any LLM |
+| Full AST-aware diffing | Massive complexity for marginal gain over text-level fuzzy matching. Academic interest, not practical for MCP tools. | Tree-sitter for symbol location + body extraction. Text-level matching within located regions |
+| Multi-repository RepoMap | Cross-repo analysis adds massive complexity. Sourcegraph/Cody handles this at enterprise scale. | Single workspace scope. Agents can call RepoMap per-workspace if needed |
 
 ## Feature Dependencies
 
 ```
-Protocol compliance tests (no deps -- uses existing harness directly)
-    |
-    v
-Per-tool contract tests + golden outputs (needs protocol layer stable)
-    |
-    +---> Error shape assertions upgrade (extends existing errCase, parallel work)
-    |
-    +---> Profile/mode behavior tests (extends existing goldens, parallel work)
-    |
-    v
-Data-driven scenario matrix + new fixtures (needs contract tests as building blocks)
-    |
-    +---> Repository fixture management (parallel -- new fixtures feed scenarios)
-    |         |
-    |         +---> polyglot-monorepo fixture
-    |         +---> unsupported-only fixture
-    |         +---> symbol-collision fixture
-    |         +---> degraded-no-ls fixture
-    |         +---> empty-repo fixture
-    |
-    v
-Multi-step scenario composition (needs scenarios + fixtures stable)
-    |
-    v
-Polyglot honesty rules (needs multi-language fixtures + degraded simulation)
-    |
-    v
-Degraded subsystem simulation (needs polyglot honesty as validation layer)
-    |
-    v
-Build tags + CI stage 1-3 (needs all deterministic tests to exist)
-    |
-    v
-LLM behavioral tests -- tool selection + disambiguation (needs deterministic layers stable)
-    |
-    v
-LLM output interpretation tests (needs behavioral infra)
-    |
-    v
-LLM-as-judge transcript scoring + rubrics (needs behavioral test transcripts)
-    |
-    v
-5-stage CI pipeline complete (needs all test types to stage properly)
+Tree-sitter tag extraction (new: def/ref tags)
+  |-- Uses: existing tree-sitter infrastructure (BodyExtractor, 4 language grammars)
+  |-- Needs: tags.scm query files per language (new)
+  |-- Fallback: LSP documentSymbol (existing GetSymbolOverview)
+  v
+SQLite tag cache (new)
+  |-- Uses: existing modernc.org/sqlite dependency
+  |-- Uses: daemon lifecycle for persistence
+  v
+Cross-file reference graph (new)
+  |-- Built from: tag extraction (def/ref pairs)
+  |-- Enriched by: LSP textDocument/references (existing, optional)
+  v
+PageRank ranking algorithm (new)
+  |-- Input: reference graph
+  |-- Personalization: task files, mentioned symbols
+  v
+Token-budgeted output formatter (new)
+  |-- Input: ranked symbols
+  |-- Uses: tree-sitter for scope-aware elision
+  v
+RepoMap overview MCP tool (new)
+  |-- Aggregates: all above
+  |-- Parameters: workspace, token_budget
+  v
+RepoMap context selection MCP tool (new)
+  |-- Extends: overview with personalization weights
+  |-- Parameters: workspace, token_budget, task_files, task_description
+
+---
+
+Fuzzy matcher library (new, independent of RepoMap)
+  |-- Strategies: exact, whitespace-normalized, indentation-flexible, Levenshtein
+  |-- Includes: similarity scoring, indentation preserver, strategy reporter
+  v
+Integration into replace_symbol_body (augment existing)
+  |-- Uses: existing BodyExtractor for symbol location
+  |-- Adds: fuzzy matching within located body
+  v
+Integration into replace_content (augment existing)
+  |-- Uses: existing ReplaceInFile
+  |-- Adds: fuzzy fallback when exact/regex match fails
+  v
+Standalone fuzzy_edit MCP tool (new)
+  |-- Uses: fuzzy matcher library
+  |-- Registered: via existing skill/tool pattern
 ```
 
 ## MVP Recommendation
 
-Prioritize (first 2-3 phases of milestone):
+### Phase 1: Fuzzy Editing Foundation
+Build the fuzzy matching library first. Lower complexity than RepoMap, immediately useful in existing tools, and unblocks resilient editing across the board.
 
-1. **Protocol compliance tests** -- Foundation layer. Validates MCP session lifecycle, tool listing schema, session isolation, reconnect. Low risk, high value, existing harness supports it directly. ~400 LOC.
-2. **Per-tool contract tests with golden outputs** -- Extend existing golden infrastructure to cover all 38 tools' response shapes. Catches schema drift and regression. ~800 LOC.
-3. **Error shape assertions upgrade** -- Low-cost extension of existing errCase to assert error categories/codes, not just IsError bool. ~200 LOC.
-4. **Data-driven scenario matrix with new fixtures** -- YAML/struct-driven test cases across 7+ repository shapes. Reuses and extends existing table-driven patterns. ~600 LOC + fixture files.
-5. **Polyglot honesty rules** -- Medium complexity but unique to Serena's value proposition. Proves cross-language integrity. No fake links, no silent omissions. ~500 LOC.
-6. **Profile/mode behavior tests** -- Validate that mode gating actually works (read blocks edits, admin grants all). ~300 LOC.
+Prioritize:
+1. **Fuzzy matcher with 4-strategy cascade** - exact, whitespace-normalized, indentation-flexible, Levenshtein fuzzy (threshold 0.8). Well-understood algorithms, pure Go, no external dependencies
+2. **Indentation preservation** - capture original indent, compute relative indent from search/replace blocks, re-apply. Critical for Python/YAML correctness
+3. **Integration into replace_symbol_body and replace_content** - augment existing tools with fuzzy fallback. Clean integration points already exist in `edit/replace.go` and `fileops/replace.go`
+4. **Strategy reporting** - include `match_strategy` and `similarity_score` in tool response JSON
+5. **Standalone fuzzy_edit MCP tool** - expose raw fuzzy matching as its own tool. Follows existing `skill.Register` + `ToolProvider` pattern
 
-Defer to later phases:
+Defer: Ellipsis/placeholder support (medium complexity, add after core cascade is solid)
 
-- **LLM behavioral tests**: Phase 3+. Requires all deterministic layers stable first. Needs API key infrastructure, cost management, non-deterministic test handling. HIGH value but HIGH complexity and long dependency chain. ~800 LOC.
-- **LLM-as-judge scoring**: Phase 4+. Depends on behavioral tests existing and producing transcripts. Rubric design is research-heavy. Should never block earlier phases. ~600 LOC.
-- **Worker pool stress scenarios**: Can be built incrementally on existing concurrency tests. Not blocking for harness MVP.
-- **Test coverage matrix report**: Nice-to-have, build after the matrix exists to report on.
-- **LLM score regression tracking**: Only meaningful after several LLM test runs exist.
+### Phase 2: RepoMap Core
+Build the structural map with ranking.
 
-## Complexity Budget
+Prioritize:
+1. **Tree-sitter tag extraction** (def/ref) - extend existing tree-sitter infrastructure. Need tags.scm query files for Go/Python/TS/Rust (4 languages with existing grammars)
+2. **LSP documentSymbol fallback** - for the other 48 languages. Existing `GetSymbolOverview` provides the data, just need aggregation
+3. **SQLite tag cache with mtime invalidation** - leverage existing sqlite dependency. Store (file_path, mtime, tags_json)
+4. **Cross-file reference graph** - build directed graph from extracted tags. Nodes = files, edges = ref-file -> def-file
+5. **PageRank ranking** - implement personalized PageRank in pure Go (well-documented algorithm, ~100-200 lines)
+6. **Token-budgeted overview output** - render ranked symbols within budget. Iterate ranked files, accumulate tokens, stop at budget
+7. **RepoMap overview MCP tool** - expose as tool with `workspace`, `token_budget` parameters
 
-| Feature | Estimated LOC | New Test Files | New Fixtures | CI Changes |
-|---------|--------------|----------------|--------------|------------|
-| Protocol compliance | ~400 | 1 | 0 | 0 |
-| Per-tool contracts + goldens | ~800 | 1-2 | 0 (uses existing) | 0 |
-| Error shape upgrade | ~200 | 0 (extends existing) | 0 | 0 |
-| Scenario matrix + driver | ~600 | 1 + scenario data | 3-5 new fixture dirs | 0 |
-| Polyglot honesty | ~500 | 1 | 2 (degraded, collision) | 0 |
-| Profile/mode behavior | ~300 | 1 (extends existing) | 0 | 0 |
-| Build tags + CI stages 1-3 | ~100 | 0 (tag existing) | 0 | 1 workflow |
-| LLM behavioral | ~800 | 1-2 | 0 | 1 CI stage |
-| LLM judge + rubrics | ~600 | 1 | 0 | 1 CI stage |
-| CI pipeline (5-stage) | ~200 | 0 | 0 | 1 workflow |
-| **Total** | **~4,500** | **8-10 new files** | **5-7 new fixtures** | **2-3 CI files** |
+Defer: LSP reference enrichment (depends on warm pool state, add as optimization in Phase 3)
 
-## Dependencies on Existing v1.1 Test Infrastructure
+### Phase 3: Context Selection & Enrichment
+Build task-focused context selection on top of the map.
 
-| v1.1 Asset | How v1.4 Uses It | Extension Needed |
-|------------|------------------|-----------------|
-| `test/integration/harness.go` (StartTestDaemon, Options, TestDaemon) | Foundation for all v1.4 tests. Protocol, contract, scenario tests all start a TestDaemon | Add options for degraded-mode simulation (e.g., `DisableMemory`, `BlockLS`) |
-| `test/integration/golden.go` (assertGoldenTools, -update flag) | Pattern reused for tool response goldens | Generalize to `assertGolden(t, name, actual string)` beyond just tool lists |
-| `test/integration/harness.go` (PrepareFixture, projectRoot) | Fixture management for new repo shapes | No change needed; just add new fixture directories |
-| `testdata/fixtures/{go,python,typescript,java,rust}` | Baseline language fixtures | Add 5 new fixtures alongside existing ones |
-| `testdata/profiles/*.tools.golden` | Profile contract oracle | Extend pattern to `testdata/contracts/*.response.golden` for tool responses |
-| `test/integration/errors_test.go` (errCase, runErrCases) | Error testing pattern | Extend errCase struct with `expectedErrCode` and `expectedErrSubstring` |
-| `test/integration/helpers.go` (callTool, textContent) | Tool invocation helpers | No change needed |
-| `test/integration/concurrency_test.go` | Concurrency test baseline | Optional: add stress scenarios alongside |
-| `.github/workflows/bench.yml` | CI pipeline pattern | New workflow for integration test staging |
-| InMemory + HTTP transports | Both transport paths | Protocol compliance tests must cover both |
+Prioritize:
+1. **Task-focused context selection tool** - personalized PageRank weighted by task files/symbols. Separate MCP tool from overview
+2. **LSP reference enrichment** - use warm LSP sessions to improve graph accuracy when available
+3. **Scope-aware elided output** - show signatures without bodies using tree-sitter scope navigation
+4. **Ellipsis support in fuzzy edits** - add dotdotdots handling to the fuzzy matcher
+
+## Complexity Summary
+
+| Feature | Complexity | Effort (days) | Risk | Confidence |
+|---------|------------|---------------|------|------------|
+| Fuzzy matcher cascade (4 strategies) | Medium | 2-3 | Low - well-understood algorithms, pure Go | HIGH |
+| Indentation preservation | Medium | 1-2 | Medium - edge cases in mixed tabs/spaces, Python semantics | HIGH |
+| Fuzzy integration into existing tools | Low | 1 | Low - clean integration points exist (`replace.go`, `fileops/replace.go`) | HIGH |
+| Standalone fuzzy_edit tool | Low | 1 | Low - follows existing `skill.Register` + `ToolProvider` pattern | HIGH |
+| Strategy reporting | Low | 0.5 | Low - mechanical addition to tool response | HIGH |
+| Tree-sitter tag extraction (def/ref) | High | 3-4 | Medium - need tags.scm queries per language, different from body queries | MEDIUM |
+| LSP documentSymbol fallback for RepoMap | Low | 1 | Low - existing `GetSymbolOverview` provides the data | HIGH |
+| SQLite tag cache | Medium | 1-2 | Low - existing sqlite infrastructure, well-understood pattern | HIGH |
+| Cross-file reference graph | Medium | 2-3 | Medium - graph construction from tag pairs, handling identifier ambiguity | MEDIUM |
+| PageRank implementation (pure Go) | Medium | 2 | Low - well-documented algorithm (~150 LOC), no networkx needed | MEDIUM |
+| Token budget + output formatting | Medium | 2 | Low - mechanical, token counting is approximate (byte heuristic ok) | HIGH |
+| Task-focused context selection | Medium | 2 | Low - builds on existing graph + personalization weights | HIGH |
+| LSP reference enrichment | High | 2-3 | High - depends on warm pool state, partial availability, async enrichment | MEDIUM |
+| Scope-aware elided output | Medium | 2 | Medium - tree-sitter scope navigation for body elision | MEDIUM |
+| Ellipsis/placeholder support | Medium | 1-2 | Medium - block splitting, per-chunk matching, edge cases | MEDIUM |
+
+## Edge Cases and Known Difficulties
+
+### RepoMap Edge Cases
+- **Large monorepos (>10K files):** PageRank convergence time. Mitigation: limit iterations, use approximation
+- **Languages without tree-sitter grammars:** Fall back to LSP documentSymbol (slower, requires warm LS). 48 of 52 languages lack tree-sitter grammars currently
+- **Identifier collision across files:** `init()` in Go, `main()` everywhere. PageRank handles this naturally (common names get diluted importance)
+- **Generated code / vendored dependencies:** Must respect .gitignore and .serenaignore. Don't index node_modules, vendor/, generated .pb.go
+- **Cache invalidation on branch switch:** mtime changes for all files. Full re-index is acceptable (tree-sitter parsing is fast)
+
+### Fuzzy Editing Edge Cases
+- **Multiple equally-good matches:** Both exact and fuzzy can find >1 match. Must refuse ambiguous edits
+- **Very short search blocks (1-2 lines):** High false positive rate with fuzzy matching. Lower threshold or require exact match for short blocks
+- **Mixed tabs and spaces:** Whitespace normalization must handle tabs-to-spaces equivalence without destroying tab-indented files
+- **Unicode in identifiers:** SequenceMatcher/Levenshtein must work on rune-level, not byte-level
+- **Empty search block:** Insertion semantics, not replacement. Must be handled as special case
+- **LLM adds/removes trailing newlines:** Common failure. Normalize trailing whitespace before matching
+- **Search block from wrong file version:** Agent read file, file changed, agent sends stale search block. Fuzzy matching helps here naturally
+- **Python indentation as logic:** Fuzzy matching that changes indentation in Python can change program semantics. Extra caution needed
 
 ## Sources
 
-- [Janix-ai/mcp-validator](https://github.com/Janix-ai/mcp-validator) -- MCP protocol compliance testing reference, validates against 2025-06-18 spec
-- [Specmatic: MCP servers lying about schemas](https://specmatic.io/demonstration/exposed-mcp-servers-are-lying-about-their-schemas/) -- Motivation for schema validation of tool declarations
-- [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25) -- Protocol reference for compliance tests
-- [MCPAgentBench](https://arxiv.org/abs/2512.24565) -- LLM agent MCP tool use benchmark with tool selection metrics
-- [MCPVerse](https://arxiv.org/html/2508.16260v2) -- Expanded MCP benchmark covering Oracle/Standard/Max-Scale modes
-- [Langfuse LLM-as-judge](https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge) -- Judge patterns: point-wise scoring, rubric decomposition
-- [Arize LLM-as-judge](https://arize.com/llm-as-a-judge/) -- Production deployment patterns for observation-level evaluators
-- [Monte Carlo: LLM-as-Judge 7 Best Practices](https://www.montecarlodata.com/blog-llm-as-judge/) -- Criteria decomposition, bias mitigation, calibration
-- [Confident AI: LLM Agent Evaluation](https://www.confident-ai.com/blog/llm-agent-evaluation-complete-guide) -- Tool selection accuracy, invocation accuracy, retrieval accuracy metrics
-- [Go Wiki: TableDrivenTests](https://go.dev/wiki/TableDrivenTests) -- Canonical Go testing pattern
-- [Eli Bendersky: File-driven testing in Go](https://eli.thegreenplace.net/2022/file-driven-testing-in-go/) -- Golden file and data-driven patterns
-- [Parallel Table-Driven Tests in Go](https://www.glukhov.org/post/2025/12/parallel-table-driven-tests-in-go/) -- Loop variable capture, parallel subtest patterns
-- [Berkeley Function Calling Leaderboard (BFCL) V4](https://gorilla.cs.berkeley.edu/leaderboard.html) -- Tool calling accuracy benchmarks for LLMs
+- [Aider RepoMap: Building a better repository map with tree-sitter](https://aider.chat/2023/10/22/repomap.html) - Original design article
+- [Aider Repository Mapping System - DeepWiki](https://deepwiki.com/Aider-AI/aider/4.1-repository-mapping) - Technical deep-dive: RepoMap class, PageRank, caching, token budgets
+- [Aider Repository Map Documentation](https://aider.chat/docs/repomap.html) - Official docs: 130+ languages, configurable token budgets
+- [Aider Search and Replace Logic - DeepWiki](https://deepwiki.com/Aider-AI/aider/3.2-prompt-engineering-and-templates) - Strategy cascade: exact, whitespace, dotdotdots, fuzzy
+- [Code Surgery: How AI Assistants Make Precise Edits - Fabian Hertwig](https://fabianhertwig.com/blog/coding-assistants-file-edits/) - Cross-tool comparison: Aider, Codex, RooCode, Cursor edit strategies
+- [RooCode Search and Replace Strategy - DeepWiki](https://deepwiki.com/qpd-v/Roo-Code/6.2-search-and-replace-strategy) - 9 strategies, Levenshtein, middle-out search, indentation preservation
+- [How Cursor Actually Indexes Your Codebase - Towards Data Science](https://towardsdatascience.com/how-cursor-actually-indexes-your-codebase/) - Embedding-based chunking, Merkle tree, Turbopuffer vector DB
+- [Cursor Codebase Indexing Documentation](https://docs.cursor.com/context/codebase-indexing) - Official: semantic chunking, path obfuscation, local retrieval
+- [Continue.dev Codebase Indexing - DeepWiki](https://deepwiki.com/continuedev/continue/3.4-context-providers) - LanceDB, tree-sitter chunking, SQLite FTS5, code_snippets index
+- [Continue.dev Context Providers Documentation](https://docs.continue.dev/customize/context/codebase) - @codebase provider, repo-map provider, embeddings + keyword search
+- [Sourcegraph Cody Agentic Context Fetching](https://sourcegraph.com/docs/cody/capabilities/agentic-context-fetching) - Mini-agent using search + tools for context retrieval
+- [How Cody Understands Your Codebase - Sourcegraph](https://sourcegraph.com/blog/how-cody-understands-your-codebase) - RAG architecture, Search API, multi-repo support
+- [RepoMapper MCP Server - GitHub](https://github.com/pdavis68/RepoMapper) - Go-based MCP server implementing Aider's RepoMap pattern
+- [Context Engineering for Coding Agents - Martin Fowler](https://martinfowler.com/articles/exploring-gen-ai/context-engineering-coding-agents.html) - Selection, compression, ordering, isolation, format optimization
+- [Context Engineering: Infrastructure for AI Agents](https://arxiv.org/html/2602.20478v1) - Three-tier architecture: hot/domain/cold memory
+- [Claude Code Text Editor Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/text-editor-tool) - old_string/new_string format, no fuzzy matching built-in
+- [Claude Code Hash-Based Line Addressing Discussion](https://github.com/anthropics/claude-code/issues/25775) - Community discussion on improving edit reliability

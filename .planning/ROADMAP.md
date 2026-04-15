@@ -105,7 +105,13 @@
   3. Replacement text inherits the original file's indentation level when a fuzzy match succeeds, not the indentation from the agent's search block
   4. When the search text matches multiple locations in the file, the tool refuses the edit and reports the ambiguity instead of silently picking one
   5. Agent can use ellipsis/placeholder markers in search blocks to skip unchanged code sections, matching only the anchoring lines around the placeholder
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 25-01-PLAN.md — Types & Options (Strategy enum, Options, Result structs) [Wave 1]
+- [ ] 25-02-PLAN.md — Line splitter & ellipsis segmenter [Wave 2]
+- [ ] 25-03-PLAN.md — 4-strategy cascade sweeps (exact / whitespace / indent-flex) [Wave 2]
+- [ ] 25-04-PLAN.md — Indentation reflow (common-prefix dedent + reapply) [Wave 2]
+- [ ] 25-05-PLAN.md — Fail-with-diff + ambiguity formatters [Wave 2]
+- [ ] 25-06-PLAN.md — Cascade orchestrator + Match() entry point [Wave 3]
 
 ### Phase 26: Fuzzy Edit Integration
 **Goal**: Existing edit tools gracefully fall back to fuzzy matching when exact matching fails, and agents have a standalone fuzzy edit tool for arbitrary text operations

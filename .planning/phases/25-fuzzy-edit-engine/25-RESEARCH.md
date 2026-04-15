@@ -641,7 +641,7 @@ func failureError(search, nearest string) error {
 plan's structure. A5 is the highest-impact — see §Open Questions Q1 for the
 explicit decision we're deferring to Phase 26.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does Phase 26 pass the tree-sitter body substring or the whole file as `source` for `replace_symbol_body`?**
    - What we know: `internal/kernel/edit/replace.go:37-46` currently extracts
@@ -650,7 +650,7 @@ explicit decision we're deferring to Phase 26.
      `source[startByte:endByte]` (clean, engine stays local) or with the whole
      file + pre-computed anchor range (requires engine to know about a sub-range).
    - What's unclear: Phase 26's preference.
-   - Recommendation: **The engine's contract is "byte offsets in Result are
+   - **RESOLVED:** Recommendation: **The engine's contract is "byte offsets in Result are
      relative to the source string you passed."** This lets Phase 26 pass either
      shape and handle offset translation at the call site. Document this in
      `fuzzy.go` package doc comment. Phase 26 picks when it exists.
@@ -662,7 +662,7 @@ explicit decision we're deferring to Phase 26.
      (b) pick the first source window with any line matching the first search
      line, (c) just emit the first N lines of source.
    - What's unclear: CONTEXT.md doesn't specify.
-   - Recommendation: **Option (a)** — cheapest meaningful signal. Implementation:
+   - **RESOLVED:** Recommendation: **Option (a)** — cheapest meaningful signal. Implementation:
      during the indentation-flexible sweep, track `bestScore = max(linesMatching)`
      and `bestOffset`. If no strategy succeeds, `formatFailureDiff` uses
      `source[bestOffset:bestOffset+len(search)]` as `nearest`. If no lines matched
@@ -674,7 +674,7 @@ explicit decision we're deferring to Phase 26.
      `internal/kernel/edit/treesitter.go` exists and is used by Phase 26 callers,
      but `internal/fuzzy/` MUST NOT import it.
    - What's unclear: Nothing — this is locked.
-   - Recommendation: **No tree-sitter in Phase 25.** Enforced by keeping the
+   - **RESOLVED:** Recommendation: **No tree-sitter in Phase 25.** Enforced by keeping the
      import list to `strings`, `fmt`, `regexp`, `internal/errors`. The planner
      should reject any task that introduces `go-tree-sitter` imports.
 

@@ -1,10 +1,13 @@
 package lspool
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // CircuitBreaker implements decorrelated jitter backoff with restart budget
@@ -122,21 +125,21 @@ func (cb *CircuitBreaker) CanAttempt() bool {
 	return false
 }
 
-// CircuitOpenErr creates a typed CircuitOpenError from the current circuit
-// state. Thread-safe.
-func (cb *CircuitBreaker) CircuitOpenErr() *CircuitOpenError {
+// CircuitOpenErr creates a typed *serr.Error with Kind CircuitOpen from the
+// current circuit state. The former CircuitOpenError metadata (language,
+// failures, backoff, retry-after) is flattened into the Detail string per D-05.
+// Thread-safe.
+func (cb *CircuitBreaker) CircuitOpenErr() *serr.Error {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	remaining := cb.backoff - time.Since(cb.lastFailure)
 	if remaining < 0 {
 		remaining = 0
 	}
-	return &CircuitOpenError{
-		Language:         cb.language,
-		BackoffRemaining: remaining,
-		Failures:         cb.failures,
-		RetryAfter:       cb.lastFailure.Add(cb.backoff),
-	}
+	retryAfter := cb.lastFailure.Add(cb.backoff)
+	detail := fmt.Sprintf("language=%s failures=%d backoff_remaining=%s retry_after=%s",
+		cb.language, cb.failures, remaining.Round(time.Millisecond), retryAfter.Format(time.RFC3339))
+	return serr.New(serr.CircuitOpen, "circuit breaker open").WithDetail(detail)
 }
 
 // BackoffDuration returns the current backoff duration.

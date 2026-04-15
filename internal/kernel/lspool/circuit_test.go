@@ -5,37 +5,37 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 func TestCircuitOpenError_Fields(t *testing.T) {
-	now := time.Now()
-	e := &CircuitOpenError{
-		Language:         "go",
-		Failures:         3,
-		BackoffRemaining: 5 * time.Second,
-		RetryAfter:       now.Add(5 * time.Second),
-	}
+	e := serr.New(serr.CircuitOpen, "circuit breaker open").
+		WithDetail("language=go failures=3 backoff_remaining=5s retry_after=2026-01-01T00:00:00Z")
 	msg := e.Error()
-	if !containsStr(msg, "go") {
-		t.Errorf("error message should contain language, got: %s", msg)
+	if !containsStr(msg, "circuit_open") {
+		t.Errorf("error message should contain kind, got: %s", msg)
 	}
-	if !containsStr(msg, "3 failures") {
-		t.Errorf("error message should contain failure count, got: %s", msg)
+	if !containsStr(msg, "circuit breaker open") {
+		t.Errorf("error message should contain message, got: %s", msg)
+	}
+	if !containsStr(msg, "language=go") {
+		t.Errorf("error message should contain detail, got: %s", msg)
 	}
 }
 
 func TestCircuitOpenError_Is(t *testing.T) {
-	e := &CircuitOpenError{Language: "go", Failures: 1}
+	e := serr.New(serr.CircuitOpen, "circuit breaker open").WithDetail("language=go failures=1")
 	if !errors.Is(e, ErrCircuitOpen) {
-		t.Error("errors.Is(&CircuitOpenError{}, ErrCircuitOpen) should return true")
+		t.Error("errors.Is(serr.New(CircuitOpen, ...), ErrCircuitOpen) should return true")
 	}
 }
 
 func TestCircuitOpenError_Unwrap(t *testing.T) {
-	inner := &CircuitOpenError{Language: "rust", Failures: 2}
+	inner := serr.New(serr.CircuitOpen, "circuit breaker open").WithDetail("language=rust failures=2")
 	wrapped := fmt.Errorf("%w: extra context", inner)
 	if !errors.Is(wrapped, ErrCircuitOpen) {
-		t.Error("errors.Is on wrapped CircuitOpenError should still find ErrCircuitOpen")
+		t.Error("errors.Is on wrapped serr.Error with CircuitOpen should still find ErrCircuitOpen")
 	}
 	if !containsStr(wrapped.Error(), "extra context") {
 		t.Error("wrapped error should contain extra context")
@@ -144,6 +144,21 @@ func TestProbeResetOnFailure(t *testing.T) {
 	// New probe should be admitted.
 	if !cb.CanAttempt() {
 		t.Error("CanAttempt should succeed after failure reset and backoff expiry")
+	}
+}
+
+func TestCircuitOpenErr_ReturnsSerrError(t *testing.T) {
+	cb := NewCircuitBreaker("go", 10*time.Millisecond, 10, NoopSink{})
+	cb.RecordFailure()
+	e := cb.CircuitOpenErr()
+	if e.Kind != serr.CircuitOpen {
+		t.Errorf("expected Kind CircuitOpen, got %s", e.Kind)
+	}
+	if !errors.Is(e, ErrCircuitOpen) {
+		t.Error("CircuitOpenErr() result should match ErrCircuitOpen via errors.Is")
+	}
+	if !containsStr(e.Detail, "language=go") {
+		t.Errorf("detail should contain language, got: %s", e.Detail)
 	}
 }
 

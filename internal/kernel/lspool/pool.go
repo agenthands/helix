@@ -36,8 +36,6 @@ func DefaultPoolConfig() PoolConfig {
 // ErrMaxWorkersReached is returned when the pool has reached its maximum worker count.
 var ErrMaxWorkersReached = errors.New("maximum number of workers reached")
 
-// ErrCircuitOpen is returned when the circuit breaker prevents spawning a new worker.
-var ErrCircuitOpen = errors.New("circuit breaker is open; retry after backoff")
 
 // Pool manages a pool of LS workers with TTL, pressure eviction, and share-until-dirty policy.
 type Pool struct {

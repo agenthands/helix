@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Typed Errors & Hardening
-status: planning
+status: executing
 stopped_at: Phase 22 context gathered
-last_updated: "2026-04-14T19:47:26.511Z"
-last_activity: 2026-04-14 -- Roadmap created for v1.5
+last_updated: "2026-04-15T07:49:14.143Z"
+last_activity: 2026-04-15 -- Phase 22 execution started
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
-  percent: 87
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.5 Typed Errors & Hardening -- Phase 22 (Error Taxonomy)
+**Current focus:** Phase 22 — error-taxonomy
 
 ## Current Position
 
-Phase: 22 of 24 (Error Taxonomy)
-Plan: 0 of 0 in current phase
-Status: Ready to plan
-Last activity: 2026-04-14 -- Roadmap created for v1.5
+Phase: 22 (error-taxonomy) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 22
+Last activity: 2026-04-15 -- Phase 22 execution started
 
 Progress: [==================░░] 87% (21/24 phases)
 

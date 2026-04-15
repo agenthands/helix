@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // maxFileSize is the maximum file size for ReadFile (10 MB).
@@ -20,20 +22,20 @@ func ReadFile(root, path string) (string, error) {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("file not found: %s", path)
+			return "", serr.New(serr.NotFound, "file not found").WithDetail(path)
 		}
-		return "", fmt.Errorf("stat file: %w", err)
+		return "", serr.Wrap(serr.Internal, "stat file", err)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("path is a directory: %s", path)
+		return "", serr.New(serr.InvalidArgs, "path is a directory").WithDetail(path)
 	}
 	if info.Size() > maxFileSize {
-		return "", fmt.Errorf("file exceeds 10MB size limit (%d bytes): %s", info.Size(), path)
+		return "", serr.New(serr.InvalidArgs, "file exceeds size limit").WithDetail(fmt.Sprintf("%d bytes: %s", info.Size(), path))
 	}
 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		return "", fmt.Errorf("reading file: %w", err)
+		return "", serr.Wrap(serr.Internal, "reading file", err)
 	}
 	return string(data), nil
 }
@@ -54,9 +56,9 @@ func ReadFileRange(root, path string, startLine, endLine int) (string, error) {
 	f, err := os.Open(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("file not found: %s", path)
+			return "", serr.New(serr.NotFound, "file not found").WithDetail(path)
 		}
-		return "", fmt.Errorf("opening file: %w", err)
+		return "", serr.Wrap(serr.Internal, "opening file", err)
 	}
 	defer f.Close()
 
@@ -74,11 +76,11 @@ func ReadFileRange(root, path string, startLine, endLine int) (string, error) {
 		result += fmt.Sprintf("%4d: %s\n", lineNum, scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("scanning file: %w", err)
+		return "", serr.Wrap(serr.Internal, "scanning file", err)
 	}
 
 	if result == "" && startLine > lineNum {
-		return "", fmt.Errorf("start line %d is beyond end of file (%d lines)", startLine, lineNum)
+		return "", serr.New(serr.InvalidArgs, "start line beyond end of file").WithDetail(fmt.Sprintf("line %d, file has %d lines", startLine, lineNum))
 	}
 
 	return result, nil

@@ -5,23 +5,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	serr "github.com/postfix/serena/internal/errors"
 )
 
 // ValidatePath resolves symlinks and ensures the path is within the workspace root.
 // Returns the cleaned absolute path or an error if the path escapes the root.
 func ValidatePath(root, path string) (string, error) {
 	if root == "" {
-		return "", fmt.Errorf("workspace root is empty")
+		return "", serr.New(serr.NoWorkspace, "workspace root is empty")
 	}
 
 	// Resolve the root to an absolute, symlink-resolved path
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("resolving workspace root: %w", err)
+		return "", serr.Wrap(serr.Internal, "resolving workspace root", err)
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(absRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolving workspace root symlinks: %w", err)
+		return "", serr.Wrap(serr.Internal, "resolving workspace root symlinks", err)
 	}
 
 	// Build the target path
@@ -46,13 +48,13 @@ func ValidatePath(root, path string) (string, error) {
 				resolvedPath = filepath.Join(parentResolved, filepath.Base(absPath))
 			}
 		} else {
-			return "", fmt.Errorf("resolving path symlinks: %w", err)
+			return "", serr.Wrap(serr.Internal, "resolving path symlinks", err)
 		}
 	}
 
 	// Check containment: resolved path must be within or equal to resolved root
 	if !strings.HasPrefix(resolvedPath, resolvedRoot+string(filepath.Separator)) && resolvedPath != resolvedRoot {
-		return "", fmt.Errorf("path %q is outside workspace root %q", path, root)
+		return "", serr.New(serr.InvalidArgs, "path outside workspace root").WithDetail(fmt.Sprintf("%s outside %s", path, root))
 	}
 
 	return resolvedPath, nil

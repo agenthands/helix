@@ -127,7 +127,7 @@ Plans:
   3. Golden files capture the full error response shape per error kind, detecting regressions in error structure across releases
 **Plans**: 2 plans
 Plans:
-- [ ] 24-01-PLAN.md — Add inline validation to all 24 kernel tools (symbols, edit, diag, fileops)
+- [x] 24-01-PLAN.md — Add inline validation to all 24 kernel tools (symbols, edit, diag, fileops)
 - [ ] 24-02-PLAN.md — Upgrade three-band error tests with Kind assertions and update error golden files
 
 ## Progress
@@ -160,4 +160,4 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete    | 2026-04-15 |
-| 24. Validation & Testing | v1.5 | 0/2 | Not started | - |
+| 24. Validation & Testing | v1.5 | 1/2 | In Progress|  |

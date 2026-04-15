@@ -1,5 +1,26 @@
 # Milestones
 
+## v1.5 Typed Errors & Hardening (Shipped: 2026-04-15)
+
+**Phases completed:** 3 phases (22-24), 12 plans
+**Files changed:** 95 files, +7,199 / -534 lines
+**Timeline:** 1 day (2026-04-14 → 2026-04-15)
+
+**Key accomplishments:**
+
+- Created `internal/errors/` package with 7 error kinds (NotFound, InvalidArgs, NoWorkspace, Unsupported, Internal, CircuitOpen, Timeout), builder pattern, JSON serialization, and cause-chain wrapping via errors.Is/As
+- Migrated existing sentinels (ErrCircuitOpen, ErrSessionExpired, ErrLSCrashed) into unified error taxonomy with backward-compatible re-exports, then removed all deprecated bridge aliases
+- Migrated all 38+ MCP tools across 10 packages (symbols, edit, fileops, diag, memory, workflow, profile, MCP core) from raw `fmt.Errorf` strings to typed `serr.New`/`serr.Wrap` errors
+- Added inline input validation to all 24 kernel tool handlers — empty-string checks on required fields before any workspace or LS work begins
+- Upgraded three-band error tests with `extractKind` helper and `expectedKind` struct field for Kind-level assertions, plus 4 typed error golden files (invalid_args, no_workspace, not_found, unsupported)
+
+**Tech debt accepted:**
+- 3 golden files deferred (circuit_open, timeout, internal runtime) — cannot trigger deterministically without live LS
+- unsupported.golden captures raw error (lspool not yet using serr.Unsupported)
+- 2 internal flow-control fmt.Errorf in fileops (errLimitReached, never reaches MCP)
+
+---
+
 ## v1.4 Integration Testing v2 (Shipped: 2026-04-14)
 
 **Phases completed:** 4 phases (18-21), 11 plans

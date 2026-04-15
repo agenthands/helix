@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 35+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching.
+A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 38+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching. Every tool returns typed, structured errors for reliable programmatic error handling.
 
 ## Core Value
 
@@ -67,19 +67,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Multi-provider LLM support (Anthropic + DeepSeek) for behavioral tests — v1.4
 - ✓ Extension-based language detection fallback for marker-free languages (Markdown) — v1.4
 - ✓ Marksman quirk adapter for Markdown LSP support — v1.4
+- ✓ Typed error taxonomy with 7 error kinds (NotFound, InvalidArgs, NoWorkspace, Unsupported, Internal, CircuitOpen, Timeout) — v1.5 Phase 22
+- ✓ All 38+ MCP tools migrated from raw strings to typed errors across 10 packages — v1.5 Phase 23
+- ✓ Inline input validation at all 24 kernel tool boundaries — v1.5 Phase 24
+- ✓ Kind-level error test assertions with extractKind helper and 4 typed golden files — v1.5 Phase 24
+- ✓ Cause-chain wrapping preserving errors.Is/As for LSP, filesystem, and tree-sitter errors — v1.5 Phase 22
 
 ### Active
 
-## Current Milestone: v1.5 Typed Errors & Hardening
-
-**Goal:** Every MCP tool returns typed, structured errors — replacing raw strings with a consistent error taxonomy that enables reliable error handling by agents.
-
-**Target features:**
-- Typed error taxonomy (error kinds, categories, structured fields)
-- Migrate all 38+ tools from raw error strings to typed errors
-- Consistent error contracts across kernel, skills, and MCP layer
-- Input validation at tool boundaries (parameter checking before execution)
-- Error path test coverage (extend three-band error tests to use typed assertions)
+(None yet — next milestone not started)
 
 ### Out of Scope
 
@@ -93,7 +89,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), v1.3 Documentation Catchup, and v1.4 Integration Testing v2 (4,850 LOC oracle tests). Single binary, 4-layer architecture, persistent daemon. All documentation current as of v1.2 capabilities. Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures), LLM behavioral (multi-provider: Anthropic + DeepSeek), and judge scoring. Extension-based language detection fallback enables marker-free languages like Markdown.
+Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), v1.3 Documentation Catchup, v1.4 Integration Testing v2 (4,850 LOC oracle tests), and v1.5 Typed Errors & Hardening (+7,199 LOC across 95 files). Single binary, 4-layer architecture, persistent daemon, 38+ MCP tools with typed structured errors. Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures), LLM behavioral (multi-provider: Anthropic + DeepSeek), and judge scoring. Error taxonomy: 7 kinds, builder pattern, cause-chain wrapping, inline validation at all 24 kernel tool boundaries.
 
 Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
@@ -140,7 +136,10 @@ The `legacy/` directory contains the original Python-based prototype as a refere
 | Tiered benchmark thresholds | PR tier (15%/25%) relaxed for CI noise; release tier (10%/20%) tight | ✓ Good — reduces false positives |
 | Dedicated admin listener | Separate from MCP mux; bind failure non-fatal | ✓ Good — clean separation of concerns |
 | Decoupled MetricsSink interface | lspool has zero imports of internal/obs | ✓ Good — compile-time assertion enforces |
-| Single typed error (ErrCircuitOpen) | Full migration deferred to v1.3+ | — Pending |
+| Single typed error (ErrCircuitOpen) | Full migration deferred to v1.3+ | ✓ Good — completed in v1.5 with full 7-kind taxonomy |
+| Kind-based error taxonomy (internal/errors/) | Typed errors for agent consumption, builder pattern, JSON serialization | ✓ Good — 7 kinds, cause-chain wrapping, all tools migrated |
+| Inline validation before workspace check | Fail fast on invalid params, avoid LS startup for bad input | ✓ Good — 24 kernel tools validate at entry |
+| extractKind test helper for Kind assertions | Replace brittle string matching with structured error validation | ✓ Good — covers SDK and inline validation formats |
 
 ## Evolution
 
@@ -160,4 +159,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-15 after Phase 24 complete — Input validation at all 24 kernel tool boundaries, typed error test harness with Kind assertions, golden files for 4 error kinds*
+*Last updated: 2026-04-15 after v1.5 milestone complete — Typed error taxonomy (7 kinds), all 38+ tools migrated, inline validation, Kind-level test assertions*

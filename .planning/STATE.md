@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Typed Errors & Hardening
-status: executing
-stopped_at: Phase 24 context gathered
-last_updated: "2026-04-15T15:55:47.361Z"
+status: completed
+stopped_at: Milestone v1.5 archived
+last_updated: "2026-04-15T19:30:00Z"
 last_activity: 2026-04-15
 progress:
   total_phases: 3
@@ -18,44 +18,42 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-14)
+See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 24 — validation-testing
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 24
-Plan: Not started
-Status: Executing Phase 24
+Phase: All v1.5 phases complete
+Plan: N/A
+Status: Milestone v1.5 shipped
 Last activity: 2026-04-15
 
-Progress: [==================░░] 87% (21/24 phases)
+Progress: [====================] 100% (24/24 phases across 6 milestones)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 79
+- Total plans completed: 91
 - Average duration: ~15 min
-- Total execution time: ~14 hours
+- Total execution time: ~16 hours
 
-**By Phase:**
+**By Milestone:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| v1.0 (1-5) | 20 | -- | -- |
-| v1.1 (6-8) | 11 | -- | -- |
-| v1.2 (9-15) | 25 | -- | -- |
-| v1.3 (16-17) | 4 | -- | -- |
-| v1.4 (18-21) | 11 | -- | -- |
-| 22 | 2 | - | - |
-| 23 | 8 | - | - |
-| 24 | 2 | - | - |
+| Milestone | Phases | Plans | Timeline |
+|-----------|--------|-------|----------|
+| v1.0 (1-5) | 5 | 20 | 2 days |
+| v1.1 (6-8) | 3 | 11 | 2 days |
+| v1.2 (9-15) | 7 | 25 | 2 days |
+| v1.3 (16-17) | 2 | 4 | 1 day |
+| v1.4 (18-21) | 4 | 11 | 4 days |
+| v1.5 (22-24) | 3 | 12 | 1 day |
 
 **Recent Trend:**
 
-- v1.4 completed in 11 plans across 4 phases
+- v1.5 completed in 12 plans across 3 phases in 1 day
 - Trend: Stable
 
 ## Accumulated Context
@@ -63,11 +61,6 @@ Progress: [==================░░] 87% (21/24 phases)
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v1.2]: Single typed error (ErrCircuitOpen) -- full migration deferred to v1.5
-- [v1.1]: Structured IsError oracle (defer typed errors) -- tracked as TODO(#typed-errors)
-- [v1.5]: Error taxonomy must support errors.Is/As for cause chain traversal
 
 ### Pending Todos
 
@@ -86,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-15T13:35:05.048Z
-Stopped at: Phase 24 context gathered
-Resume file: .planning/phases/24-validation-testing/24-CONTEXT.md
+Last session: 2026-04-15T19:30:00Z
+Stopped at: Milestone v1.5 archived
+Resume file: N/A — start next milestone with /gsd-new-milestone

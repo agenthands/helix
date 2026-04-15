@@ -305,17 +305,17 @@ func runErrCases(t *testing.T, cases []errCase) {
 | A1 | MCP SDK JSON schema validation marks non-omitempty Go struct fields as `required` | Architecture Patterns | If SDK does NOT mark them required, more inline validation needed for missing fields -- low risk since existing integration tests confirm SDK catches `{}` |
 | A2 | `int` fields missing from JSON but present in schema as required are caught by SDK before deserialization to 0 | Architecture Patterns | If not, `line`/`column` would silently default to 0 -- but D-03 says 0 is valid anyway, so impact is minimal |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **D-06 says "JSON error body carries Kind, Message, Tool, Detail"**
    - What we know: Error responses are plain text via `.Error()`, NOT JSON. The Error struct has `MarshalJSON()` but it's unused in the MCP response path.
    - What's unclear: Does D-06 expect us to CHANGE error serialization to JSON, or to extract Kind from the existing text format?
-   - Recommendation: Extract Kind from existing text prefix (`"kind: message"` format). Changing serialization is a larger change that would break existing golden files and error consumers. If JSON serialization is desired, it should be a separate decision.
+   - RESOLVED: Extract Kind from existing text prefix (`"kind: message"` format). Changing serialization is a larger change that would break existing golden files and error consumers. If JSON serialization is desired, it should be a separate decision.
 
 2. **Golden file format for updated errors**
    - What we know: Current golden files contain plain text (`"no active workspace -- activate a project first"`). After Phase 23 migration, errors use typed format (`"no_workspace: no active workspace"`).
    - What's unclear: Whether golden files should use structural wildcards for variable fields (message, detail) per D-08.
-   - Recommendation: Use exact text matching (existing harness approach) with normalization. Variable fields (paths, timestamps) are already handled by `normalizeResponse`. The per-Kind golden files should capture one canonical example per Kind.
+   - RESOLVED: Use exact text matching (existing harness approach) with normalization. Variable fields (paths, timestamps) are already handled by `normalizeResponse`. The per-Kind golden files should capture one canonical example per Kind.
 
 ## Sources
 

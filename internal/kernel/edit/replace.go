@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -16,7 +17,7 @@ import (
 func ReplaceBody(ctx context.Context, lease *lspool.WorkerLease, extractor *BodyExtractor, uri string, symbolName string, newBody string, lang string) error {
 	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeReplaceBody, newBody)
 	if err != nil {
-		return fmt.Errorf("plan edit: %w", err)
+		return serr.Wrap(serr.Internal, "plan edit", err)
 	}
 	return ReplaceBodyWithPlan(ctx, lease, extractor, plan, lang)
 }
@@ -27,7 +28,7 @@ func ReplaceBodyWithPlan(ctx context.Context, lease *lspool.WorkerLease, extract
 
 	source, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("read file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "read file", err).WithDetail(filePath)
 	}
 
 	var startByte, endByte uint
@@ -45,7 +46,7 @@ func ReplaceBodyWithPlan(ctx context.Context, lease *lspool.WorkerLease, extract
 	}
 
 	if startByte > uint(len(source)) || endByte > uint(len(source)) || startByte > endByte {
-		return fmt.Errorf("invalid byte range [%d:%d] for file of length %d", startByte, endByte, len(source))
+		return serr.New(serr.Internal, fmt.Sprintf("invalid byte range [%d:%d] for file of length %d", startByte, endByte, len(source)))
 	}
 
 	// Replace bytes from startByte to endByte with newBody.
@@ -56,12 +57,12 @@ func ReplaceBodyWithPlan(ctx context.Context, lease *lspool.WorkerLease, extract
 
 	// Atomic write.
 	if err := os.WriteFile(filePath, result, 0644); err != nil {
-		return fmt.Errorf("write file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "write file", err).WithDetail(filePath)
 	}
 
 	// Notify language server of change.
 	if err := notifyDidChange(ctx, lease, plan.URI, string(result)); err != nil {
-		return fmt.Errorf("didChange notification: %w", err)
+		return serr.Wrap(serr.Internal, "didChange notification", err)
 	}
 
 	return nil

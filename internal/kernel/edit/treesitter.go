@@ -3,7 +3,6 @@
 package edit
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 
@@ -13,6 +12,7 @@ import (
 	tree_sitter_rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tree_sitter_typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go" //nolint:importmismatch
 
+	serr "github.com/postfix/serena/internal/errors"
 	gen "github.com/postfix/serena/protocol/gen"
 )
 
@@ -96,31 +96,31 @@ func (be *BodyExtractor) ExtractBody(source []byte, lang string, symbolName stri
 	cfg, ok := be.languages[lang]
 	be.mu.RUnlock()
 	if !ok {
-		return 0, 0, fmt.Errorf("unsupported language for tree-sitter: %s", lang)
+		return 0, 0, serr.New(serr.Unsupported, "unsupported language for tree-sitter").WithDetail(lang)
 	}
 
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
 	if err := parser.SetLanguage(cfg.language); err != nil {
-		return 0, 0, fmt.Errorf("set language %s: %w", lang, err)
+		return 0, 0, serr.Wrap(serr.Internal, "set tree-sitter language", err).WithDetail(lang)
 	}
 
 	tree := parser.Parse(source, nil)
 	if tree == nil {
-		return 0, 0, fmt.Errorf("tree-sitter parse failed for %s", lang)
+		return 0, 0, serr.New(serr.Internal, "tree-sitter parse failed").WithDetail(lang)
 	}
 	defer tree.Close()
 
 	root := tree.RootNode()
 	decl := findDeclaration(root, source, symbolName, symbolRange, cfg)
 	if decl == nil {
-		return 0, 0, fmt.Errorf("declaration %q not found in tree-sitter AST", symbolName)
+		return 0, 0, serr.New(serr.NotFound, "declaration not found in tree-sitter AST").WithDetail(symbolName)
 	}
 
 	body := decl.ChildByFieldName(cfg.bodyFieldName)
 	if body == nil {
-		return 0, 0, fmt.Errorf("no %q field in %s node for %q", cfg.bodyFieldName, decl.Kind(), symbolName)
+		return 0, 0, serr.New(serr.NotFound, "body field not found in declaration node").WithDetail(symbolName)
 	}
 
 	return body.StartByte(), body.EndByte(), nil

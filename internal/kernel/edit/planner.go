@@ -2,9 +2,9 @@ package edit
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
 	gen "github.com/postfix/serena/protocol/gen"
@@ -34,12 +34,12 @@ type EditPlan struct {
 func PlanEdit(ctx context.Context, lease *lspool.WorkerLease, uri string, symbolName string, editType string, content string) (*EditPlan, error) {
 	outlines, err := symbols.GetSymbolOverview(ctx, lease, uri)
 	if err != nil {
-		return nil, fmt.Errorf("get symbol overview: %w", err)
+		return nil, serr.Wrap(serr.Internal, "get symbol overview", err)
 	}
 
 	outline := findOutlineByName(outlines, symbolName)
 	if outline == nil {
-		return nil, fmt.Errorf("symbol %q not found in %s", symbolName, uri)
+		return nil, serr.New(serr.NotFound, "symbol not found").WithDetail(symbolName)
 	}
 
 	return &EditPlan{

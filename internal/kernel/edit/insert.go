@@ -2,10 +2,10 @@ package edit
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 )
 
@@ -14,7 +14,7 @@ import (
 func InsertBefore(ctx context.Context, lease *lspool.WorkerLease, uri string, symbolName string, content string) error {
 	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeInsertBefore, content)
 	if err != nil {
-		return fmt.Errorf("plan edit: %w", err)
+		return serr.Wrap(serr.Internal, "plan edit", err)
 	}
 	return InsertBeforeWithPlan(ctx, lease, plan)
 }
@@ -25,7 +25,7 @@ func InsertBeforeWithPlan(ctx context.Context, lease *lspool.WorkerLease, plan *
 
 	source, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("read file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "read file", err).WithDetail(filePath)
 	}
 
 	// Compute insertion point at symbol's range start.
@@ -43,11 +43,11 @@ func InsertBeforeWithPlan(ctx context.Context, lease *lspool.WorkerLease, plan *
 	result = append(result, source[insertByte:]...)
 
 	if err := os.WriteFile(filePath, result, 0644); err != nil {
-		return fmt.Errorf("write file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "write file", err).WithDetail(filePath)
 	}
 
 	if err := notifyDidChange(ctx, lease, plan.URI, string(result)); err != nil {
-		return fmt.Errorf("didChange notification: %w", err)
+		return serr.Wrap(serr.Internal, "didChange notification", err)
 	}
 
 	return nil
@@ -58,7 +58,7 @@ func InsertBeforeWithPlan(ctx context.Context, lease *lspool.WorkerLease, plan *
 func InsertAfter(ctx context.Context, lease *lspool.WorkerLease, uri string, symbolName string, content string) error {
 	plan, err := PlanEdit(ctx, lease, uri, symbolName, EditTypeInsertAfter, content)
 	if err != nil {
-		return fmt.Errorf("plan edit: %w", err)
+		return serr.Wrap(serr.Internal, "plan edit", err)
 	}
 	return InsertAfterWithPlan(ctx, lease, plan)
 }
@@ -69,7 +69,7 @@ func InsertAfterWithPlan(ctx context.Context, lease *lspool.WorkerLease, plan *E
 
 	source, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("read file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "read file", err).WithDetail(filePath)
 	}
 
 	// Compute insertion point at symbol's range end.
@@ -87,11 +87,11 @@ func InsertAfterWithPlan(ctx context.Context, lease *lspool.WorkerLease, plan *E
 	result = append(result, source[insertByte:]...)
 
 	if err := os.WriteFile(filePath, result, 0644); err != nil {
-		return fmt.Errorf("write file %s: %w", filePath, err)
+		return serr.Wrap(serr.Internal, "write file", err).WithDetail(filePath)
 	}
 
 	if err := notifyDidChange(ctx, lease, plan.URI, string(result)); err != nil {
-		return fmt.Errorf("didChange notification: %w", err)
+		return serr.Wrap(serr.Internal, "didChange notification", err)
 	}
 
 	return nil

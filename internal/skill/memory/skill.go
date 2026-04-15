@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/memory"
 	"github.com/postfix/serena/internal/skill"
@@ -43,7 +44,7 @@ func (s *MemorySkill) Init(deps skill.SkillDeps) error {
 
 	store, err := memory.NewMemoryStore(projectMemDir, globalMemDir, indexDBPath, s.logger)
 	if err != nil {
-		return fmt.Errorf("memory skill init: %w", err)
+		return serr.Wrap(serr.Internal, "memory skill init", err)
 	}
 	s.store = store
 	return nil
@@ -164,21 +165,21 @@ func (s *MemorySkill) ExecuteTool(name string, args map[string]interface{}) (str
 	case "delete_memory":
 		return s.execDelete(args)
 	default:
-		return "", fmt.Errorf("unknown memory tool: %s", name)
+		return "", serr.New(serr.InvalidArgs, "unknown memory tool").WithTool(name)
 	}
 }
 
 func (s *MemorySkill) execWrite(args map[string]interface{}) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
-		return "", fmt.Errorf("write_memory: 'name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'name' parameter is required").WithTool("write_memory")
 	}
 	content, ok := args["content"].(string)
 	if !ok {
-		return "", fmt.Errorf("write_memory: 'content' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'content' parameter is required").WithTool("write_memory")
 	}
 	if err := s.store.Write(name, content); err != nil {
-		return "", fmt.Errorf("write_memory: %w", err)
+		return "", serr.Wrap(serr.Internal, "write operation failed", err).WithTool("write_memory")
 	}
 	return fmt.Sprintf("Memory %q written successfully.", name), nil
 }
@@ -186,11 +187,11 @@ func (s *MemorySkill) execWrite(args map[string]interface{}) (string, error) {
 func (s *MemorySkill) execRead(args map[string]interface{}) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
-		return "", fmt.Errorf("read_memory: 'name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'name' parameter is required").WithTool("read_memory")
 	}
 	content, err := s.store.Read(name)
 	if err != nil {
-		return "", fmt.Errorf("read_memory: %w", err)
+		return "", serr.Wrap(serr.Internal, "read operation failed", err).WithTool("read_memory")
 	}
 	return content, nil
 }
@@ -201,11 +202,11 @@ func (s *MemorySkill) execList(args map[string]interface{}) (string, error) {
 
 	entries, err := s.store.List(scope, topic)
 	if err != nil {
-		return "", fmt.Errorf("list_memories: %w", err)
+		return "", serr.Wrap(serr.Internal, "list operation failed", err).WithTool("list_memories")
 	}
 	data, err := json.Marshal(entries)
 	if err != nil {
-		return "", fmt.Errorf("list_memories: marshaling results: %w", err)
+		return "", serr.Wrap(serr.Internal, "marshaling results", err).WithTool("list_memories")
 	}
 	return string(data), nil
 }
@@ -213,17 +214,17 @@ func (s *MemorySkill) execList(args map[string]interface{}) (string, error) {
 func (s *MemorySkill) execSearch(args map[string]interface{}) (string, error) {
 	query, ok := args["query"].(string)
 	if !ok || query == "" {
-		return "", fmt.Errorf("search_memories: 'query' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'query' parameter is required").WithTool("search_memories")
 	}
 	scope, _ := args["scope"].(string)
 
 	entries, err := s.store.Search(query, scope)
 	if err != nil {
-		return "", fmt.Errorf("search_memories: %w", err)
+		return "", serr.Wrap(serr.Internal, "search operation failed", err).WithTool("search_memories")
 	}
 	data, err := json.Marshal(entries)
 	if err != nil {
-		return "", fmt.Errorf("search_memories: marshaling results: %w", err)
+		return "", serr.Wrap(serr.Internal, "marshaling results", err).WithTool("search_memories")
 	}
 	return string(data), nil
 }
@@ -231,14 +232,14 @@ func (s *MemorySkill) execSearch(args map[string]interface{}) (string, error) {
 func (s *MemorySkill) execRename(args map[string]interface{}) (string, error) {
 	oldName, ok := args["old_name"].(string)
 	if !ok || oldName == "" {
-		return "", fmt.Errorf("rename_memory: 'old_name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'old_name' parameter is required").WithTool("rename_memory")
 	}
 	newName, ok := args["new_name"].(string)
 	if !ok || newName == "" {
-		return "", fmt.Errorf("rename_memory: 'new_name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'new_name' parameter is required").WithTool("rename_memory")
 	}
 	if err := s.store.Rename(oldName, newName); err != nil {
-		return "", fmt.Errorf("rename_memory: %w", err)
+		return "", serr.Wrap(serr.Internal, "rename operation failed", err).WithTool("rename_memory")
 	}
 	return fmt.Sprintf("Memory renamed from %q to %q.", oldName, newName), nil
 }
@@ -246,22 +247,22 @@ func (s *MemorySkill) execRename(args map[string]interface{}) (string, error) {
 func (s *MemorySkill) execEdit(args map[string]interface{}) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
-		return "", fmt.Errorf("edit_memory: 'name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'name' parameter is required").WithTool("edit_memory")
 	}
 	search, ok := args["search"].(string)
 	if !ok {
-		return "", fmt.Errorf("edit_memory: 'search' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'search' parameter is required").WithTool("edit_memory")
 	}
 	replace, ok := args["replace"].(string)
 	if !ok {
-		return "", fmt.Errorf("edit_memory: 'replace' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'replace' parameter is required").WithTool("edit_memory")
 	}
 
 	err := s.store.Edit(name, func(content string) string {
 		return strings.ReplaceAll(content, search, replace)
 	})
 	if err != nil {
-		return "", fmt.Errorf("edit_memory: %w", err)
+		return "", serr.Wrap(serr.Internal, "edit operation failed", err).WithTool("edit_memory")
 	}
 	return fmt.Sprintf("Memory %q edited successfully.", name), nil
 }
@@ -269,10 +270,10 @@ func (s *MemorySkill) execEdit(args map[string]interface{}) (string, error) {
 func (s *MemorySkill) execDelete(args map[string]interface{}) (string, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
-		return "", fmt.Errorf("delete_memory: 'name' parameter is required (string)")
+		return "", serr.New(serr.InvalidArgs, "'name' parameter is required").WithTool("delete_memory")
 	}
 	if err := s.store.Delete(name); err != nil {
-		return "", fmt.Errorf("delete_memory: %w", err)
+		return "", serr.Wrap(serr.Internal, "delete operation failed", err).WithTool("delete_memory")
 	}
 	return fmt.Sprintf("Memory %q deleted.", name), nil
 }

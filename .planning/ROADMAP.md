@@ -115,7 +115,7 @@ Plans:
 - [x] 23-05-PLAN.md — Migrate 7 memory tools to typed errors
 - [x] 23-06-PLAN.md — Migrate 2 workflow tools to typed errors
 - [x] 23-07-PLAN.md — Migrate 2 profile tools to typed errors
-- [ ] 23-08-PLAN.md — Migrate MCP core tests + remove deprecated sentinel re-exports
+- [x] 23-08-PLAN.md — Migrate MCP core tests + remove deprecated sentinel re-exports
 
 ### Phase 24: Validation & Testing
 **Goal**: Tools validate inputs before execution, and the test suite asserts error types rather than string matching
@@ -156,5 +156,5 @@ Phases execute in numeric order: 22 -> 23 -> 24
 | 20. Scenarios & Runtime | v1.4 | 4/4 | Complete | 2026-04-12 |
 | 21. LLM Behavioral & Judge | v1.4 | 2/2 | Complete | 2026-04-12 |
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete    | 2026-04-15 |
-| 23. Tool Migration | v1.5 | 6/8 | In Progress|  |
+| 23. Tool Migration | v1.5 | 7/8 | In Progress|  |
 | 24. Validation & Testing | v1.5 | 0/0 | Not started | - |

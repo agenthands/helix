@@ -142,6 +142,18 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		Name:        "replace_symbol_body",
 		Description: "Replace a symbol's body with new content using tree-sitter for precise extraction",
 	}, kernel.WrapToolSpan(tracer, "replace_symbol_body", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("replace_symbol_body").Error()), nil, nil
+		}
+		if args.SymbolName == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
+				WithTool("replace_symbol_body").Error()), nil, nil
+		}
+		if args.NewBody == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_body").
+				WithTool("replace_symbol_body").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -178,6 +190,18 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		Name:        "insert_before_symbol",
 		Description: "Insert content immediately before a symbol",
 	}, kernel.WrapToolSpan(tracer, "insert_before_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("insert_before_symbol").Error()), nil, nil
+		}
+		if args.SymbolName == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
+				WithTool("insert_before_symbol").Error()), nil, nil
+		}
+		if args.Content == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
+				WithTool("insert_before_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -213,6 +237,18 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		Name:        "insert_after_symbol",
 		Description: "Insert content immediately after a symbol",
 	}, kernel.WrapToolSpan(tracer, "insert_after_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("insert_after_symbol").Error()), nil, nil
+		}
+		if args.SymbolName == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
+				WithTool("insert_after_symbol").Error()), nil, nil
+		}
+		if args.Content == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
+				WithTool("insert_after_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -248,6 +284,14 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		Name:        "rename_symbol",
 		Description: "Rename a symbol across all files in the workspace",
 	}, kernel.WrapToolSpan(tracer, "rename_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("rename_symbol").Error()), nil, nil
+		}
+		if args.NewName == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_name").
+				WithTool("rename_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -276,6 +320,14 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		Name:        "safe_delete_symbol",
 		Description: "Delete a symbol if it has no references; reports reference count if blocked",
 	}, kernel.WrapToolSpan(tracer, "safe_delete_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("safe_delete_symbol").Error()), nil, nil
+		}
+		if args.SymbolName == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
+				WithTool("safe_delete_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
@@ -322,7 +374,16 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 		Name:        "verify_edit",
 		Description: "Check for compilation errors after an edit; returns diagnostic summary",
 	}, kernel.WrapToolSpan(tracer, "verify_edit", func(ctx context.Context, req *mcpsdk.CallToolRequest, args VerifyEditArgs) (*mcpsdk.CallToolResult, any, error) {
-		uri := filePathToURI(wsKeyFn().RepoRoot, args.Path)
+		wsKey := wsKeyFn()
+		if wsKey.RepoRoot == "" {
+			return errorResult(serr.New(serr.NoWorkspace, "no active workspace").
+				WithTool("verify_edit").Error()), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("verify_edit").Error()), nil, nil
+		}
+		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		result, err := VerifyEdit(ctx, diagStore, uri)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil

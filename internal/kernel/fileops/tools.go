@@ -96,6 +96,10 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer 
 		if root == "" {
 			return noWorkspaceError(), nil, nil
 		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("read_file").Error()), nil, nil
+		}
 
 		if args.StartLine > 0 || args.EndLine > 0 {
 			content, err := ReadFileRange(root, args.Path, args.StartLine, args.EndLine)
@@ -123,6 +127,10 @@ func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, trace
 		if root == "" {
 			return noWorkspaceError(), nil, nil
 		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("create_file").Error()), nil, nil
+		}
 
 		if err := CreateFile(root, args.Path, args.Content); err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -140,6 +148,10 @@ func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		root := rootFn()
 		if root == "" {
 			return noWorkspaceError(), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("list_directory").Error()), nil, nil
 		}
 
 		entries, err := ListDirectory(root, args.Path)
@@ -172,6 +184,10 @@ func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 		if root == "" {
 			return noWorkspaceError(), nil, nil
 		}
+		if args.Pattern == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
+				WithTool("find_files").Error()), nil, nil
+		}
 
 		files, err := FindFiles(root, args.Pattern)
 		if err != nil {
@@ -194,6 +210,10 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		root := rootFn()
 		if root == "" {
 			return noWorkspaceError(), nil, nil
+		}
+		if args.Pattern == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
+				WithTool("search_in_files").Error()), nil, nil
 		}
 
 		opts := SearchOpts{
@@ -235,6 +255,14 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		root := rootFn()
 		if root == "" {
 			return noWorkspaceError(), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("replace_in_file").Error()), nil, nil
+		}
+		if args.Pattern == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
+				WithTool("replace_in_file").Error()), nil, nil
 		}
 
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)

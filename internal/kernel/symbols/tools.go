@@ -187,6 +187,10 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		Name:        "go_to_definition",
 		Description: "Go to the definition of a symbol at a given position",
 	}, kernel.WrapToolSpan(tracer, "go_to_definition", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GoToDefinitionArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("go_to_definition").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -209,6 +213,10 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		Name:        "find_references",
 		Description: "Find all references to a symbol at a given position",
 	}, kernel.WrapToolSpan(tracer, "find_references", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindReferencesArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("find_references").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -231,6 +239,10 @@ func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, ws
 		Name:        "get_symbol_overview",
 		Description: "Get a hierarchical outline of all symbols in a file",
 	}, kernel.WrapToolSpan(tracer, "get_symbol_overview", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SymbolOverviewArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_symbol_overview").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -256,6 +268,10 @@ func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyF
 		Name:        "search_symbols",
 		Description: "Search for symbols across the workspace by name",
 	}, kernel.WrapToolSpan(tracer, "search_symbols", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SearchSymbolsArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Query == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: query").
+				WithTool("search_symbols").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -278,6 +294,10 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 		Name:        "get_hover_info",
 		Description: "Get hover/type information for a symbol at a given position",
 	}, kernel.WrapToolSpan(tracer, "get_hover_info", func(ctx context.Context, req *mcpsdk.CallToolRequest, args HoverArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_hover_info").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -303,6 +323,10 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 		Name:        "find_implementations",
 		Description: "Find all implementations of an interface or abstract method",
 	}, kernel.WrapToolSpan(tracer, "find_implementations", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FindImplementationsArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("find_implementations").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -325,6 +349,10 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		Name:        "get_call_hierarchy",
 		Description: "Get call hierarchy (callers and/or callees) for a symbol",
 	}, kernel.WrapToolSpan(tracer, "get_call_hierarchy", func(ctx context.Context, req *mcpsdk.CallToolRequest, args CallHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_call_hierarchy").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -354,6 +382,10 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		Name:        "get_type_hierarchy",
 		Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol",
 	}, kernel.WrapToolSpan(tracer, "get_type_hierarchy", func(ctx context.Context, req *mcpsdk.CallToolRequest, args TypeHierarchyArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_type_hierarchy").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -383,6 +415,10 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 		Name:        "analyze_blast_radius",
 		Description: "Analyze the blast radius (impact) of changing a symbol",
 	}, kernel.WrapToolSpan(tracer, "analyze_blast_radius", func(ctx context.Context, req *mcpsdk.CallToolRequest, args BlastRadiusArgs) (*mcpsdk.CallToolResult, any, error) {
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("analyze_blast_radius").Error()), nil, nil
+		}
 		rt, err := acquireLease(ctx, k, wsKeyFn)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil

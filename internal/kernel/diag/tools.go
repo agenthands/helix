@@ -8,6 +8,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/mcp"
@@ -79,7 +80,12 @@ func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore,
 	}, kernel.WrapToolSpan(tracer, "get_diagnostics", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetDiagnosticsArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace - activate a project first"), nil, nil
+			return errorResult(serr.New(serr.NoWorkspace, "no active workspace").
+				WithTool("get_diagnostics").Error()), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_diagnostics").Error()), nil, nil
 		}
 
 		uri := fileURI(root, args.Path)
@@ -110,7 +116,12 @@ func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, l
 	}, kernel.WrapToolSpan(tracer, "get_code_actions", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetCodeActionsArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace - activate a project first"), nil, nil
+			return errorResult(serr.New(serr.NoWorkspace, "no active workspace").
+				WithTool("get_code_actions").Error()), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("get_code_actions").Error()), nil, nil
 		}
 
 		uri := fileURI(root, args.Path)
@@ -163,7 +174,12 @@ func registerFormatCode(server *mcp.SerenaMCPServer, rootFn func() string, lease
 	}, kernel.WrapToolSpan(tracer, "format_code", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FormatCodeArgs) (*mcpsdk.CallToolResult, any, error) {
 		root := rootFn()
 		if root == "" {
-			return errorResult("no active workspace - activate a project first"), nil, nil
+			return errorResult(serr.New(serr.NoWorkspace, "no active workspace").
+				WithTool("format_code").Error()), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("format_code").Error()), nil, nil
 		}
 
 		uri := fileURI(root, args.Path)

@@ -8,6 +8,7 @@
 - ✅ **v1.3 Documentation Catchup** — Phases 16-17 (shipped 2026-04-11)
 - ✅ **v1.4 Integration Testing v2** — Phases 18-21 (shipped 2026-04-14)
 - ✅ **v1.5 Typed Errors & Hardening** — Phases 22-24 (shipped 2026-04-15)
+- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-28 (in progress)
 
 ## Phases
 
@@ -83,7 +84,67 @@
 
 </details>
 
+### 🚧 v1.6 Context Intelligence & Resilient Editing (In Progress)
+
+**Milestone Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
+
+- [ ] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders
+- [ ] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content
+- [ ] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision
+- [ ] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment
+
+## Phase Details
+
+### Phase 25: Fuzzy Edit Engine
+**Goal**: Agents can perform fuzzy text matching and replacement that tolerates whitespace drift, indentation changes, and ellipsis placeholders in search blocks
+**Depends on**: Nothing (independent of RepoMap work)
+**Requirements**: FUZZ-01, FUZZ-02, FUZZ-03, FUZZ-07, FUZZ-08
+**Success Criteria** (what must be TRUE):
+  1. Agent can submit a search block with minor whitespace differences from actual file content and the fuzzy matcher finds the correct location using the 4-strategy cascade (exact, whitespace-normalized, indentation-flexible, fail-with-diff)
+  2. Tool response includes match_strategy and similarity_score fields so the agent knows how the match was resolved
+  3. Replacement text inherits the original file's indentation level when a fuzzy match succeeds, not the indentation from the agent's search block
+  4. When the search text matches multiple locations in the file, the tool refuses the edit and reports the ambiguity instead of silently picking one
+  5. Agent can use ellipsis/placeholder markers in search blocks to skip unchanged code sections, matching only the anchoring lines around the placeholder
+**Plans**: TBD
+
+### Phase 26: Fuzzy Edit Integration
+**Goal**: Existing edit tools gracefully fall back to fuzzy matching when exact matching fails, and agents have a standalone fuzzy edit tool for arbitrary text operations
+**Depends on**: Phase 25
+**Requirements**: FUZZ-04, FUZZ-05, FUZZ-06
+**Success Criteria** (what must be TRUE):
+  1. Agent can call the standalone `fuzzy_edit` MCP tool to perform raw text fuzzy matching on any file, independent of symbol boundaries
+  2. When `replace_symbol_body` receives a search block that does not exactly match content within the tree-sitter-located body, it falls back to fuzzy matching and succeeds if a fuzzy match is found
+  3. When `replace_content` receives a search string that does not match exactly or via regex, it falls back to fuzzy matching and succeeds if a fuzzy match is found
+**Plans**: TBD
+
+### Phase 27: RepoMap Tag Extraction & Cache
+**Goal**: The system can extract, cache, and elide structural tags (definitions and references) from source files across multiple languages
+**Depends on**: Nothing (independent of fuzzy editing work)
+**Requirements**: RMAP-01, RMAP-02, RMAP-03, RMAP-09
+**Success Criteria** (what must be TRUE):
+  1. Tree-sitter .scm queries extract def/ref tags from Go, Python, TypeScript, and Rust source files with correct symbol names and locations
+  2. Languages without tree-sitter grammars fall back to LSP documentSymbol for tag extraction, producing compatible tag data
+  3. Extracted tags persist in SQLite with mtime-based invalidation, surviving daemon restarts and client reconnects without re-extraction of unchanged files
+  4. Tag output uses scope-aware elision showing signatures without bodies (via tree-sitter), keeping output compact for token-budgeted consumption
+**Plans**: TBD
+
+### Phase 28: RepoMap Graph & MCP Tools
+**Goal**: Agents can request ranked, token-budgeted structural overviews and task-focused context from any codebase via MCP tools
+**Depends on**: Phase 27
+**Requirements**: RMAP-04, RMAP-05, RMAP-06, RMAP-07, RMAP-08, RMAP-10
+**Success Criteria** (what must be TRUE):
+  1. Agent can call `get_repo_map` and receive a structural overview of the repository with symbols ranked by importance via PageRank, fitting within a specified token budget
+  2. Agent can call `get_context` with a task description or set of files and receive the most relevant symbols for that task, ranked and token-budgeted
+  3. Cross-file reference graph correctly links definitions to references across files, with edges weighted by reference frequency
+  4. When LSP sessions are warm, the reference graph is enriched with precise cross-file references beyond what tree-sitter tags provide
+  5. Token budget parameter controls output size via binary search to maximize symbol coverage within the specified budget
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 25 → 26 → 27 → 28
+Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within each track, order is sequential.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -111,3 +172,7 @@
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
+| 25. Fuzzy Edit Engine | v1.6 | 0/? | Not started | - |
+| 26. Fuzzy Edit Integration | v1.6 | 0/? | Not started | - |
+| 27. RepoMap Tag Extraction & Cache | v1.6 | 0/? | Not started | - |
+| 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |

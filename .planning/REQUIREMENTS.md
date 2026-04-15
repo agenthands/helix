@@ -59,30 +59,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FUZZ-01 | — | Pending |
-| FUZZ-02 | — | Pending |
-| FUZZ-03 | — | Pending |
-| FUZZ-04 | — | Pending |
-| FUZZ-05 | — | Pending |
-| FUZZ-06 | — | Pending |
-| FUZZ-07 | — | Pending |
-| FUZZ-08 | — | Pending |
-| RMAP-01 | — | Pending |
-| RMAP-02 | — | Pending |
-| RMAP-03 | — | Pending |
-| RMAP-04 | — | Pending |
-| RMAP-05 | — | Pending |
-| RMAP-06 | — | Pending |
-| RMAP-07 | — | Pending |
-| RMAP-08 | — | Pending |
-| RMAP-09 | — | Pending |
-| RMAP-10 | — | Pending |
+| FUZZ-01 | Phase 25 | Pending |
+| FUZZ-02 | Phase 25 | Pending |
+| FUZZ-03 | Phase 25 | Pending |
+| FUZZ-04 | Phase 26 | Pending |
+| FUZZ-05 | Phase 26 | Pending |
+| FUZZ-06 | Phase 26 | Pending |
+| FUZZ-07 | Phase 25 | Pending |
+| FUZZ-08 | Phase 25 | Pending |
+| RMAP-01 | Phase 27 | Pending |
+| RMAP-02 | Phase 27 | Pending |
+| RMAP-03 | Phase 27 | Pending |
+| RMAP-04 | Phase 28 | Pending |
+| RMAP-05 | Phase 28 | Pending |
+| RMAP-06 | Phase 28 | Pending |
+| RMAP-07 | Phase 28 | Pending |
+| RMAP-08 | Phase 28 | Pending |
+| RMAP-09 | Phase 27 | Pending |
+| RMAP-10 | Phase 28 | Pending |
 
 **Coverage:**
 - v1.6 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after initial definition*
+*Last updated: 2026-04-15 after roadmap creation*

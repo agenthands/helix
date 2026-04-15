@@ -2,8 +2,8 @@ package diag
 
 import (
 	"context"
-	"fmt"
 
+	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	gen "github.com/postfix/serena/protocol/gen"
 )
@@ -34,7 +34,7 @@ func GetCodeActions(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 
 	var raw []gen.CodeAction
 	if err := lease.Request(ctx, "textDocument/codeAction", params, &raw); err != nil {
-		return nil, fmt.Errorf("codeAction request: %w", err)
+		return nil, serr.Wrap(serr.Internal, "code action request", err)
 	}
 
 	results := make([]CodeActionResult, 0, len(raw))
@@ -59,7 +59,7 @@ func GetCodeActions(ctx context.Context, lease *lspool.WorkerLease, uri string, 
 // If the action has no edit, it returns an error.
 func ApplyCodeAction(ctx context.Context, lease *lspool.WorkerLease, action CodeActionResult) error {
 	if action.Edit == nil {
-		return fmt.Errorf("code action %q has no workspace edit (may require a command)", action.Title)
+		return serr.New(serr.Unsupported, "code action has no workspace edit").WithDetail(action.Title)
 	}
 
 	// WorkspaceEdit.Changes maps document URI -> []TextEdit.
@@ -77,10 +77,10 @@ func ApplyCodeAction(ctx context.Context, lease *lspool.WorkerLease, action Code
 		Applied bool `json:"applied"`
 	}
 	if err := lease.Request(ctx, "workspace/applyEdit", applyParams, &applied); err != nil {
-		return fmt.Errorf("applying workspace edit: %w", err)
+		return serr.Wrap(serr.Internal, "applying workspace edit", err)
 	}
 	if !applied.Applied {
-		return fmt.Errorf("workspace edit was not applied by the server")
+		return serr.New(serr.Internal, "workspace edit was not applied by the server")
 	}
 	return nil
 }

@@ -107,10 +107,10 @@
   5. Agent can use ellipsis/placeholder markers in search blocks to skip unchanged code sections, matching only the anchoring lines around the placeholder
 **Plans**: 6 plans
 - [x] 25-01-PLAN.md — Types & Options (Strategy enum, Options, Result structs) [Wave 1]
-- [ ] 25-02-PLAN.md — Line splitter & ellipsis segmenter [Wave 2]
-- [ ] 25-03-PLAN.md — 4-strategy cascade sweeps (exact / whitespace / indent-flex) [Wave 2]
-- [ ] 25-04-PLAN.md — Indentation reflow (common-prefix dedent + reapply) [Wave 2]
-- [ ] 25-05-PLAN.md — Fail-with-diff + ambiguity formatters [Wave 2]
+- [x] 25-02-PLAN.md — Line splitter & ellipsis segmenter [Wave 2]
+- [x] 25-03-PLAN.md — 4-strategy cascade sweeps (exact / whitespace / indent-flex) [Wave 2]
+- [x] 25-04-PLAN.md — Indentation reflow (common-prefix dedent + reapply) [Wave 2]
+- [x] 25-05-PLAN.md — Fail-with-diff + ambiguity formatters [Wave 2]
 - [ ] 25-06-PLAN.md — Cascade orchestrator + Match() entry point [Wave 3]
 
 ### Phase 26: Fuzzy Edit Integration
@@ -178,7 +178,7 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
-| 25. Fuzzy Edit Engine | v1.6 | 1/6 | In Progress|  |
+| 25. Fuzzy Edit Engine | v1.6 | 5/6 | In Progress|  |
 | 26. Fuzzy Edit Integration | v1.6 | 0/? | Not started | - |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 0/? | Not started | - |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |

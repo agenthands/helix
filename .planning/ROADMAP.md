@@ -135,7 +135,12 @@ Plans:
   2. Languages without tree-sitter grammars fall back to LSP documentSymbol for tag extraction, producing compatible tag data
   3. Extracted tags persist in SQLite with mtime-based invalidation, surviving daemon restarts and client reconnects without re-extraction of unchanged files
   4. Tag output uses scope-aware elision showing signatures without bodies (via tree-sitter), keeping output compact for token-budgeted consumption
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 27-01-PLAN.md — Shared grammar registry, Tag types, tree-sitter .scm queries, TagExtractor, BodyExtractor refactor [Wave 1]
+- [ ] 27-02-PLAN.md — LSP documentSymbol fallback extractor [Wave 1]
+- [ ] 27-03-PLAN.md — SQLite tag cache with mtime-based invalidation [Wave 2]
+- [ ] 27-04-PLAN.md — Scope-aware elision renderer [Wave 2]
 
 ### Phase 28: RepoMap Graph & MCP Tools
 **Goal**: Agents can request ranked, token-budgeted structural overviews and task-focused context from any codebase via MCP tools
@@ -183,5 +188,5 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
-| 27. RepoMap Tag Extraction & Cache | v1.6 | 0/? | Not started | - |
+| 27. RepoMap Tag Extraction & Cache | v1.6 | 0/4 | Not started | - |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |

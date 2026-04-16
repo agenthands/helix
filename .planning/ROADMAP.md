@@ -88,7 +88,7 @@
 
 **Milestone Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
 
-- [ ] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders
+- [x] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders (completed 2026-04-16)
 - [ ] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content
 - [ ] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision
 - [ ] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment
@@ -111,7 +111,7 @@
 - [x] 25-03-PLAN.md — 4-strategy cascade sweeps (exact / whitespace / indent-flex) [Wave 2]
 - [x] 25-04-PLAN.md — Indentation reflow (common-prefix dedent + reapply) [Wave 2]
 - [x] 25-05-PLAN.md — Fail-with-diff + ambiguity formatters [Wave 2]
-- [ ] 25-06-PLAN.md — Cascade orchestrator + Match() entry point [Wave 3]
+- [x] 25-06-PLAN.md — Cascade orchestrator + Match() entry point [Wave 3]
 
 ### Phase 26: Fuzzy Edit Integration
 **Goal**: Existing edit tools gracefully fall back to fuzzy matching when exact matching fails, and agents have a standalone fuzzy edit tool for arbitrary text operations
@@ -178,7 +178,7 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
-| 25. Fuzzy Edit Engine | v1.6 | 5/6 | In Progress|  |
+| 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
 | 26. Fuzzy Edit Integration | v1.6 | 0/? | Not started | - |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 0/? | Not started | - |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |

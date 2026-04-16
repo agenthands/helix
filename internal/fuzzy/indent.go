@@ -90,16 +90,6 @@ func reapplyPrefix(lines []string, sourcePrefix string) []string {
 	return out
 }
 
-// splitLines splits text on "\n". Unlike strings.Split, a trailing
-// newline does NOT produce an extra empty element.
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	s = strings.TrimSuffix(s, "\n")
-	return strings.Split(s, "\n")
-}
-
 // reflow applies the full Aider-style common-prefix dedent + reapply
 // transform to replacement, producing the text that will become
 // Result.ReplacementText.

@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	serr "github.com/postfix/serena/internal/errors"
+	"github.com/postfix/serena/internal/fuzzy"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/mcp"
 )
@@ -277,6 +278,28 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
+		}
+
+		// Fuzzy fallback: when literal match returns 0 hits and not regex (FUZZ-06)
+		if count == 0 && !args.IsRegex {
+			content, readErr := ReadFile(root, args.Path)
+			if readErr != nil {
+				return textResult(fmt.Sprintf("0 replacement(s) made in %s", args.Path)), nil, nil
+			}
+			fResult, fErr := fuzzy.Match(content, args.Pattern, fuzzy.Options{
+				Replacement:   args.Replacement,
+				AllowEllipsis: false, // replace_in_file is literal-oriented
+			})
+			if fErr != nil {
+				return errorResult(fErr.Error()), nil, nil
+			}
+			newContent := content[:fResult.StartByte] + fResult.ReplacementText + content[fResult.EndByte:]
+			if wErr := OverwriteFile(root, args.Path, newContent); wErr != nil {
+				return errorResult(wErr.Error()), nil, nil
+			}
+			text := fmt.Sprintf("1 replacement made in %s (fuzzy)\nmatch_strategy: %s\nsimilarity_score: %.2f",
+				args.Path, fResult.Strategy, fResult.Score)
+			return textResult(text), nil, nil
 		}
 
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil

@@ -89,7 +89,7 @@
 **Milestone Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
 
 - [x] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders (completed 2026-04-16)
-- [ ] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content
+- [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
 - [ ] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision
 - [ ] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment
 
@@ -123,8 +123,8 @@
   3. When `replace_content` receives a search string that does not match exactly or via regex, it falls back to fuzzy matching and succeeds if a fuzzy match is found
 **Plans**: 2 plans
 Plans:
-- [ ] 26-01-PLAN.md — Standalone fuzzy_edit MCP tool + replace_in_file fuzzy fallback [Wave 1]
-- [ ] 26-02-PLAN.md — replace_symbol_body fuzzy fallback with search_body parameter [Wave 1]
+- [x] 26-01-PLAN.md — Standalone fuzzy_edit MCP tool + replace_in_file fuzzy fallback [Wave 1]
+- [x] 26-02-PLAN.md — replace_symbol_body fuzzy fallback with search_body parameter [Wave 1]
 
 ### Phase 27: RepoMap Tag Extraction & Cache
 **Goal**: The system can extract, cache, and elide structural tags (definitions and references) from source files across multiple languages
@@ -182,6 +182,6 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 23. Tool Migration | v1.5 | 8/8 | Complete | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
-| 26. Fuzzy Edit Integration | v1.6 | 0/2 | Not started | - |
+| 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 0/? | Not started | - |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |

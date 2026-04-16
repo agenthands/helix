@@ -22,6 +22,7 @@ type ReplaceBodyArgs struct {
 	Path       string `json:"path" jsonschema:"File path"`
 	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol whose body to replace"`
 	NewBody    string `json:"new_body" jsonschema:"New body content to replace with"`
+	SearchBody string `json:"search_body,omitempty" jsonschema:"Optional: fuzzy-match this text within the symbol body before replacing. When absent, replaces the entire body."`
 }
 
 // InsertBeforeArgs is the input schema for the insert_before_symbol tool.
@@ -175,10 +176,15 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		if err := ReplaceBodyWithPlan(ctx, dirtyLease, extractor, plan, lang); err != nil {
+		fuzzyInfo, err := ReplaceBodyWithPlan(ctx, dirtyLease, extractor, plan, lang, args.SearchBody)
+		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
+		// D-07: include strategy/score when fuzzy was used; D-08: omit for full body replace.
+		if fuzzyInfo != nil {
+			text += fmt.Sprintf("\nmatch_strategy: %s\nsimilarity_score: %.2f", fuzzyInfo.Strategy, fuzzyInfo.Score)
+		}
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))

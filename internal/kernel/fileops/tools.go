@@ -53,6 +53,14 @@ type ReplaceInFileArgs struct {
 	IsRegex     bool   `json:"is_regex,omitempty" jsonschema:"Treat pattern as regex (default false)"`
 }
 
+// FuzzyEditArgs is the input schema for the fuzzy_edit tool.
+type FuzzyEditArgs struct {
+	Path            string `json:"path" jsonschema:"File path (relative to workspace root)"`
+	Search          string `json:"search" jsonschema:"Text to search for (fuzzy matched with 4-strategy cascade: exact, whitespace-normalized, indentation-flexible)"`
+	Replacement     string `json:"replacement" jsonschema:"Replacement text"`
+	DisableEllipsis bool   `json:"disable_ellipsis,omitempty" jsonschema:"Disable ... ellipsis segmentation (default false, meaning ellipsis is enabled)"`
+}
+
 // RegisterTools registers all file operation tools with the MCP tool registry.
 // The workspaceRoot function provides the active workspace root path.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
@@ -64,6 +72,7 @@ func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string, tra
 	registerFindFiles(server, workspaceRoot, tracer)
 	registerSearchInFiles(server, workspaceRoot, tracer)
 	registerReplaceInFile(server, workspaceRoot, tracer)
+	registerFuzzyEdit(server, workspaceRoot, tracer)
 }
 
 func textResult(text string) *mcpsdk.CallToolResult {
@@ -274,3 +283,35 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)"})
 }
+
+func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
+		Name:        "fuzzy_edit",
+		Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)",
+	}, kernel.WrapToolSpan(tracer, "fuzzy_edit", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FuzzyEditArgs) (*mcpsdk.CallToolResult, any, error) {
+		root := rootFn()
+		if root == "" {
+			return noWorkspaceError(), nil, nil
+		}
+		if args.Path == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
+				WithTool("fuzzy_edit").Error()), nil, nil
+		}
+		if args.Search == "" {
+			return errorResult(serr.New(serr.InvalidArgs, "missing required field: search").
+				WithTool("fuzzy_edit").Error()), nil, nil
+		}
+
+		allowEllipsis := !args.DisableEllipsis
+		result, err := FuzzyEdit(root, args.Path, args.Search, args.Replacement, allowEllipsis)
+		if err != nil {
+			return errorResult(err.Error()), nil, nil
+		}
+
+		text := fmt.Sprintf("Fuzzy edit applied to %s\nmatch_strategy: %s\nsimilarity_score: %.2f",
+			args.Path, result.Strategy, result.Score)
+		return textResult(text), nil, nil
+	}))
+	server.Registry().Register(&mcp.ToolDef{Name: "fuzzy_edit", Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)"})
+}
+

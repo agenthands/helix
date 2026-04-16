@@ -25,6 +25,7 @@ import (
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/kernel/edit"
+	"github.com/postfix/serena/internal/treesitter"
 	"github.com/postfix/serena/internal/kernel/fileops"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
@@ -186,7 +187,8 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// 6. Create diagnostic store and body extractor.
 	// NOTE: step numbering preserved from original New() for git-blame continuity.
 	diagStore := diag.NewDiagnosticStore()
-	bodyExtractor := edit.NewBodyExtractor()
+	grammarRegistry := treesitter.NewGrammarRegistry()
+	bodyExtractor := edit.NewBodyExtractor(grammarRegistry)
 
 	// 7. Create MCP server.
 	mcpServer := serenaMCP.NewSerenaMCPServer(workspaces, logger)

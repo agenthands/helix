@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/postfix/serena/internal/treesitter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func Add(a, b int) int {
 	return a + b
 }
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	// Extract body of Hello function.
 	start, end, err := be.ExtractBody(source, "go", "Hello", gen.Range{
@@ -50,7 +51,7 @@ func (s *Server) Start() {
 	s.running = true
 }
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	start, end, err := be.ExtractBody(source, "go", "Start", gen.Range{
 		Start: gen.Position{Line: 4, Character: 0},
@@ -69,7 +70,7 @@ func TestExtractBody_PythonFunction(t *testing.T) {
 def add(a, b):
     return a + b
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	start, end, err := be.ExtractBody(source, "python", "greet", gen.Range{
 		Start: gen.Position{Line: 0, Character: 0},
@@ -91,7 +92,7 @@ function add(a: number, b: number): number {
   return a + b;
 }
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	start, end, err := be.ExtractBody(source, "typescript", "greet", gen.Range{
 		Start: gen.Position{Line: 0, Character: 0},
@@ -113,7 +114,7 @@ fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	start, end, err := be.ExtractBody(source, "rust", "greet", gen.Range{
 		Start: gen.Position{Line: 0, Character: 0},
@@ -132,7 +133,7 @@ func Hello() {
 	fmt.Println("hello")
 }
 `)
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	_, _, err := be.ExtractBody(source, "go", "NonExistent", gen.Range{
 		Start: gen.Position{Line: 2, Character: 0},
@@ -143,7 +144,7 @@ func Hello() {
 }
 
 func TestExtractBody_UnsupportedLanguage(t *testing.T) {
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	_, _, err := be.ExtractBody([]byte("code"), "haskell", "main", gen.Range{})
 	assert.Error(t, err)
@@ -151,7 +152,7 @@ func TestExtractBody_UnsupportedLanguage(t *testing.T) {
 }
 
 func TestSupportsLanguage(t *testing.T) {
-	be := NewBodyExtractor()
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
 
 	assert.True(t, be.SupportsLanguage("go"))
 	assert.True(t, be.SupportsLanguage("python"))

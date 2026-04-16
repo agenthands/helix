@@ -7,18 +7,14 @@ import (
 	"sync"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	tree_sitter_go "github.com/tree-sitter/tree-sitter-go/bindings/go"
-	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
-	tree_sitter_rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
-	tree_sitter_typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go" //nolint:importmismatch
 
 	serr "github.com/postfix/serena/internal/errors"
+	"github.com/postfix/serena/internal/treesitter"
 	gen "github.com/postfix/serena/protocol/gen"
 )
 
-// langConfig holds tree-sitter metadata for a language.
+// langConfig holds edit-specific tree-sitter metadata for a language.
 type langConfig struct {
-	language         *tree_sitter.Language
 	declarationTypes map[string]bool // node types that are declarations
 	bodyFieldName    string          // field name for the body child node
 }
@@ -26,19 +22,20 @@ type langConfig struct {
 // BodyExtractor uses tree-sitter to precisely extract symbol body byte ranges.
 // Per D-14: tree-sitter-first for replace-body operations.
 type BodyExtractor struct {
-	mu        sync.RWMutex
-	languages map[string]*langConfig
+	mu       sync.RWMutex
+	registry *treesitter.GrammarRegistry
+	configs  map[string]*langConfig
 }
 
-// NewBodyExtractor creates a BodyExtractor with Go, Python, TypeScript, and Rust grammars.
-func NewBodyExtractor() *BodyExtractor {
+// NewBodyExtractor creates a BodyExtractor using the shared grammar registry.
+func NewBodyExtractor(registry *treesitter.GrammarRegistry) *BodyExtractor {
 	be := &BodyExtractor{
-		languages: make(map[string]*langConfig),
+		registry: registry,
+		configs:  make(map[string]*langConfig),
 	}
 
 	// Go: function_declaration, method_declaration -> body
-	be.languages["go"] = &langConfig{
-		language: tree_sitter.NewLanguage(tree_sitter_go.Language()),
+	be.configs["go"] = &langConfig{
 		declarationTypes: map[string]bool{
 			"function_declaration": true,
 			"method_declaration":   true,
@@ -47,8 +44,7 @@ func NewBodyExtractor() *BodyExtractor {
 	}
 
 	// Python: function_definition, class_definition -> body
-	be.languages["python"] = &langConfig{
-		language: tree_sitter.NewLanguage(tree_sitter_python.Language()),
+	be.configs["python"] = &langConfig{
 		declarationTypes: map[string]bool{
 			"function_definition": true,
 			"class_definition":    true,
@@ -57,8 +53,7 @@ func NewBodyExtractor() *BodyExtractor {
 	}
 
 	// TypeScript: function_declaration, method_definition, arrow_function -> body
-	be.languages["typescript"] = &langConfig{
-		language: tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTypescript()),
+	be.configs["typescript"] = &langConfig{
 		declarationTypes: map[string]bool{
 			"function_declaration": true,
 			"method_definition":    true,
@@ -68,8 +63,7 @@ func NewBodyExtractor() *BodyExtractor {
 	}
 
 	// Rust: function_item, impl_item -> body
-	be.languages["rust"] = &langConfig{
-		language: tree_sitter.NewLanguage(tree_sitter_rust.Language()),
+	be.configs["rust"] = &langConfig{
 		declarationTypes: map[string]bool{
 			"function_item": true,
 			"impl_item":     true,
@@ -84,8 +78,8 @@ func NewBodyExtractor() *BodyExtractor {
 func (be *BodyExtractor) SupportsLanguage(lang string) bool {
 	be.mu.RLock()
 	defer be.mu.RUnlock()
-	_, ok := be.languages[lang]
-	return ok
+	_, ok := be.configs[lang]
+	return ok && be.registry.SupportsLanguage(lang)
 }
 
 // ExtractBody parses source with the language grammar and returns the byte range
@@ -93,8 +87,13 @@ func (be *BodyExtractor) SupportsLanguage(lang string) bool {
 // Per D-14: tree-sitter-first for precise body surgery.
 func (be *BodyExtractor) ExtractBody(source []byte, lang string, symbolName string, symbolRange gen.Range) (startByte, endByte uint, err error) {
 	be.mu.RLock()
-	cfg, ok := be.languages[lang]
+	cfg, ok := be.configs[lang]
 	be.mu.RUnlock()
+	if !ok {
+		return 0, 0, serr.New(serr.Unsupported, "unsupported language for tree-sitter").WithDetail(lang)
+	}
+
+	tsLang, ok := be.registry.GetLanguage(lang)
 	if !ok {
 		return 0, 0, serr.New(serr.Unsupported, "unsupported language for tree-sitter").WithDetail(lang)
 	}
@@ -102,7 +101,7 @@ func (be *BodyExtractor) ExtractBody(source []byte, lang string, symbolName stri
 	parser := tree_sitter.NewParser()
 	defer parser.Close()
 
-	if err := parser.SetLanguage(cfg.language); err != nil {
+	if err := parser.SetLanguage(tsLang); err != nil {
 		return 0, 0, serr.Wrap(serr.Internal, "set tree-sitter language", err).WithDetail(lang)
 	}
 

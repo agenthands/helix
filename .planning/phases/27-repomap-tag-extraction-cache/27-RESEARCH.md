@@ -454,17 +454,17 @@ func elide(source []byte, bodyStart, bodyEnd uint) string {
 | A1 | SQLite mtime as UnixNano int64 is sufficient for invalidation across filesystems | Pitfall 4 | Tags could be unnecessarily re-extracted; LOW risk since both stat calls see the same rounded value |
 | A2 | Batch INSERT for tags is fast enough without needing prepared statement pooling | Anti-Patterns | Could need optimization for very large files; mitigated by lazy per-file extraction |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Qualified names for Python/TS/Rust methods**
    - What we know: Go methods have clear receiver syntax. D-03 says qualified names when available.
    - What's unclear: Python method qualification (class.method) requires walking up to the enclosing class_definition. TypeScript methods need similar logic. Rust methods are inside impl blocks.
-   - Recommendation: Implement qualified name extraction per language. For Python: walk parent to `class_definition`. For TS: walk parent to `class_declaration`. For Rust: walk parent to `impl_item` and extract the type name from the `type` field. This is Claude's discretion area.
+   - RESOLVED: Implement qualified name extraction per language. For Python: walk parent to `class_definition`. For TS: walk parent to `class_declaration`. For Rust: walk parent to `impl_item` and extract the type name from the `type` field. This is Claude's discretion area. Plans 27-01 Task 2 implements this.
 
 2. **TSX file support**
    - What we know: `tree-sitter-typescript` provides both `LanguageTypescript()` and `LanguageTSX()`.
    - What's unclear: Should `.tsx` files use the TSX parser or TypeScript parser?
-   - Recommendation: Use `LanguageTSX()` for `.tsx` files in the grammar registry. The TypeScript parser won't handle JSX syntax correctly.
+   - RESOLVED: Use `LanguageTSX()` for `.tsx` files in the grammar registry. The TypeScript parser won't handle JSX syntax correctly. Plan 27-01 Task 1 registers TSX separately.
 
 ## Validation Architecture
 

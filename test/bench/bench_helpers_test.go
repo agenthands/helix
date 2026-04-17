@@ -34,7 +34,7 @@ import (
 
 	// Blank imports trigger skill registration via init() (Caddy-style).
 	// Must match the set in test/integration/harness.go so the bench daemon
-	// exposes the same 38 tools as the integration harness.
+	// exposes the same 41 tools as the integration harness.
 	_ "github.com/postfix/serena/internal/kernel/diag"
 	_ "github.com/postfix/serena/internal/kernel/edit"
 	_ "github.com/postfix/serena/internal/kernel/fileops"
@@ -145,7 +145,7 @@ func startBenchDaemon(tb testing.TB) *benchDaemon {
 }
 
 // defaultBenchConfig returns a minimal config for benchmark daemons. Profile
-// "full" exposes all 38 tools so the manifest parity test can compare against
+// "full" exposes all 41 tools so the manifest parity test can compare against
 // the unfiltered registry.
 func defaultBenchConfig(tb testing.TB) *config.SerenaConfig {
 	tb.Helper()

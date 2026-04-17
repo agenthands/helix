@@ -1,6 +1,6 @@
 package bench_test
 
-// main_test.go holds the package TestMain plus the 38-tool manifest parity
+// main_test.go holds the package TestMain plus the 41-tool manifest parity
 // test. TestMain performs a NumGoroutine baseline leak check (09-RESEARCH.md
 // Pitfall 6) and the parity test enforces bidirectional name alignment
 // between benchTools and the live MCP registry (threat T-09-04).
@@ -60,12 +60,12 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// TestBenchToolsManifestMatchesRegistry enforces the D-04 38-tool lock by
+// TestBenchToolsManifestMatchesRegistry enforces the D-04 41-tool lock by
 // asserting exact bidirectional name parity between benchTools and the live
 // MCP tool registry:
 //
-//  1. len(benchTools) == 38 exactly
-//  2. len(registry) == 38 exactly (catches upstream drift)
+//  1. len(benchTools) == 41 exactly
+//  2. len(registry) == 41 exactly (catches upstream drift)
 //  3. every benchCase.name exists in the live registry
 //  4. every live registry name exists in benchTools
 //
@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 // internal/daemon/bootstrap_test.go as the canonical source of truth. This
 // test is the mitigation for threat T-09-04 (tools_manifest drift).
 func TestBenchToolsManifestMatchesRegistry(t *testing.T) {
-	const expectedCount = 38
+	const expectedCount = 41
 
 	if got := len(benchTools); got != expectedCount {
 		t.Fatalf("benchTools has %d entries; expected exactly %d (per D-04 / 09-02 must_haves). "+

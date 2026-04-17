@@ -93,7 +93,7 @@
 - [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
 - [x] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment (completed 2026-04-17)
 - [x] **Phase 29: Phase 25 Formal Verification** - Run formal verification on fuzzy edit engine to close FUZZ-01/02/03/07/08 (gap closure) (completed 2026-04-17)
-- [ ] **Phase 30: RepoMap Pipeline Wiring** - Wire TagExtractor, FallbackExtractor, EnrichFromLSP, and TreeRenderer in RepoMapSkill (gap closure)
+- [x] **Phase 30: RepoMap Pipeline Wiring** - Wire TagExtractor, FallbackExtractor, EnrichFromLSP, and TreeRenderer in RepoMapSkill (gap closure) (completed 2026-04-17)
 
 ## Phase Details
 
@@ -187,7 +187,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 30-01-PLAN.md — Wire TagExtractor, ensureCache, TreeRenderer, EnrichFromLSP into RepoMapSkill + daemon wiring [Wave 1]
-- [ ] 30-02-PLAN.md — Integration tests for full pipeline (RMAP-04/05/06/07/08/10) [Wave 2]
+- [x] 30-02-PLAN.md — Integration tests for full pipeline (RMAP-04/05/06/07/08/10) [Wave 2]
 ## Progress
 
 **Execution Order:**
@@ -225,4 +225,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
-| 30. RepoMap Pipeline Wiring | v1.6 | 1/2 | In Progress|  |
+| 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete   | 2026-04-17 |

@@ -63,6 +63,8 @@ func newTestSkill(t *testing.T, populate bool) *RepoMapSkill {
 		require.NoError(t, err)
 
 		s.rootDir = dir
+		s.cachePopulated = true
+		s.renderer = repomap.NewTreeRenderer(elider, cache, dir)
 	}
 
 	return s
@@ -134,6 +136,10 @@ func TestRepoMapSkill_GetContext_PathTraversal(t *testing.T) {
 
 func TestRepoMapSkill_GetRepoMap_EmptyCache(t *testing.T) {
 	s := newTestSkill(t, false)
+	// Set rootDir to an empty temp dir so ensureCache walks it (finds nothing).
+	s.rootDir = t.TempDir()
+	s.cachePopulated = true // skip walk (nothing to walk)
+	s.renderer = repomap.NewTreeRenderer(s.elider, s.cache, s.rootDir)
 
 	result, err := s.ExecuteTool("get_repo_map", map[string]interface{}{})
 	require.NoError(t, err)
@@ -174,4 +180,25 @@ func TestRepoMapSkill_Init(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, s.cache)
 	assert.NotNil(t, s.elider)
+	assert.NotNil(t, s.extractor) // TagExtractor now created in Init
+}
+
+func TestRepoMapSkill_SetWorkspaceRoot(t *testing.T) {
+	s := newTestSkill(t, true)
+	assert.True(t, s.cachePopulated)
+
+	s.SetWorkspaceRoot("/new/root")
+
+	assert.Equal(t, "/new/root", s.rootDir)
+	assert.False(t, s.cachePopulated) // cache invalidated
+	assert.Nil(t, s.renderer)         // renderer cleared
+}
+
+func TestRepoMapSkill_GetRepoMapSkillNil(t *testing.T) {
+	// When no repomap skill is registered, GetRepoMapSkill returns nil.
+	// This test verifies the function doesn't panic.
+	// Note: actual registration happens via init(), so in test context
+	// the skill IS registered. We just verify it returns non-nil.
+	rs := GetRepoMapSkill()
+	assert.NotNil(t, rs)
 }

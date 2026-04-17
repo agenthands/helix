@@ -8,7 +8,7 @@
 - ✅ **v1.3 Documentation Catchup** — Phases 16-17 (shipped 2026-04-11)
 - ✅ **v1.4 Integration Testing v2** — Phases 18-21 (shipped 2026-04-14)
 - ✅ **v1.5 Typed Errors & Hardening** — Phases 22-24 (shipped 2026-04-15)
-- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-28 (in progress)
+- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-30 (in progress)
 
 ## Phases
 
@@ -92,6 +92,8 @@
 - [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
 - [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
 - [x] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment (completed 2026-04-17)
+- [ ] **Phase 29: Phase 25 Formal Verification** - Run formal verification on fuzzy edit engine to close FUZZ-01/02/03/07/08 (gap closure)
+- [ ] **Phase 30: RepoMap Pipeline Wiring** - Wire TagExtractor, FallbackExtractor, EnrichFromLSP, and TreeRenderer in RepoMapSkill (gap closure)
 
 ## Phase Details
 
@@ -158,6 +160,30 @@ Plans:
 - [x] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
 - [x] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
 
+### Phase 29: Phase 25 Formal Verification
+**Goal**: Close 5 unsatisfied FUZZ requirements by running formal verification on Phase 25 — code exists and tests pass, only VERIFICATION.md is missing
+**Depends on**: Phase 25
+**Requirements**: FUZZ-01, FUZZ-02, FUZZ-03, FUZZ-07, FUZZ-08
+**Gap Closure:** Closes verification gaps from v1.6 audit
+**Success Criteria** (what must be TRUE):
+  1. VERIFICATION.md exists for Phase 25 with evidence that all 5 FUZZ requirements are satisfied
+  2. Each requirement has test evidence or code inspection confirming implementation
+**Plans**: TBD
+
+### Phase 30: RepoMap Pipeline Wiring
+**Goal**: Make get_repo_map and get_context functional by wiring the tag extraction pipeline, LSP enrichment, and TreeRenderer into RepoMapSkill
+**Depends on**: Phase 27, Phase 28
+**Requirements**: RMAP-04, RMAP-05, RMAP-06, RMAP-07, RMAP-08, RMAP-10
+**Gap Closure:** Closes integration and flow gaps from v1.6 audit
+**Success Criteria** (what must be TRUE):
+  1. RepoMapSkill.Init() instantiates TagExtractor and FallbackExtractor, populating the cache with real file data
+  2. get_repo_map returns ranked symbols (not "No files found") for a workspace with Go/Python/TypeScript files
+  3. get_context returns task-relevant symbols (not "No files found") when given seed files or task description
+  4. EnrichFromLSP is called when LSP sessions are warm, adding precise cross-file references
+  5. TreeRenderer.RenderBudgeted is used (not inline copy), with 15% tolerance binary search
+  6. ProjectDir is derived from workspace path, not hardcoded
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
@@ -194,3 +220,5 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
+| 29. Phase 25 Formal Verification | v1.6 | 0/0 | Pending | — |
+| 30. RepoMap Pipeline Wiring | v1.6 | 0/0 | Pending | — |

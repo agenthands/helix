@@ -23,13 +23,13 @@ Requirements for Context Intelligence & Resilient Editing milestone. Each maps t
 - [ ] **RMAP-01**: Agent can extract def/ref tags from source files via tree-sitter .scm queries (Go, Python, TypeScript, Rust)
 - [ ] **RMAP-02**: Languages without tree-sitter grammars fall back to LSP documentSymbol for tag extraction
 - [ ] **RMAP-03**: Tag cache persists in SQLite with mtime-based invalidation, surviving client reconnects via daemon lifecycle
-- [x] **RMAP-04**: Cross-file reference graph built from extracted tags (nodes = files, edges = ref→def)
-- [x] **RMAP-05**: Personalized PageRank ranks symbol importance with configurable personalization weights
-- [x] **RMAP-06**: Agent can call `get_repo_map` to get a token-budgeted structural overview of the repo with ranked symbol importance
-- [x] **RMAP-07**: Agent can call `get_context` to get task-focused context (most relevant symbols for given files/task description)
-- [x] **RMAP-08**: Warm LSP sessions enrich the reference graph with precise cross-file references when available
+- [ ] **RMAP-04**: Cross-file reference graph built from extracted tags (nodes = files, edges = ref→def)
+- [ ] **RMAP-05**: Personalized PageRank ranks symbol importance with configurable personalization weights
+- [ ] **RMAP-06**: Agent can call `get_repo_map` to get a token-budgeted structural overview of the repo with ranked symbol importance
+- [ ] **RMAP-07**: Agent can call `get_context` to get task-focused context (most relevant symbols for given files/task description)
+- [ ] **RMAP-08**: Warm LSP sessions enrich the reference graph with precise cross-file references when available
 - [ ] **RMAP-09**: Output uses scope-aware elision (signatures without bodies via tree-sitter)
-- [x] **RMAP-10**: Token budget parameter controls output size, with binary search to maximize coverage within budget
+- [ ] **RMAP-10**: Token budget parameter controls output size, with binary search to maximize coverage within budget
 
 ## Future Requirements
 
@@ -59,24 +59,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FUZZ-01 | Phase 25 | Pending |
-| FUZZ-02 | Phase 25 | Pending |
-| FUZZ-03 | Phase 25 | Pending |
+| FUZZ-01 | Phase 29 | Pending |
+| FUZZ-02 | Phase 29 | Pending |
+| FUZZ-03 | Phase 29 | Pending |
 | FUZZ-04 | Phase 26 | Pending |
 | FUZZ-05 | Phase 26 | Pending |
 | FUZZ-06 | Phase 26 | Pending |
-| FUZZ-07 | Phase 25 | Pending |
-| FUZZ-08 | Phase 25 | Pending |
+| FUZZ-07 | Phase 29 | Pending |
+| FUZZ-08 | Phase 29 | Pending |
 | RMAP-01 | Phase 27 | Pending |
 | RMAP-02 | Phase 27 | Pending |
 | RMAP-03 | Phase 27 | Pending |
-| RMAP-04 | Phase 28 | Complete |
-| RMAP-05 | Phase 28 | Complete |
-| RMAP-06 | Phase 28 | Complete |
-| RMAP-07 | Phase 28 | Complete |
-| RMAP-08 | Phase 28 | Complete |
+| RMAP-04 | Phase 30 | Pending |
+| RMAP-05 | Phase 30 | Pending |
+| RMAP-06 | Phase 30 | Pending |
+| RMAP-07 | Phase 30 | Pending |
+| RMAP-08 | Phase 30 | Pending |
 | RMAP-09 | Phase 27 | Pending |
-| RMAP-10 | Phase 28 | Complete |
+| RMAP-10 | Phase 30 | Pending |
 
 **Coverage:**
 - v1.6 requirements: 18 total

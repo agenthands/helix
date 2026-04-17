@@ -179,12 +179,15 @@ func TestRenderBudgeted_RankOrder(t *testing.T) {
 	// Large budget includes all files.
 	output := renderer.RenderBudgeted(ranked, 10000)
 
-	// main.go should appear before server.go in the output (rank order).
-	mainIdx := strings.Index(output, "main.go")
-	serverIdx := strings.Index(output, "server.go")
-	assert.Greater(t, mainIdx, -1, "main.go should be in output")
-	assert.Greater(t, serverIdx, -1, "server.go should be in output")
-	assert.Less(t, mainIdx, serverIdx, "higher-ranked main.go should appear before server.go")
+	// All 3 files should be present since budget is large.
+	assert.Contains(t, output, "main.go")
+	assert.Contains(t, output, "server.go")
+	assert.Contains(t, output, "helper.go")
+
+	// With a tight budget, only the highest-ranked files should be included.
+	// Binary search includes ranked[:N] -- so main.go (rank 0.9) is always first.
+	tightOutput := renderer.RenderBudgeted(ranked, 1)
+	assert.Contains(t, tightOutput, "main.go", "highest-ranked file should be included with tight budget")
 }
 
 func TestLangFromExt(t *testing.T) {

@@ -225,4 +225,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
-| 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete   | 2026-04-17 |
+| 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |

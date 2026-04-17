@@ -25,8 +25,8 @@ Requirements for Context Intelligence & Resilient Editing milestone. Each maps t
 - [ ] **RMAP-03**: Tag cache persists in SQLite with mtime-based invalidation, surviving client reconnects via daemon lifecycle
 - [x] **RMAP-04**: Cross-file reference graph built from extracted tags (nodes = files, edges = ref→def)
 - [x] **RMAP-05**: Personalized PageRank ranks symbol importance with configurable personalization weights
-- [ ] **RMAP-06**: Agent can call `get_repo_map` to get a token-budgeted structural overview of the repo with ranked symbol importance
-- [ ] **RMAP-07**: Agent can call `get_context` to get task-focused context (most relevant symbols for given files/task description)
+- [x] **RMAP-06**: Agent can call `get_repo_map` to get a token-budgeted structural overview of the repo with ranked symbol importance
+- [x] **RMAP-07**: Agent can call `get_context` to get task-focused context (most relevant symbols for given files/task description)
 - [x] **RMAP-08**: Warm LSP sessions enrich the reference graph with precise cross-file references when available
 - [ ] **RMAP-09**: Output uses scope-aware elision (signatures without bodies via tree-sitter)
 - [x] **RMAP-10**: Token budget parameter controls output size, with binary search to maximize coverage within budget
@@ -72,8 +72,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RMAP-03 | Phase 27 | Pending |
 | RMAP-04 | Phase 28 | Complete |
 | RMAP-05 | Phase 28 | Complete |
-| RMAP-06 | Phase 28 | Pending |
-| RMAP-07 | Phase 28 | Pending |
+| RMAP-06 | Phase 28 | Complete |
+| RMAP-07 | Phase 28 | Complete |
 | RMAP-08 | Phase 28 | Complete |
 | RMAP-09 | Phase 27 | Pending |
 | RMAP-10 | Phase 28 | Complete |

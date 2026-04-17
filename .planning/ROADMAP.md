@@ -91,7 +91,7 @@
 - [x] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders (completed 2026-04-16)
 - [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
 - [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
-- [ ] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment
+- [x] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment (completed 2026-04-17)
 
 ## Phase Details
 
@@ -156,7 +156,7 @@ Plans:
 Plans:
 - [x] 28-01-PLAN.md — Cross-file reference graph, PageRank, LSP enrichment [Wave 1]
 - [x] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
-- [ ] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
+- [x] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
 
 ## Progress
 
@@ -193,4 +193,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
-| 28. RepoMap Graph & MCP Tools | v1.6 | 2/3 | In Progress|  |
+| 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |

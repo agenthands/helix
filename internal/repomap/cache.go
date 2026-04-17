@@ -15,8 +15,9 @@ import (
 // reconnects. The cache uses a separate tags.db file independent from
 // the memory store (per D-09).
 type TagCache struct {
-	db *sql.DB
-	mu sync.Mutex
+	db      *sql.DB
+	mu      sync.Mutex
+	version int64
 }
 
 // NewTagCache opens (or creates) the SQLite tag cache at dbPath,
@@ -107,6 +108,9 @@ func (c *TagCache) InvalidateFile(filePath string) error {
 	defer c.mu.Unlock()
 
 	_, err := c.db.Exec("DELETE FROM file_tags WHERE file_path = ?", filePath)
+	if err == nil {
+		c.version++
+	}
 	return err
 }
 
@@ -116,7 +120,54 @@ func (c *TagCache) Clear() error {
 	defer c.mu.Unlock()
 
 	_, err := c.db.Exec("DELETE FROM file_tags")
+	if err == nil {
+		c.version++
+	}
 	return err
+}
+
+// Version returns a monotonically increasing counter that increments
+// whenever the cache contents change (store, invalidate, clear).
+// Used by the graph builder to detect cache changes and avoid unnecessary rebuilds.
+func (c *TagCache) Version() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.version
+}
+
+// AllFiles returns all cached file paths with their tags.
+// Used by graph building to iterate the entire tag cache.
+func (c *TagCache) AllFiles() (map[string][]Tag, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	rows, err := c.db.Query("SELECT DISTINCT file_path FROM file_tags")
+	if err != nil {
+		return nil, fmt.Errorf("listing cached files: %w", err)
+	}
+	defer rows.Close()
+
+	var files []string
+	for rows.Next() {
+		var fp string
+		if err := rows.Scan(&fp); err != nil {
+			return nil, err
+		}
+		files = append(files, fp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]Tag, len(files))
+	for _, fp := range files {
+		tags, err := c.loadTags(fp)
+		if err != nil {
+			return nil, fmt.Errorf("loading tags for %s: %w", fp, err)
+		}
+		result[fp] = tags
+	}
+	return result, nil
 }
 
 // Close closes the underlying database connection.
@@ -180,5 +231,9 @@ func (c *TagCache) storeTags(filePath string, mtime int64, tags []Tag) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	c.version++
+	return nil
 }

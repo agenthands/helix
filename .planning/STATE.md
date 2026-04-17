@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
 status: executing
 stopped_at: Completed 28-03-PLAN.md
-last_updated: "2026-04-17T13:52:58.137Z"
-last_activity: 2026-04-17
+last_updated: "2026-04-17T16:56:40.163Z"
+last_activity: 2026-04-17 -- Phase 29 planning complete
 progress:
-  total_phases: 4
+  total_phases: 6
   completed_phases: 4
-  total_plans: 15
+  total_plans: 16
   completed_plans: 15
-  percent: 100
+  percent: 94
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 27 — repomap-tag-extraction-cache
+**Current focus:** Phase 28 — repomap-graph-mcp-tools (COMPLETED)
 
 ## Current Position
 
-Phase: 27 (repomap-tag-extraction-cache) — EXECUTING
-Plan: 4 of 4
+Phase: 28 (repomap-graph-mcp-tools) — COMPLETED
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-17
+Last activity: 2026-04-17 -- Phase 29 planning complete
 
-Progress: [                    ] 0%
+Progress: [████████████████████] 100%
 
 ## Performance Metrics
 
@@ -50,7 +50,7 @@ Progress: [                    ] 0%
 | v1.3 (16-17) | 2 | 4 | 1 day |
 | v1.4 (18-21) | 4 | 11 | 4 days |
 | v1.5 (22-24) | 3 | 12 | 1 day |
-| v1.6 (25-28) | 4 | ? | — |
+| v1.6 (25-28) | 4 | 15 | — |
 
 **Recent Trend:**
 

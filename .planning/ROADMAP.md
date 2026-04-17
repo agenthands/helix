@@ -186,7 +186,7 @@ Plans:
   6. ProjectDir is derived from workspace path, not hardcoded
 **Plans**: 2 plans
 Plans:
-- [ ] 30-01-PLAN.md — Wire TagExtractor, ensureCache, TreeRenderer, EnrichFromLSP into RepoMapSkill + daemon wiring [Wave 1]
+- [x] 30-01-PLAN.md — Wire TagExtractor, ensureCache, TreeRenderer, EnrichFromLSP into RepoMapSkill + daemon wiring [Wave 1]
 - [ ] 30-02-PLAN.md — Integration tests for full pipeline (RMAP-04/05/06/07/08/10) [Wave 2]
 ## Progress
 
@@ -225,4 +225,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
-| 30. RepoMap Pipeline Wiring | v1.6 | 0/2 | Pending | — |
+| 30. RepoMap Pipeline Wiring | v1.6 | 1/2 | In Progress|  |

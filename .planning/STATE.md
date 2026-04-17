@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
-status: verifying
+status: executing
 stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-04-17T17:03:16.361Z"
-last_activity: 2026-04-17
+last_updated: "2026-04-17T19:59:29.328Z"
+last_activity: 2026-04-17 -- Phase 30 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 16
+  total_plans: 18
   completed_plans: 16
-  percent: 100
+  percent: 89
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 29 — phase25-formal-verification
+**Current focus:** Phase 30 — repomap-pipeline-wiring
 
 ## Current Position
 
-Phase: 29 (phase25-formal-verification) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-04-17
+Phase: 30 (repomap-pipeline-wiring) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 30
+Last activity: 2026-04-17 -- Phase 30 execution started
 
 Progress: [████████████████████] 100%
 

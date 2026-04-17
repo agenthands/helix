@@ -90,7 +90,7 @@
 
 - [x] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders (completed 2026-04-16)
 - [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
-- [ ] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision
+- [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
 - [ ] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment
 
 ## Phase Details
@@ -137,10 +137,10 @@ Plans:
   4. Tag output uses scope-aware elision showing signatures without bodies (via tree-sitter), keeping output compact for token-budgeted consumption
 **Plans**: 4 plans
 Plans:
-- [ ] 27-01-PLAN.md — Shared grammar registry, Tag types, tree-sitter .scm queries, TagExtractor, BodyExtractor refactor [Wave 1]
-- [ ] 27-02-PLAN.md — LSP documentSymbol fallback extractor [Wave 1]
-- [ ] 27-03-PLAN.md — SQLite tag cache with mtime-based invalidation [Wave 2]
-- [ ] 27-04-PLAN.md — Scope-aware elision renderer [Wave 2]
+- [x] 27-01-PLAN.md — Shared grammar registry, Tag types, tree-sitter .scm queries, TagExtractor, BodyExtractor refactor [Wave 1]
+- [x] 27-02-PLAN.md — LSP documentSymbol fallback extractor [Wave 1]
+- [x] 27-03-PLAN.md — SQLite tag cache with mtime-based invalidation [Wave 2]
+- [x] 27-04-PLAN.md — Scope-aware elision renderer [Wave 2]
 
 ### Phase 28: RepoMap Graph & MCP Tools
 **Goal**: Agents can request ranked, token-budgeted structural overviews and task-focused context from any codebase via MCP tools
@@ -152,7 +152,11 @@ Plans:
   3. Cross-file reference graph correctly links definitions to references across files, with edges weighted by reference frequency
   4. When LSP sessions are warm, the reference graph is enriched with precise cross-file references beyond what tree-sitter tags provide
   5. Token budget parameter controls output size via binary search to maximize symbol coverage within the specified budget
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 28-01-PLAN.md — Cross-file reference graph, PageRank, LSP enrichment [Wave 1]
+- [ ] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
+- [ ] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
 
 ## Progress
 
@@ -188,5 +192,5 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
-| 27. RepoMap Tag Extraction & Cache | v1.6 | 0/4 | Not started | - |
-| 28. RepoMap Graph & MCP Tools | v1.6 | 0/? | Not started | - |
+| 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
+| 28. RepoMap Graph & MCP Tools | v1.6 | 0/3 | Not started | - |

@@ -168,7 +168,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. VERIFICATION.md exists for Phase 25 with evidence that all 5 FUZZ requirements are satisfied
   2. Each requirement has test evidence or code inspection confirming implementation
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 29-01-PLAN.md — Run tests and create 25-VERIFICATION.md with evidence for FUZZ-01/02/03/07/08 [Wave 1]
 
 ### Phase 30: RepoMap Pipeline Wiring
 **Goal**: Make get_repo_map and get_context functional by wiring the tag extraction pipeline, LSP enrichment, and TreeRenderer into RepoMapSkill
@@ -182,7 +184,9 @@ Plans:
   4. EnrichFromLSP is called when LSP sessions are warm, adding precise cross-file references
   5. TreeRenderer.RenderBudgeted is used (not inline copy), with 15% tolerance binary search
   6. ProjectDir is derived from workspace path, not hardcoded
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 29-01-PLAN.md — Run tests and create 25-VERIFICATION.md with evidence for FUZZ-01/02/03/07/08 [Wave 1]
 
 ## Progress
 

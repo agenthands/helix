@@ -210,7 +210,7 @@ func TestLangFromExt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			assert.Equal(t, tt.want, langFromExt(tt.path))
+			assert.Equal(t, tt.want, LangFromExt(tt.path))
 		})
 	}
 }

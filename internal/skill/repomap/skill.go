@@ -3,12 +3,11 @@
 package repomap
 
 import (
-	"bytes"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -29,13 +28,17 @@ const (
 // RepoMapSkill implements skill.ToolProvider, exposing get_repo_map and
 // get_context as MCP tools backed by the repomap graph and PageRank ranking.
 type RepoMapSkill struct {
-	cache    *repomap.TagCache
-	elider   *repomap.ElisionRenderer
-	graph    *repomap.FileGraph
-	graphVer int64 // TagCache version when graph was last built
-	mu       sync.Mutex
-	logger   *slog.Logger
-	rootDir  string // workspace root, resolved lazily via os.Getwd if empty
+	cache          *repomap.TagCache
+	extractor      *repomap.TagExtractor
+	renderer       *repomap.TreeRenderer // nil until ensureCache sets rootDir
+	elider         *repomap.ElisionRenderer
+	graph          *repomap.FileGraph
+	graphVer       int64 // TagCache version when graph was last built
+	mu             sync.Mutex
+	logger         *slog.Logger
+	rootDir        string // workspace root, resolved lazily via os.Getwd if empty
+	cachePopulated bool
+	enrichFn       func(graph *repomap.FileGraph) // optional LSP enrichment callback
 }
 
 func init() {
@@ -70,7 +73,48 @@ func (s *RepoMapSkill) Init(deps skill.SkillDeps) error {
 	registry := treesitter.NewGrammarRegistry()
 	s.elider = repomap.NewElisionRenderer(registry)
 
+	// Create tag extractor for tree-sitter-based tag extraction.
+	extractor, err := repomap.NewTagExtractor(registry)
+	if err != nil {
+		s.logger.Warn("tag extractor creation failed, tree-sitter extraction disabled", "error", err)
+	} else {
+		s.extractor = extractor
+	}
+
 	return nil
+}
+
+// SetWorkspaceRoot updates the workspace root directory for tag extraction.
+// Called by the daemon when activate_project sets a new workspace.
+// Invalidates the cache so the next tool call re-walks the workspace.
+func (s *RepoMapSkill) SetWorkspaceRoot(root string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rootDir = root
+	s.cachePopulated = false
+	s.renderer = nil // recreate with new rootDir on next use
+}
+
+// SetEnrichFn sets the optional LSP enrichment callback.
+// Called by the daemon after kernel creation to enable cross-file LSP references.
+func (s *RepoMapSkill) SetEnrichFn(fn func(graph *repomap.FileGraph)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.enrichFn = fn
+}
+
+// GetRepoMapSkill returns the registered RepoMapSkill instance for post-init wiring.
+// Returns nil if the skill has not been registered.
+func GetRepoMapSkill() *RepoMapSkill {
+	s, ok := skill.Get("repomap")
+	if !ok {
+		return nil
+	}
+	rs, ok := s.(*RepoMapSkill)
+	if !ok {
+		return nil
+	}
+	return rs
 }
 
 // Tools returns the 2 MCP tool definitions for repomap operations.
@@ -131,7 +175,7 @@ func (s *RepoMapSkill) execGetRepoMap(args map[string]interface{}) (string, erro
 		return "No files found in repository.", nil
 	}
 
-	output := s.renderBudgeted(ranked, budget)
+	output := s.renderer.RenderBudgeted(ranked, budget)
 	if output == "" {
 		return "No files found in repository.", nil
 	}
@@ -191,7 +235,7 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 		return "No files found in repository.", nil
 	}
 
-	output := s.renderBudgeted(ranked, budget)
+	output := s.renderer.RenderBudgeted(ranked, budget)
 	if output == "" {
 		return "No files found in repository.", nil
 	}
@@ -199,9 +243,84 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 	return output, nil
 }
 
+// skipDirs contains directory names to skip during workspace walk.
+var skipDirs = map[string]bool{
+	".git": true, "node_modules": true, "__pycache__": true, ".serena": true,
+	"vendor": true, ".venv": true, "dist": true, "build": true,
+}
+
+// ensureCache lazily walks the workspace and populates TagCache.
+// Called before graph building on each tool execution.
+func (s *RepoMapSkill) ensureCache() error {
+	if s.cachePopulated {
+		return nil
+	}
+	root := s.resolveRoot()
+	if root == "" || root == "." {
+		return serr.New(serr.Internal, "workspace root not set; call activate_project first")
+	}
+	if err := s.walkAndExtract(root); err != nil {
+		return serr.Wrap(serr.Internal, "walking workspace for tag extraction", err)
+	}
+	s.cachePopulated = true
+
+	// Create TreeRenderer now that we know rootDir.
+	s.renderer = repomap.NewTreeRenderer(s.elider, s.cache, root)
+	return nil
+}
+
+// walkAndExtract walks the workspace root and populates TagCache using TagExtractor.
+func (s *RepoMapSkill) walkAndExtract(root string) error {
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip entries with errors
+		}
+		if d.IsDir() && skipDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// T-30-02: skip symlinks to prevent symlink escape.
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+
+		lang := repomap.LangFromExt(path)
+		if lang == "" {
+			return nil // skip unsupported file types
+		}
+
+		_, extractErr := s.cache.GetOrExtract(path, func() ([]repomap.Tag, error) {
+			if s.extractor == nil {
+				return nil, nil // no tree-sitter extractor available
+			}
+			source, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil, readErr
+			}
+			tags, tagErr := s.extractor.Extract(source, path, lang)
+			if tagErr != nil {
+				// Log and skip: unsupported language for this extractor is not fatal.
+				s.logger.Debug("tag extraction skipped", "path", path, "lang", lang, "error", tagErr)
+				return nil, nil
+			}
+			return tags, nil
+		})
+		if extractErr != nil {
+			s.logger.Debug("cache population skipped", "path", path, "error", extractErr)
+		}
+		return nil // never abort walk on individual file errors
+	})
+}
+
 // ensureGraph lazily builds the file graph with dirty-flag caching.
 // Rebuilds only when TagCache.Version() changes.
 func (s *RepoMapSkill) ensureGraph() error {
+	if err := s.ensureCache(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -214,6 +333,12 @@ func (s *RepoMapSkill) ensureGraph() error {
 	if err != nil {
 		return err
 	}
+
+	// Opportunistic LSP enrichment (RMAP-08).
+	if s.enrichFn != nil {
+		s.enrichFn(graph)
+	}
+
 	s.graph = graph
 	s.graphVer = ver
 	return nil
@@ -230,126 +355,6 @@ func (s *RepoMapSkill) resolveRoot() string {
 		return "."
 	}
 	return wd
-}
-
-// renderBudgeted renders ranked files within the token budget using binary search
-// on file count per D-13. Token estimation: chars/4 per D-12.
-func (s *RepoMapSkill) renderBudgeted(ranked []repomap.RankedFile, budget int) string {
-	if len(ranked) == 0 {
-		return ""
-	}
-
-	lower, upper := 1, len(ranked)
-	bestOutput := ""
-	bestTokens := 0
-
-	for lower <= upper {
-		mid := (lower + upper) / 2
-		output := s.renderTree(ranked[:mid])
-		tokens := len(output) / 4 // D-12: chars/4 estimation
-
-		if tokens <= budget && tokens > bestTokens {
-			bestOutput = output
-			bestTokens = tokens
-		}
-
-		if tokens < budget {
-			lower = mid + 1
-		} else {
-			upper = mid - 1
-		}
-	}
-
-	return bestOutput
-}
-
-// renderTree renders a set of ranked files as an indented tree with elided symbols.
-func (s *RepoMapSkill) renderTree(ranked []repomap.RankedFile) string {
-	if len(ranked) == 0 {
-		return ""
-	}
-
-	root := s.resolveRoot()
-
-	// Sort by path for tree grouping.
-	sorted := make([]repomap.RankedFile, len(ranked))
-	copy(sorted, ranked)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Path < sorted[j].Path
-	})
-
-	var buf bytes.Buffer
-	for _, rf := range sorted {
-		// Make path relative to workspace root.
-		relPath := rf.Path
-		if root != "" {
-			if rel, err := filepath.Rel(root, rf.Path); err == nil {
-				relPath = rel
-			}
-		}
-
-		buf.WriteString(relPath)
-		buf.WriteByte('\n')
-
-		// Try to render elided symbols for this file.
-		elided := s.elideFile(rf.Path)
-		if elided != "" {
-			// Indent each line of elided output.
-			for _, line := range strings.Split(elided, "\n") {
-				buf.WriteString("  ")
-				buf.WriteString(line)
-				buf.WriteByte('\n')
-			}
-		}
-	}
-
-	return buf.String()
-}
-
-// elideFile reads a file and renders its elided symbols using the ElisionRenderer.
-func (s *RepoMapSkill) elideFile(filePath string) string {
-	source, err := os.ReadFile(filePath)
-	if err != nil {
-		return ""
-	}
-
-	// Determine language from file extension.
-	lang := langFromExt(filepath.Ext(filePath))
-	if lang == "" {
-		return ""
-	}
-
-	// Get cached tags for this file.
-	tags, err := s.cache.AllFiles()
-	if err != nil {
-		return ""
-	}
-	fileTags, ok := tags[filePath]
-	if !ok {
-		return ""
-	}
-
-	return s.elider.RenderFile(source, lang, fileTags)
-}
-
-// langFromExt maps file extensions to tree-sitter language names.
-func langFromExt(ext string) string {
-	switch ext {
-	case ".go":
-		return "go"
-	case ".py":
-		return "python"
-	case ".ts":
-		return "typescript"
-	case ".tsx":
-		return "tsx"
-	case ".js":
-		return "javascript"
-	case ".rs":
-		return "rust"
-	default:
-		return ""
-	}
 }
 
 // extractTokenBudget extracts and validates the token_budget parameter from args.

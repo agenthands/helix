@@ -120,7 +120,7 @@ func (r *TreeRenderer) renderFileContent(filePath string) string {
 		return ""
 	}
 
-	lang := langFromExt(filePath)
+	lang := LangFromExt(filePath)
 
 	// Try to load tags from cache.
 	tags, err := r.cache.GetOrExtract(filePath, func() ([]Tag, error) {
@@ -198,8 +198,8 @@ func renderNode(buf *bytes.Buffer, node *treeNode, depth int) {
 	}
 }
 
-// langFromExt maps file extensions to language identifiers used by tree-sitter.
-func langFromExt(path string) string {
+// LangFromExt maps file extensions to language identifiers used by tree-sitter.
+func LangFromExt(path string) string {
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".go":

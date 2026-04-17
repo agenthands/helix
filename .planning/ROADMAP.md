@@ -155,7 +155,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 28-01-PLAN.md — Cross-file reference graph, PageRank, LSP enrichment [Wave 1]
-- [ ] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
+- [x] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
 - [ ] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
 
 ## Progress
@@ -193,4 +193,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
-| 28. RepoMap Graph & MCP Tools | v1.6 | 1/3 | In Progress|  |
+| 28. RepoMap Graph & MCP Tools | v1.6 | 2/3 | In Progress|  |

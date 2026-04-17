@@ -29,7 +29,7 @@ Requirements for Context Intelligence & Resilient Editing milestone. Each maps t
 - [ ] **RMAP-07**: Agent can call `get_context` to get task-focused context (most relevant symbols for given files/task description)
 - [x] **RMAP-08**: Warm LSP sessions enrich the reference graph with precise cross-file references when available
 - [ ] **RMAP-09**: Output uses scope-aware elision (signatures without bodies via tree-sitter)
-- [ ] **RMAP-10**: Token budget parameter controls output size, with binary search to maximize coverage within budget
+- [x] **RMAP-10**: Token budget parameter controls output size, with binary search to maximize coverage within budget
 
 ## Future Requirements
 
@@ -76,7 +76,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RMAP-07 | Phase 28 | Pending |
 | RMAP-08 | Phase 28 | Complete |
 | RMAP-09 | Phase 27 | Pending |
-| RMAP-10 | Phase 28 | Pending |
+| RMAP-10 | Phase 28 | Complete |
 
 **Coverage:**
 - v1.6 requirements: 18 total

@@ -77,8 +77,7 @@ func TestFileGraph_PageRank_DanglingNodes(t *testing.T) {
 	g := newTestGraph(map[string]map[string]float64{
 		"A": {"B": 1.0},
 	})
-	// Add C as an isolated node with a self-loop so it's in the graph.
-	g.addEdge("C", "C", 0.0) // C exists but has zero-weight self-loop.
+	// Add C as a dangling node (no outgoing edges).
 	g.Files["C"] = true
 
 	scores := g.PageRank(0.85, 1e-6, 100, nil)

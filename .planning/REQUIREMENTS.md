@@ -9,14 +9,14 @@ Requirements for Context Intelligence & Resilient Editing milestone. Each maps t
 
 ### Fuzzy Editing
 
-- [ ] **FUZZ-01**: Agent can fuzzy-match a search block against file content using a 4-strategy cascade (exact → whitespace-normalized → indentation-flexible → fail with diff)
-- [ ] **FUZZ-02**: Agent receives strategy reporting in tool response (match_strategy used, similarity_score)
-- [ ] **FUZZ-03**: Replacement text preserves original file's indentation when fuzzy match succeeds
+- [x] **FUZZ-01**: Agent can fuzzy-match a search block against file content using a 4-strategy cascade (exact → whitespace-normalized → indentation-flexible → fail with diff)
+- [x] **FUZZ-02**: Agent receives strategy reporting in tool response (match_strategy used, similarity_score)
+- [x] **FUZZ-03**: Replacement text preserves original file's indentation when fuzzy match succeeds
 - [ ] **FUZZ-04**: Agent can use standalone `fuzzy_edit` MCP tool for raw text fuzzy matching independent of symbol boundaries
 - [ ] **FUZZ-05**: `replace_symbol_body` falls back to fuzzy matching within tree-sitter-located body when exact match fails
 - [ ] **FUZZ-06**: `replace_content` falls back to fuzzy matching when exact/regex match fails
-- [ ] **FUZZ-07**: Fuzzy edit refuses ambiguous edits when search text matches multiple locations
-- [ ] **FUZZ-08**: Agent can use ellipsis/placeholder (`...`) in search blocks to indicate unchanged code sections
+- [x] **FUZZ-07**: Fuzzy edit refuses ambiguous edits when search text matches multiple locations
+- [x] **FUZZ-08**: Agent can use ellipsis/placeholder (`...`) in search blocks to indicate unchanged code sections
 
 ### RepoMap Context Intelligence
 
@@ -59,14 +59,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FUZZ-01 | Phase 29 | Pending |
-| FUZZ-02 | Phase 29 | Pending |
-| FUZZ-03 | Phase 29 | Pending |
+| FUZZ-01 | Phase 29 | Complete |
+| FUZZ-02 | Phase 29 | Complete |
+| FUZZ-03 | Phase 29 | Complete |
 | FUZZ-04 | Phase 26 | Pending |
 | FUZZ-05 | Phase 26 | Pending |
 | FUZZ-06 | Phase 26 | Pending |
-| FUZZ-07 | Phase 29 | Pending |
-| FUZZ-08 | Phase 29 | Pending |
+| FUZZ-07 | Phase 29 | Complete |
+| FUZZ-08 | Phase 29 | Complete |
 | RMAP-01 | Phase 27 | Pending |
 | RMAP-02 | Phase 27 | Pending |
 | RMAP-03 | Phase 27 | Pending |

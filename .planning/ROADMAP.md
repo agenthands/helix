@@ -92,7 +92,7 @@
 - [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
 - [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
 - [x] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment (completed 2026-04-17)
-- [ ] **Phase 29: Phase 25 Formal Verification** - Run formal verification on fuzzy edit engine to close FUZZ-01/02/03/07/08 (gap closure)
+- [x] **Phase 29: Phase 25 Formal Verification** - Run formal verification on fuzzy edit engine to close FUZZ-01/02/03/07/08 (gap closure) (completed 2026-04-17)
 - [ ] **Phase 30: RepoMap Pipeline Wiring** - Wire TagExtractor, FallbackExtractor, EnrichFromLSP, and TreeRenderer in RepoMapSkill (gap closure)
 
 ## Phase Details
@@ -170,7 +170,7 @@ Plans:
   2. Each requirement has test evidence or code inspection confirming implementation
 **Plans**: 1 plan
 Plans:
-- [ ] 29-01-PLAN.md — Run tests and create 25-VERIFICATION.md with evidence for FUZZ-01/02/03/07/08 [Wave 1]
+- [x] 29-01-PLAN.md — Run tests and create 25-VERIFICATION.md with evidence for FUZZ-01/02/03/07/08 [Wave 1]
 
 ### Phase 30: RepoMap Pipeline Wiring
 **Goal**: Make get_repo_map and get_context functional by wiring the tag extraction pipeline, LSP enrichment, and TreeRenderer into RepoMapSkill
@@ -224,5 +224,5 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
 | 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
-| 29. Phase 25 Formal Verification | v1.6 | 0/0 | Pending | — |
+| 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
 | 30. RepoMap Pipeline Wiring | v1.6 | 0/0 | Pending | — |

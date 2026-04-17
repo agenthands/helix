@@ -25,7 +25,6 @@ import (
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/kernel/edit"
-	"github.com/postfix/serena/internal/treesitter"
 	"github.com/postfix/serena/internal/kernel/fileops"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
@@ -33,8 +32,12 @@ import (
 	serenaMCP "github.com/postfix/serena/internal/mcp"
 	"github.com/postfix/serena/internal/obs"
 	"github.com/postfix/serena/internal/profile"
+	repomapPkg "github.com/postfix/serena/internal/repomap"
 	"github.com/postfix/serena/internal/skill"
+	repomapSkill "github.com/postfix/serena/internal/skill/repomap"
+	"github.com/postfix/serena/internal/treesitter"
 	"github.com/postfix/serena/internal/workspace"
+	gen "github.com/postfix/serena/protocol/gen"
 )
 
 // SkillToolExecutor is implemented by skills that support direct tool execution
@@ -267,6 +270,19 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		ps.SetSessionProvider(sessionProvider)
 	}
 
+	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
+			wsKey := activeWSKey
+			if wsKey.RepoRoot == "" {
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			enrichRepoMapFromLSP(ctx, k, wsKey, g, logger)
+		})
+	}
+
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches
@@ -289,6 +305,10 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			return err
 		}
 		activeWSKey = workspace.WorkspaceKey{RepoRoot: repoPath}
+		// Propagate workspace root to repomap skill for tag extraction.
+		if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+			rs.SetWorkspaceRoot(repoPath)
+		}
 		if langs := rt.Languages(); len(langs) > 0 {
 			activeWSLang = langs[0]
 		}
@@ -515,4 +535,48 @@ func (h *forwarderServiceHandler) StreamMCP(stream serenav1.ForwarderService_Str
 	err = session.Wait()
 	h.logger.Info("forwarder stream ended", "session_id", sessionID)
 	return err
+}
+
+// enrichRepoMapFromLSP opportunistically enriches the repomap graph with
+// LSP cross-file references. Skips silently if no warm LSP session exists.
+// Called via the enrichFn callback during graph rebuild (RMAP-08).
+func enrichRepoMapFromLSP(ctx context.Context, k *kernel.Kernel, wsKey workspace.WorkspaceKey, g *repomapPkg.FileGraph, logger *slog.Logger) {
+	sessionID := "enrich-repomap"
+	lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
+	if err != nil {
+		logger.Debug("LSP enrichment skipped: no warm session", "error", err)
+		return
+	}
+	defer k.Pool().ReleaseLease(sessionID)
+
+	enriched := 0
+	for file := range g.Files {
+		uri := "file://" + file
+		params := gen.ReferenceParams{
+			TextDocumentPositionParams: gen.TextDocumentPositionParams{
+				TextDocument: gen.TextDocumentIdentifier{URI: uri},
+				Position:     gen.Position{Line: 0, Character: 0},
+			},
+			Context: gen.ReferenceContext{IncludeDeclaration: true},
+		}
+		var locations []gen.Location
+		if reqErr := lease.Request(ctx, "textDocument/references", &params, &locations); reqErr != nil {
+			continue
+		}
+		if len(locations) == 0 {
+			continue
+		}
+		rmLocs := make([]repomapPkg.Location, 0, len(locations))
+		for _, loc := range locations {
+			rmLocs = append(rmLocs, repomapPkg.Location{
+				URI:  loc.URI,
+				Line: int(loc.Range.Start.Line),
+			})
+		}
+		g.EnrichFromLSP(file, rmLocs)
+		enriched++
+	}
+	if enriched > 0 {
+		logger.Debug("LSP enrichment complete", "files_enriched", enriched)
+	}
 }

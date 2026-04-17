@@ -8,5 +8,6 @@ import (
 	_ "github.com/postfix/serena/internal/kernel/symbols"
 	_ "github.com/postfix/serena/internal/profile"
 	_ "github.com/postfix/serena/internal/skill/memory"
+	_ "github.com/postfix/serena/internal/skill/repomap"
 	_ "github.com/postfix/serena/internal/skill/workflow"
 )

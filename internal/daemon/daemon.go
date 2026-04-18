@@ -272,6 +272,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 
 	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		tagCache := rs.Cache()
 		rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
 			wsKey := activeWSKey
 			if wsKey.RepoRoot == "" {
@@ -279,7 +280,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			enrichRepoMapFromLSP(ctx, k, wsKey, g, logger)
+			enrichRepoMapFromLSP(ctx, k, wsKey, g, tagCache, logger)
 		})
 	}
 
@@ -538,9 +539,11 @@ func (h *forwarderServiceHandler) StreamMCP(stream serenav1.ForwarderService_Str
 }
 
 // enrichRepoMapFromLSP opportunistically enriches the repomap graph with
-// LSP cross-file references. Skips silently if no warm LSP session exists.
+// LSP cross-file references. Queries each defined symbol's actual position
+// rather than a fixed 0:0, which yields meaningful cross-file references.
+// Skips silently if no warm LSP session exists.
 // Called via the enrichFn callback during graph rebuild (RMAP-08).
-func enrichRepoMapFromLSP(ctx context.Context, k *kernel.Kernel, wsKey workspace.WorkspaceKey, g *repomapPkg.FileGraph, logger *slog.Logger) {
+func enrichRepoMapFromLSP(ctx context.Context, k *kernel.Kernel, wsKey workspace.WorkspaceKey, g *repomapPkg.FileGraph, cache *repomapPkg.TagCache, logger *slog.Logger) {
 	sessionID := "enrich-repomap"
 	lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
 	if err != nil {
@@ -549,34 +552,55 @@ func enrichRepoMapFromLSP(ctx context.Context, k *kernel.Kernel, wsKey workspace
 	}
 	defer k.Pool().ReleaseLease(sessionID)
 
+	// Load all cached tags so we can query at actual symbol positions.
+	allTags, err := cache.AllFiles()
+	if err != nil {
+		logger.Debug("LSP enrichment skipped: failed to load tags", "error", err)
+		return
+	}
+
 	enriched := 0
 	for file := range g.Files {
+		tags, ok := allTags[file]
+		if !ok || len(tags) == 0 {
+			continue
+		}
+
 		uri := "file://" + file
-		params := gen.ReferenceParams{
-			TextDocumentPositionParams: gen.TextDocumentPositionParams{
-				TextDocument: gen.TextDocumentIdentifier{URI: uri},
-				Position:     gen.Position{Line: 0, Character: 0},
-			},
-			Context: gen.ReferenceContext{IncludeDeclaration: true},
+		for _, tag := range tags {
+			if tag.Kind != repomapPkg.TagDef {
+				continue
+			}
+			if ctx.Err() != nil {
+				return // timeout reached
+			}
+
+			params := gen.ReferenceParams{
+				TextDocumentPositionParams: gen.TextDocumentPositionParams{
+					TextDocument: gen.TextDocumentIdentifier{URI: uri},
+					Position:     gen.Position{Line: uint32(tag.Line), Character: uint32(tag.Column)},
+				},
+				Context: gen.ReferenceContext{IncludeDeclaration: true},
+			}
+			var locations []gen.Location
+			if reqErr := lease.Request(ctx, "textDocument/references", &params, &locations); reqErr != nil {
+				continue
+			}
+			if len(locations) == 0 {
+				continue
+			}
+			rmLocs := make([]repomapPkg.Location, 0, len(locations))
+			for _, loc := range locations {
+				rmLocs = append(rmLocs, repomapPkg.Location{
+					URI:  loc.URI,
+					Line: int(loc.Range.Start.Line),
+				})
+			}
+			g.EnrichFromLSP(file, rmLocs)
+			enriched++
 		}
-		var locations []gen.Location
-		if reqErr := lease.Request(ctx, "textDocument/references", &params, &locations); reqErr != nil {
-			continue
-		}
-		if len(locations) == 0 {
-			continue
-		}
-		rmLocs := make([]repomapPkg.Location, 0, len(locations))
-		for _, loc := range locations {
-			rmLocs = append(rmLocs, repomapPkg.Location{
-				URI:  loc.URI,
-				Line: int(loc.Range.Start.Line),
-			})
-		}
-		g.EnrichFromLSP(file, rmLocs)
-		enriched++
 	}
 	if enriched > 0 {
-		logger.Debug("LSP enrichment complete", "files_enriched", enriched)
+		logger.Debug("LSP enrichment complete", "symbols_enriched", enriched)
 	}
 }

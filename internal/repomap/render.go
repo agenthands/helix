@@ -55,7 +55,8 @@ func (r *TreeRenderer) RenderBudgeted(ranked []RankedFile, budget int) string {
 
 		pctErr := math.Abs(float64(tokens-budget)) / float64(budget)
 
-		if (tokens <= budget && tokens > bestTokens) || pctErr < okErr {
+		withinBudget := tokens <= budget
+		if (withinBudget && tokens > bestTokens) || (pctErr < okErr && tokens > bestTokens) {
 			bestOutput = output
 			bestTokens = tokens
 		}

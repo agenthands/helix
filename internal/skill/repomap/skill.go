@@ -95,6 +95,11 @@ func (s *RepoMapSkill) SetWorkspaceRoot(root string) {
 	s.renderer = nil // recreate with new rootDir on next use
 }
 
+// Cache returns the underlying TagCache for external consumers (e.g., LSP enrichment).
+func (s *RepoMapSkill) Cache() *repomap.TagCache {
+	return s.cache
+}
+
 // SetEnrichFn sets the optional LSP enrichment callback.
 // Called by the daemon after kernel creation to enable cross-file LSP references.
 func (s *RepoMapSkill) SetEnrichFn(fn func(graph *repomap.FileGraph)) {
@@ -210,6 +215,10 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 			s.logger.Warn("rejected file path with path traversal", "path", fp)
 			return "", serr.New(serr.InvalidArgs, fmt.Sprintf("file path %q contains '..' (path traversal not allowed)", fp)).WithTool("get_context")
 		}
+		if filepath.IsAbs(fp) && !strings.HasPrefix(fp, s.resolveRoot()) {
+			s.logger.Warn("rejected absolute file path outside workspace root", "path", fp)
+			return "", serr.New(serr.InvalidArgs, fmt.Sprintf("file path %q is outside workspace root", fp)).WithTool("get_context")
+		}
 		files = append(files, fp)
 	}
 
@@ -251,19 +260,26 @@ var skipDirs = map[string]bool{
 
 // ensureCache lazily walks the workspace and populates TagCache.
 // Called before graph building on each tool execution.
+// Uses check-lock-check to avoid holding mu during the slow walkAndExtract.
 func (s *RepoMapSkill) ensureCache() error {
+	s.mu.Lock()
 	if s.cachePopulated {
+		s.mu.Unlock()
 		return nil
 	}
 	root := s.resolveRoot()
+	s.mu.Unlock()
+
 	if root == "" || root == "." {
 		return serr.New(serr.Internal, "workspace root not set; call activate_project first")
 	}
 	if err := s.walkAndExtract(root); err != nil {
 		return serr.Wrap(serr.Internal, "walking workspace for tag extraction", err)
 	}
-	s.cachePopulated = true
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cachePopulated = true
 	// Create TreeRenderer now that we know rootDir.
 	s.renderer = repomap.NewTreeRenderer(s.elider, s.cache, root)
 	return nil

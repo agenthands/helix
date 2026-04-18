@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
 status: executing
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-04-17T20:25:08.018Z"
+stopped_at: Phase 31 context gathered
+last_updated: "2026-04-18T18:51:09.761Z"
 last_activity: 2026-04-17
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 6
   total_plans: 18
   completed_plans: 18
@@ -73,6 +73,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 28]: Tree rendering sorts by directory structure; rank order controls file inclusion via binary search
 - [Phase 28]: RepoMapSkill creates own dependencies in Init() -- no SkillDeps modification needed
 
+### Roadmap Evolution
+
+- Phase 31 added: Multi-language grammar expansion
+
 ### Pending Todos
 
 None.
@@ -90,6 +94,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-17T17:03:16.358Z
-Stopped at: Completed 29-01-PLAN.md
-Resume file: None
+Last session: 2026-04-18T18:51:09.757Z
+Stopped at: Phase 31 context gathered
+Resume file: .planning/phases/31-multi-language-grammar-expansion/31-CONTEXT.md

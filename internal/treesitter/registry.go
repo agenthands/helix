@@ -22,6 +22,13 @@ import (
 	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	tree_sitter_kotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
+
+	// Wave 2a languages
+	tree_sitter_scala "github.com/tree-sitter/tree-sitter-scala/bindings/go"
+	tree_sitter_bash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
+	tree_sitter_haskell "github.com/tree-sitter/tree-sitter-haskell/bindings/go"
+	tree_sitter_julia "github.com/tree-sitter/tree-sitter-julia/bindings/go"
+	tree_sitter_ocaml "github.com/tree-sitter/tree-sitter-ocaml/bindings/go"
 )
 
 // GrammarRegistry holds tree-sitter language grammars keyed by language name.
@@ -52,6 +59,13 @@ func NewGrammarRegistry() *GrammarRegistry {
 	r.languages["php"] = tree_sitter.NewLanguage(tree_sitter_php.LanguagePHP())
 	r.languages["javascript"] = tree_sitter.NewLanguage(tree_sitter_javascript.Language())
 	r.languages["kotlin"] = tree_sitter.NewLanguage(tree_sitter_kotlin.Language())
+
+	// Wave 2a languages
+	r.languages["scala"] = tree_sitter.NewLanguage(tree_sitter_scala.Language())
+	r.languages["bash"] = tree_sitter.NewLanguage(tree_sitter_bash.Language())
+	r.languages["haskell"] = tree_sitter.NewLanguage(tree_sitter_haskell.Language())
+	r.languages["julia"] = tree_sitter.NewLanguage(tree_sitter_julia.Language())
+	r.languages["ocaml"] = tree_sitter.NewLanguage(tree_sitter_ocaml.LanguageOCaml())
 
 	return r
 }

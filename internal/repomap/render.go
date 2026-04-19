@@ -229,6 +229,16 @@ func LangFromExt(path string) string {
 		return "c_sharp"
 	case ".kt":
 		return "kotlin"
+	case ".scala":
+		return "scala"
+	case ".sh", ".bash":
+		return "bash"
+	case ".hs":
+		return "haskell"
+	case ".jl":
+		return "julia"
+	case ".ml":
+		return "ocaml"
 	default:
 		return ""
 	}

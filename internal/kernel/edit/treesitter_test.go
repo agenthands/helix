@@ -261,6 +261,58 @@ func TestExtractBody_KotlinFunction(t *testing.T) {
 	assert.Contains(t, body, `println("hello")`)
 }
 
+func TestExtractBody_ScalaFunction(t *testing.T) {
+	source := []byte(`def add(a: Int, b: Int): Int = {
+  a + b
+}
+
+def greet(): Unit = {
+  println("hello")
+}
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+
+	start, end, err := be.ExtractBody(source, "scala", "add", gen.Range{
+		Start: gen.Position{Line: 0, Character: 0},
+		End:   gen.Position{Line: 2, Character: 1},
+	})
+	require.NoError(t, err)
+	body := string(source[start:end])
+	assert.Contains(t, body, "a + b")
+}
+
+func TestExtractBody_BashFunction(t *testing.T) {
+	source := []byte(`greet() {
+  echo "hello"
+}
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+
+	start, end, err := be.ExtractBody(source, "bash", "greet", gen.Range{
+		Start: gen.Position{Line: 0, Character: 0},
+		End:   gen.Position{Line: 2, Character: 1},
+	})
+	require.NoError(t, err)
+	body := string(source[start:end])
+	assert.Contains(t, body, `echo "hello"`)
+}
+
+func TestExtractBody_JuliaFunction(t *testing.T) {
+	source := []byte(`function add(a, b)
+    return a + b
+end
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+
+	start, end, err := be.ExtractBody(source, "julia", "add", gen.Range{
+		Start: gen.Position{Line: 0, Character: 0},
+		End:   gen.Position{Line: 2, Character: 3},
+	})
+	require.NoError(t, err)
+	body := string(source[start:end])
+	assert.Contains(t, body, "return a + b")
+}
+
 func TestExtractBody_SymbolNotFound(t *testing.T) {
 	source := []byte(`package main
 
@@ -301,6 +353,10 @@ func TestSupportsLanguage(t *testing.T) {
 	assert.True(t, be.SupportsLanguage("php"))
 	assert.True(t, be.SupportsLanguage("javascript"))
 	assert.True(t, be.SupportsLanguage("kotlin"))
+	assert.True(t, be.SupportsLanguage("scala"))
+	assert.True(t, be.SupportsLanguage("bash"))
+	assert.True(t, be.SupportsLanguage("julia"))
 	assert.False(t, be.SupportsLanguage("haskell"))
+	assert.False(t, be.SupportsLanguage("ocaml"))
 	assert.False(t, be.SupportsLanguage(""))
 }

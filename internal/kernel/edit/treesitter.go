@@ -133,6 +133,31 @@ func NewBodyExtractor(registry *treesitter.GrammarRegistry) *BodyExtractor {
 		bodyFieldName: "body",
 	}
 
+	// Scala: function_definition -> body (block)
+	be.configs["scala"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Bash: function_definition -> body (compound_statement)
+	be.configs["bash"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Julia: function_definition -> block (unnamed child, not a named field)
+	be.configs["julia"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+		bodyNodeKind:  "block",
+	}
+
 	// Kotlin: function_declaration -> function_body (unnamed child, not a named field)
 	be.configs["kotlin"] = &langConfig{
 		declarationTypes: map[string]bool{
@@ -277,6 +302,23 @@ func extractNodeName(node *tree_sitter.Node, source []byte) string {
 			innerDecl := decl.ChildByFieldName("declarator")
 			if innerDecl != nil && (innerDecl.Kind() == "identifier" || innerDecl.Kind() == "field_identifier") {
 				return innerDecl.Utf8Text(source)
+			}
+		}
+		// Julia function_definition: name is at signature -> call_expression -> identifier
+		for i := uint(0); i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			if child != nil && child.Kind() == "signature" {
+				for j := uint(0); j < child.ChildCount(); j++ {
+					gc := child.Child(j)
+					if gc != nil && gc.Kind() == "call_expression" {
+						for k := uint(0); k < gc.ChildCount(); k++ {
+							ggc := gc.Child(k)
+							if ggc != nil && ggc.Kind() == "identifier" {
+								return ggc.Utf8Text(source)
+							}
+						}
+					}
+				}
 			}
 		}
 		return ""

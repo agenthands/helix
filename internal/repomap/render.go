@@ -245,6 +245,10 @@ func LangFromExt(path string) string {
 		return "zig"
 	case ".tf", ".hcl":
 		return "hcl"
+	case ".r", ".R":
+		return "r"
+	case ".swift":
+		return "swift"
 	default:
 		return ""
 	}

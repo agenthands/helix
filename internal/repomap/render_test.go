@@ -206,6 +206,9 @@ func TestLangFromExt(t *testing.T) {
 		{"index.php", "php"},
 		{"hello.c", "c"},
 		{"hello.cpp", "cpp"},
+		{"script.r", "r"},
+		{"Script.R", "r"},
+		{"app.swift", "swift"},
 		{"unknown.xyz", ""},
 	}
 	for _, tt := range tests {

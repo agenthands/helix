@@ -34,6 +34,10 @@ import (
 	tree_sitter_lua "github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go"
 	tree_sitter_zig "github.com/tree-sitter-grammars/tree-sitter-zig/bindings/go"
 	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
+
+	// Wave 2b gap closure: local vendored bindings (upstream Go bindings broken)
+	tree_sitter_r_local "github.com/postfix/serena/internal/treesitter/bindings/r"
+	tree_sitter_swift_local "github.com/postfix/serena/internal/treesitter/bindings/swift"
 )
 
 // GrammarRegistry holds tree-sitter language grammars keyed by language name.
@@ -76,6 +80,10 @@ func NewGrammarRegistry() *GrammarRegistry {
 	r.languages["lua"] = tree_sitter.NewLanguage(tree_sitter_lua.Language())
 	r.languages["zig"] = tree_sitter.NewLanguage(tree_sitter_zig.Language())
 	r.languages["hcl"] = tree_sitter.NewLanguage(tree_sitter_hcl.Language())
+
+	// Wave 2b gap closure: local vendored bindings
+	r.languages["r"] = tree_sitter.NewLanguage(tree_sitter_r_local.Language())
+	r.languages["swift"] = tree_sitter.NewLanguage(tree_sitter_swift_local.Language())
 
 	return r
 }

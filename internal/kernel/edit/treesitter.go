@@ -158,6 +158,22 @@ func NewBodyExtractor(registry *treesitter.GrammarRegistry) *BodyExtractor {
 		bodyNodeKind:  "block",
 	}
 
+	// Lua: function_declaration -> body (block)
+	be.configs["lua"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_declaration": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Zig: function_declaration -> body (block)
+	be.configs["zig"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_declaration": true,
+		},
+		bodyFieldName: "body",
+	}
+
 	// Kotlin: function_declaration -> function_body (unnamed child, not a named field)
 	be.configs["kotlin"] = &langConfig{
 		declarationTypes: map[string]bool{

@@ -313,6 +313,42 @@ end
 	assert.Contains(t, body, "return a + b")
 }
 
+func TestExtractBody_LuaFunction(t *testing.T) {
+	source := []byte(`function greet(name)
+  print("Hello")
+end
+
+function add(a, b)
+  return a + b
+end
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+
+	start, end, err := be.ExtractBody(source, "lua", "greet", gen.Range{
+		Start: gen.Position{Line: 0, Character: 0},
+		End:   gen.Position{Line: 2, Character: 3},
+	})
+	require.NoError(t, err)
+	body := string(source[start:end])
+	assert.Contains(t, body, `print("Hello")`)
+}
+
+func TestExtractBody_ZigFunction(t *testing.T) {
+	source := []byte(`fn add(a: i32, b: i32) i32 {
+    return a + b;
+}
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+
+	start, end, err := be.ExtractBody(source, "zig", "add", gen.Range{
+		Start: gen.Position{Line: 0, Character: 0},
+		End:   gen.Position{Line: 2, Character: 1},
+	})
+	require.NoError(t, err)
+	body := string(source[start:end])
+	assert.Contains(t, body, "return a + b")
+}
+
 func TestExtractBody_SymbolNotFound(t *testing.T) {
 	source := []byte(`package main
 
@@ -356,6 +392,9 @@ func TestSupportsLanguage(t *testing.T) {
 	assert.True(t, be.SupportsLanguage("scala"))
 	assert.True(t, be.SupportsLanguage("bash"))
 	assert.True(t, be.SupportsLanguage("julia"))
+	assert.True(t, be.SupportsLanguage("lua"))
+	assert.True(t, be.SupportsLanguage("zig"))
+	assert.False(t, be.SupportsLanguage("hcl"))
 	assert.False(t, be.SupportsLanguage("haskell"))
 	assert.False(t, be.SupportsLanguage("ocaml"))
 	assert.False(t, be.SupportsLanguage(""))

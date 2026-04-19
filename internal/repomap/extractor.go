@@ -24,6 +24,30 @@ var typescriptTagsQuery string
 //go:embed queries/rust_tags.scm
 var rustTagsQuery string
 
+//go:embed queries/java_tags.scm
+var javaTagsQuery string
+
+//go:embed queries/c_tags.scm
+var cTagsQuery string
+
+//go:embed queries/cpp_tags.scm
+var cppTagsQuery string
+
+//go:embed queries/csharp_tags.scm
+var csharpTagsQuery string
+
+//go:embed queries/ruby_tags.scm
+var rubyTagsQuery string
+
+//go:embed queries/php_tags.scm
+var phpTagsQuery string
+
+//go:embed queries/javascript_tags.scm
+var javascriptTagsQuery string
+
+//go:embed queries/kotlin_tags.scm
+var kotlinTagsQuery string
+
 // TagExtractor extracts def/ref tags from source files using tree-sitter queries.
 // Queries are compiled once per language and reused across files.
 type TagExtractor struct {
@@ -40,6 +64,15 @@ func NewTagExtractor(registry *treesitter.GrammarRegistry) (*TagExtractor, error
 		"typescript": typescriptTagsQuery,
 		"tsx":        typescriptTagsQuery,
 		"rust":       rustTagsQuery,
+		// Wave 1 languages
+		"java":       javaTagsQuery,
+		"c":          cTagsQuery,
+		"cpp":        cppTagsQuery,
+		"c_sharp":    csharpTagsQuery,
+		"ruby":       rubyTagsQuery,
+		"php":        phpTagsQuery,
+		"javascript": javascriptTagsQuery,
+		"kotlin":     kotlinTagsQuery,
 	}
 
 	queries := make(map[string]*tree_sitter.Query, len(querySources))
@@ -170,6 +203,16 @@ func buildQualifiedName(nameNode tree_sitter.Node, source []byte, lang string, c
 		return qualifyTypeScriptMethod(nameNode, source, name)
 	case lang == "rust" && captureName == "definition.function":
 		return qualifyRustMethod(nameNode, source, name)
+	case lang == "java" && captureName == "definition.method":
+		return qualifyJavaMethod(nameNode, source, name)
+	case lang == "c_sharp" && captureName == "definition.method":
+		return qualifyCSharpMethod(nameNode, source, name)
+	case lang == "ruby" && captureName == "definition.method":
+		return qualifyRubyMethod(nameNode, source, name)
+	case lang == "kotlin" && captureName == "definition.function":
+		return qualifyKotlinFunction(nameNode, source, name)
+	case lang == "javascript" && captureName == "definition.method":
+		return qualifyJavaScriptMethod(nameNode, source, name)
 	}
 	return ""
 }
@@ -270,4 +313,114 @@ func qualifyRustMethod(nameNode tree_sitter.Node, source []byte, name string) st
 	}
 	typeName := typeNode.Utf8Text(source)
 	return typeName + "." + name
+}
+
+// qualifyJavaMethod walks up: identifier -> method_declaration -> class_body -> class_declaration
+func qualifyJavaMethod(nameNode tree_sitter.Node, source []byte, name string) string {
+	methodDecl := nameNode.Parent()
+	if methodDecl == nil || methodDecl.Kind() != "method_declaration" {
+		return ""
+	}
+	classBody := methodDecl.Parent()
+	if classBody == nil || classBody.Kind() != "class_body" {
+		return ""
+	}
+	classDef := classBody.Parent()
+	if classDef == nil || classDef.Kind() != "class_declaration" {
+		return ""
+	}
+	classNameNode := classDef.ChildByFieldName("name")
+	if classNameNode == nil {
+		return ""
+	}
+	return classNameNode.Utf8Text(source) + "." + name
+}
+
+// qualifyCSharpMethod walks up: identifier -> method_declaration -> declaration_list -> class_declaration
+func qualifyCSharpMethod(nameNode tree_sitter.Node, source []byte, name string) string {
+	methodDecl := nameNode.Parent()
+	if methodDecl == nil || methodDecl.Kind() != "method_declaration" {
+		return ""
+	}
+	declList := methodDecl.Parent()
+	if declList == nil || declList.Kind() != "declaration_list" {
+		return ""
+	}
+	classDef := declList.Parent()
+	if classDef == nil || classDef.Kind() != "class_declaration" {
+		return ""
+	}
+	classNameNode := classDef.ChildByFieldName("name")
+	if classNameNode == nil {
+		return ""
+	}
+	return classNameNode.Utf8Text(source) + "." + name
+}
+
+// qualifyRubyMethod walks up to find if method is inside a class node.
+func qualifyRubyMethod(nameNode tree_sitter.Node, source []byte, name string) string {
+	method := nameNode.Parent()
+	if method == nil || method.Kind() != "method" {
+		return ""
+	}
+	// Ruby: method -> body_statement or class body -> class
+	parent := method.Parent()
+	for parent != nil {
+		if parent.Kind() == "class" {
+			classNameNode := parent.ChildByFieldName("name")
+			if classNameNode != nil {
+				return classNameNode.Utf8Text(source) + "." + name
+			}
+		}
+		parent = parent.Parent()
+	}
+	return ""
+}
+
+// qualifyKotlinFunction walks up to find if function is inside a class_declaration.
+func qualifyKotlinFunction(nameNode tree_sitter.Node, source []byte, name string) string {
+	funcDecl := nameNode.Parent()
+	if funcDecl == nil || funcDecl.Kind() != "function_declaration" {
+		return ""
+	}
+	classBody := funcDecl.Parent()
+	if classBody == nil || classBody.Kind() != "class_body" {
+		return ""
+	}
+	classDef := classBody.Parent()
+	if classDef == nil || classDef.Kind() != "class_declaration" {
+		return ""
+	}
+	// Kotlin class name is an identifier child (not a named field in this grammar version)
+	for i := uint(0); i < classDef.ChildCount(); i++ {
+		child := classDef.Child(i)
+		if child != nil && child.Kind() == "identifier" {
+			return child.Utf8Text(source) + "." + name
+		}
+	}
+	return ""
+}
+
+// qualifyJavaScriptMethod walks up: property_identifier -> method_definition -> class_body -> class/class_declaration
+func qualifyJavaScriptMethod(nameNode tree_sitter.Node, source []byte, name string) string {
+	methodDef := nameNode.Parent()
+	if methodDef == nil || methodDef.Kind() != "method_definition" {
+		return ""
+	}
+	classBody := methodDef.Parent()
+	if classBody == nil || classBody.Kind() != "class_body" {
+		return ""
+	}
+	classDef := classBody.Parent()
+	if classDef == nil {
+		return ""
+	}
+	if classDef.Kind() != "class_declaration" && classDef.Kind() != "class" {
+		return ""
+	}
+	classNameNode := classDef.ChildByFieldName("name")
+	if classNameNode == nil {
+		return ""
+	}
+	return classNameNode.Utf8Text(source) + "." + name
 }

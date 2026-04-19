@@ -204,9 +204,212 @@ func TestExtract_RustStruct(t *testing.T) {
 	require.NotNil(t, found, "should find Point struct def")
 }
 
+func TestExtract_JavaClass(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`public class Calculator {
+    public int add(int a, int b) {
+        return a + b;
+    }
+
+    public int subtract(int a, int b) {
+        return a - b;
+    }
+}
+`)
+	tags, err := ext.Extract(source, "test.java", "java")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Calculator")
+	require.NotNil(t, found, "should find Calculator class def")
+	assert.Equal(t, TagDef, found.Kind)
+
+	found = findTagByName(defs, "Calculator.add")
+	require.NotNil(t, found, "should find qualified method name Calculator.add")
+
+	found = findTagByName(defs, "Calculator.subtract")
+	require.NotNil(t, found, "should find qualified method name Calculator.subtract")
+}
+
+func TestExtract_CFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`struct Point {
+    int x;
+    int y;
+};
+
+int add(int a, int b) {
+    return a + b;
+}
+
+typedef unsigned long size_t;
+`)
+	tags, err := ext.Extract(source, "test.c", "c")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Point")
+	require.NotNil(t, found, "should find Point struct def")
+
+	found = findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add function def")
+}
+
+func TestExtract_CppClass(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`class Shape {
+public:
+    int area();
+};
+
+int compute(int x) {
+    return x * 2;
+}
+`)
+	tags, err := ext.Extract(source, "test.cpp", "cpp")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Shape")
+	require.NotNil(t, found, "should find Shape class def")
+
+	found = findTagByName(defs, "compute")
+	require.NotNil(t, found, "should find compute function def")
+}
+
+func TestExtract_CSharpMethod(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`class Service {
+    void Start() {
+        Console.WriteLine("started");
+    }
+
+    void Stop() {
+        Console.WriteLine("stopped");
+    }
+}
+`)
+	tags, err := ext.Extract(source, "test.cs", "c_sharp")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Service")
+	require.NotNil(t, found, "should find Service class def")
+
+	found = findTagByName(defs, "Service.Start")
+	require.NotNil(t, found, "should find qualified method name Service.Start")
+
+	found = findTagByName(defs, "Service.Stop")
+	require.NotNil(t, found, "should find qualified method name Service.Stop")
+}
+
+func TestExtract_RubyMethod(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`class Greeter
+  def hello
+    puts "hello"
+  end
+
+  def goodbye
+    puts "goodbye"
+  end
+end
+`)
+	tags, err := ext.Extract(source, "test.rb", "ruby")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Greeter")
+	require.NotNil(t, found, "should find Greeter class def")
+
+	found = findTagByName(defs, "Greeter.hello")
+	require.NotNil(t, found, "should find qualified method name Greeter.hello")
+}
+
+func TestExtract_PhpFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`<?php
+class User {
+    public function getName() {
+        return $this->name;
+    }
+}
+
+function greet() {
+    echo "hello";
+}
+`)
+	tags, err := ext.Extract(source, "test.php", "php")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "User")
+	require.NotNil(t, found, "should find User class def")
+
+	found = findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet function def")
+}
+
+func TestExtract_JavaScriptFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`class App {
+  start() {
+    console.log("started");
+  }
+}
+
+function greet() {
+  console.log("hello");
+}
+
+const add = (a, b) => a + b;
+`)
+	tags, err := ext.Extract(source, "test.js", "javascript")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "App")
+	require.NotNil(t, found, "should find App class def")
+
+	found = findTagByName(defs, "App.start")
+	require.NotNil(t, found, "should find qualified method name App.start")
+
+	found = findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet function def")
+
+	found = findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add arrow function def")
+}
+
+func TestExtract_KotlinFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`class Calculator {
+    fun add(a: Int, b: Int): Int {
+        return a + b
+    }
+}
+
+fun greet() {
+    println("hello")
+}
+`)
+	tags, err := ext.Extract(source, "test.kt", "kotlin")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Calculator")
+	require.NotNil(t, found, "should find Calculator class def")
+
+	found = findTagByName(defs, "Calculator.add")
+	require.NotNil(t, found, "should find qualified method name Calculator.add")
+
+	found = findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet function def")
+}
+
 func TestExtract_UnsupportedLanguage(t *testing.T) {
 	ext := newTestExtractor(t)
-	_, err := ext.Extract([]byte("code"), "test.java", "java")
+	_, err := ext.Extract([]byte("code"), "test.f90", "fortran")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no tag query for language")
 }

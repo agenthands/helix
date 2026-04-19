@@ -531,6 +531,70 @@ let greet name = "Hello, " ^ name
 	assert.Equal(t, TagDef, found.Kind)
 }
 
+func TestExtract_LuaFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`function greet(name)
+  print("Hello, " .. name)
+end
+
+local function add(a, b)
+  return a + b
+end
+`)
+	tags, err := ext.Extract(source, "test.lua", "lua")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet function def")
+	assert.Equal(t, TagDef, found.Kind)
+}
+
+func TestExtract_ZigFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`fn add(a: i32, b: i32) i32 {
+    return a + b;
+}
+
+const x: i32 = 42;
+`)
+	tags, err := ext.Extract(source, "test.zig", "zig")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add function def")
+	assert.Equal(t, TagDef, found.Kind)
+
+	found = findTagByName(defs, "x")
+	require.NotNil(t, found, "should find x variable def")
+}
+
+func TestExtract_HclBlock(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`resource "aws_instance" "web" {
+  ami           = "abc-123"
+  instance_type = "t2.micro"
+}
+
+variable "name" {
+  default = "test"
+}
+`)
+	tags, err := ext.Extract(source, "test.tf", "hcl")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	require.NotEmpty(t, defs, "should have at least one def tag for HCL blocks")
+
+	// HCL minimal query captures block type identifiers (resource, variable)
+	found := findTagByName(defs, "resource")
+	require.NotNil(t, found, "should find resource block type")
+
+	found = findTagByName(defs, "variable")
+	require.NotNil(t, found, "should find variable block type")
+}
+
 func TestExtract_UnsupportedLanguage(t *testing.T) {
 	ext := newTestExtractor(t)
 	_, err := ext.Extract([]byte("code"), "test.f90", "fortran")

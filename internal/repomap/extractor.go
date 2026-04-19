@@ -3,6 +3,7 @@ package repomap
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -63,6 +64,15 @@ var juliaTagsQuery string
 //go:embed queries/ocaml_tags.scm
 var ocamlTagsQuery string
 
+//go:embed queries/lua_tags.scm
+var luaTagsQuery string
+
+//go:embed queries/zig_tags.scm
+var zigTagsQuery string
+
+//go:embed queries/hcl_tags.scm
+var hclTagsQuery string
+
 // TagExtractor extracts def/ref tags from source files using tree-sitter queries.
 // Queries are compiled once per language and reused across files.
 type TagExtractor struct {
@@ -94,6 +104,10 @@ func NewTagExtractor(registry *treesitter.GrammarRegistry) (*TagExtractor, error
 		"haskell": haskellTagsQuery,
 		"julia":   juliaTagsQuery,
 		"ocaml":   ocamlTagsQuery,
+		// Wave 2b languages
+		"lua": luaTagsQuery,
+		"zig": zigTagsQuery,
+		"hcl": hclTagsQuery,
 	}
 
 	queries := make(map[string]*tree_sitter.Query, len(querySources))
@@ -104,11 +118,9 @@ func NewTagExtractor(registry *treesitter.GrammarRegistry) (*TagExtractor, error
 		}
 		q, qerr := tree_sitter.NewQuery(tsLang, src)
 		if qerr != nil {
-			// Clean up already-compiled queries.
-			for _, compiled := range queries {
-				compiled.Close()
-			}
-			return nil, fmt.Errorf("compiling %s tag query: %s", lang, qerr.Message)
+			// Error-tolerant: log warning and skip this language rather than failing all extraction.
+			log.Printf("WARNING: tag query for %s failed to compile: %s (skipping)", lang, qerr.Message)
+			continue
 		}
 		queries[lang] = q
 	}

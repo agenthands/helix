@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
 status: executing
-stopped_at: Phase 31 context gathered
-last_updated: "2026-04-18T18:51:09.761Z"
-last_activity: 2026-04-17
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-04-19T08:47:00Z"
+last_activity: 2026-04-19 -- Phase 31 Plan 01 complete
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
-  percent: 100
+  total_plans: 21
+  completed_plans: 19
+  percent: 90
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
-Status: Executing Phase 30
-Last activity: 2026-04-17
+Phase: 31
+Plan: 1 of 3
+Status: Executing
+Last activity: 2026-04-19 -- Phase 31 Plan 01 complete (Wave 1 grammar expansion)
 
 Progress: [████████████████████] 100%
 
@@ -61,6 +61,7 @@ Progress: [████████████████████] 100%
 | Phase 28 P02 | 145 | 1 tasks | 2 files |
 | Phase 28 P03 | 188 | 2 tasks | 3 files |
 | Phase 29 P01 | 121 | 1 tasks | 1 files |
+| Phase 31 P01 | 665 | 3 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 28]: Version counter on TagCache enables dirty-flag graph rebuild caching
 - [Phase 28]: Tree rendering sorts by directory structure; rank order controls file inclusion via binary search
 - [Phase 28]: RepoMapSkill creates own dependencies in Init() -- no SkillDeps modification needed
+- [Phase 31]: Kotlin binding from tree-sitter-grammars org (fwcd fork has module path mismatch)
+- [Phase 31]: bodyNodeKind fallback in langConfig for grammars with unnamed body children (Kotlin)
 
 ### Roadmap Evolution
 
@@ -94,6 +97,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-18T18:51:09.757Z
-Stopped at: Phase 31 context gathered
-Resume file: .planning/phases/31-multi-language-grammar-expansion/31-CONTEXT.md
+Last session: 2026-04-19T08:47:00Z
+Stopped at: Completed 31-01-PLAN.md
+Resume file: .planning/phases/31-multi-language-grammar-expansion/31-02-PLAN.md

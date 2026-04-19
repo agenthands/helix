@@ -31,6 +31,10 @@ func TestNewGrammarRegistry(t *testing.T) {
 	assert.True(t, r.SupportsLanguage("julia"))
 	assert.True(t, r.SupportsLanguage("ocaml"))
 
+	assert.True(t, r.SupportsLanguage("lua"))
+	assert.True(t, r.SupportsLanguage("zig"))
+	assert.True(t, r.SupportsLanguage("hcl"))
+
 	assert.False(t, r.SupportsLanguage("unknown"))
 	assert.False(t, r.SupportsLanguage(""))
 }
@@ -110,6 +114,18 @@ func TestGetLanguage(t *testing.T) {
 	require.True(t, ok)
 	assert.NotNil(t, lang)
 
+	lang, ok = r.GetLanguage("lua")
+	require.True(t, ok)
+	assert.NotNil(t, lang)
+
+	lang, ok = r.GetLanguage("zig")
+	require.True(t, ok)
+	assert.NotNil(t, lang)
+
+	lang, ok = r.GetLanguage("hcl")
+	require.True(t, ok)
+	assert.NotNil(t, lang)
+
 	lang, ok = r.GetLanguage("unknown")
 	assert.False(t, ok)
 	assert.Nil(t, lang)
@@ -119,5 +135,5 @@ func TestSupportedLanguages(t *testing.T) {
 	r := NewGrammarRegistry()
 
 	langs := r.SupportedLanguages()
-	assert.Equal(t, []string{"bash", "c", "c_sharp", "cpp", "go", "haskell", "java", "javascript", "julia", "kotlin", "ocaml", "php", "python", "ruby", "rust", "scala", "tsx", "typescript"}, langs)
+	assert.Equal(t, []string{"bash", "c", "c_sharp", "cpp", "go", "haskell", "hcl", "java", "javascript", "julia", "kotlin", "lua", "ocaml", "php", "python", "ruby", "rust", "scala", "tsx", "typescript", "zig"}, langs)
 }

@@ -29,6 +29,11 @@ import (
 	tree_sitter_haskell "github.com/tree-sitter/tree-sitter-haskell/bindings/go"
 	tree_sitter_julia "github.com/tree-sitter/tree-sitter-julia/bindings/go"
 	tree_sitter_ocaml "github.com/tree-sitter/tree-sitter-ocaml/bindings/go"
+
+	// Wave 2b languages
+	tree_sitter_lua "github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go"
+	tree_sitter_zig "github.com/tree-sitter-grammars/tree-sitter-zig/bindings/go"
+	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 )
 
 // GrammarRegistry holds tree-sitter language grammars keyed by language name.
@@ -66,6 +71,11 @@ func NewGrammarRegistry() *GrammarRegistry {
 	r.languages["haskell"] = tree_sitter.NewLanguage(tree_sitter_haskell.Language())
 	r.languages["julia"] = tree_sitter.NewLanguage(tree_sitter_julia.Language())
 	r.languages["ocaml"] = tree_sitter.NewLanguage(tree_sitter_ocaml.LanguageOCaml())
+
+	// Wave 2b languages
+	r.languages["lua"] = tree_sitter.NewLanguage(tree_sitter_lua.Language())
+	r.languages["zig"] = tree_sitter.NewLanguage(tree_sitter_zig.Language())
+	r.languages["hcl"] = tree_sitter.NewLanguage(tree_sitter_hcl.Language())
 
 	return r
 }

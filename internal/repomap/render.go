@@ -239,6 +239,12 @@ func LangFromExt(path string) string {
 		return "julia"
 	case ".ml":
 		return "ocaml"
+	case ".lua":
+		return "lua"
+	case ".zig":
+		return "zig"
+	case ".tf", ".hcl":
+		return "hcl"
 	default:
 		return ""
 	}

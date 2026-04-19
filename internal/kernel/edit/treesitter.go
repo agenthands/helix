@@ -17,6 +17,7 @@ import (
 type langConfig struct {
 	declarationTypes map[string]bool // node types that are declarations
 	bodyFieldName    string          // field name for the body child node
+	bodyNodeKind     string          // fallback: find body by node kind when field name not available
 }
 
 // BodyExtractor uses tree-sitter to precisely extract symbol body byte ranges.
@@ -71,6 +72,76 @@ func NewBodyExtractor(registry *treesitter.GrammarRegistry) *BodyExtractor {
 		bodyFieldName: "body",
 	}
 
+	// Java: method_declaration, constructor_declaration -> body
+	be.configs["java"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"method_declaration":      true,
+			"constructor_declaration": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// C: function_definition -> body (compound_statement)
+	be.configs["c"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// C++: function_definition -> body
+	be.configs["cpp"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// C#: method_declaration, constructor_declaration -> body
+	be.configs["c_sharp"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"method_declaration":      true,
+			"constructor_declaration": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Ruby: method, singleton_method -> body
+	be.configs["ruby"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"method":           true,
+			"singleton_method": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// PHP: function_definition, method_declaration -> body
+	be.configs["php"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+			"method_declaration":  true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// JavaScript: function_declaration, method_definition -> body
+	be.configs["javascript"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_declaration": true,
+			"method_definition":    true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Kotlin: function_declaration -> function_body (unnamed child, not a named field)
+	be.configs["kotlin"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_declaration": true,
+		},
+		bodyFieldName: "body",
+		bodyNodeKind:  "function_body",
+	}
+
 	return be
 }
 
@@ -118,6 +189,16 @@ func (be *BodyExtractor) ExtractBody(source []byte, lang string, symbolName stri
 	}
 
 	body := decl.ChildByFieldName(cfg.bodyFieldName)
+	if body == nil && cfg.bodyNodeKind != "" {
+		// Fallback: find body by node kind (e.g., Kotlin function_body is unnamed)
+		for i := uint(0); i < decl.ChildCount(); i++ {
+			child := decl.Child(i)
+			if child != nil && child.Kind() == cfg.bodyNodeKind {
+				body = child
+				break
+			}
+		}
+	}
 	if body == nil {
 		return 0, 0, serr.New(serr.NotFound, "body field not found in declaration node").WithDetail(symbolName)
 	}
@@ -186,9 +267,18 @@ func nodeContainsRange(node *tree_sitter.Node, r gen.Range) bool {
 
 // extractNodeName gets the name of a declaration node.
 // It looks for a "name" field child, which is the standard tree-sitter convention.
+// For C/C++ function_definition nodes, it traverses declarator -> function_declarator -> declarator.
 func extractNodeName(node *tree_sitter.Node, source []byte) string {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
+		// C/C++ function_definition: name is at declarator -> function_declarator -> declarator (identifier)
+		decl := node.ChildByFieldName("declarator")
+		if decl != nil && decl.Kind() == "function_declarator" {
+			innerDecl := decl.ChildByFieldName("declarator")
+			if innerDecl != nil && (innerDecl.Kind() == "identifier" || innerDecl.Kind() == "field_identifier") {
+				return innerDecl.Utf8Text(source)
+			}
+		}
 		return ""
 	}
 	name := string(source[nameNode.StartByte():nameNode.EndByte()])

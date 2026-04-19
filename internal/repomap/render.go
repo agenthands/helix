@@ -223,8 +223,12 @@ func LangFromExt(path string) string {
 		return "php"
 	case ".c":
 		return "c"
-	case ".cpp":
+	case ".cpp", ".cc", ".cxx", ".hpp", ".hxx":
 		return "cpp"
+	case ".cs":
+		return "c_sharp"
+	case ".kt":
+		return "kotlin"
 	default:
 		return ""
 	}

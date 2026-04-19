@@ -73,6 +73,12 @@ var zigTagsQuery string
 //go:embed queries/hcl_tags.scm
 var hclTagsQuery string
 
+//go:embed queries/r_tags.scm
+var rTagsQuery string
+
+//go:embed queries/swift_tags.scm
+var swiftTagsQuery string
+
 // TagExtractor extracts def/ref tags from source files using tree-sitter queries.
 // Queries are compiled once per language and reused across files.
 type TagExtractor struct {
@@ -105,9 +111,11 @@ func NewTagExtractor(registry *treesitter.GrammarRegistry) (*TagExtractor, error
 		"julia":   juliaTagsQuery,
 		"ocaml":   ocamlTagsQuery,
 		// Wave 2b languages
-		"lua": luaTagsQuery,
-		"zig": zigTagsQuery,
-		"hcl": hclTagsQuery,
+		"lua":   luaTagsQuery,
+		"zig":   zigTagsQuery,
+		"hcl":   hclTagsQuery,
+		"r":     rTagsQuery,
+		"swift": swiftTagsQuery,
 	}
 
 	queries := make(map[string]*tree_sitter.Query, len(querySources))

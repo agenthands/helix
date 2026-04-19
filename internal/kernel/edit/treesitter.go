@@ -174,6 +174,23 @@ func NewBodyExtractor(registry *treesitter.GrammarRegistry) *BodyExtractor {
 		bodyFieldName: "body",
 	}
 
+	// R: function_definition -> body
+	be.configs["r"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_definition": true,
+		},
+		bodyFieldName: "body",
+	}
+
+	// Swift: function_declaration, class_declaration -> body
+	be.configs["swift"] = &langConfig{
+		declarationTypes: map[string]bool{
+			"function_declaration": true,
+			"class_declaration":    true,
+		},
+		bodyFieldName: "body",
+	}
+
 	// Kotlin: function_declaration -> function_body (unnamed child, not a named field)
 	be.configs["kotlin"] = &langConfig{
 		declarationTypes: map[string]bool{

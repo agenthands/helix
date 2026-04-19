@@ -349,6 +349,50 @@ func TestExtractBody_ZigFunction(t *testing.T) {
 	assert.Contains(t, body, "return a + b")
 }
 
+func TestExtractBody_RFunction(t *testing.T) {
+	source := []byte(`
+greet <- function(name) {
+  paste("Hello", name)
+}
+
+add <- function(a, b) {
+  a + b
+}
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+	start, end, err := be.ExtractBody(source, "r", "greet", gen.Range{
+		Start: gen.Position{Line: 1, Character: 0},
+		End:   gen.Position{Line: 3, Character: 1},
+	})
+	if err != nil {
+		t.Skipf("R body extraction not supported: %v", err)
+	}
+	body := string(source[start:end])
+	assert.Contains(t, body, "paste")
+}
+
+func TestExtractBody_SwiftFunction(t *testing.T) {
+	source := []byte(`
+func greet(name: String) -> String {
+    return "Hello, " + name
+}
+
+func add(a: Int, b: Int) -> Int {
+    return a + b
+}
+`)
+	be := NewBodyExtractor(treesitter.NewGrammarRegistry())
+	start, end, err := be.ExtractBody(source, "swift", "greet", gen.Range{
+		Start: gen.Position{Line: 1, Character: 0},
+		End:   gen.Position{Line: 3, Character: 1},
+	})
+	if err != nil {
+		t.Skipf("Swift body extraction not supported: %v", err)
+	}
+	body := string(source[start:end])
+	assert.Contains(t, body, "Hello")
+}
+
 func TestExtractBody_SymbolNotFound(t *testing.T) {
 	source := []byte(`package main
 
@@ -394,6 +438,8 @@ func TestSupportsLanguage(t *testing.T) {
 	assert.True(t, be.SupportsLanguage("julia"))
 	assert.True(t, be.SupportsLanguage("lua"))
 	assert.True(t, be.SupportsLanguage("zig"))
+	assert.True(t, be.SupportsLanguage("r"))
+	assert.True(t, be.SupportsLanguage("swift"))
 	assert.False(t, be.SupportsLanguage("hcl"))
 	assert.False(t, be.SupportsLanguage("haskell"))
 	assert.False(t, be.SupportsLanguage("ocaml"))

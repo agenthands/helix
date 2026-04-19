@@ -595,6 +595,50 @@ variable "name" {
 	require.NotNil(t, found, "should find variable block type")
 }
 
+func TestExtract_RFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`
+greet <- function(name) {
+  paste("Hello", name)
+}
+
+add <- function(a, b) {
+  a + b
+}
+`)
+	tags, err := ext.Extract(source, "test.r", "r")
+	require.NoError(t, err)
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet def")
+	assert.Equal(t, TagDef, found.Kind)
+
+	found = findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add def")
+}
+
+func TestExtract_SwiftFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`
+class Greeter {
+    func greet(name: String) -> String {
+        return "Hello, " + name
+    }
+}
+
+func add(a: Int, b: Int) -> Int {
+    return a + b
+}
+`)
+	tags, err := ext.Extract(source, "test.swift", "swift")
+	require.NoError(t, err)
+	defs := filterTags(tags, TagDef)
+	require.NotEmpty(t, defs, "should have def tags for Swift")
+	found := findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add def")
+	assert.Equal(t, TagDef, found.Kind)
+}
+
 func TestExtract_UnsupportedLanguage(t *testing.T) {
 	ext := newTestExtractor(t)
 	_, err := ext.Extract([]byte("code"), "test.f90", "fortran")

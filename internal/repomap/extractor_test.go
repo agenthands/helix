@@ -407,6 +407,130 @@ fun greet() {
 	require.NotNil(t, found, "should find greet function def")
 }
 
+func TestExtract_ScalaFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`object Calculator {
+  def add(a: Int, b: Int): Int = {
+    a + b
+  }
+
+  def multiply(a: Int, b: Int): Int = {
+    a * b
+  }
+}
+
+class Person(val name: String)
+
+trait Greeter {
+  def greet(): Unit
+}
+`)
+	tags, err := ext.Extract(source, "test.scala", "scala")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Calculator")
+	require.NotNil(t, found, "should find Calculator object def")
+	assert.Equal(t, TagDef, found.Kind)
+
+	found = findTagByName(defs, "Calculator.add")
+	require.NotNil(t, found, "should find qualified method Calculator.add")
+
+	found = findTagByName(defs, "Person")
+	require.NotNil(t, found, "should find Person class def")
+
+	found = findTagByName(defs, "Greeter")
+	require.NotNil(t, found, "should find Greeter trait def")
+}
+
+func TestExtract_BashFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`#!/bin/bash
+
+greet() {
+  echo "hello"
+}
+
+function cleanup {
+  rm -rf /tmp/test
+}
+`)
+	tags, err := ext.Extract(source, "test.sh", "bash")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	require.NotEmpty(t, defs, "should have at least one def tag")
+
+	found := findTagByName(defs, "greet")
+	require.NotNil(t, found, "should find greet function def")
+	assert.Equal(t, TagDef, found.Kind)
+}
+
+func TestExtract_HaskellFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`add :: Int -> Int -> Int
+add x y = x + y
+
+greet :: String -> String
+greet name = "Hello, " ++ name
+`)
+	tags, err := ext.Extract(source, "test.hs", "haskell")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	require.NotEmpty(t, defs, "should have at least one def tag")
+
+	found := findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add def")
+	assert.Equal(t, TagDef, found.Kind)
+}
+
+func TestExtract_JuliaFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`struct Point
+    x::Float64
+    y::Float64
+end
+
+function add(a, b)
+    return a + b
+end
+
+macro show_value(x)
+    :(println($(string(x)), " = ", $(esc(x))))
+end
+`)
+	tags, err := ext.Extract(source, "test.jl", "julia")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	found := findTagByName(defs, "Point")
+	require.NotNil(t, found, "should find Point struct def")
+
+	found = findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add function def")
+
+	found = findTagByName(defs, "show_value")
+	require.NotNil(t, found, "should find show_value macro def")
+}
+
+func TestExtract_OcamlFunction(t *testing.T) {
+	ext := newTestExtractor(t)
+	source := []byte(`let add x y = x + y
+
+let greet name = "Hello, " ^ name
+`)
+	tags, err := ext.Extract(source, "test.ml", "ocaml")
+	require.NoError(t, err)
+
+	defs := filterTags(tags, TagDef)
+	require.NotEmpty(t, defs, "should have at least one def tag")
+
+	found := findTagByName(defs, "add")
+	require.NotNil(t, found, "should find add def")
+	assert.Equal(t, TagDef, found.Kind)
+}
+
 func TestExtract_UnsupportedLanguage(t *testing.T) {
 	ext := newTestExtractor(t)
 	_, err := ext.Extract([]byte("code"), "test.f90", "fortran")

@@ -48,6 +48,21 @@ var javascriptTagsQuery string
 //go:embed queries/kotlin_tags.scm
 var kotlinTagsQuery string
 
+//go:embed queries/scala_tags.scm
+var scalaTagsQuery string
+
+//go:embed queries/bash_tags.scm
+var bashTagsQuery string
+
+//go:embed queries/haskell_tags.scm
+var haskellTagsQuery string
+
+//go:embed queries/julia_tags.scm
+var juliaTagsQuery string
+
+//go:embed queries/ocaml_tags.scm
+var ocamlTagsQuery string
+
 // TagExtractor extracts def/ref tags from source files using tree-sitter queries.
 // Queries are compiled once per language and reused across files.
 type TagExtractor struct {
@@ -73,6 +88,12 @@ func NewTagExtractor(registry *treesitter.GrammarRegistry) (*TagExtractor, error
 		"php":        phpTagsQuery,
 		"javascript": javascriptTagsQuery,
 		"kotlin":     kotlinTagsQuery,
+		// Wave 2a languages
+		"scala":   scalaTagsQuery,
+		"bash":    bashTagsQuery,
+		"haskell": haskellTagsQuery,
+		"julia":   juliaTagsQuery,
+		"ocaml":   ocamlTagsQuery,
 	}
 
 	queries := make(map[string]*tree_sitter.Query, len(querySources))
@@ -213,8 +234,35 @@ func buildQualifiedName(nameNode tree_sitter.Node, source []byte, lang string, c
 		return qualifyKotlinFunction(nameNode, source, name)
 	case lang == "javascript" && captureName == "definition.method":
 		return qualifyJavaScriptMethod(nameNode, source, name)
+	case lang == "scala" && captureName == "definition.function":
+		return qualifyScalaFunction(nameNode, source, name)
 	}
 	return ""
+}
+
+// qualifyScalaFunction walks up to find if the function is inside a class/object definition.
+func qualifyScalaFunction(nameNode tree_sitter.Node, source []byte, name string) string {
+	funcDef := nameNode.Parent()
+	if funcDef == nil || funcDef.Kind() != "function_definition" {
+		return ""
+	}
+	// Walk up through template_body to class/object
+	parent := funcDef.Parent()
+	if parent == nil || parent.Kind() != "template_body" {
+		return ""
+	}
+	container := parent.Parent()
+	if container == nil {
+		return ""
+	}
+	if container.Kind() != "class_definition" && container.Kind() != "object_definition" {
+		return ""
+	}
+	containerNameNode := container.ChildByFieldName("name")
+	if containerNameNode == nil {
+		return ""
+	}
+	return containerNameNode.Utf8Text(source) + "." + name
 }
 
 // qualifyGoMethod walks up from the method name to find the receiver type.

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
 status: executing
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-04-19T08:47:00Z"
-last_activity: 2026-04-19 -- Phase 31 Plan 01 complete
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-04-19T08:58:55.691Z"
+last_activity: 2026-04-19
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 21
-  completed_plans: 19
-  percent: 90
+  completed_plans: 20
+  percent: 95
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 31
-Plan: 1 of 3
-Status: Executing
-Last activity: 2026-04-19 -- Phase 31 Plan 01 complete (Wave 1 grammar expansion)
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-19
 
 Progress: [████████████████████] 100%
 
@@ -62,6 +62,7 @@ Progress: [████████████████████] 100%
 | Phase 28 P03 | 188 | 2 tasks | 3 files |
 | Phase 29 P01 | 121 | 1 tasks | 1 files |
 | Phase 31 P01 | 665 | 3 tasks | 25 files |
+| Phase 31 P02 | 430 | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 28]: RepoMapSkill creates own dependencies in Init() -- no SkillDeps modification needed
 - [Phase 31]: Kotlin binding from tree-sitter-grammars org (fwcd fork has module path mismatch)
 - [Phase 31]: bodyNodeKind fallback in langConfig for grammars with unnamed body children (Kotlin)
+- [Phase 31]: OCaml binding uses LanguageOCaml() export; Julia v0.25.0 needs signature traversal for function names; Haskell/OCaml omit body extraction (equation-based)
 
 ### Roadmap Evolution
 
@@ -97,6 +99,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-19T08:47:00Z
-Stopped at: Completed 31-01-PLAN.md
-Resume file: .planning/phases/31-multi-language-grammar-expansion/31-02-PLAN.md
+Last session: 2026-04-19T08:58:55.688Z
+Stopped at: Completed 31-02-PLAN.md
+Resume file: None

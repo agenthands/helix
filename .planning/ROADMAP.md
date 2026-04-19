@@ -199,10 +199,10 @@ Plans:
   3. Body queries support symbol editing for languages with standard body fields
   4. Qualified name resolution works for OOP languages (Java, C#, Ruby, Kotlin, JavaScript, Scala)
   5. All tests pass and binary builds with all grammars compiled in
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [x] 31-01-PLAN.md — Wave 1: 8 languages (Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin) -- grammars, tag queries, body queries, tests [Wave 1]
-- [ ] 31-02-PLAN.md — Wave 2a: 5 languages (Scala, Bash, Haskell, Julia, OCaml) -- grammars, queries, tests [Wave 2]
+- [x] 31-02-PLAN.md — Wave 2a: 5 languages (Scala, Bash, Haskell, Julia, OCaml) -- grammars, queries, tests [Wave 2]
 - [ ] 31-03-PLAN.md — Wave 2b: 5 languages (Lua, Zig, HCL, Swift, R) -- grammars, queries, tests, final validation [Wave 3]
 
 ## Progress
@@ -243,4 +243,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
 | 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
-| 31. Multi-language grammar expansion | v1.6 | 1/3 | In Progress|  |
+| 31. Multi-language grammar expansion | v1.6 | 2/3 | In Progress|  |

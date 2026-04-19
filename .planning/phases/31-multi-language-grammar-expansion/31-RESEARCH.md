@@ -424,22 +424,19 @@ func qualifyJavaMethod(nameNode tree_sitter.Node, source []byte, name string) st
 | A4 | Swift pseudo-version will work with go-tree-sitter v0.25.0 | Standard Stack | Grammar API may be incompatible with older/newer tree-sitter runtime |
 | A5 | QL, Pony, D, Gleam, Elisp have no Go bindings | Standard Stack | May exist in repos not checked |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **C/C++ file extension mapping**
+1. **C/C++ file extension mapping** (RESOLVED)
    - What we know: Langregistry uses "cpp" for both `.c` and `.cpp` files. Tree-sitter needs separate "c" and "cpp" grammars.
-   - What's unclear: How does the tag extraction pipeline determine which tree-sitter language to use? Does it use the langregistry key or does it need a separate file-extension-to-tree-sitter-language map?
-   - Recommendation: Add a mapping function in the tree-sitter registry or tag extractor that maps file extensions to tree-sitter language keys independently of the langregistry.
+   - Resolution: C and C++ use separate registry keys ("c" and "cpp") in GrammarRegistry. `LangFromExt` already maps `.c` -> "c" and `.cpp` -> "cpp" independently (verified: `internal/repomap/render.go` lines 224-227). The tag extraction pipeline receives the language key from `LangFromExt`, which correctly distinguishes C from C++. No additional mapping layer needed.
 
-2. **Body field name verification**
+2. **Body field name verification** (RESOLVED)
    - What we know: Go, Python, TypeScript, Rust all use "body" as the field name for the function/method body.
-   - What's unclear: Do all target languages use "body"? Some grammars may use "consequence", "block", or other field names.
-   - Recommendation: Verify each grammar's node types before writing body queries. The `node-types.json` in each grammar repo is authoritative.
+   - Resolution: Most Wave 1 languages use "body" as the field name (Java, C, C++, C#, PHP, JavaScript, Kotlin). Ruby uses "body" on method nodes. For Wave 2 languages where "body" does not apply (Haskell, OCaml with equation-based definitions; HCL with block-based structure; R with assignment-based functions), the `langConfig` is simply omitted and `BodyExtractor.SupportsLanguage()` returns false, falling back to LSP-based editing. Body field names must be verified per grammar at implementation time; the plans instruct executors to check and adjust accordingly.
 
-3. **JavaScript vs TypeScript query sharing**
+3. **JavaScript vs TypeScript query sharing** (RESOLVED)
    - What we know: JavaScript and TypeScript have separate grammars. The existing TypeScript tag query may partially work for JavaScript but may miss JS-specific patterns (CommonJS `module.exports`, etc.).
-   - What's unclear: Whether to share the TypeScript tag query for JavaScript or write a separate one.
-   - Recommendation: Write a separate JavaScript tag query adapted from the aider JS reference, since JS has different AST node types for some constructs.
+   - Resolution: JavaScript gets a separate tag query (`javascript_tags.scm`) adapted from the aider JavaScript reference query. JS has different AST node types (e.g., `function` vs TypeScript `function_declaration`, `variable_declaration` with arrow functions for CommonJS patterns). Plan 01 Task 2a creates the dedicated JavaScript query file.
 
 ## Validation Architecture
 

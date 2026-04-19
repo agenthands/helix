@@ -188,6 +188,23 @@ Plans:
 Plans:
 - [x] 30-01-PLAN.md — Wire TagExtractor, ensureCache, TreeRenderer, EnrichFromLSP into RepoMapSkill + daemon wiring [Wave 1]
 - [x] 30-02-PLAN.md — Integration tests for full pipeline (RMAP-04/05/06/07/08/10) [Wave 2]
+
+### Phase 31: Multi-language grammar expansion
+**Goal:** Expand tree-sitter grammar support from 5 languages to 23, achieving full aider parity for all languages with Go bindings
+**Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08
+**Depends on:** Phase 30
+**Success Criteria** (what must be TRUE):
+  1. GrammarRegistry supports 23 tree-sitter languages (5 original + 8 Wave 1 + 10 Wave 2)
+  2. Tag queries extract defs/refs for all 18 new languages using Serena capture convention
+  3. Body queries support symbol editing for languages with standard body fields
+  4. Qualified name resolution works for OOP languages (Java, C#, Ruby, Kotlin, JavaScript, Scala)
+  5. All tests pass and binary builds with all grammars compiled in
+**Plans:** 3 plans
+Plans:
+- [ ] 31-01-PLAN.md — Wave 1: 8 languages (Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin) -- grammars, tag queries, body queries, tests [Wave 1]
+- [ ] 31-02-PLAN.md — Wave 2a: 5 languages (Scala, Bash, Haskell, Julia, OCaml) -- grammars, queries, tests [Wave 2]
+- [ ] 31-03-PLAN.md — Wave 2b: 5 languages (Lua, Zig, HCL, Swift, R) -- grammars, queries, tests, final validation [Wave 3]
+
 ## Progress
 
 **Execution Order:**
@@ -226,3 +243,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
 | 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
+| 31. Multi-language grammar expansion | v1.6 | 0/3 | Planning  | -- |

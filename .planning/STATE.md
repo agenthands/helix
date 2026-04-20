@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
-status: complete
-stopped_at: Phase 33 complete — all plans done, verified, 3/3 must-haves passed
+status: shipped
+stopped_at: Milestone v1.6 shipped and archived 2026-04-20
 last_updated: "2026-04-20T13:46:39.377Z"
 last_activity: 2026-04-20
 progress:

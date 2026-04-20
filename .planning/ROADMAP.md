@@ -8,7 +8,7 @@
 - ✅ **v1.3 Documentation Catchup** — Phases 16-17 (shipped 2026-04-11)
 - ✅ **v1.4 Integration Testing v2** — Phases 18-21 (shipped 2026-04-14)
 - ✅ **v1.5 Typed Errors & Hardening** — Phases 22-24 (shipped 2026-04-15)
-- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-33 (in progress)
+- ✅ **v1.6 Context Intelligence & Resilient Editing** — Phases 25-33 (shipped 2026-04-20)
 
 ## Phases
 
@@ -84,162 +84,24 @@
 
 </details>
 
-### v1.6 Context Intelligence & Resilient Editing (In Progress)
+<details>
+<summary>✅ v1.6 Context Intelligence & Resilient Editing (Phases 25-33) — SHIPPED 2026-04-20</summary>
 
-**Milestone Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
+- [x] Phase 25: Fuzzy Edit Engine (6/6 plans) — 4-strategy cascade, indentation preservation, ambiguity detection, ellipsis placeholders
+- [x] Phase 26: Fuzzy Edit Integration (2/2 plans) — Standalone fuzzy_edit MCP tool, fallback wiring
+- [x] Phase 27: RepoMap Tag Extraction & Cache (4/4 plans) — Tree-sitter extraction, SQLite cache, scope-aware elision
+- [x] Phase 28: RepoMap Graph & MCP Tools (3/3 plans) — Cross-file reference graph, PageRank, token-budgeted MCP tools
+- [x] Phase 29: Phase 25 Formal Verification (1/1 plan) — Verification gap closure
+- [x] Phase 30: RepoMap Pipeline Wiring (2/2 plans) — Integration gap closure
+- [x] Phase 31: Multi-language Grammar Expansion (4/4 plans) — 5→23 tree-sitter languages (full aider parity)
+- [x] Phase 32: v1.6 Documentation Hygiene (1/1 plan) — Documentation gap closure
+- [x] Phase 33: FallbackExtractor Wiring (2/2 plans) — LSP fallback + cache persistence
 
-- [x] **Phase 25: Fuzzy Edit Engine** - Core fuzzy matching engine with 4-strategy cascade, indentation preservation, ambiguity detection, and ellipsis placeholders (completed 2026-04-16)
-- [x] **Phase 26: Fuzzy Edit Integration** - Standalone fuzzy_edit MCP tool and fallback wiring into replace_symbol_body and replace_content (completed 2026-04-16)
-- [x] **Phase 27: RepoMap Tag Extraction & Cache** - Tree-sitter tag extraction with LSP fallback, SQLite cache, and scope-aware elision (completed 2026-04-16)
-- [x] **Phase 28: RepoMap Graph & MCP Tools** - Cross-file reference graph, PageRank ranking, token-budgeted MCP tools, and LSP enrichment (completed 2026-04-17)
-- [x] **Phase 29: Phase 25 Formal Verification** - Run formal verification on fuzzy edit engine to close FUZZ-01/02/03/07/08 (gap closure) (completed 2026-04-17)
-- [x] **Phase 30: RepoMap Pipeline Wiring** - Wire TagExtractor, FallbackExtractor, EnrichFromLSP, and TreeRenderer in RepoMapSkill (gap closure) (completed 2026-04-17)
+**Full details:** `.planning/milestones/v1.6-ROADMAP.md`
 
-## Phase Details
-
-### Phase 25: Fuzzy Edit Engine
-**Goal**: Agents can perform fuzzy text matching and replacement that tolerates whitespace drift, indentation changes, and ellipsis placeholders in search blocks
-**Depends on**: Nothing (independent of RepoMap work)
-**Requirements**: FUZZ-01, FUZZ-02, FUZZ-03, FUZZ-07, FUZZ-08
-**Success Criteria** (what must be TRUE):
-  1. Agent can submit a search block with minor whitespace differences from actual file content and the fuzzy matcher finds the correct location using the 4-strategy cascade (exact, whitespace-normalized, indentation-flexible, fail-with-diff)
-  2. Tool response includes match_strategy and similarity_score fields so the agent knows how the match was resolved
-  3. Replacement text inherits the original file's indentation level when a fuzzy match succeeds, not the indentation from the agent's search block
-  4. When the search text matches multiple locations in the file, the tool refuses the edit and reports the ambiguity instead of silently picking one
-  5. Agent can use ellipsis/placeholder markers in search blocks to skip unchanged code sections, matching only the anchoring lines around the placeholder
-**Plans**: 6 plans
-- [x] 25-01-PLAN.md — Types & Options (Strategy enum, Options, Result structs) [Wave 1]
-- [x] 25-02-PLAN.md — Line splitter & ellipsis segmenter [Wave 2]
-- [x] 25-03-PLAN.md — 4-strategy cascade sweeps (exact / whitespace / indent-flex) [Wave 2]
-- [x] 25-04-PLAN.md — Indentation reflow (common-prefix dedent + reapply) [Wave 2]
-- [x] 25-05-PLAN.md — Fail-with-diff + ambiguity formatters [Wave 2]
-- [x] 25-06-PLAN.md — Cascade orchestrator + Match() entry point [Wave 3]
-
-### Phase 26: Fuzzy Edit Integration
-**Goal**: Existing edit tools gracefully fall back to fuzzy matching when exact matching fails, and agents have a standalone fuzzy edit tool for arbitrary text operations
-**Depends on**: Phase 25
-**Requirements**: FUZZ-04, FUZZ-05, FUZZ-06
-**Success Criteria** (what must be TRUE):
-  1. Agent can call the standalone `fuzzy_edit` MCP tool to perform raw text fuzzy matching on any file, independent of symbol boundaries
-  2. When `replace_symbol_body` receives a search block that does not exactly match content within the tree-sitter-located body, it falls back to fuzzy matching and succeeds if a fuzzy match is found
-  3. When `replace_content` receives a search string that does not match exactly or via regex, it falls back to fuzzy matching and succeeds if a fuzzy match is found
-**Plans**: 2 plans
-Plans:
-- [x] 26-01-PLAN.md — Standalone fuzzy_edit MCP tool + replace_in_file fuzzy fallback [Wave 1]
-- [x] 26-02-PLAN.md — replace_symbol_body fuzzy fallback with search_body parameter [Wave 1]
-
-### Phase 27: RepoMap Tag Extraction & Cache
-**Goal**: The system can extract, cache, and elide structural tags (definitions and references) from source files across multiple languages
-**Depends on**: Nothing (independent of fuzzy editing work)
-**Requirements**: RMAP-01, RMAP-02, RMAP-03, RMAP-09
-**Success Criteria** (what must be TRUE):
-  1. Tree-sitter .scm queries extract def/ref tags from Go, Python, TypeScript, and Rust source files with correct symbol names and locations
-  2. Languages without tree-sitter grammars fall back to LSP documentSymbol for tag extraction, producing compatible tag data
-  3. Extracted tags persist in SQLite with mtime-based invalidation, surviving daemon restarts and client reconnects without re-extraction of unchanged files
-  4. Tag output uses scope-aware elision showing signatures without bodies (via tree-sitter), keeping output compact for token-budgeted consumption
-**Plans**: 4 plans
-Plans:
-- [x] 27-01-PLAN.md — Shared grammar registry, Tag types, tree-sitter .scm queries, TagExtractor, BodyExtractor refactor [Wave 1]
-- [x] 27-02-PLAN.md — LSP documentSymbol fallback extractor [Wave 1]
-- [x] 27-03-PLAN.md — SQLite tag cache with mtime-based invalidation [Wave 2]
-- [x] 27-04-PLAN.md — Scope-aware elision renderer [Wave 2]
-
-### Phase 28: RepoMap Graph & MCP Tools
-**Goal**: Agents can request ranked, token-budgeted structural overviews and task-focused context from any codebase via MCP tools
-**Depends on**: Phase 27
-**Requirements**: RMAP-04, RMAP-05, RMAP-06, RMAP-07, RMAP-08, RMAP-10
-**Success Criteria** (what must be TRUE):
-  1. Agent can call `get_repo_map` and receive a structural overview of the repository with symbols ranked by importance via PageRank, fitting within a specified token budget
-  2. Agent can call `get_context` with a task description or set of files and receive the most relevant symbols for that task, ranked and token-budgeted
-  3. Cross-file reference graph correctly links definitions to references across files, with edges weighted by reference frequency
-  4. When LSP sessions are warm, the reference graph is enriched with precise cross-file references beyond what tree-sitter tags provide
-  5. Token budget parameter controls output size via binary search to maximize symbol coverage within the specified budget
-**Plans**: 3 plans
-Plans:
-- [x] 28-01-PLAN.md — Cross-file reference graph, PageRank, LSP enrichment [Wave 1]
-- [x] 28-02-PLAN.md — Token-budgeted tree renderer with binary search [Wave 2]
-- [x] 28-03-PLAN.md — RepoMapSkill MCP tools (get_repo_map, get_context) + daemon wiring [Wave 2]
-
-### Phase 29: Phase 25 Formal Verification
-**Goal**: Close 5 unsatisfied FUZZ requirements by running formal verification on Phase 25 — code exists and tests pass, only VERIFICATION.md is missing
-**Depends on**: Phase 25
-**Requirements**: FUZZ-01, FUZZ-02, FUZZ-03, FUZZ-07, FUZZ-08
-**Gap Closure:** Closes verification gaps from v1.6 audit
-**Success Criteria** (what must be TRUE):
-  1. VERIFICATION.md exists for Phase 25 with evidence that all 5 FUZZ requirements are satisfied
-  2. Each requirement has test evidence or code inspection confirming implementation
-**Plans**: 1 plan
-Plans:
-- [x] 29-01-PLAN.md — Run tests and create 25-VERIFICATION.md with evidence for FUZZ-01/02/03/07/08 [Wave 1]
-
-### Phase 30: RepoMap Pipeline Wiring
-**Goal**: Make get_repo_map and get_context functional by wiring the tag extraction pipeline, LSP enrichment, and TreeRenderer into RepoMapSkill
-**Depends on**: Phase 27, Phase 28
-**Requirements**: RMAP-04, RMAP-05, RMAP-06, RMAP-07, RMAP-08, RMAP-10
-**Gap Closure:** Closes integration and flow gaps from v1.6 audit
-**Success Criteria** (what must be TRUE):
-  1. RepoMapSkill.Init() instantiates TagExtractor and FallbackExtractor, populating the cache with real file data
-  2. get_repo_map returns ranked symbols (not "No files found") for a workspace with Go/Python/TypeScript files
-  3. get_context returns task-relevant symbols (not "No files found") when given seed files or task description
-  4. EnrichFromLSP is called when LSP sessions are warm, adding precise cross-file references
-  5. TreeRenderer.RenderBudgeted is used (not inline copy), with 15% tolerance binary search
-  6. ProjectDir is derived from workspace path, not hardcoded
-**Plans**: 2 plans
-Plans:
-- [x] 30-01-PLAN.md — Wire TagExtractor, ensureCache, TreeRenderer, EnrichFromLSP into RepoMapSkill + daemon wiring [Wave 1]
-- [x] 30-02-PLAN.md — Integration tests for full pipeline (RMAP-04/05/06/07/08/10) [Wave 2]
-
-### Phase 31: Multi-language grammar expansion
-**Goal:** Expand tree-sitter grammar support from 5 languages to 23, achieving full aider parity for all languages with Go bindings
-**Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08
-**Depends on:** Phase 30
-**Success Criteria** (what must be TRUE):
-  1. GrammarRegistry supports 23 tree-sitter languages (5 original + 8 Wave 1 + 10 Wave 2)
-  2. Tag queries extract defs/refs for all 18 new languages using Serena capture convention
-  3. Body queries support symbol editing for languages with standard body fields
-  4. Qualified name resolution works for OOP languages (Java, C#, Ruby, Kotlin, JavaScript, Scala)
-  5. All tests pass and binary builds with all grammars compiled in
-**Plans:** 4 plans (3 complete + 1 gap closure)
-Plans:
-- [x] 31-01-PLAN.md — Wave 1: 8 languages (Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin) -- grammars, tag queries, body queries, tests [Wave 1]
-- [x] 31-02-PLAN.md — Wave 2a: 5 languages (Scala, Bash, Haskell, Julia, OCaml) -- grammars, queries, tests [Wave 2]
-- [x] 31-03-PLAN.md — Wave 2b: 3 languages (Lua, Zig, HCL) -- grammars, queries, tests [Wave 3]
-- [x] 31-04-PLAN.md — Gap closure: Swift + R via local vendored bindings (upstream Go bindings broken) [Wave 4]
-
-### Phase 32: v1.6 Documentation Hygiene
-**Goal**: Close all documentation gaps identified by v1.6 milestone audit — stale checkboxes, missing traceability entries, missing/stale VERIFICATION.md files
-**Depends on**: Phase 31
-**Requirements**: FUZZ-04, FUZZ-05, FUZZ-06, RMAP-01–RMAP-10, D-01–D-08
-**Gap Closure:** Closes documentation hygiene gaps from v1.6 audit
-**Success Criteria** (what must be TRUE):
-  1. REQUIREMENTS.md checkboxes match audit status (FUZZ-04/05/06 and RMAP-01–10 checked)
-  2. REQUIREMENTS.md traceability table shows "Complete" for all 18 satisfied requirements
-  3. D-01 through D-08 traceability entries exist in REQUIREMENTS.md
-  4. Phase 28 has a VERIFICATION.md with evidence from Phase 30 verification
-  5. Phase 31 VERIFICATION.md refreshed to reflect Swift/R gap closure (31-04)
-**Plans**: 1 plan
-Plans:
-- [x] 32-01-PLAN.md — Create Phase 28 VERIFICATION.md + refresh Phase 31 VERIFICATION.md for gap closure [Wave 1]
-
-### Phase 33: FallbackExtractor Wiring & Cache Persistence
-**Goal**: Wire FallbackExtractor into the production pipeline for languages without tree-sitter grammars, and verify daemon restart cache persistence end-to-end
-**Depends on**: Phase 32
-**Requirements**: RMAP-02
-**Gap Closure:** Closes RMAP-02 integration gap and cache persistence tech debt from v1.6 audit
-**Success Criteria** (what must be TRUE):
-  1. walkAndExtract falls back to FallbackExtractor (LSP documentSymbol) when a language has no tree-sitter grammar
-  2. SymbolRequester interface has at least one production implementor
-  3. Daemon restart preserves SQLite tag cache — tags extracted before restart are available after restart without re-extraction
-**Plans**: 2 plans
-Plans:
-- [x] 33-01-PLAN.md — Wire FallbackExtractor into walkAndExtract + daemon post-init wiring [Wave 1]
-- [x] 33-02-PLAN.md — Integration tests for fallback path + cache persistence verification [Wave 2]
+</details>
 
 ## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 25 → 26 → 27 → 28
-Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within each track, order is sequential.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|

@@ -73,23 +73,16 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Kind-level error test assertions with extractKind helper and 4 typed golden files — v1.5 Phase 24
 - ✓ Cause-chain wrapping preserving errors.Is/As for LSP, filesystem, and tree-sitter errors — v1.5 Phase 22
 
+- ✓ RepoMap overview tool — structural map of repo with ranked symbol importance via get_repo_map — v1.6
+- ✓ RepoMap context selection tool — task-focused token-budgeted context with PageRank via get_context — v1.6
+- ✓ Hybrid data source — tree-sitter fast path (23 languages), LSP enrichment when warm, SQLite cache — v1.6
+- ✓ Fuzzy edit fallback in existing tools — whitespace-normalized matching in replace_symbol_body / replace_in_file — v1.6
+- ✓ Standalone fuzzy edit MCP tool — raw text fuzzy matching with strategy reporting — v1.6
+- ✓ 23-language tree-sitter grammar support — full aider parity with tag and body queries — v1.6
+
 ### Active
 
-- [ ] RepoMap overview tool — structural map of repo with ranked symbol importance
-- [ ] RepoMap context selection tool — task-focused token-budgeted context with PageRank-style ranking
-- [ ] Hybrid data source — tree-sitter fast path, LSP enrichment when warm, SQLite cache
-- [ ] Fuzzy edit fallback in existing tools — whitespace-normalized matching in replace_symbol_body / replace_content
-- [ ] Standalone fuzzy edit MCP tool — raw text fuzzy matching with strategy reporting
-
-## Current Milestone: v1.6 Context Intelligence & Resilient Editing
-
-**Goal:** Give agents a ranked, token-budgeted view of any codebase and make edit tools resilient to LLM output drift.
-
-**Target features:**
-- RepoMap overview tool (structural map with ranked importance)
-- RepoMap context selection tool (task-focused, token-budgeted)
-- Fuzzy edit fallback in existing edit tools
-- Standalone fuzzy edit MCP tool
+(None — define in next milestone)
 
 ### Out of Scope
 
@@ -103,13 +96,13 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ## Context
 
-Shipped v1.0 (25,779 LOC, 35 MCP tools, 52 languages), v1.1 Integration Testing (~12K additional LOC), v1.2 Performance & Production Hardening (35.7K total Go LOC), v1.3 Documentation Catchup, v1.4 Integration Testing v2 (4,850 LOC oracle tests), and v1.5 Typed Errors & Hardening (+7,199 LOC across 95 files). Single binary, 4-layer architecture, persistent daemon, 38+ MCP tools with typed structured errors. Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures), LLM behavioral (multi-provider: Anthropic + DeepSeek), and judge scoring. Error taxonomy: 7 kinds, builder pattern, cause-chain wrapping, inline validation at all 24 kernel tool boundaries.
+Shipped v1.0 through v1.6. Current codebase: 49,369 Go LOC, 41 MCP tools, 52-language support, 23 tree-sitter grammars. Single binary, 4-layer architecture, persistent daemon. v1.6 added fuzzy editing (4-strategy cascade with ellipsis support), RepoMap context intelligence (tree-sitter tag extraction → SQLite cache → PageRank → token-budgeted rendering via get_repo_map/get_context), and 23-language grammar expansion (full aider parity). Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures + v1.6 repomap/fuzzy tests), LLM behavioral, and judge scoring. Error taxonomy: 7 kinds, builder pattern, cause-chain wrapping.
 
-Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter, gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
+Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
 
-Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. All layers wired via centralized daemon bootstrap with fail-fast core / degraded-optional startup. Observability: noop-default provider with opt-in Prometheus metrics and OTLP tracing. Dedicated admin listener for /healthz, /readyz, /metrics, /debug/pprof.
+Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. RepoMap skill with tag extraction pipeline, cross-file reference graph, PageRank ranking, and token-budgeted tree rendering. Fuzzy edit engine with 4-strategy cascade integrated into 3 MCP tools.
 
-**v1.2 known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. `capture-baseline.yml` workflow ready for re-capture once resolved. benchstat@latest unpinned.
+**Known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. 3 redundant GrammarRegistry instances (functionally correct).
 
 The `legacy/` directory contains the original Python-based prototype as a reference.
 
@@ -173,4 +166,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-15 after v1.6 milestone started — Context Intelligence & Resilient Editing*
+*Last updated: 2026-04-20 after v1.6 milestone shipped — Context Intelligence & Resilient Editing*

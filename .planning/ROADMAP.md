@@ -219,7 +219,7 @@ Plans:
   5. Phase 31 VERIFICATION.md refreshed to reflect Swift/R gap closure (31-04)
 **Plans**: 1 plan
 Plans:
-- [ ] 32-01-PLAN.md — Create Phase 28 VERIFICATION.md + refresh Phase 31 VERIFICATION.md for gap closure [Wave 1]
+- [x] 32-01-PLAN.md — Create Phase 28 VERIFICATION.md + refresh Phase 31 VERIFICATION.md for gap closure [Wave 1]
 
 ### Phase 33: FallbackExtractor Wiring & Cache Persistence
 **Goal**: Wire FallbackExtractor into the production pipeline for languages without tree-sitter grammars, and verify daemon restart cache persistence end-to-end
@@ -271,5 +271,5 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
 | 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
 | 31. Multi-language grammar expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
-| 32. v1.6 Documentation Hygiene | v1.6 | 0/1 | Pending | — |
+| 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 0/2 | Pending | — |

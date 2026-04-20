@@ -204,7 +204,7 @@ Plans:
 - [x] 31-01-PLAN.md — Wave 1: 8 languages (Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin) -- grammars, tag queries, body queries, tests [Wave 1]
 - [x] 31-02-PLAN.md — Wave 2a: 5 languages (Scala, Bash, Haskell, Julia, OCaml) -- grammars, queries, tests [Wave 2]
 - [x] 31-03-PLAN.md — Wave 2b: 3 languages (Lua, Zig, HCL) -- grammars, queries, tests [Wave 3]
-- [ ] 31-04-PLAN.md — Gap closure: Swift + R via local vendored bindings (upstream Go bindings broken) [Wave 4]
+- [x] 31-04-PLAN.md — Gap closure: Swift + R via local vendored bindings (upstream Go bindings broken) [Wave 4]
 
 ## Progress
 

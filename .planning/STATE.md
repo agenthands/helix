@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Context Intelligence & Resilient Editing
 status: executing
-stopped_at: Completed 31-03-PLAN.md
-last_updated: "2026-04-19T09:21:51.634Z"
+stopped_at: Completed 31-04-PLAN.md (Phase 31 complete)
+last_updated: "2026-04-19T12:00:00.000Z"
 last_activity: 2026-04-19
 progress:
   total_phases: 7
   completed_phases: 7
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 22
+  completed_plans: 22
   percent: 100
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 31
-Plan: 3 of 3
-Status: Ready to execute
+Plan: 4 of 4
+Status: Phase 31 complete
 Last activity: 2026-04-19
 
 Progress: [████████████████████] 100%
@@ -36,7 +36,7 @@ Progress: [████████████████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 93
+- Total plans completed: 94
 - Average duration: ~15 min
 - Total execution time: ~16 hours
 
@@ -64,6 +64,7 @@ Progress: [████████████████████] 100%
 | Phase 31 P01 | 665 | 3 tasks | 25 files |
 | Phase 31 P02 | 430 | 3 tasks | 19 files |
 | Phase 31 P03 | 1212 | 3 tasks | 15 files |
+| Phase 31 P04 | 408 | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -78,7 +79,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 31]: Kotlin binding from tree-sitter-grammars org (fwcd fork has module path mismatch)
 - [Phase 31]: bodyNodeKind fallback in langConfig for grammars with unnamed body children (Kotlin)
 - [Phase 31]: OCaml binding uses LanguageOCaml() export; Julia v0.25.0 needs signature traversal for function names; Haskell/OCaml omit body extraction (equation-based)
-- [Phase 31]: Swift and R grammars skipped due to broken upstream Go bindings (missing C source files)
+- [Phase 31]: Swift and R grammars use local vendored bindings (upstream Go bindings have broken CGO includes); C files in src/ subdir to avoid double-compilation
 - [Phase 31]: Error-tolerant tag query compilation: log+skip broken queries instead of failing all languages
 
 ### Roadmap Evolution
@@ -102,6 +103,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-19T09:21:51.632Z
-Stopped at: Completed 31-03-PLAN.md
+Last session: 2026-04-19T12:00:00.000Z
+Stopped at: Completed 31-04-PLAN.md (Phase 31 complete — all 4 plans done)
 Resume file: None

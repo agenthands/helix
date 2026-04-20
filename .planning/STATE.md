@@ -7,11 +7,11 @@ stopped_at: Completed 32-01-PLAN.md
 last_updated: "2026-04-20T10:00:00.000Z"
 last_activity: 2026-04-20
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 22
-  completed_plans: 22
-  percent: 100
+  total_phases: 9
+  completed_phases: 8
+  total_plans: 24
+  completed_plans: 23
+  percent: 96
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 30 — repomap-pipeline-wiring
+**Current focus:** Phase 32 — v16-documentation-hygiene (complete)
 
 ## Current Position
 

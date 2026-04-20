@@ -82,7 +82,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-(None — define in next milestone)
+<!-- v1.7 Developer Experience & Auto-Setup -->
+
+- [ ] Zero-friction client setup (`serena setup <client>`) with MCP registration, hook installation, language detection, and LS pre-installation
+- [ ] Lazy workspace init on first tool call when setup wasn't run
+- [ ] Client hooks for Claude Code, VS Code, JetBrains (PreToolUse remind, SessionStart activate, Stop cleanup)
+- [ ] Health/status MCP tool reporting active LSes, indexing state, and workspace capabilities
+- [ ] Smart error responses suggesting correct tool/params on misuse
+- [ ] Progressive tool descriptions that teach agents when to use each tool
+- [ ] Error-only reporting — suppress noise, surface only actionable failures
 
 ### Out of Scope
 
@@ -93,6 +101,19 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Knowledge graphs — CodeGraphContext/GitNexus own this space
 - Vector/embedding search — Augment Context Engine does this better
 - Git operations — GitHub MCP Server handles git comprehensively
+
+## Current Milestone: v1.7 Developer Experience & Auto-Setup
+
+**Goal:** Zero-friction onboarding with auto-detection, client hooks, real-time health visibility, and self-guiding tool surface for coding agents.
+
+**Target features:**
+- `serena setup <client>` command — registers MCP server + installs hooks + detects languages + pre-installs LSes
+- Lazy init fallback — first tool call triggers workspace activation if setup wasn't run
+- Client hooks — PreToolUse remind, SessionStart activate, Stop cleanup (Claude Code, VS Code, JetBrains)
+- Health/status MCP tool — active LSes, indexing state, workspace capabilities
+- Smart error responses — suggest correct tool/params on agent misuse
+- Progressive tool descriptions — self-documenting tool surface for agents
+- Error-only reporting — suppress noise, surface only actionable failures
 
 ## Context
 
@@ -166,4 +187,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-20 after v1.6 milestone shipped — Context Intelligence & Resilient Editing*
+*Last updated: 2026-04-20 after v1.7 milestone started — Developer Experience & Auto-Setup*

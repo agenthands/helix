@@ -1,13 +1,14 @@
 ---
 phase: 27-repomap-tag-extraction-cache
-verified: 2026-04-16T18:30:00Z
-status: human_needed
+verified: 2026-04-20T15:30:00Z
+status: passed
 score: 4/4
 overrides_applied: 0
 human_verification:
   - test: "Daemon restart preserves tag cache"
-    expected: "After daemon restart, previously extracted tags are served from cache without re-extraction"
-    why_human: "Requires starting and restarting the daemon process with real file extraction"
+    status: PASS
+    verified_date: "2026-04-20"
+    evidence: "Manual curl test confirmed identical get_repo_map output after daemon restart. Automated tests added: TestScenario_CachePersistence_DaemonRestart (full daemon stack), TestCachePersistence_DaemonRestart (unit level)"
 ---
 
 # Phase 27: RepoMap Tag Extraction & Cache Verification Report
@@ -107,17 +108,20 @@ human_verification:
 |------|------|---------|----------|--------|
 | (none) | - | No TODOs, FIXMEs, placeholders, or stubs found | - | - |
 
-### Human Verification Required
+### Human Verification — RESOLVED
 
-### 1. Daemon Restart Preserves Tag Cache
+### 1. Daemon Restart Preserves Tag Cache — PASS
 
-**Test:** Start the serena daemon, trigger tag extraction for a file, restart the daemon, then request tags for the same (unchanged) file.
-**Expected:** Tags are served from SQLite cache without re-extraction. The extractFn should not be called for unchanged files after restart.
-**Why human:** Requires running the full daemon lifecycle (start, extract, stop, restart, verify). Unit test `TestTagCache_Persistence` covers the close+reopen path at the cache layer, but end-to-end daemon restart involves IPC, daemon bootstrap, and cache path resolution that cannot be verified statically.
+**Verified:** 2026-04-20 (manual + automated)
+**Manual test:** Started daemon, called activate_project + get_repo_map via curl, stopped daemon, restarted, repeated — identical output from SQLite cache.
+**Automated tests added:**
+- `TestScenario_CachePersistence_DaemonRestart` (test/oracle/scenario/cache_persistence_test.go) — full daemon stack via harness.StartRunner + MCP protocol
+- `TestCachePersistence_DaemonRestart` (internal/skill/repomap/cache_persistence_test.go) — unit level, verifies zero re-extractions on second session
+- `TestCachePersistence_ModifiedFileReextracts` — verifies only modified files re-extract after restart
 
 ### Gaps Summary
 
-No gaps found. All 4 success criteria are verified through code inspection and passing tests (32 repomap tests, 3 treesitter tests, 8 edit tests -- zero failures). All 15 implementation decisions (D-01 through D-15) are implemented as specified. All 4 requirements (RMAP-01, RMAP-02, RMAP-03, RMAP-09) are satisfied. The single human verification item is an end-to-end daemon restart scenario that the unit test suite covers at the cache layer but cannot fully verify without a running daemon.
+No gaps found. All 4 success criteria verified. All 15 implementation decisions implemented. All 4 requirements (RMAP-01, RMAP-02, RMAP-03, RMAP-09) satisfied. The daemon restart cache persistence item is now fully automated.
 
 ---
 

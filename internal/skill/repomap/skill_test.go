@@ -1,6 +1,9 @@
 package repomap
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -9,10 +12,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	lspool "github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/repomap"
 	"github.com/postfix/serena/internal/skill"
 	"github.com/postfix/serena/internal/treesitter"
 )
+
+// Compile-time assertion: WorkerLease satisfies SymbolRequester (D-33-04).
+var _ repomap.SymbolRequester = (*lspool.WorkerLease)(nil)
+
+// mockFallbackRequester returns pre-configured DocumentSymbol responses for fallback testing.
+type mockFallbackRequester struct {
+	response []byte // raw JSON to unmarshal into result
+	err      error
+}
+
+func (m *mockFallbackRequester) Request(_ context.Context, _ string, _ interface{}, result interface{}) error {
+	if m.err != nil {
+		return m.err
+	}
+	return json.Unmarshal(m.response, result)
+}
 
 // newTestSkill creates a RepoMapSkill with a temp directory TagCache for testing.
 // If populate is true, it writes sample Go files and populates the cache with tags.
@@ -201,4 +221,101 @@ func TestRepoMapSkill_GetRepoMapSkillNil(t *testing.T) {
 	// the skill IS registered. We just verify it returns non-nil.
 	rs := GetRepoMapSkill()
 	assert.NotNil(t, rs)
+}
+
+func TestWalkAndExtract_FallbackPath(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "tags.db")
+	cache, err := repomap.NewTagCache(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { cache.Close() })
+
+	registry := treesitter.NewGrammarRegistry()
+
+	// Create a Java file -- Java is in LangFromExt. We set extractor=nil to simulate
+	// tree-sitter unavailability, forcing the fallback path via FallbackDeps.
+	javaFile := filepath.Join(dir, "Hello.java")
+	require.NoError(t, os.WriteFile(javaFile, []byte("public class Hello { void greet() {} }\n"), 0644))
+
+	// Build a mock SymbolRequester that returns a DocumentSymbol for "Hello".
+	docSymResponse, _ := json.Marshal([]map[string]interface{}{
+		{
+			"name":           "Hello",
+			"kind":           5, // Class
+			"range":          map[string]interface{}{"start": map[string]interface{}{"line": 0, "character": 0}, "end": map[string]interface{}{"line": 0, "character": 39}},
+			"selectionRange": map[string]interface{}{"start": map[string]interface{}{"line": 0, "character": 13}, "end": map[string]interface{}{"line": 0, "character": 18}},
+		},
+	})
+	mockReq := &mockFallbackRequester{response: docSymResponse}
+
+	acquireCalled := false
+	// Build skill with NO extractor (extractor=nil) to force fallback path.
+	s := &RepoMapSkill{
+		cache:    cache,
+		registry: registry,
+		logger:   slog.Default(),
+		fallbackDeps: &FallbackDeps{
+			Registry:  registry,
+			Extractor: repomap.NewFallbackExtractor(),
+			AcquireFn: func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error) {
+				acquireCalled = true
+				assert.Equal(t, "java", lang)
+				return mockReq, func() {}, nil
+			},
+		},
+	}
+
+	// Run walkAndExtract -- should use fallback since extractor is nil.
+	err = s.walkAndExtract(context.Background(), dir)
+	require.NoError(t, err)
+	assert.True(t, acquireCalled, "AcquireFn should have been called for fallback extraction")
+
+	// Verify tags were cached via fallback extraction.
+	tags, err := cache.GetOrExtract(javaFile, func() ([]repomap.Tag, error) {
+		t.Fatal("extractFn should not be called -- tags should be cached from fallback")
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, tags, 1)
+	assert.Equal(t, "Hello", tags[0].Name)
+	assert.Equal(t, repomap.TagDef, tags[0].Kind)
+}
+
+func TestWalkAndExtract_FallbackSkipsWhenNoLS(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "tags.db")
+	cache, err := repomap.NewTagCache(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { cache.Close() })
+
+	registry := treesitter.NewGrammarRegistry()
+
+	// Create a Java file (extractor=nil forces fallback path).
+	javaFile := filepath.Join(dir, "Hello.java")
+	require.NoError(t, os.WriteFile(javaFile, []byte("public class Hello {}\n"), 0644))
+
+	// AcquireFn returns error (simulating no LS available).
+	s := &RepoMapSkill{
+		cache:    cache,
+		registry: registry,
+		logger:   slog.Default(),
+		fallbackDeps: &FallbackDeps{
+			Registry:  registry,
+			Extractor: repomap.NewFallbackExtractor(),
+			AcquireFn: func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error) {
+				return nil, nil, fmt.Errorf("no language server for %s", lang)
+			},
+		},
+	}
+
+	// Walk should not error (D-33-02: silent skip).
+	err = s.walkAndExtract(context.Background(), dir)
+	require.NoError(t, err)
+
+	// Verify no tags cached (extraction was skipped, not errored).
+	tags, err := cache.GetOrExtract(javaFile, func() ([]repomap.Tag, error) {
+		return nil, nil // will be called since nothing was cached
+	})
+	require.NoError(t, err)
+	assert.Empty(t, tags)
 }

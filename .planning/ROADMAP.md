@@ -233,7 +233,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 33-01-PLAN.md — Wire FallbackExtractor into walkAndExtract + daemon post-init wiring [Wave 1]
-- [ ] 33-02-PLAN.md — Integration tests for fallback path + cache persistence verification [Wave 2]
+- [x] 33-02-PLAN.md — Integration tests for fallback path + cache persistence verification [Wave 2]
 
 ## Progress
 
@@ -275,4 +275,4 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
 | 31. Multi-language grammar expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
-| 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 1/2 | In Progress|  |
+| 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete   | 2026-04-20 |

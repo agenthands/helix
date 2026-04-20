@@ -1,174 +1,165 @@
 # Project Research Summary
 
 **Project:** Serena
-**Domain:** Multi-oracle integration test harness for MCP/LSP code intelligence platform
-**Researched:** 2026-04-11
+**Domain:** MCP Server Developer Experience
+**Researched:** 2026-04-20
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Serena v1.4 is a test-only milestone layering a multi-oracle integration test harness on top of the proven v1.1 test infrastructure (23 test files, 19 golden files, multi-language fixtures). The approach is conservative: only 2 new Go module dependencies (`santhosh-tekuri/jsonschema/v6` for schema validation, `anthropics/anthropic-sdk-go` for LLM behavioral tests), five oracle layers as separate packages with independent build tags, and a strict "extend, don't replace" rule for the existing harness.
+Serena v1.7 is a pure integration milestone — zero new external dependencies required. All features compose existing capabilities (41 MCP tools, 52-language support, daemon architecture, typed errors, profile system) into a zero-friction setup and smarter agent interaction layer. The recommended approach is dependency-ordered phasing: setup CLI first (everything depends on it), then health/status (needed by hooks), then hooks (Claude Code primary), then smart errors (benefits from observing real patterns), and progressive descriptions last (requires behavioral test regression gate).
 
-The dominant risk is breaking existing regression coverage while restructuring. The critical prerequisite is extracting shared harness code from `test/integration/` (which uses an external test package and can't be imported) into an importable `test/harness/` package. All five oracle layers depend on this extraction. The architecture research identifies a strict dependency chain: harness extraction → protocol oracle → contract oracle + fixtures → scenario oracle → CI pipeline → LLM behavioral → LLM judge.
+The primary risks are config file format instability across clients (mitigate by using client CLIs as subprocess rather than direct file manipulation), smart error suggestions creating infinite retry loops (mitigate by restricting to parameter corrections only), and progressive descriptions breaking agent tool selection (mitigate by implementing last with behavioral tests as gate).
 
-The pitfalls research converges on four critical warnings: (1) don't modify existing harness API signatures, (2) separate LLM tests from deterministic tests via build tags from day one, (3) don't apply golden files to every tool×language combination (use assertion-based tests for dynamic outputs), and (4) don't over-engineer — "multi-oracle" is a mental model for file organization, not a runtime framework.
+The six new source files all follow established patterns: middleware for cross-cutting concerns, skills for new MCP tools, cobra subcommands for CLI operations. No architectural changes needed.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Only 2 new direct dependencies needed. Everything else extends existing infrastructure.
+Zero new dependencies. All v1.7 features use existing Go stdlib + current dependency set.
 
-**Core technologies:**
-- `santhosh-tekuri/jsonschema/v6` v6.0.2: JSON Schema Draft 2020-12 validation for tool contract testing — structured `ValidationError` output for clear test failure messages
-- `anthropics/anthropic-sdk-go` v1.28.0+: Official Anthropic Go SDK for LLM behavioral tests — native `tool_use` support, build-tag gated (`//go:build llm`)
-- `gotestsum` (CI-only): Structured JUnit XML reporting for CI pipeline — install in workflow, not in go.mod
+**Core technologies (already in go.mod):**
+- `cobra v1.9.1`: Setup CLI subcommands (`serena setup`, `serena status`, `serena hook`)
+- `MCP Go SDK`: Health tool registration, tools/changed notification
+- `koanf v2`: Config generation for client setup files
+- `encoding/json` (stdlib): Client config file generation (JSON for all targets)
+- `os/exec` (stdlib): Client CLI subprocess calls (`claude mcp add-json`, `code --install-extension`)
 
-**No new libraries needed for:**
-- Test framework (stdlib `testing.T` + `testify` sufficient)
-- Golden file management (extend existing `golden.go` pattern)
-- Fixture management (extend existing `PrepareFixture`)
-- MCP client testing (existing MCP SDK `NewInMemoryTransports()`)
+**What NOT to add:**
+- go-enry — existing langregistry covers language detection
+- Template engines — JSON marshaling sufficient for config generation
+- HTTP client libs — stdlib net/http adequate for hook communication
 
 ### Expected Features
 
 **Must have (table stakes):**
-- Protocol compliance tests (MCP init, tool listing, session isolation, reconnect)
-- Per-tool contract tests with golden outputs and schema validation
-- Error shape assertions with categories (extend existing `errCase`)
-- Data-driven scenario matrix across 7+ repository shapes
-- Polyglot honesty rules (no fake cross-language links, no silent omissions)
-- Profile/mode behavior tests (mode gating actually blocks/allows correctly)
-- 5-stage CI pipeline (fast deterministic → scenarios → -race → LLM behavioral → LLM judge)
-- Build tag separation (`integration`, `llm`, `llmjudge`)
+- `serena setup <client>` one-command registration for 6 clients
+- `get_health` MCP tool reporting LS state and capabilities
+- Actionable error messages with "did you mean" suggestions
+- `serena status` CLI showing workspace health
+- Error-only reporting (suppress noise by default)
 
 **Should have (differentiators):**
-- LLM behavioral tests (tool selection accuracy, disambiguation, output interpretation)
-- LLM-as-judge transcript scoring with structured rubrics
-- Worker pool stress scenarios (sustained load, circuit breaker trips, pressure eviction)
-- Degraded subsystem simulation (selective LS/memory/skill failure injection)
-- Test coverage matrix report
+- Claude Code hook auto-installation (PreToolUse/SessionStart/Stop)
+- Lazy workspace init on first tool call
+- Progressive tool descriptions (tiered detail levels)
+- `get_tool_help` deep-dive tool for individual tool documentation
 
-**Defer:**
-- LLM score regression tracking over time
-- Multiple LLM providers for judge
-- Full MCPAgentBench reproduction
+**Defer (v2+):**
+- Meta-tool pattern (discover+execute indirection)
+- VS Code/JetBrains hook systems (less mature than Claude Code)
+- Auto-update mechanism
+- GUI/TUI setup wizard
+- AI-powered error explanations
 
 ### Architecture Approach
 
-Five oracle layers as separate Go sub-packages under `test/oracle/{protocol,contract,scenario,behavioral,judge}/`, each with its own build tag. No oracle layer imports another; all import from `test/harness/` (extracted from existing `test/integration/`). YAML-driven scenarios use `filepath.Glob` auto-discovery. Golden files scale via hierarchical subdirectories. LLM layers use double gating (build tag + env var).
+No new architectural layers. Six integration points into existing structure:
 
 **Major components:**
-1. `test/harness/` — Importable shared infrastructure (extracted from `test/integration/`)
-2. `test/oracle/protocol/` — MCP session lifecycle tests (no LS dependency)
-3. `test/oracle/contract/` — Per-tool schema validation, golden outputs, error shapes
-4. `test/oracle/scenario/` — YAML-driven multi-step scenarios across repo shapes
-5. `test/oracle/behavioral/` — LLM tool selection and output interpretation tests
-6. `test/oracle/judge/` — LLM-as-judge transcript scoring with rubrics
-7. `testdata/fixtures/` — Extended with polyglot, unsupported, collision, degraded fixtures
-8. `.github/workflows/integration-v2.yml` — 5-stage CI pipeline
+1. `cmd/serena/setup/` — Cobra subcommand for client registration + hook installation + LS pre-install
+2. `internal/mcp/middleware/` — Lazy init middleware, error enrichment middleware, description adapter
+3. `internal/skill/health/` — Health skill (ToolProvider) exposing `get_health` MCP tool
+4. `internal/setup/hooks/` — Hook template generation for Claude Code, VS Code, JetBrains
+5. Existing `internal/errors/` — Extended with suggestion field for smart error responses
+6. Existing profile YAMLs — Tiered description variants for progressive disclosure
 
 ### Critical Pitfalls
 
-1. **Breaking v1.1 tests by restructuring harness** — Extract to `test/harness/` as a copy-and-adapt, keep `test/integration/` untouched until extraction proven
-2. **Mixing LLM and deterministic tests in CI** — Three build tags (`integration`, `llm`, `llmjudge`) and 5 separate CI jobs from day one
-3. **Golden file explosion** — Use goldens only for stable contract boundaries (tool lists, error shapes, response structure); assertion-based tests for dynamic outputs
-4. **Over-engineering the framework** — No oracle registry, no plugin interfaces, no abstract factories. Helper functions + table tests + `testing.T` is the ceiling
-5. **MCP SDK version brittleness** — Assert on behavior ("tool call succeeded with text containing X"), not on Go struct types
+1. **Config format instability** — Use `claude mcp add-json --scope project` subprocess, not direct file writes
+2. **Hook exit code semantics** — Claude Code: exit 1 is NON-blocking, only exit 2 blocks. Counterintuitive.
+3. **Smart error retry loops** — Never redirect to different tools in error suggestions. Parameter corrections only.
+4. **Progressive descriptions breaking selection** — Behavioral tests must gate description changes. Implement last.
+5. **Lazy init race conditions** — Concurrent first calls must be synchronized via sync.Once pattern
 
 ## Implications for Roadmap
 
-### Phase 1: Harness Extraction & Foundation
-**Rationale:** Critical prerequisite — existing `test/integration/` is an external test package that can't be imported by new oracle packages
-**Delivers:** `test/harness/` with exported `StartTestDaemon`, `PrepareFixture`, `callTool`, golden helpers; build tag taxonomy; naming conventions
-**Avoids:** Pitfall #1 (breaking v1.1 tests) by extracting, not modifying
+### Phase 1: Setup CLI Foundation
+**Rationale:** Everything else depends on setup working — hooks need config paths, health needs workspace context
+**Delivers:** `serena setup claude-code|vscode|jetbrains`, MCP registration, language detection, LS pre-install
+**Addresses:** Table stakes (one-command setup), error-only reporting (suppress noise during install)
+**Avoids:** Config format instability (uses client CLIs as subprocess)
 
-### Phase 2: Protocol Oracle
-**Rationale:** No LS dependency, fast, validates the extracted infrastructure works
-**Delivers:** MCP init/shutdown, tools/list schema validation, session isolation, reconnect tests
-**Uses:** `test/harness/`, existing InMemory + HTTP transports
+### Phase 2: Health & Status
+**Rationale:** Low-risk new skill; hooks and lazy init depend on health reporting
+**Delivers:** `get_health` MCP tool, `serena status` CLI, compact workspace health reporting
+**Addresses:** Table stakes (health tool), feedback loop (visibility into LS state)
+**Avoids:** Noisy health (capped at <500 tokens, error-only default)
 
-### Phase 3: Contract Oracle & Fixtures
-**Rationale:** Builds on protocol layer; establishes golden vs assertion boundary for all downstream work
-**Delivers:** Per-tool contracts, error shape assertions, 5 new fixture directories (polyglot, unsupported, collision, degraded, empty)
-**Uses:** `santhosh-tekuri/jsonschema/v6`, existing golden infrastructure
+### Phase 3: Client Hooks (Claude Code)
+**Rationale:** Depends on setup and health; primary differentiator; well-documented Claude Code API
+**Delivers:** PreToolUse remind, SessionStart activate, Stop cleanup hooks auto-installed by setup
+**Addresses:** Differentiator (native Claude Code integration), discoverability (nudge toward symbolic tools)
+**Avoids:** Exit code confusion (validate in integration tests), config instability (hook templates versioned)
 
-### Phase 4: Scenario Oracle
-**Rationale:** Depends on fixtures + contract assertions as building blocks
-**Delivers:** YAML-driven multi-step scenarios, polyglot honesty rules, degraded mode tests, profile/mode behavior tests
-**Avoids:** Pitfall #3 (golden explosion) by using assertion-based tests for scenarios
+### Phase 4: Smart Error Responses
+**Rationale:** Benefits from observing real error patterns in phases 1-3; extends existing typed error taxonomy
+**Delivers:** Error enrichment middleware, "did you mean" suggestions, parameter correction hints
+**Addresses:** Error clarity, self-diagnosis capability for agents
+**Avoids:** Retry loops (parameter corrections only, never tool redirections)
 
-### Phase 5: CI Pipeline
-**Rationale:** Needs all deterministic layers to exist before staging them
-**Delivers:** 5-stage GitHub Actions workflow, build tag gating, first signal under 3 minutes
-
-### Phase 6: LLM Behavioral Oracle
-**Rationale:** Needs all deterministic layers stable; API key gated, non-blocking
-**Delivers:** Tool selection tests, disambiguation tests, output interpretation tests
-**Uses:** `anthropics/anthropic-sdk-go`
-**Avoids:** Pitfall #2 (LLM flakiness killing CI) via `//go:build llm` + env var skip
-
-### Phase 7: LLM Judge Oracle
-**Rationale:** Depends on behavioral tests producing transcripts; manual trigger only
-**Delivers:** Structured rubric scoring, transcript quality assessment
-**Avoids:** Pitfall #4 (over-engineering) by keeping judge simple
+### Phase 5: Progressive Descriptions & Lazy Init
+**Rationale:** Must be last — requires strong behavioral test coverage as regression gate
+**Delivers:** Tiered descriptions, `get_tool_help` tool, lazy workspace init on first call
+**Addresses:** Discoverability (41 tools → manageable surface), zero-config fallback
+**Avoids:** Breaking agent tool selection (behavioral tests gate), race conditions (sync.Once)
 
 ### Phase Ordering Rationale
 
-- Harness extraction must be first — it's the foundation everything else builds on
-- Protocol oracle validates infrastructure before adding complexity
-- Contract + fixtures can partially parallelize but establish patterns for scenarios
-- Scenarios consume fixtures + contracts, so they follow
-- CI pipeline stages what exists
-- LLM layers are last because they depend on stable deterministic layers and must never block earlier work
+- Dependency chain: Setup → Health → Hooks → Errors → Descriptions (each builds on previous)
+- Risk gradient: Low risk first (setup, health), high risk last (progressive descriptions)
+- Pitfall avoidance: Smart errors after real usage patterns observed, descriptions after behavioral test coverage
+- Feedback loop: Each phase immediately usable, no "big bang" integration
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 4:** YAML assertion vocabulary design, multi-step scenario state management
-- **Phase 6:** Non-deterministic test strategies, LLM response caching, Claude model selection (Haiku vs Sonnet)
+- **Phase 3:** Hook architecture (inline command vs HTTP to admin listener), exit code validation, concurrent hook execution
+- **Phase 5:** Token savings measurement, behavioral test coverage assessment, description tier triggering logic
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Mechanical refactor, well-understood Go package patterns
-- **Phase 2:** Standard protocol testing, MCP spec is well-documented
-- **Phase 3:** Extends existing golden file patterns
-- **Phase 5:** Standard GitHub Actions workflow
+- **Phase 1:** Well-documented client configs, cobra subcommands, established patterns
+- **Phase 2:** Caddy-style skill registration, straightforward ToolProvider
+- **Phase 4:** Middleware pattern proven in existing codebase (telemetry, profile filtering)
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Only 2 new deps, both verified on pkg.go.dev |
-| Features | HIGH | Clear spec from user, v1.1 patterns to extend |
-| Architecture | HIGH | Direct codebase analysis of 23 existing test files |
-| Pitfalls | MEDIUM-HIGH | Codebase-specific risks well-analyzed; LLM test flakiness less certain |
+| Stack | HIGH | Verified zero new deps needed against go.mod |
+| Features | HIGH | 6+ MCP clients documented, patterns established |
+| Architecture | HIGH | All integration points verified against source |
+| Pitfalls | HIGH | Official docs + community issue trackers confirm |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- YAML scenario assertion vocabulary: exact assertion types need design during Phase 4 planning
-- LLM behavioral test statistical assertions: how many runs constitute passing (3/5? 4/5?)
-- Polyglot fixture design: which languages in monorepo fixture (Go + Python + TypeScript is safest)
-- Build tag interaction with `go test ./...`: verify all tags compose correctly
-- Claude model for behavioral tests: Haiku 4.5 (cheap/fast) vs Sonnet 4.6 (accurate)
+- JetBrains config path stability: `.junie/mcp/mcp.json` may evolve with Junie product
+- MCP SDK `tools/changed` notification support: needed for dynamic descriptions, verify during Phase 5
+- Optimal short description token count: needs empirical measurement with agent tool selection
+- Windows path handling: config locations differ, needs testing in setup CLI
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Serena codebase analysis: 23 test files, harness patterns, golden file infrastructure
-- MCP Specification 2025-11-25: Protocol reference for compliance tests
-- Go Wiki: TableDrivenTests: Canonical Go testing pattern
+- Claude Code hooks documentation (code.claude.com/docs/en/hooks)
+- VS Code MCP configuration (official docs)
+- Serena source code (internal/daemon, internal/mcp, internal/skill, cmd/serena)
+- Python Serena reference implementation (oraios.github.io/serena)
+- MCP Go SDK documentation
 
 ### Secondary (MEDIUM confidence)
-- MCPAgentBench (arXiv 2512.24565): LLM agent MCP tool use metrics
-- Langfuse/Arize LLM-as-judge: Judge patterns, 80-90% human agreement
-- Janix-ai/mcp-validator: MCP protocol compliance testing reference
-- Specmatic: MCP servers lying about schemas — motivation for schema validation
+- JetBrains Junie MCP docs (product is newer, format may shift)
+- Community MCP server implementations (patterns, not specifications)
+- Git/Rust compiler "did you mean" pattern analysis
+- LLM behavioral test methodology (emerging practice)
 
 ### Tertiary (LOW confidence)
-- MCPVerse (arXiv 2508.16260v2): Expanded MCP benchmark — less directly applicable
+- Progressive description token savings estimates (needs validation)
+- Meta-tool pattern benchmarks (academic, not production-tested)
 
 ---
-*Research completed: 2026-04-11*
+*Research completed: 2026-04-20*
 *Ready for roadmap: yes*

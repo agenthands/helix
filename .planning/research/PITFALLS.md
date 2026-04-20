@@ -1,295 +1,271 @@
-# Pitfalls Research
+# Domain Pitfalls
 
-**Domain:** Context Intelligence (RepoMap) & Resilient Editing (Fuzzy Search/Replace) for Code Intelligence Platform
-**Researched:** 2026-04-15
-**Confidence:** HIGH (grounded in aider issues, Serena codebase analysis, SQLite concurrency literature)
+**Domain:** Developer Experience & Auto-Setup for MCP Server Platform (v1.7)
+**Researched:** 2026-04-20
+**Confidence:** HIGH (grounded in Claude Code hook specification, MCP protocol docs, Serena codebase analysis, community issue trackers)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Identifier Collision Destroys PageRank Quality on Large Codebases
+Mistakes that cause rewrites, broken existing flows, or user-facing regressions.
 
-**What goes wrong:**
-PageRank ranks symbols by how many other symbols reference them. But the graph is built on identifier name matching -- tree-sitter finds `getName` in file A, sees `getName` referenced in file B, draws an edge. In large codebases, common method names like `getName`, `toString`, `Close`, `String`, `Error` appear in hundreds of types. The graph connects them all, creating false hubs. Symbols with common names AND no outbound edges (leaf classes) absorb enormous PageRank and dominate top results despite being irrelevant. Aider issue #2341 documented this exactly: editing Cassandra, "approximately all of the top ranked definitions are artifacts of identifier collision."
+### Pitfall 1: Client Config File Format Instability
 
-**Why it happens:**
-Tree-sitter extracts identifiers as flat strings without type/scope qualification. `Foo.getName` and `Bar.getName` both emit the tag `getName`. The graph treats them as the same node, or creates spurious edges between files that share nothing beyond a common method name. This is inherent to tree-sitter -- it lacks semantic type resolution.
+**What goes wrong:** The `serena setup <client>` command writes to client config files (`.mcp.json`, `~/.claude.json`, `claude_desktop_config.json`, VS Code `mcp.json`) whose format and location shift between client versions. Claude Code moved from `~/.claude.json` mcpServers to `.mcp.json` with `--scope` flags. VS Code uses a different path per platform and changed to `mcp.json` user profile files. Claude Desktop now supports `.mcpb` Desktop Extensions alongside JSON config.
 
-**How to avoid:**
-1. Use qualified identifiers: `StructName.MethodName` not just `MethodName`. Tree-sitter can extract the parent node's name field alongside the method -- Serena's `extractNodeName` in `treesitter.go` already does this for body extraction. Apply the same pattern to tag extraction.
-2. Filter high-frequency identifiers. If an identifier appears in >N% of files (configurable, start at 5%), exclude it from graph edges -- treat it as a "stop word." Aider issue #2342 proposed this exact approach.
-3. Use LSP-enriched edges when the worker pool has a warm session. LSP `textDocument/references` gives precise, type-aware edges. Build the graph from tree-sitter fast, then upgrade edges opportunistically from LSP.
-4. Personalize PageRank toward the files the agent is working on, so common-name hubs get diluted by task relevance.
+**Why it happens:** Each client (Claude Code, VS Code Copilot, Cursor, JetBrains) has its own config schema, file location, and versioning cadence. Hardcoding paths or formats creates brittleness. JSON syntax errors (trailing commas, duplicate keys) in config files silently disable ALL MCP servers.
 
-**Warning signs:**
-- Top-ranked symbols in RepoMap output are generic methods (getters, interface methods) rather than domain-specific entry points.
-- RepoMap output is nearly identical regardless of what task context is provided.
-- Benchmark: run RepoMap against Serena's own codebase and verify top results are sensible for a given query.
+**Consequences:** Setup command silently writes to wrong file, server never appears in client. Users report "serena setup worked but no tools show up." Worst case: corrupts existing MCP config and disables all other MCP servers the user had configured.
 
-**Phase to address:**
-Graph construction / tag extraction phase. Must be correct before any ranking happens. Build qualification into tag extraction from day one -- retrofitting is expensive because cached graph data becomes invalid.
+**Prevention:**
+- Use `claude mcp add-json --scope project` subprocess call for Claude Code instead of direct file manipulation. This delegates path resolution and format handling to Claude Code itself.
+- For VS Code, use `code --list-extensions` or discover settings path from environment. Never hardcode `~/Library/Application Support/Code/User/`.
+- Validate JSON round-trip: parse before writing, parse after writing, compare. Never string-concatenate JSON.
+- Add `--dry-run` flag that shows what would be written without modifying anything.
+- Each client adapter must be its own Go package with integration tests against real config files.
+- Version-pin known config formats per client and document the tested version.
 
----
+**Detection:** Integration test that runs `serena setup claude-code` and verifies with `claude mcp list`. CI should test on macOS and Linux.
 
-### Pitfall 2: Fuzzy Matching Silently Applies Edit to Wrong Location
-
-**What goes wrong:**
-An LLM produces a search/replace block where the search text has minor whitespace or formatting drift from the actual file. The fuzzy matcher finds a "close enough" match -- but it's the wrong occurrence. The edit silently corrupts a different function, different branch of a conditional, or different method overload. The agent reports success. The user discovers the bug hours later, potentially after further edits have stacked on top.
-
-This is the single highest-severity pitfall because it violates Serena's core value of being rock-solid. A tool that silently corrupts code is worse than a tool that refuses to apply an edit.
-
-**Why it happens:**
-1. Multiple similar code blocks exist in the same file (duplicate patterns, overloaded methods, similar test cases).
-2. The fuzzy matcher uses a similarity threshold without requiring uniqueness -- it returns the first match above threshold, not the only match.
-3. Aider's `str.replace()` bug (issue #3883, April 2025) replaced ALL occurrences instead of the first. Even replacing the first is wrong when the intended target was the second.
-4. LLMs produce minimal context in search blocks, making disambiguation impossible.
-5. Serena's existing `fileops/replace.go` uses `strings.ReplaceAll` -- it already replaces all occurrences. This must not carry over to fuzzy matching.
-
-**How to avoid:**
-1. **Uniqueness check is mandatory.** If the fuzzy matcher finds >1 candidate above threshold, refuse the edit and return all candidates with line numbers. Never silently pick one.
-2. **Return match metadata.** Every fuzzy edit result must report: match line range, similarity score, number of candidates found, which strategy matched (exact/whitespace-normalized/fuzzy). The agent can then decide.
-3. **Require minimum context.** If search text is fewer than 3 lines, require either a line number hint or a symbol name anchor. Single-line fuzzy matches are the most dangerous.
-4. **Layered matching with strict preference.** Try exact first, then whitespace-normalized, then fuzzy. If exact matches, never fall through to fuzzy. Report which layer matched.
-5. **Diff preview in tool response.** Return the before/after diff snippet so the agent (and user) can verify.
-
-**Warning signs:**
-- Tests pass but code behavior changes unexpectedly after fuzzy edits.
-- Fuzzy edit tool reports "1 replacement made" but the change is in an unexpected function.
-- Similarity scores cluster tightly (e.g., three candidates at 0.92, 0.91, 0.90) -- threshold cannot disambiguate.
-
-**Phase to address:**
-Fuzzy edit implementation phase. Uniqueness check and match metadata must be in the initial design. Integration tests must include "ambiguous match" scenarios from day one.
+**Phase mapping:** Phase 1 (Setup CLI). This is the foundation feature and must be rock-solid before hooks or health tools can function.
 
 ---
 
-### Pitfall 3: Cache Invalidation Race Between Graph Cache, File System, and LSP State
+### Pitfall 2: Hook Exit Code Semantics Violate Unix Conventions
 
-**What goes wrong:**
-RepoMap caches the parsed symbol graph (tags per file) in SQLite, keyed by file path + mtime. An agent edits a file via Serena's edit tools, which writes the file and notifies the LS via `didChange`. But the RepoMap cache still holds stale tags for that file. If another tool call requests RepoMap context before the cache invalidates, the graph contains phantom symbols (deleted functions still ranked) or misses new symbols. Worse: the LS might have a different view of the file than what's on disk if `didChange` and the file write race.
+**What goes wrong:** Claude Code hooks use non-standard exit code semantics that clash with developer expectations. Exit code 1 is NON-blocking (shows stderr as warning, continues). Only exit code 2 blocks tool execution. Developers writing hook scripts naturally use `exit 1` for errors, expecting it to stop execution -- but it doesn't.
 
-**Why it happens:**
-Three independent state sources: filesystem (mtime), SQLite tag cache, and LS in-memory buffers. Serena already has this pattern with the memory system (`fsnotify` watcher + SQLite index), but RepoMap adds a fourth: the in-memory graph structure derived from cached tags. Each has its own invalidation timing.
+**Why it happens:** Claude Code follows its own convention: exit 0 = success (parses JSON), exit 2 = blocking error (uses stderr), exit 1 or other = non-blocking warning (shows stderr, continues). This is documented but counterintuitive. Furthermore, JSON output is ONLY parsed when exit code is 0 -- a hook returning exit 1 with JSON on stdout has its JSON silently ignored.
 
-The existing `edit/replace.go` writes to disk then calls `notifyDidChange` -- but nothing invalidates a hypothetical RepoMap cache. The memory system's `watcher.go` uses fsnotify for external changes but not for changes made by Serena itself.
+**Consequences:** A PreToolUse hook meant to block dangerous operations (e.g., remind agent to use Serena tools instead of Bash grep) returns exit 1 thinking it blocks -- but the tool call proceeds. The hook becomes security theater. A SessionStart hook that sets environment via JSON but exits with code 1 has its JSON discarded.
 
-**How to avoid:**
-1. **Single invalidation bus.** Create a file-change notification channel that all Serena edit operations publish to. RepoMap cache, memory index, and LS notifications all subscribe. This fires synchronously after the write, before returning success to the agent.
-2. **Lazy invalidation, not eager rebuild.** Mark cached tags as stale (delete from cache or bump a generation counter). Rebuild tags on next read. Do not re-parse on every edit -- agents often make rapid sequential edits.
-3. **mtime is not reliable enough.** Filesystem mtime granularity is 1 second on many systems. Two rapid writes within the same second produce the same mtime, so cache thinks file hasn't changed. Use content hash -- Serena already does `contentHash` in `memory/index.go`. Apply the same pattern to RepoMap tag cache.
-4. **Version the graph.** Every graph query returns a generation counter. If the graph has been invalidated since the agent started its workflow, report it.
+**Prevention:**
+- Always use exit 2 for blocking decisions. Document this prominently in generated hook scripts.
+- Keep hook scripts minimal: single call to `serena hook <event>` that handles logic in Go and returns the correct exit code. Shell logic in hook scripts is fragile.
+- Better: use HTTP hooks (`"type": "http"`) calling the serena daemon's admin listener endpoint. No exit codes, no shell, no permissions issues. Return JSON with `decision: "block"` for blocking.
+- Test every hook against the actual Claude Code binary. `claude --print-config` verifies hook presence.
 
-**Warning signs:**
-- RepoMap shows symbols that were recently deleted or renamed.
-- RepoMap misses symbols that were just added.
-- Flaky tests where RepoMap results depend on timing.
+**Detection:** Hook appears to run (stderr visible) but tool call proceeds anyway. Agent ignores reminders that should have been blocking.
 
-**Phase to address:**
-Cache infrastructure phase (before or alongside graph construction). The invalidation bus design must be settled before building the cache.
+**Phase mapping:** Phase 3 (Client Hooks). The exit code gotcha must be documented and tested from the first hook implementation.
 
 ---
 
-### Pitfall 4: Token Budget Estimation Diverges Across Models
+### Pitfall 3: Progressive Descriptions Breaking Existing Tool Discovery
 
-**What goes wrong:**
-RepoMap's context selection tool must fit output within a token budget. But different LLMs use different tokenizers: Claude uses its own BPE, GPT-4 uses cl100k_base/o200k_base, open-source models use various SentencePiece variants. If Serena estimates tokens using one tokenizer but the consuming model uses another, the output either wastes 15-20% of available context (over-cautious) or exceeds the limit and gets truncated (under-cautious). Truncation mid-symbol-definition corrupts the context.
+**What goes wrong:** Changing tool descriptions to be "progressive" (shorter initially, expandable) breaks agents that have already calibrated tool selection against the current descriptions. The existing 41 tools have descriptions that LLMs use for intent matching. Shortening them causes agents to pick wrong tools, miss capabilities, or fail to distinguish between similar tools (e.g., `find_symbol` vs `get_symbols_overview` vs `search_for_pattern`).
 
-**Why it happens:**
-Serena has `get_token_budget` in profiles, but that reports budget limits -- it doesn't provide a tokenizer. There is no universal token counter. The profile system knows which agent type is connected (claude-code, codex, ide-assistant), but this doesn't map to a specific tokenizer. Anthropic's official tokenizer requires an API call; tiktoken only works for OpenAI models; estimates using wrong tokenizer are 5-15% off.
+**Why it happens:** With 41 tools, descriptions consume ~15-20K tokens at session start. The temptation is to shorten aggressively. But research shows that tool description quality directly impacts agent task success rates. The arXiv paper "MCP Tool Descriptions Are Smelly" (Feb 2026) found that augmented descriptions significantly improved efficiency. Shortening goes against this evidence.
 
-**How to avoid:**
-1. **Use a character-based heuristic, not a tokenizer.** For code, 1 token approximately equals 4 characters across all major tokenizers (within 10-15% accuracy). This is good enough for budget allocation.
-2. **Build with a safety margin.** Target 85-90% of the declared budget. The 10-15% cushion absorbs tokenizer variance.
-3. **Make the estimator pluggable.** `TokenEstimator` interface with a default `CharBasedEstimator` (chars/4). If a specific model's tokenizer becomes available in Go, swap it in. Do not build a Go port of tiktoken as a prerequisite.
-4. **Report estimated token count in output.** Let the agent know "this output is ~2,400 estimated tokens."
+**Consequences:** Agent stops using `find_symbol` and falls back to `search_for_pattern` for symbol lookups. Agent never discovers `get_context` because the short description omits "task-focused" or "PageRank." Regression in LLM behavioral test pass rates. The meta-tool pattern paper shows 85x token savings are possible -- but only when done correctly with a discovery layer, not by truncating existing descriptions.
 
-**Warning signs:**
-- Agents frequently report context window overflow when using RepoMap output.
-- RepoMap consistently returns much less content than the budget allows.
-- Token estimate accuracy varies dramatically between agent profiles.
+**Prevention:**
+- Run LLM behavioral test suite (existing oracle in `test/oracle/`) before AND after any description changes. This is the regression gate.
+- Implement progressive disclosure via a meta-tool pattern (`list_tools_detailed`) rather than shortening existing descriptions. Keep full descriptions, add a discovery layer on top. The agent loads short descriptions initially and requests full specs on demand.
+- Profile-specific description overrides (already supported via profile YAMLs) are the right mechanism for per-agent tuning. Don't change the base descriptions.
+- A/B test: run behavioral tests with both old and new descriptions, compare pass rates before shipping.
 
-**Phase to address:**
-Context selection phase. The estimator must exist before the selection algorithm, because the algorithm makes budget decisions during tree construction.
+**Detection:** LLM behavioral test pass rate drops. Agents start calling tools with wrong arguments. Usage patterns shift (tools that should be used frequently become rare).
+
+**Phase mapping:** Phase 5 (Progressive Descriptions). Must be the LAST DX feature implemented, after behavioral test coverage is strong enough to detect regressions.
 
 ---
 
-### Pitfall 5: Graph Construction Blows Memory/CPU on Large Repos
+### Pitfall 4: Smart Errors Creating Infinite Retry Loops
 
-**What goes wrong:**
-Building a full symbol graph requires parsing every file with tree-sitter, extracting all definitions and references, and constructing an adjacency structure. For a repo with 10,000+ files (e.g., Kubernetes at ~25K Go files), this means: parsing every file, storing O(files x symbols_per_file) nodes, storing O(references) edges. Naive implementation loads everything into memory, parses sequentially, and blocks the first RepoMap call for 30+ seconds.
+**What goes wrong:** Error responses that suggest "try tool X instead" or "correct format is Y" cause the agent to retry endlessly. The agent follows the suggestion, hits a different error, gets a different suggestion, and loops until context window exhaustion or turn limit.
 
-**Why it happens:**
-Developers test against small repos (Serena itself is ~35K LOC, manageable). The scaling cliff appears at 10K+ files where memory exceeds hundreds of MB and parse time exceeds user tolerance. Aider caches tags in SQLite via diskcache but still reports slow initial scans on large repos.
+**Why it happens:** Suggestions are helpful for humans but dangerous for LLMs that follow instructions literally. Tool call errors are injected back into the LLM context window (this is how MCP works -- errors become prompt context). If `find_symbol` returns "did you mean get_symbols_overview?", the agent calls `get_symbols_overview`, which might fail differently, suggesting yet another tool. The MCP error handling guide recommends a three-part template (what happened, why, correct format) -- but tool-to-tool redirections create chains.
 
-**How to avoid:**
-1. **Incremental, file-at-a-time construction.** Parse files lazily on first access. Build the graph progressively. Never require a full-repo parse before returning results.
-2. **SQLite-backed tag storage from day one.** Store parsed tags in SQLite (path, symbol, kind, line, references). This survives daemon restarts and avoids re-parsing unchanged files. Serena already uses SQLite for memory FTS5 -- reuse the same pattern.
-3. **Background warming.** After initial on-demand parsing, start a background goroutine to parse remaining files. Use the lspool's existing pressure-aware patterns -- if memory pressure is high, pause warming.
-4. **Cap the graph.** For repos with >50K files, only include files matching language registry entries. Skip vendored, generated, test fixture files. Use `.gitignore` patterns. Provide `.serena/repomap.yml` for include/exclude overrides.
-5. **Benchmark against a 10K+ file repo early.** Don't wait until release to discover scaling issues.
+**Consequences:** Agent burns 5-10 tool calls accomplishing nothing. Token waste. User frustration. Worst case: agent enters pathological loop and exhausts the session.
 
-**Warning signs:**
-- RepoMap tool call latency exceeds 5 seconds on repos >5K files.
-- Daemon RSS jumps by >200MB during graph construction.
-- Background parsing saturates CPU and degrades concurrent LS operations.
+**Prevention:**
+- Suggestions must be parameter corrections, not tool redirections. "Invalid path: use relative path from workspace root" is safe. "Use find_symbol instead" is dangerous -- it creates redirect chains.
+- Error messages should answer three questions: What happened? Why? What is the correct input format? Include an example of correct input. Never suggest a different tool.
+- Keep the existing 7-kind error taxonomy (`NotFound`, `InvalidArgs`, `NoWorkspace`, `Unsupported`, `Internal`, `CircuitOpen`, `Timeout`). Add an optional `hint` field -- don't restructure the error type.
+- Make suggestions idempotent: the same wrong input always produces the same suggestion. No state-dependent "try this other thing" logic.
+- Cap visibility: if the same tool+error kind fires 3x in a session, suppress the hint on subsequent calls to avoid polluting context.
 
-**Phase to address:**
-Graph construction phase. The storage backend (SQLite vs. in-memory) decision must be made upfront because it determines the entire caching and invalidation architecture.
+**Detection:** In LLM behavioral tests, inject intentional errors and verify the agent recovers within 2 retries. Monitor tool call sequences for A->B->A loops.
+
+**Phase mapping:** Phase 4 (Smart Errors). Implement after health/status so you can observe the actual error patterns agents hit in practice.
 
 ---
 
-### Pitfall 6: SQLite Locking Contention Between Memory Index, RepoMap Cache, and Concurrent Tool Calls
+## Moderate Pitfalls
 
-**What goes wrong:**
-Serena's daemon handles concurrent MCP tool calls. The existing memory system uses SQLite with WAL mode and a Go `sync.Mutex` around every operation (see `memory/index.go` lines 31-32). Adding a RepoMap tag cache to the same or a separate SQLite database introduces more write contention. If a RepoMap background warming goroutine is writing tags while an agent searches memories AND another agent requests RepoMap context, the mutex serializes everything. With `busy_timeout=5000`, a blocked write waits up to 5 seconds before failing.
+### Pitfall 5: Health Tool Becoming Token-Expensive Background Noise
 
-**Why it happens:**
-SQLite WAL allows concurrent readers with one writer, but the existing `Index.mu sync.Mutex` in `memory/index.go` serializes ALL operations (reads and writes) behind a single lock -- this is safe but removes SQLite's natural read concurrency. Adding more SQLite consumers amplifies the problem.
+**What goes wrong:** A `get_health` tool that returns comprehensive LS state, indexing progress, memory usage, and capabilities list generates 2-5K tokens of response. Agents call it reflexively at session start (especially if onboarding workflow suggests it), wasting context window on information they never act on. With 41 tools already consuming ~15-20K tokens in descriptions, adding 2-5K of health data per session is significant.
 
-**How to avoid:**
-1. **Use separate SQLite databases.** Memory index and RepoMap tag cache should be in different `.db` files. SQLite's locking is per-database-file; separate files eliminate cross-feature write contention entirely.
-2. **Use `sync.RWMutex` instead of `sync.Mutex`.** The existing memory index uses a plain Mutex, serializing reads behind writes. An RWMutex allows concurrent reads (which is what SQLite WAL supports natively). Apply this to both the existing memory index and the new RepoMap cache.
-3. **Keep write transactions short.** Batch tag upserts into transactions of 100-500 rows, not one transaction per file or one giant transaction for the whole repo. Commit between batches to release the write lock.
-4. **Use `BEGIN IMMEDIATE` for writes.** This acquires the write lock at transaction start rather than at first write statement, preventing SQLITE_BUSY surprises mid-transaction.
+**Prevention:**
+- Return a compact summary by default (5-10 lines max). Detailed output only with `verbose: true` parameter.
+- Error-only reporting pattern: healthy components produce NO output. Only unhealthy components appear. "All systems operational" is one line. "gopls: not installed" is actionable.
+- Health tool should NOT be in the default onboarding workflow. It's a debugging tool, not a startup ritual.
+- If the SessionStart hook already activates the workspace, the health tool is only needed for troubleshooting -- don't encourage routine polling.
+- Cap response to ~500 tokens. Anything more goes to the admin metrics endpoint, not the MCP tool response.
 
-**Warning signs:**
-- "database is locked" errors in logs during concurrent tool calls.
-- Tool call latency spikes when RepoMap is warming in the background.
-- Memory search operations slow down after RepoMap feature is added.
-
-**Phase to address:**
-Infrastructure/cache phase. The database separation decision must happen before implementing the tag cache. Upgrading the existing memory index Mutex to RWMutex should be a preparatory step.
+**Phase mapping:** Phase 2 (Health/Status). Design for minimal token footprint from day 1.
 
 ---
 
-### Pitfall 7: Tree-Sitter Query Maintenance Burden for 52 Languages
+### Pitfall 6: Setup CLI Breaking Existing Daemon Lifecycle
 
-**What goes wrong:**
-Serena currently has tree-sitter grammars for 4 languages (Go, Python, TypeScript, Rust) used for body extraction in edit tools (see `internal/kernel/edit/queries/`). RepoMap needs tree-sitter parsing for tag extraction across all 52 supported languages. Writing and maintaining `.scm` query files (or programmatic AST walks) for each language's declaration/reference patterns is enormous ongoing work. Each language has different node type names (`function_declaration` in Go, `function_definition` in Python, `function_item` in Rust), different field names, and different AST structures.
+**What goes wrong:** `serena setup` installs hooks and config that assume a specific daemon startup sequence. But the existing architecture (forwarder -> gRPC -> daemon) has its own lifecycle. If setup installs a SessionStart hook that calls `serena activate-workspace` but the daemon isn't running yet (cold start via stdio forwarder), the hook races with daemon initialization.
 
-**Why it happens:**
-Tree-sitter grammars are maintained by different communities with different conventions. There's no standard "declaration" node type. Each grammar has its own field naming, and these change between versions. Aider handles this by supporting 130+ languages through tree-sitter but with varying quality.
+**Prevention:**
+- Setup must embed the absolute path to the `serena` binary in hook commands. Use `which serena` or `os.Executable()` at setup time. Relative paths break when Claude Code's working directory differs from where setup was run.
+- SessionStart hook must tolerate daemon cold-start. The existing stdio forwarder auto-starts the daemon via gRPC -- the hook should call through the same path, not try to start a separate daemon.
+- Add a `--timeout 15` to all hook command configurations so if daemon startup takes >15s, the hook doesn't hang Claude Code.
+- Test the full cold-start path: fresh machine, `serena setup claude-code`, start Claude Code, verify first tool call works end-to-end.
+- Setup and hooks must be designed as a pair in the same design session. Implementing them in separate phases without shared design creates integration gaps.
 
-**How to avoid:**
-1. **Two-tier approach.** Tier 1 (Go, Python, TypeScript, Rust, Java, C/C++) gets curated `.scm` queries with full definition/reference extraction. Tier 2 (remaining 46 languages) gets a generic fallback: extract only top-level named nodes using tree-sitter's `named_children` iterator without language-specific queries.
-2. **Leverage existing aider/tree-sitter-tags queries.** Aider has tag queries for many languages, BSD-licensed. Port the top 10-15 and use generic fallback for the rest.
-3. **Pin tree-sitter grammar versions in `go.mod`.** When upgrading a grammar, run tag extraction tests to catch broken queries before release.
-4. **Abstract the tag extraction interface.** `TagExtractor` interface with `ExtractTags(source []byte, lang string) ([]Tag, error)`. Implementations can be tree-sitter, LSP-based, or regex-based. This decouples RepoMap from tree-sitter specifics and allows graceful degradation.
-
-**Warning signs:**
-- RepoMap returns empty or nonsensical results for specific languages.
-- Grammar upgrade PRs break tag extraction without obvious test failures.
-- Engineers avoid adding new language support because query maintenance is too high.
-
-**Phase to address:**
-Tag extraction phase. The two-tier decision and interface design must be made before implementing individual language queries.
+**Phase mapping:** Phase 1 (Setup CLI) and Phase 3 (Hooks) must share a design document even if implemented separately.
 
 ---
 
-## Technical Debt Patterns
+### Pitfall 7: Lazy Init Racing with First Tool Call
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| In-memory graph only (no SQLite cache) | Simpler implementation, faster iteration | Re-parse on every daemon restart, O(seconds) cold start on large repos | Never for production; acceptable for prototype/proof-of-concept only |
-| Single tokenizer (chars/4 heuristic) | No external dependencies, works for all models | 10-15% inaccuracy, occasional over/under-budget | Acceptable permanently with safety margin -- over-engineering tokenizer matching is worse |
-| Unqualified identifiers in graph | Simpler tag extraction, fewer tree-sitter queries | PageRank quality degrades on large codebases (aider #2341) | Never -- qualification is cheap at extraction time, expensive to retrofit |
-| Same SQLite DB for memory + repomap | One fewer file to manage | Write contention under concurrent load | Only if RepoMap writes are infrequent (lazy invalidation); separate DBs are safer |
-| Skip fuzzy matching uniqueness check | Faster implementation, higher match rate | Silent wrong-location edits, trust erosion | Never -- this is the single most dangerous shortcut |
-| Replace-all semantics in fuzzy edit | Simpler code, matches existing fileops/replace.go pattern | Replaces every occurrence when only one was intended (aider #3883) | Never for fuzzy matching -- only for explicit regex-based replace_in_file |
+**What goes wrong:** "Lazy workspace init on first tool call" introduces a race: the first tool call triggers workspace activation (LS startup, indexing), which takes 2-30 seconds depending on project size and language server. The agent doesn't wait -- it fires the next tool call immediately, which fails because the workspace isn't ready yet. The `NoWorkspace` error kind fires, the agent retries, and you get a flurry of failed calls.
 
-## Integration Gotchas
+**Prevention:**
+- The first tool call must block synchronously until workspace is ready, then return the actual result. No partial responses, no "initializing, please wait" message that the agent doesn't know how to handle.
+- Use the existing worker pool's readiness detection. If workspace activation is in progress, queue subsequent calls behind a `sync.WaitGroup` or `sync.Once` rather than failing them.
+- Set a 30-second timeout and return a clear `Timeout` error kind if initialization exceeds it. This is better than hanging indefinitely.
+- The lazy init path must be tested explicitly: no setup run, no SessionStart hook, cold daemon, first tool call triggers everything. This is the degraded path and must work.
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| RepoMap + lspool worker lease | Holding a worker lease during graph construction (blocks pool for other tools) | Use tree-sitter for initial graph (no LS needed). Only acquire lease for optional LSP enrichment, release immediately after each query. |
-| Fuzzy edit + didChange notification | Sending didChange with content from before the fuzzy match resolved, or sending stale content | Read file, apply fuzzy edit, write file, THEN send didChange with final file content. Never send intermediate states. |
-| RepoMap cache + memory fsnotify watcher | Both watching the same directories, duplicating filesystem events, creating thundering herd on batch edits | Single watcher (or single event bus) that dispatches to both cache invalidation and memory index. Debounce: coalesce events within 100ms window. |
-| PageRank + personalization vector | Personalization vector sums to 0 (all queried files excluded from repo) or contains files not in graph | Validate personalization vector: if queried files aren't in graph, fall back to uniform distribution. Log a warning. |
-| Token budget + RepoMap output formatting | Counting tokens of raw data but outputting formatted markdown with headers, separators, indentation | Count tokens of the formatted output, not the raw symbol data. Format first, measure second. Or reserve a fixed overhead (200 tokens) for formatting chrome. |
-| Fuzzy edit + existing replace_symbol_body | Adding fuzzy fallback to replace_symbol_body without considering tree-sitter body extraction failure | Fuzzy matching should only activate AFTER tree-sitter + LSP have both failed to locate the target. It's a last resort, not a first attempt. The existing tree-sitter path is more precise. |
+**Phase mapping:** Phase 1 (Setup CLI -- fallback path). Interacts with existing kernel startup code in `internal/kernel/`.
 
-## Performance Traps
+---
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Full-repo tree-sitter parse on first RepoMap call | 10-30s hang on first tool call, agent timeout | Incremental/lazy parsing with background warming | >5K files |
-| PageRank convergence iteration without cap | CPU spike, 100% core utilization for seconds | Cap iterations at 100 (standard). Use power iteration with tolerance 1e-6. Code graphs typically converge in 20-40 iterations. | >50K nodes |
-| Fuzzy matching with Levenshtein on large files | O(n*m) per comparison, seconds per match on 10K-line files | Use line-based chunking first (find candidate regions by line hash or trigram), then run edit distance only on candidates | >5K lines per file |
-| Rebuilding full graph on every file change | CPU saturation during rapid edit sequences | Invalidate only the changed file's tags. Defer PageRank recomputation until next query (lazy). | Any batch edit (>3 files) |
-| Storing full file content in tag cache | SQLite DB grows to hundreds of MB | Store only tags (name, kind, line, references), not file content. File content lives on disk. | >10K files |
-| Creating new tree-sitter parser per file parse | GC pressure from allocating/freeing parser objects at scale | Pool tree-sitter parsers per language, reuse across file parses. Serena already pools LS workers -- apply same pattern. | >1K files parsed in a warming batch |
+### Pitfall 8: Platform-Specific Path Assumptions
 
-## Security Mistakes
+**What goes wrong:** Config file paths differ across macOS and Linux. Claude Desktop: `~/Library/Application Support/Claude/` (macOS) vs `~/.config/Claude/` (Linux). VS Code: `~/Library/Application Support/Code/User/` (macOS) vs `~/.config/Code/User/` (Linux). Claude Code CLI: works via subprocess (`claude mcp add-json`) so less path-sensitive, but the hook scripts' `$CLAUDE_PROJECT_DIR` may contain spaces.
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Fuzzy edit matching across file boundaries | Agent sends search text; fuzzy matcher finds match in a different file than intended and edits it | Fuzzy edit must require explicit file path. Never search across files unless explicitly designed for that. |
-| RepoMap exposing files outside workspace | Graph includes files from parent directories, vendored dependencies, or symlink targets outside workspace root | Validate all paths against workspace root before including in graph. Use the existing `ValidatePath` from fileops. |
-| Tag cache poisoned by crafted file content | A file with crafted identifier names causes SQL injection into tag cache, or causes tree-sitter to consume excessive memory | Use parameterized queries (already done in memory/index.go). Set tree-sitter parse timeout. Limit identifier length in tag extraction. |
-| Fuzzy edit applied to file with uncommitted changes from another agent | Two concurrent agents editing same file; fuzzy match is based on stale pre-read content | Read file content immediately before matching, not from cache. Use the same atomic-write pattern as existing edit tools. |
+**Prevention:**
+- Use Go's `os.UserConfigDir()` and `os.UserHomeDir()` as base, then apply client-specific subdirectories. Never hardcode OS-specific paths.
+- Quote all paths in generated hook commands. `"command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/serena-hook.sh"` -- note the escaped quotes around `$CLAUDE_PROJECT_DIR`.
+- For Claude Code, prefer subprocess CLI (`claude mcp add-json --scope project`) over direct file manipulation. It handles path resolution internally.
+- Windows support is out of scope for v1.7 but design path resolution to be extensible via `runtime.GOOS` switch.
+- Test with a project path containing spaces. This catches 80% of path quoting bugs.
 
-## UX Pitfalls
+**Phase mapping:** Phase 1 (Setup CLI). Path resolution is foundational.
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Fuzzy edit silently succeeds with low confidence | User trusts tool output, doesn't review, code is wrong | Always report match confidence. If score < 0.95, include a warning: "Low confidence match at line X. Please review." |
-| RepoMap returns wall of text without structure | Agent spends tokens parsing unstructured output, misses key symbols | Return structured output: ranked list with file path, symbol name, kind, line number, relevance score. Consistent formatting the agent can parse. |
-| "No match found" without guidance | Agent retries with same input, wastes turns | On no-match, return: closest candidate (with score), actual content around expected location, suggestion ("Did you mean line 42-47?") |
-| RepoMap budget exhausted by a few large files | Important small files with key interfaces get crowded out by large implementation files | Rank by symbol importance, not file size. Include at least the signature (not body) of every top-ranked symbol, then fill remaining budget with bodies of the most important ones. |
-| Fuzzy edit returns opaque "match failed" | Agent cannot diagnose why the match failed or how to fix the search text | Return: (a) the best candidate with its score, (b) the character-level diff between search text and best candidate, (c) whether whitespace normalization would have matched |
+---
 
-## "Looks Done But Isn't" Checklist
+### Pitfall 9: Hook Architecture -- Scripts vs HTTP vs Inline Commands
 
-- [ ] **Fuzzy edit:** Often missing uniqueness enforcement -- verify that ambiguous matches are rejected, not silently resolved
-- [ ] **Fuzzy edit:** Often missing the "which strategy matched" metadata in tool response -- verify exact vs. whitespace-normalized vs. fuzzy is reported
-- [ ] **Fuzzy edit:** Often missing integration with existing `replace_symbol_body` / `replace_content` -- verify fallback chain works end-to-end through the existing edit tools, not just the standalone fuzzy tool
-- [ ] **RepoMap:** Often missing personalization -- verify that task context actually changes rankings, not just filters results
-- [ ] **RepoMap:** Often missing incremental invalidation -- verify that editing a file actually updates the next RepoMap call's output
-- [ ] **Token budget:** Often missing the formatting overhead -- verify token count includes markdown/structure chrome, not just raw content
-- [ ] **Graph construction:** Often missing .gitignore filtering -- verify vendored/generated files are excluded
-- [ ] **Cache:** Often missing content-hash-based invalidation -- verify rapid same-second edits don't produce stale results
-- [ ] **Integration:** Often missing the "RepoMap cache is stale after Serena's own edits" scenario -- verify internal edit -> cache invalidation -> fresh RepoMap round-trip
-- [ ] **Fuzzy edit in edit tools:** Often missing the "tree-sitter succeeded but LSP range is stale" case -- verify fallback order is tree-sitter -> LSP range -> fuzzy, not tree-sitter -> fuzzy (skipping LSP)
+**What goes wrong:** Three hook implementation strategies each have failure modes:
+- **Shell scripts:** Permissions (`chmod +x` forgotten), wrong shell (bash vs sh vs zsh), shebang issues on different platforms, script not found when CWD changes.
+- **HTTP hooks:** Daemon must be running before hook fires. Connection refused on cold start. HTTP hook timeouts default to 30s (shorter than command hooks at 600s).
+- **Inline commands:** `"command": "serena hook pre-tool-use"` -- serena binary must be on PATH, which isn't guaranteed if installed via `go install` without PATH configuration.
 
-## Recovery Strategies
+**Prevention:**
+- Use HTTP hooks calling the serena daemon's admin listener. This is the cleanest architecture: no scripts, no permissions, no shell compatibility, Claude Code handles the HTTP call. The admin listener already exists (`internal/obs/`).
+- Fallback for cold-start: use inline command hooks with absolute path to serena binary (embedded at setup time). The command starts the daemon if needed via the existing forwarder auto-start.
+- Never generate shell script files. They create maintenance burden (need updating when hook logic changes) and platform-specific bugs.
+- Document the hook architecture decision explicitly. Mixing strategies across events creates confusion.
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Wrong-location fuzzy edit applied | MEDIUM | Git diff shows the damage. Revert file, apply edit with explicit line range. If caught immediately: clean undo. If discovered after stacking edits: painful manual merge. |
-| PageRank quality is bad (identifier collision) | HIGH | Requires changing tag extraction format (add qualification), invalidating entire cache, re-parsing all files. If graph schema changed: SQLite migration. |
-| SQLite locking causes tool timeouts | LOW | Split databases. Change Mutex to RWMutex. Both are backward-compatible changes. |
-| Token budget overflow truncates context | LOW | Reduce budget target to 80%. Adjust heuristic multiplier. No data loss, just suboptimal context. |
-| Graph construction OOM on large repo | MEDIUM | Add file count cap, exclude patterns. Requires config surface. May need to re-architect storage if in-memory-only. |
-| Tree-sitter query breaks on grammar update | LOW | Pin grammar version, revert update, fix query. No data corruption, just degraded tag quality for that language. |
-| Cache invalidation race produces stale RepoMap | LOW | Force cache rebuild via admin endpoint or tool. Add content-hash check. No data loss -- stale results are transient. |
+**Phase mapping:** Phase 3 (Client Hooks). Architecture decision must happen before any hook implementation.
 
-## Pitfall-to-Phase Mapping
+---
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Identifier collision (P1) | Graph construction / tag extraction | Benchmark: run against a 10K+ file repo, verify top-10 ranked symbols are domain-relevant, not generic getters |
-| Silent wrong-location edit (P2) | Fuzzy edit implementation | Test: file with 3 similar functions, fuzzy match returns error not silent pick |
-| Cache invalidation race (P3) | Cache infrastructure (before graph) | Test: edit file via Serena tool, immediately call RepoMap, verify new symbol appears |
-| Token budget divergence (P4) | Context selection implementation | Test: measure actual token consumption (via API response) vs. estimated, verify <15% error |
-| Graph memory/CPU (P5) | Graph construction | Benchmark: 10K-file repo, verify <500MB RSS, <5s first-call latency |
-| SQLite locking (P6) | Infrastructure / preparatory | Load test: 10 concurrent tool calls mixing memory search + RepoMap, verify no SQLITE_BUSY |
-| Tree-sitter 52-language burden (P7) | Tag extraction design | Ship with tier-1 (6 langs) curated + tier-2 generic fallback, verify both tiers return non-empty results |
+### Pitfall 10: Extending Error Type Without Breaking Serialization Contract
+
+**What goes wrong:** Adding `Hint`, `Suggestion`, or `CorrectUsage` fields to the existing `*Error` struct breaks the JSON serialization contract. The current struct serializes as `{"kind":"not_found","message":"...","tool":"...","detail":"..."}`. Agents or downstream tools parsing this format may break on unexpected fields. The 4 typed golden test files become invalid. The `extractKind` helper needs updating.
+
+**Prevention:**
+- Do NOT add suggestion fields to `internal/errors.Error`. Keep the error type clean for programmatic matching.
+- Instead, return suggestions as part of the MCP tool response content -- separate content blocks alongside the error. The MCP SDK supports multiple content items in a tool response. Error is one block (`isError: true`), suggestion is another block (`isError: false`, type `text`).
+- If extending `*Error` is unavoidable, new fields must have `omitempty` JSON tags. Run all existing error golden tests. The builder pattern (`WithTool().WithDetail()`) extends naturally to `.WithHint()` as long as hint is omitempty.
+- Consider a response wrapper: `type ToolResponse struct { Error *Error; Hint string }` at the handler level, keeping the core error type untouched.
+
+**Phase mapping:** Phase 4 (Smart Errors). Design decision (response wrapper vs error extension) needed before implementation starts.
+
+---
+
+## Minor Pitfalls
+
+### Pitfall 11: Setup Command Conflicting with Existing `.serena/` Config
+
+**What goes wrong:** `serena setup` creates/modifies `.serena/project.yml` in the workspace, but the user already has one with custom language server preferences, profile configuration, or ignore patterns. Setup overwrites their customizations.
+
+**Prevention:** Setup must be additive only. Read existing config, merge new settings, never overwrite existing keys. Use `--force` flag for explicit override. Show diff of what would change before applying. Detect and warn if `.serena/project.yml` already exists.
+
+**Phase mapping:** Phase 1 (Setup CLI).
+
+---
+
+### Pitfall 12: Health Tool Exposing Unstable Internal State
+
+**What goes wrong:** Health tool returns pool sizes, worker counts, internal queue depths, specific LSP protocol versions. Users or agents start depending on specific field names and values. Next version changes internal architecture and breaks consumers who scripted against health output.
+
+**Prevention:** Health response schema should report abstract capabilities (languages available, features active, overall status) not implementation details (worker count, queue depth, RSS). Reserve internals for Prometheus metrics endpoint (already exists) and admin-only endpoints. Version the health response format if external tools depend on it.
+
+**Phase mapping:** Phase 2 (Health/Status).
+
+---
+
+### Pitfall 13: PreToolUse Reminder Flooding Agent Context
+
+**What goes wrong:** A PreToolUse hook that injects "Remember to use Serena tools for code operations" on every tool call adds tokens to every turn. After 30 tool calls in a session, that's 30x the reminder consuming context window. The agent either ignores it (wasted tokens) or over-indexes on it (uses Serena when raw Bash would be faster).
+
+**Prevention:**
+- Use `matcher` to fire only on relevant tools: `"Bash|Edit|Write|Read|Glob|Grep"` -- tools where Serena alternatives exist.
+- Use the `if` field to filter: only remind when Bash command looks like code navigation (`grep -r`, `find . -name`, `cat src/`).
+- Keep reminders under 100 characters. Return as `additionalContext`, not a blocking decision.
+- Consider using `"once": true` (runs once per session then auto-removes) for session-level reminders rather than per-tool-call reminders.
+- Measure: count reminder injections per session and total token cost. Set a budget (e.g., max 500 tokens of reminders per session).
+
+**Phase mapping:** Phase 3 (Client Hooks). Tuning required after observing real agent behavior.
+
+---
+
+### Pitfall 14: Claude Code Hook JSON Output Size Limit
+
+**What goes wrong:** Claude Code imposes a 10,000 character limit on hook stdout. If a hook returns detailed health data, workspace capability listings, or verbose error context, the output is silently truncated and saved to a file instead of being parsed as JSON. The hook appears to succeed but its JSON response is lost.
+
+**Prevention:**
+- Keep all hook JSON output under 5,000 characters (conservative margin).
+- Health/status data should go through the MCP tool, not through hooks. Hooks are for lightweight signaling (activate workspace, inject reminder, set env vars).
+- If a hook must return data, return only the minimal decision JSON: `{"hookSpecificOutput":{"additionalContext":"..."}}` with the context being a short string.
+
+**Phase mapping:** Phase 3 (Client Hooks).
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Setup CLI | Config file corruption / wrong format (#1) | Use client CLIs as subprocess (`claude mcp add-json`), not direct file manipulation |
+| Setup CLI | Breaking existing `.serena/` config (#11) | Additive-only merge, `--force` flag for override |
+| Setup CLI | Platform path assumptions (#8) | `os.UserConfigDir()`, test with spaces in paths |
+| Setup CLI | Daemon lifecycle mismatch (#6) | Embed absolute binary path, test cold-start |
+| Health/Status | Token-expensive responses (#5) | Error-only reporting, compact by default, <500 token cap |
+| Health/Status | Exposing unstable internal state (#12) | Abstract capabilities, not implementation details |
+| Client Hooks | Exit code 1 != blocking (#2) | Always exit 2 for blocking, prefer HTTP hooks |
+| Client Hooks | Script permissions/shell issues (#9) | HTTP hooks to admin listener, no script files |
+| Client Hooks | PreToolUse noise flooding context (#13) | Scoped matchers, `if` filters, `once: true` |
+| Client Hooks | JSON output size limit (#14) | Keep hook output <5K chars, use MCP tools for data |
+| Smart Errors | Retry loops from suggestions (#4) | Parameter corrections only, never tool redirections |
+| Smart Errors | Breaking error serialization (#10) | Response wrapper pattern, not error struct modification |
+| Progressive Descriptions | Breaking agent tool selection (#3) | LLM behavioral tests as regression gate, meta-tool pattern |
+| Lazy Init | Race with first tool call (#7) | Synchronous blocking init, `sync.Once` for concurrent calls |
 
 ## Sources
 
-- [Aider RepoMap identifier uniqueness issue #2341](https://github.com/Aider-AI/aider/issues/2341) -- HIGH confidence, direct bug report with reproduction
-- [Aider RepoMap rank distribution issue #2342](https://github.com/Aider-AI/aider/issues/2342) -- HIGH confidence, companion fix proposal
-- [Aider search/replace replacing all matches #3883](https://github.com/Aider-AI/aider/issues/3883) -- HIGH confidence, confirmed bug
-- [Aider search/replace partial line matching #1294](https://github.com/paul-gauthier/aider/issues/1294) -- MEDIUM confidence
-- [Aider diff-fenced format long line failures #4716](https://github.com/aider-ai/aider/issues/4716) -- MEDIUM confidence
-- [Code Surgery: How AI Assistants Make Precise Edits (Fabian Hertwig)](https://fabianhertwig.com/blog/coding-assistants-file-edits/) -- HIGH confidence, comparative analysis
-- [Aider RepoMap documentation](https://aider.chat/docs/repomap.html) -- HIGH confidence
-- [Aider tree-sitter repomap blog post](https://aider.chat/2023/10/22/repomap.html) -- HIGH confidence
-- [Repository Mapping System (DeepWiki)](https://deepwiki.com/Aider-AI/aider/4.1-repository-mapping) -- MEDIUM confidence
-- [SQLite concurrent writes and locking](https://tenthousandmeters.com/blog/sqlite-concurrent-writes-and-database-is-locked-errors/) -- HIGH confidence
-- [Token counting across models (Propel 2025)](https://www.propelcode.ai/blog/token-counting-tiktoken-anthropic-gemini-guide-2025) -- MEDIUM confidence
-- [Counting Claude tokens without a tokenizer](https://blog.gopenai.com/counting-claude-tokens-without-a-tokenizer-e767f2b6e632) -- MEDIUM confidence
-- [Cursor silent code reversion bug (2026)](https://vibecoding.app/blog/cursor-problems-2026) -- LOW confidence (third-party reporting)
-- Serena codebase analysis: `internal/kernel/edit/treesitter.go`, `internal/kernel/edit/replace.go`, `internal/memory/index.go`, `internal/kernel/fileops/replace.go`, `internal/kernel/edit/queries/` -- HIGH confidence, direct code review
+- [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks) -- HIGH confidence, official specification for all hook events, exit code semantics, JSON format, matchers
+- [Claude Code MCP Configuration](https://code.claude.com/docs/en/mcp) -- HIGH confidence, official .mcp.json format and `claude mcp add` CLI
+- [VS Code MCP Server Configuration](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) -- HIGH confidence, official VS Code MCP setup docs
+- [MCP Tool Descriptions Are Smelly (arXiv 2602.14878)](https://arxiv.org/html/2602.14878v1) -- MEDIUM confidence, peer research on description optimization
+- [Progressive Disclosure Meta-Tool Pattern (SynapticLabs)](https://blog.synapticlabs.ai/bounded-context-packs-meta-tool-pattern) -- MEDIUM confidence, 85x token savings benchmark
+- [SEP-1576: Token Bloat in MCP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1576) -- MEDIUM confidence, official MCP protocol issue
+- [Better MCP Error Responses (Alpic AI)](https://alpic.ai/blog/better-mcp-tool-call-error-responses-ai-recover-gracefully) -- MEDIUM confidence, three-part error template
+- [MCP Tool Design: Why Your AI Agent Is Failing (DEV)](https://dev.to/aws-heroes/mcp-tool-design-why-your-ai-agent-is-failing-and-how-to-fix-it-40fc) -- MEDIUM confidence, common MCP design mistakes
+- [Claude Code Hook Automation Issue #10447](https://github.com/anthropics/claude-code/issues/10447) -- LOW confidence, feature request showing community pain points
+- [Claude Code .mcp.json Loading Issue #5037](https://github.com/anthropics/claude-code/issues/5037) -- LOW confidence, real-world config loading bug
+- Serena codebase analysis: `internal/errors/errors.go`, `internal/errors/kinds.go`, `internal/mcp/server.go`, `internal/daemon/`, `internal/config/` -- HIGH confidence, direct code review
 
 ---
-*Pitfalls research for: Context Intelligence & Resilient Editing (v1.6)*
-*Researched: 2026-04-15*
+*Pitfalls research for: Developer Experience & Auto-Setup (v1.7)*
+*Researched: 2026-04-20*

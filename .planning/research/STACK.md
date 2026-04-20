@@ -1,174 +1,289 @@
 # Technology Stack
 
-**Project:** Serena v1.6 -- Context Intelligence & Resilient Editing
-**Researched:** 2026-04-15
+**Project:** Serena v1.7 Developer Experience & Auto-Setup
+**Researched:** 2026-04-20
 
 ## Recommended Stack Additions
 
-### Graph Ranking (PageRank)
+### Zero New Go Dependencies Required
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| **No library -- implement in-house (~150 LOC)** | N/A | Personalized PageRank for symbol importance ranking | Gonum's `graph/network.PageRank` (v0.17.0) lacks personalized PageRank (no personalization vector parameter). The aider reference implementation requires personalization to bias ranking toward files the agent is actively working with. Third-party alternatives (alixaxel/pagerank, dcadenas/pagerank) also lack personalization and are unmaintained (last updated 2020). The max-planck-innovation-competition/pagerank has personalized PageRank but is a niche academic project with minimal adoption. A power-iteration PageRank with personalization vector is ~150 lines of Go with no external dependencies -- simpler than pulling in gonum's entire graph module for a function we'd need to fork anyway. |
+The v1.7 milestone features are **integration code** and **new MCP tools** -- they compose existing capabilities rather than requiring new libraries. Every feature maps cleanly to stdlib + existing deps.
 
-**Implementation notes:**
-- The core algorithm is power iteration over a sparse adjacency matrix: `r = d * M * r + (1-d) * p` where `p` is the personalization vector
-- Use `map[string]map[string]float64` for the weighted directed graph (files are nodes, def/ref relationships are edges) -- no need for gonum's interface-heavy graph types
-- The aider reference (borrow/aider/aider/repomap.py lines 460-530) uses networkx MultiDiGraph with personalization dict and weight parameter
-- Edge weights encode: identifier quality heuristics (camelCase/snake_case bonus, underscore-prefix penalty, high-fan-out penalty) multiplied by sqrt(ref_count), boosted 50x for files in active context
-- Convergence: iterate until L2 norm of rank delta < tolerance (1e-6), typically 20-40 iterations for codebases up to 100K files
+### Core Framework (No Changes)
 
-**Why NOT gonum:**
-- `gonum.org/v1/gonum/graph/network.PageRank(g graph.Directed, damp, tol float64) map[int64]float64` -- no personalization parameter (verified via source at github.com/gonum/gonum/blob/master/graph/network/page.go)
-- Would need gonum's graph.Directed interface, simple.WeightedDirectedGraph, and int64 node IDs -- all overhead for what is a ~150 LOC algorithm operating on string-keyed maps
-- gonum pulls in matrix/linear algebra packages that are irrelevant here
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| Go | 1.25.1 | Language runtime | Already in use |
+| cobra | v1.9.1 | CLI framework -- add `setup` subcommand | Already in use |
+| koanf/v2 | v2.3.4 | Config reading (not writing -- client configs use json.Marshal) | Already in use |
+| MCP Go SDK | v1.5.0 | Register health/status MCP tool | Already in use |
+| modernc.org/sqlite | v1.48.1 | Available if state persistence needed | Already in use |
+| gRPC + protobuf | v1.80.0 / v1.36.11 | Hook CLI <-> daemon IPC | Already in use |
 
-### Token Counting / Budgeting
+### Standard Library Packages Used Per Feature
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| **tiktoken-go/tokenizer** | v0.7.0+ | Accurate BPE token counting for context budgeting | Pure Go, no CGO, embeds vocabularies (~4MB compiled). Supports cl100k_base and o200k_base encodings. API: `enc.Count(text)` returns token count. Claude's tokenizer shares ~70% vocabulary overlap with cl100k_base, making it a reasonable proxy for budget estimation. |
+| Feature | Stdlib Packages | Notes |
+|---------|----------------|-------|
+| `serena setup <client>` | `encoding/json`, `os`, `path/filepath`, `runtime` | JSON config generation + file writing |
+| Language detection in setup | (none new) | Reuse `internal/langregistry` + `internal/kernel/workspace.go` DetectLanguages |
+| LS pre-installation | (none new) | Reuse `internal/langregistry/installer.go` three-tier installer |
+| Client hooks generation | `encoding/json` | Write hooks JSON into `.claude/settings.json` |
+| Health/status MCP tool | (none new) | New skill querying existing lspool/kernel state |
+| Smart error responses | (none new) | Add `Suggestion` field to existing `internal/errors` builder |
+| Progressive descriptions | (none new) | Extend profile YAML schema, existing koanf reads it |
+| Lazy workspace init | (none new) | Middleware in existing MCP request pipeline |
+| Hook subcommands | `encoding/json`, `os` | Read stdin JSON, write stdout JSON, gRPC to daemon |
 
-**Integration notes:**
-- The existing `computeTokenBudget` in `internal/profile/skill.go` uses `len(text) / 4` as a crude estimate -- this is fine for tool schema budgets but too imprecise for RepoMap context selection where we're fitting ranked symbols into a token window
-- Use `tiktoken-go/tokenizer` with `Cl100kBase` encoding for the RepoMap context budgeting tool only -- it provides ~85-90% accuracy vs Anthropic's actual tokenizer for English code
-- For the RepoMap overview tool (structural map), keep the simple `len/4` heuristic -- exact counts don't matter when the output is a fixed-format tree
-- The aider reference uses sampling-based token counting (sample 1% of lines, extrapolate) for performance on large texts -- replicate this pattern: use exact counting for texts < 1KB, sampled counting for larger texts
-- Binary size impact: ~4MB for embedded vocabularies -- acceptable for a server binary
+## Architecture Decisions
 
-**Why tiktoken-go/tokenizer over pkoukk/tiktoken-go:**
-- tiktoken-go/tokenizer embeds vocabularies at compile time (no runtime downloads, no cache directory, no network dependency)
-- pkoukk/tiktoken-go downloads dictionaries at runtime -- unacceptable for a persistent daemon that may run in airgapped environments
-- Both support the same encodings; tiktoken-go/tokenizer has cleaner API (`Count` method vs manual encode-and-count)
+### 1. CLI: Introduce Subcommands (Evolving from Flat Design)
 
-**Why NOT Anthropic's API-based counting:**
-- Requires network call to Anthropic API -- adds latency and external dependency
-- Token counting is for budget estimation, not billing -- ~10% variance is acceptable
-- The daemon serves multiple agent types (Claude Code, Codex, IDE assistants) -- need a universal estimate, not provider-specific
+Current CLI is flat ("Per D-02: flat CLI with flags, no subcommands" in root.go). For v1.7, add subcommand trees because setup/hook are distinct from server operation:
 
-### Fuzzy Text Matching
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| **sergi/go-diff** | v1.4.0 | Fuzzy matching and patching for resilient edits | Go port of Google's diff-match-patch. Provides `MatchMain` (Bitap fuzzy matching), `DiffMain` (diff computation), and `PatchApply` (fuzzy patch application). Configurable `MatchThreshold`, `MatchDistance`, `MatchMaxBits`. Used by 2,554 Go packages. MIT licensed. |
-
-**Integration notes:**
-- The aider reference (borrow/aider/aider/coders/search_replace.py) uses diff_match_patch for fuzzy search/replace with two strategies:
-  1. Tight matching (`MatchThreshold=0.95`, `MatchDistance=500`) with relative-indent remapping
-  2. Loose matching (`MatchThreshold=0.5`, `MatchDistance=100000`) as fallback
-- For Serena's fuzzy edit fallback: implement a 3-tier strategy:
-  1. **Exact match** -- `strings.Contains` on original content (current behavior)
-  2. **Whitespace-normalized match** -- strip/normalize whitespace, match, map back to original offsets (custom, ~80 LOC)
-  3. **Fuzzy match** -- `go-diff/diffmatchpatch.MatchMain` with configurable threshold
-- The whitespace normalization layer (tier 2) handles the most common LLM drift pattern (incorrect indentation) without needing the full diff-match-patch machinery
-- For the standalone fuzzy edit MCP tool: expose the strategy used in the response so agents know confidence level
-- `PatchApply` returns `(string, []bool)` -- the bool slice indicates which hunks applied successfully, critical for reporting partial application
-
-**Whitespace normalization (implement in-house, ~80 LOC):**
-- Collapse runs of spaces/tabs to single space
-- Strip trailing whitespace per line
-- Normalize line endings to `\n`
-- Build offset mapping from normalized positions back to original positions
-- This handles 70-80% of LLM output drift (indentation changes, trailing whitespace) before needing fuzzy matching
-
-### SQLite Tags Cache
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| **modernc.org/sqlite** (reuse existing) | v1.48.1 | Cache tree-sitter extracted symbol tags with mtime invalidation | Already a direct dependency. Same WAL mode + busy_timeout pattern proven in `internal/memory/index.go`. CGO-free. No new dependency needed. |
-
-**Integration notes:**
-- The aider reference uses `diskcache.Cache` (SQLite-backed key-value store) for tags caching with mtime-based invalidation
-- Implement a dedicated tags cache in the RepoMap package using the same `database/sql` + `modernc.org/sqlite` pattern as `internal/memory/`
-- Schema:
-
-```sql
-CREATE TABLE IF NOT EXISTS tags (
-    file_path TEXT NOT NULL,
-    mtime     REAL NOT NULL,
-    name      TEXT NOT NULL,
-    kind      TEXT NOT NULL,  -- 'def' or 'ref'
-    line      INTEGER NOT NULL,
-    PRIMARY KEY (file_path, name, kind, line)
-);
-CREATE INDEX IF NOT EXISTS idx_tags_file ON tags(file_path);
-CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
+```
+serena                         # existing: stdio/http/daemon (unchanged)
+serena setup claude-code       # NEW: write MCP config + hooks
+serena setup vscode            # NEW: write .vscode/mcp.json
+serena setup jetbrains         # NEW: write .junie/mcp/mcp.json
+serena setup --detect          # NEW: detect languages, report what would be installed
+serena status                  # NEW: query daemon health (terminal output)
+serena hook pre-tool-use       # NEW: hook handler (stdin JSON -> stdout JSON)
+serena hook session-start      # NEW: hook handler
+serena hook stop               # NEW: hook handler
 ```
 
-- On cache lookup: compare stored mtime vs current file mtime; on mismatch, re-parse with tree-sitter and upsert
-- Batch inserts within a transaction for performance (DELETE WHERE file_path=? then INSERT batch)
-- Store cache in `.serena/cache/tags.db` (project-scoped) -- aligned with existing config directory convention
-- WAL mode is essential for concurrent reads during map generation while background tag updates proceed
+**Why subcommands are correct here:** Setup and hook handlers are *not* server modes -- they're utility commands. Cobra supports this natively. The root command RunE stays untouched for backward compatibility.
 
-### Tree-Sitter Tag Extraction (reuse existing)
+**File structure:**
+```
+internal/cli/
+  root.go          # existing, unchanged
+  setup.go         # NEW: setup subcommand + client-specific logic
+  status.go        # NEW: status subcommand
+  hook.go          # NEW: hook subcommand handlers
+```
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| **go-tree-sitter** (reuse existing) | v0.25.0 | Extract definition and reference tags from source files | Already used in `internal/kernel/edit/` for body extraction. Same parser creation pattern. Need to add tree-sitter query files (.scm) for tag extraction -- these are different from the body extraction queries. |
+### 2. Client MCP Config Formats (Verified)
 
-**Integration notes:**
-- The existing `BodyExtractor` in `internal/kernel/edit/treesitter.go` demonstrates the parser lifecycle pattern: create parser, set language, parse source, walk AST, close
-- For tag extraction, use tree-sitter's query API (`tree_sitter.NewQuery`, `QueryCursor`) with `.scm` query files that define `@name.definition.*` and `@name.reference.*` captures
-- The aider reference uses `tags.scm` query files per language (from the tree-sitter-languages pack)
-- Tag query files for Go, Python, TypeScript, Rust are available in tree-sitter grammar repos -- embed as Go string constants or as embedded files via `//go:embed`
-- Fallback for languages without tree-sitter queries: use Pygments-style lexer tokenization (identify identifiers by token type) -- this is what aider does for unsupported languages
-- For languages without tree-sitter grammars: naive identifier extraction via regex (`\b[A-Za-z_]\w+\b`) filtered through a stop-word list -- good enough for PageRank edges
+| Client | Config File | JSON Schema | Confidence |
+|--------|-------------|-------------|------------|
+| Claude Code | `.claude/settings.json` (project) or `~/.claude/settings.json` (global) | `{ "mcpServers": { "serena": { "command": "serena", "args": [] } } }` | HIGH |
+| VS Code | `.vscode/mcp.json` | `{ "servers": { "serena": { "type": "stdio", "command": "serena", "args": [] } } }` | HIGH |
+| JetBrains (Junie) | `.junie/mcp/mcp.json` (project) or `~/.junie/mcp/mcp.json` (user) | `{ "mcpServers": { "serena": { "command": "serena", "args": [] } } }` | MEDIUM |
 
-## Alternatives Considered
+**Implementation:** Pure `encoding/json` with `json.MarshalIndent`. No templating library needed -- these are small deterministic JSON structures.
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Graph ranking | In-house PageRank (~150 LOC) | gonum/v1/gonum/graph/network | No personalization vector support; heavy dependency for a single function |
-| Graph ranking | In-house PageRank | alixaxel/pagerank | Unmaintained (2020), no personalization, uint32 node IDs (we need strings) |
-| Graph ranking | In-house PageRank | max-planck-innovation-competition/pagerank | Niche academic project, minimal adoption, Gauss-Seidel method (power iteration is simpler to reason about) |
-| Token counting | tiktoken-go/tokenizer | pkoukk/tiktoken-go | Downloads vocabularies at runtime; runtime network dependency unacceptable for daemon |
-| Token counting | tiktoken-go/tokenizer | len(text)/4 heuristic | Too imprecise for context budgeting (off by 20-40% on code with many short identifiers) |
-| Token counting | tiktoken-go/tokenizer | Anthropic API counting | Network dependency, latency, provider-specific |
-| Fuzzy matching | sergi/go-diff | agnivade/levenshtein | Edit distance only, no patch application or fuzzy search-in-text |
-| Fuzzy matching | sergi/go-diff | hbollon/go-edlib | String similarity metrics only, no patch/apply workflow |
-| Tags cache | modernc.org/sqlite (existing) | bbolt/bolt | Already have SQLite; adding another embedded DB increases complexity |
-| Tags cache | modernc.org/sqlite (existing) | File-based JSON cache | No concurrent access safety, no indexing for tag lookups |
+**Merge strategy:** Read existing file if present, unmarshal to `map[string]any`, merge serena entry, re-marshal. Preserves user's other MCP servers.
+
+### 3. Claude Code Hooks Integration (Verified via Official Docs)
+
+Claude Code hooks (v2.1.114, 26 lifecycle events) use JSON in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "serena hook session-start",
+        "once": true,
+        "timeout": 30
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "mcp__serena__.*",
+      "hooks": [{
+        "type": "command",
+        "command": "serena hook pre-tool-use",
+        "timeout": 10
+      }]
+    }],
+    "Stop": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "serena hook stop",
+        "timeout": 10
+      }]
+    }]
+  }
+}
+```
+
+**Hook handler protocol:**
+- Stdin: JSON with hook context (event, tool name, arguments)
+- Stdout: JSON response (empty = allow, structured = modify/block)
+- Exit 0 = success/allow, Exit 2 = block (stderr becomes error message)
+
+**What each hook does:**
+- `SessionStart` (once=true): Triggers lazy workspace init, language detection, LS warm-up
+- `PreToolUse` (matcher: serena tools): Inject context reminders, validate workspace readiness
+- `Stop`: Signal daemon for session cleanup, persist session state
+
+### 4. Health/Status MCP Tool
+
+New skill: `internal/skill/health/` implementing `skill.ToolProvider`:
+
+```go
+// Exposes: get_health MCP tool
+// Returns: active language servers, indexing progress, workspace capabilities,
+//          circuit breaker states, memory pressure level
+```
+
+Data sources (all existing, query only):
+- `lspool.Pool` -- active workers, languages, circuit states
+- `WorkspaceRuntime` -- detected languages, root path
+- `langregistry.Registry` -- installed vs available LSes
+- Daemon uptime, version from `daemon.go`
+
+### 5. Smart Error Responses (Extend Existing Taxonomy)
+
+The existing `internal/errors` package has a builder pattern with Kind enum. Add suggestion metadata:
+
+```go
+// New field in Error struct (internal/errors/errors.go)
+type Suggestion struct {
+    CorrectTool string `json:"correct_tool,omitempty"`
+    CorrectArgs map[string]string `json:"correct_args,omitempty"`
+    Reason      string `json:"reason"`
+}
+
+// Builder extension
+func (b *Builder) WithSuggestion(s Suggestion) *Builder
+```
+
+Suggestions are populated by tool-specific validation logic (already inline at 24 kernel tool boundaries). No new deps.
+
+### 6. Progressive Tool Descriptions
+
+Extend profile YAML with description tiers:
+
+```yaml
+# profiles/claude-code.yml
+tools:
+  get_symbol_definition:
+    description_brief: "Get symbol definition by name"
+    description_detailed: "Find where a symbol is defined. Use name_path for nested symbols (e.g., 'ClassName/method'). Supports substring matching."
+    description_tutorial: "Use this when you need to read the source code of a function, class, or method. Provide the symbol name and optionally the file path to narrow scope."
+```
+
+The MCP SDK's tool description field is a string set at registration time. Progressive disclosure works by:
+1. Starting with `description_brief` in tools/list response
+2. Including `description_detailed` in error responses when the agent misuses the tool
+3. Offering `description_tutorial` via the health tool when an agent asks for help
+
+No new library needed -- koanf already reads nested YAML, and the profile system already supports description overrides.
+
+### 7. Lazy Workspace Init
+
+Implement as middleware in the existing MCP request pipeline (`internal/mcp/middleware.go`):
+
+```go
+// LazyInitMiddleware checks if workspace is initialized before tool execution.
+// If not, triggers DetectLanguages + LS warm-up, then proceeds.
+func LazyInitMiddleware(kernel *kernel.Kernel) mcp.Middleware
+```
+
+The kernel and workspace runtime already support this flow -- `DetectLanguages` + pool acquire. The middleware just makes it automatic on first tool call.
+
+### 8. gRPC Proto Extension (Minimal)
+
+Add to existing `api/proto/serena/v1/serena.proto`:
+
+```protobuf
+// Hook notification from CLI -> daemon
+rpc NotifyHook(HookRequest) returns (HookResponse);
+
+// Health query from CLI status command
+rpc GetHealth(HealthRequest) returns (HealthResponse);
+```
+
+This follows the existing forwarder pattern. `protoc` generates the Go code -- no new tooling deps.
 
 ## What NOT to Add
 
-| Library | Reason |
-|---------|--------|
-| gonum (any package) | Overkill -- only need PageRank, and their implementation lacks personalization |
-| networkx Go ports | None exist with equivalent quality; in-house is cleaner |
-| Vector/embedding libraries | Out of scope per PROJECT.md ("Augment Context Engine does this better") |
-| go-git | Out of scope per PROJECT.md ("GitHub MCP Server handles git") |
-| Additional tree-sitter grammar bindings beyond Go/Python/TypeScript/Rust | Add only when specific language demand arises; start with the 4 already compiled in |
+| Library | Why Tempting | Why Skip |
+|---------|--------------|----------|
+| go-enry/go-enry | Language detection for setup | Serena's langregistry already has 52 languages with FileExts + marker file detection. go-enry adds ~15MB binary overhead. |
+| charmbracelet/bubbletea | Interactive setup wizard | Agents call `serena setup` non-interactively. Humans get plain text output. |
+| charmbracelet/lipgloss | Pretty terminal status | Same -- agents don't see colors. `fmt.Fprintf` suffices. |
+| survey/huh | Interactive prompts | Setup must be non-interactive (zero-friction means no prompts). |
+| viper | Config file writing | `json.MarshalIndent` + `os.WriteFile` for 3 simple JSON formats. Viper is 10x the complexity. |
+| text/template | Config generation | Templates add indirection for trivial JSON structures. Direct struct marshaling is clearer. |
+| embed | Template files | No template files needed -- JSON structures built in Go code. |
+| fatih/color | Colored CLI output | Agents ignore ANSI. Keep output parseable. |
+
+## Integration Points with Existing Stack
+
+### Cobra CLI Extension (internal/cli/root.go)
+
+```go
+rootCmd.AddCommand(newSetupCmd())   // serena setup <client>
+rootCmd.AddCommand(newStatusCmd())  // serena status
+rootCmd.AddCommand(newHookCmd())    // serena hook <event>
+```
+
+### Health Skill Registration (Caddy pattern)
+
+```go
+// internal/skill/health/health.go
+func init() { skill.Register(&HealthSkill{}) }
+
+// internal/daemon/imports.go -- add blank import
+_ "github.com/postfix/serena/internal/skill/health"
+```
+
+### Error Taxonomy Extension (internal/errors/)
+
+Add `Suggestion` struct and `WithSuggestion` builder method. Serializes into existing JSON error response. All 24 kernel validation points can optionally attach suggestions.
+
+### Profile YAML Extension (internal/profile/)
+
+Add `description_brief`, `description_detailed`, `description_tutorial` fields to tool YAML schema. The profile loader already uses koanf for nested YAML -- just add struct fields.
+
+### gRPC Service Extension (api/proto/serena/v1/)
+
+Add `NotifyHook` and `GetHealth` RPCs to existing service definition. The forwarder already connects to daemon via gRPC.
 
 ## Installation
 
 ```bash
-# New dependencies (2 packages)
-go get github.com/tiktoken-go/tokenizer@latest
-go get github.com/sergi/go-diff@v1.4.0
+# No new dependencies. Build as before:
+go build ./cmd/serena
 
-# Existing dependencies (no changes needed)
-# modernc.org/sqlite v1.48.1 -- already in go.mod
-# go-tree-sitter v0.25.0 -- already in go.mod
-# tree-sitter-{go,python,rust,typescript} -- already in go.mod
+# If proto changes for hook/health RPCs:
+protoc --go_out=. --go-grpc_out=. api/proto/serena/v1/serena.proto
 ```
 
 ## Dependency Impact
 
-| Metric | Before | After | Delta |
-|--------|--------|-------|-------|
-| Direct dependencies | 18 | 20 | +2 |
-| Binary size estimate | ~45MB | ~49MB | +4MB (tiktoken vocabularies) |
+| Metric | Before (v1.6) | After (v1.7) | Delta |
+|--------|---------------|--------------|-------|
+| Direct dependencies | 20 | 20 | +0 |
+| Binary size | ~49MB | ~49MB | No change |
 | CGO required | No | No | No change |
-| New transitive deps | 0 | ~1-2 | Minimal (both are leaf packages) |
+| New packages | 0 | 0 | Zero new external deps |
+| New internal packages | -- | +3 | `skill/health`, `cli/setup`, `cli/hook` (within existing dirs) |
+
+## Confidence Assessment
+
+| Decision | Confidence | Rationale |
+|----------|------------|-----------|
+| Zero new deps | HIGH | Verified go.mod covers all needs; features are integration code |
+| Claude Code hooks format | HIGH | Verified via official docs (code.claude.com/docs/en/hooks) |
+| VS Code mcp.json format | HIGH | Verified via VS Code official docs |
+| JetBrains mcp.json format | MEDIUM | .junie/mcp/mcp.json path may shift as Junie evolves |
+| Cobra subcommands | HIGH | Standard pattern, existing dep |
+| Skip go-enry | HIGH | langregistry already handles 52 languages |
+| gRPC for hooks | HIGH | Existing proto + forwarder IPC pattern proven |
+| Health as skill | HIGH | Follows established Caddy-style skill pattern |
 
 ## Sources
 
-- [gonum graph/network PageRank docs](https://pkg.go.dev/gonum.org/v1/gonum/graph/network) -- verified no personalization parameter (HIGH confidence)
-- [gonum PageRank source](https://github.com/gonum/gonum/blob/master/graph/network/page.go) -- confirmed via WebFetch (HIGH confidence)
-- [tiktoken-go/tokenizer](https://pkg.go.dev/github.com/tiktoken-go/tokenizer) -- v0.7.0, pure Go, embedded vocabs (HIGH confidence)
-- [pkoukk/tiktoken-go](https://github.com/pkoukk/tiktoken-go) -- v0.1.8, runtime downloads (HIGH confidence)
-- [sergi/go-diff](https://pkg.go.dev/github.com/sergi/go-diff/diffmatchpatch) -- v1.4.0, 2554 importers (HIGH confidence)
-- [Anthropic token counting docs](https://platform.claude.com/docs/en/build-with-claude/token-counting) -- Claude uses BPE with ~70% cl100k overlap (MEDIUM confidence)
-- [aider repomap.py reference](borrow/aider/aider/repomap.py) -- PageRank with personalization, SQLite tag cache (HIGH confidence, local code)
-- [aider search_replace.py reference](borrow/aider/aider/coders/search_replace.py) -- diff-match-patch fuzzy matching strategies (HIGH confidence, local code)
-- [alixaxel/pagerank](https://pkg.go.dev/github.com/alixaxel/pagerank) -- weighted but no personalization, last updated 2020 (HIGH confidence)
+- [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks) -- Official hooks API with 26 lifecycle events, handler types, matcher patterns
+- [VS Code MCP Configuration Reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration) -- mcp.json schema
+- [VS Code MCP Server Setup](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) -- .vscode/mcp.json format
+- [JetBrains AI Assistant MCP](https://www.jetbrains.com/help/ai-assistant/configure-an-mcp-server.html) -- MCP config docs
+- [Junie MCP Configuration](https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html) -- .junie/mcp/mcp.json paths
+- [go-enry/go-enry](https://github.com/go-enry/go-enry) -- Evaluated and rejected (existing langregistry sufficient)

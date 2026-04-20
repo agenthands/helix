@@ -1,368 +1,374 @@
 # Architecture Patterns
 
-**Domain:** Context Intelligence & Resilient Editing for Go MCP Code Intelligence Platform
-**Researched:** 2026-04-15
+**Domain:** Developer Experience & Auto-Setup for MCP Code Intelligence Platform
+**Researched:** 2026-04-20
 
 ## Recommended Architecture
 
-Two new subsystems integrate into the existing 4-layer architecture as **kernel-level components** (Layer 1), not skills (Layer 2). Both operate on the same data (source files, tree-sitter ASTs) and share the same lifecycle as existing kernel packages.
+The v1.7 DX features map cleanly onto the existing 4-layer architecture. No new layers needed. Each feature is either a new component in an existing layer or a modification to an existing component.
+
+### Integration Map
 
 ```
-Daemon Bootstrap
-  |
-  +-- Kernel
-  |     +-- lspool/         (existing - worker pool)
-  |     +-- symbols/        (existing - 9 retrieval tools)
-  |     +-- edit/           (existing - 6 edit tools, MODIFIED for fuzzy fallback)
-  |     +-- fileops/        (existing - 6 file tools, MODIFIED for fuzzy replace)
-  |     +-- diag/           (existing - 3 diagnostic tools)
-  |     +-- repomap/        (NEW - tag extraction, PageRank graph, map rendering)
-  |     +-- fuzzy/          (NEW - whitespace-normalized matching, DMP patching)
-  |     +-- tagcache/       (NEW - SQLite tag cache with mtime invalidation)
-  |     +-- tagger/         (NEW - tree-sitter tag queries, embedded .scm files)
-  |
-  +-- Skills (unchanged - memory, workflow, profile adapters)
+Layer 0 (MCP Runtime)
+  internal/mcp/server.go       -- MODIFY: lazy init interceptor, smart error wrapper
+  internal/mcp/middleware.go    -- MODIFY: add ErrorEnrichmentMiddleware
+  internal/mcp/registry.go     -- MODIFY: progressive description support
+
+Layer 0 (CLI)
+  internal/cli/root.go         -- MODIFY: register setup subcommand
+  internal/cli/setup.go        -- NEW: setup command orchestrator
+  internal/cli/hooks.go        -- NEW: client hook generation/installation
+
+Layer 1 (Kernel)
+  internal/kernel/workspace.go -- MODIFY: expose health state (active LSes, indexing status)
+
+Layer 2 (Skills)
+  internal/skill/health/       -- NEW: health/status MCP tool skill
+
+Layer 3 (Profiles)
+  internal/profile/profiles/   -- MODIFY: hook templates per client, progressive descriptions
+  internal/profile/hooks/      -- NEW: hook spec + generator per client type
 ```
 
 ### Component Boundaries
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `internal/kernel/tagger/` | Tree-sitter tag extraction (def/ref) using embedded .scm queries. Language-agnostic query runner. | tagcache (writes tags), repomap (provides tags) |
-| `internal/kernel/tagcache/` | SQLite cache for per-file tags with mtime-based invalidation. Separate DB from memory index. | tagger (stores results), repomap (reads cached tags) |
-| `internal/kernel/repomap/` | PageRank graph construction, ranking, token-budgeted map rendering. Two MCP tools. | tagger, tagcache, lspool (optional LSP enrichment) |
-| `internal/kernel/fuzzy/` | Whitespace-normalized matching, diff-match-patch fuzzy application. Pure functions, no state. | edit (called as fallback), fileops (called as fallback) |
+| Component | Responsibility | Communicates With | New/Modified |
+|-----------|---------------|-------------------|--------------|
+| `internal/cli/setup.go` | Orchestrates `serena setup <client>`: detect languages, install LSes, write MCP config, install hooks | langregistry, installer, profile, hooks | NEW |
+| `internal/cli/hooks.go` | Generate and install client-specific hook files (Claude Code, VS Code, JetBrains) | profile/hooks, filesystem | NEW |
+| `internal/profile/hooks/` | Hook templates and specs per client type (PreToolUse, SessionStart, Stop) | profile store | NEW |
+| `internal/skill/health/` | `get_health` MCP tool: active LSes, indexing state, workspace capabilities | kernel (Pool, WorkspaceRuntime), langregistry | NEW |
+| `internal/mcp/lazyinit.go` | Middleware that triggers workspace activation on first tool call if no workspace active | daemon's ActivateCallback, workspace.Registry | NEW |
+| `internal/mcp/smarterror.go` | ErrorEnrichmentMiddleware: intercepts tool errors, adds suggestions | errors package (Kind-based matching), tool registry (for name similarity) | NEW |
+| `internal/mcp/registry.go` | Extended ToolDef with progressive description tiers | existing registry | MODIFIED |
 
 ### Data Flow
 
-#### RepoMap Data Flow
-
+**Setup CLI flow:**
 ```
-1. Tool invocation (get_repo_map / get_context)
-2. repomap.Builder collects file list from workspace root
-3. For each file:
-   a. tagcache.Get(path) -- check mtime, return cached if fresh
-   b. On cache miss: tagger.Extract(path, lang) -- tree-sitter parse + query
-   c. tagcache.Put(path, mtime, tags) -- persist
-4. Build MultiDiGraph: files as nodes, def->ref edges with weights
-5. Run PageRank with personalization (chat files, mentioned idents)
-6. Render ranked tags into token-budgeted tree output
-7. Return as MCP tool result
+serena setup claude-code
+  |
+  +--> langregistry.NewRegistry() -- detect languages in cwd
+  +--> installer.Resolve() per detected language -- pre-install LSes
+  +--> profile/hooks.Generate("claude-code") -- emit hook files
+  +--> write MCP config JSON to client's config location
+  +--> print summary: languages detected, LSes installed, hooks written
 ```
 
-#### Fuzzy Edit Data Flow
-
+**Lazy init flow (first tool call without activate_project):**
 ```
-1. Existing tool invoked (replace_symbol_body, replace_content)
-2. Exact match attempted first (current behavior)
-3. On exact match failure:
-   a. fuzzy.NormalizeWhitespace(search, original)
-   b. Attempt normalized exact match
-   c. On failure: fuzzy.DiffMatchPatch(search, replace, original)
-   d. Return result with strategy annotation ("exact" | "normalized" | "fuzzy")
-4. Standalone fuzzy_edit tool: always runs full fuzzy pipeline
-```
-
-## Integration Decisions
-
-### Q1: Where does the tag/symbol cache live?
-
-**Decision: New separate SQLite database, NOT the existing memory DB.**
-
-Rationale:
-- The memory DB (`internal/memory/`) stores user-authored markdown with FTS5 search. Its schema, lifecycle, and watcher are designed for human-written content.
-- The tag cache stores machine-generated data (tree-sitter tag extractions) that is fully rebuildable from source. Different schema: `(file_path, mtime, language, tags_blob)` vs memory's `(name, scope, topic, content, ...)`.
-- Separate DBs means the tag cache can be blown away without affecting user memories.
-- The memory DB uses `modernc.org/sqlite` (CGO-free) -- reuse the same driver, different file.
-- Cache location: `{workspace_root}/.serena/tags.db` (project-scoped, gitignored).
-
-Schema:
-```sql
-CREATE TABLE tags (
-    file_path TEXT PRIMARY KEY,
-    mtime     REAL NOT NULL,
-    language  TEXT NOT NULL,
-    tags      BLOB NOT NULL  -- gob-encoded []Tag
-);
-CREATE INDEX idx_tags_mtime ON tags(mtime);
+Agent calls any kernel tool (e.g., get_symbols_overview)
+  |
+  +--> LazyInitMiddleware intercepts (receiving middleware on tools/call)
+  |    Check: is workspace active? (activeWSKey.RepoRoot != "")
+  |    NO  --> infer repo root from tool args or cwd
+  |            call daemon's ActivateCallback(ctx, inferredRoot)
+  |            proceed to actual tool handler
+  |    YES --> pass through
 ```
 
-Follow the same patterns as `internal/memory/index.go`: WAL mode, busy_timeout, mutex-protected access.
+**Health tool flow:**
+```
+Agent calls get_health
+  |
+  +--> health skill queries kernel.Pool().Stats()
+  +--> health skill queries kernel active WorkspaceRuntime
+  +--> health skill queries langregistry for capabilities
+  +--> returns structured JSON: {active_ls: [...], indexing: bool, languages: [...], capabilities: {...}}
+```
 
-### Q2: How does the PageRank graph interact with the LSP worker pool?
+**Smart error flow:**
+```
+Tool handler returns *serr.Error
+  |
+  +--> ErrorEnrichmentMiddleware (receiving middleware, runs after tool handler)
+  |    Match error Kind:
+  |    - InvalidArgs --> suggest correct param names/types from tool schema
+  |    - NotFound    --> suggest similar tool names or check workspace activation
+  |    - NoWorkspace --> suggest "call activate_project first" or trigger lazy init
+  |    - Unsupported --> explain which languages/capabilities support the operation
+  |    Append suggestion to error text field in CallToolResult
+```
 
-**Decision: Tree-sitter first, LSP enrichment optional and lazy.**
+**Progressive descriptions flow:**
+```
+Agent calls tools/list
+  |
+  +--> ProfileFilterMiddleware filters tools as today
+  +--> DescriptionMiddleware (or registry enhancement):
+  |    For each tool, select description tier based on session state:
+  |    - Tier 0 (cold start): full description with usage examples
+  |    - Tier 1 (after first successful call): compact description
+  |    Tier selection from session call counter or explicit mode
+```
 
-The PageRank graph is built entirely from tree-sitter tags (definitions and references), NOT from LSP. This is critical because:
+## Detailed Design Per Feature
 
-1. **LSP workers are expensive.** The pool has adaptive TTL, circuit breaking, and pressure eviction. Scanning hundreds of files through LSP would flood the pool.
-2. **Tree-sitter is fast and stateless.** Parsing a file takes microseconds, no server startup, no initialization handshake.
-3. **Aider's repomap.py does exactly this.** It uses tree-sitter queries for all tag extraction, with pygments as a fallback for languages where tree-sitter only provides defs (not refs). No LSP involvement.
+### 1. Setup CLI (`internal/cli/setup.go`)
 
-The LSP pool interaction is limited to:
-- **Optional hover enrichment:** When rendering the map, if an LSP worker is already warm (clean lease available without spin-up), we can enrich symbol entries with type signatures from `textDocument/hover`. This is a quality-of-life improvement, not a requirement.
-- **The existing `symbols/overview.go` tool** provides LSP-based symbol listing. RepoMap complements it with cross-file importance ranking, not replaces it.
+**What:** New cobra subcommand `serena setup <client>` breaking the current "flat CLI with flags, no subcommands" pattern (D-02). This is intentional -- setup is a one-time user-facing operation distinct from the daemon runtime.
 
-Implementation: `repomap.Builder` takes `*lspool.Pool` as an optional dependency. If nil or if lease acquisition fails/times out (100ms deadline), skip enrichment silently.
+**Integration points:**
+- Reuses `langregistry.NewRegistry()` for language detection (same as daemon.New step 1)
+- Reuses `langregistry.NewInstaller()` for LS pre-installation (same as daemon.New step 2)
+- Reads `profile.ProfileStore` to know which hooks a client needs
+- Writes to client-specific config locations (e.g., `~/.claude/claude_desktop_config.json` for Claude Code)
 
-### Q3: Should tree-sitter queries (.scm files) be embedded or external?
+**Decision: subcommand vs flag.** Setup is not a daemon mode -- it runs once and exits. A subcommand is the right pattern. Add `rootCmd.AddCommand(setupCmd)` in root.go.
 
-**Decision: Embedded via `//go:embed`, with runtime override path.**
+**Supported clients (initial):**
+- `claude-code` -- write to MCP settings, install hooks in `~/.claude/`
+- `vscode` -- write to VS Code settings.json MCP section
+- `cursor` -- same as vscode but different settings path
 
-Rationale:
-- Aider ships ~58 `.scm` query files across two directories (31 in tree-sitter-language-pack, 27 in tree-sitter-languages). These are the authoritative tag queries for each language.
-- Embedding via `//go:embed` is the Go-native approach (used for the language registry YAML).
-- Keeps single-binary distribution constraint satisfied.
-- Runtime override: if `{workspace_root}/.serena/queries/{lang}-tags.scm` exists, use it instead. Allows users to customize tag extraction without rebuilding.
-
-The existing `internal/kernel/edit/queries/` directory has 4 `.scm` files for body extraction (different purpose: `@name` + `@body` captures). The tag queries use different capture names (`@name.definition.function`, `@name.reference.call`, etc.). These are separate query sets serving different purposes:
-
-| Query Set | Location | Captures | Purpose |
-|-----------|----------|----------|---------|
-| Body extraction | `internal/kernel/edit/queries/` | `@name`, `@body` | Precise byte-range for body surgery |
-| Tag extraction | `internal/kernel/tagger/queries/` | `@name.definition.*`, `@name.reference.*` | Def/ref identification for graph |
-
-Port the aider `.scm` files from `borrow/aider/aider/queries/tree-sitter-language-pack/` into `internal/kernel/tagger/queries/`. Start with the 4 languages that have tree-sitter grammars compiled in (Go, Python, TypeScript, Rust), expand later.
-
-### Q4: Where does the fuzzy edit logic sit?
-
-**Decision: New `internal/kernel/fuzzy/` package, consumed by both `edit/` and `fileops/`.**
-
-Rationale:
-- The fuzzy matching logic is **pure functions** operating on strings. No state, no LSP, no file I/O.
-- Both `edit/replace.go` (symbol body replacement) and `fileops/replace.go` (content replacement) need fuzzy fallback.
-- Putting it in `edit/` would force `fileops/` to import `edit/` (wrong dependency direction).
-- Putting it in `fileops/` would force `edit/` to import `fileops/` (wrong dependency direction).
-- A shared `fuzzy/` package at the kernel level is the clean solution.
-
-The `fuzzy/` package provides:
 ```go
-package fuzzy
-
-// MatchResult describes how a match was found.
-type MatchResult struct {
-    Strategy   string  // "exact", "normalized", "fuzzy"
-    NewText    string  // the result after applying replacement
-    Confidence float64 // 0.0-1.0, from DMP match quality
-}
-
-// NormalizeAndMatch attempts whitespace-normalized exact match.
-func NormalizeAndMatch(search, original string) (start, end int, ok bool)
-
-// FuzzyReplace applies search->replace transformation to original using DMP.
-func FuzzyReplace(search, replace, original string) (*MatchResult, error)
-
-// FlexibleReplace tries exact, then normalized, then DMP fuzzy matching.
-// This is the main entry point for both edit/ and fileops/.
-func FlexibleReplace(search, replace, original string) (*MatchResult, error)
-```
-
-Integration points:
-- `edit/replace.go` `ReplaceBodyWithPlan()`: After tree-sitter body extraction, if the new body doesn't compile, try fuzzy matching the old body against what tree-sitter found.
-- `fileops/replace.go` `ReplaceInFile()`: When exact match returns 0 hits, fall back to `fuzzy.FlexibleReplace()`.
-- New standalone MCP tool `fuzzy_edit` registered in `edit/tools.go` (or its own file in `edit/`).
-
-### Q5: How to handle cache invalidation?
-
-**Decision: Mtime-based invalidation (like aider), NOT file watcher.**
-
-Rationale:
-- Aider's `repomap.py` uses `os.path.getmtime()` -- check mtime on cache read, re-extract on mismatch. Simple, correct, no daemon overhead.
-- The memory system uses fsnotify watcher because memories are edited infrequently and the index must be immediately consistent for search. Tags are different: they are queried in batch (hundreds of files per repomap call), and staleness of a few seconds is acceptable.
-- File watchers for the entire source tree would be expensive (inotify/kqueue limits, especially on large repos).
-- The mtime approach is lazy: only re-extract files that are actually queried AND have changed.
-- Matches the existing pattern in `edit/treesitter.go` where tree-sitter parses are done on-demand per file, not cached.
-
-Implementation in `tagcache/`:
-```go
-func (c *Cache) Get(filePath string) ([]Tag, bool) {
-    mtime := getMtime(filePath)
-    cached := c.lookup(filePath)
-    if cached != nil && cached.Mtime == mtime {
-        return cached.Tags, true  // cache hit
-    }
-    return nil, false  // cache miss, caller should re-extract
+// internal/cli/setup.go
+type SetupConfig struct {
+    Client      string   // "claude-code", "vscode", "cursor"
+    ProjectDir  string   // defaults to cwd
+    Languages   []string // auto-detected if empty
+    SkipInstall bool     // skip LS pre-installation
+    SkipHooks   bool     // skip hook installation
 }
 ```
 
-The SQLite cache persists across daemon restarts. On cold start, the first repomap call re-validates mtimes but avoids re-parsing unchanged files. This is the same warm-cache benefit the LSP worker pool provides.
+### 2. Lazy Workspace Init (`internal/mcp/lazyinit.go`)
+
+**What:** Receiving middleware that auto-activates workspace on first kernel tool call.
+
+**Why middleware, not per-tool logic:** Every kernel tool already checks `NoWorkspace` and returns an error. Intercepting at the middleware level avoids modifying 24+ tool handlers. The middleware runs before the tool handler, checks workspace state, and activates if needed.
+
+**Integration points:**
+- Needs access to `activeWSKey` (or a func that returns it) -- same pattern as `wsKeyFn` in daemon.go
+- Needs access to `ActivateCallback` -- already exposed on SerenaMCPServer
+- Needs to infer repo root: check tool args for `relative_path`, fall back to cwd detection
+
+**Key design decision:** The middleware must be idempotent and fast. After first activation, it becomes a no-op check (single atomic load). Use `sync.Once` or atomic bool.
+
+```go
+// internal/mcp/lazyinit.go
+func LazyInitMiddleware(
+    isActive func() bool,
+    activate func(ctx context.Context, root string) error,
+    inferRoot func(args map[string]any) string,
+) mcpsdk.ReceivingMiddleware
+```
+
+**Wiring in daemon.go:** Install after profile middleware, before telemetry.
+
+### 3. Client Hooks (`internal/profile/hooks/`)
+
+**What:** Hook templates that clients execute at lifecycle events.
+
+**Claude Code hooks:**
+- `PreToolUse` -- remind agent of workspace context, suggest activate_project if not active
+- `SessionStart` -- activate workspace, run health check
+- `Stop` -- cleanup (deactivate workspace, flush memory)
+
+**Format:** Claude Code uses hook files. VS Code uses tasks.json. JetBrains uses run configurations.
+
+**Integration points:**
+- Hook templates live in `internal/profile/hooks/` as embedded Go templates
+- `setup.go` calls hook generator to produce client-specific files
+- Templates reference Serena tool names (e.g., `activate_project`, `get_health`)
+
+```go
+// internal/profile/hooks/hooks.go
+type HookSpec struct {
+    Event   string // "pre_tool_use", "session_start", "stop"
+    Client  string // "claude-code", "vscode"
+    Content string // rendered template
+    Path    string // where to write
+}
+
+func GenerateHooks(client string, projectDir string) ([]HookSpec, error)
+```
+
+### 4. Health/Status MCP Tool (`internal/skill/health/`)
+
+**What:** New `get_health` MCP tool as a skill (Caddy-style init registration).
+
+**Why skill, not kernel tool:** Health is cross-cutting -- it reports on kernel state, LS pool, workspace, and language capabilities. It does not need direct LS communication. Skill is the right abstraction.
+
+**Integration points:**
+- Needs read access to `kernel.Pool().Stats()` -- Pool already has Stats() or similar
+- Needs read access to workspace runtime languages
+- Needs langregistry for capability reporting
+- SkillDeps needs extension: add `KernelHealthProvider` interface to avoid importing kernel directly
+
+**Design: dependency injection via interface.**
+
+```go
+// internal/skill/health/health.go
+type KernelHealth interface {
+    ActiveWorkers() []WorkerInfo
+    IsIndexing() bool
+    WorkspaceLanguages() []string
+    WorkspaceRoot() string
+}
+
+// Skill implements skill.Skill + skill.ToolProvider
+type HealthSkill struct {
+    health KernelHealth
+}
+```
+
+**Wiring:** Use a setter pattern like `repomap.SetWorkspaceRoot()`. After daemon creates kernel, call `health.SetKernelHealth(adapter)` where adapter wraps kernel.Pool and workspace state.
+
+### 5. Smart Error Responses (`internal/mcp/smarterror.go`)
+
+**What:** Post-execution error enrichment in middleware.
+
+**Why middleware:** Errors already flow through TelemetryMiddleware which classifies by Kind. Adding suggestion text is a natural extension of the same pipeline.
+
+**Recommendation: separate middleware.** Keeps concerns clean. TelemetryMiddleware records metrics; ErrorEnrichmentMiddleware adds user-facing suggestions.
+
+**Integration points:**
+- Reads `*serr.Error` Kind from tool results (already available -- v1.5 migrated all tools)
+- Reads tool schema from registry for InvalidArgs suggestions
+- Reads tool names from registry for "did you mean?" on NotFound
+
+**Suggestion rules:**
+
+| Error Kind | Suggestion |
+|------------|-----------|
+| `NoWorkspace` | "Call activate_project with your repo path first, or use `serena setup` for automatic configuration." |
+| `InvalidArgs` | "Parameter '{param}' expects {type}. See tool schema." + list valid params |
+| `NotFound` | "Symbol '{name}' not found. Check spelling, or use search_symbols for fuzzy matching." |
+| `Unsupported` | "Operation not supported for {language}. Supported: {list}." |
+| `CircuitOpen` | "Language server for {lang} is temporarily unavailable. It will retry automatically." |
+
+### 6. Progressive Tool Descriptions (`internal/mcp/registry.go` modification)
+
+**What:** Tool descriptions that adapt based on session state.
+
+**Recommendation: Two tiers -- detailed and compact.** Keep it simple. Two description fields: `Description` (compact, always present) and `DetailedDescription` (verbose, shown to cold sessions). Session tracks tool call count; after N successful calls, tools/list returns compact descriptions.
+
+**Integration points:**
+- Modify `ToolDef` in `internal/mcp/registry.go` to add `DetailedDescription`
+- Modify `ProfileFilterMiddleware` (it already touches tools/list) to swap descriptions based on session state
+- Session state: add `ToolCallCount` to `SessionInfo` in `internal/mcp/session.go`
+
+### 7. Error-Only Reporting
+
+**What:** Suppress verbose success output, surface only actionable failures.
+
+**This is not a new component.** It is a policy change in existing tool handlers. Each tool's success response should return structured data without verbose explanatory text. Error responses should include actionable guidance (handled by smart error middleware above).
+
+**Implementation:** Audit existing tool response strings. Remove "Success: " prefixes and explanatory padding. Return clean structured data. This is a refactoring task across tool handlers, not an architecture change.
 
 ## Patterns to Follow
 
-### Pattern 1: Kernel Tool Registration (existing pattern)
+### Pattern 1: Middleware for Cross-Cutting Concerns
+**What:** Use MCP SDK receiving middleware for lazy init, error enrichment, and description adaptation.
+**When:** Feature needs to intercept all tool calls or tools/list without modifying individual tool handlers.
+**Why:** Serena already uses this pattern for telemetry and profile filtering. Adding more middleware is low-risk and consistent.
 
-New repomap tools follow the exact same pattern as `symbols/tools.go` and `edit/tools.go`:
+### Pattern 2: Skill for New MCP Tools
+**What:** New MCP tools (health) register as skills via Caddy-style init().
+**When:** The tool does not need direct LS communication and can work through interfaces.
+**Why:** Consistent with memory, workflow, repomap skills. Daemon registers centrally.
 
-```go
-// internal/kernel/repomap/tools.go
-func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, builder *Builder, wsKeyFn func() workspace.WorkspaceKey) {
-    tracer := k.Tracer()
-    registerGetRepoMap(server, builder, wsKeyFn, tracer)
-    registerGetContext(server, builder, wsKeyFn, tracer)
-}
-```
+### Pattern 3: Interface-Based Dependency Injection for Skills
+**What:** Skills depend on kernel state through narrow interfaces, not direct kernel imports.
+**When:** Skill needs kernel data (pool stats, workspace state) but should not import kernel package.
+**Why:** Avoids import cycles. RepoMap skill already uses setter pattern with FallbackDeps.
 
-Registered in daemon bootstrap alongside existing kernel tools:
-```go
-// daemon.go step 10
-repomap.RegisterTools(mcpServer, k, repoBuilder, wsKeyFn)
-```
-
-### Pattern 2: Gob-Encoded Cache Values
-
-Tags are serialized as gob-encoded blobs in SQLite, not as individual rows. This keeps the schema simple and avoids N*M row explosion (N files * M tags per file). The cache is an opaque key-value store, not a queryable index.
-
-### Pattern 3: Tiered Matching Strategy
-
-Both aider's `search_replace.py` and our `fuzzy/` package use a strategy cascade:
-1. Exact string match (fastest, highest confidence)
-2. Whitespace-normalized match (handles indentation drift)
-3. DMP fuzzy match (handles LLM output drift)
-
-Each strategy is tried in order; first success wins. The result reports which strategy succeeded for transparency.
-
-Aider's approach in `flexible_search_and_replace` iterates strategy/preprocessing combinations. We simplify: no git cherry-pick (too heavy, requires git), no relative indent preprocessing initially. Just exact -> normalized -> DMP.
-
-### Pattern 4: Token Budget Binary Search
-
-Aider's `get_ranked_tags_map_uncached` uses binary search to fit the map within `max_map_tokens`. Start with an estimate (`max_map_tokens // 25` tags), render, count tokens, adjust bounds. Replicate this approach.
-
-For token counting without a model dependency, use the 4-chars-per-token heuristic (`len(text) / 4`). This is sufficient for budget fitting.
-
-### Pattern 5: Skill Adapter for Profile Filtering
-
-RepoMap tools need to participate in profile/mode filtering. Follow the existing kernel-tool-as-skill-adapter pattern (like `edit/skill.go`, `symbols/skill.go`):
-
-```go
-// internal/kernel/repomap/skill.go
-func init() {
-    skill.Register(&repomapSkill{})
-}
-
-type repomapSkill struct{}
-
-func (s *repomapSkill) Name() string        { return "repomap" }
-func (s *repomapSkill) Description() string  { return "Repository map and context selection" }
-func (s *repomapSkill) Init(deps skill.SkillDeps) error { return nil }
-func (s *repomapSkill) Tools() []*mcp.ToolDef {
-    return []*mcp.ToolDef{
-        {Name: "get_repo_map", Description: "..."},
-        {Name: "get_context", Description: "..."},
-    }
-}
-```
+### Pattern 4: Cobra Subcommand for User-Facing CLI
+**What:** `serena setup` as a subcommand, breaking D-02 flat CLI for good reason.
+**When:** One-time user operations that are not daemon modes.
+**Why:** Setup is fundamentally different from runtime -- it configures the environment and exits. Flags would be confusing.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: LSP-First Tag Extraction
+### Anti-Pattern 1: Per-Tool Lazy Init Checks
+**What:** Adding `if !workspaceActive { activate() }` to each of 24+ kernel tool handlers.
+**Why bad:** Duplicated logic, easy to miss tools, inconsistent behavior.
+**Instead:** Single middleware intercept point.
 
-**What:** Using the LSP worker pool to extract tags for every file in the repo.
-**Why bad:** LSP workers are heavyweight (server process, initialization, memory). Scanning 500 files would require 500 `textDocument/documentSymbol` calls, potentially spinning up and killing workers. Aider explicitly avoids this.
-**Instead:** Tree-sitter-first for tags. LSP only for enrichment on already-warm workers.
+### Anti-Pattern 2: Health Tool in Kernel Package
+**What:** Putting get_health as a kernel tool alongside symbol/edit/fileops tools.
+**Why bad:** Health is cross-cutting, not an LSP operation. Kernel tools all go through LS workers.
+**Instead:** Skill with interface-based access to kernel state.
 
-### Anti-Pattern 2: Shared Database with Memory System
+### Anti-Pattern 3: Hardcoded Client Paths
+**What:** Embedding client config paths (e.g., `~/.claude/`) directly in setup logic.
+**Why bad:** Paths change between OS and client versions.
+**Instead:** Client spec structs with configurable paths, OS-aware defaults.
 
-**What:** Adding tag tables to the existing `internal/memory/` SQLite DB.
-**Why bad:** Different lifecycles (user content vs machine cache), different invalidation strategies (watcher vs mtime), different schemas. Coupling them means tag cache corruption could lose user memories.
-**Instead:** Separate SQLite file per workspace, rebuildable from source.
+### Anti-Pattern 4: Over-Engineering Progressive Descriptions
+**What:** Complex ML-driven description adaptation, per-agent learning, or multi-tier cascades.
+**Why bad:** Two tiers (verbose/compact) cover 95% of the value. More complexity means more bugs.
+**Instead:** Two tiers, simple session call counter threshold.
 
-### Anti-Pattern 3: File Watcher for Tag Cache
+## New vs Modified Components
 
-**What:** Using fsnotify to watch the entire source tree and invalidate tags on change.
-**Why bad:** inotify/kqueue limits (default 8192 on Linux), high overhead on large repos, race conditions with rapid saves, and the daemon already watches memory dirs. Adding another watcher for potentially thousands of source files is expensive.
-**Instead:** Mtime-based lazy invalidation on cache read.
+### New Components (create from scratch)
 
-### Anti-Pattern 4: Fuzzy Logic in Edit Tool Handlers
+| Component | Package | Layer | LOC Estimate | Dependencies |
+|-----------|---------|-------|-------------|-------------|
+| Setup CLI command | `internal/cli/setup.go` | 0 | 200-300 | langregistry, installer, profile/hooks |
+| Hook generator | `internal/cli/hooks.go` | 0 | 150-200 | profile/hooks |
+| Hook specs/templates | `internal/profile/hooks/` | 3 | 200-250 | embed, text/template |
+| Health skill | `internal/skill/health/` | 2 | 150-200 | skill interface, KernelHealth interface |
+| Lazy init middleware | `internal/mcp/lazyinit.go` | 0 | 80-120 | mcp sdk, workspace state |
+| Error enrichment middleware | `internal/mcp/smarterror.go` | 0 | 150-200 | errors package, tool registry |
 
-**What:** Inlining fuzzy matching logic directly in `edit/tools.go` handlers.
-**Why bad:** Creates code duplication when `fileops/replace.go` needs the same logic. Makes the fuzzy logic untestable in isolation. Mixes concerns.
-**Instead:** `fuzzy/` package with pure functions, consumed by both `edit/` and `fileops/`.
+### Modified Components
 
-### Anti-Pattern 5: Full Graph Library Dependency
+| Component | Change | Scope |
+|-----------|--------|-------|
+| `internal/cli/root.go` | Add setup subcommand | Small (5-10 lines) |
+| `internal/mcp/registry.go` | Add DetailedDescription to ToolDef | Small (10-20 lines) |
+| `internal/mcp/session.go` | Add ToolCallCount to SessionInfo | Small (5-10 lines) |
+| `internal/mcp/middleware.go` | Wire new middleware in InstallMiddleware | Small (10-15 lines) |
+| `internal/daemon/daemon.go` | Wire health skill deps, lazy init, setup imports | Medium (30-50 lines) |
+| `internal/daemon/imports.go` | Blank import for health skill | Trivial (1 line) |
+| `internal/skill/skill.go` | Extend SkillDeps with KernelHealthProvider | Small (5-10 lines) |
+| `internal/kernel/lspool/` | Expose pool stats if not already public | Small (20-30 lines) |
+| Tool handlers (scattered) | Trim verbose success messages for error-only reporting | Medium (audit 41+ tools) |
 
-**What:** Using a full graph library (Go equivalent of networkx) for PageRank.
-**Why bad:** The RepoMap graph is a simple weighted MultiDiGraph with one algorithm (PageRank). A full graph library adds dependency weight for no benefit. Aider uses networkx because it is Python-standard; in Go there is no equivalent standard.
-**Instead:** Use `github.com/alixaxel/pagerank` (weighted PageRank, ~200 LOC, zero deps) or implement PageRank directly (~50 LOC). The graph construction is specific to our tag data structures anyway.
+## Suggested Build Order
 
-### Anti-Pattern 6: Git-Based Fuzzy Editing
+Based on dependency analysis:
 
-**What:** Porting aider's `git_cherry_pick_osr_onto_o` strategy that creates temporary git repos.
-**Why bad:** Requires git binary, creates temp directories, extremely slow per operation (~100ms+). Aider uses it as a last resort. For an MCP tool called in tight loops, this is unacceptable.
-**Instead:** DMP-only fuzzy matching. If DMP fails, report failure and let the agent retry with better input.
+1. **Progressive descriptions + error-only reporting** -- Lowest risk. Modify existing ToolDef and tool handlers. No new packages. Tests: update golden files for profile contracts.
 
-## New Dependencies
+2. **Smart error middleware** -- Depends only on existing error kinds and tool registry. Self-contained new file. Tests: unit test middleware with mock tool results.
 
-| Package | Version | Purpose | Why This One |
-|---------|---------|---------|-------------|
-| `github.com/alixaxel/pagerank` | latest | Weighted PageRank computation | Minimal, zero-dep, weighted edges, ~200 LOC |
-| `github.com/sergi/go-diff` | v1.3+ | diff-match-patch for fuzzy editing | Go port of Google's DMP, MIT licensed, mature |
-| `modernc.org/sqlite` | (existing) | Tag cache DB | Already in go.mod for memory FTS5 |
-| `github.com/tree-sitter/go-tree-sitter` | (existing) | Tag extraction parser | Already in go.mod for body extraction |
+3. **Lazy init middleware** -- Depends on workspace activation callback (already exists). Self-contained. Tests: unit test with mock workspace state.
 
-No new tree-sitter grammar bindings needed initially -- Go, Python, TypeScript, Rust are already compiled in. Additional grammars can be added incrementally.
+4. **Health skill** -- Needs KernelHealth interface definition and pool stats exposure. New skill package. Tests: unit test skill with mock health provider.
 
-## New Files and Modified Files
+5. **Hook specs and templates** -- New package, no runtime dependencies. Pure template generation. Tests: render templates, verify output.
 
-### New Packages
+6. **Setup CLI** -- Depends on all above components being available. Orchestrates langregistry, installer, hooks. Tests: integration test with temp directories.
 
-| Package | Files | Purpose |
-|---------|-------|---------|
-| `internal/kernel/tagger/` | `tagger.go`, `queries.go`, `tagger_test.go` | Tag extraction with embedded .scm queries |
-| `internal/kernel/tagger/queries/` | `go-tags.scm`, `python-tags.scm`, `typescript-tags.scm`, `rust-tags.scm` | Embedded tree-sitter tag queries (ported from aider) |
-| `internal/kernel/tagcache/` | `cache.go`, `schema.go`, `cache_test.go` | SQLite tag cache with mtime invalidation |
-| `internal/kernel/repomap/` | `builder.go`, `graph.go`, `render.go`, `tools.go`, `skill.go`, `repomap_test.go` | PageRank graph, map rendering, MCP tools |
-| `internal/kernel/fuzzy/` | `match.go`, `dmp.go`, `normalize.go`, `fuzzy_test.go` | Fuzzy matching strategies, DMP wrapper |
-
-### Modified Files
-
-| File | Change |
-|------|--------|
-| `internal/kernel/edit/replace.go` | Add fuzzy fallback in `ReplaceBodyWithPlan()` when exact match fails |
-| `internal/kernel/edit/tools.go` | Add `fuzzy_edit` standalone tool registration |
-| `internal/kernel/fileops/replace.go` | Add fuzzy fallback in `ReplaceInFile()` when exact match returns 0 |
-| `internal/daemon/daemon.go` | Wire tagcache, tagger, repomap builder; register repomap tools (after step 10) |
-| `internal/daemon/imports.go` | Add blank import for repomap skill adapter |
-| `go.mod` / `go.sum` | Add `alixaxel/pagerank`, `sergi/go-diff` |
-
-## Build Order (Dependency-Driven)
-
-```
-Phase 1: Foundation (no deps on each other)
-  1a. internal/kernel/fuzzy/       -- pure functions, testable in isolation
-  1b. internal/kernel/tagger/      -- tree-sitter queries, needs only go-tree-sitter (existing)
-
-Phase 2: Cache (depends on tagger types)
-  2.  internal/kernel/tagcache/    -- SQLite cache, depends on tagger.Tag type
-
-Phase 3: RepoMap (depends on tagger, tagcache)
-  3.  internal/kernel/repomap/     -- graph + ranking + rendering + MCP tools
-
-Phase 4: Integration (depends on fuzzy, repomap)
-  4a. Modify edit/replace.go       -- fuzzy fallback
-  4b. Modify fileops/replace.go    -- fuzzy fallback
-  4c. Add fuzzy_edit MCP tool      -- standalone tool
-  4d. Wire daemon bootstrap        -- tagcache, repomap builder
-```
+**Rationale:** Items 1-3 are modifications/middleware with minimal blast radius. Items 4-5 are new packages with clear interfaces. Item 6 ties everything together last, reducing integration risk.
 
 ## Scalability Considerations
 
-| Concern | At 100 files | At 10K files | At 100K files |
-|---------|-------------|-------------|--------------|
-| Tag extraction | <100ms, all in memory | 1-5s first scan, cached after | 10-30s first scan, SQLite cache critical |
-| PageRank | <10ms, trivial graph | 100-500ms, acceptable | 1-5s, may need graph pruning |
-| Tag cache DB size | <1MB | 10-50MB | 100-500MB, consider VACUUM schedule |
-| Token budget rendering | Instant | Binary search 5-10 iterations | Same, binary search is O(log n) |
-| Fuzzy DMP matching | <1ms per match | N/A (per-file, not per-repo) | N/A |
+| Concern | At 1 client | At 5 clients | At 20 clients |
+|---------|-------------|--------------|---------------|
+| Setup templates | Trivial | 5 client specs | Registry pattern, embed all |
+| Hook generation | Single file write | Multiple format outputs | Template engine, no perf concern |
+| Health queries | Single pool.Stats() call | Same (pool is shared) | Same |
+| Progressive descriptions | 41 tools x 2 tiers | Same | Same (descriptions are static strings) |
+| Error enrichment | Map lookup per error | Same | Same |
 
-For repos >50K files, consider:
-- Gitignore-aware file filtering (exclude `vendor/`, `node_modules/`, etc.)
-- Incremental graph updates (re-extract only changed files, rebuild graph)
-- Tag cache compaction on daemon startup
+No scalability concerns for v1.7 -- all features are bounded by the fixed tool count and operate per-request.
 
 ## Sources
 
-- [alixaxel/pagerank - Weighted PageRank in Go](https://github.com/alixaxel/pagerank) -- HIGH confidence (direct library)
-- [sergi/go-diff - Go port of diff-match-patch](https://github.com/sergi/go-diff) -- HIGH confidence (direct library)
-- Aider `repomap.py` (borrow/aider/aider/repomap.py) -- HIGH confidence (direct code read)
-- Aider `search_replace.py` (borrow/aider/aider/coders/search_replace.py) -- HIGH confidence (direct code read)
-- Existing codebase: `internal/kernel/edit/`, `internal/memory/`, `internal/skill/`, `internal/daemon/daemon.go` -- HIGH confidence (direct code read)
+- Existing codebase: `internal/daemon/daemon.go` (bootstrap wiring, middleware installation)
+- Existing codebase: `internal/mcp/middleware.go` (receiving middleware pattern)
+- Existing codebase: `internal/mcp/registry.go` (ToolDef structure)
+- Existing codebase: `internal/skill/skill.go` (Skill/ToolProvider interfaces)
+- Existing codebase: `internal/cli/root.go` (cobra command structure)
+- Existing codebase: `internal/errors/kinds.go` (7-kind error taxonomy)
+- Existing codebase: `internal/kernel/workspace.go` (language detection, workspace runtime)
+- Existing codebase: `internal/langregistry/installer.go` (three-tier LS resolution)
+- Existing codebase: `internal/skill/repomap/` (setter pattern for skill wiring)
+- Project: `.planning/PROJECT.md` (v1.7 requirements)
+- Confidence: HIGH -- all integration points verified against existing source code

@@ -3,6 +3,7 @@
 package repomap
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -39,6 +40,16 @@ type RepoMapSkill struct {
 	rootDir        string // workspace root, resolved lazily via os.Getwd if empty
 	cachePopulated bool
 	enrichFn       func(graph *repomap.FileGraph) // optional LSP enrichment callback
+	registry       *treesitter.GrammarRegistry
+	fallbackDeps   *FallbackDeps
+}
+
+// FallbackDeps holds dependencies for LSP-based fallback tag extraction.
+// Wired by the daemon after kernel creation via SetFallbackDeps.
+type FallbackDeps struct {
+	Registry  *treesitter.GrammarRegistry
+	AcquireFn func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error)
+	Extractor *repomap.FallbackExtractor
 }
 
 func init() {
@@ -71,6 +82,7 @@ func (s *RepoMapSkill) Init(deps skill.SkillDeps) error {
 
 	// Create grammar registry and elision renderer for output formatting.
 	registry := treesitter.NewGrammarRegistry()
+	s.registry = registry
 	s.elider = repomap.NewElisionRenderer(registry)
 
 	// Create tag extractor for tree-sitter-based tag extraction.
@@ -106,6 +118,14 @@ func (s *RepoMapSkill) SetEnrichFn(fn func(graph *repomap.FileGraph)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.enrichFn = fn
+}
+
+// SetFallbackDeps sets the fallback extraction dependencies for languages without tree-sitter grammars.
+// Called by the daemon after kernel creation to enable LSP documentSymbol fallback (D-33-01).
+func (s *RepoMapSkill) SetFallbackDeps(deps *FallbackDeps) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fallbackDeps = deps
 }
 
 // GetRepoMapSkill returns the registered RepoMapSkill instance for post-init wiring.
@@ -273,7 +293,7 @@ func (s *RepoMapSkill) ensureCache() error {
 	if root == "" || root == "." {
 		return serr.New(serr.Internal, "workspace root not set; call activate_project first")
 	}
-	if err := s.walkAndExtract(root); err != nil {
+	if err := s.walkAndExtract(context.Background(), root); err != nil {
 		return serr.Wrap(serr.Internal, "walking workspace for tag extraction", err)
 	}
 
@@ -286,7 +306,7 @@ func (s *RepoMapSkill) ensureCache() error {
 }
 
 // walkAndExtract walks the workspace root and populates TagCache using TagExtractor.
-func (s *RepoMapSkill) walkAndExtract(root string) error {
+func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // skip entries with errors
@@ -308,20 +328,41 @@ func (s *RepoMapSkill) walkAndExtract(root string) error {
 		}
 
 		_, extractErr := s.cache.GetOrExtract(path, func() ([]repomap.Tag, error) {
-			if s.extractor == nil {
-				return nil, nil // no tree-sitter extractor available
+			// Primary path: tree-sitter extraction
+			if s.extractor != nil && s.registry.SupportsLanguage(lang) {
+				source, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return nil, readErr
+				}
+				tags, tagErr := s.extractor.Extract(source, path, lang)
+				if tagErr != nil {
+					// Log and skip: unsupported language for this extractor is not fatal.
+					s.logger.Debug("tag extraction skipped", "path", path, "lang", lang, "error", tagErr)
+					return nil, nil
+				}
+				return tags, nil
 			}
-			source, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return nil, readErr
+
+			// Fallback path: LSP documentSymbol for languages without tree-sitter grammars (D-33-01)
+			if s.fallbackDeps != nil && s.fallbackDeps.AcquireFn != nil {
+				requester, release, acqErr := s.fallbackDeps.AcquireFn(ctx, lang)
+				if acqErr != nil {
+					// D-33-02: missing LSP is debug log + empty tags, not an error
+					s.logger.Debug("fallback extraction skipped: no LS available", "path", path, "lang", lang, "error", acqErr)
+					return nil, nil
+				}
+				defer release()
+				uri := "file://" + path
+				tags, fbErr := s.fallbackDeps.Extractor.Extract(ctx, requester, path, uri)
+				if fbErr != nil {
+					s.logger.Debug("fallback extraction failed", "path", path, "lang", lang, "error", fbErr)
+					return nil, nil
+				}
+				return tags, nil
 			}
-			tags, tagErr := s.extractor.Extract(source, path, lang)
-			if tagErr != nil {
-				// Log and skip: unsupported language for this extractor is not fatal.
-				s.logger.Debug("tag extraction skipped", "path", path, "lang", lang, "error", tagErr)
-				return nil, nil
-			}
-			return tags, nil
+
+			// No extractor available for this language
+			return nil, nil
 		})
 		if extractErr != nil {
 			s.logger.Debug("cache population skipped", "path", path, "error", extractErr)

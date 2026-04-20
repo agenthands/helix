@@ -230,7 +230,10 @@ Plans:
   1. walkAndExtract falls back to FallbackExtractor (LSP documentSymbol) when a language has no tree-sitter grammar
   2. SymbolRequester interface has at least one production implementor
   3. Daemon restart preserves SQLite tag cache — tags extracted before restart are available after restart without re-extraction
-**Plans**: 2 plans (pending)
+**Plans**: 2 plans
+Plans:
+- [ ] 33-01-PLAN.md — Wire FallbackExtractor into walkAndExtract + daemon post-init wiring [Wave 1]
+- [ ] 33-02-PLAN.md — Integration tests for fallback path + cache persistence verification [Wave 2]
 
 ## Progress
 

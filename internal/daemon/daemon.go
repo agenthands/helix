@@ -284,6 +284,23 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		})
 	}
 
+	// 12c. Wire repomap skill fallback extraction for non-tree-sitter languages (RMAP-02).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
+			Registry:  treesitter.NewGrammarRegistry(),
+			Extractor: repomapPkg.NewFallbackExtractor(),
+			AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
+				wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}
+				sessionID := fmt.Sprintf("fallback-%s", lang)
+				lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
+				if err != nil {
+					return nil, nil, err
+				}
+				return lease, func() { k.Pool().ReleaseLease(sessionID) }, nil
+			},
+		})
+	}
+
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches

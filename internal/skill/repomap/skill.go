@@ -329,7 +329,7 @@ func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 
 		_, extractErr := s.cache.GetOrExtract(path, func() ([]repomap.Tag, error) {
 			// Primary path: tree-sitter extraction
-			if s.extractor != nil && s.registry.SupportsLanguage(lang) {
+			if s.extractor != nil && (s.registry == nil || s.registry.SupportsLanguage(lang)) {
 				source, readErr := os.ReadFile(path)
 				if readErr != nil {
 					return nil, readErr

@@ -8,7 +8,7 @@
 - ✅ **v1.3 Documentation Catchup** — Phases 16-17 (shipped 2026-04-11)
 - ✅ **v1.4 Integration Testing v2** — Phases 18-21 (shipped 2026-04-14)
 - ✅ **v1.5 Typed Errors & Hardening** — Phases 22-24 (shipped 2026-04-15)
-- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-30 (in progress)
+- 🚧 **v1.6 Context Intelligence & Resilient Editing** — Phases 25-33 (in progress)
 
 ## Phases
 
@@ -206,6 +206,30 @@ Plans:
 - [x] 31-03-PLAN.md — Wave 2b: 3 languages (Lua, Zig, HCL) -- grammars, queries, tests [Wave 3]
 - [x] 31-04-PLAN.md — Gap closure: Swift + R via local vendored bindings (upstream Go bindings broken) [Wave 4]
 
+### Phase 32: v1.6 Documentation Hygiene
+**Goal**: Close all documentation gaps identified by v1.6 milestone audit — stale checkboxes, missing traceability entries, missing/stale VERIFICATION.md files
+**Depends on**: Phase 31
+**Requirements**: FUZZ-04, FUZZ-05, FUZZ-06, RMAP-01–RMAP-10, D-01–D-08
+**Gap Closure:** Closes documentation hygiene gaps from v1.6 audit
+**Success Criteria** (what must be TRUE):
+  1. REQUIREMENTS.md checkboxes match audit status (FUZZ-04/05/06 and RMAP-01–10 checked)
+  2. REQUIREMENTS.md traceability table shows "Complete" for all 18 satisfied requirements
+  3. D-01 through D-08 traceability entries exist in REQUIREMENTS.md
+  4. Phase 28 has a VERIFICATION.md with evidence from Phase 30 verification
+  5. Phase 31 VERIFICATION.md refreshed to reflect Swift/R gap closure (31-04)
+**Plans**: 4 plans (pending)
+
+### Phase 33: FallbackExtractor Wiring & Cache Persistence
+**Goal**: Wire FallbackExtractor into the production pipeline for languages without tree-sitter grammars, and verify daemon restart cache persistence end-to-end
+**Depends on**: Phase 32
+**Requirements**: RMAP-02
+**Gap Closure:** Closes RMAP-02 integration gap and cache persistence tech debt from v1.6 audit
+**Success Criteria** (what must be TRUE):
+  1. walkAndExtract falls back to FallbackExtractor (LSP documentSymbol) when a language has no tree-sitter grammar
+  2. SymbolRequester interface has at least one production implementor
+  3. Daemon restart preserves SQLite tag cache — tags extracted before restart are available after restart without re-extraction
+**Plans**: 2 plans (pending)
+
 ## Progress
 
 **Execution Order:**
@@ -244,4 +268,6 @@ Note: Phases 25-26 (fuzzy) and 27-28 (repomap) are independent tracks. Within ea
 | 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
 | 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
 | 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
-| 31. Multi-language grammar expansion | v1.6 | 3/4 | In Progress | — |
+| 31. Multi-language grammar expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
+| 32. v1.6 Documentation Hygiene | v1.6 | 0/4 | Pending | — |
+| 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 0/2 | Pending | — |

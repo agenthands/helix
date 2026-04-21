@@ -123,9 +123,12 @@ func removeFromJSONConfig(path, key, serverName string) error {
 }
 
 // userConfigDir wraps os.UserConfigDir for platform-specific config directory.
-func userConfigDir() string {
-	dir, _ := os.UserConfigDir()
-	return dir
+func userConfigDir() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine user config directory: %w", err)
+	}
+	return dir, nil
 }
 
 // --- ClaudeCodeRegistrar ---
@@ -263,7 +266,10 @@ func (r *VSCodeRegistrar) Name() string       { return "vscode" }
 func (r *VSCodeRegistrar) Description() string { return "VS Code / Copilot (Microsoft)" }
 
 func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
-	configPath := r.configPath(cfg)
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
 
 	serverEntry := map[string]any{
 		"type":    "stdio",
@@ -280,7 +286,10 @@ func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
 }
 
 func (r *VSCodeRegistrar) Unregister(cfg RegistrationConfig) error {
-	configPath := r.configPath(cfg)
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
@@ -290,11 +299,15 @@ func (r *VSCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	return removeFromJSONConfig(configPath, "servers", "serena")
 }
 
-func (r *VSCodeRegistrar) configPath(cfg RegistrationConfig) string {
+func (r *VSCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
 	if cfg.Global {
-		return filepath.Join(userConfigDir(), "Code", "User", "mcp.json")
+		dir, err := userConfigDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, "Code", "User", "mcp.json"), nil
 	}
-	return filepath.Join(cfg.ProjectDir, ".vscode", "mcp.json")
+	return filepath.Join(cfg.ProjectDir, ".vscode", "mcp.json"), nil
 }
 
 // --- JetBrainsRegistrar ---
@@ -306,7 +319,10 @@ func (r *JetBrainsRegistrar) Name() string       { return "jetbrains" }
 func (r *JetBrainsRegistrar) Description() string { return "JetBrains IDEs via Junie" }
 
 func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
-	configPath := r.configPath(cfg)
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would write to %s: mcpServers.serena", configPath)
@@ -317,7 +333,10 @@ func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
 }
 
 func (r *JetBrainsRegistrar) Unregister(cfg RegistrationConfig) error {
-	configPath := r.configPath(cfg)
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
@@ -327,12 +346,15 @@ func (r *JetBrainsRegistrar) Unregister(cfg RegistrationConfig) error {
 	return removeFromJSONConfig(configPath, "mcpServers", "serena")
 }
 
-func (r *JetBrainsRegistrar) configPath(cfg RegistrationConfig) string {
+func (r *JetBrainsRegistrar) configPath(cfg RegistrationConfig) (string, error) {
 	if cfg.Global {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".junie", "mcp", "mcp.json")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine user home directory: %w", err)
+		}
+		return filepath.Join(home, ".junie", "mcp", "mcp.json"), nil
 	}
-	return filepath.Join(cfg.ProjectDir, ".junie", "mcp", "mcp.json")
+	return filepath.Join(cfg.ProjectDir, ".junie", "mcp", "mcp.json"), nil
 }
 
 // --- ClaudeDesktopRegistrar ---
@@ -345,7 +367,10 @@ func (r *ClaudeDesktopRegistrar) Name() string       { return "claude-desktop" }
 func (r *ClaudeDesktopRegistrar) Description() string { return "Claude Desktop app" }
 
 func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
-	configPath := r.configPath()
+	configPath, err := r.configPath()
+	if err != nil {
+		return err
+	}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would write to %s: mcpServers.serena", configPath)
@@ -356,7 +381,10 @@ func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
 }
 
 func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
-	configPath := r.configPath()
+	configPath, err := r.configPath()
+	if err != nil {
+		return err
+	}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
@@ -368,16 +396,26 @@ func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
 
 // configPath returns the platform-specific Claude Desktop config path.
 // Claude Desktop is always global -- there is no project-scoped config.
-func (r *ClaudeDesktopRegistrar) configPath() string {
+func (r *ClaudeDesktopRegistrar) configPath() (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine user home directory: %w", err)
+		}
+		return filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), nil
 	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "Claude", "claude_desktop_config.json")
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			return "", fmt.Errorf("APPDATA environment variable is not set")
+		}
+		return filepath.Join(appData, "Claude", "claude_desktop_config.json"), nil
 	default: // linux and others
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "Claude", "claude_desktop_config.json")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine user home directory: %w", err)
+		}
+		return filepath.Join(home, ".config", "Claude", "claude_desktop_config.json"), nil
 	}
 }
 

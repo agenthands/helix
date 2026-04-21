@@ -123,7 +123,10 @@
   2. User can run `serena setup <client>` for any of the 6 supported clients (claude-code, vscode, jetbrains, claude-desktop, gemini-cli, generic) and get a working MCP registration
   3. Setup detects project languages from the current directory and pre-installs available language servers automatically
   4. Setup uses client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 35: Health & Status
 **Goal**: Agents and users can inspect workspace health and LS status at any time
@@ -134,7 +137,10 @@
   2. `get_health` response includes per-workspace capabilities and indexing progress
   3. User can run `serena status` from the CLI and see a human-readable workspace health summary
   4. Health output defaults to error-only mode, surfacing only actionable failures unless verbose is requested
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 36: Client Hooks
 **Goal**: Claude Code sessions automatically activate Serena and guide agents toward symbolic tools
@@ -145,7 +151,10 @@
   2. When an agent overuses grep/read for code navigation, PreToolUse hook nudges it toward Serena's symbolic tools (find_symbol, get_symbols_overview)
   3. Ending a Claude Code session triggers cleanup of session data via Stop hook
   4. Running `serena setup claude-code` installs all three hooks into Claude Code user settings automatically
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 37: Smart Error Responses
 **Goal**: Agents receive actionable parameter corrections when they misuse tools
@@ -155,7 +164,10 @@
   1. When an agent passes a wrong parameter name or value, the error response includes a "did you mean" suggestion with the correct parameter
   2. Error suggestions only correct parameters within the same tool — they never redirect to a different tool
   3. Smart error enrichment is implemented as middleware wrapping the existing typed error taxonomy, not modifying error kinds
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 38: Progressive Descriptions & Lazy Init
 **Goal**: Tool surface is self-documenting for agents, and workspaces activate automatically on first use
@@ -167,7 +179,10 @@
   3. Description changes are gated by behavioral test regression — no description ships without passing tool selection tests
   4. If setup was not run, the first MCP tool call transparently triggers workspace activation before executing
   5. Concurrent first calls from multiple agents are safely serialized (no duplicate initialization or races)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ## Progress
 

@@ -4,8 +4,8 @@ milestone: v1.7
 milestone_name: Developer Experience & Auto-Setup
 status: executing
 stopped_at: Phase 36 context gathered
-last_updated: "2026-04-21T18:24:13.907Z"
-last_activity: 2026-04-21 -- Phase 36 planning complete
+last_updated: "2026-04-21T18:25:08.113Z"
+last_activity: 2026-04-21 -- Phase 36 execution started
 progress:
   total_phases: 5
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-20)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 35 — health-and-status
+**Current focus:** Phase 36 — client-hooks
 
 ## Current Position
 
-Phase: 35 (health-and-status) — COMPLETE
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-04-21 -- Phase 36 planning complete
+Phase: 36 (client-hooks) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 36
+Last activity: 2026-04-21 -- Phase 36 execution started
 
 Progress: [██████████████████████████████████░░░░░░░░] 83% (33/38 phases complete)
 

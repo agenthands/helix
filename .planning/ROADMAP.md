@@ -153,7 +153,7 @@ Plans:
   4. Running `serena setup claude-code` installs all three hooks into Claude Code user settings automatically
 **Plans**: 2 plans
 Plans:
-- [ ] 36-01-PLAN.md — Hook JSON helpers, nudge command, ClaudeCodeRegistrar hook integration, tests
+- [x] 36-01-PLAN.md — Hook JSON helpers, nudge command, ClaudeCodeRegistrar hook integration, tests
 - [ ] 36-02-PLAN.md — gRPC proto extension, activate/deactivate CLI commands, daemon handler, root wiring
 
 ### Phase 37: Smart Error Responses
@@ -226,6 +226,6 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
 | 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
-| 36. Client Hooks | v1.7 | 0/2 | Not started | - |
+| 36. Client Hooks | v1.7 | 1/2 | In Progress|  |
 | 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |
 | 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

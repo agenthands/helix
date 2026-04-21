@@ -137,10 +137,6 @@ func (r *ClaudeCodeRegistrar) Name() string       { return "claude-code" }
 func (r *ClaudeCodeRegistrar) Description() string { return "Claude Code (Anthropic CLI agent)" }
 
 func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
-	if _, err := exec.LookPath("claude"); err != nil {
-		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
-	}
-
 	serverJSON, err := json.Marshal(serverConfigJSON(cfg.BinaryPath))
 	if err != nil {
 		return fmt.Errorf("marshaling server config: %w", err)
@@ -158,6 +154,10 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 		return nil
 	}
 
+	if _, err := exec.LookPath("claude"); err != nil {
+		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
+	}
+
 	cmd := exec.Command("claude", cmdArgs...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -168,10 +168,6 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 }
 
 func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
-	if _, err := exec.LookPath("claude"); err != nil {
-		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
-	}
-
 	scope := "project"
 	if cfg.Global {
 		scope = "user"
@@ -182,6 +178,10 @@ func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(cmdArgs, " "))
 		return nil
+	}
+
+	if _, err := exec.LookPath("claude"); err != nil {
+		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
 	}
 
 	cmd := exec.Command("claude", cmdArgs...)
@@ -202,10 +202,6 @@ func (r *GeminiCLIRegistrar) Name() string       { return "gemini-cli" }
 func (r *GeminiCLIRegistrar) Description() string { return "Gemini CLI (Google)" }
 
 func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
-	if _, err := exec.LookPath("gemini"); err != nil {
-		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
-	}
-
 	scope := "project"
 	if cfg.Global {
 		scope = "user"
@@ -218,6 +214,10 @@ func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
 		return nil
 	}
 
+	if _, err := exec.LookPath("gemini"); err != nil {
+		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
+	}
+
 	cmd := exec.Command("gemini", cmdArgs...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -228,10 +228,6 @@ func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
 }
 
 func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
-	if _, err := exec.LookPath("gemini"); err != nil {
-		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
-	}
-
 	scope := "project"
 	if cfg.Global {
 		scope = "user"
@@ -242,6 +238,10 @@ func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
 		return nil
+	}
+
+	if _, err := exec.LookPath("gemini"); err != nil {
+		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
 	}
 
 	cmd := exec.Command("gemini", cmdArgs...)

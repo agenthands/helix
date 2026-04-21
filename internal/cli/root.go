@@ -46,6 +46,9 @@ func NewRootCommand() *cobra.Command {
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
+	// Subcommands
+	rootCmd.AddCommand(newSetupCommand())
+
 	return rootCmd
 }
 

@@ -24,7 +24,7 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 	// propagation; the forwarder does NOT need its own OTLP endpoint.
 	fwdProvider := obs.Noop(logger.Handler())
 
-	client, conn, err := connectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
+	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}

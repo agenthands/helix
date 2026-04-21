@@ -19,10 +19,10 @@ import (
 	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
 )
 
-// connectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
+// ConnectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
 // The tp parameter provides an explicit TracerProvider for the otelgrpc client handler
 // (D-01: no global TracerProvider).
-func connectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
+func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
 	// Try connecting to existing daemon
 	conn, client, err := tryConnect(ctx, socketPath, tp)
 	if err == nil {

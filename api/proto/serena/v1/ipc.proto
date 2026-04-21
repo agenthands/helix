@@ -13,6 +13,12 @@ service ForwarderService {
 
   // GetStatus returns workspace health for the CLI status command.
   rpc GetStatus(StatusRequest) returns (StatusResponse);
+
+  // ActivateWorkspace ensures a workspace is active in the kernel.
+  rpc ActivateWorkspace(ActivateRequest) returns (ActivateResponse);
+
+  // DeactivateWorkspace cleans up workspace session state.
+  rpc DeactivateWorkspace(DeactivateRequest) returns (DeactivateResponse);
 }
 
 // MCPMessage wraps a raw MCP JSON-RPC message for gRPC transport.
@@ -31,4 +37,25 @@ message StatusRequest {
 // StatusResponse carries JSON-encoded health report.
 message StatusResponse {
   bytes payload = 1;
+}
+
+// ActivateRequest activates a workspace by path.
+message ActivateRequest {
+  string workspace_path = 1;
+}
+
+// ActivateResponse reports activation result.
+message ActivateResponse {
+  bool already_active = 1;
+  string status = 2;  // "activated" or "already_active"
+}
+
+// DeactivateRequest deactivates a workspace by path.
+message DeactivateRequest {
+  string workspace_path = 1;
+}
+
+// DeactivateResponse reports deactivation result.
+message DeactivateResponse {
+  string status = 1;  // "deactivated" or "not_active"
 }

@@ -166,6 +166,194 @@ func (x *StatusResponse) GetPayload() []byte {
 	return nil
 }
 
+// ActivateRequest activates a workspace by path.
+type ActivateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspacePath string                 `protobuf:"bytes,1,opt,name=workspace_path,json=workspacePath,proto3" json:"workspace_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActivateRequest) Reset() {
+	*x = ActivateRequest{}
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivateRequest) ProtoMessage() {}
+
+func (x *ActivateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivateRequest.ProtoReflect.Descriptor instead.
+func (*ActivateRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_serena_v1_ipc_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ActivateRequest) GetWorkspacePath() string {
+	if x != nil {
+		return x.WorkspacePath
+	}
+	return ""
+}
+
+// ActivateResponse reports activation result.
+type ActivateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AlreadyActive bool                   `protobuf:"varint,1,opt,name=already_active,json=alreadyActive,proto3" json:"already_active,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "activated" or "already_active"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActivateResponse) Reset() {
+	*x = ActivateResponse{}
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivateResponse) ProtoMessage() {}
+
+func (x *ActivateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivateResponse.ProtoReflect.Descriptor instead.
+func (*ActivateResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_serena_v1_ipc_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ActivateResponse) GetAlreadyActive() bool {
+	if x != nil {
+		return x.AlreadyActive
+	}
+	return false
+}
+
+func (x *ActivateResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+// DeactivateRequest deactivates a workspace by path.
+type DeactivateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspacePath string                 `protobuf:"bytes,1,opt,name=workspace_path,json=workspacePath,proto3" json:"workspace_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeactivateRequest) Reset() {
+	*x = DeactivateRequest{}
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeactivateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeactivateRequest) ProtoMessage() {}
+
+func (x *DeactivateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeactivateRequest.ProtoReflect.Descriptor instead.
+func (*DeactivateRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_serena_v1_ipc_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DeactivateRequest) GetWorkspacePath() string {
+	if x != nil {
+		return x.WorkspacePath
+	}
+	return ""
+}
+
+// DeactivateResponse reports deactivation result.
+type DeactivateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // "deactivated" or "not_active"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeactivateResponse) Reset() {
+	*x = DeactivateResponse{}
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeactivateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeactivateResponse) ProtoMessage() {}
+
+func (x *DeactivateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_serena_v1_ipc_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeactivateResponse.ProtoReflect.Descriptor instead.
+func (*DeactivateResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_serena_v1_ipc_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DeactivateResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_api_proto_serena_v1_ipc_proto protoreflect.FileDescriptor
 
 const file_api_proto_serena_v1_ipc_proto_rawDesc = "" +
@@ -179,10 +367,21 @@ const file_api_proto_serena_v1_ipc_proto_rawDesc = "" +
 	"\rStatusRequest\x12\x18\n" +
 	"\averbose\x18\x01 \x01(\bR\averbose\"*\n" +
 	"\x0eStatusResponse\x12\x18\n" +
-	"\apayload\x18\x01 \x01(\fR\apayload2\x93\x01\n" +
+	"\apayload\x18\x01 \x01(\fR\apayload\"8\n" +
+	"\x0fActivateRequest\x12%\n" +
+	"\x0eworkspace_path\x18\x01 \x01(\tR\rworkspacePath\"Q\n" +
+	"\x10ActivateResponse\x12%\n" +
+	"\x0ealready_active\x18\x01 \x01(\bR\ralreadyActive\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\":\n" +
+	"\x11DeactivateRequest\x12%\n" +
+	"\x0eworkspace_path\x18\x01 \x01(\tR\rworkspacePath\",\n" +
+	"\x12DeactivateResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status2\xb5\x02\n" +
 	"\x10ForwarderService\x12=\n" +
 	"\tStreamMCP\x12\x15.serena.v1.MCPMessage\x1a\x15.serena.v1.MCPMessage(\x010\x01\x12@\n" +
-	"\tGetStatus\x12\x18.serena.v1.StatusRequest\x1a\x19.serena.v1.StatusResponseB8Z6github.com/postfix/serena/api/proto/serena/v1;serenav1b\x06proto3"
+	"\tGetStatus\x12\x18.serena.v1.StatusRequest\x1a\x19.serena.v1.StatusResponse\x12L\n" +
+	"\x11ActivateWorkspace\x12\x1a.serena.v1.ActivateRequest\x1a\x1b.serena.v1.ActivateResponse\x12R\n" +
+	"\x13DeactivateWorkspace\x12\x1c.serena.v1.DeactivateRequest\x1a\x1d.serena.v1.DeactivateResponseB8Z6github.com/postfix/serena/api/proto/serena/v1;serenav1b\x06proto3"
 
 var (
 	file_api_proto_serena_v1_ipc_proto_rawDescOnce sync.Once
@@ -196,19 +395,27 @@ func file_api_proto_serena_v1_ipc_proto_rawDescGZIP() []byte {
 	return file_api_proto_serena_v1_ipc_proto_rawDescData
 }
 
-var file_api_proto_serena_v1_ipc_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_api_proto_serena_v1_ipc_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_api_proto_serena_v1_ipc_proto_goTypes = []any{
-	(*MCPMessage)(nil),     // 0: serena.v1.MCPMessage
-	(*StatusRequest)(nil),  // 1: serena.v1.StatusRequest
-	(*StatusResponse)(nil), // 2: serena.v1.StatusResponse
+	(*MCPMessage)(nil),         // 0: serena.v1.MCPMessage
+	(*StatusRequest)(nil),      // 1: serena.v1.StatusRequest
+	(*StatusResponse)(nil),     // 2: serena.v1.StatusResponse
+	(*ActivateRequest)(nil),    // 3: serena.v1.ActivateRequest
+	(*ActivateResponse)(nil),   // 4: serena.v1.ActivateResponse
+	(*DeactivateRequest)(nil),  // 5: serena.v1.DeactivateRequest
+	(*DeactivateResponse)(nil), // 6: serena.v1.DeactivateResponse
 }
 var file_api_proto_serena_v1_ipc_proto_depIdxs = []int32{
 	0, // 0: serena.v1.ForwarderService.StreamMCP:input_type -> serena.v1.MCPMessage
 	1, // 1: serena.v1.ForwarderService.GetStatus:input_type -> serena.v1.StatusRequest
-	0, // 2: serena.v1.ForwarderService.StreamMCP:output_type -> serena.v1.MCPMessage
-	2, // 3: serena.v1.ForwarderService.GetStatus:output_type -> serena.v1.StatusResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	3, // 2: serena.v1.ForwarderService.ActivateWorkspace:input_type -> serena.v1.ActivateRequest
+	5, // 3: serena.v1.ForwarderService.DeactivateWorkspace:input_type -> serena.v1.DeactivateRequest
+	0, // 4: serena.v1.ForwarderService.StreamMCP:output_type -> serena.v1.MCPMessage
+	2, // 5: serena.v1.ForwarderService.GetStatus:output_type -> serena.v1.StatusResponse
+	4, // 6: serena.v1.ForwarderService.ActivateWorkspace:output_type -> serena.v1.ActivateResponse
+	6, // 7: serena.v1.ForwarderService.DeactivateWorkspace:output_type -> serena.v1.DeactivateResponse
+	4, // [4:8] is the sub-list for method output_type
+	0, // [0:4] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -225,7 +432,7 @@ func file_api_proto_serena_v1_ipc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_serena_v1_ipc_proto_rawDesc), len(file_api_proto_serena_v1_ipc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

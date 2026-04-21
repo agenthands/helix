@@ -149,6 +149,13 @@ func (cb *CircuitBreaker) BackoffDuration() time.Duration {
 	return cb.backoff
 }
 
+// State returns the current circuit state (CircuitClosed, CircuitHalfOpen, or CircuitOpen).
+func (cb *CircuitBreaker) State() float64 {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	return cb.state
+}
+
 // Failures returns the current failure count.
 func (cb *CircuitBreaker) Failures() int {
 	cb.mu.Lock()

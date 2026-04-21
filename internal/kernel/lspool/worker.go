@@ -353,6 +353,11 @@ func (w *Worker) Conn() *jsonrpc.Conn {
 	return nil
 }
 
+// Command returns the LS command string.
+func (w *Worker) Command() string {
+	return w.lsCommand
+}
+
 // Pid returns the LS process ID, or -1 if not started.
 func (w *Worker) Pid() int {
 	if w.process != nil {

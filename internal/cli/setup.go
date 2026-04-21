@@ -2,11 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/spf13/cobra"
+
+	"github.com/postfix/serena/internal/langregistry"
 )
 
 // newSetupCommand creates the setup subcommand for registering Serena with coding agents.
@@ -104,8 +107,32 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 	printer.Success("%s registered", clientName)
 
-	// TODO: Plan 02 -- detectLanguages()
-	// TODO: Plan 02 -- healthCheck()
+	// Language detection
+	reg, regErr := langregistry.NewRegistry()
+	if regErr != nil {
+		printer.Failure("language registry unavailable: %s", regErr)
+		// Non-fatal: skip detection and installation
+		return nil
+	}
+
+	entries, _ := detectLanguages(cfg.ProjectDir, reg, printer)
+
+	// LS pre-installation (unless --skip-install)
+	skipInstall, _ := cmd.Flags().GetBool("skip-install")
+	var installed []langregistry.LSEntry
+	if !skipInstall && len(entries) > 0 {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+		inst := langregistry.NewInstaller(langregistry.InstallerConfig{AutoInstall: true}, logger)
+		installed = preInstallLanguageServers(cmd.Context(), entries, inst, printer, cfg.DryRun)
+	} else if skipInstall && len(entries) > 0 {
+		printer.Info("Skipping language server installation (--skip-install)")
+		installed = entries // pass through for health check binary lookup
+	}
+
+	// Health check
+	if len(installed) > 0 {
+		_ = runHealthCheck(cmd.Context(), installed, cfg.ProjectDir, printer, cfg.DryRun)
+	}
 
 	return nil
 }

@@ -27,10 +27,10 @@ func runHealthCheck(_ context.Context, entries []langregistry.LSEntry, _ string,
 	for _, entry := range entries {
 		path, err := exec.LookPath(entry.Command)
 		if err != nil {
-			printer.Failure("%s (%s) not responding: %v", entry.Language, entry.Command, err)
+			printer.Failure("%s (%s) not found in PATH: %v", entry.Language, entry.Command, err)
 			continue
 		}
-		printer.Success("%s (%s) responding", entry.Language, path)
+		printer.Success("%s (%s) found at %s", entry.Language, entry.Command, path)
 	}
 
 	return nil

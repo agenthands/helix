@@ -10,6 +10,9 @@ service ForwarderService {
   // StreamMCP carries MCP JSON-RPC messages bidirectionally.
   // Forwarder sends client messages, daemon sends responses.
   rpc StreamMCP(stream MCPMessage) returns (stream MCPMessage);
+
+  // GetStatus returns workspace health for the CLI status command.
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
 }
 
 // MCPMessage wraps a raw MCP JSON-RPC message for gRPC transport.
@@ -18,4 +21,14 @@ message MCPMessage {
   bytes payload = 1;
   // Session identifier for routing within the daemon.
   string session_id = 2;
+}
+
+// StatusRequest queries daemon health.
+message StatusRequest {
+  bool verbose = 1;
+}
+
+// StatusResponse carries JSON-encoded health report.
+message StatusResponse {
+  bytes payload = 1;
 }

@@ -120,6 +120,28 @@ func (k *Kernel) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// HealthStatus returns a health report enriched with workspace language data.
+// The pool snapshot is taken under a single RLock; workspace data is merged
+// afterward without holding the pool lock.
+func (k *Kernel) HealthStatus() *lspool.HealthReport {
+	report := k.pool.HealthSnapshot()
+
+	// Enrich workspace entries with detected languages from WorkspaceRuntime.
+	k.mu.RLock()
+	for i := range report.Workspaces {
+		ws := &report.Workspaces[i]
+		for _, rt := range k.workspaces {
+			if rt.Key().RepoRoot == ws.Root {
+				ws.Languages = rt.Languages()
+				break
+			}
+		}
+	}
+	k.mu.RUnlock()
+
+	return &report
+}
+
 // Pool returns the LS worker pool (for direct access if needed).
 func (k *Kernel) Pool() *lspool.Pool {
 	return k.pool

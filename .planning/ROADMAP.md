@@ -139,8 +139,8 @@ Plans:
   4. Health output defaults to error-only mode, surfacing only actionable failures unless verbose is requested
 **Plans**: 2 plans
 Plans:
-- [x] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
-- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
+- [ ] 35-01-PLAN.md — Health data layer, get_health MCP tool, gRPC GetStatus RPC, daemon wiring
+- [ ] 35-02-PLAN.md — CLI status command with colored output, --json, --verbose flags
 
 ### Phase 36: Client Hooks
 **Goal**: Claude Code sessions automatically activate Serena and guide agents toward symbolic tools
@@ -153,8 +153,8 @@ Plans:
   4. Running `serena setup claude-code` installs all three hooks into Claude Code user settings automatically
 **Plans**: 2 plans
 Plans:
-- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
-- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
+- [ ] 36-01-PLAN.md — [to be planned]
+- [ ] 36-02-PLAN.md — [to be planned]
 
 ### Phase 37: Smart Error Responses
 **Goal**: Agents receive actionable parameter corrections when they misuse tools
@@ -166,8 +166,8 @@ Plans:
   3. Smart error enrichment is implemented as middleware wrapping the existing typed error taxonomy, not modifying error kinds
 **Plans**: 2 plans
 Plans:
-- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
-- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
+- [ ] 37-01-PLAN.md — [to be planned]
+- [ ] 37-02-PLAN.md — [to be planned]
 
 ### Phase 38: Progressive Descriptions & Lazy Init
 **Goal**: Tool surface is self-documenting for agents, and workspaces activate automatically on first use
@@ -181,8 +181,8 @@ Plans:
   5. Concurrent first calls from multiple agents are safely serialized (no duplicate initialization or races)
 **Plans**: 2 plans
 Plans:
-- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
-- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
+- [ ] 38-01-PLAN.md — [to be planned]
+- [ ] 38-02-PLAN.md — [to be planned]
 
 ## Progress
 
@@ -225,7 +225,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
 | 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
-| 35. Health & Status | v1.7 | 0/0 | Not started | - |
+| 35. Health & Status | v1.7 | 0/2 | Not started | - |
 | 36. Client Hooks | v1.7 | 0/0 | Not started | - |
 | 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |
 | 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

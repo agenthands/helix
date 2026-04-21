@@ -74,23 +74,26 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// runForwarder starts the stdio forwarder that proxies MCP traffic to the daemon.
-func runForwarder(cmd *cobra.Command) error {
-	socketPath, _ := cmd.Flags().GetString("socket")
-	jsonLog, _ := cmd.Flags().GetBool("json")
-
-	// Set up logger (stderr only -- stdout is for MCP JSON-RPC)
+// newLogger creates a structured logger writing to stderr with the given format.
+// It wraps the base handler with obs.ContextHandler so traced requests
+// automatically get trace_id/span_id fields.
+func newLogger(jsonLog bool) *slog.Logger {
 	var handler slog.Handler
 	if jsonLog {
 		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	} else {
 		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	}
-	// Wrap base handler with obs.ContextHandler so future traced requests
-	// automatically get trace_id/span_id fields. Phase 10 fast-path is pure
-	// forwarding (spanContextFromContext stub always returns false).
 	handler = obs.NewContextHandler(handler)
-	logger := slog.New(handler)
+	return slog.New(handler)
+}
+
+// runForwarder starts the stdio forwarder that proxies MCP traffic to the daemon.
+func runForwarder(cmd *cobra.Command) error {
+	socketPath, _ := cmd.Flags().GetString("socket")
+	jsonLog, _ := cmd.Flags().GetBool("json")
+
+	logger := newLogger(jsonLog)
 
 	// Use default socket path if not specified
 	if socketPath == "" {
@@ -109,18 +112,7 @@ func runDaemon(cmd *cobra.Command) error {
 	profileName, _ := cmd.Flags().GetString("profile")
 	adminAddr, _ := cmd.Flags().GetString("admin-addr")
 
-	// Set up logger (D-16, D-17: stderr + configurable format)
-	var handler slog.Handler
-	if jsonLog {
-		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
-	} else {
-		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
-	}
-	// Wrap base handler with obs.ContextHandler so future traced requests
-	// automatically get trace_id/span_id fields. Phase 10 fast-path is pure
-	// forwarding (spanContextFromContext stub always returns false).
-	handler = obs.NewContextHandler(handler)
-	logger := slog.New(handler)
+	logger := newLogger(jsonLog)
 
 	// Load config with CLI overrides
 	overrides := make(map[string]interface{})

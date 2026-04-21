@@ -1,24 +1,24 @@
 ---
 phase: 34-setup-cli-foundation
-fixed_at: 2026-04-21T14:45:00Z
+fixed_at: 2026-04-21T15:00:00Z
 review_path: .planning/phases/34-setup-cli-foundation/34-REVIEW.md
-iteration: 1
-findings_in_scope: 4
-fixed: 4
-skipped: 0
-status: all_fixed
+iteration: 2
+findings_in_scope: 6
+fixed: 5
+skipped: 1
+status: partial
 ---
 
 # Phase 34: Code Review Fix Report
 
-**Fixed at:** 2026-04-21T14:45:00Z
+**Fixed at:** 2026-04-21T15:00:00Z
 **Source review:** .planning/phases/34-setup-cli-foundation/34-REVIEW.md
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
-- Findings in scope: 4
-- Fixed: 4
-- Skipped: 0
+- Findings in scope: 6
+- Fixed: 5
+- Skipped: 1
 
 ## Fixed Issues
 
@@ -46,8 +46,22 @@ status: all_fixed
 **Commit:** 2b59ee30
 **Applied fix:** Changed failure message from `"not responding"` to `"not found in PATH"` and success message from `"responding"` to `"found at <path>"` to accurately describe the LookPath-based check.
 
+### IN-01: Duplicated logger setup in runForwarder and runDaemon
+
+**Files modified:** `internal/cli/root.go`
+**Commit:** 258b0fac
+**Applied fix:** Extracted a shared `newLogger(jsonLog bool) *slog.Logger` helper function and replaced the duplicated logger construction blocks in both `runForwarder` and `runDaemon` with calls to it.
+
+## Skipped Issues
+
+### IN-02: Commented-out-style TODO in health check scope note
+
+**File:** `internal/cli/setup_health.go:13-14`
+**Reason:** No code change needed per reviewer guidance; the TODO comment documents deferred Phase 35 work items (HLTH-01 through HLTH-04) and should be captured in Phase 35 planning rather than removed.
+**Original issue:** Comment references deferred work that should be tracked as a backlog item so it does not get lost.
+
 ---
 
-_Fixed: 2026-04-21T14:45:00Z_
+_Fixed: 2026-04-21T15:00:00Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_

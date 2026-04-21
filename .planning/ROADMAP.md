@@ -107,7 +107,7 @@
 **Milestone Goal:** Zero-friction onboarding with auto-detection, client hooks, real-time health visibility, and self-guiding tool surface for coding agents.
 
 - [x] **Phase 34: Setup CLI Foundation** — One-command MCP registration for 6 clients with language detection and LS pre-install (completed 2026-04-21)
-- [ ] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility
+- [x] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility (completed 2026-04-21)
 - [ ] **Phase 36: Client Hooks** — Claude Code hook auto-installation for session lifecycle and tool nudging
 - [ ] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions
 - [ ] **Phase 38: Progressive Descriptions & Lazy Init** — Tiered tool descriptions, deep-dive help tool, and lazy workspace activation
@@ -139,8 +139,8 @@ Plans:
   4. Health output defaults to error-only mode, surfacing only actionable failures unless verbose is requested
 **Plans**: 2 plans
 Plans:
-- [ ] 35-01-PLAN.md — Health data layer, get_health MCP tool, gRPC GetStatus RPC, daemon wiring
-- [ ] 35-02-PLAN.md — CLI status command with colored output, --json, --verbose flags
+- [x] 35-01-PLAN.md — Health data layer, get_health MCP tool, gRPC GetStatus RPC, daemon wiring
+- [x] 35-02-PLAN.md — CLI status command with colored output, --json, --verbose flags
 
 ### Phase 36: Client Hooks
 **Goal**: Claude Code sessions automatically activate Serena and guide agents toward symbolic tools
@@ -225,7 +225,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
 | 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
-| 35. Health & Status | v1.7 | 0/2 | Not started | - |
+| 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 36. Client Hooks | v1.7 | 0/0 | Not started | - |
 | 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |
 | 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

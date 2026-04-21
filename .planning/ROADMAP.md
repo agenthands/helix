@@ -106,7 +106,7 @@
 
 **Milestone Goal:** Zero-friction onboarding with auto-detection, client hooks, real-time health visibility, and self-guiding tool surface for coding agents.
 
-- [ ] **Phase 34: Setup CLI Foundation** — One-command MCP registration for 6 clients with language detection and LS pre-install
+- [x] **Phase 34: Setup CLI Foundation** — One-command MCP registration for 6 clients with language detection and LS pre-install (completed 2026-04-21)
 - [ ] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility
 - [ ] **Phase 36: Client Hooks** — Claude Code hook auto-installation for session lifecycle and tool nudging
 - [ ] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions
@@ -126,7 +126,7 @@
 **Plans**: 2 plans
 Plans:
 - [x] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
-- [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
+- [x] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 35: Health & Status
 **Goal**: Agents and users can inspect workspace health and LS status at any time
@@ -139,7 +139,7 @@ Plans:
   4. Health output defaults to error-only mode, surfacing only actionable failures unless verbose is requested
 **Plans**: 2 plans
 Plans:
-- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [x] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
 - [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 36: Client Hooks
@@ -224,7 +224,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 31. Multi-language Grammar Expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
-| 34. Setup CLI Foundation | v1.7 | 1/2 | In Progress|  |
+| 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 35. Health & Status | v1.7 | 0/0 | Not started | - |
 | 36. Client Hooks | v1.7 | 0/0 | Not started | - |
 | 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |

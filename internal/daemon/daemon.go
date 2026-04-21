@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -26,6 +27,7 @@ import (
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/kernel/edit"
 	"github.com/postfix/serena/internal/kernel/fileops"
+	"github.com/postfix/serena/internal/kernel/health"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
 	"github.com/postfix/serena/internal/langregistry"
@@ -236,6 +238,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
+	health.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
 	for _, tp := range skill.ToolProviders() {
@@ -467,6 +470,7 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	)
 	serenav1.RegisterForwarderServiceServer(d.grpcServer, &forwarderServiceHandler{
 		mcpServer: d.mcpServer,
+		kernel:    d.kernel,
 		logger:    d.logger,
 	})
 
@@ -525,6 +529,7 @@ func (d *Daemon) Workspaces() *workspace.Registry {
 type forwarderServiceHandler struct {
 	serenav1.UnimplementedForwarderServiceServer
 	mcpServer *serenaMCP.SerenaMCPServer
+	kernel    *kernel.Kernel
 	logger    *slog.Logger
 }
 
@@ -553,6 +558,18 @@ func (h *forwarderServiceHandler) StreamMCP(stream serenav1.ForwarderService_Str
 	err = session.Wait()
 	h.logger.Info("forwarder stream ended", "session_id", sessionID)
 	return err
+}
+
+// GetStatus returns workspace health for the CLI status command.
+func (h *forwarderServiceHandler) GetStatus(ctx context.Context, req *serenav1.StatusRequest) (*serenav1.StatusResponse, error) {
+	report := h.kernel.HealthStatus()
+	health.FilterReport(report, req.Verbose)
+
+	payload, err := json.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling health report: %w", err)
+	}
+	return &serenav1.StatusResponse{Payload: payload}, nil
 }
 
 // enrichRepoMapFromLSP opportunistically enriches the repomap graph with

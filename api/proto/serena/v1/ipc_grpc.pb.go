@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ForwarderService_StreamMCP_FullMethodName = "/serena.v1.ForwarderService/StreamMCP"
-	ForwarderService_GetStatus_FullMethodName = "/serena.v1.ForwarderService/GetStatus"
+	ForwarderService_StreamMCP_FullMethodName           = "/serena.v1.ForwarderService/StreamMCP"
+	ForwarderService_GetStatus_FullMethodName           = "/serena.v1.ForwarderService/GetStatus"
+	ForwarderService_ActivateWorkspace_FullMethodName   = "/serena.v1.ForwarderService/ActivateWorkspace"
+	ForwarderService_DeactivateWorkspace_FullMethodName = "/serena.v1.ForwarderService/DeactivateWorkspace"
 )
 
 // ForwarderServiceClient is the client API for ForwarderService service.
@@ -35,6 +37,10 @@ type ForwarderServiceClient interface {
 	StreamMCP(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MCPMessage, MCPMessage], error)
 	// GetStatus returns workspace health for the CLI status command.
 	GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	// ActivateWorkspace ensures a workspace is active in the kernel.
+	ActivateWorkspace(ctx context.Context, in *ActivateRequest, opts ...grpc.CallOption) (*ActivateResponse, error)
+	// DeactivateWorkspace cleans up workspace session state.
+	DeactivateWorkspace(ctx context.Context, in *DeactivateRequest, opts ...grpc.CallOption) (*DeactivateResponse, error)
 }
 
 type forwarderServiceClient struct {
@@ -68,6 +74,26 @@ func (c *forwarderServiceClient) GetStatus(ctx context.Context, in *StatusReques
 	return out, nil
 }
 
+func (c *forwarderServiceClient) ActivateWorkspace(ctx context.Context, in *ActivateRequest, opts ...grpc.CallOption) (*ActivateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ActivateResponse)
+	err := c.cc.Invoke(ctx, ForwarderService_ActivateWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwarderServiceClient) DeactivateWorkspace(ctx context.Context, in *DeactivateRequest, opts ...grpc.CallOption) (*DeactivateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeactivateResponse)
+	err := c.cc.Invoke(ctx, ForwarderService_DeactivateWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForwarderServiceServer is the server API for ForwarderService service.
 // All implementations must embed UnimplementedForwarderServiceServer
 // for forward compatibility.
@@ -80,6 +106,10 @@ type ForwarderServiceServer interface {
 	StreamMCP(grpc.BidiStreamingServer[MCPMessage, MCPMessage]) error
 	// GetStatus returns workspace health for the CLI status command.
 	GetStatus(context.Context, *StatusRequest) (*StatusResponse, error)
+	// ActivateWorkspace ensures a workspace is active in the kernel.
+	ActivateWorkspace(context.Context, *ActivateRequest) (*ActivateResponse, error)
+	// DeactivateWorkspace cleans up workspace session state.
+	DeactivateWorkspace(context.Context, *DeactivateRequest) (*DeactivateResponse, error)
 	mustEmbedUnimplementedForwarderServiceServer()
 }
 
@@ -95,6 +125,12 @@ func (UnimplementedForwarderServiceServer) StreamMCP(grpc.BidiStreamingServer[MC
 }
 func (UnimplementedForwarderServiceServer) GetStatus(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedForwarderServiceServer) ActivateWorkspace(context.Context, *ActivateRequest) (*ActivateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ActivateWorkspace not implemented")
+}
+func (UnimplementedForwarderServiceServer) DeactivateWorkspace(context.Context, *DeactivateRequest) (*DeactivateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeactivateWorkspace not implemented")
 }
 func (UnimplementedForwarderServiceServer) mustEmbedUnimplementedForwarderServiceServer() {}
 func (UnimplementedForwarderServiceServer) testEmbeddedByValue()                          {}
@@ -142,6 +178,42 @@ func _ForwarderService_GetStatus_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForwarderService_ActivateWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ActivateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwarderServiceServer).ActivateWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwarderService_ActivateWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwarderServiceServer).ActivateWorkspace(ctx, req.(*ActivateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwarderService_DeactivateWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeactivateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwarderServiceServer).DeactivateWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwarderService_DeactivateWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwarderServiceServer).DeactivateWorkspace(ctx, req.(*DeactivateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForwarderService_ServiceDesc is the grpc.ServiceDesc for ForwarderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +224,14 @@ var ForwarderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _ForwarderService_GetStatus_Handler,
+		},
+		{
+			MethodName: "ActivateWorkspace",
+			Handler:    _ForwarderService_ActivateWorkspace_Handler,
+		},
+		{
+			MethodName: "DeactivateWorkspace",
+			Handler:    _ForwarderService_DeactivateWorkspace_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

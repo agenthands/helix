@@ -572,6 +572,56 @@ func (h *forwarderServiceHandler) GetStatus(ctx context.Context, req *serenav1.S
 	return &serenav1.StatusResponse{Payload: payload}, nil
 }
 
+// ActivateWorkspace ensures a workspace is active in the kernel (HOOK-01).
+func (h *forwarderServiceHandler) ActivateWorkspace(ctx context.Context, req *serenav1.ActivateRequest) (*serenav1.ActivateResponse, error) {
+	wsPath := req.WorkspacePath
+	if wsPath == "" {
+		return nil, fmt.Errorf("workspace_path is required")
+	}
+
+	// Resolve to absolute path for safety (T-36-06)
+	absPath, err := filepath.Abs(wsPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving workspace path: %w", err)
+	}
+
+	// Verify it's a directory
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("workspace path %s: %w", absPath, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("workspace path %s is not a directory", absPath)
+	}
+
+	_, err = h.kernel.ActivateWorkspace(ctx, absPath)
+	if err != nil {
+		return nil, fmt.Errorf("activating workspace: %w", err)
+	}
+
+	h.logger.Info("workspace activated via gRPC", "path", absPath)
+	return &serenav1.ActivateResponse{
+		AlreadyActive: false, // Kernel handles idempotency internally
+		Status:        "activated",
+	}, nil
+}
+
+// DeactivateWorkspace cleans up session state for a workspace (HOOK-03).
+func (h *forwarderServiceHandler) DeactivateWorkspace(ctx context.Context, req *serenav1.DeactivateRequest) (*serenav1.DeactivateResponse, error) {
+	wsPath := req.WorkspacePath
+	if wsPath == "" {
+		return nil, fmt.Errorf("workspace_path is required")
+	}
+
+	h.logger.Info("workspace deactivation requested via gRPC", "path", wsPath)
+	// Note: We don't actually shut down the workspace in the kernel --
+	// other sessions may be using it. We just acknowledge the deactivation.
+	// Session-scoped cleanup (counter files) is handled client-side.
+	return &serenav1.DeactivateResponse{
+		Status: "deactivated",
+	}, nil
+}
+
 // enrichRepoMapFromLSP opportunistically enriches the repomap graph with
 // LSP cross-file references. Queries each defined symbol's actual position
 // rather than a fixed 0:0, which yields meaningful cross-file references.

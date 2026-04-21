@@ -9,6 +9,7 @@
 - ✅ **v1.4 Integration Testing v2** — Phases 18-21 (shipped 2026-04-14)
 - ✅ **v1.5 Typed Errors & Hardening** — Phases 22-24 (shipped 2026-04-15)
 - ✅ **v1.6 Context Intelligence & Resilient Editing** — Phases 25-33 (shipped 2026-04-20)
+- 🚧 **v1.7 Developer Experience & Auto-Setup** — Phases 34-38 (in progress)
 
 ## Phases
 
@@ -101,7 +102,77 @@
 
 </details>
 
+### v1.7 Developer Experience & Auto-Setup (In Progress)
+
+**Milestone Goal:** Zero-friction onboarding with auto-detection, client hooks, real-time health visibility, and self-guiding tool surface for coding agents.
+
+- [ ] **Phase 34: Setup CLI Foundation** — One-command MCP registration for 6 clients with language detection and LS pre-install
+- [ ] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility
+- [ ] **Phase 36: Client Hooks** — Claude Code hook auto-installation for session lifecycle and tool nudging
+- [ ] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions
+- [ ] **Phase 38: Progressive Descriptions & Lazy Init** — Tiered tool descriptions, deep-dive help tool, and lazy workspace activation
+
+## Phase Details
+
+### Phase 34: Setup CLI Foundation
+**Goal**: Users can register Serena with any supported coding agent in one command
+**Depends on**: Phase 33
+**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05, SETUP-06, SETUP-07, SETUP-08
+**Success Criteria** (what must be TRUE):
+  1. User can run `serena setup claude-code` and the MCP server appears in Claude Code's tool list without manual config editing
+  2. User can run `serena setup <client>` for any of the 6 supported clients (claude-code, vscode, jetbrains, claude-desktop, gemini-cli, generic) and get a working MCP registration
+  3. Setup detects project languages from the current directory and pre-installs available language servers automatically
+  4. Setup uses client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
+**Plans**: TBD
+
+### Phase 35: Health & Status
+**Goal**: Agents and users can inspect workspace health and LS status at any time
+**Depends on**: Phase 34
+**Requirements**: HLTH-01, HLTH-02, HLTH-03, HLTH-04
+**Success Criteria** (what must be TRUE):
+  1. Agent can call `get_health` MCP tool and receive a list of active language servers with their status (running, crashed, indexing)
+  2. `get_health` response includes per-workspace capabilities and indexing progress
+  3. User can run `serena status` from the CLI and see a human-readable workspace health summary
+  4. Health output defaults to error-only mode, surfacing only actionable failures unless verbose is requested
+**Plans**: TBD
+
+### Phase 36: Client Hooks
+**Goal**: Claude Code sessions automatically activate Serena and guide agents toward symbolic tools
+**Depends on**: Phase 34, Phase 35
+**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04
+**Success Criteria** (what must be TRUE):
+  1. Starting a new Claude Code session in a project with Serena setup triggers automatic workspace activation via SessionStart hook
+  2. When an agent overuses grep/read for code navigation, PreToolUse hook nudges it toward Serena's symbolic tools (find_symbol, get_symbols_overview)
+  3. Ending a Claude Code session triggers cleanup of session data via Stop hook
+  4. Running `serena setup claude-code` installs all three hooks into Claude Code user settings automatically
+**Plans**: TBD
+
+### Phase 37: Smart Error Responses
+**Goal**: Agents receive actionable parameter corrections when they misuse tools
+**Depends on**: Phase 34
+**Requirements**: SERR-01, SERR-02, SERR-03
+**Success Criteria** (what must be TRUE):
+  1. When an agent passes a wrong parameter name or value, the error response includes a "did you mean" suggestion with the correct parameter
+  2. Error suggestions only correct parameters within the same tool — they never redirect to a different tool
+  3. Smart error enrichment is implemented as middleware wrapping the existing typed error taxonomy, not modifying error kinds
+**Plans**: TBD
+
+### Phase 38: Progressive Descriptions & Lazy Init
+**Goal**: Tool surface is self-documenting for agents, and workspaces activate automatically on first use
+**Depends on**: Phase 34, Phase 35
+**Requirements**: DESC-01, DESC-02, DESC-03, LAZY-01, LAZY-02
+**Success Criteria** (what must be TRUE):
+  1. Tool listings show brief descriptions (under 100 tokens each), while detailed documentation is available on demand
+  2. Agent can call `get_tool_help <tool_name>` and receive comprehensive documentation including usage examples and parameter details
+  3. Description changes are gated by behavioral test regression — no description ships without passing tool selection tests
+  4. If setup was not run, the first MCP tool call transparently triggers workspace activation before executing
+  5. Concurrent first calls from multiple agents are safely serialized (no duplicate initialization or races)
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -129,12 +200,17 @@
 | 22. Error Taxonomy | v1.5 | 2/2 | Complete | 2026-04-15 |
 | 23. Tool Migration | v1.5 | 8/8 | Complete | 2026-04-15 |
 | 24. Validation & Testing | v1.5 | 2/2 | Complete | 2026-04-15 |
-| 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete   | 2026-04-16 |
-| 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete   | 2026-04-16 |
-| 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete   | 2026-04-16 |
-| 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete   | 2026-04-17 |
-| 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete   | 2026-04-17 |
-| 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete    | 2026-04-17 |
-| 31. Multi-language grammar expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
+| 25. Fuzzy Edit Engine | v1.6 | 6/6 | Complete | 2026-04-16 |
+| 26. Fuzzy Edit Integration | v1.6 | 2/2 | Complete | 2026-04-16 |
+| 27. RepoMap Tag Extraction & Cache | v1.6 | 4/4 | Complete | 2026-04-16 |
+| 28. RepoMap Graph & MCP Tools | v1.6 | 3/3 | Complete | 2026-04-17 |
+| 29. Phase 25 Formal Verification | v1.6 | 1/1 | Complete | 2026-04-17 |
+| 30. RepoMap Pipeline Wiring | v1.6 | 2/2 | Complete | 2026-04-17 |
+| 31. Multi-language Grammar Expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
-| 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete   | 2026-04-20 |
+| 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
+| 34. Setup CLI Foundation | v1.7 | 0/0 | Not started | - |
+| 35. Health & Status | v1.7 | 0/0 | Not started | - |
+| 36. Client Hooks | v1.7 | 0/0 | Not started | - |
+| 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |
+| 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

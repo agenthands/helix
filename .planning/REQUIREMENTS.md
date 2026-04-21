@@ -86,36 +86,36 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | — | Pending |
-| SETUP-02 | — | Pending |
-| SETUP-03 | — | Pending |
-| SETUP-04 | — | Pending |
-| SETUP-05 | — | Pending |
-| SETUP-06 | — | Pending |
-| SETUP-07 | — | Pending |
-| SETUP-08 | — | Pending |
-| HOOK-01 | — | Pending |
-| HOOK-02 | — | Pending |
-| HOOK-03 | — | Pending |
-| HOOK-04 | — | Pending |
-| HLTH-01 | — | Pending |
-| HLTH-02 | — | Pending |
-| HLTH-03 | — | Pending |
-| HLTH-04 | — | Pending |
-| SERR-01 | — | Pending |
-| SERR-02 | — | Pending |
-| SERR-03 | — | Pending |
-| DESC-01 | — | Pending |
-| DESC-02 | — | Pending |
-| DESC-03 | — | Pending |
-| LAZY-01 | — | Pending |
-| LAZY-02 | — | Pending |
+| SETUP-01 | Phase 34 | Pending |
+| SETUP-02 | Phase 34 | Pending |
+| SETUP-03 | Phase 34 | Pending |
+| SETUP-04 | Phase 34 | Pending |
+| SETUP-05 | Phase 34 | Pending |
+| SETUP-06 | Phase 34 | Pending |
+| SETUP-07 | Phase 34 | Pending |
+| SETUP-08 | Phase 34 | Pending |
+| HOOK-01 | Phase 36 | Pending |
+| HOOK-02 | Phase 36 | Pending |
+| HOOK-03 | Phase 36 | Pending |
+| HOOK-04 | Phase 36 | Pending |
+| HLTH-01 | Phase 35 | Pending |
+| HLTH-02 | Phase 35 | Pending |
+| HLTH-03 | Phase 35 | Pending |
+| HLTH-04 | Phase 35 | Pending |
+| SERR-01 | Phase 37 | Pending |
+| SERR-02 | Phase 37 | Pending |
+| SERR-03 | Phase 37 | Pending |
+| DESC-01 | Phase 38 | Pending |
+| DESC-02 | Phase 38 | Pending |
+| DESC-03 | Phase 38 | Pending |
+| LAZY-01 | Phase 38 | Pending |
+| LAZY-02 | Phase 38 | Pending |
 
 **Coverage:**
 - v1.7 requirements: 24 total
-- Mapped to phases: 0
-- Unmapped: 24
+- Mapped to phases: 24
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 after initial definition*
+*Last updated: 2026-04-20 after roadmap creation*

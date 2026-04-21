@@ -127,7 +127,7 @@ func runDaemon(cmd *cobra.Command) error {
 	if socketPath != "" {
 		overrides["daemon.socket_path"] = socketPath
 	}
-	if httpAddr != "" {
+	if cmd.Flags().Changed("http-addr") {
 		overrides["daemon.http_addr"] = httpAddr
 	}
 	if profileName != "" {

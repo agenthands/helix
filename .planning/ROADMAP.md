@@ -125,7 +125,7 @@
   4. Setup uses client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
 **Plans**: 2 plans
 Plans:
-- [ ] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
+- [x] 34-01-PLAN.md — Setup command scaffold, 6 client registrars, output formatting, root wiring
 - [ ] 34-02-PLAN.md — Language detection, LS pre-install, health check, unit tests
 
 ### Phase 35: Health & Status
@@ -224,7 +224,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 31. Multi-language Grammar Expansion | v1.6 | 4/4 | Complete | 2026-04-20 |
 | 32. v1.6 Documentation Hygiene | v1.6 | 1/1 | Complete | 2026-04-20 |
 | 33. FallbackExtractor Wiring & Cache Persistence | v1.6 | 2/2 | Complete | 2026-04-20 |
-| 34. Setup CLI Foundation | v1.7 | 0/0 | Not started | - |
+| 34. Setup CLI Foundation | v1.7 | 1/2 | In Progress|  |
 | 35. Health & Status | v1.7 | 0/0 | Not started | - |
 | 36. Client Hooks | v1.7 | 0/0 | Not started | - |
 | 37. Smart Error Responses | v1.7 | 0/0 | Not started | - |

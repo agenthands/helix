@@ -29,6 +29,7 @@ type RegistrationConfig struct {
 	DryRun     bool          // --dry-run flag
 	ProjectDir string        // Current working directory
 	OutputPath string        // --output flag (generic client only)
+	NoHooks    bool          // --no-hooks flag (skip hook installation)
 	Printer    *SetupPrinter // Colored output helper
 }
 
@@ -167,6 +168,22 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("claude mcp add-json failed: %w", err)
 	}
+
+	// Hook installation (per D-01, D-16).
+	if !cfg.NoHooks {
+		settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
+		if cfg.DryRun {
+			cfg.Printer.DryRunAction("would write hooks to %s", settingsPath)
+		} else {
+			if err := mergeHooksIntoSettings(settingsPath, cfg.BinaryPath); err != nil {
+				cfg.Printer.Failure("hook installation failed: %s", err)
+				cfg.Printer.Info("MCP registration succeeded; hooks can be installed manually")
+				return nil // Non-fatal per D-16.
+			}
+			cfg.Printer.Success("installed hooks (SessionStart, PreToolUse, Stop)")
+		}
+	}
+
 	return nil
 }
 
@@ -193,6 +210,19 @@ func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("claude mcp remove failed: %w", err)
 	}
+
+	// Hook removal (per D-03).
+	settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove hooks from %s", settingsPath)
+	} else {
+		if err := removeHooksFromSettings(settingsPath); err != nil {
+			cfg.Printer.Failure("hook removal failed: %s", err)
+		} else {
+			cfg.Printer.Success("removed hooks from %s", settingsPath)
+		}
+	}
+
 	return nil
 }
 

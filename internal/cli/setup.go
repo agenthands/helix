@@ -33,6 +33,7 @@ Run with a client name to register Serena for that client.`,
 	cmd.Flags().Bool("skip-install", false, "Skip language server pre-installation")
 	cmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
 	cmd.Flags().String("output", "", "Output path for generic client config (default: stdout)")
+	cmd.Flags().Bool("no-hooks", false, "Skip hook installation (Claude Code only)")
 
 	return cmd
 }
@@ -78,6 +79,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	uninstall, _ := cmd.Flags().GetBool("uninstall")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	outputPath, _ := cmd.Flags().GetString("output")
+	noHooks, _ := cmd.Flags().GetBool("no-hooks")
 
 	printer.DryRun = dryRun
 
@@ -87,6 +89,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		DryRun:     dryRun,
 		ProjectDir: projectDir,
 		OutputPath: outputPath,
+		NoHooks:    noHooks,
 		Printer:    printer,
 	}
 

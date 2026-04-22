@@ -179,10 +179,11 @@ Plans:
   3. Description changes are gated by behavioral test regression — no description ships without passing tool selection tests
   4. If setup was not run, the first MCP tool call transparently triggers workspace activation before executing
   5. Concurrent first calls from multiple agents are safely serialized (no duplicate initialization or races)
-**Plans**: 2 plans
+**Plans**: 3 plans
 Plans:
-- [ ] 38-01-PLAN.md — [to be planned]
-- [ ] 38-02-PLAN.md — [to be planned]
+- [ ] 38-01-PLAN.md — Core infrastructure: ToolDef extension, brief description middleware, lazy init middleware, get_tool_help tool, daemon wiring
+- [ ] 38-02-PLAN.md — Brief descriptions and help text for all 42 tool registration sites (kernel + skill)
+- [ ] 38-03-PLAN.md — Golden-file description snapshot tests, tool manifest count update to 43
 
 ## Progress
 
@@ -228,4 +229,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 36. Client Hooks | v1.7 | 2/2 | Complete    | 2026-04-21 |
 | 37. Smart Error Responses | v1.7 | 2/2 | Complete    | 2026-04-22 |
-| 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |
+| 38. Progressive Descriptions & Lazy Init | v1.7 | 0/3 | Not started | - |

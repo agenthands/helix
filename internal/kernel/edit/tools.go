@@ -136,6 +136,86 @@ func appendVerifyInfo(ctx context.Context, diagStore *diag.DiagnosticStore, uri 
 	return text + "\n\nPost-edit verification: OK (no errors)"
 }
 
+// --- help text constants ---
+
+const replaceSymbolBodyHelp = `## Usage Examples
+
+Replace a function body entirely:
+  replace_symbol_body(path="src/auth.go", symbol_name="Login", new_body="{\n\treturn nil\n}")
+
+Replace a specific part of a function using search_body:
+  replace_symbol_body(path="src/handler.go", symbol_name="HandleRequest", search_body="if err != nil {\n\treturn err\n}", new_body="if err != nil {\n\tlog.Error(err)\n\treturn fmt.Errorf(\"handle: %w\", err)\n}")
+
+## Common Patterns
+- Use get_symbols_overview first to find the exact symbol name
+- Use search_body to replace only a portion of a large function body
+- Post-edit verification runs automatically and reports any compilation errors`
+
+const insertBeforeSymbolHelp = `## Usage Examples
+
+Add a comment before a function:
+  insert_before_symbol(path="src/api.go", symbol_name="HandleAuth", content="// HandleAuth authenticates incoming requests.\n")
+
+Add an import before a class definition:
+  insert_before_symbol(path="src/models.py", symbol_name="User", content="from datetime import datetime\n\n")
+
+## Common Patterns
+- Use to add documentation, decorators, or preceding definitions
+- Content is inserted on the line immediately before the symbol
+- Combine with get_symbols_overview to verify symbol names`
+
+const insertAfterSymbolHelp = `## Usage Examples
+
+Add a new function after an existing one:
+  insert_after_symbol(path="src/utils.go", symbol_name="ParseConfig", content="\nfunc ValidateConfig(cfg *Config) error {\n\treturn nil\n}\n")
+
+Add a test helper after a test function:
+  insert_after_symbol(path="src/auth_test.go", symbol_name="TestLogin", content="\nfunc TestLogout(t *testing.T) {\n}\n")
+
+## Common Patterns
+- Use to add related functions near existing code
+- Content is inserted on the line immediately after the symbol
+- Include leading newline for proper spacing between symbols`
+
+const renameSymbolHelp = `## Usage Examples
+
+Rename a function across the workspace:
+  rename_symbol(path="src/auth.go", line=15, column=6, new_name="AuthenticateUser")
+
+Rename a struct type:
+  rename_symbol(path="src/models.go", line=8, column=6, new_name="UserProfile")
+
+## Common Patterns
+- Updates all references across all files in the workspace
+- Line and column are 1-indexed (matching editor display)
+- Use find_references first to preview what will change`
+
+const safeDeleteSymbolHelp = `## Usage Examples
+
+Delete an unused function:
+  safe_delete_symbol(path="src/legacy.go", symbol_name="OldHandler")
+
+Force-delete even if references exist:
+  safe_delete_symbol(path="src/deprecated.go", symbol_name="DeprecatedFunc", force=true)
+
+## Common Patterns
+- Checks for references before deleting; reports count if blocked
+- Use force=true only when you have already updated all callers
+- Combine with find_references to review usage before deletion`
+
+const verifyEditHelp = `## Usage Examples
+
+Check for errors after editing a file:
+  verify_edit(path="src/auth.go")
+
+Verify a test file compiles:
+  verify_edit(path="src/auth_test.go")
+
+## Common Patterns
+- Called automatically after replace_symbol_body and other edit tools
+- Use manually to check compilation status of any file
+- Returns "No errors found" or lists errors with line:col and message`
+
 // --- tool registrations ---
 
 func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -188,7 +268,7 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction"})
+	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction", BriefDescription: "Replace the entire body of a function, method, or class", HelpText: replaceSymbolBodyHelp})
 }
 
 func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -235,7 +315,7 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "insert_before_symbol", Description: "Insert content immediately before a symbol"})
+	server.Registry().Register(&mcp.ToolDef{Name: "insert_before_symbol", Description: "Insert content immediately before a symbol", BriefDescription: "Insert code before a symbol definition", HelpText: insertBeforeSymbolHelp})
 }
 
 func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -282,7 +362,7 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol"})
+	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol", BriefDescription: "Insert code after a symbol definition", HelpText: insertAfterSymbolHelp})
 }
 
 func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -318,7 +398,7 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "rename_symbol", Description: "Rename a symbol across all files in the workspace"})
+	server.Registry().Register(&mcp.ToolDef{Name: "rename_symbol", Description: "Rename a symbol across all files in the workspace", BriefDescription: "Rename a symbol across the entire workspace", HelpText: renameSymbolHelp})
 }
 
 func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -372,7 +452,7 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "safe_delete_symbol", Description: "Delete a symbol if it has no references; reports reference count if blocked"})
+	server.Registry().Register(&mcp.ToolDef{Name: "safe_delete_symbol", Description: "Delete a symbol if it has no references; reports reference count if blocked", BriefDescription: "Remove a symbol definition from a file", HelpText: safeDeleteSymbolHelp})
 }
 
 func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -404,5 +484,5 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 		}
 		return textResult(sb.String()), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "verify_edit", Description: "Check for compilation errors after an edit; returns diagnostic summary"})
+	server.Registry().Register(&mcp.ToolDef{Name: "verify_edit", Description: "Check for compilation errors after an edit; returns diagnostic summary", BriefDescription: "Check for compilation errors after an edit", HelpText: verifyEditHelp})
 }

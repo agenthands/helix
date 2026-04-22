@@ -62,6 +62,105 @@ type FuzzyEditArgs struct {
 	DisableEllipsis bool   `json:"disable_ellipsis,omitempty" jsonschema:"Disable ... ellipsis segmentation (default false, meaning ellipsis is enabled)"`
 }
 
+// --- help text constants ---
+
+const readFileHelp = `## Usage Examples
+
+Read an entire file:
+  read_file(path="src/main.go")
+
+Read a specific line range:
+  read_file(path="src/server.go", start_line=10, end_line=30)
+
+## Common Patterns
+- Use start_line/end_line to read only the relevant portion of large files
+- Line numbers are 1-indexed and end_line is inclusive
+- Combine with get_symbols_overview to find which lines to read`
+
+const createFileHelp = `## Usage Examples
+
+Create a new Go file:
+  create_file(path="src/handlers/health.go", content="package handlers\n\nfunc HealthCheck() string {\n\treturn \"ok\"\n}\n")
+
+Create a configuration file:
+  create_file(path="config/defaults.yaml", content="server:\n  port: 8080\n")
+
+## Common Patterns
+- Errors if the file already exists (use replace_in_file or fuzzy_edit to modify existing files)
+- Creates parent directories automatically
+- Path is relative to workspace root`
+
+const listDirectoryHelp = `## Usage Examples
+
+List the project root:
+  list_directory(path=".")
+
+List a specific subdirectory:
+  list_directory(path="src/handlers")
+
+## Common Patterns
+- Shows file type (FILE/DIR), size, modification time, and name
+- Use to explore unfamiliar project structures
+- Combine with find_files for recursive pattern matching`
+
+const findFilesHelp = `## Usage Examples
+
+Find all Go files recursively:
+  find_files(pattern="**/*.go")
+
+Find test files in a specific directory:
+  find_files(pattern="src/**/*_test.go")
+
+Find configuration files:
+  find_files(pattern="*.yaml")
+
+## Common Patterns
+- Supports ** for recursive directory matching
+- Returns file paths relative to workspace root
+- Use to locate files before reading or editing them`
+
+const searchInFilesHelp = `## Usage Examples
+
+Search for a function name:
+  search_in_files(pattern="func HandleRequest")
+
+Search with context lines in specific files:
+  search_in_files(pattern="TODO|FIXME", include_glob="*.go", context_lines=2)
+
+Search excluding test files:
+  search_in_files(pattern="db\\.Connect", exclude_glob="*_test.go", max_results=50)
+
+## Common Patterns
+- Pattern is a regex; escape special characters with backslash
+- Use include_glob/exclude_glob to narrow the search scope
+- Default max_results is 100; increase for broader searches`
+
+const replaceInFileHelp = `## Usage Examples
+
+Replace a string literal:
+  replace_in_file(path="src/config.go", pattern="localhost:8080", replacement="0.0.0.0:9090")
+
+Replace using regex:
+  replace_in_file(path="src/api.go", pattern="v1\\.([a-z]+)", replacement="v2.$1", is_regex=true)
+
+## Common Patterns
+- Default is literal matching; set is_regex=true for regex patterns
+- Replaces all occurrences in the file
+- Falls back to fuzzy matching when literal match finds 0 hits`
+
+const fuzzyEditHelp = `## Usage Examples
+
+Replace a code block with fuzzy matching:
+  fuzzy_edit(path="src/handler.go", search="if err != nil {\n  return err\n}", replacement="if err != nil {\n  return fmt.Errorf(\"handler: %w\", err)\n}")
+
+Use ellipsis to skip middle content:
+  fuzzy_edit(path="src/main.go", search="func main() {\n...\n  server.Start()\n}", replacement="func main() {\n...\n  server.StartTLS()\n}")
+
+## Common Patterns
+- Uses 4-strategy cascade: exact, whitespace-normalized, indentation-flexible, fuzzy
+- Ellipsis (...) segments skip arbitrary content between anchors
+- Reports match_strategy and similarity_score for transparency`
+
 // RegisterTools registers all file operation tools with the MCP tool registry.
 // The workspaceRoot function provides the active workspace root path.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
@@ -125,7 +224,7 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer 
 		}
 		return textResult(content), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range"})
+	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range", BriefDescription: "Read the contents of a file", HelpText: readFileHelp})
 }
 
 func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -147,7 +246,7 @@ func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, trace
 		}
 		return textResult("created: " + args.Path), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "create_file", Description: "Create a new file with content (errors if file already exists)"})
+	server.Registry().Register(&mcp.ToolDef{Name: "create_file", Description: "Create a new file with content (errors if file already exists)", BriefDescription: "Write content to a file, creating it if needed", HelpText: createFileHelp})
 }
 
 func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -182,7 +281,7 @@ func registerListDirectory(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		}
 		return textResult(sb.String()), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "list_directory", Description: "List directory contents with file type, size, and modification time"})
+	server.Registry().Register(&mcp.ToolDef{Name: "list_directory", Description: "List directory contents with file type, size, and modification time", BriefDescription: "List files and directories in a path", HelpText: listDirectoryHelp})
 }
 
 func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -209,7 +308,7 @@ func registerFindFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 		}
 		return textResult(strings.Join(files, "\n")), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "find_files", Description: "Find files matching a glob pattern (supports ** for recursive matching)"})
+	server.Registry().Register(&mcp.ToolDef{Name: "find_files", Description: "Find files matching a glob pattern (supports ** for recursive matching)", BriefDescription: "Search for files by name pattern", HelpText: findFilesHelp})
 }
 
 func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -254,7 +353,7 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		}
 		return textResult(sb.String()), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines"})
+	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines", BriefDescription: "Search file contents using regex patterns", HelpText: searchInFilesHelp})
 }
 
 func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -304,7 +403,7 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)"})
+	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)", BriefDescription: "Replace text in a file using exact string matching", HelpText: replaceInFileHelp})
 }
 
 func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
@@ -335,6 +434,6 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 			args.Path, result.Strategy, result.Score)
 		return textResult(text), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "fuzzy_edit", Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)"})
+	server.Registry().Register(&mcp.ToolDef{Name: "fuzzy_edit", Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)", BriefDescription: "Apply a fuzzy text edit using search/replace with context matching", HelpText: fuzzyEditHelp})
 }
 

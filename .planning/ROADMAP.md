@@ -166,7 +166,7 @@ Plans:
   3. Smart error enrichment is implemented as middleware wrapping the existing typed error taxonomy, not modifying error kinds
 **Plans**: 2 plans
 Plans:
-- [ ] 37-01-PLAN.md — Suggestion engine: Levenshtein helpers, ToolSchemaMap, SuggestionMiddleware, unit tests
+- [x] 37-01-PLAN.md — Suggestion engine: Levenshtein helpers, ToolSchemaMap, SuggestionMiddleware, unit tests
 - [ ] 37-02-PLAN.md — Daemon wiring: tool schema collection, middleware installation
 
 ### Phase 38: Progressive Descriptions & Lazy Init
@@ -227,5 +227,5 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 36. Client Hooks | v1.7 | 2/2 | Complete    | 2026-04-21 |
-| 37. Smart Error Responses | v1.7 | 0/2 | Not started | - |
+| 37. Smart Error Responses | v1.7 | 1/2 | In Progress|  |
 | 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

@@ -317,6 +317,14 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	})
 	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, logger)
 
+	// 14b. Install suggestion middleware: enriches error responses with "did you mean"
+	// parameter corrections (SERR-01, SERR-02, SERR-03). Schema map built from all
+	// registered tools (steps 10-11 complete). Must run AFTER InstallMiddleware so
+	// SuggestionMiddleware sits between the tool handler and TelemetryMiddleware --
+	// errors are enriched before telemetry classifies the outcome.
+	suggestionSchemaMap := serenaMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
+	serenaMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
+
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session
 	// so TelemetryMiddleware can surface it as the "language" metric label.

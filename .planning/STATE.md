@@ -74,6 +74,19 @@ None.
 - MCP SDK `tools/changed` notification support needed for dynamic descriptions (verify during Phase 38)
 - gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64 may affect CI fixture tests (v1.2 known debt)
 
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-04-22:
+
+| Category | Item | Status | Notes |
+|----------|------|--------|-------|
+| uat_gaps | Phase 36: 36-HUMAN-UAT.md | partial | 4 scenarios require live Claude Code hooks pipeline |
+| verification | Phase 34: 34-VERIFICATION.md | human_needed | Requires Claude CLI, Gemini CLI, VS Code, JetBrains |
+| verification | Phase 35: 35-VERIFICATION.md | human_needed | CLI color output + exit codes (MCP layer now covered by integration tests) |
+| verification | Phase 36: 36-VERIFICATION.md | human_needed | Requires live Claude Code session for hook lifecycle |
+| verification | Phase 37: 37-VERIFICATION.md | human_needed | Now covered by TestSuggestionMiddlewareParamTypo integration test |
+| verification | Phase 38: 38-VERIFICATION.md | human_needed | Now covered by 3 integration tests in tools_integration_test.go |
+
 ## Session Continuity
 
 Last session: 2026-04-22T18:17:43.211Z

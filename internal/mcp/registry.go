@@ -7,8 +7,10 @@ import (
 
 // ToolDef holds a tool definition before registration with the MCP SDK server.
 type ToolDef struct {
-	Name        string
-	Description string
+	Name             string
+	Description      string
+	BriefDescription string // short description for tools/list (under 100 tokens, DESC-01)
+	HelpText         string // usage examples and patterns for get_tool_help (DESC-02)
 	// RegisterFn is called to register this tool with the MCP SDK server.
 	// This is a callback because the SDK's AddTool is generic and requires type params.
 	RegisterFn func(server interface{}) error
@@ -61,4 +63,25 @@ func (r *ToolRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.tools)
+}
+
+// BriefDescriptions returns a map of tool name to BriefDescription for all
+// tools that have a non-empty BriefDescription (DESC-01).
+func (r *ToolRegistry) BriefDescriptions() map[string]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	descs := make(map[string]string, len(r.tools))
+	for name, def := range r.tools {
+		if def.BriefDescription != "" {
+			descs[name] = def.BriefDescription
+		}
+	}
+	return descs
+}
+
+// Get returns the ToolDef for a tool by name, or nil if not found.
+func (r *ToolRegistry) Get(name string) *ToolDef {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.tools[name]
 }

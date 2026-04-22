@@ -315,7 +315,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	budgetFn := serenaMCP.BudgetFunc(func(toolName string) time.Duration {
 		return degrade.BudgetFor(toolName, degradeCfg)
 	})
-	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, logger)
+	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, mcpServer.Registry(), logger)
 
 	// 14b. Install suggestion middleware: enriches error responses with "did you mean"
 	// parameter corrections (SERR-01, SERR-02, SERR-03). Schema map built from all
@@ -382,12 +382,14 @@ func registerSkillTools(server *serenaMCP.SerenaMCPServer, tp skill.ToolProvider
 	executor, hasExecutor := tp.(SkillToolExecutor)
 	for _, td := range tp.Tools() {
 		if hasExecutor {
-			server.AddSkillTool(td.Name, td.Description, executor)
+			server.AddSkillTool(td.Name, td.Description, td.BriefDescription, td.HelpText, executor)
 		} else {
 			// Catalog-only registration (e.g., profile skill with custom Execute* methods).
 			server.Registry().Register(&serenaMCP.ToolDef{
-				Name:        td.Name,
-				Description: td.Description,
+				Name:             td.Name,
+				Description:      td.Description,
+				BriefDescription: td.BriefDescription,
+				HelpText:         td.HelpText,
 			})
 		}
 	}

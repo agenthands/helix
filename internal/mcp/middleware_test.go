@@ -37,7 +37,7 @@ func TestProfileFilterMiddleware_FiltersToolsList(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	// Simulate a tools/list response with 3 tools (one should be filtered)
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
@@ -85,7 +85,7 @@ func TestProfileFilterMiddleware_AppliesDescriptionOverrides(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.ListToolsResult{
@@ -120,7 +120,7 @@ func TestProfileFilterMiddleware_PassesThroughNonToolsMethods(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return nil
-	}, logger)
+	}, nil, logger)
 
 	called := false
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
@@ -144,7 +144,7 @@ func TestProfileFilterMiddleware_NilSession(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return nil
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.ListToolsResult{
@@ -181,7 +181,7 @@ func TestProfileFilterMiddleware_NilAllowedToolsPassesAll(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	mw := mcp.ProfileFilterMiddleware(resolver, func(ctx context.Context) *mcp.SessionInfo {
 		return session
-	}, logger)
+	}, nil, logger)
 
 	inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 		return &mcpsdk.ListToolsResult{

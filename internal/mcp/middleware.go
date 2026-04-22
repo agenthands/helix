@@ -34,10 +34,14 @@ import (
 // (mcp -> config -> profile -> mcp).
 type BudgetFunc func(toolName string) time.Duration
 
-func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, budgetFn BudgetFunc, logger *slog.Logger) {
+func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, budgetFn BudgetFunc, registry *ToolRegistry, logger *slog.Logger) {
 	server.AddReceivingMiddleware(TelemetryMiddleware(provider, getSession, budgetFn, logger))
 	if resolver != nil {
-		server.AddReceivingMiddleware(ProfileFilterMiddleware(resolver, getSession, logger))
+		var briefDescs map[string]string
+		if registry != nil {
+			briefDescs = registry.BriefDescriptions()
+		}
+		server.AddReceivingMiddleware(ProfileFilterMiddleware(resolver, getSession, briefDescs, logger))
 	}
 }
 
@@ -237,7 +241,7 @@ type ProfileResolver interface {
 // the active session's AllowedTools and applies description overrides from the
 // profile (PRF-03). For tools/list requests it filters and rewrites descriptions;
 // all other methods pass through unchanged.
-func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, logger *slog.Logger) mcpsdk.Middleware {
+func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx context.Context) *SessionInfo, briefDescs map[string]string, logger *slog.Logger) mcpsdk.Middleware {
 	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
 		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 			result, err := next(ctx, method, req)
@@ -277,6 +281,16 @@ func ProfileFilterMiddleware(resolver ProfileResolver, getSession func(ctx conte
 					}
 				}
 				listResult.Tools = filtered
+			}
+
+			// Apply brief descriptions (DESC-01, D-02). Applied before profile
+			// overrides so ToolDescriptionOverrides win when both are present.
+			if briefDescs != nil {
+				for _, tool := range listResult.Tools {
+					if brief, ok := briefDescs[tool.Name]; ok && brief != "" {
+						tool.Description = brief
+					}
+				}
 			}
 
 			// Apply description overrides from the profile.

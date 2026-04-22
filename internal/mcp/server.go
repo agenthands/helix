@@ -174,6 +174,18 @@ func (s *SerenaMCPServer) AddTool(tool *mcpsdk.Tool, handler mcpsdk.ToolHandler)
 	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
+// AddToolWithMeta registers a tool with optional BriefDescription and HelpText metadata (DESC-01, DESC-02).
+func (s *SerenaMCPServer) AddToolWithMeta(tool *mcpsdk.Tool, handler mcpsdk.ToolHandler, brief, helpText string) {
+	s.sdk.AddTool(tool, handler)
+	s.registry.Register(&ToolDef{
+		Name:             tool.Name,
+		Description:      tool.Description,
+		BriefDescription: brief,
+		HelpText:         helpText,
+	})
+	s.toolSchemas = append(s.toolSchemas, tool)
+}
+
 // RemoveTool removes a tool by name at runtime (MCP-07).
 func (s *SerenaMCPServer) RemoveTool(name string) {
 	s.sdk.RemoveTools(name)
@@ -188,7 +200,7 @@ func (s *SerenaMCPServer) SetActivateCallback(cb ActivateCallback) {
 
 // AddSkillTool registers a skill-provided tool with a generic ExecuteTool handler.
 // Uses the generic mcpsdk.AddTool so the SDK auto-generates an input schema.
-func (s *SerenaMCPServer) AddSkillTool(name, description string, executor SkillToolExecutor) {
+func (s *SerenaMCPServer) AddSkillTool(name, description, briefDescription, helpText string, executor SkillToolExecutor) {
 	toolName := name // capture for closure
 	tool := &mcpsdk.Tool{
 		Name:        toolName,
@@ -210,7 +222,12 @@ func (s *SerenaMCPServer) AddSkillTool(name, description string, executor SkillT
 			},
 		}, nil, nil
 	})
-	s.registry.Register(&ToolDef{Name: name, Description: description})
+	s.registry.Register(&ToolDef{
+		Name:             name,
+		Description:      description,
+		BriefDescription: briefDescription,
+		HelpText:         helpText,
+	})
 	s.toolSchemas = append(s.toolSchemas, tool)
 }
 

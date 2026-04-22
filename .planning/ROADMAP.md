@@ -110,7 +110,7 @@
 - [x] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility (completed 2026-04-21)
 - [x] **Phase 36: Client Hooks** — Claude Code hook auto-installation for session lifecycle and tool nudging (completed 2026-04-21)
 - [x] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions (completed 2026-04-22)
-- [ ] **Phase 38: Progressive Descriptions & Lazy Init** — Tiered tool descriptions, deep-dive help tool, and lazy workspace activation
+- [x] **Phase 38: Progressive Descriptions & Lazy Init** — Tiered tool descriptions, deep-dive help tool, and lazy workspace activation (completed 2026-04-22)
 
 ## Phase Details
 
@@ -182,8 +182,8 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 38-01-PLAN.md — Core infrastructure: ToolDef extension, brief description middleware, lazy init middleware, get_tool_help tool, daemon wiring
-- [ ] 38-02-PLAN.md — Brief descriptions and help text for all 42 tool registration sites (kernel + skill)
-- [ ] 38-03-PLAN.md — Golden-file description snapshot tests, tool manifest count update to 43
+- [x] 38-02-PLAN.md — Brief descriptions and help text for all 42 tool registration sites (kernel + skill)
+- [x] 38-03-PLAN.md — Golden-file description snapshot tests, tool manifest count update to 43
 
 ## Progress
 
@@ -229,4 +229,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 36. Client Hooks | v1.7 | 2/2 | Complete    | 2026-04-21 |
 | 37. Smart Error Responses | v1.7 | 2/2 | Complete    | 2026-04-22 |
-| 38. Progressive Descriptions & Lazy Init | v1.7 | 1/3 | In Progress|  |
+| 38. Progressive Descriptions & Lazy Init | v1.7 | 3/3 | Complete   | 2026-04-22 |

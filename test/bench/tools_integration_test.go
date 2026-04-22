@@ -12,16 +12,32 @@ package bench_test
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// intDaemon is shared across all integration tests to avoid creating multiple
+// daemon instances (each leaks a few goroutines until context unwinds).
+var (
+	intDaemonOnce sync.Once
+	intDaemonInst *benchDaemon
+)
+
+func getIntDaemon(t *testing.T) *benchDaemon {
+	t.Helper()
+	intDaemonOnce.Do(func() {
+		intDaemonInst = startBenchDaemon(t)
+	})
+	return intDaemonInst
+}
+
 // TestToolsListShowsBriefDescriptions verifies that tools/list responses contain
 // brief descriptions (not the full detailed ones) via the MCP protocol layer.
 // This exercises ProfileFilterMiddleware's brief description rewrite (D-02).
 func TestToolsListShowsBriefDescriptions(t *testing.T) {
-	bd := startBenchDaemon(t)
+	bd := getIntDaemon(t)
 
 	result, err := bd.Session.ListTools(context.Background(), &mcp.ListToolsParams{})
 	if err != nil {
@@ -69,7 +85,7 @@ func TestToolsListShowsBriefDescriptions(t *testing.T) {
 // TestGetToolHelpReturnsComprehensiveDocs verifies that get_tool_help returns
 // formatted documentation with parameter details extracted from JSON Schema.
 func TestGetToolHelpReturnsComprehensiveDocs(t *testing.T) {
-	bd := startBenchDaemon(t)
+	bd := getIntDaemon(t)
 
 	// Call get_tool_help for a well-known tool with parameters.
 	result := callToolB(t, bd.Session, "get_tool_help", map[string]any{
@@ -109,14 +125,10 @@ func TestGetToolHelpReturnsComprehensiveDocs(t *testing.T) {
 // activation through the full MCP protocol stack. A tool call without prior
 // activate_project should trigger transparent activation (LAZY-01).
 func TestLazyInitActivatesWorkspaceOnFirstCall(t *testing.T) {
-	// Start daemon without activating any workspace.
-	bd := startBenchDaemon(t)
+	bd := getIntDaemon(t)
 
-	// Verify no workspace is active by checking the daemon's workspace state.
-	// The bench daemon starts without calling activate_project.
-
-	// Now call a tool that doesn't require an active workspace (get_tool_help)
-	// to verify the daemon is responsive.
+	// Call a tool that doesn't require an active workspace (get_tool_help)
+	// to verify the daemon is responsive without prior activation.
 	helpResult := callToolB(t, bd.Session, "get_tool_help", map[string]any{
 		"tool_name": "ping",
 	})
@@ -125,14 +137,10 @@ func TestLazyInitActivatesWorkspaceOnFirstCall(t *testing.T) {
 		t.Fatal("get_tool_help for ping returned empty — daemon not responsive")
 	}
 
-	// Call activate_project to set up a workspace (lazy init would do this
-	// automatically, but we need a valid workspace path for the test).
-	// Use the Go fixture as the workspace.
+	// Call activate_project through the full MCP protocol layer.
+	// The daemon wires it through the full middleware chain (including lazy init).
 	fixtureDir := prepareGoFixtureB(t)
 
-	// The lazy init middleware activates workspace transparently.
-	// Here we test that activate_project works through the MCP protocol layer
-	// (the daemon wires it through the full middleware chain).
 	activateResult, err := bd.Session.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "activate_project",
 		Arguments: map[string]any{"repo_path": fixtureDir},

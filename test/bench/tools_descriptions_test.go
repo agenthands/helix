@@ -17,15 +17,31 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files")
 
+// descDaemon is shared across all description tests to avoid creating multiple
+// daemon instances (each leaks a few goroutines until context unwinds).
+var (
+	descDaemonOnce sync.Once
+	descDaemonInst *benchDaemon
+)
+
+func getDescDaemon(t *testing.T) *benchDaemon {
+	t.Helper()
+	descDaemonOnce.Do(func() {
+		descDaemonInst = startBenchDaemon(t)
+	})
+	return descDaemonInst
+}
+
 // TestToolDescriptionsComplete asserts every registered tool has a non-empty
 // BriefDescription (D-10a).
 func TestToolDescriptionsComplete(t *testing.T) {
-	bd := startBenchDaemon(t)
+	bd := getDescDaemon(t)
 	descs := bd.BriefDescriptions()
 	names := bd.RegistryNames()
 
@@ -44,7 +60,7 @@ func TestToolDescriptionsComplete(t *testing.T) {
 // TestToolDescriptionsTokenLimit asserts every BriefDescription is under 100
 // tokens, using word count < 80 as a conservative proxy (D-10b, Assumption A1).
 func TestToolDescriptionsTokenLimit(t *testing.T) {
-	bd := startBenchDaemon(t)
+	bd := getDescDaemon(t)
 	descs := bd.BriefDescriptions()
 
 	const maxWords = 80 // ~100 tokens for English text
@@ -71,7 +87,7 @@ func TestToolDescriptionsTokenLimit(t *testing.T) {
 //
 // On first run (golden file missing), the file is auto-created.
 func TestToolDescriptionsGoldenFile(t *testing.T) {
-	bd := startBenchDaemon(t)
+	bd := getDescDaemon(t)
 	descs := bd.BriefDescriptions()
 	names := bd.RegistryNames()
 	sort.Strings(names)

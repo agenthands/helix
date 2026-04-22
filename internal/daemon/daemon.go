@@ -28,6 +28,7 @@ import (
 	"github.com/postfix/serena/internal/kernel/edit"
 	"github.com/postfix/serena/internal/kernel/fileops"
 	"github.com/postfix/serena/internal/kernel/health"
+	"github.com/postfix/serena/internal/kernel/help"
 	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/kernel/symbols"
 	"github.com/postfix/serena/internal/langregistry"
@@ -239,6 +240,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
 	health.RegisterTools(mcpServer, k)
+	help.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
 	for _, tp := range skill.ToolProviders() {
@@ -324,6 +326,29 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// errors are enriched before telemetry classifies the outcome.
 	suggestionSchemaMap := serenaMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
 	serenaMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
+
+	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST
+	// so it runs FIRST in the LIFO middleware chain (before TelemetryMiddleware deadline).
+	lazyActivateFn := func(ctx context.Context, repoPath string) error {
+		rt, err := k.ActivateWorkspace(ctx, repoPath)
+		if err != nil {
+			return err
+		}
+		activeWSKey = workspace.WorkspaceKey{RepoRoot: repoPath}
+		if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+			rs.SetWorkspaceRoot(repoPath)
+		}
+		if langs := rt.Languages(); len(langs) > 0 {
+			activeWSLang = langs[0]
+		}
+		if sess := sessionProvider.CurrentSession(); sess != nil {
+			sess.SetLanguage(activeWSLang)
+		}
+		logger.Info("kernel workspace activated (lazy init)", "root", repoPath, "languages", rt.Languages())
+		return nil
+	}
+	isActiveFn := func() bool { return activeWSKey.RepoRoot != "" }
+	serenaMCP.InstallLazyInitMiddleware(mcpServer.SDK(), lazyActivateFn, isActiveFn, "", logger)
 
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session

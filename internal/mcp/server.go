@@ -27,6 +27,7 @@ type SerenaMCPServer struct {
 	registry         *ToolRegistry
 	logger           *slog.Logger
 	activateCallback ActivateCallback
+	toolSchemas      []*mcpsdk.Tool // stored for suggestion middleware schema introspection (D-07)
 }
 
 // PingArgs is the input schema for the ping diagnostic tool.
@@ -74,10 +75,11 @@ func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *Se
 
 // registerPingTool adds the ping diagnostic tool.
 func (s *SerenaMCPServer) registerPingTool() {
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{
+	tool := &mcpsdk.Tool{
 		Name:        "ping",
 		Description: "Echo a message back (diagnostic tool)",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args PingArgs) (*mcpsdk.CallToolResult, any, error) {
+	}
+	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args PingArgs) (*mcpsdk.CallToolResult, any, error) {
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.TextContent{Text: "pong: " + args.Message},
@@ -85,14 +87,16 @@ func (s *SerenaMCPServer) registerPingTool() {
 		}, nil, nil
 	})
 	s.registry.Register(&ToolDef{Name: "ping", Description: "Echo a message back (diagnostic tool)"})
+	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
 // registerEchoTool adds the echo diagnostic tool.
 func (s *SerenaMCPServer) registerEchoTool() {
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{
+	tool := &mcpsdk.Tool{
 		Name:        "echo",
 		Description: "Echo arguments back as-is (diagnostic tool)",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args EchoArgs) (*mcpsdk.CallToolResult, any, error) {
+	}
+	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args EchoArgs) (*mcpsdk.CallToolResult, any, error) {
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.TextContent{Text: args.Text},
@@ -100,14 +104,16 @@ func (s *SerenaMCPServer) registerEchoTool() {
 		}, nil, nil
 	})
 	s.registry.Register(&ToolDef{Name: "echo", Description: "Echo arguments back as-is (diagnostic tool)"})
+	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
 // registerActivateProjectTool adds the activate_project tool (WRK-01).
 func (s *SerenaMCPServer) registerActivateProjectTool(workspaces *workspace.Registry) {
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{
+	tool := &mcpsdk.Tool{
 		Name:        "activate_project",
 		Description: "Activate a workspace for a given repository path",
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ActivateProjectArgs) (*mcpsdk.CallToolResult, any, error) {
+	}
+	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args ActivateProjectArgs) (*mcpsdk.CallToolResult, any, error) {
 		key := workspace.WorkspaceKey{
 			RepoRoot: args.RepoPath,
 			Language: "generic",
@@ -136,6 +142,7 @@ func (s *SerenaMCPServer) registerActivateProjectTool(workspaces *workspace.Regi
 		}, nil, nil
 	})
 	s.registry.Register(&ToolDef{Name: "activate_project", Description: "Activate a workspace for a given repository path"})
+	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
 // SDK returns the underlying MCP SDK server for direct use (e.g., transport wiring).
@@ -164,6 +171,7 @@ func (s *SerenaMCPServer) HTTPHandler() http.Handler {
 func (s *SerenaMCPServer) AddTool(tool *mcpsdk.Tool, handler mcpsdk.ToolHandler) {
 	s.sdk.AddTool(tool, handler)
 	s.registry.Register(&ToolDef{Name: tool.Name, Description: tool.Description})
+	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
 // RemoveTool removes a tool by name at runtime (MCP-07).
@@ -182,10 +190,11 @@ func (s *SerenaMCPServer) SetActivateCallback(cb ActivateCallback) {
 // Uses the generic mcpsdk.AddTool so the SDK auto-generates an input schema.
 func (s *SerenaMCPServer) AddSkillTool(name, description string, executor SkillToolExecutor) {
 	toolName := name // capture for closure
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{
+	tool := &mcpsdk.Tool{
 		Name:        toolName,
 		Description: description,
-	}, func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+	}
+	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
 		result, err := executor.ExecuteTool(toolName, args)
 		if err != nil {
 			return &mcpsdk.CallToolResult{
@@ -202,4 +211,12 @@ func (s *SerenaMCPServer) AddSkillTool(name, description string, executor SkillT
 		}, nil, nil
 	})
 	s.registry.Register(&ToolDef{Name: name, Description: description})
+	s.toolSchemas = append(s.toolSchemas, tool)
+}
+
+// CollectToolSchemas returns all registered tool definitions with their InputSchema
+// for suggestion middleware schema introspection (D-07). Called once at daemon
+// startup after all tools are registered.
+func (s *SerenaMCPServer) CollectToolSchemas() []*mcpsdk.Tool {
+	return s.toolSchemas
 }

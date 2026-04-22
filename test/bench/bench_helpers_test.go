@@ -68,6 +68,12 @@ func (bd *benchDaemon) RegistryNames() []string {
 	return bd.daemon.MCPServer().Registry().Names()
 }
 
+// BriefDescriptions returns a map of tool name -> BriefDescription for all
+// registered tools. Used by golden-file description tests (DESC-03).
+func (bd *benchDaemon) BriefDescriptions() map[string]string {
+	return bd.daemon.MCPServer().Registry().BriefDescriptions()
+}
+
 // startBenchDaemon creates a daemon in-process, wires an MCP client via
 // InMemoryTransports, and registers cleanup via tb.Cleanup. Callers MUST NOT
 // invoke this inside a b.Loop() body — one daemon per bench function, shared

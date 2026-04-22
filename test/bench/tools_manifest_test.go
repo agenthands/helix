@@ -1,6 +1,6 @@
 package bench_test
 
-// tools_manifest.go enumerates the 42-tool bench manifest locked by D-04.
+// tools_manifest.go enumerates the 43-tool bench manifest locked by D-04.
 //
 // Every entry is a benchCase with:
 //   - name: exact MCP tool name (canonical source: internal/daemon/bootstrap_test.go)
@@ -9,11 +9,11 @@ package bench_test
 //     the sub-benchmark must use prepareGoFixtureCopyB(b) instead of
 //     prepareGoFixtureB(b) to avoid corrupting the shared read-only fixture
 //
-// The total count MUST equal 42 — enforced by TestBenchToolsManifestMatchesRegistry
+// The total count MUST equal 43 — enforced by TestBenchToolsManifestMatchesRegistry
 // in main_test.go, which also asserts bidirectional name parity with the live
 // MCP registry (no manifest-only names, no registry-only names).
 //
-// Breakdown (9 + 6 + 7 + 3 + 7 + 2 + 2 + 2 + 3 + 1 = 42):
+// Breakdown (9 + 6 + 7 + 3 + 7 + 2 + 2 + 2 + 3 + 1 + 1 = 43):
 //   - Symbol (9): 09-RESEARCH.md Pattern 1 symbol retrieval tools
 //   - Edit (6): mutating tools — Plan 09-03 must use prepareGoFixtureCopyB
 //   - File ops (7): read/list/find/search/create/replace/fuzzy_edit
@@ -23,6 +23,8 @@ package bench_test
 //   - Profile (2): switch_mode, get_token_budget
 //   - RepoMap (2): get_repo_map, get_context
 //   - Built-in (3): ping, echo, activate_project
+//   - Health (1): get_health
+//   - Help (1): get_tool_help
 //
 // Hardcoded offsets in testdata/fixtures/go/main.go (verified at plan time):
 //
@@ -46,7 +48,7 @@ type benchCase struct {
 // something to operate on when their sub-benches run.
 const benchMemoryName = "bench-manifest"
 
-// benchTools is the canonical 42-tool manifest. Count and names are locked by
+// benchTools is the canonical 43-tool manifest. Count and names are locked by
 // D-04 and asserted against the live registry in
 // TestBenchToolsManifestMatchesRegistry.
 var benchTools = []benchCase{
@@ -242,4 +244,9 @@ var benchTools = []benchCase{
 
 	// === Health (1) ==========================================================
 	{name: "get_health", args: map[string]any{}},
+
+	// === Help (1) =============================================================
+	{name: "get_tool_help", args: map[string]any{
+		"tool_name": "ping",
+	}},
 }

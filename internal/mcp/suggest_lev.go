@@ -67,15 +67,16 @@ func bestParamSuggestion(unknown string, validParams []string, maxDistance int) 
 	bestDist := maxDistance + 1
 
 	for _, valid := range validParams {
-		// Exact substring match (D-01): either direction
+		d := levenshteinDistance(unknown, valid)
+		// Exact substring match (D-01): bypass maxDistance threshold.
+		// Substring matches are high-confidence even when edit distance is large
+		// (e.g., "path" -> "relative_path").
 		if strings.Contains(valid, unknown) || strings.Contains(unknown, valid) {
-			d := levenshteinDistance(unknown, valid)
-			if d < bestDist {
+			if best == "" || d < bestDist {
 				best, bestDist = valid, d
 			}
 			continue
 		}
-		d := levenshteinDistance(unknown, valid)
 		if d <= maxDistance && d < bestDist {
 			best, bestDist = valid, d
 		}
@@ -90,14 +91,14 @@ func bestValueSuggestion(value string, validValues []string, maxDistance int) (s
 	bestDist := maxDistance + 1
 
 	for _, valid := range validValues {
+		d := levenshteinDistance(value, valid)
+		// Exact substring match (D-01): bypass maxDistance threshold.
 		if strings.Contains(valid, value) || strings.Contains(value, valid) {
-			d := levenshteinDistance(value, valid)
-			if d < bestDist {
+			if best == "" || d < bestDist {
 				best, bestDist = valid, d
 			}
 			continue
 		}
-		d := levenshteinDistance(value, valid)
 		if d <= maxDistance && d < bestDist {
 			best, bestDist = valid, d
 		}

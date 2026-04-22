@@ -82,15 +82,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-<!-- v1.7 Developer Experience & Auto-Setup -->
+<!-- v1.8 Documentation Overhaul -->
 
-- [ ] Zero-friction client setup (`serena setup <client>`) with MCP registration, hook installation, language detection, and LS pre-installation
-- [ ] Lazy workspace init on first tool call when setup wasn't run
-- [ ] Client hooks for Claude Code, VS Code, JetBrains (PreToolUse remind, SessionStart activate, Stop cleanup)
-- [ ] Health/status MCP tool reporting active LSes, indexing state, and workspace capabilities
-- [ ] Smart error responses suggesting correct tool/params on misuse
-- [ ] Progressive tool descriptions that teach agents when to use each tool
-- [ ] Error-only reporting — suppress noise, surface only actionable failures
+- [ ] README.md rewrite presenting Serena as its own Go-native product, not a Python port
+- [ ] USAGE.md refresh reflecting full current feature set (fuzzy editing, RepoMap, smart errors, progressive descriptions, health tools, lazy init)
+- [ ] INSTALL.md update with current install paths and client configs
+- [ ] CONTRIBUTING.md update as Go-native contributor guide reflecting current codebase
+- [ ] CHANGELOG.md audit ensuring all milestones are accurately represented
+- [ ] CLAUDE.md update with current project description and architecture
+- [ ] Brief Python legacy acknowledgment — no "port" or "rewrite" framing
 
 ### Out of Scope
 
@@ -102,18 +102,18 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Vector/embedding search — Augment Context Engine does this better
 - Git operations — GitHub MCP Server handles git comprehensively
 
-## Current Milestone: v1.7 Developer Experience & Auto-Setup
+## Current Milestone: v1.8 Documentation Overhaul
 
-**Goal:** Zero-friction onboarding with auto-detection, client hooks, real-time health visibility, and self-guiding tool surface for coding agents.
+**Goal:** Rewrite all documentation to present Serena as its own Go-native product — not a Python port — reflecting 7 milestones of accumulated functionality, 41 MCP tools, and unique capabilities.
 
 **Target features:**
-- `serena setup <client>` command — registers MCP server + installs hooks + detects languages + pre-installs LSes
-- Lazy init fallback — first tool call triggers workspace activation if setup wasn't run
-- Client hooks — PreToolUse remind, SessionStart activate, Stop cleanup (Claude Code, VS Code, JetBrains)
-- Health/status MCP tool — active LSes, indexing state, workspace capabilities
-- Smart error responses — suggest correct tool/params on agent misuse
-- Progressive tool descriptions — self-documenting tool surface for agents
-- Error-only reporting — suppress noise, surface only actionable failures
+- README.md rewrite — product identity, capabilities, architecture as a standalone product
+- USAGE.md refresh — reflect current feature set (fuzzy editing, RepoMap, smart errors, progressive descriptions, health tools, lazy init)
+- INSTALL.md update — current install paths and client configs
+- CONTRIBUTING.md update — Go-native contributor guide reflecting current codebase
+- CHANGELOG.md — ensure all milestones are accurately represented
+- CLAUDE.md — update project description and architecture to match reality
+- Brief Python acknowledgment ("Originally inspired by Python Serena") — no more "port" or "rewrite" framing
 
 ## Context
 
@@ -123,7 +123,7 @@ Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-
 
 Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. RepoMap skill with tag extraction pipeline, cross-file reference graph, PageRank ranking, and token-budgeted tree rendering. Fuzzy edit engine with 4-strategy cascade integrated into 3 MCP tools.
 
-**Known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. 3 redundant GrammarRegistry instances (functionally correct).
+**Known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. 3 redundant GrammarRegistry instances (functionally correct). rust-analyzer v1.90 `textDocument/rename` returns "No references found at position" in temp workspaces despite hover/references/search working at the same position — upstream LS bug, all other Rust operations work (see USAGE.md Troubleshooting). jdtls cold-start indexing exceeds 2min in temp workspaces — Java integration tests gated behind `-short=false`.
 
 The `legacy/` directory contains the original Python-based prototype as a reference.
 
@@ -187,4 +187,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-20 after v1.7 milestone started — Developer Experience & Auto-Setup*
+*Last updated: 2026-04-23 after v1.8 milestone started — Documentation Overhaul*

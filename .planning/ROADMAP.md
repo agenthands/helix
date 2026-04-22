@@ -109,7 +109,7 @@
 - [x] **Phase 34: Setup CLI Foundation** — One-command MCP registration for 6 clients with language detection and LS pre-install (completed 2026-04-21)
 - [x] **Phase 35: Health & Status** — MCP health tool and CLI status command for workspace visibility (completed 2026-04-21)
 - [x] **Phase 36: Client Hooks** — Claude Code hook auto-installation for session lifecycle and tool nudging (completed 2026-04-21)
-- [ ] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions
+- [x] **Phase 37: Smart Error Responses** — Error enrichment middleware with parameter correction suggestions (completed 2026-04-22)
 - [ ] **Phase 38: Progressive Descriptions & Lazy Init** — Tiered tool descriptions, deep-dive help tool, and lazy workspace activation
 
 ## Phase Details
@@ -167,7 +167,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 37-01-PLAN.md — Suggestion engine: Levenshtein helpers, ToolSchemaMap, SuggestionMiddleware, unit tests
-- [ ] 37-02-PLAN.md — Daemon wiring: tool schema collection, middleware installation
+- [x] 37-02-PLAN.md — Daemon wiring: tool schema collection, middleware installation
 
 ### Phase 38: Progressive Descriptions & Lazy Init
 **Goal**: Tool surface is self-documenting for agents, and workspaces activate automatically on first use
@@ -227,5 +227,5 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38
 | 34. Setup CLI Foundation | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 35. Health & Status | v1.7 | 2/2 | Complete   | 2026-04-21 |
 | 36. Client Hooks | v1.7 | 2/2 | Complete    | 2026-04-21 |
-| 37. Smart Error Responses | v1.7 | 1/2 | In Progress|  |
+| 37. Smart Error Responses | v1.7 | 2/2 | Complete   | 2026-04-22 |
 | 38. Progressive Descriptions & Lazy Init | v1.7 | 0/0 | Not started | - |

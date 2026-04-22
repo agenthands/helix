@@ -61,11 +61,38 @@ func (s *WorkflowSkill) Tools() []*mcp.ToolDef {
 	}
 }
 
+// --- help text constants ---
+
+const onboardProjectHelp = `## Usage Examples
+
+Run onboarding for the current project:
+  onboard_project()
+
+## Common Patterns
+- Call once at the start of a session if onboarding has not been performed
+- Returns a prompt guiding you to create project memories
+- Detects languages, counts files, and analyzes project structure`
+
+const prepareForNewConversationHelp = `## Usage Examples
+
+Prepare a session handoff summary:
+  prepare_for_new_conversation(tools_used=["find_symbol", "replace_symbol_body"], files_modified=["src/auth.go"], open_context="Refactoring auth middleware")
+
+Save handoff as a memory:
+  prepare_for_new_conversation(tools_used=["read_file"], open_context="Investigating bug #123", save_as_memory=true)
+
+## Common Patterns
+- Call at the end of a session to preserve context for the next session
+- Include open_context to describe work in progress
+- Set save_as_memory=true to persist the summary as a memory file`
+
 func (s *WorkflowSkill) onboardProjectTool() *mcp.ToolDef {
 	return &mcp.ToolDef{
 		Name: "onboard_project",
 		Description: "Analyze the project structure, detect languages, count files, and return onboarding instructions. " +
 			"Call this tool if onboarding has not been performed yet. Returns a prompt guiding you to create project memories.",
+		BriefDescription: "Get an orientation guide for the current project",
+		HelpText:         onboardProjectHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -78,6 +105,8 @@ func (s *WorkflowSkill) prepareForNewConversationTool() *mcp.ToolDef {
 		Description: "Prepare a session handoff summary for continuation in a new conversation. " +
 			"Takes session context (tools used, files modified, open questions) and produces a summary. " +
 			"Optionally writes the summary as a session handoff memory.",
+		BriefDescription: "Prepare a summary for handing off to the next session",
+		HelpText:         prepareForNewConversationHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},

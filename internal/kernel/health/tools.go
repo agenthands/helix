@@ -17,6 +17,21 @@ type GetHealthArgs struct {
 	Verbose bool `json:"verbose,omitempty" jsonschema:"Show all language servers including healthy ones. Default false returns only unhealthy LSes."`
 }
 
+// --- help text constants ---
+
+const getHealthHelp = `## Usage Examples
+
+Check workspace health (show only unhealthy servers):
+  get_health()
+
+Show all language servers including healthy ones:
+  get_health(verbose=true)
+
+## Common Patterns
+- Default mode shows only unhealthy workers and non-closed circuits
+- Use verbose=true to see all language servers and their states
+- Call after activation to verify language servers started successfully`
+
 // RegisterTools registers the get_health MCP tool with the server.
 func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 	tracer := k.Tracer()
@@ -42,8 +57,10 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 	}))
 
 	server.Registry().Register(&mcp.ToolDef{
-		Name:        "get_health",
-		Description: "Get workspace health status and language server states",
+		Name:             "get_health",
+		Description:      "Get workspace health status and language server states",
+		BriefDescription: "Check workspace health and language server status",
+		HelpText:         getHealthHelp,
 	})
 }
 

@@ -150,6 +150,34 @@ func (s *RepoMapSkill) Tools() []*mcp.ToolDef {
 	}
 }
 
+// --- help text constants ---
+
+const getRepoMapHelp = `## Usage Examples
+
+Get a ranked overview of the repository:
+  get_repo_map()
+
+Get a larger overview with more detail:
+  get_repo_map(token_budget=8192)
+
+## Common Patterns
+- Default token_budget is 4096; increase for more detail, decrease for a quick overview
+- Files are ranked by structural importance using PageRank
+- Use at the start of a session to understand the codebase structure`
+
+const getContextHelp = `## Usage Examples
+
+Get context relevant to specific files:
+  get_context(files=["src/auth/login.go", "src/models/user.go"])
+
+Get more context with a larger budget:
+  get_context(files=["src/server.go"], token_budget=4096)
+
+## Common Patterns
+- Pass the files you are currently working with for personalized ranking
+- Symbols are ranked by relevance to the specified files
+- Use to discover related code when working on a feature`
+
 func (s *RepoMapSkill) getRepoMapTool() *mcp.ToolDef {
 	return &mcp.ToolDef{
 		Name: "get_repo_map",
@@ -157,6 +185,8 @@ func (s *RepoMapSkill) getRepoMapTool() *mcp.ToolDef {
 			"as a tree with elided symbol signatures, ranked by structural importance (PageRank). " +
 			"Use this to understand the overall codebase structure. The token_budget parameter " +
 			"controls the maximum output size (in approximate tokens).",
+		BriefDescription: "Get a ranked overview of repository structure and key files",
+		HelpText:         getRepoMapHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -169,6 +199,8 @@ func (s *RepoMapSkill) getContextTool() *mcp.ToolDef {
 		Description: "Get the most relevant code context for a set of files or a task. Returns symbols " +
 			"ranked by relevance to the specified files, within the token budget. Use this when you " +
 			"need to understand code related to specific files you're working with.",
+		BriefDescription: "Get relevant code context for a set of files",
+		HelpText:         getContextHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},

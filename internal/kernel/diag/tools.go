@@ -40,6 +40,47 @@ type FormatCodeArgs struct {
 // It abstracts the kernel/pool layer so tools don't depend on kernel directly.
 type LeaseProvider func(ctx context.Context, uri string) (*lspool.WorkerLease, error)
 
+// --- help text constants ---
+
+const getDiagnosticsHelp = `## Usage Examples
+
+Get errors and warnings for a file:
+  get_diagnostics(path="src/main.go")
+
+Check diagnostics after editing:
+  get_diagnostics(path="src/handlers/auth.go")
+
+## Common Patterns
+- Returns severity:line:col: message for each diagnostic
+- Use after editing files to check for compilation errors
+- Shows errors, warnings, info, and hints from the language server`
+
+const getCodeActionsHelp = `## Usage Examples
+
+Get quick fixes at a specific position:
+  get_code_actions(path="src/main.go", line=15, column=10)
+
+Get code actions for a range:
+  get_code_actions(path="src/handler.go", line=10, column=1, end_line=20, end_column=1)
+
+## Common Patterns
+- Line and column are 1-indexed
+- Returns available actions like "add import", "extract method", etc.
+- Preferred actions are marked with [preferred]`
+
+const formatCodeHelp = `## Usage Examples
+
+Format a file with default settings:
+  format_code(path="src/main.go")
+
+Format with custom tab size:
+  format_code(path="src/config.py", tab_size=2, use_spaces=true)
+
+## Common Patterns
+- Uses the language server's built-in formatter
+- Returns "already formatted" if no changes needed
+- Writes the formatted result back to the file`
+
 // RegisterTools registers the 3 diagnostic MCP tools with the server.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
 // sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
@@ -104,8 +145,10 @@ func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore,
 		return textResult(sb.String()), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{
-		Name:        "get_diagnostics",
-		Description: "Returns current diagnostics (errors, warnings) for a file",
+		Name:             "get_diagnostics",
+		Description:      "Returns current diagnostics (errors, warnings) for a file",
+		BriefDescription: "Get compiler errors and warnings for a file",
+		HelpText:         getDiagnosticsHelp,
 	})
 }
 
@@ -162,8 +205,10 @@ func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, l
 		return textResult(sb.String()), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{
-		Name:        "get_code_actions",
-		Description: "Returns available code actions/quick fixes for a position or range",
+		Name:             "get_code_actions",
+		Description:      "Returns available code actions/quick fixes for a position or range",
+		BriefDescription: "Get available code actions (quick fixes) for a location",
+		HelpText:         getCodeActionsHelp,
 	})
 }
 
@@ -220,8 +265,10 @@ func registerFormatCode(server *mcp.SerenaMCPServer, rootFn func() string, lease
 		return textResult(fmt.Sprintf("formatted %s (%d edits applied)", args.Path, len(edits))), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{
-		Name:        "format_code",
-		Description: "Formats a file via the language server and writes the result",
+		Name:             "format_code",
+		Description:      "Formats a file via the language server and writes the result",
+		BriefDescription: "Format a file using the language server formatter",
+		HelpText:         formatCodeHelp,
 	})
 }
 

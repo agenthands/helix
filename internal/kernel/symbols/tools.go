@@ -180,6 +180,128 @@ func formatHierarchy(nodes []HierarchyNode, indent int) string {
 	return sb.String()
 }
 
+// --- help text constants ---
+
+const goToDefinitionHelp = `## Usage Examples
+
+Jump to where a function is defined:
+  go_to_definition(path="src/server.go", line=42, column=10)
+
+Find the definition of a type used in an import:
+  go_to_definition(path="src/handlers/auth.go", line=5, column=15)
+
+## Common Patterns
+- Use after hovering to navigate from usage to source
+- Combine with find_references to understand how a symbol is used after finding its definition
+- Works across files: follows imports and cross-package references`
+
+const findReferencesHelp = `## Usage Examples
+
+Find all usages of a function:
+  find_references(path="src/auth/login.go", line=20, column=6)
+
+Find references including the declaration itself:
+  find_references(path="src/models/user.go", line=10, column=6, include_declaration=true)
+
+## Common Patterns
+- Use before renaming or deleting a symbol to understand impact
+- Combine with go_to_definition to trace call chains
+- Results show file:line:col for each reference location`
+
+const getSymbolOverviewHelp = `## Usage Examples
+
+List all symbols in a Go file:
+  get_symbol_overview(path="src/server.go")
+
+Get an outline of a Python module:
+  get_symbol_overview(path="src/utils/helpers.py")
+
+## Common Patterns
+- Use to understand file structure before making edits
+- Shows functions, classes, methods, variables with line numbers
+- Nested symbols (methods inside classes) are shown indented`
+
+const searchSymbolsHelp = `## Usage Examples
+
+Find a function by name across the workspace:
+  search_symbols(query="handleRequest")
+
+Search for all types matching a pattern:
+  search_symbols(query="UserService")
+
+## Common Patterns
+- Use to locate symbols when you know the name but not the file
+- Returns file:line:col with symbol kind for each match
+- Combine with get_symbol_overview to understand the file containing the result`
+
+const getHoverInfoHelp = `## Usage Examples
+
+Get type information for a variable:
+  get_hover_info(path="src/main.go", line=15, column=8)
+
+Check the signature of a function call:
+  get_hover_info(path="src/handlers/api.go", line=30, column=12)
+
+## Common Patterns
+- Use to inspect types without navigating away from current file
+- Shows function signatures, type definitions, and documentation
+- Useful for understanding inferred types in dynamically typed languages`
+
+const findImplementationsHelp = `## Usage Examples
+
+Find all implementations of an interface:
+  find_implementations(path="src/interfaces.go", line=10, column=6)
+
+Find concrete implementations of an abstract method:
+  find_implementations(path="src/base.py", line=25, column=8)
+
+## Common Patterns
+- Use to discover which types satisfy an interface
+- Essential for understanding polymorphic code
+- Combine with get_type_hierarchy for a broader view of inheritance`
+
+const getCallHierarchyHelp = `## Usage Examples
+
+Find all callers of a function:
+  get_call_hierarchy(path="src/auth.go", line=15, column=6, direction="incoming")
+
+Find all functions called by a method:
+  get_call_hierarchy(path="src/service.go", line=30, column=6, direction="outgoing")
+
+Find both callers and callees:
+  get_call_hierarchy(path="src/handler.go", line=20, column=6)
+
+## Common Patterns
+- Use "incoming" to find who calls a function before modifying it
+- Use "outgoing" to understand a function's dependencies
+- Default direction is "both" which shows the full call graph`
+
+const getTypeHierarchyHelp = `## Usage Examples
+
+Get supertypes and subtypes of a class:
+  get_type_hierarchy(path="src/models.py", line=10, column=6)
+
+Find only subtypes:
+  get_type_hierarchy(path="src/base.go", line=8, column=6, direction="subtypes")
+
+## Common Patterns
+- Use to understand inheritance chains and interface hierarchies
+- Direction can be "subtypes", "supertypes", or "both" (default)
+- Combine with find_implementations for a complete picture`
+
+const analyzeBlastRadiusHelp = `## Usage Examples
+
+Analyze impact of changing a function:
+  analyze_blast_radius(path="src/core/engine.go", line=50, column=6)
+
+Check how many files would be affected by modifying a type:
+  analyze_blast_radius(path="src/models/user.go", line=12, column=6)
+
+## Common Patterns
+- Use before making changes to understand the scope of impact
+- Shows direct references, callers, implementations, and affected files
+- Higher total impact means more careful review is needed`
+
 // --- tool registrations ---
 
 func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -205,7 +327,7 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "go_to_definition", Description: "Go to the definition of a symbol at a given position"})
+	server.Registry().Register(&mcp.ToolDef{Name: "go_to_definition", Description: "Go to the definition of a symbol at a given position", BriefDescription: "Jump to where a symbol is defined", HelpText: goToDefinitionHelp})
 }
 
 func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -231,7 +353,7 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "find_references", Description: "Find all references to a symbol at a given position"})
+	server.Registry().Register(&mcp.ToolDef{Name: "find_references", Description: "Find all references to a symbol at a given position", BriefDescription: "Find all references to a symbol", HelpText: findReferencesHelp})
 }
 
 func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -260,7 +382,7 @@ func registerGetSymbolOverview(server *mcp.SerenaMCPServer, k *kernel.Kernel, ws
 		}
 		return textResult(formatOutline(outlines, 0)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "get_symbol_overview", Description: "Get a hierarchical outline of all symbols in a file"})
+	server.Registry().Register(&mcp.ToolDef{Name: "get_symbol_overview", Description: "Get a hierarchical outline of all symbols in a file", BriefDescription: "List all symbols defined in a file with their types", HelpText: getSymbolOverviewHelp})
 }
 
 func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -286,7 +408,7 @@ func registerSearchSymbols(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyF
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "search_symbols", Description: "Search for symbols across the workspace by name"})
+	server.Registry().Register(&mcp.ToolDef{Name: "search_symbols", Description: "Search for symbols across the workspace by name", BriefDescription: "Search for symbols by name across the workspace", HelpText: searchSymbolsHelp})
 }
 
 func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -315,7 +437,7 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 		}
 		return textResult(result.Content), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "get_hover_info", Description: "Get hover/type information for a symbol at a given position"})
+	server.Registry().Register(&mcp.ToolDef{Name: "get_hover_info", Description: "Get hover/type information for a symbol at a given position", BriefDescription: "Get type information and documentation for a symbol", HelpText: getHoverInfoHelp})
 }
 
 func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -341,7 +463,7 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 		}
 		return textResult(formatLocations(locs)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "find_implementations", Description: "Find all implementations of an interface or abstract method"})
+	server.Registry().Register(&mcp.ToolDef{Name: "find_implementations", Description: "Find all implementations of an interface or abstract method", BriefDescription: "Find all implementations of an interface or abstract method", HelpText: findImplementationsHelp})
 }
 
 func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -374,7 +496,7 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		return textResult(formatHierarchy(nodes, 0)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "get_call_hierarchy", Description: "Get call hierarchy (callers and/or callees) for a symbol"})
+	server.Registry().Register(&mcp.ToolDef{Name: "get_call_hierarchy", Description: "Get call hierarchy (callers and/or callees) for a symbol", BriefDescription: "Find all callers or callees of a function or method", HelpText: getCallHierarchyHelp})
 }
 
 func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -407,7 +529,7 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		}
 		return textResult(formatHierarchy(nodes, 0)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "get_type_hierarchy", Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol"})
+	server.Registry().Register(&mcp.ToolDef{Name: "get_type_hierarchy", Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol", BriefDescription: "Get the type hierarchy (supertypes and subtypes)", HelpText: getTypeHierarchyHelp})
 }
 
 func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
@@ -433,7 +555,7 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 		}
 		return textResult(formatBlastRadius(br)), nil, nil
 	}))
-	server.Registry().Register(&mcp.ToolDef{Name: "analyze_blast_radius", Description: "Analyze the blast radius (impact) of changing a symbol"})
+	server.Registry().Register(&mcp.ToolDef{Name: "analyze_blast_radius", Description: "Analyze the blast radius (impact) of changing a symbol", BriefDescription: "Analyze the impact of changing a symbol", HelpText: analyzeBlastRadiusHelp})
 }
 
 // formatBlastRadius formats a BlastRadius as a human-readable summary.

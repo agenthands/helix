@@ -63,6 +63,102 @@ func (s *MemorySkill) Tools() []*mcp.ToolDef {
 	}
 }
 
+// --- help text constants ---
+
+const writeMemoryHelp = `## Usage Examples
+
+Save authentication logic notes:
+  write_memory(name="auth/login/logic", content="# Login Flow\n\nThe login endpoint validates credentials...")
+
+Create a memory organized by topic:
+  write_memory(name="architecture/database/schema", content="# DB Schema\n\nMain tables: users, sessions...")
+
+## Common Patterns
+- Use "/" separators to organize memories by topic
+- Use "global/" prefix for cross-project knowledge
+- Write memories after understanding complex code to help future sessions`
+
+const readMemoryHelp = `## Usage Examples
+
+Read a specific memory:
+  read_memory(name="auth/login/logic")
+
+Read a global memory:
+  read_memory(name="global/go-patterns")
+
+## Common Patterns
+- Only read memories relevant to the current task
+- Infer relevance from the memory name before reading
+- Do not read the same memory multiple times in one conversation`
+
+const listMemoriesHelp = `## Usage Examples
+
+List all project memories:
+  list_memories(scope="project")
+
+List global memories filtered by topic:
+  list_memories(scope="global", topic="patterns")
+
+List all memories:
+  list_memories()
+
+## Common Patterns
+- Use scope "project" or "global" to filter by scope
+- Use topic to filter by path prefix
+- Results can be read with read_memory`
+
+const searchMemoriesHelp = `## Usage Examples
+
+Search across all memories:
+  search_memories(query="authentication flow")
+
+Search only global memories:
+  search_memories(query="error handling", scope="global")
+
+## Common Patterns
+- Uses full-text search (FTS5) for fast matching
+- Filter by scope to narrow results
+- Returns matching memory names with relevance ranking`
+
+const renameMemoryHelp = `## Usage Examples
+
+Rename a memory:
+  rename_memory(old_name="auth/notes", new_name="auth/login/notes")
+
+Move from project to global scope:
+  rename_memory(old_name="go-patterns", new_name="global/go-patterns")
+
+## Common Patterns
+- Use to reorganize memories as project understanding grows
+- Moving between project and global scope is supported
+- Use "/" separators for topic-based organization`
+
+const editMemoryHelp = `## Usage Examples
+
+Update a section in a memory:
+  edit_memory(name="auth/login/logic", search="validates credentials", replace="validates credentials and checks MFA")
+
+Fix a typo in a memory:
+  edit_memory(name="architecture/overview", search="PostgresSQL", replace="PostgreSQL")
+
+## Common Patterns
+- Uses literal string matching (not regex)
+- Replaces all occurrences of the search string
+- Use read_memory first to see the current content`
+
+const deleteMemoryHelp = `## Usage Examples
+
+Delete a memory:
+  delete_memory(name="auth/old-notes")
+
+Delete a global memory:
+  delete_memory(name="global/deprecated-patterns")
+
+## Common Patterns
+- Only delete when explicitly instructed by the user
+- Deletion is permanent; the file and index entry are removed
+- Use rename_memory to move instead of delete and recreate`
+
 // writeMemoryTool creates or overwrites a memory with the given content.
 func (s *MemorySkill) writeMemoryTool() *mcp.ToolDef {
 	return &mcp.ToolDef{
@@ -70,6 +166,8 @@ func (s *MemorySkill) writeMemoryTool() *mcp.ToolDef {
 		Description: "Write information about this project that can be useful for future tasks to a memory in md format. " +
 			"The memory name should be meaningful and can include \"/\" to organize into topics (e.g., \"auth/login/logic\"). " +
 			"Use the \"global/\" prefix for writing a memory that is shared across projects.",
+		BriefDescription: "Save project knowledge to a named memory file",
+		HelpText:         writeMemoryHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -82,6 +180,8 @@ func (s *MemorySkill) readMemoryTool() *mcp.ToolDef {
 		Name: "read_memory",
 		Description: "Read the content of a memory file. Only use if the information is relevant to the current task. " +
 			"Infer relevance from the memory name. Do not read the same memory multiple times in one conversation.",
+		BriefDescription: "Read a specific memory file by name",
+		HelpText:         readMemoryHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -94,6 +194,8 @@ func (s *MemorySkill) listMemoriesTool() *mcp.ToolDef {
 		Name: "list_memories",
 		Description: "List available memories, optionally filtered by scope (\"project\" or \"global\") and topic. " +
 			"Any memory can be read using the read_memory tool.",
+		BriefDescription: "List all available memory files",
+		HelpText:         listMemoriesHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -103,8 +205,10 @@ func (s *MemorySkill) listMemoriesTool() *mcp.ToolDef {
 // searchMemoriesTool performs full-text search over memories.
 func (s *MemorySkill) searchMemoriesTool() *mcp.ToolDef {
 	return &mcp.ToolDef{
-		Name: "search_memories",
-		Description: "Search memories by full-text query, optionally filtered by scope (\"project\" or \"global\").",
+		Name:             "search_memories",
+		Description:      "Search memories by full-text query, optionally filtered by scope (\"project\" or \"global\").",
+		BriefDescription: "Full-text search across all memory files",
+		HelpText:         searchMemoriesHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -117,6 +221,8 @@ func (s *MemorySkill) renameMemoryTool() *mcp.ToolDef {
 		Name: "rename_memory",
 		Description: "Rename or move a memory. Use \"/\" in the name to organize into topics. " +
 			"Moving between project and global scope is supported (e.g., renaming \"global/foo\" to \"bar\" moves from global to project scope).",
+		BriefDescription: "Rename or move a memory file",
+		HelpText:         renameMemoryHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -129,6 +235,8 @@ func (s *MemorySkill) editMemoryTool() *mcp.ToolDef {
 		Name: "edit_memory",
 		Description: "Edit a memory by replacing a search string with a replacement string. " +
 			"The search is performed as a literal string match.",
+		BriefDescription: "Edit a memory using search and replace",
+		HelpText:         editMemoryHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},
@@ -138,8 +246,10 @@ func (s *MemorySkill) editMemoryTool() *mcp.ToolDef {
 // deleteMemoryTool removes a memory file and its index entry.
 func (s *MemorySkill) deleteMemoryTool() *mcp.ToolDef {
 	return &mcp.ToolDef{
-		Name: "delete_memory",
-		Description: "Delete a memory file. Should only be called if explicitly instructed or permission was granted by the user.",
+		Name:             "delete_memory",
+		Description:      "Delete a memory file. Should only be called if explicitly instructed or permission was granted by the user.",
+		BriefDescription: "Delete a memory file by name",
+		HelpText:         deleteMemoryHelp,
 		RegisterFn: func(server interface{}) error {
 			return nil
 		},

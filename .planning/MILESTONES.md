@@ -1,5 +1,23 @@
 # Milestones
 
+## v1.7 Developer Experience & Auto-Setup (Shipped: 2026-04-22)
+
+**Phases completed:** 5 phases (34-38), 11 plans, 61 files changed, ~7,000 LOC
+**Timeline:** 2 days (2026-04-21 → 2026-04-22)
+
+**Key accomplishments:**
+
+- One-command MCP registration (`serena setup <client>`) for 6 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, generic) with automatic language detection and LS pre-installation
+- `get_health` MCP tool and `serena status` CLI for workspace health inspection with error-only defaults and verbose mode
+- Claude Code hook auto-installation (SessionStart activation, PreToolUse nudge toward symbolic tools, Stop cleanup) with `--no-hooks` opt-out
+- Smart error responses: MCP middleware enriches parameter typos and enum value errors with "Did you mean" suggestions using Levenshtein distance matching
+- Progressive tool descriptions: tiered brief/detailed descriptions, `get_tool_help` for comprehensive on-demand docs, golden-file regression gating
+- Lazy workspace initialization: sync.Once per workspace path, transparent activation on first MCP tool call
+
+**Known deferred items at close:** 6 (see STATE.md Deferred Items) — all require live external environments (Claude CLI, VS Code, JetBrains) not available in CI
+
+---
+
 ## v1.5 Typed Errors & Hardening (Shipped: 2026-04-15)
 
 **Phases completed:** 3 phases (22-24), 12 plans
@@ -15,6 +33,7 @@
 - Upgraded three-band error tests with `extractKind` helper and `expectedKind` struct field for Kind-level assertions, plus 4 typed error golden files (invalid_args, no_workspace, not_found, unsupported)
 
 **Tech debt accepted:**
+
 - 3 golden files deferred (circuit_open, timeout, internal runtime) — cannot trigger deterministically without live LS
 - unsupported.golden captures raw error (lspool not yet using serr.Unsupported)
 - 2 internal flow-control fmt.Errorf in fileops (errLimitReached, never reaches MCP)

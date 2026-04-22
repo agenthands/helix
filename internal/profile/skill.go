@@ -67,12 +67,14 @@ func (s *profileSkill) Init(deps skill.SkillDeps) error {
 func (s *profileSkill) Tools() []*mcp.ToolDef {
 	return []*mcp.ToolDef{
 		{
-			Name:        "switch_mode",
-			Description: "Switch the current session's operational mode (read/edit/review/admin)",
+			Name:             "switch_mode",
+			Description:      "Switch the current session's operational mode (read/edit/review/admin)",
+			BriefDescription: "Switch operational mode (read/edit/review/admin)",
 		},
 		{
-			Name:        "get_token_budget",
-			Description: "Get token budget breakdown for the current or specified profile/mode",
+			Name:             "get_token_budget",
+			Description:      "Get token budget breakdown for the current or specified profile/mode",
+			BriefDescription: "Get token budget for current profile and mode",
 		},
 	}
 }

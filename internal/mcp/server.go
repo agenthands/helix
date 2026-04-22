@@ -86,7 +86,7 @@ func (s *SerenaMCPServer) registerPingTool() {
 			},
 		}, nil, nil
 	})
-	s.registry.Register(&ToolDef{Name: "ping", Description: "Echo a message back (diagnostic tool)"})
+	s.registry.Register(&ToolDef{Name: "ping", Description: "Echo a message back (diagnostic tool)", BriefDescription: "Echo a message back for connectivity testing"})
 	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
@@ -103,7 +103,7 @@ func (s *SerenaMCPServer) registerEchoTool() {
 			},
 		}, nil, nil
 	})
-	s.registry.Register(&ToolDef{Name: "echo", Description: "Echo arguments back as-is (diagnostic tool)"})
+	s.registry.Register(&ToolDef{Name: "echo", Description: "Echo arguments back as-is (diagnostic tool)", BriefDescription: "Echo arguments back as-is for debugging"})
 	s.toolSchemas = append(s.toolSchemas, tool)
 }
 
@@ -141,7 +141,7 @@ func (s *SerenaMCPServer) registerActivateProjectTool(workspaces *workspace.Regi
 			},
 		}, nil, nil
 	})
-	s.registry.Register(&ToolDef{Name: "activate_project", Description: "Activate a workspace for a given repository path"})
+	s.registry.Register(&ToolDef{Name: "activate_project", Description: "Activate a workspace for a given repository path", BriefDescription: "Activate a workspace for a repository path"})
 	s.toolSchemas = append(s.toolSchemas, tool)
 }
 

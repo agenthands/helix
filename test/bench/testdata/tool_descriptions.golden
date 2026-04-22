@@ -1,43 +1,43 @@
-activate_project: (no brief description)
-analyze_blast_radius: (no brief description)
-create_file: (no brief description)
-delete_memory: (no brief description)
-echo: (no brief description)
-edit_memory: (no brief description)
-find_files: (no brief description)
-find_implementations: (no brief description)
-find_references: (no brief description)
-format_code: (no brief description)
-fuzzy_edit: (no brief description)
-get_call_hierarchy: (no brief description)
-get_code_actions: (no brief description)
-get_context: (no brief description)
-get_diagnostics: (no brief description)
-get_health: (no brief description)
-get_hover_info: (no brief description)
-get_repo_map: (no brief description)
-get_symbol_overview: (no brief description)
-get_token_budget: (no brief description)
+activate_project: Activate a workspace for a repository path
+analyze_blast_radius: Analyze the impact of changing a symbol
+create_file: Write content to a file, creating it if needed
+delete_memory: Delete a memory file by name
+echo: Echo arguments back as-is for debugging
+edit_memory: Edit a memory using search and replace
+find_files: Search for files by name pattern
+find_implementations: Find all implementations of an interface or abstract method
+find_references: Find all references to a symbol
+format_code: Format a file using the language server formatter
+fuzzy_edit: Apply a fuzzy text edit using search/replace with context matching
+get_call_hierarchy: Find all callers or callees of a function or method
+get_code_actions: Get available code actions (quick fixes) for a location
+get_context: Get relevant code context for a set of files
+get_diagnostics: Get compiler errors and warnings for a file
+get_health: Check workspace health and language server status
+get_hover_info: Get type information and documentation for a symbol
+get_repo_map: Get a ranked overview of repository structure and key files
+get_symbol_overview: List all symbols defined in a file with their types
+get_token_budget: Get token budget for current profile and mode
 get_tool_help: Get detailed help and usage examples for a tool
-get_type_hierarchy: (no brief description)
-go_to_definition: (no brief description)
-insert_after_symbol: (no brief description)
-insert_before_symbol: (no brief description)
-list_directory: (no brief description)
-list_memories: (no brief description)
-onboard_project: (no brief description)
-ping: (no brief description)
-prepare_for_new_conversation: (no brief description)
-read_file: (no brief description)
-read_memory: (no brief description)
-rename_memory: (no brief description)
-rename_symbol: (no brief description)
-replace_in_file: (no brief description)
-replace_symbol_body: (no brief description)
-safe_delete_symbol: (no brief description)
-search_in_files: (no brief description)
-search_memories: (no brief description)
-search_symbols: (no brief description)
-switch_mode: (no brief description)
-verify_edit: (no brief description)
-write_memory: (no brief description)
+get_type_hierarchy: Get the type hierarchy (supertypes and subtypes)
+go_to_definition: Jump to where a symbol is defined
+insert_after_symbol: Insert code after a symbol definition
+insert_before_symbol: Insert code before a symbol definition
+list_directory: List files and directories in a path
+list_memories: List all available memory files
+onboard_project: Get an orientation guide for the current project
+ping: Echo a message back for connectivity testing
+prepare_for_new_conversation: Prepare a summary for handing off to the next session
+read_file: Read the contents of a file
+read_memory: Read a specific memory file by name
+rename_memory: Rename or move a memory file
+rename_symbol: Rename a symbol across the entire workspace
+replace_in_file: Replace text in a file using exact string matching
+replace_symbol_body: Replace the entire body of a function, method, or class
+safe_delete_symbol: Remove a symbol definition from a file
+search_in_files: Search file contents using regex patterns
+search_memories: Full-text search across all memory files
+search_symbols: Search for symbols by name across the workspace
+switch_mode: Switch operational mode (read/edit/review/admin)
+verify_edit: Check for compilation errors after an edit
+write_memory: Save project knowledge to a named memory file

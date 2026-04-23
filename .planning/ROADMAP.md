@@ -105,6 +105,9 @@
 - [x] **Phase 40: USAGE Refresh** - Update USAGE.md to reflect full current feature set through v1.7 (completed 2026-04-23)
 - [x] **Phase 41: Install & Contributing** - Update INSTALL.md and CONTRIBUTING.md for current codebase (completed 2026-04-23)
 - [x] **Phase 42: Changelog & CLAUDE.md** - Audit CHANGELOG.md completeness and update CLAUDE.md to match reality (completed 2026-04-23)
+- [ ] **Phase 43: Cross-Doc Truth Sync** - Close F-01/F-03/F-07/F-08/F-10/F-11 drift identified by v1.8 milestone audit
+- [ ] **Phase 44: Re-Verify Phase 41 and USAGE-02** - Close F-13 orphan requirements and confirm Phase 43 fixes
+- [ ] **Phase 45: Cross-link & Manual-Config Polish** - Close F-02/F-06/F-12 optional-but-actionable findings
 
 ## Phase Details
 
@@ -165,10 +168,45 @@ Plans:
 - [x] 42-01-PLAN.md -- Audit CHANGELOG.md and add v1.3-v1.7 milestone entries (CLOG-01, CLOG-02)
 - [x] 42-02-PLAN.md -- Refresh CLAUDE.md Project + Architecture for v1.6/v1.7 subsystems (CLMD-01, CLMD-02)
 
+### Phase 43: Cross-Doc Truth Sync
+**Goal**: All public docs and CLAUDE.md agree with the source-of-truth code on setup-CLI client count (7), file-ops tool count (7), fuzzy-edit strategy names, Layer 3 label, and overall tool count.
+**Depends on**: Phase 42
+**Requirements**: README-04, USAGE-02, INST-01, INST-02, CLOG-01, CLOG-02, CLMD-01, CLMD-02
+**Gap Closure**: Closes F-01 (critical), F-11, F-07, F-08, F-10, F-03 from `.planning/v1.8-MILESTONE-AUDIT.md`
+**Success Criteria** (what must be TRUE):
+  1. README, INSTALL, USAGE, CHANGELOG all enumerate 7 setup-CLI clients including `opencode`
+  2. CLAUDE.md and README agree on file-ops tool count (7) and total tool count
+  3. Fuzzy-edit strategy names identical across USAGE, CHANGELOG, CLAUDE.md
+  4. CLAUDE.md Layer 3 label matches README exactly
+  5. `internal/cli/setup_clients.go:36` comment says 7 registrars, not 6
+**Plans:** 0 plans
+
+### Phase 44: Re-Verify Phase 41 and USAGE-02
+**Goal**: Phase 41 has a complete 41-VERIFICATION.md; Phase 40 USAGE-02 is re-verified after the strategy-naming and setup-CLI fixes land; milestone integration check is re-run.
+**Depends on**: Phase 43
+**Requirements**: USAGE-02, INST-01, INST-02, CONT-01, CONT-02
+**Gap Closure**: Closes F-13 (critical) and resolves the 4 orphaned + 1 unsatisfied requirements from the v1.8 audit
+**Success Criteria** (what must be TRUE):
+  1. `.planning/phases/41-install-contributing/41-VERIFICATION.md` exists and passes INST-01, INST-02, CONT-01, CONT-02
+  2. `40-VERIFICATION.md` is re-run with `gaps_found` resolved for USAGE-02
+  3. Re-running the v1.8 integration check produces no remaining critical findings
+**Plans:** 0 plans
+
+### Phase 45: Cross-link & Manual-Config Polish
+**Goal**: Non-blocking v1.8 integration warnings cleared — README manual-config has reasonable coverage, docs cross-link symmetrically, rust-analyzer troubleshooting metadata is current.
+**Depends on**: Phase 43
+**Requirements**: README-03, USAGE-03, INST-02
+**Gap Closure**: Closes F-02, F-06, F-12 (warning/info severity) from the v1.8 audit
+**Success Criteria** (what must be TRUE):
+  1. README manual-config block either covers all 7 clients or explicitly points to INSTALL.md
+  2. README links to CHANGELOG; USAGE links to INSTALL
+  3. USAGE rust-analyzer troubleshooting metadata reflects current behavior
+**Plans:** 0 plans
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 39 -> 40 -> 41 -> 42
+Phases execute in numeric order: 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -184,6 +222,9 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 40. USAGE Refresh | v1.8 | 3/3 | Complete   | 2026-04-23 |
 | 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 42. Changelog & CLAUDE.md | v1.8 | 2/2 | Complete   | 2026-04-23 |
+| 43. Cross-Doc Truth Sync | v1.8 | 0 | Pending | — |
+| 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0 | Pending | — |
+| 45. Cross-link & Manual-Config Polish | v1.8 | 0 | Pending | — |
 
 ## Backlog
 

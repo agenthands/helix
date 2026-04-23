@@ -17,18 +17,18 @@ Requirements for documentation overhaul. Each maps to roadmap phases.
 ### USAGE
 
 - [x] **USAGE-01**: USAGE.md documents all v1.6 features (fuzzy editing, RepoMap/get_context, 23 tree-sitter grammars)
-- [ ] **USAGE-02**: USAGE.md documents all v1.7 features (setup CLI, health tool, hooks, smart errors, progressive descriptions, lazy init)
+- [ ] **USAGE-02**: USAGE.md documents all v1.7 features (setup CLI, health tool, hooks, smart errors, progressive descriptions, lazy init) — re-opened by v1.8 audit (40-VERIFICATION.md gaps_found)
 - [x] **USAGE-03**: USAGE.md troubleshooting section is current with known issues and workarounds
 
 ### INSTALL
 
-- [x] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method
-- [x] **INST-02**: INSTALL.md has accurate MCP configs for all 6 supported clients
+- [ ] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method — orphaned by v1.8 audit (Phase 41 never verified)
+- [ ] **INST-02**: INSTALL.md has accurate MCP configs for all 7 supported clients — orphaned by v1.8 audit; count corrected from 6 to 7 (OpenCode was missing)
 
 ### CONTRIBUTING
 
-- [x] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow
-- [x] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates)
+- [ ] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow — orphaned by v1.8 audit (Phase 41 never verified)
+- [ ] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates) — orphaned by v1.8 audit (Phase 41 never verified)
 
 ### CHANGELOG
 
@@ -61,27 +61,28 @@ None -- documentation milestone is self-contained.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| README-01 | Phase 39 | Pending |
-| README-02 | Phase 39 | Pending |
-| README-03 | Phase 39 | Pending |
-| README-04 | Phase 39 | Pending |
-| LEGC-01 | Phase 39 | Pending |
+| README-01 | Phase 39 | Satisfied (pending checkbox update) |
+| README-02 | Phase 39 | Satisfied (pending checkbox update) |
+| README-03 | Phase 39, Phase 45 | Satisfied; Phase 45 polishes cross-links |
+| README-04 | Phase 39, Phase 43 | Satisfied (re-opened: client count drift) |
+| LEGC-01 | Phase 39 | Satisfied (pending checkbox update) |
 | USAGE-01 | Phase 40 | Complete |
-| USAGE-02 | Phase 40 | Pending |
-| USAGE-03 | Phase 40 | Complete |
-| INST-01 | Phase 41 | Complete |
-| INST-02 | Phase 41 | Complete |
-| CONT-01 | Phase 41 | Complete |
-| CONT-02 | Phase 41 | Complete |
-| CLOG-01 | Phase 42 | Pending |
-| CLOG-02 | Phase 42 | Pending |
-| CLMD-01 | Phase 42 | Pending |
-| CLMD-02 | Phase 42 | Pending |
+| USAGE-02 | Phase 40, Phase 44 | Pending (re-verify after Phase 43 fixes) |
+| USAGE-03 | Phase 40, Phase 45 | Complete; Phase 45 refreshes rust-analyzer metadata |
+| INST-01 | Phase 41, Phase 44 | Pending (orphaned — re-verify in Phase 44) |
+| INST-02 | Phase 41, Phase 43, Phase 44, Phase 45 | Pending (orphaned — client count fix + re-verify) |
+| CONT-01 | Phase 41, Phase 44 | Pending (orphaned — re-verify in Phase 44) |
+| CONT-02 | Phase 41, Phase 44 | Pending (orphaned — re-verify in Phase 44) |
+| CLOG-01 | Phase 42, Phase 43 | Satisfied; Phase 43 fixes v1.7 client count |
+| CLOG-02 | Phase 42, Phase 43 | Satisfied (re-opened: client count drift) |
+| CLMD-01 | Phase 42, Phase 43 | Satisfied (re-opened: Layer 3 label + tool count) |
+| CLMD-02 | Phase 42, Phase 43 | Satisfied (re-opened: file-ops count, strategy names) |
 
 **Coverage:**
 - v1.8 requirements: 16 total
 - Mapped to phases: 16
 - Unmapped: 0
+- Post-audit status: 6 satisfied · 5 orphaned (closing in P44) · 1 unsatisfied (closing in P44) · 4 satisfied-but-drift-reopened (closing in P43)
 
 ---
 *Requirements defined: 2026-04-23*

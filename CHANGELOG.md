@@ -5,7 +5,7 @@ All notable changes to Serena (Go) are documented here.
 ## v1.7 — Developer Experience & Auto-Setup (2026-04-22)
 
 ### Setup CLI
-- One-command MCP registration: `serena setup <client>` for 6 clients — Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, and generic MCP clients
+- One-command MCP registration: `serena setup <client>` for 7 clients — Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, and generic MCP clients
 - Automatic project language detection in the working directory and pre-installation of available language servers
 - Uses client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
 - `--global` flag for user-wide registration; `--no-hooks` opt-out for Claude Code hook installation

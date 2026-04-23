@@ -10,10 +10,12 @@ skills:
   - memory
   - workflow
   - file-ops
+  - profile
 
 tools:
   - activate_project
   - switch_mode
+  - get_token_budget
 
 exclude_tools: []
 

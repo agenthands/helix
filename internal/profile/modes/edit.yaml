@@ -11,7 +11,8 @@ skills:
   - workflow
   - file-ops
 
-tools: []
+tools:
+  - get_token_budget
 
 exclude_tools:
   - replace_lines

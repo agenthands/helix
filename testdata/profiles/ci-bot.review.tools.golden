@@ -6,9 +6,14 @@ find_references
 format_code
 get_call_hierarchy
 get_code_actions
+get_context
 get_diagnostics
+get_health
 get_hover_info
+get_repo_map
 get_symbol_overview
+get_token_budget
+get_tool_help
 get_type_hierarchy
 go_to_definition
 list_memories

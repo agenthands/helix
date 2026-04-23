@@ -18,6 +18,9 @@ skills:
   - symbol-retrieval
   - diagnostics
   - memory
+  - repomap
+  - health
+  - help
 
 tools: []
 

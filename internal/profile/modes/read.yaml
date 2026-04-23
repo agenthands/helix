@@ -12,6 +12,7 @@ tools:
   - search_for_pattern
   - list_dir
   - find_file
+  - get_token_budget
 
 exclude_tools:
   - create_text_file

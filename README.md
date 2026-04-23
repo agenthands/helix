@@ -7,6 +7,8 @@
     Serena is the IDE for your coding agent.
 </h3>
 
+<p align="center">Code intelligence platform for MCP &mdash; 40+ tools across 52 languages.</p>
+
 * Serena provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
 * It integrates with any client/LLM via the model context protocol (**MCP**).
@@ -18,9 +20,22 @@ approaches that rely on low-level concepts like line numbers or primitive search
 Practically, this means that your agent operates **faster, more efficiently and more reliably**, especially in larger and
 more complex codebases.
 
+## Table of Contents
+
+- [How Serena Works](#how-serena-works)
+- [Key Advantages](#key-advantages-over-file-based-approaches)
+- [Quick Start](#quick-start)
+- [Key Features](#key-features)
+- [RepoMap](#repomap)
+- [Production & Observability](#production--observability)
+- [Languages](#programming-language-support)
+- [Tools](#features)
+- [Architecture](#architecture)
+- [Acknowledgements](#acknowledgements)
+
 ## How Serena Works
 
-Serena provides 35+ MCP tools for coding workflows, backed by real language servers.
+Serena provides 40+ MCP tools for coding workflows, backed by real language servers.
 An LLM orchestrates these tools to navigate, understand, and edit code.
 
 Serena runs as a **persistent daemon** that keeps language servers warm between sessions.
@@ -39,6 +54,115 @@ Agents connect via the **model context protocol (MCP)** through:
 | **Safety** | Hope the line numbers are right | Reference checking before delete, post-edit diagnostic verification |
 | **Performance** | Re-read files every session | Warm language server cache, shared across sessions |
 | **Scale** | Degrades in large codebases | Symbol-level operations stay fast regardless of codebase size |
+
+## Quick Start
+
+### Install
+
+```bash
+go install github.com/postfix/serena/cmd/serena@latest
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/postfix/serena.git
+cd serena
+go build ./cmd/serena
+```
+
+### Configure Your Client
+
+```bash
+serena setup claude-code    # Claude Code
+serena setup vscode         # VS Code / Cursor
+serena setup jetbrains      # JetBrains IDEs
+serena setup gemini-cli     # Gemini CLI
+serena setup claude-desktop # Claude Desktop
+```
+
+Add `--global` for user-wide registration. Run `serena setup --help` for all options.
+
+Serena uses **lazy initialization** — workspaces are configured on first tool call, so there is no upfront indexing delay.
+
+<details>
+<summary>Manual configuration (without serena setup)</summary>
+
+**Claude Code** (`.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio"]
+    }
+  }
+}
+```
+
+**Codex** (`.codex/config.json`):
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio", "--profile=codex"]
+    }
+  }
+}
+```
+
+**IDE Assistant** (generic MCP client config):
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio", "--profile=ide-assistant"]
+    }
+  }
+}
+```
+
+**HTTP mode** (for IDEs, web clients, multi-client):
+```bash
+serena --serve --http-addr=:9091
+# Connect your client to http://localhost:9091/mcp
+```
+
+For detailed configuration options, see [INSTALL.md](INSTALL.md).
+
+</details>
+
+### Select a Profile
+
+```bash
+serena --profile=claude-code    # Curated for Claude Code (excludes file tools it already has)
+serena --profile=codex          # Curated for Codex
+serena --profile=ide-assistant  # Read-focused for IDE assistants
+serena --profile=ci-bot         # Read-only for CI/review bots
+serena --profile=full           # All tools (default)
+```
+
+For full profile and mode reference, see [USAGE.md](USAGE.md).
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Fuzzy Editing** | 4-strategy cascade (exact, whitespace-normalized, indentation-flexible) handles imprecise LLM-generated edits |
+| **Smart Errors** | "Did you mean?" suggestions via Levenshtein distance on misspelled parameter names and enum values |
+| **Progressive Descriptions** | Tools expose short descriptions for listing; full documentation available on demand via `get_tool_help` |
+| **Health Monitoring** | `get_health` reports runtime status of language servers and worker pool |
+| **Lazy Initialization** | Workspaces initialize on first tool call — no upfront indexing delay |
+| **Setup CLI** | One-command client registration: `serena setup claude-code` with language detection and health check |
+
+## RepoMap
+
+Serena includes a structural code intelligence engine for understanding repository layout and finding task-relevant context:
+
+- **`get_repo_map`** — Generates a structural overview of the repository using tree-sitter tag extraction and PageRank ranking. Token-budget-aware output scales to any repository size.
+- **`get_context`** — Given a set of files relevant to your task, returns ranked symbols and definitions across the codebase that are most relevant, using dependency graph analysis.
 
 ## Production & Observability
 
@@ -188,76 +312,6 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 
 <!-- END TOOLS -->
 
-## Quick Start
-
-### Install
-
-```bash
-go install github.com/postfix/serena/cmd/serena@latest
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/postfix/serena.git
-cd serena
-go build ./cmd/serena
-```
-
-### Configure Your Client
-
-**Claude Code** (`.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio"]
-    }
-  }
-}
-```
-
-**Codex** (`.codex/config.json`):
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio", "--profile=codex"]
-    }
-  }
-}
-```
-
-**IDE Assistant** (generic MCP client config):
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio", "--profile=ide-assistant"]
-    }
-  }
-}
-```
-
-**HTTP mode** (for IDEs, web clients, multi-client):
-```bash
-serena --serve --http-addr=:9091
-# Connect your client to http://localhost:9091/mcp
-```
-
-### Select a Profile
-
-```bash
-serena --profile=claude-code    # Curated for Claude Code (excludes file tools it already has)
-serena --profile=codex          # Curated for Codex
-serena --profile=ide-assistant  # Read-focused for IDE assistants
-serena --profile=ci-bot         # Read-only for CI/review bots
-serena --profile=full           # All tools (default)
-```
-
 ## Architecture
 
 Serena is built as a 4-layer Go binary:
@@ -281,3 +335,7 @@ The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus
 A significant part of Serena, especially support for various languages, was contributed by the open source community.
 We are very grateful for the many contributors who made this possible and who played an important role in making Serena
 what it is today.
+
+---
+
+<sub>Originally inspired by [Python Serena](https://github.com/lks-ai/serena).</sub>

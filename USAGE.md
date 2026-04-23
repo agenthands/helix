@@ -16,20 +16,13 @@ This tutorial walks through setting up Serena for a new codebase from scratch.
 go install github.com/postfix/serena/cmd/serena@latest
 ```
 
-**Step 2: Configure your MCP client**
+**Step 2: Register with your MCP client**
 
-For Claude Code, add to `.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio"]
-    }
-  }
-}
+```bash
+serena setup claude-code
 ```
+
+This auto-detects your project, registers Serena as an MCP server, detects programming languages, pre-installs language servers, and runs a health check. Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `generic`.
 
 For HTTP mode (IDEs, web clients, multi-client):
 
@@ -140,6 +133,86 @@ get_diagnostics("internal/api/handler.go")
 Surface compiler errors, linter warnings, and other issues. Present findings with file paths, symbol names, and line numbers for actionable review feedback.
 
 The `ci-bot` profile is purpose-built for this workflow -- it restricts tools to read-only and review operations, preventing any file modifications.
+
+## Feature Guide
+
+### Fuzzy Editing
+
+Serena's `fuzzy_edit` tool matches search blocks against file content using a 4-strategy cascade that tolerates whitespace and indentation differences. The strategies, in order: **Exact** (byte-for-byte match), **Whitespace** (ignores leading/trailing whitespace per line), **IndentFlex** (tabs and spaces interchangeable), and **Failed** (returns a unified-diff showing the nearest match). If multiple matches are found at any strategy level, the tool returns an error asking you to add more context to disambiguate.
+
+Search and replacement blocks support **ellipsis** (`...` on its own line) to skip intermediate content. Segments match in forward-only order, and search and replacement must have the same number of segments.
+
+```
+fuzzy_edit("src/handler.go", "func HandleRequest(", "...", "func HandleRequest(ctx context.Context,", "...")
+```
+
+### RepoMap and Context
+
+Two tools provide structural code intelligence using tree-sitter tag extraction and PageRank ranking:
+
+- **`get_repo_map`** returns a structural overview of the repository, ranking symbols by importance. Accepts a `max_tokens` parameter (default 4096, max 32768) to control output size.
+- **`get_context`** takes a list of files relevant to your current task and returns ranked symbols from across the codebase using Personalized PageRank on the dependency graph. Default budget is 2048 tokens.
+
+Both tools support 23 languages via tree-sitter grammars: Go, Python, TypeScript, TSX, Rust, Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin, Scala, Bash, Haskell, Julia, OCaml, Lua, Zig, HCL, R, and Swift.
+
+```
+get_repo_map(max_tokens=4096)
+get_context(files=["src/api/handler.go", "src/models/user.go"])
+```
+
+### Setup CLI
+
+The `serena setup <client>` command registers Serena with your MCP client in one step. It resolves the Serena binary path, writes the MCP configuration, detects programming languages in your project, pre-installs required language servers, and runs a post-setup health check.
+
+```bash
+serena setup claude-code          # Project-scoped (default)
+serena setup vscode --global      # User-scoped registration
+serena setup jetbrains --dry-run  # Preview without changes
+```
+
+Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `generic`.
+
+For Claude Code, setup also installs **session hooks** that automatically activate and deactivate workspaces. Three hooks are registered: `SessionStart` (activates the workspace), `PreToolUse` (nudges the agent toward Serena tools on Grep/Read/Bash), and `Stop` (deactivates the workspace). Use `--no-hooks` to skip hook installation.
+
+```bash
+serena setup claude-code --no-hooks     # Skip hook installation
+serena setup claude-code --uninstall    # Remove registration and hooks
+```
+
+### Smart Errors
+
+When a tool call contains a misspelled parameter name or incorrect enum value, Serena suggests corrections using Levenshtein distance matching. For example, passing `path` instead of `relative_path` returns a "Did you mean `relative_path`?" suggestion alongside the validation error. Exact substring matches (like `path` within `relative_path`) are prioritized for high-confidence suggestions.
+
+This is automatic middleware behavior -- no tool call needed.
+
+### Progressive Descriptions
+
+Serena uses a two-tier description system to reduce token consumption. When agents enumerate tools via `tools/list`, each tool returns a brief description (under 100 tokens). Full documentation -- including parameter details, usage examples, and patterns -- is available on demand via the `get_tool_help` tool.
+
+```
+get_tool_help(tool_name="fuzzy_edit")
+```
+
+### Lazy Workspace Init
+
+Serena transparently activates a workspace on the first `tools/call` if no workspace is currently active. The workspace path is resolved from the `repo_path` argument of the tool call or falls back to the configured default root. This eliminates the need to explicitly call `activate_project` before using tools.
+
+If automatic activation fails, Serena returns an actionable error message suggesting you call `activate_project` explicitly with the correct path.
+
+This is automatic middleware behavior -- no tool call needed.
+
+### Health Monitoring
+
+The `get_health` tool reports the status of all active language server workers and circuit breakers.
+
+```
+get_health()               # Shows only unhealthy workers (if any)
+get_health(verbose=true)   # Shows all workers including healthy ones
+```
+
+When all language servers are healthy, the default (non-verbose) call returns a simple "All N language servers healthy" message. Use verbose mode to inspect individual worker states, circuit breaker status, and workspace assignments.
+
+See [Configuration Reference](#configuration-reference) for `degradation.timeout_index` and other tuning keys.
 
 ## Profiles and Modes
 

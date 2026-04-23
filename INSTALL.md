@@ -38,6 +38,8 @@ serena setup vscode         # VS Code
 serena setup jetbrains      # JetBrains IDEs
 serena setup gemini-cli     # Gemini CLI
 serena setup claude-desktop # Claude Desktop
+serena setup opencode       # OpenCode
+serena setup generic        # Generic MCP client
 ```
 
 Add `--global` for user-wide registration. Other flags:

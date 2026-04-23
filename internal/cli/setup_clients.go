@@ -33,7 +33,7 @@ type RegistrationConfig struct {
 	Printer    *SetupPrinter // Colored output helper
 }
 
-// clientRegistry returns all 6 registrars keyed by client name.
+// clientRegistry returns all 7 registrars keyed by client name.
 func clientRegistry() map[string]ClientRegistrar {
 	return map[string]ClientRegistrar{
 		"claude-code":    &ClaudeCodeRegistrar{},

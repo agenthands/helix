@@ -21,7 +21,7 @@ func newSetupCommand() *cobra.Command {
 
 Run without arguments to list available clients.
 Run with a client name to register Serena for that client.`,
-		ValidArgs: []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "generic"},
+		ValidArgs: []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
 		Args:      cobra.MaximumNArgs(1),
 		RunE:      runSetup,
 		SilenceUsage:  true,

@@ -41,6 +41,7 @@ func clientRegistry() map[string]ClientRegistrar {
 		"jetbrains":      &JetBrainsRegistrar{},
 		"claude-desktop": &ClaudeDesktopRegistrar{},
 		"gemini-cli":     &GeminiCLIRegistrar{},
+		"opencode":       &OpenCodeRegistrar{},
 		"generic":        &GenericRegistrar{},
 	}
 }
@@ -581,6 +582,61 @@ func (r *ClaudeDesktopRegistrar) configPath() (string, error) {
 		}
 		return filepath.Join(home, ".config", "Claude", "claude_desktop_config.json"), nil
 	}
+}
+
+// --- OpenCodeRegistrar ---
+
+// OpenCodeRegistrar handles MCP registration for OpenCode.
+// OpenCode uses "mcp" key (not "mcpServers") and "command" is an array.
+type OpenCodeRegistrar struct{}
+
+func (r *OpenCodeRegistrar) Name() string       { return "opencode" }
+func (r *OpenCodeRegistrar) Description() string { return "OpenCode" }
+
+func (r *OpenCodeRegistrar) Register(cfg RegistrationConfig) error {
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
+
+	// OpenCode uses a different server config shape: "command" is an array, plus "type" and "enabled" fields.
+	serverEntry := map[string]any{
+		"type":    "local",
+		"command": []string{cfg.BinaryPath, "--mode=stdio"},
+		"enabled": true,
+	}
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would write to %s: mcp.serena = %v", configPath, serverEntry)
+		return nil
+	}
+
+	return mergeJSONConfig(configPath, "mcp", "serena", serverEntry)
+}
+
+func (r *OpenCodeRegistrar) Unregister(cfg RegistrationConfig) error {
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
+		return nil
+	}
+
+	return removeFromJSONConfig(configPath, "mcp", "serena")
+}
+
+func (r *OpenCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
+	if cfg.Global {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine home directory: %w", err)
+		}
+		return filepath.Join(home, ".config", "opencode", "opencode.json"), nil
+	}
+	return filepath.Join(cfg.ProjectDir, "opencode.json"), nil
 }
 
 // --- GenericRegistrar ---

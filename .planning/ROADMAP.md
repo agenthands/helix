@@ -160,7 +160,10 @@ Plans:
   2. CHANGELOG.md v1.6 (RepoMap, fuzzy editing, 23 grammars) and v1.7 (setup CLI, health, hooks, smart errors, progressive descriptions, lazy init) entries are complete and accurate
   3. CLAUDE.md project description presents Serena as a standalone Go-native product matching the README identity
   4. CLAUDE.md architecture section includes RepoMap skill, fuzzy editing engine, setup CLI, health tools, and current tool count (41+)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 42-01-PLAN.md -- Audit CHANGELOG.md and add v1.3-v1.7 milestone entries (CLOG-01, CLOG-02)
+- [ ] 42-02-PLAN.md -- Refresh CLAUDE.md Project + Architecture for v1.6/v1.7 subsystems (CLMD-01, CLMD-02)
 
 ## Progress
 
@@ -180,4 +183,4 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 39. README Rewrite | v1.8 | 2/2 | Complete    | 2026-04-23 |
 | 40. USAGE Refresh | v1.8 | 3/3 | Complete   | 2026-04-23 |
 | 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
-| 42. Changelog & CLAUDE.md | v1.8 | 0/0 | Not started | - |
+| 42. Changelog & CLAUDE.md | v1.8 | 0/2 | Planned | - |

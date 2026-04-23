@@ -22,13 +22,13 @@ Requirements for documentation overhaul. Each maps to roadmap phases.
 
 ### INSTALL
 
-- [ ] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method — orphaned by v1.8 audit (Phase 41 never verified)
-- [ ] **INST-02**: INSTALL.md has accurate MCP configs for all 7 supported clients — orphaned by v1.8 audit; count corrected from 6 to 7 (OpenCode was missing)
+- [x] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method — orphaned by v1.8 audit (Phase 41 never verified)
+- [x] **INST-02**: INSTALL.md has accurate MCP configs for all 7 supported clients — orphaned by v1.8 audit; count corrected from 6 to 7 (OpenCode was missing)
 
 ### CONTRIBUTING
 
-- [ ] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow — orphaned by v1.8 audit (Phase 41 never verified)
-- [ ] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates) — orphaned by v1.8 audit (Phase 41 never verified)
+- [x] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow — orphaned by v1.8 audit (Phase 41 never verified)
+- [x] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates) — orphaned by v1.8 audit (Phase 41 never verified)
 
 ### CHANGELOG
 

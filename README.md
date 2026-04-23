@@ -7,7 +7,7 @@
     Serena is the IDE for your coding agent.
 </h3>
 
-<p align="center">Code intelligence platform for MCP &mdash; 40+ tools across 52 languages.</p>
+<p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
 * Serena provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
@@ -35,7 +35,7 @@ more complex codebases.
 
 ## How Serena Works
 
-Serena provides 40+ MCP tools for coding workflows, backed by real language servers.
+Serena provides 41+ MCP tools for coding workflows, backed by real language servers.
 An LLM orchestrates these tools to navigate, understand, and edit code.
 
 Serena runs as a **persistent daemon** that keeps language servers warm between sessions.
@@ -325,7 +325,7 @@ Code Intelligence Kernel (LS worker pool, symbol ops, file ops, diagnostics)
     |
 Skills & Multi-Language (52-language registry, memory system, skill plugins)
     |
-Agent Profiles (5 profiles, 4 modes, token budget, layered config)
+Agent Profiles & Setup (5 profiles, 4 modes, token budget, layered config, setup CLI)
 ```
 
 The **persistent daemon** keeps language servers warm between sessions. The **worker pool** uses share-until-dirty semantics with adaptive TTL, circuit breaking for crashy servers, and platform-aware memory pressure eviction.

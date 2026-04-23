@@ -143,20 +143,20 @@ Serena's `fuzzy_edit` tool matches search blocks against file content using a 4-
 Search and replacement blocks support **ellipsis** (`...` on its own line) to skip intermediate content. Segments match in forward-only order, and search and replacement must have the same number of segments.
 
 ```
-fuzzy_edit("src/handler.go", "func HandleRequest(", "...", "func HandleRequest(ctx context.Context,", "...")
+fuzzy_edit(path="src/handler.go", search="func HandleRequest(\n...\n)", replacement="func HandleRequest(ctx context.Context,\n...\n)")
 ```
 
 ### RepoMap and Context
 
 Two tools provide structural code intelligence using tree-sitter tag extraction and PageRank ranking:
 
-- **`get_repo_map`** returns a structural overview of the repository, ranking symbols by importance. Accepts a `max_tokens` parameter (default 4096, max 32768) to control output size.
+- **`get_repo_map`** returns a structural overview of the repository, ranking symbols by importance. Accepts a `token_budget` parameter (default 4096, max 32768) to control output size.
 - **`get_context`** takes a list of files relevant to your current task and returns ranked symbols from across the codebase using Personalized PageRank on the dependency graph. Default budget is 2048 tokens.
 
 Both tools support 23 languages via tree-sitter grammars: Go, Python, TypeScript, TSX, Rust, Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin, Scala, Bash, Haskell, Julia, OCaml, Lua, Zig, HCL, R, and Swift.
 
 ```
-get_repo_map(max_tokens=4096)
+get_repo_map(token_budget=4096)
 get_context(files=["src/api/handler.go", "src/models/user.go"])
 ```
 

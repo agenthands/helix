@@ -2,6 +2,51 @@
 
 All notable changes to Serena (Go) are documented here.
 
+## v1.5 — Typed Errors & Hardening (2026-04-15)
+
+### Error Taxonomy
+- `internal/errors/` package with 7 error kinds: `NotFound`, `InvalidArgs`, `NoWorkspace`, `Unsupported`, `Internal`, `CircuitOpen`, `Timeout`
+- Builder pattern API with `serr.New` / `serr.Wrap` and JSON serialization
+- Cause-chain wrapping compatible with `errors.Is` / `errors.As`
+- Unified sentinels: `ErrCircuitOpen`, `ErrSessionExpired`, `ErrLSCrashed` migrated into the taxonomy (backward-compatible re-exports, later removed)
+
+### Tool Migration
+- All 38+ MCP tools across 10 packages (symbols, edit, fileops, diag, memory, workflow, profile, MCP core) migrated from raw `fmt.Errorf` strings to typed `serr.New` / `serr.Wrap`
+- All 24 kernel tool handlers gained inline input validation — empty-string checks on required fields before any workspace or LS work
+
+### Testing
+- Three-band error tests upgraded with `extractKind` helper and `expectedKind` struct field for Kind-level assertions
+- 4 typed error golden files: `invalid_args`, `no_workspace`, `not_found`, `unsupported`
+
+## v1.4 — Integration Testing v2 (2026-04-14)
+
+### Test Harness
+- Importable `test/harness/` package — Runner, golden store, fixture helpers
+- Build tag taxonomy: `integration`, `llm`, `llmjudge`
+
+### Oracle Tests
+- **Protocol oracle:** MCP handshake, `tools/list` validation, session isolation, reconnect resilience
+- **Contract oracle:** JSON Schema Draft 2020-12 validation, 23 golden output files, 6 error category contracts, tool selectability heuristics
+- **Scenario oracle:** 14+ full-cycle agent workflow tests across Go, Python, TypeScript, C++, Swift, Zig, JavaScript, PHP, SQL, Markdown, polyglot, unsupported, collision, and degraded fixtures
+
+### LLM Behavioral Tests
+- Tool selection across 33 tools, 11 disambiguation pairs, output interpretation
+- Multi-provider support (Anthropic + DeepSeek)
+- Judge scoring with 5-dimension rubrics, transcript pipeline, aggregate reporting — never blocks merge
+
+## v1.3 — Documentation Catchup (2026-04-11)
+
+### README & Observability Docs
+- README **Production & Observability** section documenting metrics, tracing, admin endpoints, and graceful degradation
+- Go-native CONTRIBUTING.md replacing the legacy Python contribution guide
+
+### Install & Usage Guides
+- USAGE.md accuracy fixes plus a benchmarks subsection
+- INSTALL.md with per-agent MCP config sections for Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Antigravity, and HTTP mode
+
+### Changelog
+- CHANGELOG.md v1.2 gap fill (items missed during the v1.2 writeup)
+
 ## v1.2 — Performance & Production Hardening (2026-04-10)
 
 ### Benchmark Harness

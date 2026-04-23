@@ -103,7 +103,7 @@
 
 - [x] **Phase 39: README Rewrite** - Rewrite README as standalone Go-native product identity document (completed 2026-04-23)
 - [x] **Phase 40: USAGE Refresh** - Update USAGE.md to reflect full current feature set through v1.7 (completed 2026-04-23)
-- [ ] **Phase 41: Install & Contributing** - Update INSTALL.md and CONTRIBUTING.md for current codebase
+- [x] **Phase 41: Install & Contributing** - Update INSTALL.md and CONTRIBUTING.md for current codebase (completed 2026-04-23)
 - [ ] **Phase 42: Changelog & CLAUDE.md** - Audit CHANGELOG.md completeness and update CLAUDE.md to match reality
 
 ## Phase Details
@@ -146,10 +146,10 @@ Plans:
   2. INSTALL.md includes accurate MCP JSON configs for all 6 supported clients (Claude Code, Codex, VS Code, JetBrains, Claude Desktop, Gemini CLI) plus HTTP mode
   3. CONTRIBUTING.md reflects the current Go project structure (4-layer architecture, test/ directory, internal/ packages)
   4. CONTRIBUTING.md references the current test harness (oracle tests with protocol/contract/scenario/LLM layers, integration build tags, benchmark gates with benchstat)
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 41-01-PLAN.md -- Rewrite INSTALL.md with setup CLI as primary path
-- [ ] 41-02-PLAN.md -- Update CONTRIBUTING.md project structure and test documentation
+- [x] 41-01-PLAN.md -- Rewrite INSTALL.md with setup CLI as primary path
+- [x] 41-02-PLAN.md -- Update CONTRIBUTING.md project structure and test documentation
 
 ### Phase 42: Changelog & CLAUDE.md
 **Goal**: CHANGELOG.md accurately records all shipped milestones and CLAUDE.md reflects current project reality for AI assistants
@@ -179,5 +179,5 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39. README Rewrite | v1.8 | 2/2 | Complete    | 2026-04-23 |
 | 40. USAGE Refresh | v1.8 | 3/3 | Complete   | 2026-04-23 |
-| 41. Install & Contributing | v1.8 | 0/2 | In progress | - |
+| 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 42. Changelog & CLAUDE.md | v1.8 | 0/0 | Not started | - |

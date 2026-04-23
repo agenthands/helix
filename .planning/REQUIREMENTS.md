@@ -22,13 +22,13 @@ Requirements for documentation overhaul. Each maps to roadmap phases.
 
 ### INSTALL
 
-- [ ] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method
-- [ ] **INST-02**: INSTALL.md has accurate MCP configs for all 6 supported clients
+- [x] **INST-01**: INSTALL.md reflects current install paths and `serena setup <client>` as primary method
+- [x] **INST-02**: INSTALL.md has accurate MCP configs for all 6 supported clients
 
 ### CONTRIBUTING
 
-- [ ] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow
-- [ ] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates)
+- [x] **CONT-01**: CONTRIBUTING.md reflects current Go codebase structure and dev workflow
+- [x] **CONT-02**: CONTRIBUTING.md references current test harness (oracle tests, integration tags, benchmark gates)
 
 ### CHANGELOG
 
@@ -69,10 +69,10 @@ None -- documentation milestone is self-contained.
 | USAGE-01 | Phase 40 | Complete |
 | USAGE-02 | Phase 40 | Pending |
 | USAGE-03 | Phase 40 | Complete |
-| INST-01 | Phase 41 | Pending |
-| INST-02 | Phase 41 | Pending |
-| CONT-01 | Phase 41 | Pending |
-| CONT-02 | Phase 41 | Pending |
+| INST-01 | Phase 41 | Complete |
+| INST-02 | Phase 41 | Complete |
+| CONT-01 | Phase 41 | Complete |
+| CONT-02 | Phase 41 | Complete |
 | CLOG-01 | Phase 42 | Pending |
 | CLOG-02 | Phase 42 | Pending |
 | CLMD-01 | Phase 42 | Pending |

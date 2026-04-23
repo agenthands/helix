@@ -42,25 +42,40 @@ Every PR should cover a single logical change or a set of closely related change
 Serena uses a 4-layer architecture shipping as a single Go binary:
 
 - `cmd/serena/` -- CLI entry point
-- `internal/mcp/` -- MCP runtime (Layer 0)
+- `internal/mcp/` -- MCP runtime, smart error suggestions, lazy workspace init (Layer 0)
 - `internal/daemon/` -- Persistent supervisor daemon (Layer 0)
 - `internal/forwarder/` -- Stdio-to-gRPC proxy (Layer 0)
+- `internal/cli/` -- CLI commands: setup, status, activate, deactivate, nudge
 - `internal/kernel/` -- Code intelligence kernel (Layer 1)
 - `internal/kernel/lspool/` -- LS worker pool (share-until-dirty, adaptive TTL, circuit breaking)
 - `internal/kernel/symbols/` -- 9 symbol retrieval tools
 - `internal/kernel/edit/` -- 6 symbol editing tools (tree-sitter body surgery)
-- `internal/kernel/fileops/` -- 6 file operation tools
+- `internal/kernel/fileops/` -- 7 file operation tools (includes fuzzy_edit)
 - `internal/kernel/diag/` -- 3 diagnostic tools
-- `internal/skill/` -- Skill plugin system (Layer 2)
+- `internal/kernel/health/` -- get_health tool
+- `internal/kernel/help/` -- get_tool_help tool
+- `internal/kernel/jsonrpc/` -- Custom JSON-RPC 2.0 codec for LS communication
+- `internal/fuzzy/` -- Fuzzy editing strategies (whitespace-normalized, indentation-flexible)
+- `internal/repomap/` -- RepoMap subsystem (PageRank-based context selection)
+- `internal/treesitter/` -- Tree-sitter grammar integration
+- `internal/skill/` -- Skill plugin system, Caddy-style init() registration (Layer 2)
+- `internal/skill/memory/` -- 7 memory tools
+- `internal/skill/repomap/` -- 2 RepoMap tools (get_repo_map, get_context)
+- `internal/skill/workflow/` -- 2 workflow tools (onboard_project, prepare_for_new_conversation)
 - `internal/langregistry/` -- 52-language registry with YAML override (Layer 2)
+- `internal/memory/` -- Memory store, FTS5 index, fsnotify watcher
 - `internal/profile/` -- 5 agent profiles (Layer 3)
 - `internal/config/` -- 4-layer configuration (Layer 3)
+- `internal/errors/` -- Structured error types
 - `internal/obs/` -- Observability (metrics, tracing, admin listener)
 - `internal/degrade/` -- Graceful degradation
+- `internal/workspace/` -- Workspace key and state
 - `api/proto/serena/v1/` -- gRPC IPC definitions
 - `protocol/gen/` -- Generated LSP 3.17 types
+- `test/harness/` -- Test harness: Runner, tool helpers, golden file comparison, fixtures
+- `test/oracle/` -- Oracle test suite (6 layers: protocol, contract, runtime, scenario, llm, judge)
 - `test/integration/` -- MCP round-trip integration tests
-- `test/bench/` -- Benchmark suite
+- `test/bench/` -- Benchmark suite with baselines
 
 ## Running Integration Tests
 
@@ -84,6 +99,33 @@ Key details:
 - Tests exercise MCP round-trips against live language servers.
 - Go fixtures are in `test/integration/`, with additional language fixtures available for Python, TypeScript, Java, and Rust.
 - **Requirement:** Integration tests require `gopls` installed. Tests for other languages require their respective language servers.
+
+## Oracle Test Suite
+
+The oracle test suite in `test/oracle/` provides structured verification across 6 layers:
+
+| Layer | Package | Purpose |
+|-------|---------|---------|
+| protocol | `test/oracle/protocol/` | MCP handshake, reconnect, session isolation, smoke tests, tool listing |
+| contract | `test/oracle/contract/` | Schema validation, golden output comparison, error contracts, selectability |
+| runtime | `test/oracle/runtime/` | Degraded start, pool stress, shutdown ordering, deferred errors |
+| scenario | `test/oracle/scenario/` | Multi-language end-to-end scenarios (Go, Python, TS, Java, Rust, PHP, C++, JS, Swift, and more) |
+| llm | `test/oracle/llm/` | LLM-driven disambiguation, interpretation, selection |
+| judge | `test/oracle/judge/` | Automated scoring with rubrics and aggregation |
+
+Run all oracle tests:
+
+```sh
+go test ./test/oracle/... -v -timeout 300s
+```
+
+Run a specific layer:
+
+```sh
+go test ./test/oracle/scenario/ -v -timeout 120s
+```
+
+The test harness (`test/harness/`) provides shared infrastructure: `Runner` (starts daemon + exercises MCP round-trips), tool call helpers, golden file comparison, and fixture management.
 
 ## Running Benchmarks
 
@@ -112,7 +154,7 @@ Key details:
 ## Adding a New MCP Tool
 
 1. **Choose the right layer:**
-   - Kernel tools go in `internal/kernel/{category}/` (symbols, edit, fileops, diag)
+   - Kernel tools go in `internal/kernel/{category}/` (symbols, edit, fileops, diag, health, help)
    - Skill tools go in `internal/skill/{name}/`
 
 2. **Implement the tool:**
@@ -123,7 +165,7 @@ Key details:
 
 4. **Regenerate docs:** Run `make docs` to regenerate the README tool table.
 
-5. **Add test coverage:** Add integration test coverage in `test/integration/`.
+5. **Add test coverage:** Add integration tests in `test/integration/` and oracle scenario tests in `test/oracle/scenario/` for end-to-end verification.
 
 6. **Validate:** Run `go test ./...` and `go vet ./...`.
 

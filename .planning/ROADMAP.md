@@ -105,8 +105,8 @@
 - [x] **Phase 40: USAGE Refresh** - Update USAGE.md to reflect full current feature set through v1.7 (completed 2026-04-23)
 - [x] **Phase 41: Install & Contributing** - Update INSTALL.md and CONTRIBUTING.md for current codebase (completed 2026-04-23)
 - [x] **Phase 42: Changelog & CLAUDE.md** - Audit CHANGELOG.md completeness and update CLAUDE.md to match reality (completed 2026-04-23)
-- [ ] **Phase 43: Cross-Doc Truth Sync** - Close F-01/F-03/F-07/F-08/F-10/F-11 drift identified by v1.8 milestone audit
-- [ ] **Phase 44: Re-Verify Phase 41 and USAGE-02** - Close F-13 orphan requirements and confirm Phase 43 fixes
+- [x] **Phase 43: Cross-Doc Truth Sync** - Close F-01/F-03/F-07/F-08/F-10/F-11 drift identified by v1.8 milestone audit (completed 2026-04-23)
+- [x] **Phase 44: Re-Verify Phase 41 and USAGE-02** - Close F-13 orphan requirements and confirm Phase 43 fixes (completed 2026-04-23)
 - [ ] **Phase 45: Cross-link & Manual-Config Polish** - Close F-02/F-06/F-12 optional-but-actionable findings
 
 ## Phase Details
@@ -179,14 +179,14 @@ Plans:
   3. Fuzzy-edit strategy names identical across USAGE, CHANGELOG, CLAUDE.md
   4. CLAUDE.md Layer 3 label matches README exactly
   5. `internal/cli/setup_clients.go:36` comment says 7 registrars, not 6
-**Plans:** 6 plans
+**Plans:** 6/6 plans complete
 Plans:
-- [ ] 43-01-PLAN.md — README.md client list, tool count, Layer 3 label, fuzzy strategy names
-- [ ] 43-02-PLAN.md — INSTALL.md Quick Start + Supported-clients enumeration (add opencode/generic)
-- [ ] 43-03-PLAN.md — USAGE.md Supported-clients list + fuzzy strategy vocabulary rewrite
-- [ ] 43-04-PLAN.md — CHANGELOG.md v1.7 Setup CLI bullet (6 → 7 clients, add OpenCode)
-- [ ] 43-05-PLAN.md — CLAUDE.md fileops count, Layer 3 client count, fuzzy strategy naming
-- [ ] 43-06-PLAN.md — internal/cli/setup_clients.go:36 comment (6 → 7 registrars)
+- [x] 43-01-PLAN.md — README.md client list, tool count, Layer 3 label, fuzzy strategy names
+- [x] 43-02-PLAN.md — INSTALL.md Quick Start + Supported-clients enumeration (add opencode/generic)
+- [x] 43-03-PLAN.md — USAGE.md Supported-clients list + fuzzy strategy vocabulary rewrite
+- [x] 43-04-PLAN.md — CHANGELOG.md v1.7 Setup CLI bullet (6 → 7 clients, add OpenCode)
+- [x] 43-05-PLAN.md — CLAUDE.md fileops count, Layer 3 client count, fuzzy strategy naming
+- [x] 43-06-PLAN.md — internal/cli/setup_clients.go:36 comment (6 → 7 registrars)
 
 ### Phase 44: Re-Verify Phase 41 and USAGE-02
 **Goal**: Phase 41 has a complete 41-VERIFICATION.md; Phase 40 USAGE-02 is re-verified after the strategy-naming and setup-CLI fixes land; milestone integration check is re-run.
@@ -229,7 +229,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45
 | 40. USAGE Refresh | v1.8 | 3/3 | Complete   | 2026-04-23 |
 | 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 42. Changelog & CLAUDE.md | v1.8 | 2/2 | Complete   | 2026-04-23 |
-| 43. Cross-Doc Truth Sync | v1.8 | 0/6 | Planned | — |
+| 43. Cross-Doc Truth Sync | v1.8 | 6/6 | Complete   | 2026-04-23 |
 | 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0 | Pending | — |
 | 45. Cross-link & Manual-Config Polish | v1.8 | 0 | Pending | — |
 

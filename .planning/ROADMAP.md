@@ -184,3 +184,27 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 40. USAGE Refresh | v1.8 | 3/3 | Complete   | 2026-04-23 |
 | 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 42. Changelog & CLAUDE.md | v1.8 | 0/2 | Planned | - |
+
+## Backlog
+
+### Phase 999.1: repomap returns lua fixture instead of go sources (BACKLOG)
+
+**Goal:** Fix `get_repo_map` returning only `legacy/test/resources/repos/lua/test_repo/src/utils.lua` when called on Serena's own workspace. Expected: ranked view of `internal/` Go sources.
+**Requirements:** TBD
+
+**Repro:** Call `mcp__serena__get_repo_map` on `/Users/Janis_Vizulis/go/src/github.com/postfix/serena` — output surfaces a single deeply-nested Lua test fixture, zero Go files from `internal/`.
+
+**Suspected causes (ordered):**
+1. PageRank ranking broken/starved — no cross-file refs picked up, so ranker degenerates to lexicographic or leaf-weighted selection
+2. Tag extractor only succeeded for Lua; Go queries failed silently
+3. Workspace root resolution wrong
+4. Default token budget too small, elide step nukes everything except one file
+
+**Investigation path:** Read `internal/repomap/{pagerank,render,extractor,cache,graph,elide}.go`. Trace `get_repo_map` on Serena's own workspace with a large explicit token budget and focus path. Compare against aider's repomap output.
+
+**Defer until:** after v1.8 Documentation Overhaul ships.
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)

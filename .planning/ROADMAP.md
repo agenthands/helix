@@ -107,7 +107,7 @@
 - [x] **Phase 42: Changelog & CLAUDE.md** - Audit CHANGELOG.md completeness and update CLAUDE.md to match reality (completed 2026-04-23)
 - [x] **Phase 43: Cross-Doc Truth Sync** - Close F-01/F-03/F-07/F-08/F-10/F-11 drift identified by v1.8 milestone audit (completed 2026-04-23)
 - [x] **Phase 44: Re-Verify Phase 41 and USAGE-02** - Close F-13 orphan requirements and confirm Phase 43 fixes (completed 2026-04-23)
-- [ ] **Phase 45: Cross-link & Manual-Config Polish** - Close F-02/F-06/F-12 optional-but-actionable findings
+- [x] **Phase 45: Cross-link & Manual-Config Polish** - Close F-02/F-06/F-12 optional-but-actionable findings (completed 2026-04-23)
 
 ## Phase Details
 
@@ -212,9 +212,9 @@ Plans:
   1. README manual-config block either covers all 7 clients or explicitly points to INSTALL.md
   2. README links to CHANGELOG; USAGE links to INSTALL
   3. USAGE rust-analyzer troubleshooting metadata reflects current behavior
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 45-01-PLAN.md — F-02 README 7-client pointer + F-12 README→CHANGELOG and USAGE→INSTALL cross-links + F-06 rust-analyzer read-only verification
+- [x] 45-01-PLAN.md — F-02 README 7-client pointer + F-12 README→CHANGELOG and USAGE→INSTALL cross-links + F-06 rust-analyzer read-only verification
 
 ## Progress
 
@@ -237,7 +237,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45
 | 42. Changelog & CLAUDE.md | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 43. Cross-Doc Truth Sync | v1.8 | 6/6 | Complete   | 2026-04-23 |
 | 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0/3 | In Progress | — |
-| 45. Cross-link & Manual-Config Polish | v1.8 | 0/1 | Pending | — |
+| 45. Cross-link & Manual-Config Polish | v1.8 | 1/1 | Complete   | 2026-04-23 |
 
 ## Backlog
 

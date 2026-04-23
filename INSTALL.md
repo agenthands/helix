@@ -129,6 +129,73 @@ Add to the platform-specific config file:
 }
 ```
 
+### Codex
+
+Add to `.codex/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio", "--profile=codex"]
+    }
+  }
+}
+```
+
+The `--profile=codex` flag loads a tool set tuned for Codex's capabilities.
+
+### OpenCode
+
+Add to `opencode.json` (project root) or `~/.config/opencode/opencode.json` (global):
+
+```json
+{
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": ["serena", "--mode=stdio"],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Note:** OpenCode uses the `"mcp"` key (not `"mcpServers"`), and `"command"` is an array.
+
+### Cursor
+
+Add to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio", "--profile=ide-assistant"]
+    }
+  }
+}
+```
+
+### Antigravity
+
+Open the Agent Panel, click "..." > MCP Servers > Manage > Edit configuration, and add:
+
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio"]
+    }
+  }
+}
+```
+
+Use absolute paths for the command if `serena` is not in your PATH.
+
 ### Generic (any MCP client)
 
 Use the `"mcpServers"` format:

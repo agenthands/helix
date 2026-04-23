@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Documentation Overhaul
 status: executing
-last_updated: "2026-04-23T11:14:24.288Z"
-last_activity: 2026-04-23 -- Phase 40 planning complete
+last_updated: "2026-04-23T11:16:50.894Z"
+last_activity: 2026-04-23 -- Phase 40 execution started
 progress:
   total_phases: 4
   completed_phases: 1
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-23)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 39 — readme-rewrite
+**Current focus:** Phase 40 — usage-refresh
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-23 -- Phase 40 planning complete
+Phase: 40 (usage-refresh) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 40
+Last activity: 2026-04-23 -- Phase 40 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

@@ -54,7 +54,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 - `internal/kernel/lspool/` -- LS worker pool: share-until-dirty, adaptive TTL, circuit breaking, pressure eviction
 - `internal/kernel/symbols/` -- 9 symbol retrieval tools (definition, references, hover, implementations, call/type hierarchy, blast radius)
 - `internal/kernel/edit/` -- 6 symbol editing tools with tree-sitter body surgery
-- `internal/kernel/fileops/` -- 6 file operation tools (read, write, list, find, search, replace)
+- `internal/kernel/fileops/` -- 7 file operation tools (read, write, list, find, search, replace, fuzzy_edit)
 - `internal/kernel/diag/` -- 3 diagnostic tools (diagnostics, code actions, formatting)
 - `internal/kernel/jsonrpc/` -- Custom JSON-RPC 2.0 codec for LS communication
 - `internal/kernel/health/` -- `get_health` MCP tool returning per-workspace LS status, capabilities, and indexing progress (kernel-level because it introspects kernel state); wrapped as a skill via `skill_adapter.go`

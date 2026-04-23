@@ -152,7 +152,7 @@ For full profile and mode reference, see [USAGE.md](USAGE.md).
 
 | Feature | Description |
 |---------|-------------|
-| **Fuzzy Editing** | 4-strategy cascade (exact, whitespace-normalized, indentation-flexible) handles imprecise LLM-generated edits |
+| **Fuzzy Editing** | 4-strategy cascade (exact, whitespace-normalized, indentation-flexible, ellipsis-placeholder) handles imprecise LLM-generated edits |
 | **Smart Errors** | "Did you mean?" suggestions via Levenshtein distance on misspelled parameter names and enum values |
 | **Progressive Descriptions** | Tools expose short descriptions for listing; full documentation available on demand via `get_tool_help` |
 | **Health Monitoring** | `get_health` reports runtime status of language servers and worker pool |

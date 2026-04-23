@@ -138,7 +138,7 @@ The `ci-bot` profile is purpose-built for this workflow -- it restricts tools to
 
 ### Fuzzy Editing
 
-Serena's `fuzzy_edit` tool matches search blocks against file content using a 4-strategy cascade that tolerates whitespace and indentation differences. The strategies, in order: **Exact** (byte-for-byte match), **Whitespace** (ignores leading/trailing whitespace per line), **IndentFlex** (tabs and spaces interchangeable), and **Failed** (returns a unified-diff showing the nearest match). If multiple matches are found at any strategy level, the tool returns an error asking you to add more context to disambiguate.
+Serena's `fuzzy_edit` tool matches search blocks against file content using a 4-strategy cascade that tolerates whitespace and indentation differences. The strategies, in order: **exact match** (byte-for-byte), **whitespace-normalized** (ignores leading/trailing whitespace per line), **indentation-flexible** (tabs and spaces interchangeable at line start), and **ellipsis-placeholder** (allows `...` in the search block to skip intermediate content). If all four strategies miss, the tool returns a unified-diff envelope showing the nearest candidate match. If multiple matches are found at any strategy level, the tool returns an error asking you to add more context to disambiguate.
 
 Search and replacement blocks support **ellipsis** (`...` on its own line) to skip intermediate content. Segments match in forward-only order, and search and replacement must have the same number of segments.
 

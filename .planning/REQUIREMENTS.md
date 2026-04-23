@@ -46,7 +46,7 @@ Requirements for documentation overhaul. Each maps to roadmap phases.
 
 ## Future Requirements
 
-None — documentation milestone is self-contained.
+None -- documentation milestone is self-contained.
 
 ## Out of Scope
 
@@ -61,28 +61,28 @@ None — documentation milestone is self-contained.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| README-01 | TBD | Pending |
-| README-02 | TBD | Pending |
-| README-03 | TBD | Pending |
-| README-04 | TBD | Pending |
-| USAGE-01 | TBD | Pending |
-| USAGE-02 | TBD | Pending |
-| USAGE-03 | TBD | Pending |
-| INST-01 | TBD | Pending |
-| INST-02 | TBD | Pending |
-| CONT-01 | TBD | Pending |
-| CONT-02 | TBD | Pending |
-| CLOG-01 | TBD | Pending |
-| CLOG-02 | TBD | Pending |
-| CLMD-01 | TBD | Pending |
-| CLMD-02 | TBD | Pending |
-| LEGC-01 | TBD | Pending |
+| README-01 | Phase 39 | Pending |
+| README-02 | Phase 39 | Pending |
+| README-03 | Phase 39 | Pending |
+| README-04 | Phase 39 | Pending |
+| LEGC-01 | Phase 39 | Pending |
+| USAGE-01 | Phase 40 | Pending |
+| USAGE-02 | Phase 40 | Pending |
+| USAGE-03 | Phase 40 | Pending |
+| INST-01 | Phase 41 | Pending |
+| INST-02 | Phase 41 | Pending |
+| CONT-01 | Phase 41 | Pending |
+| CONT-02 | Phase 41 | Pending |
+| CLOG-01 | Phase 42 | Pending |
+| CLOG-02 | Phase 42 | Pending |
+| CLMD-01 | Phase 42 | Pending |
+| CLMD-02 | Phase 42 | Pending |
 
 **Coverage:**
 - v1.8 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-23*
-*Last updated: 2026-04-23 after initial definition*
+*Last updated: 2026-04-23 after roadmap creation*

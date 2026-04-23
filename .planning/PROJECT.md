@@ -80,17 +80,18 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Standalone fuzzy edit MCP tool — raw text fuzzy matching with strategy reporting — v1.6
 - ✓ 23-language tree-sitter grammar support — full aider parity with tag and body queries — v1.6
 
+- ✓ README.md rewritten as standalone Go-native product identity document (hero, Quick Start, architecture, auto-generated tool table with 41+ tools) — v1.8 Phase 39
+- ✓ USAGE.md refreshed through v1.7 feature set (fuzzy editing 4-strategy cascade, RepoMap, 23 grammars, smart errors, progressive descriptions, lazy init) + Troubleshooting (jdtls/gopls/rust-analyzer) — v1.8 Phase 40
+- ✓ INSTALL.md Quick Start + manual configuration for 9 clients; CONTRIBUTING.md project structure and Go-native contributor guide — v1.8 Phase 41
+- ✓ CHANGELOG.md v1.6/v1.7 entries; CLAUDE.md architecture matches reality across all 4 layers — v1.8 Phase 42
+- ✓ Cross-doc truth sync: closed F-01/F-03/F-04/F-05/F-07/F-08/F-10/F-11 drift between README/USAGE/CLAUDE/CHANGELOG/CONTRIBUTING and source of truth (setup_clients.go, fuzzy/strategies.go) — v1.8 Phase 43
+- ✓ Re-verified Phase 41 (41-VERIFICATION.md created) and USAGE-02; v1.8 integration-check re-run with 0 open criticals/warnings — v1.8 Phase 44
+- ✓ Closed F-02 (README manual-config explicit 7-client pointer to INSTALL.md#manual-configuration), F-12 (README→CHANGELOG + USAGE→INSTALL cross-links), confirmed F-06 rust-analyzer troubleshooting metadata current — v1.8 Phase 45
+- ✓ Python legacy acknowledgment scoped to a single CLAUDE.md disclaimer; no "port" or "rewrite" language anywhere else — v1.8 Phase 42
+
 ### Active
 
-<!-- v1.8 Documentation Overhaul -->
-
-- [ ] README.md rewrite presenting Serena as its own Go-native product, not a Python port
-- [ ] USAGE.md refresh reflecting full current feature set (fuzzy editing, RepoMap, smart errors, progressive descriptions, health tools, lazy init)
-- [ ] INSTALL.md update with current install paths and client configs
-- [ ] CONTRIBUTING.md update as Go-native contributor guide reflecting current codebase
-- [ ] CHANGELOG.md audit ensuring all milestones are accurately represented
-- [ ] CLAUDE.md update with current project description and architecture
-- [ ] Brief Python legacy acknowledgment — no "port" or "rewrite" framing
+_No active requirements — v1.8 shipped 2026-04-24. Next milestone TBD via `/gsd-new-milestone`._
 
 ### Out of Scope
 
@@ -102,18 +103,15 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - Vector/embedding search — Augment Context Engine does this better
 - Git operations — GitHub MCP Server handles git comprehensively
 
-## Current Milestone: v1.8 Documentation Overhaul
+## Current State
 
-**Goal:** Rewrite all documentation to present Serena as its own Go-native product — not a Python port — reflecting 7 milestones of accumulated functionality, 41 MCP tools, and unique capabilities.
+**Shipped:** v1.8 Documentation Overhaul (2026-04-24) — Phases 39–45, 19 plans, 16/16 REQs satisfied.
 
-**Target features:**
-- README.md rewrite — product identity, capabilities, architecture as a standalone product
-- USAGE.md refresh — reflect current feature set (fuzzy editing, RepoMap, smart errors, progressive descriptions, health tools, lazy init)
-- INSTALL.md update — current install paths and client configs
-- CONTRIBUTING.md update — Go-native contributor guide reflecting current codebase
-- CHANGELOG.md — ensure all milestones are accurately represented
-- CLAUDE.md — update project description and architecture to match reality
-- Brief Python acknowledgment ("Originally inspired by Python Serena") — no more "port" or "rewrite" framing
+All public-facing documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md) now presents Serena as its own standalone Go-native product. Full current feature set through v1.7 is documented. Cross-doc drift is closed with grep-verifiable integration checks. Phase 39 retains 3 pending human-verification tests (subjective content-quality checks) as tech debt.
+
+## Next Milestone Goals
+
+TBD. Backlog Phase 999.1 (repomap returns lua fixture instead of go sources) is available for promotion via `/gsd-review-backlog`. Run `/gsd-new-milestone` to scope the next release.
 
 ## Context
 
@@ -187,4 +185,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-23 after Phase 39 complete — README rewritten as product identity document*
+*Last updated: 2026-04-24 after v1.8 milestone (Documentation Overhaul) shipped*

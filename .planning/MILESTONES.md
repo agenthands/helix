@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.8 Documentation Overhaul (Shipped: 2026-04-23)
+
+**Phases completed:** 8 phases, 19 plans, 11 tasks
+
+**Key accomplishments:**
+
+- 1. [Rule 3 - Blocking] Created skill adapters for health and help packages
+- Commit:
+- 1. [Rule 3 - Blocking] rust-analyzer entry not found
+- Commit:
+- INSTALL.md
+- 1. [Rule 1 — Plan acceptance criterion off-by-one] `serena setup opencode` count is 1, not ≥2
+- One-liner:
+- 1. [Rule 3 - Blocking] Sentence insertion position adjusted to preserve rust-analyzer block byte-position
+
+---
+
 ## v1.7 Developer Experience & Auto-Setup (Shipped: 2026-04-22)
 
 **Phases completed:** 5 phases (34-38), 11 plans, 61 files changed, ~7,000 LOC

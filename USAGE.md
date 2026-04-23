@@ -490,6 +490,44 @@ worker_pool:
 
 3. Mode transitions are governed by your profile. The `ci-bot` profile cannot enter `edit` mode. Check the [Profiles](#profiles) section for allowed transitions.
 
+### jdtls cold-start indexing delay
+
+**Symptom:** Java tools (`go_to_definition`, `find_references`, `search_symbols`) return timeout errors or empty results in freshly-opened workspaces, especially in projects with many dependencies.
+
+**Cause:** Eclipse JDT Language Server (jdtls) performs full workspace indexing on first activation, which can exceed 2 minutes in new or temporary workspaces. During indexing, symbol resolution is unavailable. The default `degradation.timeout_index` of 120 seconds may not be sufficient for large Java projects.
+
+**Fix:**
+
+1. Increase the indexing timeout for Java projects in `.serena/project.yml`:
+   ```yaml
+   degradation:
+     timeout_index: 300  # 5 minutes for jdtls cold-start
+   ```
+
+2. Wait for indexing to complete before issuing symbol queries. Serena creates a workspace-specific data directory (`.jdtls-data`) to avoid cross-workspace conflicts.
+
+3. Subsequent sessions reuse the cached index, so cold-start delay is only on first activation per workspace.
+
+### gopls version incompatibility with Go 1.25
+
+**Symptom:** Build failures or unexpected behavior when running Serena's benchmark suite (`test/bench/`) or when gopls returns errors after a Go version upgrade.
+
+**Cause:** gopls v0.17.1 has a known incompatibility with Go 1.25 on linux/amd64. Additionally, the benchmark suite uses `testing.B.Loop` which requires Go 1.24 or later.
+
+**Fix:**
+
+1. Ensure your gopls version is compatible with your Go version. After upgrading Go, update gopls:
+   ```bash
+   go install golang.org/x/tools/gopls@latest
+   ```
+
+2. For benchmarks, verify you are running Go 1.24 or later:
+   ```bash
+   go version  # Must be 1.24+
+   ```
+
+3. After Go version changes, re-baseline benchmarks using the `capture-baseline.yml` CI workflow to avoid false regression alerts from benchstat comparisons.
+
 ### Circuit Breaker Open
 
 **Symptom:** `ErrCircuitOpen` error from the worker pool.

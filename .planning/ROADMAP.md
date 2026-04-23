@@ -197,7 +197,11 @@ Plans:
   1. `.planning/phases/41-install-contributing/41-VERIFICATION.md` exists and passes INST-01, INST-02, CONT-01, CONT-02
   2. `40-VERIFICATION.md` is re-run with `gaps_found` resolved for USAGE-02
   3. Re-running the v1.8 integration check produces no remaining critical findings
-**Plans:** 0 plans
+**Plans:** 3 plans
+Plans:
+- [ ] 44-01-PLAN.md — Write 41-VERIFICATION.md from scratch (INST-01, INST-02, CONT-01, CONT-02)
+- [ ] 44-02-PLAN.md — Re-run 40-VERIFICATION.md in place (flip 3 gaps to SATISFIED, status → passed)
+- [ ] 44-03-PLAN.md — Re-run v1.8 integration check (phases_verified=[39,40,41,42], defer residuals to Phase 45)
 
 ### Phase 45: Cross-link & Manual-Config Polish
 **Goal**: Non-blocking v1.8 integration warnings cleared — README manual-config has reasonable coverage, docs cross-link symmetrically, rust-analyzer troubleshooting metadata is current.
@@ -230,7 +234,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45
 | 41. Install & Contributing | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 42. Changelog & CLAUDE.md | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 43. Cross-Doc Truth Sync | v1.8 | 6/6 | Complete   | 2026-04-23 |
-| 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0 | Pending | — |
+| 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0/3 | In Progress | — |
 | 45. Cross-link & Manual-Config Polish | v1.8 | 0 | Pending | — |
 
 ## Backlog

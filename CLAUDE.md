@@ -74,7 +74,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 ### Layer 3: Agent Profiles & Setup
 - `internal/profile/` -- 5 agent profiles (claude-code, codex, ide-assistant, ci-bot, full), 4 modes (read/edit/review/admin)
 - `internal/config/` -- 4-layer config: CLI > project (.serena/) > user (~/.serena/) > profile defaults
-- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `serena setup <client>` one-command MCP registration for 6 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, generic) with language detection, LS pre-installation, and Claude Code hook installer
+- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `serena setup <client>` one-command MCP registration for 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic) with language detection, LS pre-installation, and Claude Code hook installer
 - `internal/cli/status.go`, `internal/cli/status_output.go` -- `serena status` CLI producing human-readable workspace health summary (`--json`, `--verbose` modes)
 - `cmd/serena/main.go` -- single entrypoint; all CLI subcommands (setup, status, activate, deactivate, nudge, root, daemon wiring) live in `internal/cli/` and are mounted via cobra in `internal/cli/root.go`
 

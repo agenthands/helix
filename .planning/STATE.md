@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-23)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 41 — install-contributing
+**Current focus:** Phase 42 — changelog-claude-md
 
 ## Current Position
 
-Phase: 41 (install-contributing) — EXECUTING
+Phase: 41 (install-contributing) — COMPLETE
 Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-04-23
+Status: All plans executed
+Last activity: 2026-04-23 -- Phase 41 complete
 
-Next: Phase 41 (install-contributing)
+Next: Phase 42 (changelog-claude-md)
 
 Progress: [██████████] 100%
 
@@ -53,9 +53,7 @@ Progress: [██████████] 100%
 | v1.5 (22-24) | 3 | 12 | 1 day |
 | v1.6 (25-33) | 7 | 22 | 4 days |
 | v1.7 (34-38) | 5 | 11 | 2 days |
-| v1.8 (39-40) | 2 | 5 | 1 day |
-| Phase 41 P02 | 77s | 1 tasks | 1 files |
-| Phase 41 P01 | 74s | 1 tasks | 1 files |
+| v1.8 (39-41) | 3 | 7 | 1 day |
 
 ## Accumulated Context
 

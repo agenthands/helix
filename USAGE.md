@@ -2,7 +2,7 @@
 
 This guide covers operational usage of Serena: tutorials for common workflows, profile and mode reference, configuration, troubleshooting, observability, and performance tuning.
 
-For installation and feature overview, see [README.md](README.md).
+For installation and feature overview, see [README.md](README.md). If you haven't installed Serena yet, see [INSTALL.md](INSTALL.md) first.
 
 ## Quick Tutorials
 

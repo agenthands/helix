@@ -170,7 +170,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 22-24 | v1.5 | 12/12 | Complete | 2026-04-15 |
 | 25-33 | v1.6 | 22/22 | Complete | 2026-04-20 |
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
-| 39. README Rewrite | v1.8 | 2/2 | Complete   | 2026-04-23 |
+| 39. README Rewrite | v1.8 | 2/2 | Complete    | 2026-04-23 |
 | 40. USAGE Refresh | v1.8 | 0/0 | Not started | - |
 | 41. Install & Contributing | v1.8 | 0/0 | Not started | - |
 | 42. Changelog & CLAUDE.md | v1.8 | 0/0 | Not started | - |

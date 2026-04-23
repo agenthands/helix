@@ -118,7 +118,10 @@
   3. The architecture section reflects the full 4-layer stack including RepoMap, fuzzy editing, smart errors, and progressive descriptions
   4. The quick start section references `serena setup <client>` and lazy workspace initialization
   5. Python legacy is acknowledged briefly ("Originally inspired by") with no "port" or "rewrite" language anywhere in the document
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 39-01-PLAN.md -- Fix docgen missing imports and regenerate tool/language tables
+- [ ] 39-02-PLAN.md -- Rewrite README structure, content, and product positioning
 
 ### Phase 40: USAGE Refresh
 **Goal**: USAGE.md comprehensively documents all features through v1.7 so users can discover and use every capability
@@ -167,7 +170,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 22-24 | v1.5 | 12/12 | Complete | 2026-04-15 |
 | 25-33 | v1.6 | 22/22 | Complete | 2026-04-20 |
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
-| 39. README Rewrite | v1.8 | 0/0 | Not started | - |
+| 39. README Rewrite | v1.8 | 0/2 | Planning complete | - |
 | 40. USAGE Refresh | v1.8 | 0/0 | Not started | - |
 | 41. Install & Contributing | v1.8 | 0/0 | Not started | - |
 | 42. Changelog & CLAUDE.md | v1.8 | 0/0 | Not started | - |

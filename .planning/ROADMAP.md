@@ -212,7 +212,9 @@ Plans:
   1. README manual-config block either covers all 7 clients or explicitly points to INSTALL.md
   2. README links to CHANGELOG; USAGE links to INSTALL
   3. USAGE rust-analyzer troubleshooting metadata reflects current behavior
-**Plans:** 0 plans
+**Plans:** 1 plan
+Plans:
+- [ ] 45-01-PLAN.md — F-02 README 7-client pointer + F-12 README→CHANGELOG and USAGE→INSTALL cross-links + F-06 rust-analyzer read-only verification
 
 ## Progress
 
@@ -235,7 +237,7 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45
 | 42. Changelog & CLAUDE.md | v1.8 | 2/2 | Complete   | 2026-04-23 |
 | 43. Cross-Doc Truth Sync | v1.8 | 6/6 | Complete   | 2026-04-23 |
 | 44. Re-Verify Phase 41 and USAGE-02 | v1.8 | 0/3 | In Progress | — |
-| 45. Cross-link & Manual-Config Polish | v1.8 | 0 | Pending | — |
+| 45. Cross-link & Manual-Config Polish | v1.8 | 0/1 | Pending | — |
 
 ## Backlog
 

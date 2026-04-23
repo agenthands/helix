@@ -132,7 +132,7 @@ serena --serve --http-addr=:9091
 # Connect your client to http://localhost:9091/mcp
 ```
 
-For detailed configuration options, see [INSTALL.md](INSTALL.md).
+For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and OpenCode — see [INSTALL.md#manual-configuration](INSTALL.md#manual-configuration) for full examples.
 
 </details>
 
@@ -337,6 +337,8 @@ The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus
 A significant part of Serena, especially support for various languages, was contributed by the open source community.
 We are very grateful for the many contributors who made this possible and who played an important role in making Serena
 what it is today.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 

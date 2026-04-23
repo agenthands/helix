@@ -59,7 +59,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 - `internal/kernel/jsonrpc/` -- Custom JSON-RPC 2.0 codec for LS communication
 - `internal/kernel/health/` -- `get_health` MCP tool returning per-workspace LS status, capabilities, and indexing progress (kernel-level because it introspects kernel state); wrapped as a skill via `skill_adapter.go`
 - `internal/kernel/help/` -- `get_tool_help` MCP tool serving on-demand comprehensive tool documentation pulled from the tool registry; wrapped as a skill via `skill_adapter.go`
-- `internal/fuzzy/` -- 4-strategy fuzzy match cascade (exact, whitespace-normalized, indent-flexible, ellipsis-placeholder) with ambiguity refusal and indentation reflow; used by `replace_in_file`, `replace_symbol_body`, and standalone `fuzzy_edit` tool
+- `internal/fuzzy/` -- 4-strategy fuzzy match cascade (exact match, whitespace-normalized, indentation-flexible, ellipsis-placeholder) with ambiguity refusal and indentation reflow; used by `replace_in_file`, `replace_symbol_body`, and standalone `fuzzy_edit` tool
 - `internal/repomap/` -- Tag extraction (tree-sitter grammars for 23 languages + LSP documentSymbol fallback), SQLite tag cache with mtime invalidation, scope-aware elision, cross-file PageRank, token-budgeted tree renderer
 - `protocol/gen/` -- Generated LSP 3.17 types (324 structs, 216 union types from metaModel.json)
 

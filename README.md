@@ -132,7 +132,7 @@ serena --serve --http-addr=:9091
 # Connect your client to http://localhost:9091/mcp
 ```
 
-For detailed configuration options, see [INSTALL.md](INSTALL.md).
+For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and OpenCode — see [INSTALL.md#manual-configuration](INSTALL.md#manual-configuration) for full examples.
 
 </details>
 

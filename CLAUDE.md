@@ -28,13 +28,15 @@ Available pytest markers for selective testing:
 
 ## Project
 
-**Serena** -- A Go-native code intelligence platform for MCP.
+**Serena** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
 
-Universal LSP gateway with agent skills as plugins. Single binary, persistent daemon, 38+ MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations -- symbol-level retrieval, editing, refactoring -- backed by real language servers with warm persistent caching.
+Serena provides 41+ MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
 
-**Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
+Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need symbol-level operations — go-to-definition, find references, rename across files, replace symbol body, blast-radius analysis — backed by real language servers with warm persistent caching, a ranked RepoMap for structural context, and fuzzy editing that tolerates LLM output drift.
 
-The `legacy/` directory contains the original Python-based Serena as a reference. All active development is in Go.
+**Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, serves ranked structural context on demand, and exposes semantic code operations as agent tools — all from a single binary with one-command client setup.
+
+**Legacy reference:** The `legacy/` directory contains the original Python Serena as a read-only reference. All active development is in Go. Serena is a standalone Go product originally inspired by Python Serena, not a port or rewrite.
 
 ## Architecture
 

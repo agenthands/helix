@@ -67,30 +67,30 @@ Explicitly excluded from v1.9 to prevent scope creep.
 
 ## Traceability
 
-Filled by the roadmapper during `/gsd-new-milestone` → roadmap step. Maps each REQ-ID to exactly one phase.
+Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | TBD | Pending |
-| BUG-02 | TBD | Pending |
-| BUG-03 | TBD | Pending |
-| BUG-04 | TBD | Pending |
-| TOOL-01 | TBD | Pending |
-| TOOL-02 | TBD | Pending |
-| PKG-01 | TBD | Pending |
-| PKG-02 | TBD | Pending |
-| PKG-03 | TBD | Pending |
-| PKG-04 | TBD | Pending |
-| OBS-01 | TBD | Pending |
-| OBS-02 | TBD | Pending |
-| OBS-03 | TBD | Pending |
-| OBS-04 | TBD | Pending |
+| BUG-01 | Phase 46 | Pending |
+| BUG-02 | Phase 47 | Pending |
+| BUG-03 | Phase 48 | Pending |
+| BUG-04 | Phase 49 | Pending |
+| TOOL-01 | Phase 50 | Pending |
+| TOOL-02 | Phase 50 | Pending |
+| PKG-01 | Phase 51 | Pending |
+| PKG-02 | Phase 52 | Pending |
+| PKG-03 | Phase 52 | Pending |
+| PKG-04 | Phase 52 | Pending |
+| OBS-01 | Phase 54 | Pending |
+| OBS-02 | Phase 54 | Pending |
+| OBS-03 | Phase 53 | Pending |
+| OBS-04 | Phase 55 | Pending |
 
 **Coverage:**
 - v1.9 requirements: 14 total
-- Mapped to phases: 0 (filled by roadmapper)
-- Unmapped: 14 (will be 0 after roadmap creation)
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 at milestone v1.9 kickoff*
+*Last updated: 2026-04-24 — traceability filled at roadmap creation (10 phases, 46–55)*

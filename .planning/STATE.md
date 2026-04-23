@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
-status: defining_requirements
+status: ready_to_plan
 last_updated: "2026-04-24T00:00:00.000Z"
 last_activity: 2026-04-24
 progress:
-  total_phases: 0
+  total_phases: 10
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.9 milestone kickoff — defining requirements
+**Current focus:** Phase 46 — bug-repomap-lua-fixture
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 46 (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-24 — Milestone v1.9 Polish & Infra started
+Status: Ready to plan
+Last activity: 2026-04-24 — v1.9 roadmap created (10 phases, 46–55); 14/14 REQs mapped
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Last activity: 2026-04-24 — Milestone v1.9 Polish & Infra started
 | v1.6 (25-33) | 7 | 22 | 4 days |
 | v1.7 (34-38) | 5 | 11 | 2 days |
 | v1.8 (39-45) | 7 | 19 | 1 day |
+| v1.9 (46-55) | 10 | 0 (planning) | in flight |
 
 ## Accumulated Context
 
@@ -58,11 +59,13 @@ Last activity: 2026-04-24 — Milestone v1.9 Polish & Infra started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [v1.9]: One phase per bug for BUG-01..BUG-04 (user-confirmed scoping)
+- [v1.9]: TOOL-01 + TOOL-02 clustered into Phase 50 (Go 1.25/gopls fix is prerequisite for restoring the CI bench gate)
+- [v1.9]: PKG-02 + PKG-03 + PKG-04 clustered into Phase 52 (all downstream of goreleaser pipeline in Phase 51; goreleaser `nfpms` handles deb/rpm natively so PKG-04 does not need its own phase)
+- [v1.9]: Orphan backlog phase 999.1 promoted to Phase 46; phase directory to be renamed during `/gsd-plan-phase 46`
+- [v1.9]: OBS-03 (metrics) before OBS-01/02 (dashboards/runbooks) so dashboards reference metrics that exist
 - [v1.8]: Acknowledge Python legacy briefly ("Originally inspired by") -- no "port" or "rewrite" framing
 - [v1.8]: Full doc overhaul scope -- README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md
-- [v1.8]: LEGC-01 (cross-cutting legacy framing) assigned to Phase 39 (README) as primary product identity doc
-- [Phase 41]: Documented oracle test hierarchy as 6-layer table (protocol, contract, runtime, scenario, llm, judge) in CONTRIBUTING.md
-- [Phase 41]: INSTALL.md restructured: setup CLI primary, manual configs collapsed, stale agents removed, VS Code servers key fixed
 
 ### Pending Todos
 

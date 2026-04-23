@@ -528,6 +528,14 @@ worker_pool:
 
 3. After Go version changes, re-baseline benchmarks using the `capture-baseline.yml` CI workflow to avoid false regression alerts from benchstat comparisons.
 
+### rust-analyzer rename fails in fresh workspaces
+
+**Symptom:** `rename_symbol` returns `"internal: rename (No references found at position)"` when targeting a Rust symbol, even though `get_hover_info`, `find_references`, and `search_symbols` all work correctly at the same position.
+
+**Cause:** rust-analyzer (tested with v1.90) has a known limitation where `textDocument/rename` and `textDocument/prepareRename` return "No references found at position" in freshly-opened workspaces. Other LSP operations (`textDocument/hover`, `textDocument/references`, `workspace/symbol`) work correctly at the same position, indicating the issue is specific to the rename protocol handler's workspace readiness check.
+
+**Workaround:** Use `replace_symbol_body` (tree-sitter-based) instead of `rename_symbol` (LSP-based) for Rust symbol renaming. The `replace_symbol_body` tool uses tree-sitter parsing rather than LSP rename, bypassing the rust-analyzer limitation entirely.
+
 ### Circuit Breaker Open
 
 **Symptom:** `ErrCircuitOpen` error from the worker pool.

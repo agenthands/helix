@@ -151,22 +151,58 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 		scope = "user"
 	}
 
-	cmdArgs := []string{"mcp", "add-json", "serena", string(serverJSON), "--scope", scope}
+	addArgs := []string{"mcp", "add-json", "serena", string(serverJSON), "--scope", scope}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(cmdArgs, " "))
+		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(addArgs, " "))
 		return nil
 	}
 
 	if _, err := exec.LookPath("claude"); err != nil {
-		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
+		// No claude CLI — fall back to direct .mcp.json write
+		cfg.Printer.Info("claude CLI not found; writing directly to .mcp.json")
+		configPath := filepath.Join(cfg.ProjectDir, ".mcp.json")
+		if cfg.Global {
+			home, homeErr := os.UserHomeDir()
+			if homeErr != nil {
+				return fmt.Errorf("cannot determine home directory: %w", homeErr)
+			}
+			configPath = filepath.Join(home, ".claude", "settings.json")
+		}
+		if !cfg.Global {
+			return mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+		}
+		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first or add manually")
 	}
 
-	cmd := exec.Command("claude", cmdArgs...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("claude mcp add-json failed: %w", err)
+	cmd := exec.Command("claude", addArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If "already exists", remove then re-add to update the config
+		if strings.Contains(string(output), "already exists") {
+			cfg.Printer.Info("serena already registered — updating")
+			rmCmd := exec.Command("claude", "mcp", "remove", "serena", "--scope", scope)
+			rmCmd.Stdout = os.Stderr
+			rmCmd.Stderr = os.Stderr
+			if rmErr := rmCmd.Run(); rmErr != nil {
+				// Remove failed — fall back to direct file write
+				cfg.Printer.Info("could not remove via CLI; writing directly to .mcp.json")
+				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+			}
+			// Retry add after remove
+			retryCmd := exec.Command("claude", addArgs...)
+			retryCmd.Stdout = os.Stderr
+			retryCmd.Stderr = os.Stderr
+			if retryErr := retryCmd.Run(); retryErr != nil {
+				// CLI still failing — fall back to direct file write
+				cfg.Printer.Info("CLI retry failed; writing directly to .mcp.json")
+				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+			}
+		} else {
+			// Non-duplicate error — fall back to direct file write
+			cfg.Printer.Info("claude CLI failed (%s); writing directly to .mcp.json", strings.TrimSpace(string(output)))
+			return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+		}
 	}
 
 	// Hook installation (per D-01, D-16).
@@ -244,20 +280,107 @@ func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
+		cfg.Printer.DryRunAction("would enable serena in mcp-server-enablement.json")
 		return nil
 	}
 
-	if _, err := exec.LookPath("gemini"); err != nil {
-		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
+	// Try CLI first
+	cliDone := false
+	if _, err := exec.LookPath("gemini"); err == nil {
+		cmd := exec.Command("gemini", cmdArgs...)
+		output, runErr := cmd.CombinedOutput()
+		if runErr == nil {
+			cliDone = true
+		} else {
+			// CLI failed — log and fall through to direct file write
+			cfg.Printer.Info("gemini CLI failed (%s); writing directly to settings file", strings.TrimSpace(string(output)))
+		}
+	} else {
+		cfg.Printer.Info("gemini CLI not found; writing directly to settings file")
 	}
 
-	cmd := exec.Command("gemini", cmdArgs...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("gemini mcp add failed: %w", err)
+	if !cliDone {
+		// Fall back to direct file write for MCP server config
+		configPath, err := r.settingsPath(cfg)
+		if err != nil {
+			return err
+		}
+		if err := mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath)); err != nil {
+			return err
+		}
 	}
+
+	// Always ensure serena is enabled in the enablement file.
+	// Gemini CLI uses a separate mcp-server-enablement.json to gate which servers are active.
+	// Without this, the server is registered but invisible.
+	if err := r.ensureEnabled(cfg); err != nil {
+		cfg.Printer.Failure("could not enable serena in mcp-server-enablement.json: %s", err)
+		cfg.Printer.Info("MCP registration succeeded; enable manually in ~/.gemini/mcp-server-enablement.json")
+	}
+
 	return nil
+}
+
+// ensureDisabled sets {"serena": {"enabled": false}} in Gemini's mcp-server-enablement.json.
+func (r *GeminiCLIRegistrar) ensureDisabled() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	enablementPath := filepath.Join(home, ".gemini", "mcp-server-enablement.json")
+
+	existing := make(map[string]any)
+	if data, readErr := os.ReadFile(enablementPath); readErr == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+
+	existing["serena"] = map[string]any{"enabled": false}
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling enablement config: %w", err)
+	}
+
+	return os.WriteFile(enablementPath, append(data, '\n'), 0644)
+}
+
+// ensureEnabled writes {"serena": {"enabled": true}} into Gemini's mcp-server-enablement.json.
+func (r *GeminiCLIRegistrar) ensureEnabled(cfg RegistrationConfig) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	enablementPath := filepath.Join(home, ".gemini", "mcp-server-enablement.json")
+
+	existing := make(map[string]any)
+	if data, readErr := os.ReadFile(enablementPath); readErr == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+
+	existing["serena"] = map[string]any{"enabled": true}
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling enablement config: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(enablementPath), 0755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+
+	return os.WriteFile(enablementPath, append(data, '\n'), 0644)
+}
+
+// settingsPath returns the Gemini CLI settings file path.
+func (r *GeminiCLIRegistrar) settingsPath(cfg RegistrationConfig) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	if cfg.Global {
+		return filepath.Join(home, ".gemini", "settings.json"), nil
+	}
+	return filepath.Join(cfg.ProjectDir, ".gemini", "settings.json"), nil
 }
 
 func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -270,11 +393,22 @@ func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
+		cfg.Printer.DryRunAction("would disable serena in mcp-server-enablement.json")
 		return nil
 	}
 
+	// Disable in enablement file
+	if err := r.ensureDisabled(); err != nil {
+		cfg.Printer.Failure("could not disable in mcp-server-enablement.json: %s", err)
+	}
+
 	if _, err := exec.LookPath("gemini"); err != nil {
-		return fmt.Errorf("gemini CLI not found in PATH; install Gemini CLI first")
+		// No CLI — remove directly from settings file
+		configPath, pathErr := r.settingsPath(cfg)
+		if pathErr != nil {
+			return pathErr
+		}
+		return removeFromJSONConfig(configPath, "mcpServers", "serena")
 	}
 
 	cmd := exec.Command("gemini", cmdArgs...)

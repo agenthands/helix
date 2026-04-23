@@ -1,37 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.8
-milestone_name: Documentation Overhaul
-status: executing
-last_updated: "2026-04-23T22:16:00.915Z"
-last_activity: 2026-04-23
+milestone: v1.9
+milestone_name: Polish & Infra
+status: defining_requirements
+last_updated: "2026-04-24T00:00:00.000Z"
+last_activity: 2026-04-24
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-23)
+See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 45 — polish-crosslinks
+**Current focus:** v1.9 milestone kickoff — defining requirements
 
 ## Current Position
 
-Phase: 45 (polish-crosslinks) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 45
-Last activity: 2026-04-23
-
-Next: Phase 44 (re-verify-41)
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-24 — Milestone v1.9 Polish & Infra started
 
 ## Performance Metrics
 
@@ -53,7 +49,7 @@ Progress: [██████████] 100%
 | v1.5 (22-24) | 3 | 12 | 1 day |
 | v1.6 (25-33) | 7 | 22 | 4 days |
 | v1.7 (34-38) | 5 | 11 | 2 days |
-| v1.8 (39-41) | 3 | 7 | 1 day |
+| v1.8 (39-45) | 7 | 19 | 1 day |
 
 ## Accumulated Context
 

@@ -91,7 +91,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-_No active requirements — v1.8 shipped 2026-04-24. Next milestone TBD via `/gsd-new-milestone`._
+_v1.9 requirements pending — scoped in `.planning/REQUIREMENTS.md` after milestone kickoff._
 
 ### Out of Scope
 
@@ -109,9 +109,24 @@ _No active requirements — v1.8 shipped 2026-04-24. Next milestone TBD via `/gs
 
 All public-facing documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md) now presents Serena as its own standalone Go-native product. Full current feature set through v1.7 is documented. Cross-doc drift is closed with grep-verifiable integration checks. Phase 39 retains 3 pending human-verification tests (subjective content-quality checks) as tech debt.
 
-## Next Milestone Goals
+**In flight:** v1.9 Polish & Infra (kicked off 2026-04-24) — defining requirements.
 
-TBD. Backlog Phase 999.1 (repomap returns lua fixture instead of go sources) is available for promotion via `/gsd-review-backlog`. Run `/gsd-new-milestone` to scope the next release.
+## Current Milestone: v1.9 Polish & Infra
+
+**Goal:** Close accumulated tech debt and harden infrastructure — fix known LSP/tooling quirks, resolve the Go 1.25 / gopls linux/amd64 incompatibility, ship proper packaging, and fill remaining observability gaps.
+
+**Target features:**
+
+*Bug fixes / polish*
+- Fix backlog 999.1 — `get_repo_map` returning lua fixture instead of go sources
+- Fix rust-analyzer `textDocument/rename` "No references found" quirk in temp workspaces
+- Mitigate jdtls cold-start > 2min (currently gates Java integration tests behind `-short=false`)
+- Consolidate 3 redundant `GrammarRegistry` instances into a single canonical registry
+
+*Infra*
+- Resolve Go 1.25 / gopls v0.17.1 linux/amd64 incompatibility (unblocks CI bench gate on ubuntu-latest)
+- Packaging & distribution (release artifacts, installers, signing — scope locked in REQUIREMENTS.md)
+- Observability polish (fill metric/tracing/logging gaps, dashboards, runbooks — scope locked in REQUIREMENTS.md)
 
 ## Context
 
@@ -185,4 +200,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 after v1.8 milestone (Documentation Overhaul) shipped*
+*Last updated: 2026-04-24 — v1.9 Polish & Infra milestone kicked off*

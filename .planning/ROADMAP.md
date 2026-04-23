@@ -131,10 +131,11 @@ Plans:
   1. v1.6 features are documented: fuzzy editing (4-strategy cascade, ellipsis support), RepoMap tools (get_repo_map, get_context), and 23 tree-sitter grammars
   2. v1.7 features are documented: `serena setup <client>`, get_health tool, Claude Code hooks, smart error suggestions, progressive tool descriptions, get_tool_help, lazy workspace init
   3. Troubleshooting section reflects current known issues (rust-analyzer rename, jdtls cold-start, gopls/Go 1.25 benchmark constraint) with workarounds
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete, 1 gap closure)
 Plans:
 - [x] 40-01-PLAN.md -- Add Feature Guide section (7 subsections) and update Tutorial 1 for setup CLI
 - [x] 40-02-PLAN.md -- Add jdtls and gopls troubleshooting entries
+- [ ] 40-03-PLAN.md -- Fix RepoMap param name, fuzzy_edit example, add rust-analyzer rename troubleshooting (gap closure)
 
 ### Phase 41: Install & Contributing
 **Goal**: INSTALL.md and CONTRIBUTING.md accurately guide new users and contributors through the current codebase
@@ -174,6 +175,6 @@ Phases execute in numeric order: 39 -> 40 -> 41 -> 42
 | 25-33 | v1.6 | 22/22 | Complete | 2026-04-20 |
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39. README Rewrite | v1.8 | 2/2 | Complete    | 2026-04-23 |
-| 40. USAGE Refresh | v1.8 | 2/2 | Complete   | 2026-04-23 |
+| 40. USAGE Refresh | v1.8 | 2/3 | Gap closure | - |
 | 41. Install & Contributing | v1.8 | 0/0 | Not started | - |
 | 42. Changelog & CLAUDE.md | v1.8 | 0/0 | Not started | - |

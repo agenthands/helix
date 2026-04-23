@@ -338,6 +338,8 @@ A significant part of Serena, especially support for various languages, was cont
 We are very grateful for the many contributors who made this possible and who played an important role in making Serena
 what it is today.
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ---
 
 <sub>Originally inspired by [Python Serena](https://github.com/lks-ai/serena).</sub>

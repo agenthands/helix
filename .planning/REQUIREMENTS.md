@@ -16,9 +16,9 @@ Requirements for documentation overhaul. Each maps to roadmap phases.
 
 ### USAGE
 
-- [ ] **USAGE-01**: USAGE.md documents all v1.6 features (fuzzy editing, RepoMap/get_context, 23 tree-sitter grammars)
+- [x] **USAGE-01**: USAGE.md documents all v1.6 features (fuzzy editing, RepoMap/get_context, 23 tree-sitter grammars)
 - [ ] **USAGE-02**: USAGE.md documents all v1.7 features (setup CLI, health tool, hooks, smart errors, progressive descriptions, lazy init)
-- [ ] **USAGE-03**: USAGE.md troubleshooting section is current with known issues and workarounds
+- [x] **USAGE-03**: USAGE.md troubleshooting section is current with known issues and workarounds
 
 ### INSTALL
 
@@ -66,9 +66,9 @@ None -- documentation milestone is self-contained.
 | README-03 | Phase 39 | Pending |
 | README-04 | Phase 39 | Pending |
 | LEGC-01 | Phase 39 | Pending |
-| USAGE-01 | Phase 40 | Pending |
+| USAGE-01 | Phase 40 | Complete |
 | USAGE-02 | Phase 40 | Pending |
-| USAGE-03 | Phase 40 | Pending |
+| USAGE-03 | Phase 40 | Complete |
 | INST-01 | Phase 41 | Pending |
 | INST-02 | Phase 41 | Pending |
 | CONT-01 | Phase 41 | Pending |

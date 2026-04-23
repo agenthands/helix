@@ -2,6 +2,76 @@
 
 All notable changes to Serena (Go) are documented here.
 
+## v1.7 — Developer Experience & Auto-Setup (2026-04-22)
+
+### Setup CLI
+- One-command MCP registration: `serena setup <client>` for 6 clients — Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, and generic MCP clients
+- Automatic project language detection in the working directory and pre-installation of available language servers
+- Uses client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
+- `--global` flag for user-wide registration; `--no-hooks` opt-out for Claude Code hook installation
+
+### Health & Status
+- `get_health` MCP tool returning per-workspace language server status (running, crashed, indexing), capabilities, and indexing progress
+- `serena status` CLI command with human-readable summary, `--json` machine-readable output, and `--verbose` detail mode
+- Error-only defaults — surfaces only actionable failures unless verbose is requested
+
+### Claude Code Hooks
+- Automatic hook installation during `serena setup claude-code`:
+  - **SessionStart** hook activates the workspace when a Claude Code session begins
+  - **PreToolUse** hook nudges agents toward symbolic tools (`find_symbol`, `get_symbols_overview`) when they overuse grep/read
+  - **Stop** hook cleans up session data on exit
+- `--no-hooks` opt-out for users who manage their own hook config
+
+### Smart Error Responses
+- MCP middleware that enriches parameter typos and enum value errors with "Did you mean?" suggestions via Levenshtein distance
+- Suggestions only correct parameters within the same tool — never redirect to a different tool
+- Implemented as middleware wrapping the existing typed error taxonomy — error kinds unchanged
+
+### Progressive Descriptions
+- Tiered brief/detailed tool descriptions — listings show brief under 100 tokens each
+- `get_tool_help <tool_name>` MCP tool for comprehensive on-demand docs with parameters, types, and usage examples
+- Golden-file regression gating — no description ships without passing behavioral tool-selection tests
+
+### Lazy Workspace Initialization
+- `sync.Once` per workspace path — first MCP tool call transparently activates the workspace
+- Concurrent first calls from multiple agents safely serialized (no duplicate initialization or races)
+- No upfront indexing delay after setup
+
+## v1.6 — Context Intelligence & Resilient Editing (2026-04-20)
+
+### Fuzzy Editing
+- 4-strategy cascade in `internal/fuzzy/`: exact match, whitespace-normalized, indentation-flexible, ellipsis-placeholder
+- Common-prefix indentation reflow — preserves indentation when rewriting at different nesting levels
+- Ambiguity refusal — ambiguous matches return a structured diff with options rather than silently applying
+- Ellipsis placeholder support — `...` in the search block matches across any number of lines
+- Strategy reporting in the result envelope so agents can see which strategy matched
+
+### Fuzzy Edit Integration
+- Standalone `fuzzy_edit` MCP tool for direct fuzzy match-and-replace
+- `replace_in_file` falls back to fuzzy matching when exact matching fails
+- `replace_symbol_body` gains a `search_body` parameter for fuzzy body matching before tree-sitter surgery
+
+### RepoMap Context Intelligence
+- Tree-sitter tag extraction with per-language `.scm` queries and a shared `GrammarRegistry`
+- LSP `documentSymbol` fallback extractor for languages without tree-sitter grammars
+- SQLite tag cache with mtime-based invalidation — survives daemon restart
+- Scope-aware elision renderer preserves enclosing scope when trimming for token budget
+- Cross-file reference graph with hand-rolled PageRank (~60 LOC, no third-party dep, supports personalization)
+- Token-budgeted tree renderer using binary search to fit any target budget
+- `get_repo_map` MCP tool — ranked structural overview of the repository
+- `get_context` MCP tool — given relevant files, returns ranked symbols and definitions across the codebase
+- LSP enrichment of tag hover/signature information after PageRank ranking
+
+### Multi-Language Grammar Expansion
+- Tree-sitter grammar coverage expanded from 5 to **23 languages** (full aider parity): Java, C, C++, C#, Ruby, PHP, JavaScript, Kotlin, Scala, Bash, Haskell, Julia, OCaml, Lua, Zig, HCL, plus Swift and R via locally vendored bindings
+- Both tag and body queries defined per language
+- Best-of-breed query merging from aider community collections
+- Unit, integration, and Wave 1 LS fixture tests
+
+### Verification & Wiring
+- Cache persistence verified end-to-end (daemon restart returns identical output from SQLite cache without re-extraction)
+- FallbackExtractor wired through `walkAndExtract` and the daemon post-init path for languages without tree-sitter coverage
+
 ## v1.5 — Typed Errors & Hardening (2026-04-15)
 
 ### Error Taxonomy

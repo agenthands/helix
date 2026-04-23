@@ -10,7 +10,17 @@ Serena is a single Go binary. Install it, point your coding agent at it, and you
 go install github.com/postfix/serena/cmd/serena@latest
 ```
 
-Requires Go 1.25 or later. After installation, verify the binary is in your PATH:
+Requires Go 1.25 or later.
+
+Or build from source:
+
+```bash
+git clone https://github.com/postfix/serena.git
+cd serena
+go build ./cmd/serena
+```
+
+Verify the binary is in your PATH:
 
 ```bash
 serena --help
@@ -18,18 +28,64 @@ serena --help
 
 If `serena` is not found, ensure `$(go env GOPATH)/bin` is in your PATH.
 
-## Agent Setup
+## Quick Start
 
-Each coding agent has its own MCP configuration format. Pick the section for your agent below.
+The fastest way to configure Serena for your coding agent is the setup CLI:
+
+```bash
+serena setup claude-code    # Claude Code
+serena setup vscode         # VS Code
+serena setup jetbrains      # JetBrains IDEs
+serena setup gemini-cli     # Gemini CLI
+serena setup claude-desktop # Claude Desktop
+```
+
+Add `--global` for user-wide registration. Other flags:
+
+- `--uninstall` -- remove Serena registration from the client
+- `--dry-run` -- preview what would happen without making changes
+- `--no-hooks` -- skip hook installation (Claude Code only)
+
+Run `serena setup --help` for all options.
+
+Serena uses **lazy initialization** -- workspaces are configured on first tool call, so there is no upfront indexing delay.
+
+## Manual Configuration
+
+<details>
+<summary>Manual configuration (without serena setup)</summary>
+
+For clients that use their own CLI for MCP registration, run the CLI command directly. For file-based clients, add the JSON config to the appropriate file.
 
 ### Claude Code
 
-Add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
+Claude Code uses the `claude` CLI for MCP registration:
+
+```bash
+claude mcp add-json serena '{"command":"serena","args":["--mode=stdio"]}'
+```
+
+Add `--scope user` for global registration. Or just use `serena setup claude-code`.
+
+### Gemini CLI
+
+Gemini CLI uses the `gemini` CLI for MCP registration:
+
+```bash
+gemini mcp add --scope project -t stdio serena serena -- --mode=stdio
+```
+
+Add `--scope user` for global registration. Or just use `serena setup gemini-cli`.
+
+### VS Code
+
+Add to `.vscode/mcp.json` (project) or `~/.config/Code/User/mcp.json` (global):
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "serena": {
+      "type": "stdio",
       "command": "serena",
       "args": ["--mode=stdio"]
     }
@@ -37,44 +93,11 @@ Add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (glo
 }
 ```
 
-### Codex
+**Note:** VS Code uses the `"servers"` key, not `"mcpServers"`. The `"type": "stdio"` field is required.
 
-Add to `.codex/config.json`:
+### JetBrains
 
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio", "--profile=codex"]
-    }
-  }
-}
-```
-
-The `--profile=codex` flag loads a tool set tuned for Codex's capabilities.
-
-### OpenCode
-
-Add to `opencode.json` (project root) or `~/.config/opencode/opencode.json` (global):
-
-```json
-{
-  "mcp": {
-    "serena": {
-      "type": "local",
-      "command": ["serena", "--mode=stdio"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Note: OpenCode uses the `"mcp"` key (not `"mcpServers"`), and `"command"` is an array rather than a string.
-
-### Cursor
-
-Add to `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
+Add to `.junie/mcp/mcp.json` (project) or `~/.junie/mcp/mcp.json` (global):
 
 ```json
 {
@@ -87,26 +110,13 @@ Add to `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
 }
 ```
 
-Use absolute paths if `serena` is not in your PATH (e.g., `"/home/user/go/bin/serena"`).
+### Claude Desktop
 
-### Gemini CLI
+Add to the platform-specific config file:
 
-Add to `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project-level):
-
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "command": "serena",
-      "args": ["--mode=stdio"]
-    }
-  }
-}
-```
-
-### Antigravity
-
-Open the Agent Panel, click "..." > MCP Servers > Manage > Edit configuration, and add:
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -119,11 +129,28 @@ Open the Agent Panel, click "..." > MCP Servers > Manage > Edit configuration, a
 }
 ```
 
-Use absolute paths for the command. The config file location varies by platform.
+### Generic (any MCP client)
 
-### HTTP Mode
+Use the `"mcpServers"` format:
 
-For agents that support HTTP-based MCP servers, or for connecting multiple agents to a shared daemon:
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["--mode=stdio"]
+    }
+  }
+}
+```
+
+You can also generate this with `serena setup generic`, or write it to a file with `serena setup generic --output config.json`.
+
+</details>
+
+## HTTP Mode
+
+For shared daemon or multi-agent scenarios, run Serena in HTTP mode:
 
 ```bash
 serena --mode=http --http-addr=127.0.0.1:8080
@@ -133,11 +160,18 @@ Point your agent's MCP client at `http://127.0.0.1:8080`. The daemon persists ac
 
 ## Verify Installation
 
-After configuring your agent, run the `onboard_project` tool from your agent to confirm everything works. This initializes Serena for your workspace and prints a summary of available capabilities.
+After configuring your agent, use these tools to confirm everything works:
 
-Expected behavior: Serena starts a background daemon, launches a language server for your project's primary language, and returns a project summary with detected languages and available tools.
+- **`get_health`** -- quick check that the Serena daemon is running and language servers are healthy
+- **`onboard_project`** -- full workspace initialization; prints a summary of detected languages and available tools
+
+Expected behavior: Serena starts a background daemon, launches a language server for your project's primary language, and returns a project summary.
 
 ## Next Steps
 
 - [USAGE.md](USAGE.md) -- Configuration, profiles, modes, observability, and performance tuning
 - [README.md](README.md) -- Feature overview, architecture, and full tool list
+
+## Legacy Python
+
+The `legacy/` directory contains the original Python Serena for reference only. It is not actively developed.

@@ -22,7 +22,7 @@ go install github.com/postfix/serena/cmd/serena@latest
 serena setup claude-code
 ```
 
-This auto-detects your project, registers Serena as an MCP server, detects programming languages, pre-installs language servers, and runs a health check. Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `generic`.
+This auto-detects your project, registers Serena as an MCP server, detects programming languages, pre-installs language servers, and runs a health check. Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `opencode`, `generic`.
 
 For HTTP mode (IDEs, web clients, multi-client):
 
@@ -170,7 +170,7 @@ serena setup vscode --global      # User-scoped registration
 serena setup jetbrains --dry-run  # Preview without changes
 ```
 
-Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `generic`.
+Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `opencode`, `generic`.
 
 For Claude Code, setup also installs **session hooks** that automatically activate and deactivate workspaces. Three hooks are registered: `SessionStart` (activates the workspace), `PreToolUse` (nudges the agent toward Serena tools on Grep/Read/Bash), and `Stop` (deactivates the workspace). Use `--no-hooks` to skip hook installation.
 

@@ -154,6 +154,9 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 | `find_files` | file-ops | Find files matching a glob pattern (supports ** for recursive matching) |
 | `search_in_files` | file-ops | Search for a regex pattern across the codebase, with optional context lines |
 | `replace_in_file` | file-ops | Replace all occurrences of a pattern in a file (literal or regex) |
+| `fuzzy_edit` | file-ops | Fuzzy-match and replace text in a file using 4-strategy cascade |
+| `get_health` | health | Get workspace health status and language server states |
+| `get_tool_help` | help | Get comprehensive documentation for any MCP tool including parameters, types, and usage examples |
 | `write_memory` | memory | Write information about this project that can be useful for future tasks to a memory in md format. |
 | `read_memory` | memory | Read the content of a memory file. |
 | `list_memories` | memory | List available memories, optionally filtered by scope ("project" or "global") and topic. |
@@ -163,6 +166,8 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 | `delete_memory` | memory | Delete a memory file. |
 | `switch_mode` | profile | Switch the current session's operational mode (read/edit/review/admin) |
 | `get_token_budget` | profile | Get token budget breakdown for the current or specified profile/mode |
+| `get_repo_map` | repomap | Get a ranked structural overview of the repository. |
+| `get_context` | repomap | Get the most relevant code context for a set of files or a task. |
 | `replace_symbol_body` | symbol-editing | Replace a symbol's body with new content using tree-sitter for precise extraction |
 | `insert_before_symbol` | symbol-editing | Insert content immediately before a symbol |
 | `insert_after_symbol` | symbol-editing | Insert content immediately after a symbol |

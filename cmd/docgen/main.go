@@ -22,9 +22,12 @@ import (
 	_ "github.com/postfix/serena/internal/kernel/diag"
 	_ "github.com/postfix/serena/internal/kernel/edit"
 	_ "github.com/postfix/serena/internal/kernel/fileops"
+	_ "github.com/postfix/serena/internal/kernel/health"
+	_ "github.com/postfix/serena/internal/kernel/help"
 	_ "github.com/postfix/serena/internal/kernel/symbols"
 	_ "github.com/postfix/serena/internal/profile"
 	_ "github.com/postfix/serena/internal/skill/memory"
+	_ "github.com/postfix/serena/internal/skill/repomap"
 	_ "github.com/postfix/serena/internal/skill/workflow"
 
 	"github.com/postfix/serena/internal/langregistry"

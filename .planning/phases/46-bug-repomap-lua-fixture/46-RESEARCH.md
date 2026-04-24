@@ -329,22 +329,17 @@ for ident, definers := range defs {
 | A5 | The oracle smoke test can bypass the persistent tag cache by using a throwaway `ProjectDir` in `SkillDeps`. | Validation Architecture | If cache path is wired elsewhere (e.g., user home dir), oracle will need explicit cache clearing. Executor verifies. |
 | A6 | Go 1.x toolchain + existing `go-tree-sitter` deps compile cleanly on the Mac dev machine where reproduction runs. | Reproduction Plan | Phase 50 is fixing Go 1.25 + gopls on Linux CI, but local reproduction is on darwin/arm64 which is known-green today. Low risk. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does ref-qualification (F1-A) require LSP for Go receiver type inference?**
-   - What we know: `extractor.go:qualifyGoMethod` walks the tree-sitter AST to get receiver type for defs (e.g. `func (s *Server) Run` → `Server.Run`). For refs, the call site is `s.Run(...)` — tree-sitter knows the IDENTIFIER `s` but NOT its type without semantic analysis.
-   - What's unclear: whether qualifying refs as `s.Run` (identifier-based, no type inference) is a useful signal or just noise.
-   - Recommendation: prefer F1-B (no qualification needed) first. If F1-A is needed, start with identifier-only qualification; LSP-backed type inference is a separate enhancement.
+   - RESOLVED: F1-B selected as the primary fix shape — no ref-qualification required. F1-A deferred; if ever needed, start with identifier-only qualification (no LSP).
+   - Context: `extractor.go:qualifyGoMethod` walks the tree-sitter AST to get receiver type for defs. For refs (`s.Run(...)`), tree-sitter knows the identifier `s` but not its type without semantic analysis. F1-B sidesteps this entirely.
 
 2. **Is the persistent tag cache a source of reproducibility flakiness in oracle tests?**
-   - What we know: tag cache at `$ProjectDir/index/tags.db` is mtime-invalidated per file. Oracle test uses `harness.PrepareFixture` which creates fresh temp dirs — but a new `TestScenario_SerenaRepoMap` pointing at the real Serena repo root would share the on-disk cache.
-   - What's unclear: whether the planner/executor can safely use `t.TempDir()` as the `ProjectDir` (where tags.db lives) while still walking the real Serena workspace. Reading `RepoMapSkill.Init` and `NewTagCache`, this looks feasible — `ProjectDir` only controls where `index/tags.db` lives, orthogonal to `SetWorkspaceRoot`.
-   - Recommendation: document this decoupling in the test.
+   - RESOLVED: Use `t.TempDir()` as `ProjectDir` (where `index/tags.db` lives) while walking the real Serena workspace — confirmed feasible via `RepoMapSkill.Init` + `NewTagCache` (ProjectDir is orthogonal to `SetWorkspaceRoot`). Oracle test will document this decoupling inline.
 
 3. **Does fixing the graph with F1-B regress any existing unit tests?**
-   - What we know: `graph_test.go:TestBuildGraph_CrossFileEdges` asserts `weight = sqrt(1) = 1.0` for a single-ref, single-def case. With F1-B, the weight becomes `sqrt(1) * 1/sqrt(2) ≈ 0.707`.
-   - What's unclear: how many tests hard-code exact edge weights.
-   - Recommendation: executor runs existing tests pre-fix, audits the failures, updates weight constants symmetrically (the relative ordering of ranks is what matters for correctness).
+   - RESOLVED: Yes — `graph_test.go:TestBuildGraph_CrossFileEdges` and similar weight-hardcoded assertions will shift (e.g. single-ref/single-def weight goes from `1.0` to `≈0.707`). Plan 46-02 explicitly includes a task to update weight constants symmetrically; relative ordering is the invariant that must hold.
 
 ## Environment Availability
 

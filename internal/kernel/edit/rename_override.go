@@ -73,7 +73,7 @@ func RustClientSideRename(
 	}
 	locs, err := symbols.FindReferences(ctx, lease, uri, line, col, true)
 	if err != nil {
-		return nil, serr.Wrap(serr.Internal, "rust-client-side rename: find references", err)
+		return nil, serr.Wrap(serr.Internal, "rust-client-side rename: find references", err).WithDetail(err.Error())
 	}
 	if len(locs) == 0 {
 		return nil, serr.New(serr.NotFound, "rust-client-side rename: no references at position")

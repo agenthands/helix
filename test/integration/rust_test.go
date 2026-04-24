@@ -117,12 +117,10 @@ func TestEdit_RustFixture(t *testing.T) {
 	})
 
 	t.Run("rename", func(t *testing.T) {
-		t.Skip("rust-analyzer returns 'file not found' for textDocument/rename in temp workspaces; needs prepareRename support investigation")
-
 		fixture := PrepareFixture(t, "rust")
 		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 45 * time.Second, LSQuery: "helper"})
 
-		// Rename helper to renamed_helper (line 4, col 4 in src/main.rs, 1-indexed)
+		// Rename helper to renamed_helper (line 4, col 4 in src/main.rs, 1-indexed).
 		result := callTool(t, td.Session, "rename_symbol", map[string]any{
 			"path":     "src/main.rs",
 			"line":     4,
@@ -131,6 +129,9 @@ func TestEdit_RustFixture(t *testing.T) {
 		})
 		text := textContent(result)
 		t.Logf("rename: %s", text)
+
+		assert.Regexp(t, `strategy: (lsp-native|rust-client-side)`, text,
+			"rename_symbol must advertise strategy tag (D-07)")
 
 		// Verify cross-reference updated
 		readResult := callTool(t, td.Session, "read_file", map[string]any{

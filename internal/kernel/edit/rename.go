@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
@@ -67,9 +68,24 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 	// D-01 native-first readiness gate: if the lease's adapter is a
 	// *lspool.RustAnalyzerAdapter, wait for rust-analyzer quiescence before
 	// dispatching textDocument/rename. Best-effort: ignore return value.
+	//
+	// Budget protection: the wait is capped at half of any remaining ctx
+	// deadline so the client-side fallback retains enough budget to run
+	// textDocument/references + apply edits when native rename fails and
+	// the quiescent signal never fires (e.g. rust-analyzer 1.90 on temp
+	// workspaces; see RCA §1 and BUG-02).
 	if lease != nil {
 		if ra, ok := any(lease.Adapter()).(*lspool.RustAnalyzerAdapter); ok {
-			_ = ra.WaitUntilRenameReady(ctx) // best-effort; D-01 native-first readiness gate
+			waitCtx := ctx
+			if dl, ok := ctx.Deadline(); ok {
+				remaining := time.Until(dl)
+				if remaining > 0 {
+					var cancel context.CancelFunc
+					waitCtx, cancel = context.WithTimeout(ctx, remaining/2)
+					defer cancel()
+				}
+			}
+			_ = ra.WaitUntilRenameReady(waitCtx) // best-effort; D-01 native-first readiness gate
 		}
 	}
 

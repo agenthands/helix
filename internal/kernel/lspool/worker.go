@@ -197,6 +197,19 @@ func (w *Worker) Start(ctx context.Context) error {
 			},
 		},
 	}
+	// Allow quirks to advertise LS-specific experimental client capabilities
+	// (e.g., rust-analyzer's serverStatusNotification). Merged into
+	// ClientCapabilities.Experimental via optional-interface type assertion —
+	// see quirks.go ExperimentalCapabilities.
+	if w.quirks != nil {
+		if ec, ok := w.quirks.(ExperimentalCapabilities); ok {
+			exp := map[string]any{}
+			for k, v := range ec.ExperimentalCapabilities() {
+				exp[k] = v
+			}
+			initParams.Capabilities.Experimental = exp
+		}
+	}
 	initParams.InitializationOptions = initOptions
 	initParams.WorkspaceFolders = []gen.WorkspaceFolder{
 		{URI: rootURI, Name: w.workDir},

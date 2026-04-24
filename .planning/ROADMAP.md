@@ -43,7 +43,7 @@
 **Plans**: 3 plans
 Plans:
 - [x] 46-01-PLAN.md — Create synthetic polyglot fixture + failing reproduction unit tests (TDD red)
-- [ ] 46-02-PLAN.md — Apply F1-B ambiguity-weighted edges in graph.go BuildGraph (TDD green)
+- [x] 46-02-PLAN.md — Apply F1-B ambiguity-weighted edges in graph.go BuildGraph (TDD green)
 - [ ] 46-03-PLAN.md — Oracle smoke test + phase RCA + orphan directory cleanup
 **Notes**: An orphan backlog directory exists at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/`. The plan-phase step should promote/rename that directory to `46-bug-repomap-lua-fixture/` rather than duplicate work; any investigation notes already in 999.1 are prior art.
 
@@ -169,7 +169,7 @@ Plans:
 | 25-33 | v1.6 | 22/22 | Complete | 2026-04-20 |
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
-| 46 | v1.9 | 1/3 | In Progress|  |
+| 46 | v1.9 | 2/3 | In Progress|  |
 | 47 | v1.9 | 0/? | Not started | - |
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 0/? | Not started | - |

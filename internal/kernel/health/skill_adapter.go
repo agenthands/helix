@@ -28,6 +28,6 @@ func (s *HealthSkill) Init(deps skill.SkillDeps) error { return nil }
 // the daemon owns MCP registration (D-01).
 func (s *HealthSkill) Tools() []*mcp.ToolDef {
 	return []*mcp.ToolDef{
-		{Name: "get_health", Description: "Get workspace health status and language server states"},
+		{Name: "get_health", Description: "Get workspace health status and language server states", BriefDescription: "Check workspace health and language server status"},
 	}
 }

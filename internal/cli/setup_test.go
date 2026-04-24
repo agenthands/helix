@@ -457,7 +457,7 @@ func TestSetupCommandDryRunGeneric(t *testing.T) {
 
 func TestClientRegistryContainsAll(t *testing.T) {
 	reg := clientRegistry()
-	expected := []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "generic"}
+	expected := []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"}
 	for _, name := range expected {
 		_, ok := reg[name]
 		assert.True(t, ok, "registry should contain %s", name)

@@ -135,11 +135,18 @@ func tryNativeRename(ctx context.Context, lease *lspool.WorkerLease, uri string,
 	prepareErr := lease.Request(ctx, "textDocument/prepareRename", prepareParams, &prepareResult)
 	if prepareErr == nil && len(prepareResult) > 0 {
 		// Try to extract a range from the prepare result and use its start position.
+		// A real prepareRename range has Start <= End and End > Start; when that
+		// invariant holds we trust the refined Start even if it's (0, 0) (e.g.
+		// a symbol at the very first byte of a file). See Phase 47 REVIEW MN-02.
 		var rangeResult struct {
 			Start gen.Position `json:"start"`
+			End   gen.Position `json:"end"`
 		}
-		if json.Unmarshal(prepareResult, &rangeResult) == nil && (rangeResult.Start.Line > 0 || rangeResult.Start.Character > 0) {
-			pos = rangeResult.Start
+		if err := json.Unmarshal(prepareResult, &rangeResult); err == nil {
+			if rangeResult.End.Line > rangeResult.Start.Line ||
+				(rangeResult.End.Line == rangeResult.Start.Line && rangeResult.End.Character > rangeResult.Start.Character) {
+				pos = rangeResult.Start
+			}
 		}
 	}
 

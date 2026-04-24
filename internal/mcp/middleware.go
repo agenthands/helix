@@ -20,26 +20,27 @@ import (
 // Prometheus counter on obs.Metrics. Nil until the first InstallMiddleware call;
 // RecordRenameStrategy no-ops until wiring happens (e.g. during test setup).
 // Phase 47 D-07: serena_rename_strategy_total bounded-label counter.
-var renameStrategySink atomic.Pointer[func(strategy string)]
+var renameStrategySink atomic.Pointer[func(ctx context.Context, strategy string)]
 
 // setRenameStrategySink stores the recorder callback. Called from
-// InstallMiddleware with provider.Metrics().RenameStrategyInc.
-func setRenameStrategySink(fn func(strategy string)) {
+// InstallMiddleware with an adapter around provider.Metrics().RenameStrategyInc.
+// The sink accepts a ctx so a future OTel tracer can attach span attributes
+// without a signature churn on every call-site (Phase 47 REVIEW IN-03).
+func setRenameStrategySink(fn func(ctx context.Context, strategy string)) {
 	renameStrategySink.Store(&fn)
 }
 
 // RecordRenameStrategy increments the serena_rename_strategy_total counter.
 // The strategy string MUST be one of {"lsp-native","rust-client-side"}; any
 // other value is dropped by the underlying obs.Metrics.RenameStrategyInc
-// (closed-enum cardinality discipline, threat T-47-08). ctx is reserved for
-// future OTel integration; currently unused.
+// (closed-enum cardinality discipline, threat T-47-08). ctx is threaded
+// through for future OTel integration; currently the sink adapter discards it.
 func RecordRenameStrategy(ctx context.Context, strategy string) {
-	_ = ctx
 	p := renameStrategySink.Load()
 	if p == nil || *p == nil {
 		return
 	}
-	(*p)(strategy)
+	(*p)(ctx, strategy)
 }
 
 // InstallMiddleware wires Serena's receiving middleware onto the MCP SDK server
@@ -76,7 +77,11 @@ func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver P
 	// mcp.RecordRenameStrategy without reaching into obs directly.
 	if provider != nil {
 		if m := provider.Metrics(); m != nil {
-			setRenameStrategySink(m.RenameStrategyInc)
+			// Adapter closure discards ctx for now; future OTel integration
+			// can read span context from ctx here without touching callers.
+			setRenameStrategySink(func(_ context.Context, strategy string) {
+				m.RenameStrategyInc(strategy)
+			})
 		}
 	}
 }

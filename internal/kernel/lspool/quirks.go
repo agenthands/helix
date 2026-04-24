@@ -196,6 +196,12 @@ func (r *RustAnalyzerAdapter) signalReady() {
 	r.readyChMu.Lock()
 	defer r.readyChMu.Unlock()
 	if r.readyCh == nil {
+		// signalReady may be called before any WaitUntilRenameReady caller has
+		// observed the adapter. In that case we install a pre-closed channel so
+		// the next ensureReadyCh consumer returns immediately — matching the
+		// atomic quiescent=true store we just performed. This mirrors the
+		// fresh un-closed channel lazily created by ensureReadyCh on its own
+		// first-access path.
 		ch := make(chan struct{})
 		close(ch)
 		r.readyCh = ch
@@ -248,7 +254,11 @@ func (r *RustAnalyzerAdapter) NormalizeSymbolName(name string) string {
 	return name
 }
 
-func (r *RustAnalyzerAdapter) PostInitialize(_ context.Context, _ *LSAdapter) error {
+func (r *RustAnalyzerAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
+	// rust-analyzer requires textDocument/didOpen on target files before
+	// textDocument/rename and other file-scoped operations work.
+	// Opening only the first file leaves other files invisible to the LS.
+	didOpenAllFilesRecursive(ctx, adapter, ".rs", "rust")
 	return nil
 }
 
@@ -384,6 +394,38 @@ func didOpenFirstFile(ctx context.Context, adapter *LSAdapter, ext string, langI
 	}
 }
 
+// didOpenAllFiles opens ALL files matching ext in the workspace root via didOpen.
+// Used for LS implementations where textDocument/* operations (hover, references,
+// documentSymbol) require the target file to have been opened first — opening only
+// the first file is insufficient for multi-file workspaces.
+func didOpenAllFiles(ctx context.Context, adapter *LSAdapter, ext string, langID string) {
+	workDir := adapter.worker.workDir
+	entries, err := os.ReadDir(workDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ext) {
+			continue
+		}
+		filePath := filepath.Join(workDir, entry.Name())
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+		uri := "file://" + filePath
+		params := gen.DidOpenTextDocumentParams{
+			TextDocument: gen.TextDocumentItem{
+				URI:        uri,
+				LanguageId: langID,
+				Version:    1,
+				Text:       string(content),
+			},
+		}
+		_ = adapter.worker.Notify(ctx, "textDocument/didOpen", params)
+	}
+}
+
 // didOpenFirstFileRecursive walks subdirectories to find and open the first file
 // matching ext. Used for languages where source files live in subdirectories
 // (e.g., Rust src/, Java src/main/java/).
@@ -414,6 +456,36 @@ func didOpenFirstFileRecursive(ctx context.Context, adapter *LSAdapter, ext stri
 	})
 }
 
+// didOpenAllFilesRecursive walks subdirectories and opens ALL files matching ext.
+// Used for LS implementations where textDocument/* operations require the target
+// file to have been opened first — opening only the first file is insufficient.
+func didOpenAllFilesRecursive(ctx context.Context, adapter *LSAdapter, ext string, langID string) {
+	workDir := adapter.worker.workDir
+	_ = filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ext) {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		uri := "file://" + path
+		params := gen.DidOpenTextDocumentParams{
+			TextDocument: gen.TextDocumentItem{
+				URI:        uri,
+				LanguageId: langID,
+				Version:    1,
+				Text:       string(content),
+			},
+		}
+		_ = adapter.worker.Notify(ctx, "textDocument/didOpen", params)
+		return nil // continue to next file
+	})
+}
+
 // TypeScriptAdapter provides TypeScript-specific quirks for typescript-language-server.
 // tsserver only creates a "project" after a file is opened via didOpen.
 // Without this, workspace/symbol fails with "No Project" until a file is opened.
@@ -427,9 +499,11 @@ func (t *TypeScriptAdapter) NotificationHandlers() map[string]func(params json.R
 }
 func (t *TypeScriptAdapter) NormalizeSymbolName(name string) string { return name }
 func (t *TypeScriptAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
-	// Try .ts first, fall back to .js for JavaScript-only projects.
-	didOpenFirstFile(ctx, adapter, ".ts", "typescript")
-	didOpenFirstFile(ctx, adapter, ".js", "javascript")
+	// typescript-language-server requires didOpen on every file for textDocument/*
+	// operations (hover, references, documentSymbol) to work on that file.
+	// Opening only the first file leaves other files invisible to the LS.
+	didOpenAllFiles(ctx, adapter, ".ts", "typescript")
+	didOpenAllFiles(ctx, adapter, ".js", "javascript")
 	return nil
 }
 

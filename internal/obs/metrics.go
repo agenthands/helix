@@ -41,6 +41,13 @@ type Metrics struct {
 	LSPoolEvictions    *prometheus.CounterVec
 	LSPoolCircuitState *prometheus.GaugeVec
 	LSPoolRestarts     *prometheus.CounterVec
+
+	// Phase 47 D-07: rename_symbol dispatcher strategy counter.
+	// Closed-enum label "strategy" ∈ {"lsp-native", "rust-client-side"};
+	// enforced at emission sites (see *Metrics.RenameStrategyInc and
+	// internal/mcp.RecordRenameStrategy). The "strategy" label is carved
+	// out of AllowedLabels in metrics_labels_test.go for this family only.
+	RenameStrategy *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -98,6 +105,15 @@ func newMetrics() *Metrics {
 			},
 			[]string{"language"},
 		),
+		RenameStrategy: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "serena_rename_strategy_total",
+				Help: "rename_symbol successes by strategy (lsp-native | rust-client-side).",
+			},
+			// "strategy" is a closed-enum dimension carved out of AllowedLabels
+			// for this family only (Phase 47 D-07). Enforced at emission sites.
+			[]string{"strategy"},
+		),
 	}
 
 	reg.MustRegister(
@@ -107,6 +123,7 @@ func newMetrics() *Metrics {
 		m.LSPoolEvictions,
 		m.LSPoolCircuitState,
 		m.LSPoolRestarts,
+		m.RenameStrategy,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -145,4 +162,15 @@ func (m *Metrics) LSPoolCircuitStateSet(language string, state float64) {
 // LSPoolRestart increments the worker restart counter for a language (D-15).
 func (m *Metrics) LSPoolRestart(language string) {
 	m.LSPoolRestarts.WithLabelValues(language).Inc()
+}
+
+// RenameStrategyInc increments the rename dispatcher strategy counter.
+// strategy MUST be one of the closed-enum values {"lsp-native","rust-client-side"};
+// any other value is dropped to preserve bounded cardinality (Phase 47 D-07,
+// threat T-47-08 mitigation).
+func (m *Metrics) RenameStrategyInc(strategy string) {
+	if strategy != "lsp-native" && strategy != "rust-client-side" {
+		return
+	}
+	m.RenameStrategy.WithLabelValues(strategy).Inc()
 }

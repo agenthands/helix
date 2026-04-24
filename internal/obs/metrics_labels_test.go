@@ -21,6 +21,10 @@ import (
 // enum — the CI lint only carves the label NAME, not its values.
 var carveOuts = map[string]map[string]bool{
 	"serena_lspool_evictions_total": {"reason": true},
+	// Phase 47 D-07: closed-enum "strategy" label on the rename dispatcher
+	// counter. Values enforced at emission (see *Metrics.RenameStrategyInc);
+	// the CI lint only carves the label NAME.
+	"serena_rename_strategy_total": {"strategy": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -93,6 +97,7 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.LSPoolEvictions.WithLabelValues("go", "idle").Inc()
 	m.LSPoolCircuitState.WithLabelValues("go").Set(0)
 	m.LSPoolRestarts.WithLabelValues("go").Inc()
+	m.RenameStrategy.WithLabelValues("lsp-native").Inc()
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

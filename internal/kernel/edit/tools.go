@@ -393,8 +393,10 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
-		text := fmt.Sprintf("Renamed to %q: %d files changed, %d edits applied\nFiles: %s",
-			args.NewName, result.FilesChanged, result.EditsApplied, strings.Join(result.Files, ", "))
+		// Phase 47 D-07: emit closed-enum strategy metric.
+		mcp.RecordRenameStrategy(ctx, string(result.Strategy))
+		text := fmt.Sprintf("Renamed to %q: %d files changed, %d edits applied\nFiles: %s\nstrategy: %s",
+			args.NewName, result.FilesChanged, result.EditsApplied, strings.Join(result.Files, ", "), result.Strategy)
 		text = appendVerifyInfo(ctx, diagStore, uri, text)
 		return textResult(text), nil, nil
 	}))

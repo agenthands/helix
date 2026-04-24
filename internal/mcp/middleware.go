@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -13,6 +14,33 @@ import (
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/obs"
 )
+
+// renameStrategySink is the package-level recorder wired by InstallMiddleware.
+// It accepts the closed-enum strategy string and increments the corresponding
+// Prometheus counter on obs.Metrics. Nil until the first InstallMiddleware call;
+// RecordRenameStrategy no-ops until wiring happens (e.g. during test setup).
+// Phase 47 D-07: serena_rename_strategy_total bounded-label counter.
+var renameStrategySink atomic.Pointer[func(strategy string)]
+
+// setRenameStrategySink stores the recorder callback. Called from
+// InstallMiddleware with provider.Metrics().RenameStrategyInc.
+func setRenameStrategySink(fn func(strategy string)) {
+	renameStrategySink.Store(&fn)
+}
+
+// RecordRenameStrategy increments the serena_rename_strategy_total counter.
+// The strategy string MUST be one of {"lsp-native","rust-client-side"}; any
+// other value is dropped by the underlying obs.Metrics.RenameStrategyInc
+// (closed-enum cardinality discipline, threat T-47-08). ctx is reserved for
+// future OTel integration; currently unused.
+func RecordRenameStrategy(ctx context.Context, strategy string) {
+	_ = ctx
+	p := renameStrategySink.Load()
+	if p == nil || *p == nil {
+		return
+	}
+	(*p)(strategy)
+}
 
 // InstallMiddleware wires Serena's receiving middleware onto the MCP SDK server
 // (MCP-04 + METRIC-02).
@@ -42,6 +70,14 @@ func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver P
 			briefDescs = registry.BriefDescriptions()
 		}
 		server.AddReceivingMiddleware(ProfileFilterMiddleware(resolver, getSession, briefDescs, logger))
+	}
+	// Phase 47 D-07: wire the rename dispatcher strategy recorder to the
+	// provider's metrics sink so edit/tools.go can call
+	// mcp.RecordRenameStrategy without reaching into obs directly.
+	if provider != nil {
+		if m := provider.Metrics(); m != nil {
+			setRenameStrategySink(m.RenameStrategyInc)
+		}
 	}
 }
 

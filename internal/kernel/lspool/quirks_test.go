@@ -2,14 +2,76 @@ package lspool
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/postfix/serena/internal/langregistry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestRustAnalyzerAdapter_ServerStatusReadiness verifies the experimental/serverStatus
+// notification handler flips the readiness flag correctly and that WaitUntilRenameReady
+// observes quiescent transitions. This backs BUG-02 / Plan 01 Task 2.
+func TestRustAnalyzerAdapter_ServerStatusReadiness(t *testing.T) {
+	r := &RustAnalyzerAdapter{}
+	handlers := r.NotificationHandlers()
+	handler, ok := handlers["experimental/serverStatus"]
+	require.True(t, ok, "rust-analyzer adapter must register experimental/serverStatus handler")
+
+	// Not ready before any notification.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	assert.False(t, r.WaitUntilRenameReady(ctx), "adapter should not be ready before any serverStatus notification")
+
+	// Becomes ready on quiescent=true.
+	handler(json.RawMessage(`{"health":"ok","quiescent":true}`))
+	assert.True(t, r.WaitUntilRenameReady(context.Background()), "adapter should be ready after quiescent=true")
+
+	// Non-quiescent resets the readiness.
+	handler(json.RawMessage(`{"health":"ok","quiescent":false}`))
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel2()
+	assert.False(t, r.WaitUntilRenameReady(ctx2), "adapter should reset to not-ready after quiescent=false")
+
+	// Flip back to ready on a second quiescent=true.
+	handler(json.RawMessage(`{"health":"ok","quiescent":true}`))
+	assert.True(t, r.WaitUntilRenameReady(context.Background()), "adapter should become ready again after second quiescent=true")
+}
+
+// TestRustAnalyzerAdapter_ServerStatusMalformed verifies malformed payloads
+// do not panic and leave state unchanged (T-47-01 in threat model).
+func TestRustAnalyzerAdapter_ServerStatusMalformed(t *testing.T) {
+	r := &RustAnalyzerAdapter{}
+	handler := r.NotificationHandlers()["experimental/serverStatus"]
+	require.NotNil(t, handler)
+	assert.NotPanics(t, func() {
+		handler(json.RawMessage(`not-json`))
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	assert.False(t, r.WaitUntilRenameReady(ctx), "malformed payload must not mark adapter ready")
+}
+
+// TestRustAnalyzerAdapter_ImplementsQuirkAdapter guarantees the base interface is
+// still structurally satisfied (no required-method additions).
+func TestRustAnalyzerAdapter_ImplementsQuirkAdapter(t *testing.T) {
+	var _ QuirkAdapter = (*RustAnalyzerAdapter)(nil)
+}
+
+// TestRustAnalyzerAdapter_ExperimentalCapabilities verifies the optional
+// ExperimentalCapabilities interface is implemented and advertises
+// serverStatusNotification=true.
+func TestRustAnalyzerAdapter_ExperimentalCapabilities(t *testing.T) {
+	var r QuirkAdapter = &RustAnalyzerAdapter{}
+	ec, ok := r.(ExperimentalCapabilities)
+	require.True(t, ok, "RustAnalyzerAdapter must implement ExperimentalCapabilities")
+	caps := ec.ExperimentalCapabilities()
+	assert.Equal(t, true, caps["serverStatusNotification"])
+}
 
 func TestQuirkAdapter_DefaultReturnsEntryInitOptions(t *testing.T) {
 	entry := langregistry.LSEntry{

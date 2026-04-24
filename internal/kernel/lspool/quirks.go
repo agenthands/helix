@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/postfix/serena/internal/langregistry"
 	gen "github.com/postfix/serena/protocol/gen"
@@ -16,6 +19,22 @@ import (
 type ArgsModifier interface {
 	ExtraArgs(workDir string, args []string) []string
 }
+
+// ExperimentalCapabilities is an optional interface that QuirkAdapters can
+// implement to advertise LS-specific experimental client capabilities during
+// the initialize handshake. The returned map is merged into
+// ClientCapabilities.Experimental before "initialize" is dispatched. Used by
+// RustAnalyzerAdapter to opt into rust-analyzer's experimental/serverStatus
+// notification (see Phase 47 / BUG-02).
+type ExperimentalCapabilities interface {
+	ExperimentalCapabilities() map[string]any
+}
+
+// renameReadinessTimeout bounds WaitUntilRenameReady. rust-analyzer typically
+// emits experimental/serverStatus.quiescent=true within ~2-4s on the fixtures
+// used for Phase 47; 10s gives generous headroom without letting a stuck
+// server wedge the rename path forever (T-47-02).
+const renameReadinessTimeout = 10 * time.Second
 
 // QuirkAdapter provides per-language behavioral hooks for LS workers.
 // Languages with no special behavior use DefaultQuirkAdapter.
@@ -85,9 +104,31 @@ func (g *GoplsAdapter) PostInitialize(_ context.Context, _ *LSAdapter) error {
 }
 
 // RustAnalyzerAdapter provides Rust-specific quirks for rust-analyzer.
-// Enables cargo build scripts in initialization options.
+// Enables cargo build scripts in initialization options and wires the
+// experimental/serverStatus notification handler so edit.RenameSymbol can
+// wait for rename-relevant quiescence before dispatching textDocument/rename
+// (BUG-02). Per the Phase 47 RCA, rust-analyzer 1.90 returns
+// "No references found at position" from textDocument/rename whenever the
+// per-position analysis is still cold; the quiescent signal is the
+// deterministic readiness gate.
+//
+// Semantic-accuracy note (D-05): when the client-side rename fallback
+// (introduced in Plan 02) runs, cross-crate trait-impl discovery and
+// macro-expansion rename corners are NOT matched with native rust-analyzer
+// fidelity. See BUG-DEFER-02.
 type RustAnalyzerAdapter struct {
 	Entry langregistry.LSEntry
+
+	// quiescent tracks the most recent experimental/serverStatus.quiescent value.
+	// Read lock-free via atomic.Bool; writes come from the notification-dispatch
+	// goroutine inside Conn.Listen (one writer at a time per worker).
+	quiescent atomic.Bool
+
+	// readyCh is closed when quiescent flips to true and recreated when it
+	// flips back to false. WaitUntilRenameReady selects on it. readyChMu
+	// guards the re-creation / close races (T-47-05).
+	readyChMu sync.Mutex
+	readyCh   chan struct{}
 }
 
 func (r *RustAnalyzerAdapter) InitOptions(_ string) map[string]any {
@@ -106,8 +147,101 @@ func (r *RustAnalyzerAdapter) InitOptions(_ string) map[string]any {
 	return opts
 }
 
+// ExperimentalCapabilities opts rust-analyzer into the experimental/serverStatus
+// notification stream. Without this advertisement, rust-analyzer will not emit
+// the quiescent signal and the rename readiness gate degrades to timeout-only.
+func (r *RustAnalyzerAdapter) ExperimentalCapabilities() map[string]any {
+	return map[string]any{"serverStatusNotification": true}
+}
+
+// NotificationHandlers returns a handler for experimental/serverStatus that
+// flips the adapter's readiness flag. Payload schema (per rust-analyzer LSP
+// extensions docs): {health: "ok"|"warning"|"error", quiescent: bool,
+// message: string}. Unknown fields are discarded; malformed payloads are a
+// no-op (T-47-01).
 func (r *RustAnalyzerAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
-	return nil
+	return map[string]func(params json.RawMessage){
+		"experimental/serverStatus": func(raw json.RawMessage) {
+			var s struct {
+				Health    string `json:"health"`
+				Quiescent bool   `json:"quiescent"`
+				Message   string `json:"message"`
+			}
+			if err := json.Unmarshal(raw, &s); err != nil {
+				return
+			}
+			if s.Quiescent && (s.Health == "ok" || s.Health == "") {
+				r.quiescent.Store(true)
+				r.signalReady()
+			} else {
+				r.quiescent.Store(false)
+				r.resetReadyCh()
+			}
+		},
+	}
+}
+
+// ensureReadyCh lazily constructs the readiness channel on first access.
+func (r *RustAnalyzerAdapter) ensureReadyCh() chan struct{} {
+	r.readyChMu.Lock()
+	defer r.readyChMu.Unlock()
+	if r.readyCh == nil {
+		r.readyCh = make(chan struct{})
+	}
+	return r.readyCh
+}
+
+// signalReady closes the readiness channel (idempotent).
+func (r *RustAnalyzerAdapter) signalReady() {
+	r.readyChMu.Lock()
+	defer r.readyChMu.Unlock()
+	if r.readyCh == nil {
+		ch := make(chan struct{})
+		close(ch)
+		r.readyCh = ch
+		return
+	}
+	select {
+	case <-r.readyCh:
+		// already closed — keep it closed
+	default:
+		close(r.readyCh)
+	}
+}
+
+// resetReadyCh replaces the readiness channel with a fresh unclosed one so
+// subsequent WaitUntilRenameReady callers block until the next quiescent=true.
+func (r *RustAnalyzerAdapter) resetReadyCh() {
+	r.readyChMu.Lock()
+	defer r.readyChMu.Unlock()
+	r.readyCh = make(chan struct{})
+}
+
+// WaitUntilRenameReady blocks until rust-analyzer reports quiescent=true via
+// experimental/serverStatus, ctx is cancelled, or renameReadinessTimeout
+// elapses. Returns true iff the server reached quiescence before the timeout
+// or cancellation. Safe to call concurrently; Plan 02 consumes this via
+// optional-interface type assertion from internal/kernel/edit.
+func (r *RustAnalyzerAdapter) WaitUntilRenameReady(ctx context.Context) bool {
+	if r.quiescent.Load() {
+		return true
+	}
+	ch := r.ensureReadyCh()
+	// Re-check after grabbing the channel to avoid missing a transition that
+	// happened between the initial Load and the ensureReadyCh call.
+	if r.quiescent.Load() {
+		return true
+	}
+	timer := time.NewTimer(renameReadinessTimeout)
+	defer timer.Stop()
+	select {
+	case <-ch:
+		return r.quiescent.Load()
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return false
+	}
 }
 
 func (r *RustAnalyzerAdapter) NormalizeSymbolName(name string) string {

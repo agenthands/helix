@@ -72,7 +72,13 @@ Plans:
   2. The warm-workspace strategy is isolated at the Serena/test layer — no upstream jdtls tuning is required (that is explicitly deferred to BUG-DEFER-01).
   3. A second consecutive `go test` run reuses the warm jdtls workspace measurably faster than the first (recorded in the phase review).
   4. CI wall-clock for the Java suite is documented before/after.
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 48-01-PLAN.md — jdtlscache helper package (pure-stdlib hash + ResolveDataDir)
+- [ ] 48-02-PLAN.md — JdtlsAdapter env-var override (SERENA_TEST_JDTLS_DATA_DIR)
+- [ ] 48-03-PLAN.md — Drop build tags + wire Options.JdtlsDataDir + remove Short() skip
+- [ ] 48-04-PLAN.md — Makefile targets clean-jdtls-cache and bench-jdtls-warm
+- [ ] 48-05-PLAN.md — go-test.yml CI workflow + USAGE.md doc section
 
 ### Phase 49: bug-grammar-registry-consolidation
 **Goal**: A single canonical `GrammarRegistry` is constructed at daemon bootstrap and shared by all consumers; the two redundant instances are deleted.

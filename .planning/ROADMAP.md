@@ -17,7 +17,7 @@
 
 ### v1.9 Polish & Infra (Phases 46-55)
 
-- [ ] **Phase 46: bug-repomap-lua-fixture** -- Fix `get_repo_map` returning Lua testdata fixture instead of Go sources on Serena's own workspace
+- [x] **Phase 46: bug-repomap-lua-fixture** -- Fix `get_repo_map` returning Lua testdata fixture instead of Go sources on Serena's own workspace (completed 2026-04-24)
 - [ ] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround)
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [ ] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap
@@ -44,7 +44,7 @@
 Plans:
 - [x] 46-01-PLAN.md — Create synthetic polyglot fixture + failing reproduction unit tests (TDD red)
 - [x] 46-02-PLAN.md — Apply F1-B ambiguity-weighted edges in graph.go BuildGraph (TDD green)
-- [ ] 46-03-PLAN.md — Oracle smoke test + phase RCA + orphan directory cleanup
+- [x] 46-03-PLAN.md — Oracle smoke test + phase RCA + orphan directory cleanup
 **Notes**: An orphan backlog directory exists at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/`. The plan-phase step should promote/rename that directory to `46-bug-repomap-lua-fixture/` rather than duplicate work; any investigation notes already in 999.1 are prior art.
 
 ### Phase 47: bug-rust-analyzer-rename
@@ -169,7 +169,7 @@ Plans:
 | 25-33 | v1.6 | 22/22 | Complete | 2026-04-20 |
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
-| 46 | v1.9 | 2/3 | In Progress|  |
+| 46 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 47 | v1.9 | 0/? | Not started | - |
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 0/? | Not started | - |

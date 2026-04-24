@@ -94,36 +94,47 @@ func rootDirFromPath(t *testing.T, absPath, relSuffix string) string {
 // the BUG-01 rank-dominance symptom. See RESEARCH.md §Synthetic Fixture
 // Design (lines 175-208) for the rationale.
 //
-// Key reproduction mechanic: Go defs are QUALIFIED (via buildQualifiedName,
-// e.g. "Store.Add") but Go refs are stored BARE (buildQualifiedName runs only
-// on defs — see extractor.go:235-261). Thus when Go code does `s.add(...)`,
-// the ref lands as bare "add" and collides with Lua's `add` def, pumping
-// rank across the language boundary into the closed Lua sink subgraph.
+// Fixture shape reflects the combined F1-B + F1-A fix (Phase 46):
+//   - F1-B (graph.go): edges weighted by 1/sqrt(1+defDegree[name]).
+//   - F1-A (extractor.go): Go call-site refs inside a selector_expression
+//     are qualified by the operand identifier (e.g. `s.Add(...)` -> ref
+//     "s.Add"; `Logger.Log(...)` -> ref "Logger.Log").
+//
+// Pre-fix reproduction (Plan 01) used BARE Go refs ("add", "log", ...)
+// which collided with BARE Lua defs ("add" in calculator.lua, "log" in
+// utils.lua). Post-F1-A those Go refs become identifier-qualified
+// ("s.add", "srv.log", ...) and no longer collide with Lua's bare defs.
+// We also add cross-Go type-qualified refs (Store.Add, Logger.Log, ...)
+// modeling realistic Go call sites where the operand is a package-style
+// identifier matching a type-qualified def — see 46-02-SUMMARY for the
+// realism note.
 func polyglotFixture() map[string][]Tag {
 	return map[string][]Tag{
-		// --- Go package pkg/ with qualified defs (realistic after
-		// buildQualifiedName) and bare refs (realistic for Go call sites).
-		// Go defs being qualified means they do NOT collide with Go refs,
-		// so Go refs leak out to any other file (Lua) that defines the bare name.
+		// --- Go package pkg/ with qualified defs and F1-A-qualified refs ---
 		"pkg/server.go": {
 			{Name: "pkg.Server", Kind: TagDef, Line: 10, Column: 6},
 			{Name: "Server.Start", Kind: TagDef, Line: 20, Column: 18},
 			{Name: "Server.Stop", Kind: TagDef, Line: 30, Column: 18},
-			// Bare refs (common method names) — collide with Lua defs.
-			{Name: "log", Kind: TagRef, Line: 22, Column: 5},
-			{Name: "add", Kind: TagRef, Line: 23, Column: 5},
-			{Name: "new", Kind: TagRef, Line: 24, Column: 5},
-			{Name: "trim", Kind: TagRef, Line: 25, Column: 5},
-			{Name: "split", Kind: TagRef, Line: 26, Column: 5},
+			// F1-A identifier-qualified refs (formerly bare "log"/"add"/...).
+			// Operand is a local receiver/var; no matching def exists -> no edge.
+			{Name: "srv.log", Kind: TagRef, Line: 22, Column: 5},
+			{Name: "srv.add", Kind: TagRef, Line: 23, Column: 5},
+			{Name: "srv.trim", Kind: TagRef, Line: 24, Column: 5},
+			// Cross-Go refs where the operand is a type-name identifier
+			// (realistic for `Logger.Log(...)` / `Store.Add(...)` patterns).
+			// F1-A produces qualified name "Type.method" which matches the
+			// type-qualified def above.
+			{Name: "Store.Add", Kind: TagRef, Line: 25, Column: 5},
+			{Name: "Logger.Log", Kind: TagRef, Line: 26, Column: 5},
 		},
 		"pkg/store.go": {
 			{Name: "pkg.Store", Kind: TagDef, Line: 10, Column: 6},
 			{Name: "Store.Add", Kind: TagDef, Line: 20, Column: 18},
 			{Name: "Store.Get", Kind: TagDef, Line: 30, Column: 18},
 			{Name: "Store.Delete", Kind: TagDef, Line: 40, Column: 18},
-			{Name: "log", Kind: TagRef, Line: 22, Column: 5},
-			{Name: "add", Kind: TagRef, Line: 23, Column: 5},
-			{Name: "new", Kind: TagRef, Line: 24, Column: 5},
+			{Name: "s.log", Kind: TagRef, Line: 22, Column: 5},
+			{Name: "s.new", Kind: TagRef, Line: 23, Column: 5},
+			{Name: "Logger.Log", Kind: TagRef, Line: 24, Column: 5},
 		},
 		"pkg/logger.go": {
 			{Name: "pkg.Logger", Kind: TagDef, Line: 10, Column: 6},
@@ -132,26 +143,28 @@ func polyglotFixture() map[string][]Tag {
 			{Name: "Logger.Debug", Kind: TagDef, Line: 40, Column: 18},
 			{Name: "Logger.Warn", Kind: TagDef, Line: 50, Column: 18},
 			{Name: "Logger.Error", Kind: TagDef, Line: 60, Column: 18},
-			// bare refs again — Go code calls helpers with bare identifiers.
-			{Name: "trim", Kind: TagRef, Line: 22, Column: 5},
-			{Name: "split", Kind: TagRef, Line: 23, Column: 5},
+			{Name: "l.trim", Kind: TagRef, Line: 22, Column: 5},
+			{Name: "l.split", Kind: TagRef, Line: 23, Column: 5},
 		},
 		"pkg/handler.go": {
 			{Name: "pkg.Handler", Kind: TagDef, Line: 10, Column: 6},
 			{Name: "Handler.Handle", Kind: TagDef, Line: 20, Column: 18},
-			// bare refs dominate — method calls in Go
-			{Name: "add", Kind: TagRef, Line: 21, Column: 5},
-			{Name: "log", Kind: TagRef, Line: 22, Column: 5},
-			{Name: "new", Kind: TagRef, Line: 23, Column: 5},
-			{Name: "subtract", Kind: TagRef, Line: 24, Column: 5},
-			{Name: "multiply", Kind: TagRef, Line: 25, Column: 5},
+			// Cross-Go refs modeling realistic package-qualified / static
+			// style method calls. F1-A qualifies these by the operand
+			// identifier, matching the type-qualified defs.
+			{Name: "Store.Add", Kind: TagRef, Line: 21, Column: 5},
+			{Name: "Store.Get", Kind: TagRef, Line: 22, Column: 5},
+			{Name: "Server.Start", Kind: TagRef, Line: 23, Column: 5},
+			{Name: "Server.Stop", Kind: TagRef, Line: 24, Column: 5},
+			{Name: "Logger.Log", Kind: TagRef, Line: 25, Column: 5},
+			{Name: "Logger.Info", Kind: TagRef, Line: 26, Column: 5},
 		},
 		"pkg/util.go": {
 			{Name: "pkg.Trim", Kind: TagDef, Line: 10, Column: 6},
 			{Name: "pkg.Split", Kind: TagDef, Line: 20, Column: 6},
-			{Name: "log", Kind: TagRef, Line: 12, Column: 5},
-			{Name: "add", Kind: TagRef, Line: 13, Column: 5},
-			{Name: "new", Kind: TagRef, Line: 14, Column: 5},
+			{Name: "u.log", Kind: TagRef, Line: 12, Column: 5},
+			{Name: "Server.Start", Kind: TagRef, Line: 13, Column: 5},
+			{Name: "Logger.Log", Kind: TagRef, Line: 14, Column: 5},
 		},
 
 		// --- Deeply-nested Lua testdata fixture with bare-name collisions ---

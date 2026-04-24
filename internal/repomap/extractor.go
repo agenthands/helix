@@ -206,6 +206,20 @@ func (e *TagExtractor) Extract(source []byte, filePath string, lang string) ([]T
 			nameText = qualName
 		}
 
+		// F1-A (Phase 46 / BUG-01): qualify Go call-site refs by their
+		// receiver identifier. A call like `s.Add(...)` captures `Add` as
+		// @name inside a selector_expression whose operand is `s`; under
+		// F1-A the ref becomes `s.Add`. This prevents bare Go refs from
+		// colliding with bare defs in other languages (e.g. Lua
+		// `calculator.add` which the Lua extractor stores as bare `add`).
+		// Identifier-only qualification (no type inference, no LSP) per
+		// RESEARCH.md §Fix-Shape Constraints F1-A.
+		if kind == TagRef && lang == "go" && strings.HasPrefix(captureName, "reference.") {
+			if q := qualifyGoRef(*nameNode, source); q != "" {
+				nameText = q
+			}
+		}
+
 		tags = append(tags, Tag{
 			Name:      nameText,
 			Kind:      kind,
@@ -283,6 +297,39 @@ func qualifyScalaFunction(nameNode tree_sitter.Node, source []byte, name string)
 		return ""
 	}
 	return containerNameNode.Utf8Text(source) + "." + name
+}
+
+// qualifyGoRef produces an identifier-qualified name for Go call-site refs.
+// When a ref's name node lives inside a selector_expression whose operand is
+// a plain identifier (e.g. `s.Add(...)`), this returns `operand.name` (e.g.
+// `s.Add`). For non-selector refs (bare function calls like `trim(x)`),
+// refs whose operand is not a simple identifier (composite literals, method
+// chains), or refs where the parent is not a selector_expression at all,
+// this returns "" and the caller keeps the bare name.
+//
+// This is F1-A (Phase 46 / BUG-01): stops bare Go call-site refs from
+// colliding with bare defs in other languages (e.g. Lua) without any LSP
+// or type inference. See RESEARCH.md §Fix-Shape Constraints F1-A.
+func qualifyGoRef(nameNode tree_sitter.Node, source []byte) string {
+	parent := nameNode.Parent()
+	if parent == nil || parent.Kind() != "selector_expression" {
+		return ""
+	}
+	// Ensure this node is the `field` child, not the `operand` child.
+	fieldNode := parent.ChildByFieldName("field")
+	if fieldNode == nil || fieldNode.StartByte() != nameNode.StartByte() || fieldNode.EndByte() != nameNode.EndByte() {
+		return ""
+	}
+	operand := parent.ChildByFieldName("operand")
+	if operand == nil || operand.Kind() != "identifier" {
+		return ""
+	}
+	operandText := operand.Utf8Text(source)
+	nameText := nameNode.Utf8Text(source)
+	if operandText == "" || nameText == "" {
+		return ""
+	}
+	return operandText + "." + nameText
 }
 
 // qualifyGoMethod walks up from the method name to find the receiver type.

@@ -320,22 +320,25 @@ Use `serr.New(serr.Unsupported, "...")`. `Unsupported` signals the specific path
 | A5 | No existing upstream rust-analyzer GitHub issue exactly matches "rename fails in fresh temp workspaces while hover/references succeed at same position" | Sources / Upstream Issue | [ASSUMED] — issues #6560 (local variable panic), #15837 (file-indexed?), #10888 (workspace ready notification), and the `rename.rs` source are close but not exact matches. Worth a targeted search during RCA to either pin one OR capture ours as a new one for `BUG-DEFER-02`. |
 | A6 | Strategy counter can extend existing OTel meter pattern (`serena_tool_calls_total`) | Don't Hand-Roll / Claude's Discretion | [ASSUMED] — plausible given existing closed-enum counter discipline (`middleware.go:48`). Exact meter wiring needs a quick read of the metric definition file. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Is the trigger cargo-metadata resolution vs. indexing?**
    - What we know: `workspace/symbol` succeeds (pre-rename readiness gate), yet rename fails.
    - What's unclear: whether `cargo metadata` on the temp workspace completes, and whether rust-analyzer's rename handler has a hard dependency on the project graph vs. just symbol tables.
    - Recommendation: RCA task captures the wire trace and any rust-analyzer stderr/progress; check whether `experimental/serverStatus.health` reports `warning` when rename fails.
+   - **RESOLVED:** Deferred to Plan 01 Task 1 (RCA) — empirical wire trace will pin the exact trigger. Planning proceeds with hybrid path that handles both hypotheses (indexing vs. rename-specific readiness).
 
 2. **Which readiness signal wins on cost/reliability — `experimental/serverStatus` notification vs. bounded `prepareRename` retry?**
    - What we know: notification is event-driven, but requires capability plumbing; retry is simple but wastes 1-2 round-trips.
    - What's unclear: which produces fewer flakes in the Nyquist harness.
    - Recommendation: plan for notification-first, retry-fallback. If `serverStatus` arrives within the test's 45s `LSTimeout`, use it; otherwise retry `prepareRename` up to N times with small backoff, then trigger the override.
+   - **RESOLVED:** `experimental/serverStatus.quiescent=true` notification handler with bounded `prepareRename` retry fallback (see §2).
 
 3. **Does an upstream rust-analyzer issue exactly match?**
    - What we know: Several candidate issues exist (#6560, #10888, #15837, #5829); none is an exact symptom match from the surface.
    - What's unclear: whether one exists under a different title.
    - Recommendation: RCA task does a targeted repo search on rust-analyzer with the exact error string; if no match, file one for `BUG-DEFER-02`.
+   - **RESOLVED:** No exact upstream match; deferred to Plan 01 Task 1 (RCA) + `BUG-DEFER-02` (upstream filing).
 
 ## Environment Availability
 

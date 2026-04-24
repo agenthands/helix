@@ -18,7 +18,7 @@
 ### v1.9 Polish & Infra (Phases 46-55)
 
 - [x] **Phase 46: bug-repomap-lua-fixture** -- Fix `get_repo_map` returning Lua testdata fixture instead of Go sources on Serena's own workspace (completed 2026-04-24)
-- [ ] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround)
+- [x] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround) (completed 2026-04-24)
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [ ] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap
 - [ ] **Phase 50: toolchain-go1.25-gopls-ci** -- Unblock Go 1.25 / gopls on `ubuntu-latest` and restore the CI benchmark gate
@@ -58,9 +58,9 @@ Plans:
   3. Hover / references / search behavior on the same Rust symbol is unchanged (no regression).
   4. A trace of the successful path is recorded in the phase review (what was the "No references found at position" trigger, and what resolved it).
 **Plans**: 3 plans
-  - [ ] 47-01-PLAN.md — RCA + readiness signal (capture wire trace, wire experimental/serverStatus into RustAnalyzerAdapter)
-  - [ ] 47-02-PLAN.md — QuirkAdapter RenameOverride + dispatcher + strategy metric
-  - [ ] 47-03-PLAN.md — Unskip rust rename integration test + USAGE.md troubleshooting + D-05 doc comments
+  - [x] 47-01-PLAN.md — RCA + readiness signal (capture wire trace, wire experimental/serverStatus into RustAnalyzerAdapter)
+  - [x] 47-02-PLAN.md — QuirkAdapter RenameOverride + dispatcher + strategy metric
+  - [x] 47-03-PLAN.md — Unskip rust rename integration test + USAGE.md troubleshooting + D-05 doc comments
 
 ### Phase 48: bug-jdtls-warm-cache
 **Goal**: Java integration tests run as part of the default `go test ./...` suite because jdtls reuses a warm workspace across runs.
@@ -173,7 +173,7 @@ Plans:
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46 | v1.9 | 3/3 | Complete   | 2026-04-24 |
-| 47 | v1.9 | 0/? | Not started | - |
+| 47 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 0/? | Not started | - |
 | 50 | v1.9 | 0/? | Not started | - |

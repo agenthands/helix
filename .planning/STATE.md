@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-24T14:03:04.078Z"
-last_activity: 2026-04-24 -- Phase 46 execution started
+last_updated: "2026-04-24T14:44:25.446Z"
+last_activity: 2026-04-24 -- Phase 47 execution started
 progress:
   total_phases: 11
   completed_phases: 1
-  total_plans: 3
+  total_plans: 6
   completed_plans: 3
-  percent: 100
+  percent: 50
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 46 — bug-repomap-lua-fixture
+**Current focus:** Phase 47 — bug-rust-analyzer-rename
 
 ## Current Position
 
-Phase: 46 (bug-repomap-lua-fixture) — EXECUTING
+Phase: 47 (bug-rust-analyzer-rename) — EXECUTING
 Plan: 1 of 3
-Status: Executing Phase 46
-Last activity: 2026-04-24 -- Phase 46 execution started
+Status: Executing Phase 47
+Last activity: 2026-04-24 -- Phase 47 execution started
 
 ## Performance Metrics
 

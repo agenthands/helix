@@ -95,13 +95,25 @@ func BuildGraph(cache *TagCache) (*FileGraph, error) {
 		}
 	}
 
+	// F1-B (Phase 46 / BUG-01): weight edges by inverse sqrt of name
+	// ambiguity. A name defined in many files is a weaker signal per-edge
+	// than a name defined in one file. This dampens common-name collisions
+	// (add, log, new, Logger) across languages without any path- or
+	// language-specific heuristic. See
+	// .planning/phases/46-bug-repomap-lua-fixture/46-RESEARCH.md.
+	defDegree := make(map[string]int, len(defs))
+	for name, files := range defs {
+		defDegree[name] = len(files)
+	}
+
 	g := NewFileGraph()
 
-	// Create edges: referencer -> definer, weight = sqrt(refCount).
+	// Create edges: referencer -> definer, weight = sqrt(refCount) * ambiguityScale.
 	for ident, definers := range defs {
+		ambiguityScale := 1.0 / math.Sqrt(1.0+float64(defDegree[ident]))
 		refFiles, hasRefs := refs[ident]
 		if !hasRefs {
-			// Self-loop for isolated definitions (aider pattern, weight 0.1).
+			// Self-loop for isolated definitions (aider pattern, weight 0.1, unchanged).
 			for _, defFile := range definers {
 				g.addEdge(defFile, defFile, 0.1)
 			}
@@ -112,7 +124,7 @@ func BuildGraph(cache *TagCache) (*FileGraph, error) {
 				if refFile == defFile {
 					continue // skip same-file refs
 				}
-				g.addEdge(refFile, defFile, math.Sqrt(float64(count)))
+				g.addEdge(refFile, defFile, math.Sqrt(float64(count))*ambiguityScale)
 			}
 		}
 	}

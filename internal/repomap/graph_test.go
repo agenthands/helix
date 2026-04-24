@@ -58,9 +58,9 @@ func TestBuildGraph_CrossFileEdges(t *testing.T) {
 	g, err := BuildGraph(cache)
 	require.NoError(t, err)
 
-	// Edge from fileA (ref) -> fileB (def) with weight sqrt(1) = 1.0.
+	// Edge from fileA (ref) -> fileB (def). F1-B: weight = sqrt(1) * 1/sqrt(1+1) = sqrt(1)/sqrt(2) ≈ 0.7071.
 	require.Contains(t, g.Edges, paths["fileA.go"])
-	assert.InDelta(t, math.Sqrt(1), g.Edges[paths["fileA.go"]][paths["fileB.go"]], 0.001)
+	assert.InDelta(t, math.Sqrt(1)*1.0/math.Sqrt(2), g.Edges[paths["fileA.go"]][paths["fileB.go"]], 0.001)
 }
 
 func TestBuildGraph_WeightByRefCount(t *testing.T) {
@@ -79,9 +79,9 @@ func TestBuildGraph_WeightByRefCount(t *testing.T) {
 	g, err := BuildGraph(cache)
 	require.NoError(t, err)
 
-	// 4 refs -> weight = sqrt(4) = 2.0.
+	// 4 refs, defDegree("Bar")=1 -> weight = sqrt(4) * 1/sqrt(2) ≈ 1.4142.
 	require.Contains(t, g.Edges, paths["fileA.go"])
-	assert.InDelta(t, 2.0, g.Edges[paths["fileA.go"]][paths["fileC.go"]], 0.001)
+	assert.InDelta(t, 2.0*1.0/math.Sqrt(2), g.Edges[paths["fileA.go"]][paths["fileC.go"]], 0.001)
 }
 
 func TestBuildGraph_IsolatedDefinition(t *testing.T) {

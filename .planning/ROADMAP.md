@@ -57,7 +57,10 @@ Plans:
   2. If a tool-level workaround is shipped instead of a true fix, it is documented in `USAGE.md` Troubleshooting and in a QuirkAdapter for `rust-analyzer`.
   3. Hover / references / search behavior on the same Rust symbol is unchanged (no regression).
   4. A trace of the successful path is recorded in the phase review (what was the "No references found at position" trigger, and what resolved it).
-**Plans**: TBD
+**Plans**: 3 plans
+  - [ ] 47-01-PLAN.md — RCA + readiness signal (capture wire trace, wire experimental/serverStatus into RustAnalyzerAdapter)
+  - [ ] 47-02-PLAN.md — QuirkAdapter RenameOverride + dispatcher + strategy metric
+  - [ ] 47-03-PLAN.md — Unskip rust rename integration test + USAGE.md troubleshooting + D-05 doc comments
 
 ### Phase 48: bug-jdtls-warm-cache
 **Goal**: Java integration tests run as part of the default `go test ./...` suite because jdtls reuses a warm workspace across runs.

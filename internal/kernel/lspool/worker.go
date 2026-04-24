@@ -384,6 +384,14 @@ func (w *Worker) SetQuirks(q QuirkAdapter) {
 	w.quirks = q
 }
 
+// Quirks returns the QuirkAdapter configured on this worker, or nil if none.
+// Exposed for optional-interface type assertions by callers that need to
+// detect per-LS capabilities (e.g., edit.RenameSymbol dispatching on
+// *RustAnalyzerAdapter for the rename readiness gate and override path).
+func (w *Worker) Quirks() QuirkAdapter {
+	return w.quirks
+}
+
 // NormalizeSymbolName delegates symbol name normalization to the QuirkAdapter.
 func (w *Worker) NormalizeSymbolName(name string) string {
 	if w.quirks != nil {

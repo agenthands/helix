@@ -50,6 +50,17 @@ func (l *WorkerLease) Notify(ctx context.Context, method string, params interfac
 	return l.Worker.Notify(ctx, method, params)
 }
 
+// Adapter returns the QuirkAdapter of the lease's worker, or nil if the
+// lease or its worker is unset. Exposed so higher layers (e.g., edit.RenameSymbol)
+// can perform optional-interface type assertions to select per-LS behaviour
+// without reaching through Worker directly.
+func (l *WorkerLease) Adapter() QuirkAdapter {
+	if l == nil || l.Worker == nil {
+		return nil
+	}
+	return l.Worker.Quirks()
+}
+
 // IsMutation returns true for LSP methods that mutate document state.
 func IsMutation(method string) bool {
 	return mutationMethods[method]

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	serr "github.com/postfix/serena/internal/errors"
@@ -244,12 +243,4 @@ func applyTextEdits(uri string, edits []gen.TextEdit) error {
 	}
 
 	return nil
-}
-
-// pathToURI converts a filesystem path to a file:// URI.
-func pathToURI(path string) string {
-	if strings.HasPrefix(path, "file://") {
-		return path
-	}
-	return "file://" + path
 }

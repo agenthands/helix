@@ -40,7 +40,11 @@
   2. A regression test in `internal/repomap/` (or `test/oracle/`) asserts that on a polyglot workspace with Go + Lua testdata, the ranked output contains at least one `internal/` Go symbol and is not dominated by testdata fixtures.
   3. Root cause is documented in the phase review (PageRank starvation vs. extractor failure vs. workspace root vs. elide step).
   4. `go test ./...` and `go vet ./...` pass.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 46-01-PLAN.md — Create synthetic polyglot fixture + failing reproduction unit tests (TDD red)
+- [ ] 46-02-PLAN.md — Apply F1-B ambiguity-weighted edges in graph.go BuildGraph (TDD green)
+- [ ] 46-03-PLAN.md — Oracle smoke test + phase RCA + orphan directory cleanup
 **Notes**: An orphan backlog directory exists at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/`. The plan-phase step should promote/rename that directory to `46-bug-repomap-lua-fixture/` rather than duplicate work; any investigation notes already in 999.1 are prior art.
 
 ### Phase 47: bug-rust-analyzer-rename

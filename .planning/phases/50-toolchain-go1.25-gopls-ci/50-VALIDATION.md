@@ -1,9 +1,9 @@
 ---
 phase: 50
 slug: toolchain-go1-25-gopls-ci
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-25
 ---
 
@@ -65,11 +65,11 @@ Existing infrastructure covers all phase requirements. Phase 50 is a docs + base
 
 ## Validation Sign-Off
 
-- [ ] All tasks have automated verify or are flagged manual with reason
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (N/A — none required)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 120s local
-- [ ] `nyquist_compliant: true` set in frontmatter once plans land
+- [x] All tasks have automated verify or are flagged manual with reason
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (N/A — none required)
+- [x] No watch-mode flags
+- [x] Feedback latency < 120s local
+- [x] `nyquist_compliant: true` set in frontmatter once plans land
 
-**Approval:** pending
+**Approval:** approved 2026-04-25

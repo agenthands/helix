@@ -351,15 +351,16 @@ Delete this sentence. Keep the rest of the paragraph (3 redundant GrammarRegistr
 
 **No claims tagged `[ASSUMED]` are load-bearing decisions** — both items above are verified or have clear fallbacks.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `benchstat@latest` be pinned at the same time as documenting gopls?**
    - What we know: `bench.yml:62` has a TODO comment to pin to a commit SHA.
    - What's unclear: User did not raise this in discussion; not in CONTEXT.md.
-   - Recommendation: Out of scope for Phase 50. Note in phase review as a follow-up todo so it doesn't get lost.
+   - **RESOLVED:** Out of scope for Phase 50. Tracked as a follow-up todo in the phase review so it does not get lost; no CONTEXT.md decision exists to authorize it inside this phase.
 
 2. **Should the gopls subsection live under `## Benchmark CI Gate` (existing) or as a new `## CI Tooling` top-level section?**
-   - This is a Claude's discretion item. Recommendation: nest under `## Benchmark CI Gate` because the pin's rationale is bench-stability-driven, and that section already exists. Top-level placement implies a broader CI tooling story that does not yet exist.
+   - This is a Claude's discretion item.
+   - **RESOLVED:** Nest under the existing `## Benchmark CI Gate` section per Plan 50-02 Task 2. Rationale: the pin's justification is bench-stability-driven (Pitfall 4) and that section already exists; introducing a top-level `## CI Tooling` heading would imply a broader CI tooling story that does not yet exist.
 
 ## Project Constraints (from CLAUDE.md)
 

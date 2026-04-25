@@ -103,7 +103,11 @@ Plans:
   2. The CI benchmark gate runs on `ubuntu-latest` and fails the PR when PR-tier thresholds (15% p50 / 25% p95) are exceeded.
   3. The gopls v0.17.1 incompatibility is resolved with a documented strategy (upgrade, patch, or replacement) captured in the phase review and `CONTRIBUTING.md`.
   4. The benchmarks tech-debt note in `PROJECT.md` Context section is removed.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 50-01-PLAN.md — Trigger capture-baseline.yml to produce v1.9 ubuntu-latest baseline (D-01, D-04)
+- [ ] 50-02-PLAN.md — Swap bench.yml to v1.9 baseline + CONTRIBUTING.md gopls subsection + PROJECT.md tech-debt delete + open verification PR (D-02, D-05/06/14, D-13, D-10)
 
 ### Phase 51: packaging-goreleaser
 **Goal**: GitHub Releases publish reproducible multi-arch signed binaries for darwin/linux/windows × amd64/arm64 via a goreleaser pipeline.

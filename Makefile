@@ -26,13 +26,17 @@ fmt:
 docs: ## Regenerate tool and language tables in README.md
 	$(GO) run ./cmd/docgen
 
-clean-jdtls-cache: ## Wipe warm jdtls workspaces under $XDG_CACHE_HOME/serena-test/jdtls/
-	@rm -rf "$${XDG_CACHE_HOME:-$$HOME/.cache}/serena-test/jdtls"
-	@echo "cleared jdtls warm cache at $${XDG_CACHE_HOME:-$$HOME/.cache}/serena-test/jdtls"
+clean-jdtls-cache: ## Wipe warm jdtls workspaces under the platform user cache dir
+	@case "$$(uname -s)" in \
+	  Darwin) DIR="$$HOME/Library/Caches/serena-test/jdtls" ;; \
+	  *)      DIR="$${XDG_CACHE_HOME:-$$HOME/.cache}/serena-test/jdtls" ;; \
+	esac; \
+	rm -rf "$$DIR"; \
+	echo "cleared jdtls warm cache at $$DIR"
 
 bench-jdtls-warm: ## Run Java integration suite cold then warm; print both wall-clocks
 	@$(MAKE) clean-jdtls-cache
 	@echo "=== jdtls COLD run ==="
-	@time $(GO) test -run 'Java' ./test/integration/... -count=1
+	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
 	@echo "=== jdtls WARM run ==="
-	@time $(GO) test -run 'Java' ./test/integration/... -count=1
+	-@time $(GO) test -run 'Java' ./test/integration/... -count=1

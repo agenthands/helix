@@ -11,11 +11,31 @@ overrides:
     accepted_at: "2026-04-25T00:00:00Z"
 human_verification:
   - test: "Cold-vs-warm wall-clock measurement"
-    expected: "make bench-jdtls-warm prints two times; warm run measurably faster than cold (Success Criterion #3 + D-14)"
-    why_human: "Absolute timings are machine-dependent and require local jdtls install. 48-03-SUMMARY recorded ~15s cold vs ~3.3s warm sub-case locally, but BUG-03 requires this be paste-ready in the phase review."
+    captured: "2026-04-25 on darwin/arm64 (jdtls /opt/homebrew/bin/jdtls)"
+    cold_seconds: 19.35
+    warm_seconds: 18.15
+    delta_seconds: 1.20
+    delta_percent: 6.2
+    note: "Small delta is expected — Java fixture is a single helper class. Cache directory grew to 436K after cold run, confirming SERENA_TEST_JDTLS_DATA_DIR override is honored. Mechanism works; magnitude requires a larger project to demonstrate."
   - test: "CI cache hit/miss confirmation"
-    expected: "First run after merge to main → actions/cache MISS, cold start. Subsequent run → HIT, warm reuse. Both wall-clocks captured per D-14 (Success Criterion #4)."
-    why_human: "Requires triggering two consecutive workflow runs on main. 48-05-SUMMARY explicitly notes CI was not yet triggered."
+    expected: "First run after merge to main → actions/cache MISS, cold start. Subsequent run → HIT, warm reuse."
+    why_human: "Requires push to origin/main + two workflow runs. Not yet captured."
+
+phase_48_followup_bugs:
+  - id: "BUG-48-FOLLOWUP-01"
+    severity: "medium"
+    file: "Makefile"
+    target: "clean-jdtls-cache"
+    issue: "Hardcodes ${XDG_CACHE_HOME:-$HOME/.cache}/serena-test/jdtls — wrong on Darwin where os.UserCacheDir() returns $HOME/Library/Caches/. Helper writes to Library/Caches; Makefile silently 'cleans' empty $HOME/.cache path. Bench appears to work but cold runs are actually warm on macOS."
+    suggested_fix: "Resolve cache dir via the Go helper at runtime (e.g. `go run ./test/integration/jdtlscache/cmd/print-data-dir`) or use a small Go program rather than shell path concatenation."
+    surfaced_during: "human verification of bench-jdtls-warm on darwin/arm64"
+  - id: "BUG-48-FOLLOWUP-02"
+    severity: "medium"
+    file: "Makefile"
+    target: "bench-jdtls-warm"
+    issue: "Cold `time go test ...` aborts the recipe on non-zero exit (pre-existing fixture failures from BUG-DEFER-01). Warm run never executes. User cannot capture both timings until BUG-DEFER-01 is resolved or the recipe is made resilient."
+    suggested_fix: "Prefix both `time go test` lines with `-` (or wrap in `|| true`) so the recipe continues through test failures and prints both wall-clocks."
+    surfaced_during: "human verification of bench-jdtls-warm"
 ---
 
 # Phase 48: bug-jdtls-warm-cache Verification Report

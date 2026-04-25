@@ -275,6 +275,11 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		ps.SetSessionProvider(sessionProvider)
 	}
 
+	// 12a. Wire shared GrammarRegistry into repomap skill (BUG-04, D-01/D-02/D-03).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetRegistry(grammarRegistry)
+	}
+
 	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
 		tagCache := rs.Cache()
@@ -292,7 +297,6 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// 12c. Wire repomap skill fallback extraction for non-tree-sitter languages (RMAP-02).
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
 		rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
-			Registry:  treesitter.NewGrammarRegistry(),
 			Extractor: repomapPkg.NewFallbackExtractor(),
 			AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
 				wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}

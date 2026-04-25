@@ -60,8 +60,8 @@ func tryConnect(_ context.Context, socketPath string, tp trace.TracerProvider) (
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// Pitfall 1: Configure keepalive to detect dead daemon
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second,
-			Timeout:             5 * time.Second,
+			Time:                60 * time.Second,
+			Timeout:             20 * time.Second,
 			PermitWithoutStream: true,
 		}),
 		// Phase 12: otelgrpc client handler for trace propagation (D-01, D-12).

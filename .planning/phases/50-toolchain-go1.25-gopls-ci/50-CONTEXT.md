@@ -1,7 +1,8 @@
 # Phase 50: toolchain-go1.25-gopls-ci - Context
 
 **Gathered:** 2026-04-25
-**Status:** Ready for planning
+**Amended:** 2026-04-25 (post-execution failure of Plan 50-01 capture-baseline run on ubuntu-latest)
+**Status:** Ready for re-planning (add Plan 50-00 prereq)
 
 <domain>
 ## Phase Boundary
@@ -107,7 +108,46 @@ Make CI green on `ubuntu-latest` with Go 1.25, bring the benchmark regression ga
 
 </deferred>
 
+<amendment_2026_04_25>
+## Amendment — Discovered prerequisites (post Plan 50-01 dry-run)
+
+A first attempt to dispatch `capture-baseline.yml` on `gsd/phase-50-toolchain-go1.25-gopls-ci` (run id `24938112931`) **failed** with:
+- `BenchmarkTools/insert_before_symbol-4 --- FAIL: tools_bench_test.go:181: LS readiness timeout after 30s (last: context deadline exceeded)`
+- Job killed at `timeout-minutes: 30` (`Process completed with exit code 143`)
+
+Root causes (not anticipated by the original CONTEXT/RESEARCH):
+
+1. **Hardcoded 30s LS readiness window in `test/bench/bench_helpers_test.go:280`.** The constant is not env-driven; `SERENA_TEST_LS_TIMEOUT` (set in `go-test.yml`) does not apply to this code path. ubuntu-latest cold-start blows past 30s.
+2. **`timeout-minutes: 30` is too tight on both `bench.yml` and `capture-baseline.yml`.** A clean `-count=10` run across the 12 ubuntu-latest benchmarks does not fit. The same cap exists on `bench.yml`, so the PR gate this phase is meant to enable is also impacted — the original phase scope was unverifiable as written.
+
+### New decisions
+
+- **D-15 (LS readiness timeout):** Make the LS readiness deadline in `test/bench/bench_helpers_test.go` configurable via env var `SERENA_BENCH_LS_TIMEOUT` (default `30s` — preserves local fail-fast). Bench workflows (`bench.yml`, `capture-baseline.yml`) export `SERENA_BENCH_LS_TIMEOUT=4m` to mirror the `SERENA_TEST_LS_TIMEOUT: "4m"` pattern already in `go-test.yml`. Both occurrences (line 244 `context.WithTimeout` AND line 258 `time.Now().Add` deadline AND the `30s` literal in the fatal message at line 280) must be unified through the env-resolved value.
+- **D-16 (Workflow wall budget):** Bump `timeout-minutes` from `30` to `60` on **both** `.github/workflows/bench.yml` and `.github/workflows/capture-baseline.yml` in lockstep. Rationale: timeout is not a benchmark flag, so this does not affect Pitfall 1 parity numerically — but the two values must remain identical so the PR gate has the same wall budget as the baseline that produced it. CONTRIBUTING.md gopls subsection (D-05) also documents this as a parity-tracked value.
+- **D-17 (Plan structure):** Insert a new **Plan 50-00 (prerequisite)** ahead of the existing 50-01/50-02:
+  - Implements D-15 (env-driven LS readiness timeout) — source change in `test/bench/bench_helpers_test.go`.
+  - Implements D-16 (workflow timeout bump) — edits both `bench.yml` and `capture-baseline.yml`.
+  - Validates by running `go test -short -bench=. -benchmem -count=1 -run=^$ ./test/bench/...` locally to confirm the env-driven path compiles and the default still works, then dispatches `capture-baseline.yml` with `milestone=v1.9-dryrun` (or equivalent) on the phase branch as a smoke test (NOT the real baseline — that stays Plan 50-01's job).
+  - On a green dry-run, deletes the smoke-test artifact (or names it differently so it doesn't pollute baselines) before marking the plan done.
+  - 50-01 and 50-02 are NOT torn down — they re-run unchanged once 50-00 has cleared the path.
+- **D-18 (Plan 50-01 retry semantics):** Plan 50-01 must check (`gh run view <id>`) that no earlier failed `capture-baseline.yml` run wrote a partial/empty `v1.9-github-hosted.txt`; if so, the auto-commit from a green re-run will overwrite it correctly, but the plan's verification step must explicitly grep the new file's `goos: linux` header AND `>= 5` Benchmark lines AND `! BenchmarkFullRepoSmoke` before marking complete.
+- **D-19 (Out of scope, reaffirmed):** Phase 50 still does NOT introduce a reusable workflow or a shared versions/timeouts file. Both `timeout-minutes: 60` values stay duplicated, like `GOPLS_VERSION` (D-06). The CONTRIBUTING.md gopls subsection (D-05) is extended to call out timeout parity as a second value that must move in lockstep.
+
+### Updated canonical refs
+
+- `test/bench/bench_helpers_test.go` lines ~244, ~258, ~280 — D-15 source change site; readers should also note the `35*time.Second` parent context wrapping the 30s deadline (must be widened to `timeout + 5s` or similar margin).
+- `.github/workflows/bench.yml` line `timeout-minutes: 30` — D-16 edit.
+- `.github/workflows/capture-baseline.yml` line `timeout-minutes: 30` — D-16 edit.
+
+### Updated deferred ideas
+
+- **Centralizing `timeout-minutes` and `GOPLS_VERSION`** in a shared file. Reaffirmed deferred (D-19). Would simplify future bumps but is not justified by the current pair-wise drift risk.
+- **Self-hosted runner for benchmarks** to remove the `timeout-minutes` budget question entirely. Deferred — release-tier gate (Pitfall 11) is the right venue.
+
+</amendment_2026_04_25>
+
 ---
 
 *Phase: 50-toolchain-go1.25-gopls-ci*
 *Context gathered: 2026-04-25*
+*Amended: 2026-04-25 (post Plan 50-01 dry-run failure on run id 24938112931)*

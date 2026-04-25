@@ -121,7 +121,11 @@ Plans:
   2. Each binary ships with a SHA-256 checksum file and a cryptographic signature (cosign or minisign) — documented in `INSTALL.md`.
   3. A user following `INSTALL.md` can verify a downloaded binary's signature and checksum in one terminal session.
   4. The pipeline is reproducible — a second dry-run against the same tag produces byte-identical archives (modulo signatures).
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 51-01-PLAN.md — Add .goreleaser.yml + release.yml + delete publish.yml + internal/cli version scaffold
+- [ ] 51-02-PLAN.md — Amend INSTALL.md (download + verify) + add RELEASING.md + README.md pointer + Makefile ldflags
 
 ### Phase 52: packaging-distribution-channels
 **Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.

@@ -45,7 +45,6 @@ Plans:
 - [x] 46-01-PLAN.md — Create synthetic polyglot fixture + failing reproduction unit tests (TDD red)
 - [x] 46-02-PLAN.md — Apply F1-B ambiguity-weighted edges in graph.go BuildGraph (TDD green)
 - [x] 46-03-PLAN.md — Oracle smoke test + phase RCA + orphan directory cleanup
-**Notes**: An orphan backlog directory exists at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/`. The plan-phase step should promote/rename that directory to `46-bug-repomap-lua-fixture/` rather than duplicate work; any investigation notes already in 999.1 are prior art.
 
 ### Phase 47: bug-rust-analyzer-rename
 **Goal**: Users can rename Rust symbols via `rename_symbol` in temp workspaces, either by fixing the upstream quirk at the tool layer or by shipping a documented, deterministic workaround.
@@ -190,12 +189,7 @@ Plans:
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
-
-## Backlog
-
-### Phase 999.1: repomap returns lua fixture instead of go sources (PROMOTED → Phase 46)
-
-Promoted into milestone v1.9 as **Phase 46: bug-repomap-lua-fixture** (tracks REQ BUG-01). The orphan phase directory at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/` should be renamed to `46-bug-repomap-lua-fixture/` during `/gsd-plan-phase 46`.
+| 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 
 ### Phase 56: bug-ls-notification-dispatch-and-jdtls-readiness
 
@@ -209,3 +203,7 @@ Plans:
 - [x] 56-02-PLAN.md — Wire dispatcher + regression assertion in Worker.Start + worker_test.go + extend codec_test.go (D-01, D-04, D-05, D-11, D-12)
 - [x] 56-03-PLAN.md — Implement JdtlsAdapter.NotificationHandlers + WaitUntilJavaReady + extend quirks_test.go (D-06, D-07, D-08, D-09, D-13)
 - [x] 56-04-PLAN.md — Java integration gate + rust-analyzer integration regression + final go vet/go test gate (D-10, D-14, D-15)
+
+## Backlog
+
+_No items in backlog._

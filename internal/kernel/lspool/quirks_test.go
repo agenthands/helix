@@ -304,3 +304,66 @@ func TestJdtlsAdapter_ExtraArgs_PreservesExtraArgs(t *testing.T) {
 	expectedDir := filepath.Join(workDir, ".jdtls-data")
 	require.Equal(t, []string{"-data", expectedDir, "extra", "flag"}, got)
 }
+
+// TestJdtlsAdapter_ImplementsQuirkAdapter is a compile-time guard that the
+// adapter still satisfies QuirkAdapter after the Phase 56 readiness extension.
+func TestJdtlsAdapter_ImplementsQuirkAdapter(t *testing.T) {
+	var _ QuirkAdapter = (*JdtlsAdapter)(nil)
+}
+
+// TestJdtlsAdapter_LanguageStatusReadiness verifies the language/status handler
+// is registered and that WaitUntilJavaReady requires BOTH ServiceReady AND
+// ProjectStatus=OK signals (D-08). Backs Phase 56 Plan 03.
+func TestJdtlsAdapter_LanguageStatusReadiness(t *testing.T) {
+	j := &JdtlsAdapter{}
+	handlers := j.NotificationHandlers()
+	handler, ok := handlers["language/status"]
+	require.True(t, ok, "jdtls adapter must register language/status handler")
+
+	// Not ready before any notification.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	require.Error(t, j.WaitUntilJavaReady(ctx))
+
+	// ServiceReady alone insufficient (D-08).
+	handler(json.RawMessage(`{"type":"ServiceReady","message":"ServiceReady"}`))
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel2()
+	require.Error(t, j.WaitUntilJavaReady(ctx2))
+
+	// After ProjectStatus=OK both gates closed → success.
+	handler(json.RawMessage(`{"type":"ProjectStatus","message":"OK"}`))
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel3()
+	require.NoError(t, j.WaitUntilJavaReady(ctx3))
+}
+
+// TestJdtlsAdapter_LanguageStatusMalformed verifies malformed payloads do not
+// panic and leave the readiness gate closed (T-56-07).
+func TestJdtlsAdapter_LanguageStatusMalformed(t *testing.T) {
+	j := &JdtlsAdapter{}
+	handler := j.NotificationHandlers()["language/status"]
+	require.NotPanics(t, func() {
+		handler(json.RawMessage(`not json`))
+		handler(json.RawMessage(`{"type":42,"message":null}`)) // wrong types
+		handler(json.RawMessage(`{}`))
+	})
+	// Gate must stay closed.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	require.Error(t, j.WaitUntilJavaReady(ctx))
+}
+
+// TestJdtlsAdapter_WaitUntilJavaReady_ContextCancel verifies WaitUntilJavaReady
+// honors a pre-cancelled context promptly without waiting for the internal
+// javaReadinessTimeout.
+func TestJdtlsAdapter_WaitUntilJavaReady_ContextCancel(t *testing.T) {
+	j := &JdtlsAdapter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+	start := time.Now()
+	err := j.WaitUntilJavaReady(ctx)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Less(t, time.Since(start), 100*time.Millisecond, "must honor pre-cancelled ctx promptly")
+}

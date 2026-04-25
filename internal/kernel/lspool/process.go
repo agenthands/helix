@@ -53,7 +53,10 @@ func NewProcessHandle(command string, args []string, workDir string, env []strin
 	}
 }
 
-// Start launches the process and sets up JSON-RPC communication.
+// Start spawns the LS process and creates the jsonrpc.Conn, but does NOT
+// begin reading frames. Callers MUST invoke StartListen(ctx) AFTER setting
+// Conn().OnNotification (if needed) to begin dispatch. Phase 56 D-02.
+//
 // The sessionPrefix is used for JSON-RPC request ID generation to avoid collisions.
 func (p *ProcessHandle) Start(ctx context.Context, sessionPrefix string) error {
 	var err error
@@ -84,8 +87,9 @@ func (p *ProcessHandle) Start(ctx context.Context, sessionPrefix string) error {
 	// Launch stderr drain goroutine — captures last N lines for crash reports.
 	go p.drainStderr()
 
-	// Launch JSON-RPC listener goroutine.
-	go p.conn.Listen(ctx)
+	// Phase 56 D-02: do NOT launch the JSON-RPC dispatch loop here. Callers
+	// must invoke StartListen(ctx) AFTER wiring Conn().OnNotification, otherwise
+	// notifications received before assignment are silently dropped.
 
 	// Launch reaper goroutine: waits for process exit.
 	go p.reap()
@@ -99,6 +103,14 @@ func (p *ProcessHandle) Start(ctx context.Context, sessionPrefix string) error {
 // Conn returns the JSON-RPC connection. Only valid after Start.
 func (p *ProcessHandle) Conn() *jsonrpc.Conn {
 	return p.conn
+}
+
+// StartListen begins the JSON-RPC dispatch loop. Caller MUST set
+// Conn().OnNotification (if needed) before invoking StartListen — otherwise
+// notifications received before assignment are silently dropped (this is the
+// exact bug Phase 56 fixes; see jsonrpc.Conn.Listen comment).
+func (p *ProcessHandle) StartListen(ctx context.Context) {
+	go p.conn.Listen(ctx)
 }
 
 // Wait blocks until the process exits.

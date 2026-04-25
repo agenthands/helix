@@ -20,7 +20,7 @@
 - [x] **Phase 46: bug-repomap-lua-fixture** -- Fix `get_repo_map` returning Lua testdata fixture instead of Go sources on Serena's own workspace (completed 2026-04-24)
 - [x] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround) (completed 2026-04-24)
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
-- [ ] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap
+- [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [ ] **Phase 50: toolchain-go1.25-gopls-ci** -- Unblock Go 1.25 / gopls on `ubuntu-latest` and restore the CI benchmark gate
 - [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
@@ -92,7 +92,7 @@ Plans:
   4. `go test ./...` and `go vet ./...` pass.
 **Plans**: 1 plan
 Plans:
-- [ ] 49-01-PLAN.md — Inject canonical GrammarRegistry from daemon bootstrap into RepoMapSkill via SetRegistry; delete redundant FallbackDeps.Registry instantiation; verify D-10 grep + go vet + go test
+- [x] 49-01-PLAN.md — Inject canonical GrammarRegistry from daemon bootstrap into RepoMapSkill via SetRegistry; delete redundant FallbackDeps.Registry instantiation; verify D-10 grep + go vet + go test
 
 ### Phase 50: toolchain-go1.25-gopls-ci
 **Goal**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25, and the CI benchmark gate enforces PR-tier thresholds on every PR.
@@ -183,7 +183,7 @@ Plans:
 | 46 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 47 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 48 | v1.9 | 0/? | Not started | - |
-| 49 | v1.9 | 0/? | Not started | - |
+| 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 0/? | Not started | - |
 | 51 | v1.9 | 0/? | Not started | - |
 | 52 | v1.9 | 0/? | Not started | - |

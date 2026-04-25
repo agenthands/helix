@@ -197,6 +197,14 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 			if timeout == 0 {
 				timeout = 30 * time.Second
 			}
+			// Env-var override lets slow environments (CI cold-start, low-spec
+			// machines) raise the LS-readiness limit without code changes. Local
+			// dev stays fast-fail at the test-defined default.
+			if v := os.Getenv("SERENA_TEST_LS_TIMEOUT"); v != "" {
+				if d, err := time.ParseDuration(v); err == nil && d > timeout {
+					timeout = d
+				}
+			}
 			query := opts.LSQuery
 			if query == "" {
 				query = "main"

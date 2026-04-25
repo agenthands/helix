@@ -230,3 +230,77 @@ func TestQuirkAdapter_ClangdNoCompileCommands(t *testing.T) {
 	_, hasPath := opts["compilationDatabasePath"]
 	assert.False(t, hasPath, "should not set compilationDatabasePath when no compile_commands.json")
 }
+
+// TestJdtlsAdapter_ExtraArgs_DefaultDataDir verifies the production codepath when
+// SERENA_TEST_JDTLS_DATA_DIR is unset: the adapter prepends `-data <workDir>/.jdtls-data`
+// and creates that dir on disk. Backs Phase 48 BUG-03.
+func TestJdtlsAdapter_ExtraArgs_DefaultDataDir(t *testing.T) {
+	// Ensure env is unset (some shells may leak in CI).
+	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", "")
+	// t.Setenv with empty string still sets the var; explicitly unset for the "unset" branch
+	// by using os.Unsetenv. t.Setenv guarantees auto-restore for the empty value, then
+	// we unset; both branches share fallback semantics so behavior is identical.
+	require.NoError(t, os.Unsetenv("SERENA_TEST_JDTLS_DATA_DIR"))
+
+	workDir := t.TempDir()
+	adapter := &JdtlsAdapter{}
+	got := adapter.ExtraArgs(workDir, []string{"tail1", "tail2"})
+
+	expectedDir := filepath.Join(workDir, ".jdtls-data")
+	require.Equal(t, []string{"-data", expectedDir, "tail1", "tail2"}, got)
+
+	st, err := os.Stat(expectedDir)
+	require.NoError(t, err, "default data dir must be created on disk")
+	assert.True(t, st.IsDir(), "default data dir must be a directory")
+}
+
+// TestJdtlsAdapter_ExtraArgs_EnvOverride verifies the test-only override branch:
+// when SERENA_TEST_JDTLS_DATA_DIR is set, that path is used verbatim and created.
+func TestJdtlsAdapter_ExtraArgs_EnvOverride(t *testing.T) {
+	overridePath := filepath.Join(t.TempDir(), "warm")
+	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", overridePath)
+
+	workDir := t.TempDir()
+	adapter := &JdtlsAdapter{}
+	got := adapter.ExtraArgs(workDir, []string{"tail"})
+
+	require.Equal(t, []string{"-data", overridePath, "tail"}, got)
+
+	st, err := os.Stat(overridePath)
+	require.NoError(t, err, "override data dir must be created on disk")
+	assert.True(t, st.IsDir(), "override data dir must be a directory")
+
+	// And the default workDir/.jdtls-data must NOT have been created.
+	_, err = os.Stat(filepath.Join(workDir, ".jdtls-data"))
+	assert.True(t, os.IsNotExist(err), "default dir must not be created when override is set")
+}
+
+// TestJdtlsAdapter_ExtraArgs_EnvEmptyFallsBack verifies that an explicitly-empty
+// env var falls back to the default branch (treated identically to unset).
+func TestJdtlsAdapter_ExtraArgs_EnvEmptyFallsBack(t *testing.T) {
+	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", "")
+
+	workDir := t.TempDir()
+	adapter := &JdtlsAdapter{}
+	got := adapter.ExtraArgs(workDir, nil)
+
+	expectedDir := filepath.Join(workDir, ".jdtls-data")
+	require.Equal(t, []string{"-data", expectedDir}, got)
+
+	st, err := os.Stat(expectedDir)
+	require.NoError(t, err)
+	assert.True(t, st.IsDir())
+}
+
+// TestJdtlsAdapter_ExtraArgs_PreservesExtraArgs verifies argv composition:
+// `-data <dir>` is prepended and the tail args are preserved in order.
+func TestJdtlsAdapter_ExtraArgs_PreservesExtraArgs(t *testing.T) {
+	require.NoError(t, os.Unsetenv("SERENA_TEST_JDTLS_DATA_DIR"))
+
+	workDir := t.TempDir()
+	adapter := &JdtlsAdapter{}
+	got := adapter.ExtraArgs(workDir, []string{"extra", "flag"})
+
+	expectedDir := filepath.Join(workDir, ".jdtls-data")
+	require.Equal(t, []string{"-data", expectedDir, "extra", "flag"}, got)
+}

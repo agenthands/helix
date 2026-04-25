@@ -94,20 +94,22 @@ Plans:
 - [x] 49-01-PLAN.md — Inject canonical GrammarRegistry from daemon bootstrap into RepoMapSkill via SetRegistry; delete redundant FallbackDeps.Registry instantiation; verify D-10 grep + go vet + go test
 
 ### Phase 50: toolchain-go1.25-gopls-ci
-**Goal**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25, and the CI benchmark gate enforces PR-tier thresholds on every PR.
+**Goal**: Serena builds and tests green on `ubuntu-latest` with Go 1.25 (TOOL-01 via `go-test.yml`); the CI benchmark gate is retired (deletion of `bench.yml` + `capture-baseline.yml`); the local-first benchmark workflow and gopls v0.21.1 pin are documented in `CONTRIBUTING.md`; the benchmarks tech-debt sentence in `PROJECT.md` is rewritten to reflect the post-pivot state; TOOL-02 is cancelled.
 **Depends on**: Nothing (independent of bug phases)
-**Requirements**: TOOL-01, TOOL-02
-**Sizing**: L
-**Success Criteria** (what must be TRUE):
-  1. A CI job on `ubuntu-latest` with Go 1.25 completes `go build ./...`, `go vet ./...`, and `go test ./...` green.
-  2. The CI benchmark gate runs on `ubuntu-latest` and fails the PR when PR-tier thresholds (15% p50 / 25% p95) are exceeded.
-  3. The gopls v0.17.1 incompatibility is resolved with a documented strategy (upgrade, patch, or replacement) captured in the phase review and `CONTRIBUTING.md`.
-  4. The benchmarks tech-debt note in `PROJECT.md` Context section is removed.
+**Requirements**: TOOL-01, TOOL-02 (TOOL-02 cancelled by this phase per CONTEXT.md D-A10)
+**Sizing**: S (post-pivot — was L pre-pivot)
+**Success Criteria** (what must be TRUE) — post-pivot, supersedes the original four bullets and mirrors 50-CONTEXT.md D-A13:
+  1. `go-test.yml` on the verification PR is green on `ubuntu-latest` with Go 1.25 (TOOL-01).
+  2. `bench.yml` and `capture-baseline.yml` are absent from `.github/workflows/`.
+  3. `CONTRIBUTING.md` has the new `## Benchmarks` and `## gopls pin` sections.
+  4. `PROJECT.md` "Known tech debt" first sentence rewritten per D-A12.
+  5. `REQUIREMENTS.md` shows TOOL-02 cancelled per D-A10.
+  6. `test/bench/baselines/README.md` rewritten per D-A5.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 50-01-PLAN.md — Trigger capture-baseline.yml to produce v1.9 ubuntu-latest baseline (D-01, D-04)
-- [ ] 50-02-PLAN.md — Swap bench.yml to v1.9 baseline + CONTRIBUTING.md gopls subsection + PROJECT.md tech-debt delete + open verification PR (D-02, D-05/06/14, D-13, D-10)
+- [ ] 50-01-PLAN.md — Delete `bench.yml` + `capture-baseline.yml`; rewrite `test/bench/baselines/README.md` for local-first workflow (D-A2, D-A5)
+- [ ] 50-02-PLAN.md — Add CONTRIBUTING.md `## Benchmarks` + `## gopls pin` (D-A7, D-A8); rewrite PROJECT.md tech-debt sentence (D-A12); mark TOOL-02 cancelled in REQUIREMENTS.md (D-A10); optional `bench-capture` / `bench-compare` Makefile targets (D-A9)
 
 ### Phase 51: packaging-goreleaser
 **Goal**: GitHub Releases publish reproducible multi-arch signed binaries for darwin/linux/windows × amd64/arm64 via a goreleaser pipeline.

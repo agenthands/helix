@@ -101,6 +101,18 @@ func (p *ProcessHandle) Conn() *jsonrpc.Conn {
 	return p.conn
 }
 
+// StartListen begins the JSON-RPC dispatch loop.
+//
+// NOTE (Phase 56 D-02, Plan 01 Task 1 — RED stub): This method is the
+// lifecycle anchor for the upcoming fix. In this commit Start still launches
+// Listen eagerly; Task 2 of Plan 56-01 deletes that eager launch so this
+// becomes the only call site. The accompanying
+// TestProcessHandle_StartListenSeparate asserts the contract: Listen MUST
+// NOT run before this method is called.
+func (p *ProcessHandle) StartListen(ctx context.Context) {
+	go p.conn.Listen(ctx)
+}
+
 // Wait blocks until the process exits.
 func (p *ProcessHandle) Wait() error {
 	<-p.done

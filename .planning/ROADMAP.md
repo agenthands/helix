@@ -202,10 +202,10 @@ Promoted into milestone v1.9 as **Phase 46: bug-repomap-lua-fixture** (tracks RE
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)
 - [x] 56-02-PLAN.md — Wire dispatcher + regression assertion in Worker.Start + worker_test.go + extend codec_test.go (D-01, D-04, D-05, D-11, D-12)
 - [x] 56-03-PLAN.md — Implement JdtlsAdapter.NotificationHandlers + WaitUntilJavaReady + extend quirks_test.go (D-06, D-07, D-08, D-09, D-13)
-- [ ] 56-04-PLAN.md — Java integration gate + rust-analyzer integration regression + final go vet/go test gate (D-10, D-14, D-15)
+- [x] 56-04-PLAN.md — Java integration gate + rust-analyzer integration regression + final go vet/go test gate (D-10, D-14, D-15)

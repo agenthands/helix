@@ -75,6 +75,10 @@ None.
 
 None.
 
+### Roadmap Evolution
+
+- Phase 56 added: bug-ls-notification-dispatch-and-jdtls-readiness (LS notification dispatch unwired in production — `jsonrpc.Conn.OnNotification` never set, all `QuirkAdapter.NotificationHandlers()` silently dropped; jdtls has no `language/status: ServiceReady` listener, causing functional Java test failures surfaced after Phase 48)
+
 ## Deferred Items
 
 Items acknowledged and deferred at v1.7 milestone close on 2026-04-22:

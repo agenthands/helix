@@ -196,3 +196,13 @@ Plans:
 ### Phase 999.1: repomap returns lua fixture instead of go sources (PROMOTED → Phase 46)
 
 Promoted into milestone v1.9 as **Phase 46: bug-repomap-lua-fixture** (tracks REQ BUG-01). The orphan phase directory at `.planning/phases/999.1-repomap-returns-lua-fixture-instead-of-go-sources/` should be renamed to `46-bug-repomap-lua-fixture/` during `/gsd-plan-phase 46`.
+
+### Phase 56: bug-ls-notification-dispatch-and-jdtls-readiness
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 55
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 56 to break down)

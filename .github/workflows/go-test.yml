@@ -32,9 +32,47 @@ jobs:
 
       - name: Install jdtls
         run: |
-          pipx install "jdtls==${JDTLS_VERSION}"
-          jdtls --help > /dev/null 2>&1 || true
+          set -euo pipefail
+          JDTLS_HOME="$HOME/.local/share/jdtls"
+          mkdir -p "$JDTLS_HOME" "$HOME/.local/bin"
+
+          # Eclipse publishes the tarball name (with timestamp) in latest.txt
+          TARBALL=$(curl -fsSL "https://download.eclipse.org/jdtls/milestones/${JDTLS_VERSION}/latest.txt")
+          curl -fsSL "https://download.eclipse.org/jdtls/milestones/${JDTLS_VERSION}/${TARBALL}" \
+            | tar -xz -C "$JDTLS_HOME"
+
+          # Self-contained wrapper script — invoked as `jdtls -data <dir>` by lspool
+          cat > "$HOME/.local/bin/jdtls" <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -e
+          JDTLS_HOME="$HOME/.local/share/jdtls"
+          JAVA_BIN="${JAVA_HOME:-/usr}/bin/java"
+          LAUNCHER=$(echo "$JDTLS_HOME"/plugins/org.eclipse.equinox.launcher_*.jar)
+          case "$(uname -s)" in
+            Darwin) CONFIG="$JDTLS_HOME/config_mac" ;;
+            *)      CONFIG="$JDTLS_HOME/config_linux" ;;
+          esac
+          if [[ "${1:-}" == "--help" ]]; then
+            echo "jdtls wrapper for Eclipse JDT.LS (linux/mac)"
+            exit 0
+          fi
+          exec "$JAVA_BIN" \
+            -Declipse.application=org.eclipse.jdt.ls.core.id1 \
+            -Dosgi.bundles.defaultStartLevel=4 \
+            -Declipse.product=org.eclipse.jdt.ls.core.product \
+            -Dlog.level=ALL \
+            -Xmx1G \
+            --add-modules=ALL-SYSTEM \
+            --add-opens java.base/java.util=ALL-UNNAMED \
+            --add-opens java.base/java.lang=ALL-UNNAMED \
+            -jar "$LAUNCHER" \
+            -configuration "$CONFIG" \
+            "$@"
+          WRAPPER
+          chmod +x "$HOME/.local/bin/jdtls"
+
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/jdtls" --help
 
       - name: Cache warm jdtls workspace
         uses: actions/cache@v3

@@ -218,6 +218,9 @@ go run ./test/bench/cmd/benchgate \
   --new      test/bench/baselines/<new>.txt
 ```
 
+- Or use the convenience wrappers: `make bench-capture` (with `OUT=...`) and
+  `make bench-compare OLD=... NEW=...`.
+
 **Why CI no longer enforces this:** GitHub-hosted `ubuntu-latest` runners are
 shared-CPU hosts with high variance on cold-start and warm-reuse benchmarks.
 Re-enabling the gate without first provisioning a dedicated runner would

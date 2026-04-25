@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-capture bench-compare
 
 BINARY=serena
 GO=go
@@ -40,3 +40,15 @@ bench-jdtls-warm: ## Run Java integration suite cold then warm; print both wall-
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
 	@echo "=== jdtls WARM run ==="
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
+
+bench-capture: ## Capture a local pre-release benchmark baseline (override OUT=test/bench/baselines/v<version>-local-<goos>-<goarch>.txt)
+	@OUT="$${OUT:-test/bench/baselines/v-local-$$($(GO) env GOOS)-$$($(GO) env GOARCH).txt}"; \
+	echo "Capturing baseline -> $$OUT"; \
+	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee "$$OUT"
+
+bench-compare: ## Diff two baselines via benchstat (usage: make bench-compare OLD=<path> NEW=<path>)
+	@if [ -z "$$OLD" ] || [ -z "$$NEW" ]; then \
+	  echo "usage: make bench-compare OLD=<path> NEW=<path>" >&2; exit 2; \
+	fi
+	@command -v benchstat >/dev/null 2>&1 || { echo "benchstat not on PATH; install via: go install golang.org/x/perf/cmd/benchstat@latest" >&2; exit 2; }
+	benchstat "$$OLD" "$$NEW"

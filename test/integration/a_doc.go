@@ -1,7 +1,7 @@
-//go:build integration
-
 // Package integration_test provides end-to-end integration tests for Serena's MCP tools.
 // Tests exercise the full protocol path: MCP client -> daemon -> kernel -> tool -> response.
 //
-// Run with: go test -tags integration ./test/integration/...
+// The Java subset (java_test.go) runs under default `go test ./...` by sharing a warm
+// jdtls workspace across runs via test/integration/jdtlscache (Phase 48, BUG-03).
+// Other language tests remain gated on `-tags integration`.
 package integration_test

@@ -1,23 +1,35 @@
-//go:build integration
-
 package integration_test
 
 import (
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/postfix/serena/test/integration/jdtlscache"
 )
 
 // TestSymbols_JavaFixture exercises symbol retrieval tools against the Java fixture
 // with jdtls as the language server.
 func TestSymbols_JavaFixture(t *testing.T) {
-	t.Skip("jdtls workspace/symbol needs Maven/Gradle; use oracle scenario test instead")
 	requireLS(t, "jdtls")
 
+	jdtlsPath, err := exec.LookPath("jdtls")
+	require.NoError(t, err)
+	fixtureSrc := filepath.Join(projectRoot(), "testdata", "fixtures", "java")
+	warmDir, err := jdtlscache.ResolveDataDir("java", fixtureSrc, jdtlsPath)
+	require.NoError(t, err)
+
 	fixture := PrepareFixture(t, "java")
-	td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 120 * time.Second})
+	td := StartTestDaemon(t, Options{
+		WorkspaceDir: fixture,
+		JdtlsDataDir: warmDir,
+		LSTimeout:    120 * time.Second,
+	})
 
 	t.Run("search_symbols", func(t *testing.T) {
 		result := callTool(t, td.Session, "search_symbols", map[string]any{
@@ -94,12 +106,21 @@ func TestSymbols_JavaFixture(t *testing.T) {
 
 // TestEdit_JavaFixture exercises representative edit tools against the Java fixture.
 func TestEdit_JavaFixture(t *testing.T) {
-	t.Skip("jdtls workspace/symbol needs Maven/Gradle; use oracle scenario test instead")
 	requireLS(t, "jdtls")
+
+	jdtlsPath, err := exec.LookPath("jdtls")
+	require.NoError(t, err)
+	fixtureSrc := filepath.Join(projectRoot(), "testdata", "fixtures", "java")
+	warmDir, err := jdtlscache.ResolveDataDir("java", fixtureSrc, jdtlsPath)
+	require.NoError(t, err)
 
 	t.Run("replace_body", func(t *testing.T) {
 		fixture := PrepareFixture(t, "java")
-		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 120 * time.Second})
+		td := StartTestDaemon(t, Options{
+			WorkspaceDir: fixture,
+			JdtlsDataDir: warmDir,
+			LSTimeout:    120 * time.Second,
+		})
 
 		result := callTool(t, td.Session, "replace_symbol_body", map[string]any{
 			"path":        "Main.java",
@@ -120,7 +141,11 @@ func TestEdit_JavaFixture(t *testing.T) {
 
 	t.Run("rename", func(t *testing.T) {
 		fixture := PrepareFixture(t, "java")
-		td := StartTestDaemon(t, Options{WorkspaceDir: fixture, LSTimeout: 120 * time.Second})
+		td := StartTestDaemon(t, Options{
+			WorkspaceDir: fixture,
+			JdtlsDataDir: warmDir,
+			LSTimeout:    120 * time.Second,
+		})
 
 		// Rename helper to renamedHelper (line 2, col 26 in Main.java, 1-indexed)
 		result := callTool(t, td.Session, "rename_symbol", map[string]any{

@@ -1,5 +1,3 @@
-//go:build integration
-
 package integration_test
 
 import (
@@ -49,6 +47,10 @@ type Options struct {
 	Mode string
 	// MaxWorkers overrides cfg.WorkerPool.MaxWorkers (default 2 preserves existing behavior).
 	MaxWorkers int
+	// JdtlsDataDir, if non-empty, is exported via the SERENA_TEST_JDTLS_DATA_DIR
+	// environment variable so that JdtlsAdapter.ExtraArgs uses it as jdtls's -data
+	// path (shared warm workspace across test runs; Phase 48, BUG-03).
+	JdtlsDataDir string
 }
 
 // TestDaemon wraps a daemon instance with an MCP client session for integration tests.
@@ -96,6 +98,10 @@ func (td *TestDaemon) NewHTTPSession(t *testing.T) *mcp.ClientSession {
 // InMemoryTransports, and optionally activates a workspace with LS readiness wait.
 func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 	tb.Helper()
+
+	if opts.JdtlsDataDir != "" {
+		tb.Setenv("SERENA_TEST_JDTLS_DATA_DIR", opts.JdtlsDataDir)
+	}
 
 	cfg := defaultTestConfig(tb)
 	if opts.Profile != "" {

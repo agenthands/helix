@@ -199,8 +199,17 @@ func TestRepoMapSkill_Init(t *testing.T) {
 	err := s.Init(deps)
 	require.NoError(t, err)
 	assert.NotNil(t, s.cache)
+	// Per BUG-04 (D-03): registry-dependent fields (elider, extractor) are now
+	// populated by SetRegistry post-init wiring, not Init. Init only sets up cache.
+	assert.Nil(t, s.elider)
+	assert.Nil(t, s.extractor)
+	assert.Nil(t, s.registry)
+
+	// After SetRegistry, registry-dependent fields are populated.
+	s.SetRegistry(treesitter.NewGrammarRegistry())
+	assert.NotNil(t, s.registry)
 	assert.NotNil(t, s.elider)
-	assert.NotNil(t, s.extractor) // TagExtractor now created in Init
+	assert.NotNil(t, s.extractor)
 }
 
 func TestRepoMapSkill_SetWorkspaceRoot(t *testing.T) {
@@ -255,7 +264,6 @@ func TestWalkAndExtract_FallbackPath(t *testing.T) {
 		registry: registry,
 		logger:   slog.Default(),
 		fallbackDeps: &FallbackDeps{
-			Registry:  registry,
 			Extractor: repomap.NewFallbackExtractor(),
 			AcquireFn: func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error) {
 				acquireCalled = true
@@ -300,7 +308,6 @@ func TestWalkAndExtract_FallbackSkipsWhenNoLS(t *testing.T) {
 		registry: registry,
 		logger:   slog.Default(),
 		fallbackDeps: &FallbackDeps{
-			Registry:  registry,
 			Extractor: repomap.NewFallbackExtractor(),
 			AcquireFn: func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error) {
 				return nil, nil, fmt.Errorf("no language server for %s", lang)

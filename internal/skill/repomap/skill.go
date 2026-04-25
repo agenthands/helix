@@ -47,7 +47,6 @@ type RepoMapSkill struct {
 // FallbackDeps holds dependencies for LSP-based fallback tag extraction.
 // Wired by the daemon after kernel creation via SetFallbackDeps.
 type FallbackDeps struct {
-	Registry  *treesitter.GrammarRegistry
 	AcquireFn func(ctx context.Context, lang string) (repomap.SymbolRequester, func(), error)
 	Extractor *repomap.FallbackExtractor
 }
@@ -79,19 +78,6 @@ func (s *RepoMapSkill) Init(deps skill.SkillDeps) error {
 		return serr.Wrap(serr.Internal, "creating tag cache for repomap skill", err)
 	}
 	s.cache = cache
-
-	// Create grammar registry and elision renderer for output formatting.
-	registry := treesitter.NewGrammarRegistry()
-	s.registry = registry
-	s.elider = repomap.NewElisionRenderer(registry)
-
-	// Create tag extractor for tree-sitter-based tag extraction.
-	extractor, err := repomap.NewTagExtractor(registry)
-	if err != nil {
-		s.logger.Warn("tag extractor creation failed, tree-sitter extraction disabled", "error", err)
-	} else {
-		s.extractor = extractor
-	}
 
 	return nil
 }
@@ -126,6 +112,24 @@ func (s *RepoMapSkill) SetFallbackDeps(deps *FallbackDeps) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.fallbackDeps = deps
+}
+
+// SetRegistry injects the canonical GrammarRegistry constructed at daemon bootstrap
+// and lazily builds registry-dependent renderers/extractors. Called by the daemon
+// post-init (BUG-04, D-01/D-02/D-03). Idempotent and nil-safe.
+func (s *RepoMapSkill) SetRegistry(registry *treesitter.GrammarRegistry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if registry == nil || s.registry != nil {
+		return
+	}
+	s.registry = registry
+	s.elider = repomap.NewElisionRenderer(registry)
+	if extractor, err := repomap.NewTagExtractor(registry); err == nil {
+		s.extractor = extractor
+	} else {
+		s.logger.Warn("tag extractor creation failed, tree-sitter extraction disabled", "error", err)
+	}
 }
 
 // GetRepoMapSkill returns the registered RepoMapSkill instance for post-init wiring.

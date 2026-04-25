@@ -19,7 +19,9 @@ human_verification:
     note: "Small delta is expected — Java fixture is a single helper class. Cache directory grew to 436K after cold run, confirming SERENA_TEST_JDTLS_DATA_DIR override is honored. Mechanism works; magnitude requires a larger project to demonstrate."
   - test: "CI cache hit/miss confirmation"
     expected: "First run after merge to main → actions/cache MISS, cold start. Subsequent run → HIT, warm reuse."
-    why_human: "Requires push to origin/main + two workflow runs. Not yet captured."
+    status: "BLOCKED by BUG-48-FOLLOWUP-03 (CI workflow cannot install jdtls)"
+    run_1_url: "https://github.com/postfix/serena/actions/runs/24928423973"
+    run_1_outcome: "failure at 'Install jdtls' step (16s) — pipx install jdtls==1.57.0 → ERROR: Could not find a version that satisfies the requirement jdtls==1.57.0 (from versions: none)"
 
 phase_48_followup_bugs:
   - id: "BUG-48-FOLLOWUP-01"
@@ -36,6 +38,14 @@ phase_48_followup_bugs:
     issue: "Cold `time go test ...` aborts the recipe on non-zero exit (pre-existing fixture failures from BUG-DEFER-01). Warm run never executes. User cannot capture both timings until BUG-DEFER-01 is resolved or the recipe is made resilient."
     suggested_fix: "Prefix both `time go test` lines with `-` (or wrap in `|| true`) so the recipe continues through test failures and prints both wall-clocks."
     surfaced_during: "human verification of bench-jdtls-warm"
+  - id: "BUG-48-FOLLOWUP-03"
+    severity: "high"
+    file: ".github/workflows/go-test.yml"
+    step: "Install jdtls"
+    issue: "`pipx install jdtls==${JDTLS_VERSION}` fails — package `jdtls` does not exist on PyPI (404 for both `jdtls` and `jdtls-launcher` package names). CI run #24928423973 errored 'Could not find a version that satisfies the requirement jdtls==1.57.0 (from versions: none)' at 16s. Locally jdtls comes from Homebrew (`brew install jdtls` → 1.58.0), not pip. Plan 48-05's research assumed a wrong install mechanism."
+    suggested_fix: "Replace pipx step with: (a) download Eclipse JDT.LS tarball from https://download.eclipse.org/jdtls/snapshots/ keyed on JDTLS_VERSION, extract to ~/.local/share/jdtls/, install a `jdtls` shell wrapper in $HOME/.local/bin; OR (b) evaluate a pre-built setup-action; OR (c) install via mason. Whatever mechanism is chosen, the cache key must still include JDTLS_VERSION so cache hits stay correct across upgrades."
+    blocks: "Success Criterion #4 (CI cache HIT/MISS verification) — workflow can never reach the cache-restore + go-test phase until jdtls install is fixed."
+    surfaced_during: "first CI run after push to main (2026-04-25)"
 ---
 
 # Phase 48: bug-jdtls-warm-cache Verification Report

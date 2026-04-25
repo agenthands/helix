@@ -17,6 +17,7 @@ import (
 
 	"github.com/postfix/serena/internal/config"
 	"github.com/postfix/serena/internal/daemon"
+	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/internal/skill"
 
 	// Blank imports trigger skill registration via init() (Caddy-style).
@@ -65,6 +66,14 @@ type TestDaemon struct {
 // and triggers pool.stopAll to shut down all LS worker processes.
 func (td *TestDaemon) Stop() {
 	td.cancel()
+}
+
+// LSPoolWorker returns the warm LS worker for (language, workspaceDir) from
+// the test daemon's pool. Test-only — used by Phase 56 integration tests to
+// reach into adapter readiness state (TestRustAnalyzer_NotificationDispatchEndToEnd,
+// waitJavaReady). Returns nil if no matching worker is currently in the pool.
+func (td *TestDaemon) LSPoolWorker(language, workspaceDir string) *lspool.Worker {
+	return td.daemon.KernelInstance().Pool().WorkerForTests(language, workspaceDir)
 }
 
 // NewHTTPSession creates an MCP client session over HTTP transport.

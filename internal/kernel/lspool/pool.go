@@ -220,6 +220,21 @@ func (p *Pool) WorkerCount() int {
 	return len(p.workers)
 }
 
+// WorkerForTests returns the first worker matching (language, workDir).
+// TEST-ONLY — used by integration tests to reach into adapter readiness state
+// (e.g. Phase 56 TestRustAnalyzer_NotificationDispatchEndToEnd, waitJavaReady).
+// Do NOT use this in production code paths; use AcquireLease instead.
+func (p *Pool) WorkerForTests(language, workDir string) *Worker {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, w := range p.workers {
+		if w.Language() == language && w.WorkDir() == workDir {
+			return w
+		}
+	}
+	return nil
+}
+
 // LeaseCount returns the number of active leases.
 func (p *Pool) LeaseCount() int {
 	p.mu.RLock()

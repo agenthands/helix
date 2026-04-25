@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/postfix/serena/internal/kernel/lspool"
 	"github.com/postfix/serena/test/integration/jdtlscache"
 )
+
+// waitJavaReady blocks until jdtls has emitted both ServiceReady and
+// ProjectStatus=OK via language/status notifications, or fails the test
+// loudly. Phase 56 D-10 forbids silent proceed.
+//
+// Pre-condition: caller invoked StartTestDaemon with WorkspaceDir set and
+// SkipLS=false, so WaitForLS has already forced lazy activation and the
+// java worker is in the pool by the time this helper runs.
+func waitJavaReady(t *testing.T, td *TestDaemon, fixture string) {
+	t.Helper()
+	worker := td.LSPoolWorker("java", fixture)
+	require.NotNil(t, worker, "java worker not found in LS pool — StartTestDaemon must have activated it via WaitForLS")
+	j, ok := worker.Quirks().(*lspool.JdtlsAdapter)
+	require.True(t, ok, "expected jdtls quirks adapter on java worker")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	require.NoError(t, j.WaitUntilJavaReady(ctx),
+		"WaitUntilJavaReady must succeed before issuing symbol queries; D-10 forbids silent proceed")
+}
 
 // TestSymbols_JavaFixture exercises symbol retrieval tools against the Java fixture
 // with jdtls as the language server.
@@ -30,6 +51,7 @@ func TestSymbols_JavaFixture(t *testing.T) {
 		JdtlsDataDir: warmDir,
 		LSTimeout:    120 * time.Second,
 	})
+	waitJavaReady(t, td, fixture)
 
 	t.Run("search_symbols", func(t *testing.T) {
 		result := callTool(t, td.Session, "search_symbols", map[string]any{
@@ -121,6 +143,7 @@ func TestEdit_JavaFixture(t *testing.T) {
 			JdtlsDataDir: warmDir,
 			LSTimeout:    120 * time.Second,
 		})
+		waitJavaReady(t, td, fixture)
 
 		result := callTool(t, td.Session, "replace_symbol_body", map[string]any{
 			"path":        "Main.java",
@@ -146,6 +169,7 @@ func TestEdit_JavaFixture(t *testing.T) {
 			JdtlsDataDir: warmDir,
 			LSTimeout:    120 * time.Second,
 		})
+		waitJavaReady(t, td, fixture)
 
 		// Rename helper to renamedHelper (line 2, col 26 in Main.java, 1-indexed)
 		result := callTool(t, td.Session, "rename_symbol", map[string]any{

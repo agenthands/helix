@@ -3,12 +3,48 @@
 package integration_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/postfix/serena/internal/kernel/lspool"
 )
+
+// TestRustAnalyzer_NotificationDispatchEndToEnd is the regression proof for
+// Phase 56 (D-14, LSDISP-REG-01). It asserts that experimental/serverStatus
+// actually flips RustAnalyzerAdapter.quiescent via the wired dispatch path —
+// not via direct handler invocation as in quirks_test.go's unit tests.
+// Without Phase 56's dispatcher wiring this test fails — that's the entire
+// point: prior to Phase 56, RustAnalyzerAdapter.WaitUntilRenameReady has
+// technically never received a notification in production despite all unit
+// tests passing.
+//
+// Pre-condition: StartTestDaemon's WaitForLS pre-warms the workspace (calls
+// search_symbols which forces LazyInitMiddleware activation), so the rust
+// worker is in the pool by the time we query td.LSPoolWorker.
+func TestRustAnalyzer_NotificationDispatchEndToEnd(t *testing.T) {
+	requireLS(t, "rust-analyzer")
+	fixture := PrepareFixture(t, "rust")
+	td := StartTestDaemon(t, Options{
+		WorkspaceDir: fixture,
+		LSTimeout:    45 * time.Second,
+		LSQuery:      "helper",
+	})
+
+	worker := td.LSPoolWorker("rust", fixture)
+	require.NotNil(t, worker, "rust worker not found in pool — StartTestDaemon must have activated it via WaitForLS")
+	ra, ok := worker.Quirks().(*lspool.RustAnalyzerAdapter)
+	require.True(t, ok, "expected rust-analyzer quirks adapter")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	require.True(t, ra.WaitUntilRenameReady(ctx),
+		"rust-analyzer must reach quiescence via wired dispatch — without dispatcher this returns false")
+}
 
 // TestSymbols_RustFixture exercises symbol retrieval tools against the Rust fixture
 // with rust-analyzer as the language server.

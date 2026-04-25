@@ -2,6 +2,7 @@ package lspool
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -180,6 +181,28 @@ func (w *Worker) Start(ctx context.Context) error {
 		w.state.Store(int32(WorkerStopped))
 		return fmt.Errorf("starting LS process: %w", err)
 	}
+
+	// Phase 56 D-01 + D-02: wire dispatcher BEFORE Listen, BEFORE first LSP
+	// call. Notifications received before OnNotification is assigned would be
+	// silently dropped — that is the bug Phase 56 fixes.
+	var handlers map[string]func(json.RawMessage)
+	if w.quirks != nil {
+		handlers = w.quirks.NotificationHandlers()
+	}
+	if len(handlers) > 0 {
+		w.process.Conn().OnNotification = buildDispatcher(handlers, w.logger, w.id)
+	}
+
+	// Phase 56 D-11: regression assertion — fail loud if a future refactor
+	// drops the wiring while quirks still declare handlers.
+	if err := assertDispatcherWired(handlers, w.process.Conn(), w.logger, w.id); err != nil {
+		_ = w.process.Stop(ctx)
+		w.state.Store(int32(WorkerStopped))
+		return err
+	}
+
+	// Phase 56 D-02: now safe to start the dispatch loop.
+	w.process.StartListen(ctx)
 
 	// Set state to Initializing.
 	w.state.Store(int32(WorkerInitializing))
@@ -403,4 +426,57 @@ func (w *Worker) NormalizeSymbolName(name string) string {
 // processID returns the current process ID for the LSP initialize handshake.
 func processID() int {
 	return pid()
+}
+
+// buildDispatcher returns a NotificationFunc that routes incoming LS
+// notifications to the per-method handlers registered by the active
+// QuirkAdapter. Unknown methods are debug-logged and dropped (Phase 56 D-04).
+// Handler panics are recovered, logged at Error level, and never crash the
+// Listen goroutine (Phase 56 D-05). The handler map is defensively copied so
+// subsequent mutations of the QuirkAdapter's map cannot affect routing
+// (T-56-06).
+func buildDispatcher(
+	handlers map[string]func(json.RawMessage),
+	logger *slog.Logger,
+	workerID string,
+) jsonrpc.NotificationFunc {
+	routes := make(map[string]func(json.RawMessage), len(handlers))
+	for k, v := range handlers {
+		routes[k] = v
+	}
+	return func(method string, params json.RawMessage) {
+		h, ok := routes[method]
+		if !ok {
+			logger.Debug("unhandled LS notification", "method", method, "worker_id", workerID)
+			return
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("LS notification handler panicked",
+					"method", method, "worker_id", workerID, "panic", fmt.Sprint(r))
+			}
+		}()
+		h(params)
+	}
+}
+
+// assertDispatcherWired implements the Phase 56 D-11 regression check.
+// Returns a non-nil error if quirks declared handlers but OnNotification was
+// not actually assigned. Logs at Error level so the failure is loud in tests
+// and production. Empty handlers always pass — there is nothing to wire.
+func assertDispatcherWired(
+	handlers map[string]func(json.RawMessage),
+	conn *jsonrpc.Conn,
+	logger *slog.Logger,
+	workerID string,
+) error {
+	if len(handlers) == 0 {
+		return nil
+	}
+	if conn.OnNotification == nil {
+		logger.Error("dispatcher wiring lost between assignment and check",
+			"worker_id", workerID, "handler_count", len(handlers))
+		return fmt.Errorf("dispatcher wiring failed for worker %s", workerID)
+	}
+	return nil
 }

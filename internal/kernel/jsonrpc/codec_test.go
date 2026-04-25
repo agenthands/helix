@@ -249,6 +249,42 @@ func TestConn_Notification_Handler(t *testing.T) {
 	assert.NotNil(t, receivedParams)
 }
 
+// Note: panic recovery for notification handlers is the Worker dispatcher's
+// responsibility (lspool.buildDispatcher); see TestBuildDispatcher_PanicRecovers
+// in internal/kernel/lspool/worker_test.go. jsonrpc.Conn intentionally does
+// not recover (Phase 56 D-05 architectural placement).
+
+// TestConn_NotificationUnknownMethod (Phase 56 LSDISP-04b / D-12) asserts that
+// Conn.Listen forwards ALL notifications to OnNotification regardless of method
+// name; method allow-listing is the dispatcher's job (Phase 56 D-04 lives in
+// lspool.buildDispatcher, not here). This test guards against regressions
+// where Listen accidentally adds a method allow-list at the Conn layer.
+func TestConn_NotificationUnknownMethod(t *testing.T) {
+	mock := newMockRWC()
+	conn := NewConn(mock, "test-sess")
+
+	// Pre-load a notification with a method name that no real LSP server
+	// would ever emit and that no quirk handler would ever register for.
+	mock.writeNotification("totally/unregistered", map[string]int{"x": 1})
+
+	var gotMethod string
+	var gotParams json.RawMessage
+	conn.OnNotification = func(method string, params json.RawMessage) {
+		gotMethod = method
+		gotParams = params
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// Listen will read the notification then hit EOF.
+	_ = conn.Listen(ctx)
+
+	assert.Equal(t, "totally/unregistered", gotMethod)
+	require.NotNil(t, gotParams)
+	assert.JSONEq(t, `{"x":1}`, string(gotParams))
+}
+
 func TestConn_SessionPrefixedIDs(t *testing.T) {
 	mock1 := newMockRWC()
 	mock2 := newMockRWC()

@@ -45,7 +45,7 @@ created: 2026-04-25
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | TBD | TBD | TBD | LSDISP-01 | — | OnNotification set when handlers registered | unit | `go test ./internal/kernel/lspool/... -run 'TestWorker_DispatcherWired' -count=1` | ❌ W0 | ⬜ pending |
 | TBD | TBD | TBD | LSDISP-02 | — | ProcessHandle.Start does NOT auto-launch Listen | unit | `go test ./internal/kernel/lspool/... -run 'TestProcessHandle_StartListenSeparate' -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | LSDISP-03 | — | Dispatcher recovers from handler panic and continues | unit | `go test ./internal/kernel/jsonrpc/... -run 'TestConn_NotificationHandlerPanic' -count=1` | ❌ W0 | ⬜ pending |
+| TBD | TBD | TBD | LSDISP-03 | — | Dispatcher recovers from handler panic and continues | unit | `go test ./internal/kernel/lspool/... -run 'TestBuildDispatcher_PanicRecovers' -count=1` | ❌ W0 | ⬜ pending |
 | TBD | TBD | TBD | LSDISP-04 | — | Worker.Start errors if dispatcher unwired with non-empty handlers (D-11) | unit | `go test ./internal/kernel/lspool/... -run 'TestWorker_DispatcherWiringRegression' -count=1` | ❌ W0 | ⬜ pending |
 | TBD | TBD | TBD | LSDISP-04b | — | Unhandled method debug-logs and drops | unit | `go test ./internal/kernel/jsonrpc/... -run 'TestConn_NotificationUnknownMethod' -count=1` | ❌ W0 | ⬜ pending |
 | TBD | TBD | TBD | JDTLS-RDY-01a | — | JdtlsAdapter registers `language/status` handler | unit | `go test ./internal/kernel/lspool/... -run 'TestJdtlsAdapter_LanguageStatusReadiness' -count=1` | ❌ W0 | ⬜ pending |
@@ -56,13 +56,15 @@ created: 2026-04-25
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
+> **Revision note (Phase 56 revision):** LSDISP-03 row updated to point at `TestBuildDispatcher_PanicRecovers` in `internal/kernel/lspool/...` (not `internal/kernel/jsonrpc/`). Rationale: per 56-PATTERNS.md, panic recovery for notification handlers lives in `lspool.buildDispatcher` (the Worker layer), NOT inside `jsonrpc.Conn.Listen`. `jsonrpc.Conn` intentionally does not recover panics. The legacy `TestConn_NotificationHandlerPanic` test name has been retired in favour of the dispatcher-layer test.
+
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `internal/kernel/jsonrpc/codec_test.go` — extend with `TestConn_NotificationUnknownMethod`, `TestConn_NotificationHandlerPanic` (D-12)
+- [ ] `internal/kernel/jsonrpc/codec_test.go` — extend with `TestConn_NotificationUnknownMethod` (D-12)
 - [ ] `internal/kernel/lspool/quirks_test.go` — extend with `TestJdtlsAdapter_LanguageStatusReadiness`, `TestJdtlsAdapter_LanguageStatusMalformed`, `TestJdtlsAdapter_WaitUntilJavaReady` (D-13), `TestJdtlsAdapter_ImplementsQuirkAdapter`
-- [ ] `internal/kernel/lspool/worker_test.go` — scaffold if missing; add `TestWorker_DispatcherWired`, `TestWorker_DispatcherWiringRegression` (D-11)
+- [ ] `internal/kernel/lspool/worker_test.go` — scaffold if missing; add `TestBuildDispatcher_KnownMethod`, `TestBuildDispatcher_UnknownMethodLogsAndDrops`, `TestBuildDispatcher_PanicRecovers` (D-12 + D-05), `TestWorker_DispatcherWired` (LSDISP-01), `TestWorker_DispatcherWiringRegression` (D-11)
 - [ ] `internal/kernel/lspool/process_test.go` — scaffold if missing; add `TestProcessHandle_StartListenSeparate` (D-02 contract)
 - [ ] `test/integration/rust_test.go` — extend with `TestRustAnalyzer_NotificationDispatchEndToEnd` (D-14) under `//go:build integration`
 - [ ] `test/integration/java_test.go` — modify `TestSymbols_JavaFixture` and `TestEdit_JavaFixture` to call `waitJavaReady` after `StartTestDaemon` (D-10)

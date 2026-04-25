@@ -1,0 +1,51 @@
+name: go-test
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: go test (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JDTLS_VERSION: "1.57.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Set up Java (for jdtls)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install jdtls
+        run: |
+          pipx install "jdtls==${JDTLS_VERSION}"
+          jdtls --help > /dev/null 2>&1 || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache warm jdtls workspace
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/serena-test/jdtls
+          key: jdtls-warm-${{ runner.os }}-${{ hashFiles('testdata/fixtures/java/**') }}-jdtls-${{ env.JDTLS_VERSION }}
+          restore-keys: |
+            jdtls-warm-${{ runner.os }}-
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./... -count=1

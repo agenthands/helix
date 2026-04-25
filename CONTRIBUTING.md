@@ -147,9 +147,8 @@ Key details:
 
 - Benchmarks use `testing.B.Loop` (Go 1.24+) to prevent compiler elision.
 - Baselines are committed in `test/bench/baselines/`.
-- CI runs the benchstat regression gate via `.github/workflows/bench.yml`.
-- PR thresholds: >15% time regression or >25% allocs regression blocks merge.
-- Release thresholds: >10% time or >20% allocs.
+- Benchmarks are captured locally pre-release; see the **Benchmarks** section
+  below for the capture procedure and historical thresholds.
 
 ## Adding a New MCP Tool
 
@@ -175,13 +174,79 @@ Key details:
 - See the memory guide: [`.serena/memories/adding_new_language_support_guide.md`](.serena/memories/adding_new_language_support_guide.md).
 - After adding a language, run `make docs` to regenerate the README language table.
 
-## Benchmark CI Gate
+## Benchmarks
 
-The benchmark CI gate prevents performance regressions from landing:
+Benchmarks are captured **locally pre-release** on stable maintainer hardware.
+The CI bench gate was retired in Phase 50 (milestone v1.9) — see
+`.planning/phases/50-toolchain-go1.25-gopls-ci/50-CONTEXT.md` "Pivot 2026-04-25"
+for the rationale. The short version: GitHub-hosted shared-CPU runners are too
+noisy for PR-blocking benchmark enforcement, and two `capture-baseline.yml`
+runs failed on exactly that symptom.
 
-- `.github/workflows/bench.yml` runs on PRs, comparing PR benchmarks against committed baselines via `benchstat`.
-- Uses tiered thresholds: PR tier (>15% time / >25% allocs) and release tier (>10% time / >20% allocs).
-- `.github/workflows/capture-baseline.yml` captures new baselines (manual dispatch on GitHub Actions).
+**When to run:** before tagging a release, or when investigating a suspected
+regression on a specific subsystem.
+
+**How to run** (same flags the retired CI gate used, for direct comparison
+against historical baselines):
+
+```sh
+go test -short -bench=. -benchmem -count=10 -run=^$ ./test/bench/...
+```
+
+**Where to put the result:**
+
+```sh
+go test -short -bench=. -benchmem -count=10 -run=^$ ./test/bench/... \
+  | tee test/bench/baselines/v<version>-local-<goos>-<goarch>.txt
+```
+
+Filename pattern: `v<version>-local-<goos>-<goarch>.txt`
+(e.g. `v1.9-local-darwin-arm64.txt`).
+
+**How to compare** against an earlier baseline:
+
+```sh
+benchstat test/bench/baselines/<old>.txt test/bench/baselines/<new>.txt
+```
+
+For a regression decision against the v1.2 PR-tier thresholds (15% time / 25%
+allocs at p<0.05) using the in-tree gate tool:
+
+```sh
+go run ./test/bench/cmd/benchgate \
+  --baseline test/bench/baselines/<old>.txt \
+  --new      test/bench/baselines/<new>.txt
+```
+
+**Why CI no longer enforces this:** GitHub-hosted `ubuntu-latest` runners are
+shared-CPU hosts with high variance on cold-start and warm-reuse benchmarks.
+Re-enabling the gate without first provisioning a dedicated runner would
+reintroduce the same flake pattern Phase 50 retired. See
+`test/bench/baselines/README.md` and the Pivot 2026-04-25 block in 50-CONTEXT.md.
+
+## gopls pin
+
+Serena pins `gopls` to **`v0.21.1`** in dev tooling.
+
+**Why pinned:**
+
+1. **Compatibility.** `gopls v0.17.1` is incompatible with Go 1.25 on
+   `linux/amd64`. The `v0.21.1` pin resolves this. (This was the original
+   driver for milestone v1.9 TOOL-01.)
+2. **Bench stability.** Cold-start and warm-reuse metrics
+   (`BenchmarkLSPIndex_Cold`, `BenchmarkLSPIndex_Warm`) are sensitive to gopls
+   internal indexing changes — see Pitfall 4 in
+   `.planning/phases/50-toolchain-go1.25-gopls-ci/50-RESEARCH.md`.
+
+**Where the pin lives:** the `Makefile` and dev-tooling install scripts. The
+pin is **not** declared in any `.github/workflows/` file — `bench.yml` and
+`capture-baseline.yml` were deleted in Phase 50, and no other workflow needs
+gopls.
+
+**Bump policy:** any change to the gopls pin should trigger a fresh local
+benchmark baseline before the next release (see the Benchmarks section above
+for the capture procedure). Do not bump in a PR that does not also re-capture
+the baseline — comparisons against pre-bump baselines will be misleading.
 
 ## Legacy Python
 

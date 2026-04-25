@@ -17,7 +17,7 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 ### Infra — Toolchain
 
 - [ ] **TOOL-01**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25 and a compatible gopls version — the root-cause of the gopls v0.17.1 linux/amd64 incompatibility is resolved (upgrade, patch, or replacement strategy)
-- [ ] **TOOL-02**: The CI benchmark gate runs on `ubuntu-latest` (not just darwin/arm64 locally) and enforces PR-tier thresholds on every PR — closes the benchmarks tech-debt note in PROJECT.md
+- [x] ~~**TOOL-02**~~: ~~The CI benchmark gate runs on `ubuntu-latest` (not just darwin/arm64 locally) and enforces PR-tier thresholds on every PR — closes the benchmarks tech-debt note in PROJECT.md~~ — Cancelled in Phase 50 (CI-hosted bench gate proven unreliable on shared-CPU GitHub runners across two failed capture attempts; benchmarks now run locally pre-release. See `.planning/phases/50-toolchain-go1.25-gopls-ci/50-CONTEXT.md` "Pivot 2026-04-25").
 
 ### Packaging & Distribution
 
@@ -76,7 +76,7 @@ Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 | BUG-03 | Phase 48 | Pending |
 | BUG-04 | Phase 49 | Pending |
 | TOOL-01 | Phase 50 | Pending |
-| TOOL-02 | Phase 50 | Pending |
+| TOOL-02 | Phase 50 | Cancelled (Phase 50) |
 | PKG-01 | Phase 51 | Pending |
 | PKG-02 | Phase 52 | Pending |
 | PKG-03 | Phase 52 | Pending |

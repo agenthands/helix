@@ -90,7 +90,9 @@ Plans:
   2. Repomap, tagcache, and grammar consumers all receive the registry via dependency injection from the daemon.
   3. All existing tree-sitter-backed tests (repomap, tagcache, symbol editing for supported langs) remain green.
   4. `go test ./...` and `go vet ./...` pass.
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 49-01-PLAN.md — Inject canonical GrammarRegistry from daemon bootstrap into RepoMapSkill via SetRegistry; delete redundant FallbackDeps.Registry instantiation; verify D-10 grep + go vet + go test
 
 ### Phase 50: toolchain-go1.25-gopls-ci
 **Goal**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25, and the CI benchmark gate enforces PR-tier thresholds on every PR.

@@ -330,8 +330,16 @@ func (j *JdtlsAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) e
 
 // ExtraArgs injects -data <dir> so jdtls has a workspace-specific data directory.
 // Without this, jdtls may fail to index or conflict across workspaces.
+//
+// Test-only override: if the environment variable SERENA_TEST_JDTLS_DATA_DIR is set
+// to a non-empty path, it is used verbatim in place of workDir/.jdtls-data. This
+// lets integration tests (test/integration/jdtlscache) share a warm jdtls workspace
+// across test runs (Phase 48, BUG-03). Production never sets this variable.
 func (j *JdtlsAdapter) ExtraArgs(workDir string, args []string) []string {
-	dataDir := filepath.Join(workDir, ".jdtls-data")
+	dataDir := os.Getenv("SERENA_TEST_JDTLS_DATA_DIR")
+	if dataDir == "" {
+		dataDir = filepath.Join(workDir, ".jdtls-data")
+	}
 	_ = os.MkdirAll(dataDir, 0o755)
 	return append([]string{"-data", dataDir}, args...)
 }

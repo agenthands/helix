@@ -3,6 +3,7 @@ package lspool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,21 @@ type QuirkAdapter interface {
 	// InitOptions returns language-specific initialization options.
 	// workDir is the workspace root for workspace-dependent options.
 	InitOptions(workDir string) map[string]any
-	// NotificationHandlers returns handlers for LS-specific notifications.
+	// NotificationHandlers returns handlers for LS-specific notifications,
+	// keyed by JSON-RPC method name (e.g. "experimental/serverStatus",
+	// "language/status"). Returning nil or an empty map means this adapter
+	// declines to observe any notifications.
+	//
+	// Phase 56 D-06 contract: each handler runs synchronously on the
+	// jsonrpc.Conn.Listen goroutine in the worker. Handlers MUST be
+	// non-blocking — atomic ops, channel close/signal, or mutex-guarded
+	// flag flips only. Handlers MUST NOT do I/O, MUST NOT call back into
+	// the same conn (e.g. issuing another LSP request via the worker), and
+	// MUST NOT block on user-controlled timing. A misbehaving handler will
+	// stall every subsequent notification on this worker. Panics are
+	// recovered by the dispatcher (see lspool.buildDispatcher) and logged
+	// at Error level, but the originating handler is still considered buggy
+	// and should be fixed.
 	NotificationHandlers() map[string]func(params json.RawMessage)
 	// NormalizeSymbolName adjusts symbol names for language conventions.
 	NormalizeSymbolName(name string) string
@@ -302,8 +317,16 @@ func (c *ClangdAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) 
 
 // JdtlsAdapter provides Java-specific quirks for Eclipse JDT Language Server.
 // Creates workspace data directory and configures jdtls-specific init options.
+//
+// Phase 56 readiness extension: observes language/status notifications and
+// exposes WaitUntilJavaReady so callers can block until BOTH ServiceReady
+// and ProjectStatus=OK have been seen (D-07, D-08, D-09).
 type JdtlsAdapter struct {
 	Entry langregistry.LSEntry
+
+	readyMu      sync.Mutex
+	serviceReady chan struct{} // closed when ServiceReady seen
+	projectReady chan struct{} // closed when ProjectStatus=OK seen
 }
 
 func (j *JdtlsAdapter) InitOptions(workDir string) map[string]any {
@@ -314,8 +337,115 @@ func (j *JdtlsAdapter) InitOptions(workDir string) map[string]any {
 	return opts
 }
 
-func (j *JdtlsAdapter) NotificationHandlers() map[string]func(params json.RawMessage) {
-	return nil
+// NotificationHandlers handles jdtls language/status notifications. Payload
+// schema (per legacy/src/solidlsp/language_servers/eclipse_jdtls.py:861-867):
+// {type: string, message: string}. Phase 56 D-06: handler runs synchronously
+// on the Listen goroutine — operations are limited to json.Unmarshal +
+// mutex-guarded channel close. No I/O, no LSP calls back to the same conn.
+func (j *JdtlsAdapter) NotificationHandlers() map[string]func(json.RawMessage) {
+	return map[string]func(json.RawMessage){
+		"language/status": func(raw json.RawMessage) {
+			var s struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(raw, &s); err != nil {
+				return // malformed → no-op (D-13)
+			}
+			if s.Type == "ServiceReady" && s.Message == "ServiceReady" {
+				j.signalServiceReady()
+			}
+			if s.Type == "ProjectStatus" && s.Message == "OK" {
+				j.signalProjectReady()
+			}
+		},
+	}
+}
+
+func (j *JdtlsAdapter) ensureServiceReadyCh() chan struct{} {
+	j.readyMu.Lock()
+	defer j.readyMu.Unlock()
+	if j.serviceReady == nil {
+		j.serviceReady = make(chan struct{})
+	}
+	return j.serviceReady
+}
+
+func (j *JdtlsAdapter) signalServiceReady() {
+	j.readyMu.Lock()
+	defer j.readyMu.Unlock()
+	if j.serviceReady == nil {
+		ch := make(chan struct{})
+		close(ch)
+		j.serviceReady = ch
+		return
+	}
+	select {
+	case <-j.serviceReady:
+		// already closed — idempotent
+	default:
+		close(j.serviceReady)
+	}
+}
+
+func (j *JdtlsAdapter) ensureProjectReadyCh() chan struct{} {
+	j.readyMu.Lock()
+	defer j.readyMu.Unlock()
+	if j.projectReady == nil {
+		j.projectReady = make(chan struct{})
+	}
+	return j.projectReady
+}
+
+func (j *JdtlsAdapter) signalProjectReady() {
+	j.readyMu.Lock()
+	defer j.readyMu.Unlock()
+	if j.projectReady == nil {
+		ch := make(chan struct{})
+		close(ch)
+		j.projectReady = ch
+		return
+	}
+	select {
+	case <-j.projectReady:
+		// already closed — idempotent
+	default:
+		close(j.projectReady)
+	}
+}
+
+// javaReadinessTimeout bounds WaitUntilJavaReady when the caller's context has
+// no deadline. Mirrors renameReadinessTimeout (above). 90s is generous vs.
+// legacy's 20s hotfix (eclipse_jdtls.py:921-927) which sometimes proceeds
+// without ProjectStatus=OK; we keep the strict gate but raise the ceiling.
+const javaReadinessTimeout = 90 * time.Second
+
+// WaitUntilJavaReady blocks until BOTH ServiceReady AND ProjectStatus=OK
+// have been observed via language/status notifications, ctx is cancelled,
+// or javaReadinessTimeout elapses (whichever fires first). Returns nil iff
+// both gates closed. Phase 56 D-08 + D-09.
+func (j *JdtlsAdapter) WaitUntilJavaReady(ctx context.Context) error {
+	svc := j.ensureServiceReadyCh()
+	proj := j.ensureProjectReadyCh()
+
+	timer := time.NewTimer(javaReadinessTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-svc:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return fmt.Errorf("jdtls ServiceReady timeout after %s", javaReadinessTimeout)
+	}
+	select {
+	case <-proj:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return fmt.Errorf("jdtls ProjectStatus=OK timeout after %s", javaReadinessTimeout)
+	}
 }
 
 func (j *JdtlsAdapter) NormalizeSymbolName(name string) string {

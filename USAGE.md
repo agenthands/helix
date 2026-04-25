@@ -833,3 +833,45 @@ When a language server crashes, Serena automatically restarts it. If it crashes 
 - Increase `restart_budget` if a language server occasionally crashes but recovers (e.g., during indexing of very large projects)
 - Keep it low (2-3) for development machines to avoid crash loops consuming resources
 - The circuit breaker uses decorrelated jitter backoff, so recovery attempts are spaced out even after the circuit re-closes
+
+## Development
+
+### Java integration tests (warm jdtls cache)
+
+Serena's Java integration suite (`test/integration/java_test.go`) runs as part of
+the default `go test ./...`. First-time runs are slow because jdtls must index the
+Java fixture; subsequent runs reuse a persistent workspace under the user cache
+directory, cutting wall-clock dramatically.
+
+**Cache location:**
+
+- Linux: `$XDG_CACHE_HOME/serena-test/jdtls/<fixture-hash>-<jdtls-hash>/` (default `~/.cache/...`).
+- macOS: `~/Library/Caches/serena-test/jdtls/...`.
+- Windows: `%LocalAppData%\serena-test\jdtls\...`.
+
+The cache key is derived from the Java fixture contents (`testdata/fixtures/java/**`)
+and the resolved `jdtls` binary identity. Changing either produces a new directory;
+old ones coexist until manually cleaned.
+
+**Commands:**
+
+- `go test ./test/integration/ -run 'TestSymbols_JavaFixture|TestEdit_JavaFixture' -count=1` — run the Java suite once. Skips cleanly if `jdtls` is not on PATH.
+- `make bench-jdtls-warm` — wipe the cache, run the Java suite cold, then run it warm; prints both wall-clocks.
+- `make clean-jdtls-cache` — remove `$XDG_CACHE_HOME/serena-test/jdtls/` (POSIX only; on Windows delete the folder manually).
+
+**Test-only environment variable:**
+
+`SERENA_TEST_JDTLS_DATA_DIR` — when set to a non-empty absolute path, Serena's
+jdtls adapter uses that path as the `-data` argument instead of the default
+`workDir/.jdtls-data`. This is the seam the Java integration tests use to inject
+the warm cache directory. **Do not set this variable in production.**
+
+**Known limitations:**
+
+- Running two `go test ./...` invocations concurrently against the same fixture
+  will race on the warm `-data` directory — jdtls requires an exclusive workspace
+  lock. Mitigation: avoid concurrent integration-test runs on the same machine,
+  or run `make clean-jdtls-cache` between them. A file-system advisory lock is
+  tracked as a follow-up (see RESEARCH.md Pitfall 4; deferred beyond Phase 48).
+- CI reuses the same cache via `actions/cache@v3` in `.github/workflows/go-test.yml`;
+  cache misses (new fixture content or new jdtls version) fall back to cold start.

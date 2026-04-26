@@ -704,11 +704,21 @@ func (h *forwarderServiceHandler) DeactivateWorkspace(ctx context.Context, req *
 
 	h.logger.Info("workspace deactivation requested via gRPC", "path", wsPath)
 
-	// Phase 53 D-04: emit serena_session_lifecycle_total{phase="deactivate"}
-	// once per detected language for the workspace at this root. If the
-	// workspace is unknown to the kernel (e.g. already torn down) we skip
-	// the emit rather than polluting the "language" label with an empty
-	// value — see CONTEXT.md D-04 ("PREFER skipping").
+	// Phase 53 D-04 / IN-05: emit serena_session_lifecycle_total{phase=
+	// "deactivate"} once per detected language for the workspace at this
+	// root. The activate/shutdown emission sites both fall back to a
+	// single emit with language="" when no languages were detected (see
+	// kernel.go:117-122 and ActiveLanguages's empty-string append). This
+	// handler used to skip the emit on empty-language to "PREFER
+	// skipping over polluting the label", but that asymmetry means a
+	// zero-detection workspace registers an activate (and a shutdown) but
+	// never a deactivate, breaking PromQL `sum by(language)` balance.
+	// Iteration 2 IN-05 fix: align with activate/shutdown — emit once
+	// with language="" for workspaces tracked by the kernel that have no
+	// detected languages. We still skip when the kernel has NO record of
+	// the path at all (already torn down), since that is a different
+	// signal (idempotent re-deactivation) and not a "successful workspace
+	// session ended" event.
 	if h.metrics != nil && h.kernel != nil {
 		// Resolve to absolute path mirroring ActivateWorkspace so the lookup
 		// matches whatever the kernel stored under WorkspaceKey.RepoRoot.
@@ -716,9 +726,14 @@ func (h *forwarderServiceHandler) DeactivateWorkspace(ctx context.Context, req *
 		if abs, err := filepath.Abs(wsPath); err == nil {
 			lookupPath = abs
 		}
-		if langs := h.kernel.LanguagesForRoot(lookupPath); len(langs) > 0 {
-			for _, lang := range langs {
-				h.metrics.SessionLifecycleInc(lang, kernel.PhaseDeactivate)
+		if h.kernel.HasWorkspace(lookupPath) {
+			langs := h.kernel.LanguagesForRoot(lookupPath)
+			if len(langs) == 0 {
+				h.metrics.SessionLifecycleInc("", kernel.PhaseDeactivate)
+			} else {
+				for _, lang := range langs {
+					h.metrics.SessionLifecycleInc(lang, kernel.PhaseDeactivate)
+				}
 			}
 		}
 	}

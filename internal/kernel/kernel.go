@@ -208,6 +208,11 @@ func (k *Kernel) ActiveLanguages() []string {
 // rooted at the given repository path, or nil if no workspace runtime
 // matches. Used by the daemon's gRPC DeactivateWorkspace handler to emit
 // SessionLifecycleInc(lang, "deactivate") per detected language.
+//
+// NOTE: a nil return is ambiguous between "workspace not tracked" and
+// "workspace tracked but zero languages detected". Callers that need to
+// distinguish these (Phase 53 IN-05: deactivate emission policy) should
+// use HasWorkspace separately to disambiguate.
 func (k *Kernel) LanguagesForRoot(repoRoot string) []string {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
@@ -217,4 +222,21 @@ func (k *Kernel) LanguagesForRoot(repoRoot string) []string {
 		}
 	}
 	return nil
+}
+
+// HasWorkspace reports whether the kernel currently tracks a workspace
+// runtime rooted at the given repository path. Used by the daemon's
+// gRPC DeactivateWorkspace handler to disambiguate "unknown workspace"
+// (skip emit) from "known workspace with zero detected languages"
+// (emit with language="" to mirror ActivateWorkspace and the shutdown
+// sweep — Phase 53 IN-05 policy alignment).
+func (k *Kernel) HasWorkspace(repoRoot string) bool {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	for _, rt := range k.workspaces {
+		if rt.Key().RepoRoot == repoRoot {
+			return true
+		}
+	}
+	return false
 }

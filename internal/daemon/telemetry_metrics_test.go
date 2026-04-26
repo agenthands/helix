@@ -210,12 +210,14 @@ func TestSessionLifecycleMetrics(t *testing.T) {
 	}
 
 	// Phase 2: deactivate — drives the gRPC handler the forwarder hits.
-	// The handler resolves the language via kernel.LanguagesForRoot; for
-	// our zero-language workspace it skips emission (D-04 PREFER skipping
-	// when language unresolvable), so we emit deactivate explicitly via
-	// the same metrics handle to assert the phase enum reaches Gather().
-	// This faithfully reproduces what production does for a workspace
-	// where detection found at least one language.
+	// Phase 53 IN-05 (iteration 2 fix): the handler now mirrors
+	// ActivateWorkspace/Shutdown by emitting once with language="" for
+	// a tracked workspace that has zero detected languages, instead of
+	// skipping. The wsDir temp dir contains no source files so detection
+	// returns zero languages and the handler emits one increment with
+	// language="". The belt-and-braces explicit emit below is preserved
+	// to reproduce what production does for a workspace where detection
+	// found at least one language.
 	handler := &forwarderServiceHandler{
 		mcpServer: d.mcpServer,
 		kernel:    d.kernel,

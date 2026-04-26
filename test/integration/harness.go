@@ -125,7 +125,11 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 	if opts.MaxWorkers > 0 {
 		cfg.WorkerPool.MaxWorkers = opts.MaxWorkers
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var logOut io.Writer = io.Discard
+	if os.Getenv("SERENA_TEST_LS_DEBUG") != "" {
+		logOut = os.Stderr
+	}
+	logger := slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// Initialize skills with temp dirs.
 	tmpDir := tb.TempDir()

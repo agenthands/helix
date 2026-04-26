@@ -16,11 +16,9 @@ jobs:
     timeout-minutes: 20
     env:
       JDTLS_VERSION: "1.57.0"
-      # First-run cache MISS on ubuntu-latest needs >4m for cold workspace
-      # indexing before search_symbols returns non-empty. 8m covers cold starts;
-      # warm runs return in seconds. Local dev is unaffected (env honored only
-      # when greater than the test-defined LSTimeout).
-      SERENA_TEST_LS_TIMEOUT: "8m"
+      # jdtls 1.57.0 indexes the Java fixture in <1s on Java 21. Keep a 2m
+      # ceiling as cold-runner safety margin; warm runs return instantly.
+      SERENA_TEST_LS_TIMEOUT: "2m"
     steps:
       - uses: actions/checkout@v4
 
@@ -31,10 +29,14 @@ jobs:
           cache: true
 
       - name: Set up Java (for jdtls)
+        # jdtls 1.57.0 requires Java 21+. Running on 17 produces the symptom
+        # "jdtls requires at least Java 21" from the launcher wrapper, which
+        # manifests as instant `internal: acquire session` errors at the MCP
+        # layer because every spawned worker dies in <100ms before LSP init.
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Install jdtls
         run: |
@@ -92,7 +94,4 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        # -timeout=20m: Java integration tests do cold jdtls indexing on first
-        # cache-MISS run, which can exceed Go's 10m default before the warm
-        # cache is populated for subsequent runs.
-        run: go test ./... -count=1 -timeout=20m
+        run: go test ./... -count=1

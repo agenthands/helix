@@ -73,16 +73,27 @@ func NewTagCache(dbPath string) (*TagCache, error) {
 // Per D-10: file-level mtime invalidation. Per D-12: lazy (no eager warming).
 // Per T-27-05: all SQL uses parameterized queries only.
 func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)) ([]Tag, error) {
+	// Resolve language up front for emission. LangFromExt returns "" for
+	// unsupported extensions; emit with the empty string in that case so
+	// operators can spot path-traversal-style misuse if it happens. Resolved
+	// before os.Stat so stat failures can still surface in metrics (WR-04).
+	lang := LangFromExt(filePath)
+
 	info, err := os.Stat(filePath)
 	if err != nil {
+		// Phase 53 WR-04: stat failures (file deleted between walk and
+		// extract, permission denied, etc.) must still emit a miss + extract
+		// observation so operators see this class of failure in
+		// serena_repomap_cache_total. Mirrors the "errors still emit miss"
+		// principle documented for the extractFn-failure path below.
+		c.mu.Lock()
+		sink := c.metrics
+		c.mu.Unlock()
+		sink.RepoMapExtractObserve(lang, 0)
+		sink.RepoMapCacheInc(lang, ResultMiss)
 		return nil, fmt.Errorf("stat %s: %w", filePath, err)
 	}
 	mtime := info.ModTime().UnixNano()
-
-	// Resolve language up front for emission. LangFromExt returns "" for
-	// unsupported extensions; emit with the empty string in that case so
-	// operators can spot path-traversal-style misuse if it happens.
-	lang := LangFromExt(filePath)
 
 	c.mu.Lock()
 

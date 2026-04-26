@@ -279,6 +279,35 @@ func TestTagCache_MetricsEmission_MissOnExtractError(t *testing.T) {
 	assert.Len(t, sink.observed, 1)
 }
 
+// TestTagCache_MetricsEmission_MissOnStatError verifies that os.Stat
+// failures (e.g. file deleted between walk and extract, permission
+// denied) still emit a miss + extract-duration observation. Phase 53
+// WR-04: stat failures are silently invisible without this — operators
+// watching serena_repomap_cache_total need to see this class of failure.
+func TestTagCache_MetricsEmission_MissOnStatError(t *testing.T) {
+	cache := newTestCache(t)
+	sink := &fakeRepoMapSink{}
+	cache.SetMetrics(sink)
+
+	dir := t.TempDir()
+	// File path that does NOT exist on disk — os.Stat will fail.
+	missingPath := filepath.Join(dir, "nonexistent.go")
+
+	extractFn := func() ([]Tag, error) {
+		t.Fatal("extractFn must NOT be invoked when stat fails")
+		return nil, nil
+	}
+
+	_, err := cache.GetOrExtract(missingPath, extractFn)
+	assert.Error(t, err, "GetOrExtract must surface stat error")
+	assert.Equal(t, 0, sink.hits)
+	assert.Equal(t, 1, sink.misses, "stat failure must emit cache miss")
+	assert.Len(t, sink.observed, 1, "stat failure must record extract observation")
+	for _, l := range sink.langs {
+		assert.Equal(t, "go", l, "language label must resolve from extension before stat")
+	}
+}
+
 func TestTagCache_Persistence(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "tags.db")

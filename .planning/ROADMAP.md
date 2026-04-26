@@ -136,7 +136,12 @@ Plans:
   2. All new labels are bounded (no unbounded cardinality) — a cardinality test asserts max series per metric.
   3. `USAGE.md` Observability section documents each new metric with its labels and semantics.
   4. Noop-default invariant preserved — metrics are zero-alloc when observability is disabled.
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 53-01-PLAN.md — Extend *obs.Metrics with five new vectors + helpers + cardinality / zero-alloc tests
+- [ ] 53-02-PLAN.md — Per-package sinks + emission at lspool/repomap/edit/kernel call sites + fuzzy.ErrAmbiguous sentinel
+- [ ] 53-03-PLAN.md — Daemon wiring + four var _ assertions + USAGE.md Observability docs + ROADMAP reconciliation
 
 ### Phase 54: obs-dashboards-runbooks
 **Goal**: Operators can import ready-made Grafana dashboards and follow written runbooks for the four most common failure modes.

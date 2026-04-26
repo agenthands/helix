@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	serr "github.com/postfix/serena/internal/errors"
+	"github.com/postfix/serena/internal/fuzzy"
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/diag"
 	"github.com/postfix/serena/internal/mcp"
@@ -62,14 +63,30 @@ type VerifyEditArgs struct {
 // RegisterTools registers all 6 symbol editing tools with the MCP server.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
 // sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
-func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey) {
+//
+// sink receives one EditOutcomeInc per handler invocation (Phase 53 D-07).
+// Pass NoopSink{} (or nil — converted internally) to disable; daemon wires
+// *obs.Metrics in plan 53-03.
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, sink MetricsSink) {
+	if sink == nil {
+		sink = NoopSink{}
+	}
 	tracer := k.Tracer()
-	registerReplaceBody(server, k, extractor, diagStore, wsKeyFn, tracer)
-	registerInsertBefore(server, k, diagStore, wsKeyFn, tracer)
-	registerInsertAfter(server, k, diagStore, wsKeyFn, tracer)
-	registerRenameSymbol(server, k, diagStore, wsKeyFn, tracer)
-	registerSafeDelete(server, k, diagStore, wsKeyFn, tracer)
+	registerReplaceBody(server, k, extractor, diagStore, wsKeyFn, tracer, sink)
+	registerInsertBefore(server, k, diagStore, wsKeyFn, tracer, sink)
+	registerInsertAfter(server, k, diagStore, wsKeyFn, tracer, sink)
+	registerRenameSymbol(server, k, diagStore, wsKeyFn, tracer, sink)
+	registerSafeDelete(server, k, diagStore, wsKeyFn, tracer, sink)
 	registerVerifyEdit(server, diagStore, wsKeyFn, tracer)
+}
+
+// strategyOf safely extracts a fuzzy.Strategy from an optional FuzzyMatchInfo.
+// Returns "" when info is nil (the caller used the non-fuzzy path).
+func strategyOf(info *FuzzyMatchInfo) fuzzy.Strategy {
+	if info == nil {
+		return ""
+	}
+	return info.Strategy
 }
 
 // --- helpers ---
@@ -218,26 +235,40 @@ Verify a test file compiles:
 
 // --- tool registrations ---
 
-func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extractor *BodyExtractor, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer, sink MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "replace_symbol_body",
 		Description: "Replace a symbol's body with new content using tree-sitter for precise extraction",
 	}, kernel.WrapToolSpan(tracer, "replace_symbol_body", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceBodyArgs) (*mcpsdk.CallToolResult, any, error) {
+		// Phase 53 D-07: emit exactly one outcome before return. strategy stays
+		// "" unless ReplaceBodyWithPlan reports fuzzy info; outcomeErr captures
+		// any error path (errorResult-wrapped errors are never propagated as
+		// the third return value, so we track the underlying error here).
+		var strategy fuzzy.Strategy
+		var outcomeErr error
+		defer func() {
+			sink.EditOutcomeInc("replace_symbol_body", ClassifyOutcome(strategy, outcomeErr))
+		}()
+
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing required field: path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("replace_symbol_body").Error()), nil, nil
 		}
 		if args.SymbolName == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing required field: symbol_name")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
 				WithTool("replace_symbol_body").Error()), nil, nil
 		}
 		if args.NewBody == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing required field: new_body")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_body").
 				WithTool("replace_symbol_body").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
@@ -245,21 +276,26 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeReplaceBody, args.NewBody)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease using the plan's range.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		fuzzyInfo, err := ReplaceBodyWithPlan(ctx, dirtyLease, extractor, plan, lang, args.SearchBody)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
+		strategy = strategyOf(fuzzyInfo)
 		text := fmt.Sprintf("Replaced body of %q in %s", args.SymbolName, args.Path)
 		// D-07: include strategy/score when fuzzy was used; D-08: omit for full body replace.
 		if fuzzyInfo != nil {
@@ -271,44 +307,56 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction", BriefDescription: "Replace the entire body of a function, method, or class", HelpText: replaceSymbolBodyHelp})
 }
 
-func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer, sink MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "insert_before_symbol",
 		Description: "Insert content immediately before a symbol",
 	}, kernel.WrapToolSpan(tracer, "insert_before_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertBeforeArgs) (*mcpsdk.CallToolResult, any, error) {
+		// Phase 53 D-07: insert_* has no fuzzy strategy (strategy="").
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("insert_before_symbol", ClassifyOutcome("", outcomeErr)) }()
+
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("insert_before_symbol").Error()), nil, nil
 		}
 		if args.SymbolName == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing symbol_name")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
 				WithTool("insert_before_symbol").Error()), nil, nil
 		}
 		if args.Content == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing content")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
 				WithTool("insert_before_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertBefore, args.Content)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		if err := InsertBeforeWithPlan(ctx, dirtyLease, plan); err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content before %q in %s", args.SymbolName, args.Path)
@@ -318,44 +366,55 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 	server.Registry().Register(&mcp.ToolDef{Name: "insert_before_symbol", Description: "Insert content immediately before a symbol", BriefDescription: "Insert code before a symbol definition", HelpText: insertBeforeSymbolHelp})
 }
 
-func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer, sink MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "insert_after_symbol",
 		Description: "Insert content immediately after a symbol",
 	}, kernel.WrapToolSpan(tracer, "insert_after_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args InsertAfterArgs) (*mcpsdk.CallToolResult, any, error) {
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("insert_after_symbol", ClassifyOutcome("", outcomeErr)) }()
+
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("insert_after_symbol").Error()), nil, nil
 		}
 		if args.SymbolName == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing symbol_name")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
 				WithTool("insert_after_symbol").Error()), nil, nil
 		}
 		if args.Content == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing content")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
 				WithTool("insert_after_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeInsertAfter, args.Content)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: execute mutation on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		if err := InsertAfterWithPlan(ctx, dirtyLease, plan); err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		text := fmt.Sprintf("Inserted content after %q in %s", args.SymbolName, args.Path)
@@ -365,32 +424,40 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol", BriefDescription: "Insert code after a symbol definition", HelpText: insertAfterSymbolHelp})
 }
 
-func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer, sink MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "rename_symbol",
 		Description: "Rename a symbol across all files in the workspace",
 	}, kernel.WrapToolSpan(tracer, "rename_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args RenameSymbolArgs) (*mcpsdk.CallToolResult, any, error) {
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("rename_symbol", ClassifyOutcome("", outcomeErr)) }()
+
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("rename_symbol").Error()), nil, nil
 		}
 		if args.NewName == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing new_name")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_name").
 				WithTool("rename_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		lease, err := rt.AcquireSession(ctx, "default", true) // dirty=true
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Convert from 1-indexed (user-facing) to 0-indexed (LSP).
 		result, err := RenameSymbol(ctx, lease, uri, args.Line-1, args.Col-1, args.NewName)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 47 D-07: emit closed-enum strategy metric.
@@ -403,41 +470,51 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 	server.Registry().Register(&mcp.ToolDef{Name: "rename_symbol", Description: "Rename a symbol across all files in the workspace", BriefDescription: "Rename a symbol across the entire workspace", HelpText: renameSymbolHelp})
 }
 
-func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore *diag.DiagnosticStore, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer, sink MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "safe_delete_symbol",
 		Description: "Delete a symbol if it has no references; reports reference count if blocked",
 	}, kernel.WrapToolSpan(tracer, "safe_delete_symbol", func(ctx context.Context, req *mcpsdk.CallToolRequest, args SafeDeleteArgs) (*mcpsdk.CallToolResult, any, error) {
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("safe_delete_symbol", ClassifyOutcome("", outcomeErr)) }()
+
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("safe_delete_symbol").Error()), nil, nil
 		}
 		if args.SymbolName == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing symbol_name")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: symbol_name").
 				WithTool("safe_delete_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.NoWorkspace, "workspace not activated", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
 		// Phase 1: plan on clean (shared) lease for accurate symbol ranges and references.
 		cleanLease, err := rt.AcquireSession(ctx, "plan-read", false)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire read session", err).Error()), nil, nil
 		}
 		plan, err := PlanEdit(ctx, cleanLease, uri, args.SymbolName, EditTypeDelete, "")
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		// Phase 2: check references on clean lease, execute on dirty lease.
 		dirtyLease, err := rt.AcquireSession(ctx, "default", true)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		result, err := SafeDeleteWithPlan(ctx, cleanLease, dirtyLease, plan, args.Force)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		if !result.Deleted {

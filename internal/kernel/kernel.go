@@ -22,14 +22,27 @@ type KernelConfig struct {
 // Kernel coordinates workspaces, the LS worker pool, and tool dispatch.
 // It is the central entry point for code intelligence operations.
 type Kernel struct {
-	workspaces map[string]*WorkspaceRuntime // keyed by workspace key hash
-	pool       *lspool.Pool
-	registry   *workspace.Registry           // Phase 1 workspace registry
-	langReg    *langregistry.Registry         // language registry for extension-based detection
-	config     KernelConfig
-	logger     *slog.Logger
-	tracer     trace.Tracer // Phase 12: plumbed via constructor, noop-safe
-	mu         sync.RWMutex
+	workspaces     map[string]*WorkspaceRuntime // keyed by workspace key hash
+	pool           *lspool.Pool
+	registry       *workspace.Registry    // Phase 1 workspace registry
+	langReg        *langregistry.Registry // language registry for extension-based detection
+	config         KernelConfig
+	logger         *slog.Logger
+	tracer         trace.Tracer // Phase 12: plumbed via constructor, noop-safe
+	sessionMetrics SessionMetricsSink
+	mu             sync.RWMutex
+}
+
+// SetSessionMetricsSink wires the workspace lifecycle sink. Daemon calls
+// this in plan 53-03 with *obs.Metrics so activate emits land on the
+// owned Prometheus registry. Idempotent and nil-safe.
+func (k *Kernel) SetSessionMetricsSink(s SessionMetricsSink) {
+	if s == nil {
+		s = NoopSessionSink{}
+	}
+	k.mu.Lock()
+	k.sessionMetrics = s
+	k.mu.Unlock()
 }
 
 // NewKernel creates a new kernel with the given workspace registry, language registry, and configuration.
@@ -42,13 +55,14 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 	}
 	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics)
 	return &Kernel{
-		workspaces: make(map[string]*WorkspaceRuntime),
-		pool:       pool,
-		registry:   registry,
-		langReg:    langReg,
-		config:     cfg,
-		logger:     logger.With("component", "kernel"),
-		tracer:     tracer,
+		workspaces:     make(map[string]*WorkspaceRuntime),
+		pool:           pool,
+		registry:       registry,
+		langReg:        langReg,
+		config:         cfg,
+		logger:         logger.With("component", "kernel"),
+		tracer:         tracer,
+		sessionMetrics: NoopSessionSink{},
 	}
 }
 
@@ -88,6 +102,18 @@ func (k *Kernel) ActivateWorkspace(ctx context.Context, rootPath string) (*Works
 		"root", rootPath,
 		"languages", langs,
 	)
+
+	// Phase 53 D-04: emit one SessionLifecycleInc per detected language so
+	// per-language activation rate falls out of PromQL. If detection found
+	// no languages we still emit once with an empty label so dashboards can
+	// surface "unknown language" workspaces.
+	if len(langs) == 0 {
+		k.sessionMetrics.SessionLifecycleInc("", PhaseActivate)
+	} else {
+		for _, lang := range langs {
+			k.sessionMetrics.SessionLifecycleInc(lang, PhaseActivate)
+		}
+	}
 
 	return rt, nil
 }

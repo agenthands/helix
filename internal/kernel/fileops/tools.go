@@ -11,6 +11,7 @@ import (
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/fuzzy"
 	"github.com/postfix/serena/internal/kernel"
+	"github.com/postfix/serena/internal/kernel/edit"
 	"github.com/postfix/serena/internal/mcp"
 )
 
@@ -165,14 +166,23 @@ Use ellipsis to skip middle content:
 // The workspaceRoot function provides the active workspace root path.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
 // sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
-func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string, tracer trace.Tracer) {
+//
+// sink receives one EditOutcomeInc per write-tool invocation (Phase 53 D-07);
+// fileops imports edit's MetricsSink to share one definition (D-12).
+// Read-only tools (read_file, list_directory, find_files, search_in_files)
+// are NOT instrumented. Pass NoopSink{} (or nil) to disable; daemon wires
+// *obs.Metrics in plan 53-03.
+func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string, tracer trace.Tracer, sink edit.MetricsSink) {
+	if sink == nil {
+		sink = edit.NoopSink{}
+	}
 	registerReadFile(server, workspaceRoot, tracer)
-	registerCreateFile(server, workspaceRoot, tracer)
+	registerCreateFile(server, workspaceRoot, tracer, sink)
 	registerListDirectory(server, workspaceRoot, tracer)
 	registerFindFiles(server, workspaceRoot, tracer)
 	registerSearchInFiles(server, workspaceRoot, tracer)
-	registerReplaceInFile(server, workspaceRoot, tracer)
-	registerFuzzyEdit(server, workspaceRoot, tracer)
+	registerReplaceInFile(server, workspaceRoot, tracer, sink)
+	registerFuzzyEdit(server, workspaceRoot, tracer, sink)
 }
 
 func textResult(text string) *mcpsdk.CallToolResult {
@@ -227,21 +237,27 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer 
 	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range", BriefDescription: "Read the contents of a file", HelpText: readFileHelp})
 }
 
-func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer, sink edit.MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "create_file",
 		Description: "Create a new file with content (errors if file already exists)",
 	}, kernel.WrapToolSpan(tracer, "create_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args CreateFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("create_file", edit.ClassifyOutcome("", outcomeErr)) }()
+
 		root := rootFn()
 		if root == "" {
+			outcomeErr = serr.New(serr.NoWorkspace, "no active workspace")
 			return noWorkspaceError(), nil, nil
 		}
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("create_file").Error()), nil, nil
 		}
 
 		if err := CreateFile(root, args.Path, args.Content); err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 		return textResult("created: " + args.Path), nil, nil
@@ -356,26 +372,34 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines", BriefDescription: "Search file contents using regex patterns", HelpText: searchInFilesHelp})
 }
 
-func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer, sink edit.MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "replace_in_file",
 		Description: "Replace all occurrences of a pattern in a file (literal or regex)",
 	}, kernel.WrapToolSpan(tracer, "replace_in_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		var strategy fuzzy.Strategy
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("replace_in_file", edit.ClassifyOutcome(strategy, outcomeErr)) }()
+
 		root := rootFn()
 		if root == "" {
+			outcomeErr = serr.New(serr.NoWorkspace, "no active workspace")
 			return noWorkspaceError(), nil, nil
 		}
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("replace_in_file").Error()), nil, nil
 		}
 		if args.Pattern == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing pattern")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
 				WithTool("replace_in_file").Error()), nil, nil
 		}
 
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
 
@@ -390,10 +414,13 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 				AllowEllipsis: false, // replace_in_file is literal-oriented
 			})
 			if fErr != nil {
+				outcomeErr = fErr
 				return errorResult(fErr.Error()), nil, nil
 			}
+			strategy = fResult.Strategy
 			newContent := content[:fResult.StartByte] + fResult.ReplacementText + content[fResult.EndByte:]
 			if wErr := OverwriteFile(root, args.Path, newContent); wErr != nil {
+				outcomeErr = wErr
 				return errorResult(wErr.Error()), nil, nil
 			}
 			text := fmt.Sprintf("1 replacement made in %s (fuzzy)\nmatch_strategy: %s\nsimilarity_score: %.2f",
@@ -406,20 +433,27 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)", BriefDescription: "Replace text in a file using exact string matching", HelpText: replaceInFileHelp})
 }
 
-func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer, sink edit.MetricsSink) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "fuzzy_edit",
 		Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)",
 	}, kernel.WrapToolSpan(tracer, "fuzzy_edit", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FuzzyEditArgs) (*mcpsdk.CallToolResult, any, error) {
+		var strategy fuzzy.Strategy
+		var outcomeErr error
+		defer func() { sink.EditOutcomeInc("fuzzy_edit", edit.ClassifyOutcome(strategy, outcomeErr)) }()
+
 		root := rootFn()
 		if root == "" {
+			outcomeErr = serr.New(serr.NoWorkspace, "no active workspace")
 			return noWorkspaceError(), nil, nil
 		}
 		if args.Path == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing path")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
 		if args.Search == "" {
+			outcomeErr = serr.New(serr.InvalidArgs, "missing search")
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: search").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
@@ -427,8 +461,10 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 		allowEllipsis := !args.DisableEllipsis
 		result, err := FuzzyEdit(root, args.Path, args.Search, args.Replacement, allowEllipsis)
 		if err != nil {
+			outcomeErr = err
 			return errorResult(err.Error()), nil, nil
 		}
+		strategy = result.Strategy
 
 		text := fmt.Sprintf("Fuzzy edit applied to %s\nmatch_strategy: %s\nsimilarity_score: %.2f",
 			args.Path, result.Strategy, result.Score)
@@ -436,4 +472,3 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "fuzzy_edit", Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)", BriefDescription: "Apply a fuzzy text edit using search/replace with context matching", HelpText: fuzzyEditHelp})
 }
-

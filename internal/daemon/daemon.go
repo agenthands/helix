@@ -227,8 +227,11 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
 
 	symbols.RegisterTools(mcpServer, k, wsKeyFn)
-	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
-	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer())
+	// Phase 53 plan 53-02: edit/fileops accept a MetricsSink. Plan 53-03
+	// swaps observability.Metrics() in here; for now NoopSink keeps the
+	// call sites compiling while emission tests cover the registration.
+	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn, edit.NoopSink{})
+	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer(), edit.NoopSink{})
 
 	// Diag lease provider.
 	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {

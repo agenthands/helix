@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -18,6 +19,20 @@ type TagCache struct {
 	db      *sql.DB
 	mu      sync.Mutex
 	version int64
+	metrics MetricsSink
+}
+
+// SetMetrics wires a Phase 53 MetricsSink into the cache. Idempotent and
+// nil-safe (nil sink is converted to NoopSink). Daemon calls this in plan
+// 53-03 with *obs.Metrics so cache decisions and extract latencies surface
+// on the owned Prometheus registry.
+func (c *TagCache) SetMetrics(m MetricsSink) {
+	if m == nil {
+		m = NoopSink{}
+	}
+	c.mu.Lock()
+	c.metrics = m
+	c.mu.Unlock()
 }
 
 // NewTagCache opens (or creates) the SQLite tag cache at dbPath,
@@ -48,7 +63,7 @@ func NewTagCache(dbPath string) (*TagCache, error) {
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 
-	return &TagCache{db: db}, nil
+	return &TagCache{db: db, metrics: NoopSink{}}, nil
 }
 
 // GetOrExtract returns cached tags for filePath if the file's mtime has
@@ -64,6 +79,11 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 	}
 	mtime := info.ModTime().UnixNano()
 
+	// Resolve language up front for emission. LangFromExt returns "" for
+	// unsupported extensions; emit with the empty string in that case so
+	// operators can spot path-traversal-style misuse if it happens.
+	lang := LangFromExt(filePath)
+
 	c.mu.Lock()
 
 	// Check if we have a cached mtime for this file.
@@ -76,17 +96,26 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 	if err == nil && cachedMtime == mtime {
 		// Cache hit: load all tags for this file.
 		tags, loadErr := c.loadTags(filePath)
+		sink := c.metrics
 		c.mu.Unlock()
 		if loadErr != nil {
 			return nil, fmt.Errorf("loading cached tags: %w", loadErr)
 		}
+		// Phase 53 D-02: cache hit path.
+		sink.RepoMapCacheInc(lang, ResultHit)
 		return tags, nil
 	}
 
 	// Cache miss or mtime mismatch: extract fresh tags.
+	sink := c.metrics
 	c.mu.Unlock()
 
+	start := time.Now()
 	tags, err := extractFn()
+	sink.RepoMapExtractObserve(lang, time.Since(start).Seconds())
+	// Emit miss whether or not extractFn errored — operators want the
+	// miss-rate to include failed extractions.
+	sink.RepoMapCacheInc(lang, ResultMiss)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package repomap
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -202,6 +203,80 @@ func TestTagCache_Clear(t *testing.T) {
 
 	assert.Equal(t, int32(2), calls1.Load(), "file1 should be re-extracted after Clear")
 	assert.Equal(t, int32(2), calls2.Load(), "file2 should be re-extracted after Clear")
+}
+
+// fakeRepoMapSink is a recording MetricsSink for emission assertions.
+type fakeRepoMapSink struct {
+	hits     int
+	misses   int
+	observed []float64
+	langs    []string
+}
+
+func (f *fakeRepoMapSink) RepoMapCacheInc(lang, result string) {
+	f.langs = append(f.langs, lang)
+	if result == ResultHit {
+		f.hits++
+		return
+	}
+	f.misses++
+}
+
+func (f *fakeRepoMapSink) RepoMapExtractObserve(_ string, s float64) {
+	f.observed = append(f.observed, s)
+}
+
+func TestTagCache_MetricsEmission(t *testing.T) {
+	cache := newTestCache(t)
+	sink := &fakeRepoMapSink{}
+	cache.SetMetrics(sink)
+
+	dir := t.TempDir()
+	filePath := writeTempFile(t, dir, "hello.go", "package main\n\nfunc Hello() {}\n")
+
+	extractFn := func() ([]Tag, error) {
+		return []Tag{
+			{Name: "Hello", Kind: TagDef, File: filePath, Line: 2, Column: 5, StartByte: 20, EndByte: 50},
+		}, nil
+	}
+
+	// Cold path: miss + extract observation.
+	_, err := cache.GetOrExtract(filePath, extractFn)
+	require.NoError(t, err)
+
+	// Warm path: hit, no extract observation.
+	_, err = cache.GetOrExtract(filePath, extractFn)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, sink.hits, "expected exactly 1 hit on the warm path")
+	assert.Equal(t, 1, sink.misses, "expected exactly 1 miss on the cold path")
+	assert.Len(t, sink.observed, 1, "expected exactly 1 extract-duration observation")
+	// All emissions should carry the resolved language label ("go").
+	for _, l := range sink.langs {
+		assert.Equal(t, "go", l)
+	}
+}
+
+// TestTagCache_MetricsEmission_MissOnExtractError verifies that extractFn
+// failures still emit miss + extract-duration so miss-rate dashboards
+// include failed extractions.
+func TestTagCache_MetricsEmission_MissOnExtractError(t *testing.T) {
+	cache := newTestCache(t)
+	sink := &fakeRepoMapSink{}
+	cache.SetMetrics(sink)
+
+	dir := t.TempDir()
+	filePath := writeTempFile(t, dir, "broken.go", "package main\n")
+
+	extractFn := func() ([]Tag, error) {
+		return nil, fmt.Errorf("simulated extractor failure")
+	}
+
+	_, err := cache.GetOrExtract(filePath, extractFn)
+	assert.Error(t, err)
+	assert.Equal(t, 0, sink.hits)
+	assert.Equal(t, 1, sink.misses)
+	assert.Len(t, sink.observed, 1)
 }
 
 func TestTagCache_Persistence(t *testing.T) {

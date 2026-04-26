@@ -81,3 +81,21 @@ func (NoopSink) LSPoolCacheInc(string, string, string) {}
 
 // Compile-time assertion that NoopSink satisfies MetricsSink.
 var _ MetricsSink = NoopSink{}
+
+// SessionTimeoutSink is the parallel sink the pool uses to emit the
+// "timeout" workspace lifecycle phase from checkTTLs (D-04). Defined here
+// rather than importing kernel.SessionMetricsSink to avoid the cycle
+// (kernel imports lspool). The daemon wires a small adapter that forwards
+// SessionTimeout calls to *obs.Metrics.SessionLifecycleInc(lang, "timeout")
+// at construction time (Plan 53-03).
+type SessionTimeoutSink interface {
+	SessionTimeout(language string)
+}
+
+// NoopSessionTimeoutSink is the zero-allocation default for SessionTimeoutSink.
+type NoopSessionTimeoutSink struct{}
+
+// SessionTimeout implements SessionTimeoutSink.
+func (NoopSessionTimeoutSink) SessionTimeout(string) {}
+
+var _ SessionTimeoutSink = NoopSessionTimeoutSink{}

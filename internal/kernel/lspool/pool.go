@@ -36,22 +36,35 @@ func DefaultPoolConfig() PoolConfig {
 // ErrMaxWorkersReached is returned when the pool has reached its maximum worker count.
 var ErrMaxWorkersReached = errors.New("maximum number of workers reached")
 
-
 // Pool manages a pool of LS workers with TTL, pressure eviction, and share-until-dirty policy.
 type Pool struct {
-	mu        sync.RWMutex
-	workers   map[string]*Worker         // keyed by worker ID
-	leases    map[string]*WorkerLease    // keyed by session ID
-	circuits  map[string]*CircuitBreaker // keyed by language
-	registry  *langregistry.Registry
-	installer *langregistry.Installer
-	pressure  MemoryPressure
-	config    PoolConfig
-	logger    *slog.Logger
-	metrics   MetricsSink
-	nextID    int
-	done      chan struct{}
-	runCtx    context.Context // lifecycle context from Run(); workers use this instead of request ctx
+	mu             sync.RWMutex
+	workers        map[string]*Worker         // keyed by worker ID
+	leases         map[string]*WorkerLease    // keyed by session ID
+	circuits       map[string]*CircuitBreaker // keyed by language
+	registry       *langregistry.Registry
+	installer      *langregistry.Installer
+	pressure       MemoryPressure
+	config         PoolConfig
+	logger         *slog.Logger
+	metrics        MetricsSink
+	sessionMetrics SessionTimeoutSink
+	nextID         int
+	done           chan struct{}
+	runCtx         context.Context // lifecycle context from Run(); workers use this instead of request ctx
+}
+
+// SetSessionTimeoutSink wires an optional sink that receives the
+// timeout phase of workspace lifecycle. Defaults to a no-op when unset,
+// so the pool's existing constructors stay backward-compatible. Daemon
+// wiring lives in plan 53-03.
+func (p *Pool) SetSessionTimeoutSink(s SessionTimeoutSink) {
+	if s == nil {
+		s = NoopSessionTimeoutSink{}
+	}
+	p.mu.Lock()
+	p.sessionMetrics = s
+	p.mu.Unlock()
 }
 
 // NewPool creates a new LS worker pool.
@@ -64,16 +77,17 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 		metrics = NoopSink{}
 	}
 	return &Pool{
-		workers:   make(map[string]*Worker),
-		leases:    make(map[string]*WorkerLease),
-		circuits:  make(map[string]*CircuitBreaker),
-		registry:  registry,
-		installer: installer,
-		pressure:  pressure,
-		config:    cfg,
-		logger:    logger.With("component", "lspool"),
-		metrics:   metrics,
-		done:      make(chan struct{}),
+		workers:        make(map[string]*Worker),
+		leases:         make(map[string]*WorkerLease),
+		circuits:       make(map[string]*CircuitBreaker),
+		registry:       registry,
+		installer:      installer,
+		pressure:       pressure,
+		config:         cfg,
+		logger:         logger.With("component", "lspool"),
+		metrics:        metrics,
+		sessionMetrics: NoopSessionTimeoutSink{},
+		done:           make(chan struct{}),
 	}
 }
 
@@ -118,6 +132,8 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 			lease := NewWorkerLease(sessionID, w, false)
 			p.leases[sessionID] = lease
 			p.logger.Info("shared lease acquired", "session", sessionID, "worker", w.ID())
+			// Phase 53 D-02: cache HIT, scope=clean (share-until-dirty match).
+			p.metrics.LSPoolCacheInc(wsKey.Language, ResultHit, ScopeClean)
 			return lease, nil
 		}
 	}
@@ -125,11 +141,21 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 	// Need a new worker. Check circuit breaker first.
 	cb := p.circuitForLanguage(wsKey.Language)
 	if !cb.CanAttempt() {
+		// Phase 53 D-02: cache MISS, scope=crashed (circuit blocked reuse).
+		p.metrics.LSPoolCacheInc(wsKey.Language, ResultMiss, ScopeCrashed)
 		return nil, cb.CircuitOpenErr()
 	}
 
 	// Check max workers limit.
 	if len(p.workers) >= p.config.MaxWorkers {
+		// Phase 53 D-02: cache MISS — pool is at capacity but circuit was OK,
+		// so this is a clean miss (no crash signal). dirty=true callers also
+		// surface here; emit ScopeDirty in that case for accurate accounting.
+		scope := ScopeClean
+		if dirty {
+			scope = ScopeDirty
+		}
+		p.metrics.LSPoolCacheInc(wsKey.Language, ResultMiss, scope)
 		return nil, ErrMaxWorkersReached
 	}
 
@@ -137,6 +163,8 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 	worker, err := p.spawnWorkerLocked(ctx, wsKey)
 	if err != nil {
 		cb.RecordFailure()
+		// Phase 53 D-02: spawn failure is a circuit-relevant signal -> crashed.
+		p.metrics.LSPoolCacheInc(wsKey.Language, ResultMiss, ScopeCrashed)
 		return nil, fmt.Errorf("spawning worker: %w", err)
 	}
 	cb.RecordSuccess()
@@ -144,6 +172,13 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 	lease := NewWorkerLease(sessionID, worker, dirty)
 	p.leases[sessionID] = lease
 	p.logger.Info("new lease acquired", "session", sessionID, "worker", worker.ID(), "dirty", dirty)
+	// Phase 53 D-02: cache MISS, scope=clean for fresh share-eligible spawn,
+	// scope=dirty for dedicated-worker spawn.
+	scope := ScopeClean
+	if dirty {
+		scope = ScopeDirty
+	}
+	p.metrics.LSPoolCacheInc(wsKey.Language, ResultMiss, scope)
 	return lease, nil
 }
 
@@ -354,6 +389,10 @@ func (p *Pool) checkTTLs() {
 			// METRIC-03: idle-TTL retirement path.
 			p.metrics.LSPoolWorkersSet(lang, -1)
 			p.metrics.LSPoolEviction(lang, EvictIdle)
+			// Phase 53 D-04: workspace lifecycle "timeout" phase. Emitted via
+			// the parallel SessionTimeoutSink to avoid the lspool↔kernel cycle.
+			// Daemon adapter forwards this to *obs.Metrics.SessionLifecycleInc(lang, "timeout").
+			p.sessionMetrics.SessionTimeout(lang)
 		}
 	}
 }

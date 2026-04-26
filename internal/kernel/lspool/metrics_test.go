@@ -1,11 +1,14 @@
 package lspool
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/postfix/serena/internal/workspace"
 )
 
 // recordingSink is a thread-safe MetricsSink that captures every call for
@@ -14,10 +17,10 @@ import (
 type recordingSink struct {
 	mu sync.Mutex
 
-	workers       []workerEvent
-	evictions     []evictionEvent
-	circuitStates []circuitEvent
-	restarts      []string
+	workers        []workerEvent
+	evictions      []evictionEvent
+	circuitStates  []circuitEvent
+	restarts       []string
 	cacheDecisions []cacheEvent
 }
 
@@ -237,6 +240,164 @@ func TestCircuit_nilSinkReplacedWithNoop(t *testing.T) {
 	cb.RecordFailure()
 	cb.RecordSuccess()
 	assert.True(t, cb.CanAttempt())
+}
+
+// --- Cache decision emission ---------------------------------------------
+
+// TestPool_CacheMetricsEmission exercises four distinct branches in
+// AcquireLease (hit/clean shared-lease, miss/crashed circuit-blocked,
+// miss/clean MaxWorkers reached, miss/crashed spawn-failure) and asserts
+// each emits exactly one LSPoolCacheInc with the right (result, scope).
+func TestPool_CacheMetricsEmission(t *testing.T) {
+	t.Run("hit/clean shared lease", func(t *testing.T) {
+		sink := &recordingSink{}
+		p := newTestPoolWithSink(t, sink)
+
+		// Pre-inject a Ready worker matching the workspace key.
+		w := fakeWorker("w-go-1", "go")
+		w.workDir = "/tmp/wsA"
+		p.mu.Lock()
+		p.workers[w.ID()] = w
+		p.mu.Unlock()
+
+		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsA", Language: "go"}
+		_, err := p.AcquireLease(context.Background(), "s1", key, false)
+		assert.NoError(t, err)
+
+		_, _, _, _, cache := snapshotAll(sink)
+		if assert.Len(t, cache, 1, "expected one cache emission") {
+			assert.Equal(t, "go", cache[0].lang)
+			assert.Equal(t, ResultHit, cache[0].result)
+			assert.Equal(t, ScopeClean, cache[0].scope)
+		}
+	})
+
+	t.Run("miss/crashed circuit blocked", func(t *testing.T) {
+		sink := &recordingSink{}
+		p := newTestPoolWithSink(t, sink)
+
+		// Trip the circuit so CanAttempt returns false.
+		cb := NewCircuitBreaker("go", 1*time.Hour, 1, sink)
+		cb.RecordFailure() // budget=1, 1 failure trips
+		p.mu.Lock()
+		p.circuits["go"] = cb
+		p.mu.Unlock()
+
+		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsB", Language: "go"}
+		_, err := p.AcquireLease(context.Background(), "s2", key, false)
+		assert.Error(t, err)
+
+		_, _, _, _, cache := snapshotAll(sink)
+		if assert.Len(t, cache, 1) {
+			assert.Equal(t, ResultMiss, cache[0].result)
+			assert.Equal(t, ScopeCrashed, cache[0].scope)
+		}
+	})
+
+	t.Run("miss/clean max workers reached", func(t *testing.T) {
+		sink := &recordingSink{}
+		// MaxWorkers=0 means any AcquireLease (after no warm worker found)
+		// goes straight to ErrMaxWorkersReached.
+		cfg := testPoolConfig()
+		cfg.MaxWorkers = 0
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+
+		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsC", Language: "go"}
+		_, err := p.AcquireLease(context.Background(), "s3", key, false)
+		assert.ErrorIs(t, err, ErrMaxWorkersReached)
+
+		_, _, _, _, cache := snapshotAll(sink)
+		if assert.Len(t, cache, 1) {
+			assert.Equal(t, ResultMiss, cache[0].result)
+			assert.Equal(t, ScopeClean, cache[0].scope)
+		}
+	})
+
+	t.Run("miss/dirty max workers reached", func(t *testing.T) {
+		sink := &recordingSink{}
+		cfg := testPoolConfig()
+		cfg.MaxWorkers = 0
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+
+		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsD", Language: "go"}
+		_, err := p.AcquireLease(context.Background(), "s4", key, true)
+		assert.ErrorIs(t, err, ErrMaxWorkersReached)
+
+		_, _, _, _, cache := snapshotAll(sink)
+		if assert.Len(t, cache, 1) {
+			assert.Equal(t, ResultMiss, cache[0].result)
+			assert.Equal(t, ScopeDirty, cache[0].scope)
+		}
+	})
+
+	t.Run("miss/crashed spawn failure", func(t *testing.T) {
+		sink := &recordingSink{}
+		p := newTestPoolWithSink(t, sink)
+
+		// Use an unregistered language so spawnWorkerLocked errors with
+		// "no language server configured for X" before ever calling Start.
+		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsE", Language: "no_such_lang_xyz"}
+		_, err := p.AcquireLease(context.Background(), "s5", key, false)
+		assert.Error(t, err)
+
+		_, _, _, _, cache := snapshotAll(sink)
+		// Filter to cache emissions (circuit may also emit state events).
+		if assert.GreaterOrEqual(t, len(cache), 1) {
+			last := cache[len(cache)-1]
+			assert.Equal(t, ResultMiss, last.result)
+			assert.Equal(t, ScopeCrashed, last.scope)
+		}
+	})
+}
+
+// snapshotAll extends snapshot() with cache events.
+func snapshotAll(r *recordingSink) ([]workerEvent, []evictionEvent, []circuitEvent, []string, []cacheEvent) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w := append([]workerEvent(nil), r.workers...)
+	e := append([]evictionEvent(nil), r.evictions...)
+	c := append([]circuitEvent(nil), r.circuitStates...)
+	rs := append([]string(nil), r.restarts...)
+	cd := append([]cacheEvent(nil), r.cacheDecisions...)
+	return w, e, c, rs, cd
+}
+
+// TestPool_CheckTTLs_EmitsSessionTimeout asserts that idle-TTL eviction
+// also emits SessionTimeout(lang) via the parallel SessionTimeoutSink
+// (Phase 53 D-04 timeout phase).
+func TestPool_CheckTTLs_EmitsSessionTimeout(t *testing.T) {
+	sink := &recordingSink{}
+	p := newTestPoolWithSink(t, sink)
+	tsink := &recordingTimeoutSink{}
+	p.SetSessionTimeoutSink(tsink)
+
+	// Inject a Ready worker with old LastUsedAt to trigger TTL eviction.
+	w := fakeWorker("w-go-1", "go")
+	wm := w.Metrics()
+	wm.StartedAt = time.Now().Add(-2 * time.Hour)
+	wm.LastUsedAt = time.Now().Add(-2 * time.Hour)
+	p.mu.Lock()
+	p.workers[w.ID()] = w
+	p.mu.Unlock()
+
+	p.checkTTLs()
+
+	tsink.mu.Lock()
+	defer tsink.mu.Unlock()
+	if assert.Len(t, tsink.langs, 1) {
+		assert.Equal(t, "go", tsink.langs[0])
+	}
+}
+
+type recordingTimeoutSink struct {
+	mu    sync.Mutex
+	langs []string
+}
+
+func (r *recordingTimeoutSink) SessionTimeout(language string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.langs = append(r.langs, language)
 }
 
 // --- Pool construction safety --------------------------------------------

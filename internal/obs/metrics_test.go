@@ -43,6 +43,13 @@ func TestMetrics_RegisteredFamilies(t *testing.T) {
 	m.LSPoolEvictions.WithLabelValues("go", "idle").Inc()
 	m.LSPoolCircuitState.WithLabelValues("go").Set(0)
 	m.LSPoolRestarts.WithLabelValues("go").Inc()
+	m.RenameStrategy.WithLabelValues("lsp-native").Inc()
+	// Phase 53 D-01..D-11: prime the five new vectors so they show up in Gather().
+	m.LSPoolCacheInc("go", "hit", "clean")
+	m.RepoMapCacheInc("go", "hit")
+	m.RepoMapExtractObserve("go", 0.001)
+	m.SessionLifecycleInc("go", "activate")
+	m.EditOutcomeInc("replace_symbol_body", "success")
 
 	mfs, err := m.Registry().Gather()
 	if err != nil {
@@ -59,6 +66,14 @@ func TestMetrics_RegisteredFamilies(t *testing.T) {
 		"serena_lspool_evictions_total",
 		"serena_lspool_circuit_state",
 		"serena_lspool_restarts_total",
+		// Phase 47 D-07 — closed in this plan (oversight from Phase 47).
+		"serena_rename_strategy_total",
+		// Phase 53 D-01..D-11 — five new families.
+		"serena_lspool_cache_total",
+		"serena_repomap_cache_total",
+		"serena_repomap_extract_duration_seconds",
+		"serena_session_lifecycle_total",
+		"serena_edit_outcome_total",
 		"go_goroutines",
 		"process_resident_memory_bytes",
 	}
@@ -88,6 +103,12 @@ func TestMetrics_NoopProviderReturnsUsableSink(t *testing.T) {
 	m.LSPoolEviction("go", "idle")
 	m.LSPoolCircuitStateSet("go", 2)
 	m.LSPoolRestart("go")
+	// Phase 53: ensure new helpers also work on the noop sink (D-15).
+	m.LSPoolCacheInc("go", "hit", "clean")
+	m.RepoMapCacheInc("go", "miss")
+	m.RepoMapExtractObserve("go", 0.001)
+	m.SessionLifecycleInc("go", "activate")
+	m.EditOutcomeInc("replace_symbol_body", "success")
 }
 
 // TestMetrics_MultipleConstructionNoPanic proves that each call to newMetrics()

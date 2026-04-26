@@ -25,6 +25,22 @@ var carveOuts = map[string]map[string]bool{
 	// counter. Values enforced at emission (see *Metrics.RenameStrategyInc);
 	// the CI lint only carves the label NAME.
 	"serena_rename_strategy_total": {"strategy": true},
+	// Phase 53 D-01/D-02: lspool cache decisions. result/scope are closed
+	// enums enforced at emission (LSPoolCacheInc); not in AllowedLabels.
+	"serena_lspool_cache_total": {"result": true, "scope": true},
+	// Phase 53 D-01/D-02: repomap tag-cache decisions. result is a closed
+	// enum enforced at emission (RepoMapCacheInc).
+	"serena_repomap_cache_total": {"result": true},
+	// Phase 53 D-10: histogram with only the language label (already in
+	// AllowedLabels); kept here as an explicit no-op carve-out so future
+	// audits see the family was intentionally reviewed.
+	"serena_repomap_extract_duration_seconds": {},
+	// Phase 53 D-04/D-05: workspace session lifecycle. phase is a closed
+	// enum enforced at emission (SessionLifecycleInc).
+	"serena_session_lifecycle_total": {"phase": true},
+	// Phase 53 D-07/D-09: edit-tool outcomes. tool/outcome are closed
+	// enums enforced at emission (EditOutcomeInc).
+	"serena_edit_outcome_total": {"tool": true, "outcome": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -98,6 +114,13 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.LSPoolCircuitState.WithLabelValues("go").Set(0)
 	m.LSPoolRestarts.WithLabelValues("go").Inc()
 	m.RenameStrategy.WithLabelValues("lsp-native").Inc()
+	// Phase 53: prime new vectors via their helper methods so the lint walks
+	// each new family.
+	m.LSPoolCacheInc("go", "hit", "clean")
+	m.RepoMapCacheInc("go", "hit")
+	m.RepoMapExtractObserve("go", 0.001)
+	m.SessionLifecycleInc("go", "activate")
+	m.EditOutcomeInc("replace_symbol_body", "success")
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

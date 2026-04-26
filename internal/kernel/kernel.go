@@ -82,6 +82,13 @@ func (k *Kernel) ActivateWorkspace(ctx context.Context, rootPath string) (*Works
 	defer k.mu.Unlock()
 
 	// Check if already activated.
+	// Phase 53 WR-02 idempotency invariant: SessionLifecycleInc(phase="activate")
+	// is emitted EXACTLY ONCE per workspace per daemon lifetime. Both
+	// lazyActivateFn and SetActivateCallback in the daemon invoke this method;
+	// the early return below ensures the metric is not double-counted. Any
+	// future refactor that re-detects languages on cache hits MUST preserve
+	// this invariant — see TestActivateWorkspace_EmitsActivateOnce in
+	// internal/kernel/kernel_test.go.
 	hash := baseKey.Hash()
 	if rt, ok := k.workspaces[hash]; ok {
 		return rt, nil

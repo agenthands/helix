@@ -23,7 +23,6 @@
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-gopls-ci** -- Make CI green on ubuntu-latest with Go 1.25 and retire the CI benchmark gate (completed 2026-04-25)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-26)
-- [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
@@ -127,24 +126,6 @@ Plans:
 - [x] 51-01-PLAN.md — Add .goreleaser.yml + release.yml + delete publish.yml + internal/cli version scaffold
 - [x] 51-02-PLAN.md — Amend INSTALL.md (download + verify) + add RELEASING.md + README.md pointer + Makefile ldflags
 
-### Phase 52: packaging-distribution-channels
-**Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.
-**Depends on**: Phase 51 (consumes goreleaser artifacts and release metadata)
-**Requirements**: PKG-02, PKG-03, PKG-04
-**Sizing**: L
-**Success Criteria** (what must be TRUE):
-  1. `brew install <tap>/serena` on macOS arm64 and linux amd64 produces a working `serena` binary whose `serena --version` matches the tagged release.
-  2. `scoop install serena` on Windows amd64 produces a working `serena.exe`.
-  3. The chosen Linux package (apt/deb, rpm, or AUR — decision captured in plan) installs via its native tooling and is documented in `INSTALL.md`.
-  4. A release tag triggers automated formula/manifest updates in the tap and bucket repos without manual editing.
-**Plans**: 3 plans
-**Clustering rationale**: PKG-02/03/04 are all downstream consumers of the goreleaser pipeline (Phase 51). Delivering them as one phase with parallel plans keeps them synchronized; PKG-04 was not split into its own phase because goreleaser's `nfpms` integration handles deb/rpm packaging natively — distro complexity is bounded. If AUR ends up more bespoke, it can be isolated to its own plan within this phase.
-
-Plans:
-- [ ] 52-01-PLAN.md — Bootstrap serena-packages repo + PACKAGES_PAT secret (autonomous: false; LICENSE SPDX confirm)
-- [ ] 52-02-PLAN.md — Append nfpms/brews/scoops blocks to .goreleaser.yml + wire PACKAGES_PAT in release.yml
-- [ ] 52-03-PLAN.md — Create release-verify.yml smoke matrix + extend INSTALL.md (4 channels) + RELEASING.md (bootstrap + rotation + repro exclude)
-
 ### Phase 53: obs-metrics-gaps
 **Goal**: Operators can observe cache hit-rate, RepoMap extraction latency, session lifecycle, and edit-tool outcomes via Prometheus metrics with bounded labels.
 **Depends on**: Nothing (builds on existing Prom infra from v1.2)
@@ -200,7 +181,6 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
-| 52 | v1.9 | 0/? | Not started | - |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |

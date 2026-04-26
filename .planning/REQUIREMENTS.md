@@ -22,9 +22,9 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 ### Packaging & Distribution
 
 - [ ] **PKG-01**: GitHub Releases publish multi-arch binaries (darwin/linux/windows × amd64/arm64) with SHA-256 checksums and cryptographic signatures (cosign or minisign) via a reproducible goreleaser pipeline
-- [ ] **PKG-02**: Users can install Serena on macOS and Linux via a Homebrew tap (`brew install <tap>/serena`), with automated formula-update on release
-- [ ] **PKG-03**: Users can install Serena on Windows via a Scoop bucket (`scoop install serena`) with automated manifest update on release
-- [ ] **PKG-04**: Users can install Serena on at least one major Linux distribution via a native package path (apt/deb, rpm, or AUR) — format chosen during planning, documented in INSTALL.md
+- [~] **PKG-02**: ~~Homebrew tap install~~ — Removed 2026-04-26 (Phase 52 cancelled; binary releases on `postfix/serena` are sufficient)
+- [~] **PKG-03**: ~~Scoop bucket install~~ — Removed 2026-04-26 (Phase 52 cancelled)
+- [~] **PKG-04**: ~~Linux native package install~~ — Removed 2026-04-26 (Phase 52 cancelled)
 
 ### Observability
 
@@ -78,9 +78,9 @@ Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 | TOOL-01 | Phase 50 | Pending |
 | TOOL-02 | Phase 50 | Cancelled (Phase 50) |
 | PKG-01 | Phase 51 | Pending |
-| PKG-02 | Phase 52 | Pending |
-| PKG-03 | Phase 52 | Pending |
-| PKG-04 | Phase 52 | Pending |
+| PKG-02 | -- | Removed (Phase 52 cancelled) |
+| PKG-03 | -- | Removed (Phase 52 cancelled) |
+| PKG-04 | -- | Removed (Phase 52 cancelled) |
 | OBS-01 | Phase 54 | Pending |
 | OBS-02 | Phase 54 | Pending |
 | OBS-03 | Phase 53 | Pending |

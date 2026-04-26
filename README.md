@@ -71,6 +71,8 @@ cd serena
 go build ./cmd/serena
 ```
 
+> For prebuilt binaries and signature verification, see [INSTALL.md](INSTALL.md#download-a-prebuilt-binary).
+
 ### Configure Your Client
 
 ```bash

@@ -28,6 +28,62 @@ serena --help
 
 If `serena` is not found, ensure `$(go env GOPATH)/bin` is in your PATH.
 
+## Download a prebuilt binary
+
+Prebuilt binaries for darwin/linux/windows × amd64/arm64 are published on the [Releases page](https://github.com/postfix/serena/releases) for every tagged version.
+
+Download and install (Linux amd64 example — substitute `<os>` and `<arch>` for your platform):
+
+```bash
+VERSION=v1.9.0   # set to the release tag you want
+OS=linux         # one of: linux, darwin, windows
+ARCH=amd64       # one of: amd64, arm64
+
+curl -LO "https://github.com/postfix/serena/releases/download/${VERSION}/serena_${OS}_${ARCH}.tar.gz"
+tar -xzf "serena_${OS}_${ARCH}.tar.gz"
+chmod +x "serena_${OS}_${ARCH}/serena"
+sudo mv "serena_${OS}_${ARCH}/serena" /usr/local/bin/serena
+serena --version
+```
+
+On Windows, download `serena_windows_${ARCH}.zip`, extract with `Expand-Archive`, and place `serena.exe` somewhere on `%PATH%`.
+
+> Note: `--version` from a `go install`-built binary reports `2.0.0-dev`. Only release archives carry full version metadata.
+
+## Verify a release binary
+
+Every release archive ships with a cosign signature (`.sig`) and a Sigstore certificate (`.pem`). The release pipeline uses [cosign keyless signing](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/) — no long-lived signing keys are stored anywhere, and every signature is logged to the public Rekor transparency log.
+
+Verify a downloaded archive end-to-end (Linux amd64 example):
+
+```bash
+VERSION=v1.9.0
+OS=linux
+ARCH=amd64
+ARTIFACT="serena_${OS}_${ARCH}.tar.gz"
+
+# Download archive + signature + certificate + checksums
+curl -LO "https://github.com/postfix/serena/releases/download/${VERSION}/${ARTIFACT}"
+curl -LO "https://github.com/postfix/serena/releases/download/${VERSION}/${ARTIFACT}.sig"
+curl -LO "https://github.com/postfix/serena/releases/download/${VERSION}/${ARTIFACT}.pem"
+curl -LO "https://github.com/postfix/serena/releases/download/${VERSION}/checksums.txt"
+
+# 1. Verify the cosign signature against the canonical workflow identity
+cosign verify-blob \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/postfix/serena/\.github/workflows/release\.yml@refs/tags/v.*$' \
+  --signature "${ARTIFACT}.sig" \
+  --certificate "${ARTIFACT}.pem" \
+  "${ARTIFACT}"
+
+# 2. Verify the SHA-256 checksum
+sha256sum --ignore-missing -c checksums.txt
+```
+
+Both commands must succeed. The `--certificate-identity-regexp` pins verification to releases built by **this** repo's `release.yml` on a `v*` tag — a binary signed by any other workflow or repo will fail verification.
+
+Requires [cosign](https://docs.sigstore.dev/cosign/installation/) v2.x on PATH.
+
 ## Quick Start
 
 The fastest way to configure Serena for your coding agent is the setup CLI:

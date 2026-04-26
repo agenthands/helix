@@ -126,10 +126,13 @@ type lspoolSessionTimeoutAdapter struct {
 }
 
 // SessionTimeout implements lspool.SessionTimeoutSink.
+//
+// Phase 53 WR-05: no nil-guard on a.m — the adapter MUST always be
+// constructed with a real *obs.Metrics (see the wiring contract at
+// daemon.go newDaemon step 5/14). A nil here is a wiring bug, not a
+// runtime condition; surfacing the nil-deref loudly in tests beats
+// silently swallowing emissions.
 func (a lspoolSessionTimeoutAdapter) SessionTimeout(lang string) {
-	if a.m == nil {
-		return
-	}
 	a.m.SessionLifecycleInc(lang, kernel.PhaseTimeout)
 }
 

@@ -148,14 +148,12 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 
 	// Check max workers limit.
 	if len(p.workers) >= p.config.MaxWorkers {
-		// Phase 53 D-02: cache MISS — pool is at capacity but circuit was OK,
-		// so this is a clean miss (no crash signal). dirty=true callers also
-		// surface here; emit ScopeDirty in that case for accurate accounting.
-		scope := ScopeClean
-		if dirty {
-			scope = ScopeDirty
-		}
-		p.metrics.LSPoolCacheInc(wsKey.Language, ResultMiss, scope)
+		// Phase 53 WR-03: capacity exhaustion is orthogonal to cache
+		// effectiveness. Emitting a miss here would distort the hit-rate
+		// signal — operators reading serena_lspool_cache_total expect that
+		// metric to reflect cache reuse, not pool sizing. Skip emission and
+		// surface the capacity error instead, matching the "PREFER skipping
+		// over mislabeling" pattern used in DeactivateWorkspace.
 		return nil, ErrMaxWorkersReached
 	}
 

@@ -294,10 +294,12 @@ func TestPool_CacheMetricsEmission(t *testing.T) {
 		}
 	})
 
-	t.Run("miss/clean max workers reached", func(t *testing.T) {
+	t.Run("max workers reached skips emission (WR-03)", func(t *testing.T) {
+		// Phase 53 WR-03: capacity exhaustion is orthogonal to cache
+		// effectiveness. AcquireLease MUST NOT emit a cache miss when it
+		// returns ErrMaxWorkersReached, otherwise the hit-rate signal in
+		// serena_lspool_cache_total reflects pool sizing rather than reuse.
 		sink := &recordingSink{}
-		// MaxWorkers=0 means any AcquireLease (after no warm worker found)
-		// goes straight to ErrMaxWorkersReached.
 		cfg := testPoolConfig()
 		cfg.MaxWorkers = 0
 		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
@@ -306,28 +308,13 @@ func TestPool_CacheMetricsEmission(t *testing.T) {
 		_, err := p.AcquireLease(context.Background(), "s3", key, false)
 		assert.ErrorIs(t, err, ErrMaxWorkersReached)
 
-		_, _, _, _, cache := snapshotAll(sink)
-		if assert.Len(t, cache, 1) {
-			assert.Equal(t, ResultMiss, cache[0].result)
-			assert.Equal(t, ScopeClean, cache[0].scope)
-		}
-	})
-
-	t.Run("miss/dirty max workers reached", func(t *testing.T) {
-		sink := &recordingSink{}
-		cfg := testPoolConfig()
-		cfg.MaxWorkers = 0
-		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
-
-		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsD", Language: "go"}
-		_, err := p.AcquireLease(context.Background(), "s4", key, true)
+		// dirty=true must also skip.
+		keyD := workspace.WorkspaceKey{RepoRoot: "/tmp/wsD", Language: "go"}
+		_, err = p.AcquireLease(context.Background(), "s4", keyD, true)
 		assert.ErrorIs(t, err, ErrMaxWorkersReached)
 
 		_, _, _, _, cache := snapshotAll(sink)
-		if assert.Len(t, cache, 1) {
-			assert.Equal(t, ResultMiss, cache[0].result)
-			assert.Equal(t, ScopeDirty, cache[0].scope)
-		}
+		assert.Empty(t, cache, "capacity exhaustion must NOT emit cache miss (WR-03)")
 	})
 
 	t.Run("miss/crashed spawn failure", func(t *testing.T) {

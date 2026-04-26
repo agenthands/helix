@@ -1,0 +1,56 @@
+# Phase 51 — release pipeline. See .planning/phases/51-packaging-goreleaser/.
+# Locked decisions: D-09 (tag pattern v*), D-17 (permissions), D-18 (ubuntu-latest, Go 1.25.x).
+# Pinned action versions per D-11; bump intentionally, not auto.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # D-17 / Q7: least-privilege at JOB level (not workflow level).
+    # contents: write — create GitHub Release, upload archives + sigs.
+    # id-token: write — request OIDC token for Sigstore Fulcio (cosign keyless).
+    # NOT needed: packages: write (no docker push), attestations: write (no SBOM).
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # CRITICAL: full history for goreleaser tag/changelog detection.
+          # See RESEARCH.md Pitfall 2.
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      # Required because internal/treesitter/bindings/{r,swift} use cgo;
+      # zig is the cross-compiler invoked by .goreleaser.yml builds[0].overrides
+      # (CC=zig cc -target ..., CXX=zig c++ -target ...). See DEVIATION block
+      # in .goreleaser.yml for context.
+      - name: Setup Zig (cross-compile toolchain)
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.7.0
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6.4.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

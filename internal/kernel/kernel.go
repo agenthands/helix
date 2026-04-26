@@ -172,3 +172,42 @@ func (k *Kernel) HealthStatus() *lspool.HealthReport {
 func (k *Kernel) Pool() *lspool.Pool {
 	return k.pool
 }
+
+// ActiveLanguages returns a snapshot of the languages across every
+// currently-active WorkspaceRuntime. Used by the daemon's signal-first
+// shutdown sweep to emit one SessionLifecycleInc(lang, "shutdown") per
+// still-active language before kernel teardown (Phase 53 D-04).
+//
+// When a workspace was activated but no language was detected, an empty
+// string is included so dashboards can still surface the shutdown of an
+// "unknown language" workspace (mirrors ActivateWorkspace's empty-label
+// emission).
+func (k *Kernel) ActiveLanguages() []string {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	var out []string
+	for _, rt := range k.workspaces {
+		langs := rt.Languages()
+		if len(langs) == 0 {
+			out = append(out, "")
+			continue
+		}
+		out = append(out, langs...)
+	}
+	return out
+}
+
+// LanguagesForRoot returns the languages detected for the workspace
+// rooted at the given repository path, or nil if no workspace runtime
+// matches. Used by the daemon's gRPC DeactivateWorkspace handler to emit
+// SessionLifecycleInc(lang, "deactivate") per detected language.
+func (k *Kernel) LanguagesForRoot(repoRoot string) []string {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	for _, rt := range k.workspaces {
+		if rt.Key().RepoRoot == repoRoot {
+			return rt.Languages()
+		}
+	}
+	return nil
+}

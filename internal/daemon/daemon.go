@@ -114,6 +114,23 @@ type Daemon struct {
 	activeProfile  *profile.Profile
 	diagStore      *diag.DiagnosticStore
 	bodyExtractor  *edit.BodyExtractor
+	metrics        *obs.Metrics // Phase 53: session lifecycle emission handle
+}
+
+// lspoolSessionTimeoutAdapter forwards the parallel lspool.SessionTimeoutSink
+// SessionTimeout(lang) call into the unified *obs.Metrics SessionLifecycleInc
+// helper with phase="timeout". Plan 53-02 chose this adapter pattern (Pitfall
+// 3 sub-option (a)) to bypass the lspool↔kernel import cycle.
+type lspoolSessionTimeoutAdapter struct {
+	m *obs.Metrics
+}
+
+// SessionTimeout implements lspool.SessionTimeoutSink.
+func (a lspoolSessionTimeoutAdapter) SessionTimeout(lang string) {
+	if a.m == nil {
+		return
+	}
+	a.m.SessionLifecycleInc(lang, kernel.PhaseTimeout)
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -188,7 +205,16 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 
 	// 5. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
-	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
+	// Phase 53 plan 53-03: capture the metrics handle once and reuse it for
+	// all four sinks (lspool, repomap, edit, kernel session) so every consumer
+	// shares the same prometheus registry.
+	metrics := observability.Metrics()
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, metrics, observability.Tracer())
+
+	// Phase 53 plan 53-03: wire the kernel session lifecycle sink and the
+	// parallel lspool session-timeout sink (Pitfall 3 sub-option (a)).
+	k.SetSessionMetricsSink(metrics)
+	k.Pool().SetSessionTimeoutSink(lspoolSessionTimeoutAdapter{m: metrics})
 
 	// 6. Create diagnostic store and body extractor.
 	// NOTE: step numbering preserved from original New() for git-blame continuity.
@@ -227,11 +253,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
 
 	symbols.RegisterTools(mcpServer, k, wsKeyFn)
-	// Phase 53 plan 53-02: edit/fileops accept a MetricsSink. Plan 53-03
-	// swaps observability.Metrics() in here; for now NoopSink keeps the
-	// call sites compiling while emission tests cover the registration.
-	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn, edit.NoopSink{})
-	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer(), edit.NoopSink{})
+	// Phase 53 plan 53-03: edit and fileops both consume edit.MetricsSink so
+	// the shared *obs.Metrics handle covers serena_edit_outcome_total emission
+	// across replace_symbol_body, insert_*, rename_symbol, safe_delete_symbol,
+	// replace_in_file, fuzzy_edit, and create_file.
+	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn, metrics)
+	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer(), metrics)
 
 	// Diag lease provider.
 	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
@@ -281,6 +308,16 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// 12a. Wire shared GrammarRegistry into repomap skill (BUG-04, D-01/D-02/D-03).
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
 		rs.SetRegistry(grammarRegistry)
+	}
+
+	// 12a-bis. Phase 53 plan 53-03: wire *obs.Metrics into the TagCache so
+	// serena_repomap_cache_total{result} and the
+	// serena_repomap_extract_duration_seconds histogram populate from
+	// GetOrExtract. Idempotent and nil-safe (SetMetrics handles nil).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		if cache := rs.Cache(); cache != nil {
+			cache.SetMetrics(metrics)
+		}
 	}
 
 	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
@@ -395,6 +432,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		activeProfile: activeProfile,
 		diagStore:     diagStore,
 		bodyExtractor: bodyExtractor,
+		metrics:       metrics,
 	}, nil
 }
 

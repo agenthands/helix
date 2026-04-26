@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-26T12:39:48.482Z"
-last_activity: 2026-04-26 -- Phase 52 cancelled and removed from roadmap (binary releases on postfix/serena suffice; no package-manager channels needed)
+last_updated: "2026-04-26T13:47:41.126Z"
+last_activity: 2026-04-26
 progress:
   total_phases: 10
-  completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
+  completed_phases: 8
+  total_plans: 23
+  completed_plans: 23
   percent: 100
 ---
 
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 51 — packaging-goreleaser
+**Current focus:** Phase 53 — obs-metrics-gaps
 
 ## Current Position
 
-Phase: 51 (packaging-goreleaser) — EXECUTING
-Plan: 1 of 2
-Status: Ready to execute
-Last activity: 2026-04-26 -- Phase 52 cancelled and removed from roadmap (binary releases on postfix/serena suffice; no package-manager channels needed)
+Phase: 56
+Plan: Not started
+Status: Executing Phase 53
+Last activity: 2026-04-26
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 122
+- Total plans completed: 125
 - Average duration: ~15 min
 - Total execution time: ~18 hours
 

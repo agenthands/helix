@@ -23,7 +23,7 @@
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-gopls-ci** -- Make CI green on ubuntu-latest with Go 1.25 and retire the CI benchmark gate (completed 2026-04-25)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-26)
-- [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
+- [x] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes) (completed 2026-04-26)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
 
@@ -136,12 +136,12 @@ Plans:
   2. All new labels are bounded (no unbounded cardinality) — a cardinality test asserts max series per metric.
   3. `USAGE.md` Observability section documents each new metric with its labels and semantics.
   4. Noop-default invariant preserved — metrics are zero-alloc when observability is disabled.
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 53-01-PLAN.md — Extend *obs.Metrics with five new vectors + helpers + cardinality / zero-alloc tests
-- [ ] 53-02-PLAN.md — Per-package sinks + emission at lspool/repomap/edit/kernel call sites + fuzzy.ErrAmbiguous sentinel
-- [ ] 53-03-PLAN.md — Daemon wiring + four var _ assertions + USAGE.md Observability docs + ROADMAP reconciliation
+- [x] 53-01-PLAN.md — Extend *obs.Metrics with five new vectors + helpers + cardinality / zero-alloc tests
+- [x] 53-02-PLAN.md — Per-package sinks + emission at lspool/repomap/edit/kernel call sites + fuzzy.ErrAmbiguous sentinel
+- [x] 53-03-PLAN.md — Daemon wiring + four var _ assertions + USAGE.md Observability docs + ROADMAP reconciliation
 
 ### Phase 54: obs-dashboards-runbooks
 **Goal**: Operators can import ready-made Grafana dashboards and follow written runbooks for the four most common failure modes.
@@ -186,7 +186,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
-| 53 | v1.9 | 0/3 | In progress | - |
+| 53 | v1.9 | 3/3 | Complete    | 2026-04-26 |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |

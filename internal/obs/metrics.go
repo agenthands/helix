@@ -48,6 +48,21 @@ type Metrics struct {
 	// internal/mcp.RecordRenameStrategy). The "strategy" label is carved
 	// out of AllowedLabels in metrics_labels_test.go for this family only.
 	RenameStrategy *prometheus.CounterVec
+
+	// Phase 53 D-01/D-02: lspool cache decisions (result hit|miss; scope clean|dirty|crashed).
+	LSPoolCache *prometheus.CounterVec
+
+	// Phase 53 D-01/D-02: repomap tag-cache decisions (result hit|miss).
+	RepoMapCache *prometheus.CounterVec
+
+	// Phase 53 D-10/D-11: repomap tag-extraction latency by language (DefBuckets).
+	RepoMapExtractDuration *prometheus.HistogramVec
+
+	// Phase 53 D-04/D-05: workspace session lifecycle (phase activate|deactivate|timeout|shutdown).
+	SessionLifecycle *prometheus.CounterVec
+
+	// Phase 53 D-07/D-09: edit-tool outcomes (closed tool allowlist; outcome success|fuzzy_applied|refused_ambiguous|failed).
+	EditOutcome *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -114,6 +129,42 @@ func newMetrics() *Metrics {
 			// for this family only (Phase 47 D-07). Enforced at emission sites.
 			[]string{"strategy"},
 		),
+		LSPoolCache: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "serena_lspool_cache_total",
+				Help: "LS pool cache decisions by language, result (hit|miss), and scope (clean|dirty|crashed).",
+			},
+			[]string{"language", "result", "scope"},
+		),
+		RepoMapCache: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "serena_repomap_cache_total",
+				Help: "RepoMap tag cache decisions by language and result (hit|miss).",
+			},
+			[]string{"language", "result"},
+		),
+		RepoMapExtractDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "serena_repomap_extract_duration_seconds",
+				Help:    "RepoMap tag extraction latency by language.",
+				Buckets: prometheus.DefBuckets,
+			},
+			[]string{"language"},
+		),
+		SessionLifecycle: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "serena_session_lifecycle_total",
+				Help: "Workspace session lifecycle transitions (activate|deactivate|timeout|shutdown).",
+			},
+			[]string{"language", "phase"},
+		),
+		EditOutcome: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "serena_edit_outcome_total",
+				Help: "Edit-tool outcomes by tool (closed allowlist) and outcome (success|fuzzy_applied|refused_ambiguous|failed).",
+			},
+			[]string{"tool", "outcome"},
+		),
 	}
 
 	reg.MustRegister(
@@ -124,6 +175,11 @@ func newMetrics() *Metrics {
 		m.LSPoolCircuitState,
 		m.LSPoolRestarts,
 		m.RenameStrategy,
+		m.LSPoolCache,
+		m.RepoMapCache,
+		m.RepoMapExtractDuration,
+		m.SessionLifecycle,
+		m.EditOutcome,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -173,4 +229,70 @@ func (m *Metrics) RenameStrategyInc(strategy string) {
 		return
 	}
 	m.RenameStrategy.WithLabelValues(strategy).Inc()
+}
+
+// --- Phase 53 helper methods (FROZEN signatures — plans 53-02/53-03) ---
+
+// LSPoolCacheInc increments the lspool cache decision counter.
+// result MUST be {hit, miss}; scope MUST be {clean, dirty, crashed}.
+// Unknown values are dropped to preserve bounded cardinality (D-02).
+func (m *Metrics) LSPoolCacheInc(language, result, scope string) {
+	if result != "hit" && result != "miss" {
+		return
+	}
+	if scope != "clean" && scope != "dirty" && scope != "crashed" {
+		return
+	}
+	m.LSPoolCache.WithLabelValues(language, result, scope).Inc()
+}
+
+// RepoMapCacheInc increments the repomap tag-cache decision counter.
+// result MUST be {hit, miss}; unknown values are dropped (D-02).
+func (m *Metrics) RepoMapCacheInc(language, result string) {
+	if result != "hit" && result != "miss" {
+		return
+	}
+	m.RepoMapCache.WithLabelValues(language, result).Inc()
+}
+
+// RepoMapExtractObserve records a repomap tag-extraction latency sample for
+// a language. language is open (bounded only by the LS catalog) so no enum
+// guard is applied (D-10).
+func (m *Metrics) RepoMapExtractObserve(language string, seconds float64) {
+	m.RepoMapExtractDuration.WithLabelValues(language).Observe(seconds)
+}
+
+// SessionLifecycleInc increments the workspace session lifecycle counter.
+// phase MUST be {activate, deactivate, timeout, shutdown}; unknown values
+// are dropped (D-04).
+func (m *Metrics) SessionLifecycleInc(language, phase string) {
+	if phase != "activate" && phase != "deactivate" && phase != "timeout" && phase != "shutdown" {
+		return
+	}
+	m.SessionLifecycle.WithLabelValues(language, phase).Inc()
+}
+
+// EditOutcomeInc increments the edit-tool outcome counter.
+// tool MUST be in the inline closed allowlist below (mirrors edit.AllowedTools
+// to be defined in plan 53-02; duplicating the string set here avoids an
+// import cycle — internal/obs imports nothing back). outcome MUST be
+// {success, fuzzy_applied, refused_ambiguous, failed}. Unknown values for
+// either dimension drop silently (D-07/D-08).
+//
+// Read-only diagnostics tools are INTENTIONALLY excluded from the allowlist
+// — they are not edits (RESEARCH.md A3, Open Question 3).
+func (m *Metrics) EditOutcomeInc(tool, outcome string) {
+	switch tool {
+	case "replace_symbol_body", "insert_before_symbol", "insert_after_symbol",
+		"rename_symbol", "safe_delete_symbol",
+		"replace_in_file", "fuzzy_edit", "create_file":
+		// allowed
+	default:
+		return
+	}
+	if outcome != "success" && outcome != "fuzzy_applied" &&
+		outcome != "refused_ambiguous" && outcome != "failed" {
+		return
+	}
+	m.EditOutcome.WithLabelValues(tool, outcome).Inc()
 }

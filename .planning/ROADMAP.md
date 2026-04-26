@@ -137,8 +137,13 @@ Plans:
   2. `scoop install serena` on Windows amd64 produces a working `serena.exe`.
   3. The chosen Linux package (apt/deb, rpm, or AUR — decision captured in plan) installs via its native tooling and is documented in `INSTALL.md`.
   4. A release tag triggers automated formula/manifest updates in the tap and bucket repos without manual editing.
-**Plans**: TBD
+**Plans**: 3 plans
 **Clustering rationale**: PKG-02/03/04 are all downstream consumers of the goreleaser pipeline (Phase 51). Delivering them as one phase with parallel plans keeps them synchronized; PKG-04 was not split into its own phase because goreleaser's `nfpms` integration handles deb/rpm packaging natively — distro complexity is bounded. If AUR ends up more bespoke, it can be isolated to its own plan within this phase.
+
+Plans:
+- [ ] 52-01-PLAN.md — Bootstrap serena-packages repo + PACKAGES_PAT secret (autonomous: false; LICENSE SPDX confirm)
+- [ ] 52-02-PLAN.md — Append nfpms/brews/scoops blocks to .goreleaser.yml + wire PACKAGES_PAT in release.yml
+- [ ] 52-03-PLAN.md — Create release-verify.yml smoke matrix + extend INSTALL.md (4 channels) + RELEASING.md (bootstrap + rotation + repro exclude)
 
 ### Phase 53: obs-metrics-gaps
 **Goal**: Operators can observe cache hit-rate, RepoMap extraction latency, session lifecycle, and edit-tool outcomes via Prometheus metrics with bounded labels.

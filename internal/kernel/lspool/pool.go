@@ -157,6 +157,11 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 		return nil, ErrMaxWorkersReached
 	}
 
+	// Phase 53 IN-04: capture circuit failure count BEFORE spawn so the
+	// restart-after-failures emission is independent of cb.RecordSuccess()
+	// ordering. spawnWorkerLocked no longer emits LSPoolRestart itself.
+	priorFailures := cb.Failures()
+
 	// Spawn new worker.
 	worker, err := p.spawnWorkerLocked(ctx, wsKey)
 	if err != nil {
@@ -166,6 +171,11 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 		return nil, fmt.Errorf("spawning worker: %w", err)
 	}
 	cb.RecordSuccess()
+	// Phase 53 D-15 / IN-04: emit a restart event when the circuit had
+	// recorded failures before this successful spawn.
+	if priorFailures > 0 {
+		p.metrics.LSPoolRestart(wsKey.Language)
+	}
 
 	lease := NewWorkerLease(sessionID, worker, dirty)
 	p.leases[sessionID] = lease
@@ -226,6 +236,11 @@ func (p *Pool) PromoteToDirty(ctx context.Context, sessionID string) (*WorkerLea
 		return nil, ErrMaxWorkersReached
 	}
 
+	// Phase 53 IN-04: capture circuit failure count BEFORE spawn so the
+	// restart-after-failures emission is independent of cb.RecordSuccess()
+	// ordering. spawnWorkerLocked no longer emits LSPoolRestart itself.
+	priorFailures := cb.Failures()
+
 	// Spawn new dedicated worker.
 	newWorker, err := p.spawnWorkerLocked(ctx, wsKey)
 	if err != nil {
@@ -233,6 +248,11 @@ func (p *Pool) PromoteToDirty(ctx context.Context, sessionID string) (*WorkerLea
 		return nil, fmt.Errorf("spawning dirty worker: %w", err)
 	}
 	cb.RecordSuccess()
+	// Phase 53 D-15 / IN-04: emit a restart event when the circuit had
+	// recorded failures before this successful spawn.
+	if priorFailures > 0 {
+		p.metrics.LSPoolRestart(wsKey.Language)
+	}
 
 	// Remove old lease.
 	delete(p.leases, sessionID)
@@ -329,13 +349,13 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	p.workers[id] = worker
 	// METRIC-03: worker gauge +1 on spawn.
 	p.metrics.LSPoolWorkersSet(worker.Language(), +1)
-	// If the circuit for this language has recorded failures, treat this spawn
-	// as a restart after a crash (D-15). RecordSuccess will reset the counter
-	// immediately after, so the order matters: emit before the success signal
-	// that the caller issues.
-	if cb, ok := p.circuits[wsKey.Language]; ok && cb.Failures() > 0 {
-		p.metrics.LSPoolRestart(wsKey.Language)
-	}
+	// Phase 53 IN-04: the restart-after-failures emission moved to the
+	// callers (AcquireLease / PromoteToDirty), which capture priorFailures
+	// BEFORE spawnWorkerLocked runs and emit only after a successful spawn.
+	// Keeping the emission here previously coupled correctness to the
+	// caller invoking cb.RecordSuccess() AFTER spawn returned — fragile if
+	// a future refactor inlines RecordSuccess inside this helper. The
+	// caller-driven pattern decouples the metric from temporal ordering.
 	return worker, nil
 }
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-26T09:55:18.550Z"
+last_updated: "2026-04-26T12:39:48.482Z"
 last_activity: 2026-04-26 -- Phase 52 cancelled and removed from roadmap (binary releases on postfix/serena suffice; no package-manager channels needed)
 progress:
-  total_phases: 11
+  total_phases: 10
   completed_phases: 7
-  total_plans: 23
+  total_plans: 20
   completed_plans: 20
-  percent: 87
+  percent: 100
 ---
 
 # Project State

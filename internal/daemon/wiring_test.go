@@ -3,6 +3,8 @@ package daemon
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/postfix/serena/internal/kernel"
 	"github.com/postfix/serena/internal/kernel/edit"
 	"github.com/postfix/serena/internal/kernel/lspool"
@@ -80,4 +82,36 @@ func TestObsMetricsIsSessionSink(t *testing.T) {
 	sink.SessionLifecycleInc("go", kernel.PhaseDeactivate)
 	sink.SessionLifecycleInc("go", kernel.PhaseTimeout)
 	sink.SessionLifecycleInc("go", kernel.PhaseShutdown)
+}
+
+// TestEditOutcomeAllowlist_DriftGuard locks the WR-03/IN-03 invariant:
+// every tool in edit.AllowedTools MUST also appear in the inline switch
+// in (*obs.Metrics).EditOutcomeInc — drift is otherwise silent (the
+// helper-side guard drops unknown tools without logging).
+//
+// The test feeds each entry of edit.AllowedTools through a real
+// (registered) *obs.Metrics and asserts the labelled series increments.
+// If a tool is added to edit.AllowedTools but not to the obs switch, the
+// counter stays at 0 and this test fails loudly.
+func TestEditOutcomeAllowlist_DriftGuard(t *testing.T) {
+	provider := obs.Noop(nil)
+	metrics := provider.Metrics()
+	if metrics == nil {
+		t.Fatal("obs.Noop(...).Metrics() returned nil")
+	}
+
+	// Sanity: allowlist is non-empty.
+	if len(edit.AllowedTools) == 0 {
+		t.Fatal("edit.AllowedTools is empty — allowlist must enumerate at least one edit tool")
+	}
+
+	for tool := range edit.AllowedTools {
+		// Use a fresh outcome label per call so each (tool, outcome)
+		// series is unambiguous.
+		metrics.EditOutcomeInc(tool, edit.OutcomeSuccess)
+		got := testutil.ToFloat64(metrics.EditOutcome.WithLabelValues(tool, edit.OutcomeSuccess))
+		if got != 1 {
+			t.Errorf("edit.AllowedTools entry %q is NOT in the obs.Metrics.EditOutcomeInc inline switch — series stayed at %v after one increment. The two allowlists have drifted; align internal/obs/metrics.go EditOutcomeInc with internal/kernel/edit/metrics.go AllowedTools.", tool, got)
+		}
+	}
 }

@@ -59,7 +59,7 @@ func NewRootCommand() *cobra.Command {
 func runRoot(cmd *cobra.Command, args []string) error {
 	showVersion, _ := cmd.Flags().GetBool("version")
 	if showVersion {
-		fmt.Println("serena version 2.0.0-dev")
+		fmt.Println(FormatVersion())
 		return nil
 	}
 

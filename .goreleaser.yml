@@ -1,0 +1,146 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Phase 51 — packaging-goreleaser. See .planning/phases/51-packaging-goreleaser/.
+# Locked decisions: D-02 (sign archives + checksum), D-10 (prerelease auto),
+# D-11 (v2 schema, repo-root path), D-12 (6-binary matrix), D-13 (build flags),
+# D-14 (archive layout).
+version: 2
+
+project_name: serena
+
+# DEVIATION from D-13 `CGO_ENABLED=0`:
+#
+# The serena binary requires CGO at build time because the tree-sitter
+# language bindings under internal/treesitter/bindings/{r,swift} use cgo
+# (#cgo CFLAGS + #include of tree-sitter parser.c/scanner.c). Building with
+# CGO_ENABLED=0 fails with `build constraints exclude all Go files` on
+# those packages — verified in 51-01 execution (snapshot smoke test).
+#
+# Mitigation: enable CGO and use zig as the cross-compiler, which is the
+# standard 2026 pattern for Go projects with tree-sitter dependencies.
+# Reproducibility (D-13's primary intent) is preserved via -trimpath,
+# -buildvcs=false, mod_timestamp, and ldflags pinned to {{.CommitDate}}.
+#
+# CC mappings produce static binaries:
+#   linux/amd64   → zig cc -target x86_64-linux-musl
+#   linux/arm64   → zig cc -target aarch64-linux-musl
+#   darwin/amd64  → zig cc -target x86_64-macos-none
+#   darwin/arm64  → zig cc -target aarch64-macos-none
+#   windows/amd64 → zig cc -target x86_64-windows-gnu
+#   windows/arm64 → zig cc -target aarch64-windows-gnu
+#
+# release.yml installs zig before invoking goreleaser-action.
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: serena
+    main: ./cmd/serena
+    binary: serena
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Per-target CC via overrides: avoids brittle env templating. zig cc is the
+    # cross-compiler; release.yml installs zig before invoking goreleaser.
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-linux-musl
+          - CXX=zig c++ -target x86_64-linux-musl
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-linux-musl
+          - CXX=zig c++ -target aarch64-linux-musl
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-macos-none
+          - CXX=zig c++ -target x86_64-macos-none
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-macos-none
+          - CXX=zig c++ -target aarch64-macos-none
+      - goos: windows
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-windows-gnu
+          - CXX=zig c++ -target x86_64-windows-gnu
+      - goos: windows
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-windows-gnu
+          - CXX=zig c++ -target aarch64-windows-gnu
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/postfix/serena/internal/cli.Version={{.Version}}
+      - -X github.com/postfix/serena/internal/cli.Commit={{.FullCommit}}
+      - -X github.com/postfix/serena/internal/cli.Date={{.CommitDate}}
+
+gomod:
+  proxy: true
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+archives:
+  - id: archive
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    builds_info:
+      mtime: "{{ .CommitTimestamp }}"
+    files:
+      - LICENSE*
+      - README*
+      - INSTALL.md
+
+# D-02: sign BOTH the checksum file AND each archive (two signs entries).
+# Two-file form (--signature + --certificate) per D-03 — INSTALL.md verify
+# command pairs to this output shape. Do NOT switch to --bundle.
+signs:
+  - id: sign-checksum
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    output: true
+  - id: sign-archives
+    cmd: cosign
+    artifacts: archive
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    output: true
+
+release:
+  prerelease: auto
+  draft: false
+  mode: replace

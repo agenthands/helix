@@ -132,7 +132,7 @@ Plans:
 **Requirements**: OBS-03
 **Sizing**: M
 **Success Criteria** (what must be TRUE):
-  1. `/metrics` exposes new series: `serena_lspool_cache_hits_total`, `serena_repomap_cache_hits_total`, `serena_repomap_extract_duration_seconds` (histogram), `serena_session_lifecycle_total` (counter by phase), `serena_edit_outcome_total` (counter by tool + outcome).
+  1. `/metrics` exposes new series: `serena_lspool_cache_total{language,result,scope}`, `serena_repomap_cache_total{language,result}`, `serena_repomap_extract_duration_seconds` (histogram by language), `serena_session_lifecycle_total` (counter by language + phase), `serena_edit_outcome_total` (counter by tool + outcome). Hit-rate is computed in PromQL via `rate({result="hit"}[5m]) / rate(...[5m])` per CONTEXT.md D-01.
   2. All new labels are bounded (no unbounded cardinality) — a cardinality test asserts max series per metric.
   3. `USAGE.md` Observability section documents each new metric with its labels and semantics.
   4. Noop-default invariant preserved — metrics are zero-alloc when observability is disabled.
@@ -186,7 +186,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
-| 53 | v1.9 | 0/? | Not started | - |
+| 53 | v1.9 | 0/3 | In progress | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |

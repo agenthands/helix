@@ -682,6 +682,84 @@ serena_lspool_workers
 rate(serena_lspool_evictions_total[5m])
 ```
 
+#### Phase 53 metric families (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
+
+> **Bounded labels:** All five families below use closed-enum allowlists at
+> the helper-method layer (`internal/obs/metrics.go`). Unknown values are
+> silently dropped — the registry is never polluted with unbounded label
+> cardinality. The `language` label is bounded by Serena's 52-language
+> registry; every other label is a fixed enum.
+
+##### serena_lspool_cache_total
+
+- **Type:** counter
+- **Labels:** `language`, `result` (`hit` | `miss`), `scope` (`clean` | `dirty` | `crashed`)
+- **Semantics:** LS pool cache decisions for share-until-dirty worker reuse. `scope=clean` means a clean (non-dirty) acquire; `scope=dirty` means file changes invalidated reuse; `scope=crashed` means the circuit blocked the acquire OR a spawn attempt failed.
+- **Hit-rate PromQL:**
+  ```promql
+  rate(serena_lspool_cache_total{result="hit"}[5m])
+    / rate(serena_lspool_cache_total[5m])
+  ```
+- **Cardinality cap:** 312 (52 langs × 2 results × 3 scopes).
+
+##### serena_repomap_cache_total
+
+- **Type:** counter
+- **Labels:** `language`, `result` (`hit` | `miss`)
+- **Semantics:** RepoMap tag-cache decisions, driven by mtime invalidation in `internal/repomap/cache.go`. A miss covers both cold cache and stale-mtime entries; emission fires even when extraction subsequently errors so miss-rate dashboards include failed extractions.
+- **Hit-rate PromQL:**
+  ```promql
+  rate(serena_repomap_cache_total{result="hit"}[5m])
+    / rate(serena_repomap_cache_total[5m])
+  ```
+- **Cardinality cap:** 104 (52 langs × 2 results).
+
+##### serena_repomap_extract_duration_seconds
+
+- **Type:** histogram (`prometheus.DefBuckets`)
+- **Labels:** `language`
+- **Semantics:** Wall-clock time for tree-sitter (or LSP `documentSymbol` fallback) tag extraction on a cache miss. Observed even when extraction errors so the histogram reflects real cold-path cost.
+- **p95 PromQL:**
+  ```promql
+  histogram_quantile(
+    0.95,
+    sum by (language, le) (rate(serena_repomap_extract_duration_seconds_bucket[5m]))
+  )
+  ```
+- **Cardinality cap:** 52 series (one per language).
+
+##### serena_session_lifecycle_total
+
+- **Type:** counter
+- **Labels:** `language`, `phase` (`activate` | `deactivate` | `timeout` | `shutdown`)
+- **Semantics:** Workspace-level session lifecycle transitions.
+  - `activate` fires from `kernel.ActivateWorkspace` (lazy-init and explicit `activate_project` converge here); one increment per detected language.
+  - `deactivate` fires from the gRPC `DeactivateWorkspace` handler when forwarder cleanup runs; one increment per detected language for the workspace at that root.
+  - `timeout` means a warm worker was idle-evicted by `pool.checkTTLs`. NOTE: this is *worker-level* idle eviction, not a user-session timeout — Serena v1.2 has no first-class user session. The pool emits via a parallel `lspool.SessionTimeoutSink` that the daemon adapter-forwards to the unified counter (avoids the lspool↔kernel import cycle).
+  - `shutdown` fires once per still-active language during signal-first daemon shutdown, BEFORE kernel teardown.
+- **PromQL:**
+  ```promql
+  sum by (phase) (rate(serena_session_lifecycle_total[5m]))
+  ```
+- **Cardinality cap:** 208 (52 langs × 4 phases).
+
+##### serena_edit_outcome_total
+
+- **Type:** counter
+- **Labels:** `tool` (closed allowlist below), `outcome` (`success` | `fuzzy_applied` | `refused_ambiguous` | `failed`)
+- **Tool allowlist:** `replace_symbol_body`, `insert_before_symbol`, `insert_after_symbol`, `rename_symbol`, `safe_delete_symbol`, `replace_in_file`, `fuzzy_edit`, `create_file`. Read-only diagnostics (e.g. `verify_edit`) are intentionally excluded.
+- **Semantics:**
+  - `success` — exact-match strategy applied (or strategy not applicable, e.g. `rename_symbol`).
+  - `fuzzy_applied` — whitespace-normalized or indentation-flexible cascade succeeded. **Operator-watched leading indicator of LLM output drift.**
+  - `refused_ambiguous` — fuzzy cascade hit multiple candidates and refused (`fuzzy.ErrAmbiguous`).
+  - `failed` — catch-all (no match, IO/write error, LSP rejection).
+- **Fuzzy-rate PromQL:**
+  ```promql
+  rate(serena_edit_outcome_total{outcome="fuzzy_applied"}[5m])
+    / rate(serena_edit_outcome_total[5m])
+  ```
+- **Cardinality cap:** 32 (8 tools × 4 outcomes).
+
 ### Enable Tracing
 
 Serena supports distributed tracing via OpenTelemetry (OTLP/gRPC):

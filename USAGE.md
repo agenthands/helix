@@ -735,7 +735,7 @@ rate(serena_lspool_evictions_total[5m])
 - **Semantics:** Workspace-level session lifecycle transitions.
   - `activate` fires from `kernel.ActivateWorkspace` (lazy-init and explicit `activate_project` converge here); one increment per detected language.
   - `deactivate` fires from the gRPC `DeactivateWorkspace` handler when forwarder cleanup runs; one increment per detected language for the workspace at that root.
-  - `timeout` means a warm worker was idle-evicted by `pool.checkTTLs`. NOTE: this is *worker-level* idle eviction, not a user-session timeout — Serena v1.2 has no first-class user session. The pool emits via a parallel `lspool.SessionTimeoutSink` that the daemon adapter-forwards to the unified counter (avoids the lspool↔kernel import cycle).
+  - `timeout` means a warm worker was idle-evicted by `pool.checkTTLs`. **WARNING: this is *worker-level* idle eviction, NOT a user-session timeout — Serena v1.2 has no first-class user session.** Do NOT alert on `phase="timeout"` rate spikes as a "user sessions are timing out" signal; the underlying event is "warm LSP workers idled past `BaseTTL` and were retired", which is normal pool behaviour. A planned rename to `phase="worker_idle_evicted"` is tracked in `deferred-items.md` (Phase 53 IN-01). The pool emits via a parallel `lspool.SessionTimeoutSink` that the daemon adapter-forwards to the unified counter (avoids the lspool↔kernel import cycle).
   - `shutdown` fires once per still-active language during signal-first daemon shutdown, BEFORE kernel teardown.
 - **PromQL:**
   ```promql

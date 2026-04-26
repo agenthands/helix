@@ -407,6 +407,10 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		if count == 0 && !args.IsRegex {
 			content, readErr := ReadFile(root, args.Path)
 			if readErr != nil {
+				// Phase 53 WR-01: fuzzy fallback couldn't read the file; this
+				// is a no-op outcome, not a success. Classify as failed so the
+				// success-rate signal isn't diluted by silent no-ops.
+				outcomeErr = serr.New(serr.InvalidArgs, fmt.Sprintf("0 replacement(s) made in %s (fuzzy fallback unavailable: %v)", args.Path, readErr))
 				return textResult(fmt.Sprintf("0 replacement(s) made in %s", args.Path)), nil, nil
 			}
 			fResult, fErr := fuzzy.Match(content, args.Pattern, fuzzy.Options{
@@ -426,6 +430,15 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 			text := fmt.Sprintf("1 replacement made in %s (fuzzy)\nmatch_strategy: %s\nsimilarity_score: %.2f",
 				args.Path, fResult.Strategy, fResult.Score)
 			return textResult(text), nil, nil
+		}
+
+		if count == 0 {
+			// Phase 53 WR-01: regex path returned zero hits. A no-op edit is not
+			// a success — operators reading serena_edit_outcome_total need 0-match
+			// regex runs to surface as failures so silent pattern regressions
+			// don't dilute the success-rate signal.
+			outcomeErr = serr.New(serr.InvalidArgs, "no matches for pattern")
+			return textResult(fmt.Sprintf("0 replacement(s) made in %s", args.Path)), nil, nil
 		}
 
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil

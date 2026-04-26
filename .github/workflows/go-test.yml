@@ -15,10 +15,11 @@ jobs:
     timeout-minutes: 20
     env:
       JDTLS_VERSION: "1.57.0"
-      # Cold jdtls boot on ubuntu-latest exceeds the 2m default LS-readiness
-      # ceiling baked into Java integration tests. 4m is comfortable on a cold
-      # MISS run; warm runs return in seconds regardless. Local dev is unaffected.
-      SERENA_TEST_LS_TIMEOUT: "4m"
+      # First-run cache MISS on ubuntu-latest needs >4m for cold workspace
+      # indexing before search_symbols returns non-empty. 8m covers cold starts;
+      # warm runs return in seconds. Local dev is unaffected (env honored only
+      # when greater than the test-defined LSTimeout).
+      SERENA_TEST_LS_TIMEOUT: "8m"
     steps:
       - uses: actions/checkout@v4
 
@@ -90,4 +91,7 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test ./... -count=1
+        # -timeout=20m: Java integration tests do cold jdtls indexing on first
+        # cache-MISS run, which can exceed Go's 10m default before the warm
+        # cache is populated for subsequent runs.
+        run: go test ./... -count=1 -timeout=20m

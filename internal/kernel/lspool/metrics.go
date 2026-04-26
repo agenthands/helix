@@ -22,6 +22,12 @@ type MetricsSink interface {
 
 	// LSPoolRestart increments the restart counter for a language (D-15).
 	LSPoolRestart(language string)
+
+	// LSPoolCacheInc increments the cache-decision counter (Phase 53 D-13).
+	// result must be one of ResultHit / ResultMiss; scope must be one of
+	// ScopeClean / ScopeDirty / ScopeCrashed. Unknown values are dropped at
+	// the helper-side (closed-enum guard in *obs.Metrics).
+	LSPoolCacheInc(language, result, scope string)
 }
 
 // Eviction reason constants — closed enum per D-13. The label space for
@@ -42,6 +48,17 @@ const (
 	CircuitOpen     float64 = 2
 )
 
+// Cache decision label values per Phase 53 D-02. result ∈ {hit, miss},
+// scope ∈ {clean, dirty, crashed} — the closed enum guarded at the helper.
+const (
+	ResultHit  = "hit"
+	ResultMiss = "miss"
+
+	ScopeClean   = "clean"
+	ScopeDirty   = "dirty"
+	ScopeCrashed = "crashed"
+)
+
 // NoopSink is used by tests and bootstrap paths where metrics are not wired.
 // All methods are lock-free no-ops; a value-receiver keeps them trivially
 // inlinable.
@@ -58,6 +75,9 @@ func (NoopSink) LSPoolCircuitStateSet(string, float64) {}
 
 // LSPoolRestart implements MetricsSink.
 func (NoopSink) LSPoolRestart(string) {}
+
+// LSPoolCacheInc implements MetricsSink.
+func (NoopSink) LSPoolCacheInc(string, string, string) {}
 
 // Compile-time assertion that NoopSink satisfies MetricsSink.
 var _ MetricsSink = NoopSink{}

@@ -18,6 +18,13 @@ type recordingSink struct {
 	evictions     []evictionEvent
 	circuitStates []circuitEvent
 	restarts      []string
+	cacheDecisions []cacheEvent
+}
+
+type cacheEvent struct {
+	lang   string
+	result string
+	scope  string
 }
 
 type workerEvent struct {
@@ -59,6 +66,12 @@ func (r *recordingSink) LSPoolRestart(language string) {
 	r.restarts = append(r.restarts, language)
 }
 
+func (r *recordingSink) LSPoolCacheInc(language, result, scope string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cacheDecisions = append(r.cacheDecisions, cacheEvent{lang: language, result: result, scope: scope})
+}
+
 // snapshot returns a consistent copy of all recorded events.
 func (r *recordingSink) snapshot() (w []workerEvent, e []evictionEvent, c []circuitEvent, rs []string) {
 	r.mu.Lock()
@@ -89,6 +102,9 @@ func TestNoopSink_safe(t *testing.T) {
 	sink.LSPoolCircuitStateSet("go", CircuitHalfOpen)
 	sink.LSPoolCircuitStateSet("go", CircuitOpen)
 	sink.LSPoolRestart("go")
+	sink.LSPoolCacheInc("go", ResultHit, ScopeClean)
+	sink.LSPoolCacheInc("go", ResultMiss, ScopeDirty)
+	sink.LSPoolCacheInc("go", ResultMiss, ScopeCrashed)
 }
 
 func TestMetricsSink_EvictionReasonConstants(t *testing.T) {

@@ -1,11 +1,17 @@
 package fuzzy
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	serr "github.com/postfix/serena/internal/errors"
 )
+
+// ErrAmbiguous is the sentinel returned (wrapped) when the fuzzy match cascade
+// finds multiple candidates and refuses to apply (D-07 refused_ambiguous bucket).
+// Detect via errors.Is(err, fuzzy.ErrAmbiguous).
+var ErrAmbiguous = errors.New("fuzzy: ambiguous match")
 
 // Match runs the 4-strategy cascade over source and search, returning a
 // Result on success or an error on ambiguity / no-match / invalid input.
@@ -274,7 +280,7 @@ func ambiguityError(strategy Strategy, hits []int) error {
 		oneIndexed[i] = h + 1
 	}
 	msg := formatAmbiguity(oneIndexed)
-	return serr.New(serr.InvalidArgs, msg).
+	return serr.Wrap(serr.InvalidArgs, msg, ErrAmbiguous).
 		WithDetail(fmt.Sprintf("strategy=%s count=%d", strategy, len(hits)))
 }
 

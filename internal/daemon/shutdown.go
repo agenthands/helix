@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"time"
+
+	"github.com/postfix/serena/internal/kernel"
 )
 
 // shutdown performs two-phase graceful shutdown (DMN-12).
@@ -19,6 +21,15 @@ func (d *Daemon) shutdown() {
 	defer cancel()
 
 	d.logger.Info("graceful shutdown starting", "timeout", timeout)
+
+	// Phase 0: Phase 53 D-04 — emit serena_session_lifecycle_total{phase="shutdown"}
+	// once per still-active language BEFORE kernel teardown. Kernel.Shutdown
+	// clears the workspaces map, so the snapshot must happen first.
+	if d.metrics != nil && d.kernel != nil {
+		for _, lang := range d.kernel.ActiveLanguages() {
+			d.metrics.SessionLifecycleInc(lang, kernel.PhaseShutdown)
+		}
+	}
 
 	// Phase 1: Stop kernel (drain workers, close LS processes).
 	if d.kernel != nil {

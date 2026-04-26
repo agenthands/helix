@@ -552,6 +552,7 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 		mcpServer: d.mcpServer,
 		kernel:    d.kernel,
 		logger:    d.logger,
+		metrics:   d.metrics,
 	})
 
 	// Serve in a goroutine so we can wait for context cancellation
@@ -611,6 +612,11 @@ type forwarderServiceHandler struct {
 	mcpServer *serenaMCP.SerenaMCPServer
 	kernel    *kernel.Kernel
 	logger    *slog.Logger
+	// metrics is the daemon's *obs.Metrics handle, used by DeactivateWorkspace
+	// to emit serena_session_lifecycle_total{phase="deactivate"} per detected
+	// language (Phase 53 D-04). May be nil only in synthetic tests; production
+	// daemon construction always populates this field.
+	metrics *obs.Metrics
 }
 
 // StreamMCP handles a bidirectional MCP stream from a forwarder.
@@ -694,6 +700,26 @@ func (h *forwarderServiceHandler) DeactivateWorkspace(ctx context.Context, req *
 	}
 
 	h.logger.Info("workspace deactivation requested via gRPC", "path", wsPath)
+
+	// Phase 53 D-04: emit serena_session_lifecycle_total{phase="deactivate"}
+	// once per detected language for the workspace at this root. If the
+	// workspace is unknown to the kernel (e.g. already torn down) we skip
+	// the emit rather than polluting the "language" label with an empty
+	// value — see CONTEXT.md D-04 ("PREFER skipping").
+	if h.metrics != nil && h.kernel != nil {
+		// Resolve to absolute path mirroring ActivateWorkspace so the lookup
+		// matches whatever the kernel stored under WorkspaceKey.RepoRoot.
+		lookupPath := wsPath
+		if abs, err := filepath.Abs(wsPath); err == nil {
+			lookupPath = abs
+		}
+		if langs := h.kernel.LanguagesForRoot(lookupPath); len(langs) > 0 {
+			for _, lang := range langs {
+				h.metrics.SessionLifecycleInc(lang, kernel.PhaseDeactivate)
+			}
+		}
+	}
+
 	// Note: We don't actually shut down the workspace in the kernel --
 	// other sessions may be using it. We just acknowledge the deactivation.
 	// Session-scoped cleanup (counter files) is handled client-side.

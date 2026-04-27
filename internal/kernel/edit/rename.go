@@ -9,8 +9,14 @@ import (
 
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/kernel/symbols"
 	gen "github.com/postfix/serena/protocol/gen"
 )
+
+// toLSPCoord delegates to symbols.ToLSPCoord. Defined here to keep call
+// sites readable; the canonical implementation is in symbols/retrieval.go
+// alongside makePositionParams.
+func toLSPCoord(v int) uint32 { return symbols.ToLSPCoord(v) }
 
 // RenameResult summarizes the outcome of a rename operation.
 type RenameResult struct {
@@ -117,9 +123,11 @@ func RenameSymbol(ctx context.Context, lease *lspool.WorkerLease, uri string, li
 // textDocument/rename and WorkspaceEdit application.
 // EDT-04: LSP rename forwarding.
 func tryNativeRename(ctx context.Context, lease *lspool.WorkerLease, uri string, line, col int, newName string) (*RenameResult, error) {
+	// Public API is 1-indexed (matches formatLocations display output);
+	// LSP wire format is 0-indexed. Convert at the boundary.
 	pos := gen.Position{
-		Line:      uint32(line),
-		Character: uint32(col),
+		Line:      toLSPCoord(line),
+		Character: toLSPCoord(col),
 	}
 
 	// Send prepareRename first — some LS implementations (rust-analyzer) require

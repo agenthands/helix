@@ -53,13 +53,20 @@ func PlanEdit(ctx context.Context, lease *lspool.WorkerLease, uri string, symbol
 }
 
 // findOutlineByName searches recursively for a symbol by name in the outline tree.
+//
+// Some language servers include signatures in DocumentSymbol.Name — jdtls
+// returns Java methods as "helper()" or "main(String[])". The lookup strips
+// signatures via stripSignature so callers can address symbols by their bare
+// identifier regardless of language conventions.
 func findOutlineByName(outlines []symbols.SymbolOutline, name string) *symbols.SymbolOutline {
 	for i := range outlines {
-		if outlines[i].Name == name {
+		outlineName := outlines[i].Name
+		bare := stripSignature(outlineName)
+		if outlineName == name || bare == name {
 			return &outlines[i]
 		}
 		// Also check with dot-qualified names for methods.
-		if strings.HasSuffix(outlines[i].Name, "."+name) || strings.HasPrefix(name, outlines[i].Name+".") {
+		if strings.HasSuffix(bare, "."+name) || strings.HasPrefix(name, bare+".") {
 			return &outlines[i]
 		}
 		if found := findOutlineByName(outlines[i].Children, name); found != nil {
@@ -67,4 +74,16 @@ func findOutlineByName(outlines []symbols.SymbolOutline, name string) *symbols.S
 		}
 	}
 	return nil
+}
+
+// stripSignature removes trailing parameter lists from a symbol name, e.g.
+// "helper()" → "helper", "main(String[])" → "main", "Foo<T>" → "Foo".
+// Idempotent on names without signatures.
+func stripSignature(name string) string {
+	for _, sep := range []string{"(", "<"} {
+		if i := strings.Index(name, sep); i >= 0 {
+			return name[:i]
+		}
+	}
+	return name
 }

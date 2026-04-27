@@ -454,8 +454,9 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		uri := filePathToURI(wsKey.RepoRoot, args.Path)
-		// Convert from 1-indexed (user-facing) to 0-indexed (LSP).
-		result, err := RenameSymbol(ctx, lease, uri, args.Line-1, args.Col-1, args.NewName)
+		// Position is converted from 1-indexed (public API) to 0-indexed (LSP)
+		// inside tryNativeRename via symbols.ToLSPCoord. Pass through unchanged.
+		result, err := RenameSymbol(ctx, lease, uri, args.Line, args.Col, args.NewName)
 		if err != nil {
 			outcomeErr = err
 			return errorResult(err.Error()), nil, nil

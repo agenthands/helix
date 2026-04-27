@@ -255,10 +255,16 @@ func TestHierarchyDepthLimit(t *testing.T) {
 }
 
 func TestMakePositionParams(t *testing.T) {
+	// Public API is 1-indexed; LSP wire format is 0-indexed.
+	// Inputs (42, 7) → LSP (41, 6). Inputs ≤ 1 clamp to 0.
 	params := makePositionParams("file:///test.go", 42, 7)
 	assert.Equal(t, "file:///test.go", params.TextDocument.URI)
-	assert.Equal(t, uint32(42), params.Position.Line)
-	assert.Equal(t, uint32(7), params.Position.Character)
+	assert.Equal(t, uint32(41), params.Position.Line)
+	assert.Equal(t, uint32(6), params.Position.Character)
+
+	clamped := makePositionParams("file:///test.go", 0, 1)
+	assert.Equal(t, uint32(0), clamped.Position.Line)
+	assert.Equal(t, uint32(0), clamped.Position.Character)
 }
 
 func TestItoa(t *testing.T) {

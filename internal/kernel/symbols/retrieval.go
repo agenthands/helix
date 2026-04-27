@@ -86,14 +86,28 @@ func FindImplementations(ctx context.Context, lease *lspool.WorkerLease, uri str
 
 // --- helpers ---
 
+// makePositionParams converts a 1-indexed (line, col) — the public API
+// convention used in tool schemas and matched by formatLocations' display
+// output — into the 0-indexed Position the LSP expects. Inputs less than 1
+// clamp to 0 so we never emit negative coordinates if a caller mistakenly
+// passes 0.
 func makePositionParams(uri string, line, col int) gen.TextDocumentPositionParams {
 	return gen.TextDocumentPositionParams{
 		TextDocument: gen.TextDocumentIdentifier{URI: uri},
 		Position: gen.Position{
-			Line:      uint32(line),
-			Character: uint32(col),
+			Line:      ToLSPCoord(line),
+			Character: ToLSPCoord(col),
 		},
 	}
+}
+
+// ToLSPCoord converts a 1-indexed coordinate to the 0-indexed value LSP
+// expects. Values ≤ 0 clamp to 0.
+func ToLSPCoord(v int) uint32 {
+	if v <= 1 {
+		return 0
+	}
+	return uint32(v - 1)
 }
 
 func locationsToSymbolLocations(locs []gen.Location) []SymbolLocation {
@@ -141,8 +155,35 @@ func extractHoverContent(hover gen.Hover) string {
 			}
 		}
 		return strings.Join(parts, "\n\n")
+	case gen.MarkedString:
+		return extractMarkedStringContent(v)
+	case []gen.MarkedString:
+		var parts []string
+		for _, m := range v {
+			if s := extractMarkedStringContent(m); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, "\n\n")
 	}
-	return fmt.Sprintf("%v", hover.Contents.Value)
+	return ""
+}
+
+// extractMarkedStringContent unwraps MarkedString = Or_Literal_String, which
+// holds either a string or a {language, value} struct.
+func extractMarkedStringContent(m gen.MarkedString) string {
+	if m.Value == nil {
+		return ""
+	}
+	switch v := m.Value.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if val, ok := v["value"].(string); ok {
+			return val
+		}
+	}
+	return ""
 }
 
 // SymbolKindName converts a SymbolKind enum to a human-readable string.

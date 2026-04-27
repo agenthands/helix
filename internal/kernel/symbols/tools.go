@@ -19,15 +19,15 @@ import (
 // GoToDefinitionArgs is the input schema for the go_to_definition tool.
 type GoToDefinitionArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed)"`
 }
 
 // FindReferencesArgs is the input schema for the find_references tool.
 type FindReferencesArgs struct {
 	Path        string `json:"path" jsonschema:"File path"`
-	Line        int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col         int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line        int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col         int    `json:"column" jsonschema:"Column number (1-indexed)"`
 	IncludeDecl bool   `json:"include_declaration,omitempty" jsonschema:"Include the declaration itself in results"`
 }
 
@@ -44,38 +44,38 @@ type SearchSymbolsArgs struct {
 // HoverArgs is the input schema for the get_hover_info tool.
 type HoverArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed)"`
 }
 
 // FindImplementationsArgs is the input schema for the find_implementations tool.
 type FindImplementationsArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed)"`
 }
 
 // CallHierarchyArgs is the input schema for the get_call_hierarchy tool.
 type CallHierarchyArgs struct {
 	Path      string `json:"path" jsonschema:"File path"`
-	Line      int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col       int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line      int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col       int    `json:"column" jsonschema:"Column number (1-indexed)"`
 	Direction string `json:"direction,omitempty" jsonschema:"incoming, outgoing, or both (default: both)"`
 }
 
 // TypeHierarchyArgs is the input schema for the get_type_hierarchy tool.
 type TypeHierarchyArgs struct {
 	Path      string `json:"path" jsonschema:"File path"`
-	Line      int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col       int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line      int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col       int    `json:"column" jsonschema:"Column number (1-indexed)"`
 	Direction string `json:"direction,omitempty" jsonschema:"subtypes, supertypes, or both (default: both)"`
 }
 
 // BlastRadiusArgs is the input schema for the analyze_blast_radius tool.
 type BlastRadiusArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed)"`
 }
 
 // RegisterTools registers all 9 symbol retrieval tools with the MCP server.

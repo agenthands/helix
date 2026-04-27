@@ -5,6 +5,7 @@ import (
 
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/postfix/serena/internal/kernel/symbols"
 	gen "github.com/postfix/serena/protocol/gen"
 )
 
@@ -19,13 +20,15 @@ type CodeActionResult struct {
 
 // GetCodeActions sends textDocument/codeAction and returns the available actions
 // for the given position or range in the file identified by uri.
-// Line and column values are 0-indexed (LSP convention).
+// Line and column values are 1-indexed (matches the public tool API and
+// formatLocations display output); converted to LSP's 0-indexed wire format
+// here.
 func GetCodeActions(ctx context.Context, lease *lspool.WorkerLease, uri string, startLine, startCol, endLine, endCol int) ([]CodeActionResult, error) {
 	params := gen.CodeActionParams{
 		TextDocument: gen.TextDocumentIdentifier{URI: uri},
 		Range: gen.Range{
-			Start: gen.Position{Line: uint32(startLine), Character: uint32(startCol)},
-			End:   gen.Position{Line: uint32(endLine), Character: uint32(endCol)},
+			Start: gen.Position{Line: symbols.ToLSPCoord(startLine), Character: symbols.ToLSPCoord(startCol)},
+			End:   gen.Position{Line: symbols.ToLSPCoord(endLine), Character: symbols.ToLSPCoord(endCol)},
 		},
 		Context: gen.CodeActionContext{
 			Diagnostics: []gen.Diagnostic{},

@@ -173,16 +173,17 @@ func registerGetCodeActions(server *mcp.SerenaMCPServer, rootFn func() string, l
 			return errorResult(fmt.Sprintf("failed to get LS worker: %v", err)), nil, nil
 		}
 
-		// Convert from 1-indexed to 0-indexed.
-		startLine := args.Line - 1
-		startCol := args.Col - 1
+		// 1-indexed→0-indexed conversion happens inside GetCodeActions via
+		// symbols.ToLSPCoord. End* default to start when omitted.
+		startLine := args.Line
+		startCol := args.Col
 		endLine := startLine
 		endCol := startCol
 		if args.EndLine > 0 {
-			endLine = args.EndLine - 1
+			endLine = args.EndLine
 		}
 		if args.EndCol > 0 {
-			endCol = args.EndCol - 1
+			endCol = args.EndCol
 		}
 
 		actions, err := GetCodeActions(ctx, lease, uri, startLine, startCol, endLine, endCol)

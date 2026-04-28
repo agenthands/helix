@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline
 
 BINARY=serena
 GO=go
@@ -40,3 +40,9 @@ bench-jdtls-warm: ## Run Java integration suite cold then warm; print both wall-
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
 	@echo "=== jdtls WARM run ==="
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
+
+bench: ## Run the bench suite once and print results to stdout
+	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/...
+
+bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt (gitignored, overwrites)
+	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee test/bench/baselines/local.txt

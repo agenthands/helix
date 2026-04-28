@@ -508,25 +508,19 @@ worker_pool:
 
 3. Subsequent sessions reuse the cached index, so cold-start delay is only on first activation per workspace.
 
-### gopls version incompatibility with Go 1.25
+### gopls version compatibility
 
-**Symptom:** Build failures or unexpected behavior when running Serena's benchmark suite (`test/bench/`) or when gopls returns errors after a Go version upgrade.
+**Symptom:** Build failures or unexpected behavior from the Go integration tests after upgrading Go.
 
-**Cause:** gopls v0.17.1 has a known incompatibility with Go 1.25 on linux/amd64. Additionally, the benchmark suite uses `testing.B.Loop` which requires Go 1.24 or later.
+**Cause:** Older gopls releases (notably v0.17.1) predate Go 1.25 and exhibit incompatibilities on linux/amd64. The fix shipped upstream in gopls v0.21 and later.
 
-**Fix:**
+**Fix:** Update gopls after every Go upgrade:
 
-1. Ensure your gopls version is compatible with your Go version. After upgrading Go, update gopls:
-   ```bash
-   go install golang.org/x/tools/gopls@latest
-   ```
+```bash
+go install golang.org/x/tools/gopls@latest
+```
 
-2. For benchmarks, verify you are running Go 1.24 or later:
-   ```bash
-   go version  # Must be 1.24+
-   ```
-
-3. After Go version changes, re-baseline benchmarks using the `capture-baseline.yml` CI workflow to avoid false regression alerts from benchstat comparisons.
+Serena does not pin a gopls version — `internal/langregistry` invokes whatever `gopls` is on `$PATH`. Use `>=v0.21` as a floor, not as a pin.
 
 ### `rename_symbol` on Rust symbols
 

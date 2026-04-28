@@ -129,27 +129,32 @@ The test harness (`test/harness/`) provides shared infrastructure: `Runner` (sta
 
 ## Running Benchmarks
 
-The benchmark suite lives in `test/bench/`. It measures tool response times, LSP indexing throughput, and memory profiles.
+The benchmark suite lives in `test/bench/`. **Benchmarks run locally only** — the project does not run benchmarks on CI runners because shared GitHub-hosted runners produce noisy, untrustable baselines.
 
-Run all benchmarks:
+Run the suite once and print to stdout:
 
 ```sh
-go test -bench=. ./test/bench/ -timeout 300s
+make bench
 ```
 
-Run a specific benchmark:
+Capture a local baseline (overwrites `test/bench/baselines/local.txt`, which is gitignored):
 
 ```sh
-go test -bench=BenchmarkTools ./test/bench/ -timeout 300s
+make bench-baseline
+```
+
+To compare two captures, install upstream `benchstat` and run it directly:
+
+```sh
+go install golang.org/x/perf/cmd/benchstat@latest
+benchstat old.txt new.txt
 ```
 
 Key details:
 
 - Benchmarks use `testing.B.Loop` (Go 1.24+) to prevent compiler elision.
-- Baselines are committed in `test/bench/baselines/`.
-- CI runs the benchstat regression gate via `.github/workflows/bench.yml`.
-- PR thresholds: >15% time regression or >25% allocs regression blocks merge.
-- Release thresholds: >10% time or >20% allocs.
+- `test/bench/baselines/` is the conventional capture location; everything you save there is gitignored.
+- If your changes are likely to affect bench numbers, mention the local before/after deltas in your PR description. (Honor system — there is no PR-time gate.)
 
 ## Adding a New MCP Tool
 
@@ -175,13 +180,11 @@ Key details:
 - See the memory guide: [`.serena/memories/adding_new_language_support_guide.md`](.serena/memories/adding_new_language_support_guide.md).
 - After adding a language, run `make docs` to regenerate the README language table.
 
-## Benchmark CI Gate
+## gopls Compatibility
 
-The benchmark CI gate prevents performance regressions from landing:
-
-- `.github/workflows/bench.yml` runs on PRs, comparing PR benchmarks against committed baselines via `benchstat`.
-- Uses tiered thresholds: PR tier (>15% time / >25% allocs) and release tier (>10% time / >20% allocs).
-- `.github/workflows/capture-baseline.yml` captures new baselines (manual dispatch on GitHub Actions).
+- `gopls` is installed at runtime by `internal/langregistry`; the project does not pin a gopls version in `go.sum` or `go.mod`.
+- The project tests against `gopls@latest`. Run `go install golang.org/x/tools/gopls@latest` after every Go upgrade.
+- gopls v0.17.1 had a Go 1.25 incompatibility on linux/amd64. The fix shipped upstream in gopls v0.21 and later — use `>=v0.21` as a floor, not a pin.
 
 ## Legacy Python
 

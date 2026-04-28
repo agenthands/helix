@@ -277,3 +277,10 @@ vue-implementation/
 *.exe
 /bin/
 /api/proto/**/*.pb.go
+
+# Vendored references (kept locally, not committed)
+borrow/
+
+# Claude harness transients
+.claude/worktrees/
+.claude/scheduled_tasks.lock

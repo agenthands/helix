@@ -158,8 +158,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 54-01-PLAN.md — In-binary HTML status page handler on admin listener (status_page.go + template + tests + telemetry.go mux wiring)
-- [ ] 54-02-PLAN.md — Runbook compliance test (file existence + required sections + forbidden Grafana/PromQL string gate)
+- [x] 54-01-PLAN.md — In-binary HTML status page handler on admin listener (status_page.go + template + tests + telemetry.go mux wiring)
+- [x] 54-02-PLAN.md — Runbook compliance test (file existence + required sections + forbidden Grafana/PromQL string gate)
 - [ ] 54-03-PLAN.md — USAGE.md In-Binary Metrics Page subsection + REQUIREMENTS.md OBS-01 reconciliation + regression test
 
 ### Phase 55: obs-trace-coverage-audit
@@ -194,7 +194,7 @@ Plans:
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
 | 53 | v1.9 | 3/3 | Complete    | 2026-04-26 |
-| 54 | v1.9 | 0/3 | In progress | - |
+| 54 | v1.9 | 2/3 | In Progress|  |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 
@@ -203,7 +203,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 2/2 plans complete
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

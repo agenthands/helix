@@ -21,7 +21,7 @@
 - [x] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround) (completed 2026-04-24)
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
-- [ ] **Phase 50: toolchain-go1.25-gopls-ci** -- Unblock Go 1.25 / gopls on `ubuntu-latest` and restore the CI benchmark gate
+- [ ] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing)
 - [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
@@ -93,21 +93,22 @@ Plans:
 Plans:
 - [x] 49-01-PLAN.md — Inject canonical GrammarRegistry from daemon bootstrap into RepoMapSkill via SetRegistry; delete redundant FallbackDeps.Registry instantiation; verify D-10 grep + go vet + go test
 
-### Phase 50: toolchain-go1.25-gopls-ci
-**Goal**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25, and the CI benchmark gate enforces PR-tier thresholds on every PR.
+### Phase 50: toolchain-go1.25-bench-local
+**Goal**: Serena builds/vets/tests green on `ubuntu-latest` with Go 1.25 + a compatible gopls, AND the benchmark harness is converted to a local-only flow with all hosted-CI bench plumbing removed.
 **Depends on**: Nothing (independent of bug phases)
 **Requirements**: TOOL-01, TOOL-02
 **Sizing**: L
 **Success Criteria** (what must be TRUE):
-  1. A CI job on `ubuntu-latest` with Go 1.25 completes `go build ./...`, `go vet ./...`, and `go test ./...` green.
-  2. The CI benchmark gate runs on `ubuntu-latest` and fails the PR when PR-tier thresholds (15% p50 / 25% p95) are exceeded.
-  3. The gopls v0.17.1 incompatibility is resolved with a documented strategy (upgrade, patch, or replacement) captured in the phase review and `CONTRIBUTING.md`.
-  4. The benchmarks tech-debt note in `PROJECT.md` Context section is removed.
-**Plans**: 2 plans
+  1. A CI job on `ubuntu-latest` with Go 1.25 completes `go build ./...`, `go vet ./...`, and `go test ./...` green. Benchmarks are NOT run on CI.
+  2. The gopls v0.17.1 linux/amd64 incompatibility is resolved with a documented strategy (upgrade, patch, or replacement) captured in `CONTRIBUTING.md`.
+  3. `bench.yml` and `capture-baseline.yml` workflows are removed; `test/bench/baselines/v1.*-github-hosted.txt` files are removed or relocated to clearly mark them as historical-local artifacts (decided during planning).
+  4. The bench harness runs locally via documented commands (e.g. `make bench`, `make bench-baseline`) and the local-only flow is documented in `CONTRIBUTING.md` and `test/bench/baselines/README.md`.
+  5. The benchmarks tech-debt note in `PROJECT.md` is removed or rewritten to reflect the local-only stance.
+**Plans**: TBD (to be created via /gsd-discuss-phase + /gsd-plan-phase — original CI-bench plans archived to `_superseded/`)
 
-Plans:
-- [ ] 50-01-PLAN.md — Trigger capture-baseline.yml to produce v1.9 ubuntu-latest baseline (D-01, D-04)
-- [ ] 50-02-PLAN.md — Swap bench.yml to v1.9 baseline + CONTRIBUTING.md gopls subsection + PROJECT.md tech-debt delete + open verification PR (D-02, D-05/06/14, D-13, D-10)
+Notes:
+- Original Phase 50 design assumed a CI bench gate on ubuntu-latest; that design violates the project's local-only bench rule and was archived on 2026-04-28. See `.planning/phases/50-toolchain-go1.25-bench-local/_superseded/README.md` for the original artifacts.
+- Phase 51 (packaging-goreleaser) "Depends on Phase 50" still holds — Phase 51 needs the green ubuntu-latest CI for build/vet/test (criterion 1), not the dropped bench gate.
 
 ### Phase 51: packaging-goreleaser
 **Goal**: GitHub Releases publish reproducible multi-arch signed binaries for darwin/linux/windows × amd64/arm64 via a goreleaser pipeline.

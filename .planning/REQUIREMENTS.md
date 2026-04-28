@@ -16,8 +16,8 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 
 ### Infra — Toolchain
 
-- [ ] **TOOL-01**: Serena builds, tests, and benches green on `ubuntu-latest` with Go 1.25 and a compatible gopls version — the root-cause of the gopls v0.17.1 linux/amd64 incompatibility is resolved (upgrade, patch, or replacement strategy)
-- [ ] **TOOL-02**: The CI benchmark gate runs on `ubuntu-latest` (not just darwin/arm64 locally) and enforces PR-tier thresholds on every PR — closes the benchmarks tech-debt note in PROJECT.md
+- [ ] **TOOL-01**: Serena builds, vets, and tests green on `ubuntu-latest` with Go 1.25 and a compatible gopls version — the root-cause of the gopls v0.17.1 linux/amd64 incompatibility is resolved (upgrade, patch, or replacement strategy). Benchmarks are explicitly out of scope for CI per the project's local-only bench rule.
+- [ ] **TOOL-02**: The benchmark harness is local-only — `bench.yml`, `capture-baseline.yml`, and the `*-github-hosted.txt` baselines are removed; benches are runnable via a documented local target (e.g. `make bench`, `make bench-baseline`) and the local-only flow is documented in CONTRIBUTING.md and `test/bench/baselines/README.md`. The benchmarks tech-debt note in PROJECT.md is removed or rewritten to reflect the local-only stance.
 
 ### Packaging & Distribution
 

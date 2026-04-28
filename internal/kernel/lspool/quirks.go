@@ -452,9 +452,18 @@ func (j *JdtlsAdapter) NormalizeSymbolName(name string) string {
 	return name
 }
 
-// PostInitialize opens a Java file so jdtls indexes the workspace.
+// PostInitialize opens every Java source file so jdtls has each document
+// available for textDocument/* operations. Opening only the first file is
+// insufficient: workspace/symbol works off the project index, but hover,
+// references, and replace_symbol_body need the specific file to have been
+// didOpen'd first — otherwise jdtls returns an empty hover ({"contents":""})
+// and "symbol not found" for replace_symbol_body on un-opened files.
 func (j *JdtlsAdapter) PostInitialize(ctx context.Context, adapter *LSAdapter) error {
-	didOpenFirstFile(ctx, adapter, ".java", "java")
+	// Open every Java source file (not just the first). workspace/symbol works
+	// off the project index, but textDocument/hover and textDocument/references
+	// against a specific file behave more reliably once the file has been
+	// didOpen'd. Mirrors the rust-analyzer pattern.
+	didOpenAllFilesRecursive(ctx, adapter, ".java", "java")
 	return nil
 }
 

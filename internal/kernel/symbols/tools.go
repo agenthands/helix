@@ -19,15 +19,15 @@ import (
 // GoToDefinitionArgs is the input schema for the go_to_definition tool.
 type GoToDefinitionArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 }
 
 // FindReferencesArgs is the input schema for the find_references tool.
 type FindReferencesArgs struct {
 	Path        string `json:"path" jsonschema:"File path"`
-	Line        int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col         int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line        int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col         int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 	IncludeDecl bool   `json:"include_declaration,omitempty" jsonschema:"Include the declaration itself in results"`
 }
 
@@ -44,38 +44,38 @@ type SearchSymbolsArgs struct {
 // HoverArgs is the input schema for the get_hover_info tool.
 type HoverArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 }
 
 // FindImplementationsArgs is the input schema for the find_implementations tool.
 type FindImplementationsArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 }
 
 // CallHierarchyArgs is the input schema for the get_call_hierarchy tool.
 type CallHierarchyArgs struct {
 	Path      string `json:"path" jsonschema:"File path"`
-	Line      int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col       int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line      int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col       int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 	Direction string `json:"direction,omitempty" jsonschema:"incoming, outgoing, or both (default: both)"`
 }
 
 // TypeHierarchyArgs is the input schema for the get_type_hierarchy tool.
 type TypeHierarchyArgs struct {
 	Path      string `json:"path" jsonschema:"File path"`
-	Line      int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col       int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line      int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col       int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 	Direction string `json:"direction,omitempty" jsonschema:"subtypes, supertypes, or both (default: both)"`
 }
 
 // BlastRadiusArgs is the input schema for the analyze_blast_radius tool.
 type BlastRadiusArgs struct {
 	Path string `json:"path" jsonschema:"File path"`
-	Line int    `json:"line" jsonschema:"Line number (0-indexed)"`
-	Col  int    `json:"column" jsonschema:"Column number (0-indexed)"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
 }
 
 // RegisterTools registers all 9 symbol retrieval tools with the MCP server.
@@ -121,6 +121,25 @@ func pathToURI(root, path string) string {
 		path = root + "/" + path
 	}
 	return "file://" + path
+}
+
+// userPosToLSP converts user-facing 1-indexed line/column to LSP 0-indexed
+// values. Inputs ≤ 0 are clamped to LSP 0 to keep the call site valid even
+// when callers (or tests) accidentally pass 0. The schema docstrings on each
+// xxxArgs struct document the 1-indexed convention; the tool-result formatter
+// in formatLocations converts back the same way (loc.Range.Start.Line + 1).
+func userPosToLSP(line, col int) (int, int) {
+	if line > 0 {
+		line--
+	} else {
+		line = 0
+	}
+	if col > 0 {
+		col--
+	} else {
+		col = 0
+	}
+	return line, col
 }
 
 func acquireLease(ctx context.Context, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) (*kernel.WorkspaceRuntime, error) {
@@ -321,7 +340,8 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		locs, err := GoToDefinition(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		locs, err := GoToDefinition(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -347,7 +367,8 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		locs, err := FindReferences(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, args.IncludeDecl)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		locs, err := FindReferences(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol, args.IncludeDecl)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -428,7 +449,8 @@ func registerGetHoverInfo(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		result, err := GetHover(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		result, err := GetHover(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -457,7 +479,8 @@ func registerFindImplementations(server *mcp.SerenaMCPServer, k *kernel.Kernel, 
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		locs, err := FindImplementations(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		locs, err := FindImplementations(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -487,7 +510,8 @@ func registerGetCallHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		if direction == "" {
 			direction = "both"
 		}
-		nodes, err := GetCallHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		nodes, err := GetCallHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol, direction)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -520,7 +544,8 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 		if direction == "" {
 			direction = "both"
 		}
-		nodes, err := GetTypeHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col, direction)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		nodes, err := GetTypeHierarchy(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol, direction)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
@@ -549,7 +574,8 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 		if err != nil {
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
-		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), args.Line, args.Col)
+		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
+		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol)
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}

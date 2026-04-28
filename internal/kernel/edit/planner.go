@@ -53,13 +53,22 @@ func PlanEdit(ctx context.Context, lease *lspool.WorkerLease, uri string, symbol
 }
 
 // findOutlineByName searches recursively for a symbol by name in the outline tree.
+//
+// jdtls (and some other LSPs) return method names with their argument list
+// appended — e.g. "helper()" or "format(String,Object[])" — so a literal
+// equality check on a bare method name like "helper" misses. Strip the
+// trailing parenthesised argument list before comparing in addition to the
+// existing exact and dot-qualified matches.
 func findOutlineByName(outlines []symbols.SymbolOutline, name string) *symbols.SymbolOutline {
 	for i := range outlines {
-		if outlines[i].Name == name {
+		candidate := outlines[i].Name
+		bareCandidate := stripSymbolSignature(candidate)
+		if candidate == name || bareCandidate == name {
 			return &outlines[i]
 		}
 		// Also check with dot-qualified names for methods.
-		if strings.HasSuffix(outlines[i].Name, "."+name) || strings.HasPrefix(name, outlines[i].Name+".") {
+		if strings.HasSuffix(candidate, "."+name) || strings.HasSuffix(bareCandidate, "."+name) ||
+			strings.HasPrefix(name, candidate+".") || strings.HasPrefix(name, bareCandidate+".") {
 			return &outlines[i]
 		}
 		if found := findOutlineByName(outlines[i].Children, name); found != nil {
@@ -67,4 +76,14 @@ func findOutlineByName(outlines []symbols.SymbolOutline, name string) *symbols.S
 		}
 	}
 	return nil
+}
+
+// stripSymbolSignature removes a trailing "(...)" argument list from a symbol
+// name, leaving the bare identifier. Returns the input unchanged if no
+// parenthesised tail is present.
+func stripSymbolSignature(name string) string {
+	if idx := strings.IndexByte(name, '('); idx >= 0 {
+		return name[:idx]
+	}
+	return name
 }

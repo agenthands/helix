@@ -11,7 +11,7 @@ import (
 
 func TestHealthSnapshot_EmptyPool(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
 	report := pool.HealthSnapshot()
 	assert.Empty(t, report.Workspaces)
@@ -21,10 +21,10 @@ func TestHealthSnapshot_EmptyPool(t *testing.T) {
 
 func TestHealthSnapshot_HealthyWorker(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
 	// Manually add a worker in Ready state with a closed circuit.
-	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger())
+	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerReady))
 	pool.mu.Lock()
 	pool.workers["w-go-1"] = w
@@ -46,9 +46,9 @@ func TestHealthSnapshot_HealthyWorker(t *testing.T) {
 
 func TestHealthSnapshot_DegradedWorker(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
-	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger())
+	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerReady))
 
 	cb := NewCircuitBreaker("go", 5*time.Minute, 10, NoopSink{})
@@ -72,9 +72,9 @@ func TestHealthSnapshot_DegradedWorker(t *testing.T) {
 
 func TestHealthSnapshot_FailedCircuit(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
-	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger())
+	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerReady))
 
 	cb := NewCircuitBreaker("go", 5*time.Minute, 3, NoopSink{})
@@ -102,9 +102,9 @@ func TestHealthSnapshot_FailedCircuit(t *testing.T) {
 
 func TestHealthSnapshot_IndexingWorker(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
-	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger())
+	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerInitializing))
 
 	pool.mu.Lock()
@@ -122,9 +122,9 @@ func TestHealthSnapshot_IndexingWorker(t *testing.T) {
 
 func TestHealthSnapshot_StoppedWorker(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
-	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(testPoolConfig(), testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
-	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger())
+	w := NewWorker("w-go-1", "go", "/tmp/test-project", "gopls", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerStopped))
 
 	pool.mu.Lock()
@@ -170,7 +170,7 @@ func TestCircuitStateString(t *testing.T) {
 }
 
 func TestWorker_Command(t *testing.T) {
-	w := NewWorker("w-1", "go", "/tmp", "gopls", []string{"-remote=auto"}, testLogger())
+	w := NewWorker("w-1", "go", "/tmp", "gopls", []string{"-remote=auto"}, testLogger(), nil)
 	assert.Equal(t, "gopls", w.Command())
 }
 

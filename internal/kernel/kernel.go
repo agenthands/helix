@@ -53,7 +53,10 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 	if tracer == nil {
 		tracer = tracenoop.NewTracerProvider().Tracer("kernel-fallback")
 	}
-	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics)
+	// Phase 55-01: thread the kernel's tracer into the pool so Worker.Request
+	// can emit `ls.request` child spans parented to the active kernel/skill
+	// tool span (OBS-04 #1).
+	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics, tracer)
 	return &Kernel{
 		workspaces:     make(map[string]*WorkspaceRuntime),
 		pool:           pool,

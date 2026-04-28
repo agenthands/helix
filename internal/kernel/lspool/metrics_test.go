@@ -129,14 +129,14 @@ func TestMetricsSink_CircuitStateConstants(t *testing.T) {
 // same testRegistry/testLogger helpers already present in pool_test.go.
 func newTestPoolWithSink(t *testing.T, sink MetricsSink) *Pool {
 	t.Helper()
-	return NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+	return NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink, nil)
 }
 
 // fakeWorker returns a Worker stub with just enough fields populated for the
 // lifecycle hooks to exercise. We bypass Start() because those tests would
 // need a real LS binary.
 func fakeWorker(id, lang string) *Worker {
-	w := NewWorker(id, lang, "/tmp/test-"+lang, "true", nil, testLogger())
+	w := NewWorker(id, lang, "/tmp/test-"+lang, "true", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerReady))
 	return w
 }
@@ -302,7 +302,7 @@ func TestPool_CacheMetricsEmission(t *testing.T) {
 		sink := &recordingSink{}
 		cfg := testPoolConfig()
 		cfg.MaxWorkers = 0
-		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink, nil)
 
 		key := workspace.WorkspaceKey{RepoRoot: "/tmp/wsC", Language: "go"}
 		_, err := p.AcquireLease(context.Background(), "s3", key, false)
@@ -392,7 +392,7 @@ func (r *recordingTimeoutSink) SessionTimeout(language string) {
 func TestPool_nilMetricsDefaultsToNoop(t *testing.T) {
 	// Passing a nil sink must not panic; the Pool should default to NoopSink
 	// internally so later hook calls are safe.
-	p := NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), nil)
+	p := NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), nil, nil)
 	assert.NotNil(t, p.metrics)
 
 	// Exercise an eviction path with a fake worker to prove no panic.

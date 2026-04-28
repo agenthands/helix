@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/postfix/serena/internal/langregistry"
 	"github.com/postfix/serena/internal/workspace"
 )
@@ -49,6 +52,7 @@ type Pool struct {
 	logger         *slog.Logger
 	metrics        MetricsSink
 	sessionMetrics SessionTimeoutSink
+	tracer         trace.Tracer // Phase 55-01: injected for ls.request child spans; nil-safe noop fallback
 	nextID         int
 	done           chan struct{}
 	runCtx         context.Context // lifecycle context from Run(); workers use this instead of request ctx
@@ -72,9 +76,19 @@ func (p *Pool) SetSessionTimeoutSink(s SessionTimeoutSink) {
 // The installer uses three-tier resolution (PATH/download/error) to find LS binaries.
 // metrics is the MetricsSink receiving worker lifecycle and circuit state
 // events; pass NoopSink{} (or nil, which is converted) to disable.
-func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger, metrics MetricsSink) *Pool {
+// tracer is the trace.Tracer threaded into each Worker so Worker.Request can
+// emit an `ls.request` child span (Phase 55-01 / OBS-04 #1). When nil, a noop
+// tracer is substituted so existing tests that build a Pool without tracing
+// continue to compile and run with zero allocation on the hot path.
+func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger, metrics MetricsSink, tracer trace.Tracer) *Pool {
 	if metrics == nil {
 		metrics = NoopSink{}
+	}
+	if tracer == nil {
+		// nil-safe fallback: existing tests in this package construct pools
+		// without tracing wired. Returning a noop Tracer here preserves the
+		// D-17 zero-allocation property for the noop path.
+		tracer = tracenoop.NewTracerProvider().Tracer("lspool")
 	}
 	return &Pool{
 		workers:        make(map[string]*Worker),
@@ -87,6 +101,7 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 		logger:         logger.With("component", "lspool"),
 		metrics:        metrics,
 		sessionMetrics: NoopSessionTimeoutSink{},
+		tracer:         tracer,
 		done:           make(chan struct{}),
 	}
 }
@@ -329,7 +344,7 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	}
 
 	quirks := GetQuirkAdapter(entry)
-	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger)
+	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger, p.tracer)
 	worker.SetQuirks(quirks)
 
 	// Start the worker with the pool's lifecycle context (not the request context)

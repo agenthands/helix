@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/postfix/serena/internal/kernel/jsonrpc"
 	gen "github.com/postfix/serena/protocol/gen"
@@ -140,10 +142,22 @@ type Worker struct {
 	pendingOpen  []pendingDidOpen // buffered during Initializing (per Pitfall 2)
 	capabilities gen.ServerCapabilities
 	logger       *slog.Logger
+	tracer       trace.Tracer // Phase 55-01: emits ls.request child spans; never nil
+	// callOverride is a TEST-ONLY hook. When non-nil, Worker.Request invokes
+	// it instead of w.process.Conn().Call. Production code never sets it; the
+	// span/instrumentation tests in worker_span_test.go set it to a fake to
+	// exercise the wrapping logic without spawning a real LS process.
+	callOverride func(ctx context.Context, method string, params, result interface{}) error
 }
 
 // NewWorker creates a new LS worker.
-func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, logger *slog.Logger) *Worker {
+// tracer is the trace.Tracer used by Worker.Request to emit `ls.request` child
+// spans. When nil, a noop tracer is substituted (preserves D-17 zero-alloc path
+// for callers that still construct workers without tracing wired).
+func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, logger *slog.Logger, tracer trace.Tracer) *Worker {
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("lspool")
+	}
 	w := &Worker{
 		id:        id,
 		language:  language,
@@ -151,6 +165,7 @@ func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, 
 		lsCommand: lsCommand,
 		lsArgs:    lsArgs,
 		logger:    logger.With("worker_id", id, "language", language),
+		tracer:    tracer,
 	}
 	w.state.Store(int32(WorkerStarting))
 	return w
@@ -291,29 +306,49 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 // Request sends a request to the LS, gated on Ready state.
-// When the calling context carries a recording span (i.e. tracing is sampled),
-// an "ls.request" span event is emitted with lsp.method, lsp.language, and
-// lsp.duration_ms attributes. Gated on span.IsRecording() so the tracing-off
-// path allocates nothing (D-17 budget). This is a span EVENT, not a child
-// span, per D-06.
+//
+// Emits an `ls.request` CHILD span via w.tracer, parented to whatever span the
+// caller has on ctx. Attributes (`lsp.method`, `lsp.language`, `lsp.duration_ms`)
+// are gated on span.IsRecording() to preserve the D-17 zero-allocation noop
+// path. Phase 55 plan 55-01 converted this from an AddEvent to a child span to
+// satisfy OBS-04 #1 — events do not establish parent/child links and are
+// invisible to per-method latency aggregations in the trace backend.
+//
+// Span name is uniform `ls.request` (NOT `ls.request.<method>`) per
+// 55-RESEARCH Open Question #2 — the method is carried as a bounded-enum
+// attribute so backend cardinality stays small.
 func (w *Worker) Request(ctx context.Context, method string, params interface{}, result interface{}) error {
 	if WorkerState(w.state.Load()) != WorkerReady {
 		return ErrWorkerNotReady
 	}
-	start := time.Now()
-	err := w.process.Conn().Call(ctx, method, params, result)
-	duration := time.Since(start)
-	if err == nil {
-		w.metrics.OnReuse()
-	}
-	if span := trace.SpanFromContext(ctx); span.IsRecording() {
-		span.AddEvent("ls.request", trace.WithAttributes(
+	ctx, span := w.tracer.Start(ctx, "ls.request")
+	defer span.End()
+	if span.IsRecording() {
+		span.SetAttributes(
 			attribute.String("lsp.method", method),
 			attribute.String("lsp.language", w.language),
-			attribute.Int64("lsp.duration_ms", duration.Milliseconds()),
-		))
+		)
 	}
-	return err
+	start := time.Now()
+	var err error
+	if w.callOverride != nil {
+		err = w.callOverride(ctx, method, params, result)
+	} else {
+		err = w.process.Conn().Call(ctx, method, params, result)
+	}
+	duration := time.Since(start)
+	if span.IsRecording() {
+		span.SetAttributes(attribute.Int64("lsp.duration_ms", duration.Milliseconds()))
+	}
+	if err != nil {
+		if span.IsRecording() {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		return err
+	}
+	w.metrics.OnReuse()
+	return nil
 }
 
 // Notify sends a notification to the LS.

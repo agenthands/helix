@@ -1,7 +1,7 @@
 # `test/bench/baselines/` — committed v1.1 reference baselines
 
 This directory holds the **immutable performance reference** against which
-every v1.2+ phase publishes its benchstat / benchgate delta. Per
+every v1.2+ phase publishes its benchstat delta. Per
 `.planning/phases/09-benchmark-harness-v1-1-baseline/09-CONTEXT.md` D-01,
 the goal is a tiered regression gate that prevents silent drift during
 the v1.2 Performance & Production Hardening milestone.
@@ -10,7 +10,7 @@ the v1.2 Performance & Production Hardening milestone.
 
 | File | Purpose |
 |------|---------|
-| `v1.1-github-hosted.txt` | PR-tier baseline captured on GitHub-hosted `ubuntu-latest`. Consumed by `.github/workflows/bench.yml` on every PR via `benchgate`. |
+| `v1.1-github-hosted.txt` | PR-tier baseline captured on GitHub-hosted `ubuntu-latest`. Consumed by `.github/workflows/bench.yml` on every PR. |
 
 A future `v1.1-self-hosted.txt` will follow once the release-tier
 self-hosted runner is provisioned (D-02, post-v1.2).
@@ -38,21 +38,21 @@ The rollout completed in three steps:
 
 - `v1.1-github-hosted.txt` was committed as a placeholder with a
   header stanza only (no `Benchmark` lines).
-- `benchgate` and `.github/workflows/bench.yml` both reference this
-  real on-disk path so everything builds and runs.
+- `.github/workflows/bench.yml` references this real on-disk path so
+  everything builds and runs.
 
 ### Step B — first CI run in `--warn-only` mode
 
 - `bench.yml` ran the full bench suite on `ubuntu-latest` with
   `GOMAXPROCS=4`, `-count=10`, `-short` (skipping `BenchmarkFullRepoSmoke`
   per Pitfall 11).
-- `benchgate` was invoked with `--warn-only`, which printed the full
-  delta report but always exited 0 — no PR was blocked during this phase.
+- The regression gate was invoked with `--warn-only`, which printed the
+  full delta report but always exited 0 — no PR was blocked during this phase.
 
 ### Step C — flip to blocking mode (automated via capture-baseline.yml)
 
 - `--warn-only` has been removed from `bench.yml` (Phase 15).
-- `benchgate` now enforces the D-01 tiered thresholds and any
+- The regression gate now enforces the D-01 tiered thresholds and any
   significant regression blocks merge.
 - Re-baselining is automated via the `capture-baseline.yml` workflow
   — no manual artifact download/commit needed.
@@ -84,7 +84,7 @@ Pitfall 4.
 | PR | `ubuntu-latest` (github-hosted) | 10 | 15% | 25% | 0.05 |
 | Release | self-hosted (future) | 20 | 10% | 20% | 0.05 |
 
-`benchgate` enforces `(delta > tier_threshold) AND (p < alpha)` via
+The regression gate enforces `(delta > tier_threshold) AND (p < alpha)` via
 Welch's t-test (`benchmath.AssumeNormal.Compare`). p99 is reported by
 benchstat for trend-watching but is deliberately **not** gated per
 phase Q5 + Pitfall 10 (p99 is too noisy for a hard gate).

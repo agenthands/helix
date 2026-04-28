@@ -481,24 +481,28 @@ observability:
 
 **If this table is empty:** Two `[ASSUMED]` items (A1, A2) need confirmation during planning — A1 is cosmetic, A2 is a real correctness check the planner should add as a verification step in 55-03.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `kernel.tool.{name}` and `skill.tool.{name}` share a single namespace?**
+   - **RESOLVED:** Use distinct `skill.tool.{name}` namespace (per researcher recommendation). Plans 55-01/55-02/55-03 encode this as locked for execution — coverage test asserts child span name starts with `kernel.tool.` OR `skill.tool.`, allowlist test treats `skill.tool.*` as a distinct (empty-attribute) entry, TRACE-AUDIT.md documents both as separate inventory rows.
    - What we know: Phase 12 D-07 chose `kernel.tool.*` deliberately because kernel handlers are first-class. Skill tools (memory, workflow, repomap) are equally valid MCP tools from the client's perspective.
    - What's unclear: Whether a unified `tool.{name}` namespace would make backend filtering cleaner, or whether keeping `kernel.tool.*` vs `skill.tool.*` distinct is operationally useful for separating "does Serena's code intelligence work" from "do auxiliary skills work."
    - Recommendation: Use `skill.tool.*` for parity-but-distinct (matches the architectural distinction in CLAUDE.md). Defer to discuss-phase if there's a strong reason to unify.
 
 2. **Should the LS child span be `ls.request.{method}` (high cardinality on method) or `ls.request` with `lsp.method` attribute (low cardinality)?**
+   - **RESOLVED:** Use uniform `ls.request` span name with `lsp.method` attribute (per researcher recommendation). Plans 55-01/55-02/55-03 encode this as locked for execution — Worker.Request opens a single `ls.request` span name with `lsp.method` set as a bounded-enum attribute; allowlist test entry is keyed on `ls.request` (not `ls.request.*`); TRACE-AUDIT.md inventory lists exactly one `ls.request` row.
    - What we know: LSP method names are a closed enum (~30 in our usage). Per-method spans give better filtering in the backend; uniform name gives smaller cardinality and clearer aggregation.
    - What's unclear: Operator preference. Phase 12 made the analogous choice for events (uniform `ls.request` name + attribute) deliberately.
    - Recommendation: Keep `ls.request` as the span name with `lsp.method` attribute (matches existing event shape, preserves cardinality discipline). Discuss-phase can override.
 
 3. **Does `Worker.Request` need its own injected `trace.Tracer`, or can it call `trace.SpanFromContext(ctx).TracerProvider().Tracer(...)`?**
+   - **RESOLVED:** Inject `trace.Tracer` into `Worker` via the pool constructor (per researcher recommendation, mirroring Phase 11 MetricsSink plumbing). Plan 55-01 encodes this as locked for execution — pool/worker constructors gain a `trace.Tracer` parameter sourced from `obs.Provider.Tracer()` and threaded down by the kernel; production code in `internal/kernel/lspool` does NOT call `trace.SpanFromContext(...).TracerProvider().Tracer(...)`.
    - What we know: The latter avoids constructor changes but couples Worker to the OTel API surface (forbidden by Phase 12 D-04 layering — OTel imports only in `internal/obs`).
    - What's unclear: Whether the layering rule applies to `trace.Tracer` parameter types in non-obs packages (the kernel already accepts `trace.Tracer` per `internal/kernel/kernel.go:31`, so precedent exists).
    - Recommendation: Inject `trace.Tracer` into `Worker` via the pool constructor (mirror of how `MetricsSink` is plumbed). Precedent in `internal/kernel/kernel.go` makes this clean.
 
 4. **Should we add an OTLP/HTTP exporter alongside OTLP/gRPC?**
+   - **DEFERRED:** Out of scope for Phase 55 (explicit deferral). USAGE.md will document the OTLP/gRPC-only constraint; a follow-up phase can add OTLP/HTTP if operator demand surfaces.
    - What we know: Today only OTLP/gRPC is wired (`tracing.go:43`).
    - What's unclear: Whether operators using HTTP-only collectors would benefit. Out of scope per phase scope ("audit + close gaps", not "expand exporter surface").
    - Recommendation: Defer to a separate phase if requested. Document the OTLP/gRPC-only constraint in USAGE.md.

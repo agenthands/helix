@@ -771,7 +771,13 @@ rate(serena_lspool_evictions_total[5m])
 
 ### Enable Tracing
 
-Serena supports distributed tracing via OpenTelemetry (OTLP/gRPC):
+Serena supports distributed tracing via OpenTelemetry (OTLP/gRPC). The
+sampler is `ParentBased(TraceIDRatioBased(ratio))`: root spans are sampled
+at `ratio`, child spans inherit the parent's decision. Traces include spans
+for tool execution (`daemon.mcp.tools.call` parent + `kernel.tool.*` /
+`skill.tool.*` children), language-server JSON-RPC calls (`ls.request`),
+and worker-pool operations. Connect to any OTLP-compatible backend
+(Jaeger, Tempo, Honeycomb, otel-collector, etc.).
 
 ```yaml
 observability:
@@ -779,7 +785,101 @@ observability:
   tracing_sample_ratio: 0.1           # 10% sampling
 ```
 
-Traces include spans for tool execution, language server communication, and worker pool operations. Connect to any OTLP-compatible backend (Jaeger, Tempo, Honeycomb, etc.).
+#### Sampling
+
+The configuration keys are `observability.tracing_endpoint` and
+`observability.tracing_sample_ratio` on `ObservabilityConfig`
+(`internal/config/config.go`). Both are opt-in.
+
+| Setting | Recommended `tracing_sample_ratio` | Notes |
+|---------|------------------------------------|-------|
+| Default (tracing OFF) | `0.0` | Serena substitutes the OTel noop tracer when the ratio is `0.0` OR `tracing_endpoint` is empty — zero allocation on the hot path. |
+| Smoke test / local debugging | `1.0` | 100% sampling. Honest about cost: every root span is exported. Use only against a local collector you control. |
+| Production | `0.01` – `0.10` | 1–10% representative sampling keeps backend cost bounded while preserving useful trace volume. |
+
+**Head-only sampling, in-binary.** The sampler runs in the daemon process
+and decides per *root* span whether to record. Serena does NOT honour
+inbound trace context from MCP clients — every Serena span is a root
+span, see `TRACE-AUDIT.md` "Trace Context Propagation Policy". For
+**tail-based** sampling (decisions made AFTER spans are observed —
+e.g., "always sample errors", "always sample p99 latency"), run an
+[opentelemetry-collector](https://opentelemetry.io/docs/collector/configuration/)
+with the
+[`tail_sampling`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/tailsamplingprocessor)
+processor between Serena and your backend. The Serena daemon does not
+ship a tail sampler — that capability lives in the collector ecosystem
+by design.
+
+```yaml
+observability:
+  tracing_endpoint: "127.0.0.1:4317"
+  tracing_sample_ratio: 0.05    # 5% head sampling; collector adds tail policies
+```
+
+#### Smoke-Testing the Pipeline
+
+Verify the trace pipeline end-to-end against a local OTLP collector that
+prints spans to stdout. **The collector below is a dev-only verification
+tool — Serena's runtime requires no external services.** See
+[`./.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md`](./.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md)
+for the full attribute audit.
+
+1. Save the following as `otel-collector-config.yaml`:
+
+   ```yaml
+   receivers:
+     otlp:
+       protocols:
+         grpc:
+           endpoint: 0.0.0.0:4317
+   exporters:
+     debug:                     # use `logging` if your collector image is < v0.86
+       verbosity: detailed
+   service:
+     pipelines:
+       traces:
+         receivers: [otlp]
+         exporters: [debug]
+   ```
+
+2. Run the collector via Docker (dev-only):
+
+   ```bash
+   docker run --rm -p 4317:4317 \
+     -v "$(pwd)/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml" \
+     otel/opentelemetry-collector-contrib:0.118.0
+   ```
+
+3. Point Serena at it and crank the sampler to 100%:
+
+   ```yaml
+   observability:
+     tracing_endpoint: "127.0.0.1:4317"
+     tracing_sample_ratio: 1.0
+   ```
+
+4. Start the daemon and invoke any MCP tool that fans into a language
+   server (e.g., `find_symbol` against a Go file). The collector's stdout
+   should print a trace tree of `daemon.mcp.tools.call` →
+   `kernel.tool.find_symbol` → `ls.request` (with `lsp.method`,
+   `lsp.language`, `lsp.duration_ms` attributes) within ~5 seconds.
+
+5. Shut down the daemon with `SIGTERM` (NOT `SIGKILL`) so the
+   `BatchSpanProcessor` flushes any queued spans on exit; the kill-9
+   path discards the in-flight batch.
+
+#### Trace Coverage
+
+Every MCP tool handler emits a span: a `daemon.mcp.tools.call` parent
+plus a `kernel.tool.*` (kernel-resident tool) or `skill.tool.*`
+(skill-resident tool) child. Every outbound LSP JSON-RPC call emits an
+`ls.request` child span. Coverage is mechanically enforced by
+`internal/mcp/coverage_test.go::TestEveryRegisteredToolEmitsSpans`, and
+the closed attribute allowlist by
+`internal/mcp/attribute_allowlist_integration_test.go::TestSpanAttributeAllowlist`.
+The full human-readable attribute audit (every span name × every
+attribute key, certifying no PII and no unbounded cardinality) lives in
+[`./.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md`](./.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md).
 
 ### Enable pprof
 

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-27T17:30:42.817Z"
-last_activity: 2026-04-26
+last_updated: "2026-04-28T08:50:00.000Z"
+last_activity: 2026-04-28 -- Phase 54 reverted; replan as in-binary HTML page
 progress:
   total_phases: 10
   completed_phases: 8
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 53 — obs-metrics-gaps
+**Current focus:** Phase 54 — obs-inbinary-page (replan needed)
 
 ## Current Position
 
-Phase: 56
-Plan: Not started
-Status: Executing Phase 53
-Last activity: 2026-04-26
+Phase: 54 (obs-inbinary-page) — REPLAN NEEDED
+Plan: Original Grafana approach reverted on 2026-04-28; awaiting `/gsd-plan-phase 54` against the new lean scope (in-binary HTML page on admin listener)
+Status: Phase 54 reverted
+Last activity: 2026-04-28 -- Phase 54 reverted
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ None.
 ### Roadmap Evolution
 
 - Phase 56 added: bug-ls-notification-dispatch-and-jdtls-readiness (LS notification dispatch unwired in production — `jsonrpc.Conn.OnNotification` never set, all `QuirkAdapter.NotificationHandlers()` silently dropped; jdtls has no `language/status: ServiceReady` listener, causing functional Java test failures surfaced after Phase 48)
+- Phase 54 retitled (2026-04-28): obs-dashboards-runbooks → obs-inbinary-page. Original Grafana scope reverted mid-execution after the dashboards-stack-required-three-Docker-containers reality test failed the "single binary, no Docker" product principle. New scope: HTML page served by the admin listener over the existing `prometheus.Registry`, plus log-based runbooks. Zero external services.
 
 ## Deferred Items
 

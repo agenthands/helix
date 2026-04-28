@@ -24,7 +24,7 @@
 - [x] **Phase 50: toolchain-go1.25-gopls-ci** -- Make CI green on ubuntu-latest with Go 1.25 and retire the CI benchmark gate (completed 2026-04-25)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-26)
 - [x] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes) (completed 2026-04-26)
-- [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
+- [ ] **Phase 54: obs-inbinary-page** -- Ship a built-in HTML metrics page on the admin listener and operational runbooks in `docs/runbooks/` — zero external services
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
 
 ## Phase Details
@@ -143,17 +143,19 @@ Plans:
 - [x] 53-02-PLAN.md — Per-package sinks + emission at lspool/repomap/edit/kernel call sites + fuzzy.ErrAmbiguous sentinel
 - [x] 53-03-PLAN.md — Daemon wiring + four var _ assertions + USAGE.md Observability docs + ROADMAP reconciliation
 
-### Phase 54: obs-dashboards-runbooks
-**Goal**: Operators can import ready-made Grafana dashboards and follow written runbooks for the four most common failure modes.
-**Depends on**: Phase 53 (dashboards consume the metrics landed there)
+### Phase 54: obs-inbinary-page
+**Goal**: An operator can hit `http://127.0.0.1:9100/` and see a live human-readable summary of Serena's health (RED metrics, lspool workers, recent errors) with zero external services. Plus four short operator runbooks in `docs/runbooks/` for the most common failure modes — log-based triage, no Prometheus or Grafana required.
+**Why this shape**: Phase 54 was originally scoped as Grafana dashboards + PromQL-deep-linked runbooks. Mid-execution we hit the obvious mismatch — Serena ships as a single Go binary "no Docker, no Python, one-command setup", so requiring Prometheus + Grafana + a custom Podman network just to read metrics violated the product's whole pitch. Reverted on 2026-04-28 and replanned around the same `prometheus.Registry` we already build, surfaced by an HTML handler on the admin listener that's already there.
+**Depends on**: Phase 53 (the metrics families this page reads were landed there)
 **Requirements**: OBS-01, OBS-02
-**Sizing**: M
+**Sizing**: S
 **Success Criteria** (what must be TRUE):
-  1. `deploy/grafana/` contains at least two JSON dashboards covering RED metrics, lspool worker health, and workspace activity; they import cleanly into Grafana 10+.
-  2. `docs/runbooks/` contains four runbooks: `ErrCircuitOpen.md`, `deadline-timeouts.md`, `ls-crash-restart.md`, `memory-pressure-eviction.md` — each with symptoms, triage steps, PromQL queries, and remediation.
-  3. `USAGE.md` Observability section links to `deploy/grafana/` with a screenshot of the primary dashboard.
-  4. Every PromQL expression in the dashboards and runbooks references a metric that actually exists in the registered Prom registry (validated by test).
-**Plans**: TBD
+  1. With the daemon running and `--admin-addr 127.0.0.1:9100` set, opening `http://127.0.0.1:9100/` in a browser renders a single self-contained HTML page (inline CSS, no JS frameworks) showing: tool call counts + p95 latency by tool, edit outcomes, lspool worker count + circuit state by language, recent eviction reasons, repomap cache hit rate, and process RSS / goroutines.
+  2. The page reads the *same* `prometheus.Registry` already exposed at `/metrics` — no second registry, no caching layer, no scraper. Refresh on the page = re-render from current registry state.
+  3. `docs/runbooks/` contains four runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction) — each with symptoms (specific log lines / fields), triage steps (commands the operator runs locally), and remediation (config knobs, restart procedure). No Grafana panel deep-links, no PromQL fences.
+  4. `USAGE.md` Observability section gains one short paragraph pointing at `http://127.0.0.1:9100/` and `docs/runbooks/`. No third-party software is mentioned as a prerequisite.
+  5. Zero new external Go module dependencies. The page is `html/template` + the existing `dto.MetricFamily` walk from `prometheus.Gatherer`.
+**Plans**: TBD (replan needed)
 
 ### Phase 55: obs-trace-coverage-audit
 **Goal**: Every MCP tool handler and every outbound LS call produces a span; sampling configuration is documented; trace attributes pass a hygiene review.
@@ -187,7 +189,7 @@ Plans:
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
 | 53 | v1.9 | 3/3 | Complete    | 2026-04-26 |
-| 54 | v1.9 | 0/? | Not started | - |
+| 54 | v1.9 | 0/? | Replan needed | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 

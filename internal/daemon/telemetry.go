@@ -56,6 +56,11 @@ func (d *Daemon) listenAdmin(ctx context.Context) error {
 	defer adminListenerAddr.Store(nil)
 
 	mux := http.NewServeMux()
+	// Phase 54 OBS-01: in-binary HTML metrics page at GET /. Mounted before
+	// the exact-match routes for readability — ServeMux exact-match (e.g.
+	// /healthz, /readyz, /metrics) wins over "/" regardless of registration
+	// order, so this is cosmetic. Internally narrows r.URL.Path != "/" to 404.
+	mux.Handle("/", http.HandlerFunc(d.handleStatusPage))
 	mux.HandleFunc("/healthz", d.handleHealthz)
 	mux.HandleFunc("/readyz", d.handleReadyz)
 	if d.config.Observability.EnablePprof {

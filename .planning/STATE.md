@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-28T16:14:21.370Z"
-last_activity: 2026-04-28 -- Phase 50 execution started
+last_updated: "2026-04-28T17:50:00.000Z"
+last_activity: 2026-04-28 -- Phase 50 complete (go-test.yml green on Go 1.25)
 progress:
   total_phases: 11
-  completed_phases: 5
-  total_plans: 20
-  completed_plans: 16
-  percent: 80
+  completed_phases: 6
+  total_plans: 24
+  completed_plans: 20
+  percent: 83
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 50 — toolchain-go1.25-bench-local
+**Current focus:** Phase 51 — packaging-goreleaser (next)
 
 ## Current Position
 
-Phase: 50 (toolchain-go1.25-bench-local) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 50
-Last activity: 2026-04-28 -- Phase 50 execution started
+Phase: 50 (toolchain-go1.25-bench-local) — COMPLETE
+Plan: 4 of 4 complete
+Status: Ready to plan Phase 51
+Last activity: 2026-04-28 -- Phase 50 complete (go-test.yml green on Go 1.25, run 25068609876)
 
 ## Performance Metrics
 

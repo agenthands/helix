@@ -28,7 +28,7 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 
 ### Observability
 
-- [ ] **OBS-01**: Ship JSON Grafana dashboards in `deploy/grafana/` covering RED metrics, lspool worker health, and workspace activity — documented in USAGE.md with screenshots
+- [ ] **OBS-01**: In-binary HTML metrics page on the admin listener (`http://127.0.0.1:9100/`) rendering RED metrics, lspool workers, circuit state, evictions, repomap cache hit-rate, and process info from the same `prometheus.Registry` exposed at `/metrics`. No third-party services required. (Replanned 2026-04-28; original Grafana scope reverted in commit `82d39f87`.)
 - [ ] **OBS-02**: Ship written runbooks (in `docs/runbooks/`) for the four most common operational failure modes: `ErrCircuitOpen`, deadline timeouts, LS crash / restart, and memory-pressure eviction
 - [ ] **OBS-03**: Close the v1.2 metrics gaps — add cache hit-rate (lspool + repomap), RepoMap extraction latency histogram, session lifecycle counters, and edit-tool outcome counters with bounded labels
 - [ ] **OBS-04**: Audit and close trace coverage gaps — every MCP tool handler and every outbound LS call has a span, sampling configuration is documented, and trace attributes pass a hygiene review (no PII, no unbounded cardinality)

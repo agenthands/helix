@@ -637,6 +637,15 @@ curl http://127.0.0.1:9100/healthz
 curl http://127.0.0.1:9100/readyz
 ```
 
+### In-Binary Metrics Page
+
+Once the admin listener is enabled, point a browser at `http://127.0.0.1:9100/`
+to see a live, self-contained HTML page summarising tool RED metrics, lspool
+worker state, circuit breakers, recent eviction reasons, repomap cache
+hit-rate, and process RSS / goroutines. The page reads the same registry
+exposed at `/metrics` -- press F5 to refresh. No additional software is
+required to view it. For triage walkthroughs, see [`docs/runbooks/`](./docs/runbooks/).
+
 ### Prometheus Metrics
 
 Scrape metrics from the admin listener:

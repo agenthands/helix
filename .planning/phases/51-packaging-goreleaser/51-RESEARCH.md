@@ -853,19 +853,23 @@ and is the same surface every Go project's release pipeline carries.
 | A3 | The minisign `0.12` release tarball URL pattern (`releases/download/${VERSION}/minisign-${VERSION}-linux.tar.gz`) is current | Pattern 5 install step | If wrong: planner must adjust the URL; minisign release pattern is stable but version 0.12 was the latest at training. Recommend the planner re-verify before writing release.yml. **Confirm with `gh release list -R jedisct1/minisign` at plan time.** |
 | A4 | Goreleaser v2 schema is current major (no impending v3) | Standard Stack version | Goreleaser-action `version: '~> v2'` will keep working until v3 ships; minimal risk |
 
-## Open Questions
+## Open Questions (RESOLVED — adopted by 51-01/51-02 PLAN.md, 2026-04-29)
 
-1. **Should `go.mod` module path be renamed from `github.com/postfix/serena` to `github.com/agenthands/helix` in this phase?**
+> Q1: RESOLVED — `go.mod` stays unchanged this phase (large blast radius; separate decision).
+> Q2: RESOLVED — password-protected key (two GH secrets: `MINISIGN_PRIVATE_KEY`, `MINISIGN_PASSWORD`).
+> Q3: RESOLVED — `release.yml` does NOT add `needs: [go-test]`; reproducibility gate is the safety net per D-06.
+
+1. **Should `go.mod` module path be renamed from `github.com/postfix/serena` to `github.com/agenthands/helix` in this phase?** [RESOLVED — NO]
    - What we know: git remote is agenthands/helix; doc URLs are postfix/serena; go.mod is postfix/serena. Renaming go.mod is a sweeping internal-import rewrite (affects every `package` import statement that uses the module path).
    - What's unclear: whether the project has a pending separate decision about the module rename, OR whether the project intentionally keeps the postfix/serena module path while publishing to agenthands/helix as a transitional state.
    - Recommendation: **Phase 51 fixes only the public-facing doc URLs (INSTALL.md, README.md). The `go.mod` rename is a separate phase or explicit user decision.** Goreleaser does not need the go.mod path to match the GitHub repo; it cares about `release.github.owner/name` only. A user who runs `go install github.com/postfix/serena/cmd/serena@latest` against a renamed module would see a 404 from Go's proxy — but post-binary-first INSTALL.md (D-05) demotes that command. The planner should ASK the user during plan-checking before silently renaming go.mod.
 
-2. **Should the minisign secret key be password-protected or `-W`-unencrypted?**
+2. **Should the minisign secret key be password-protected or `-W`-unencrypted?** [RESOLVED — password-protected]
    - What we know: D-01 says "private key stored as a GitHub Actions secret"; D-02a says "private key + optional password". Both options work.
    - What's unclear: whether the project values the password defense-in-depth or prefers fewer secrets to manage.
    - Recommendation: **Use a password-protected key**. Two secrets (`MINISIGN_PRIVATE_KEY` + `MINISIGN_PASSWORD`) is trivially more friction than one and adds a real defense-in-depth layer. CONTRIBUTING.md "Releasing" section documents both. If the user explicitly prefers `-W` unencrypted for simplicity, the `signs.stdin` line in Pattern 3 is removed.
 
-3. **Should `release.yml` add a `needs:` dependency on a green go-test.yml run?**
+3. **Should `release.yml` add a `needs:` dependency on a green go-test.yml run?** [RESOLVED — NO]
    - What we know: D-06 says "tag triggers immediately"; reproducibility gate is the safety net.
    - What's unclear: whether the user wants additional belt-and-suspenders by gating release on a fresh test run.
    - Recommendation: **No additional gate.** D-06 is explicit. Release runs on tag push; tags are typically cut from a green main commit; running tests AGAIN would add ~5min for marginal value. The planner should NOT propose a `needs:` clause. (If a typo'd tag publishes, the project takes the hit and re-cuts.)

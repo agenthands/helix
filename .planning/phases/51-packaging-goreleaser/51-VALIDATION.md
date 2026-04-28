@@ -2,8 +2,8 @@
 phase: 51
 slug: packaging-goreleaser
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-29
 ---
 
@@ -82,4 +82,4 @@ created: 2026-04-29
 - [ ] Feedback latency < 90s for unit; < 5min for CI gate
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-04-29 (per gsd-plan-checker verification of 51-01 + 51-02 PLAN.md task coverage)

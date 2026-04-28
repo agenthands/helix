@@ -24,7 +24,7 @@
 - [x] **Phase 50: toolchain-go1.25-gopls-ci** -- Make CI green on ubuntu-latest with Go 1.25 and retire the CI benchmark gate (completed 2026-04-25)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-26)
 - [x] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes) (completed 2026-04-26)
-- [ ] **Phase 54: obs-inbinary-page** -- Ship a built-in HTML metrics page on the admin listener and operational runbooks in `docs/runbooks/` — zero external services
+- [x] **Phase 54: obs-inbinary-page** -- Ship a built-in HTML metrics page on the admin listener and operational runbooks in `docs/runbooks/` — zero external services (completed 2026-04-28)
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
 
 ## Phase Details
@@ -160,7 +160,7 @@ Plans:
 Plans:
 - [x] 54-01-PLAN.md — In-binary HTML status page handler on admin listener (status_page.go + template + tests + telemetry.go mux wiring)
 - [x] 54-02-PLAN.md — Runbook compliance test (file existence + required sections + forbidden Grafana/PromQL string gate)
-- [ ] 54-03-PLAN.md — USAGE.md In-Binary Metrics Page subsection + REQUIREMENTS.md OBS-01 reconciliation + regression test
+- [x] 54-03-PLAN.md — USAGE.md In-Binary Metrics Page subsection + REQUIREMENTS.md OBS-01 reconciliation + regression test
 
 ### Phase 55: obs-trace-coverage-audit
 **Goal**: Every MCP tool handler and every outbound LS call produces a span; sampling configuration is documented; trace attributes pass a hygiene review.
@@ -194,7 +194,7 @@ Plans:
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
 | 53 | v1.9 | 3/3 | Complete    | 2026-04-26 |
-| 54 | v1.9 | 2/3 | In Progress|  |
+| 54 | v1.9 | 3/3 | Complete   | 2026-04-28 |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 
@@ -203,7 +203,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

@@ -155,7 +155,12 @@ Plans:
   3. `docs/runbooks/` contains four runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction) — each with symptoms (specific log lines / fields), triage steps (commands the operator runs locally), and remediation (config knobs, restart procedure). No Grafana panel deep-links, no PromQL fences.
   4. `USAGE.md` Observability section gains one short paragraph pointing at `http://127.0.0.1:9100/` and `docs/runbooks/`. No third-party software is mentioned as a prerequisite.
   5. Zero new external Go module dependencies. The page is `html/template` + the existing `dto.MetricFamily` walk from `prometheus.Gatherer`.
-**Plans**: TBD (replan needed)
+**Plans**: 3 plans
+
+Plans:
+- [ ] 54-01-PLAN.md — In-binary HTML status page handler on admin listener (status_page.go + template + tests + telemetry.go mux wiring)
+- [ ] 54-02-PLAN.md — Runbook compliance test (file existence + required sections + forbidden Grafana/PromQL string gate)
+- [ ] 54-03-PLAN.md — USAGE.md In-Binary Metrics Page subsection + REQUIREMENTS.md OBS-01 reconciliation + regression test
 
 ### Phase 55: obs-trace-coverage-audit
 **Goal**: Every MCP tool handler and every outbound LS call produces a span; sampling configuration is documented; trace attributes pass a hygiene review.
@@ -189,7 +194,7 @@ Plans:
 | 50 | v1.9 | 2/2 | Complete   | 2026-04-25 |
 | 51 | v1.9 | 2/2 | Complete   | 2026-04-26 |
 | 53 | v1.9 | 3/3 | Complete    | 2026-04-26 |
-| 54 | v1.9 | 0/? | Replan needed | - |
+| 54 | v1.9 | 0/3 | In progress | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 

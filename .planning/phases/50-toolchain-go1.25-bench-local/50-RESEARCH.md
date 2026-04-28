@@ -349,22 +349,25 @@ Serena does not pin a gopls version — `internal/langregistry` invokes whatever
 
 **If this table is empty:** N/A — three assumptions tagged. All are LOW risk and easily corrected by doc edits if reality differs.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Exact filename for the local baseline.**
    - What we know: D-08 mandates a single fixed path; D-09 mandates it is gitignored.
    - What's unclear: Whether `test/bench/baselines/local.txt` is the right name, vs. `local-baseline.txt`, `current.txt`, or `latest.txt`.
    - Recommendation: `test/bench/baselines/local.txt` — matches the README's existing "local-only flow" framing and is the shortest unambiguous name. Planner can choose otherwise within `test/bench/baselines/`.
+   - **RESOLVED:** `test/bench/baselines/local.txt` adopted in Plan 50-02 (Make target body + `.gitignore` entry).
 
 2. **One plan or three?**
    - What we know: Phase is small (~10 file deletions, ~5 file edits, 2 Make target additions, 1 .gitignore line).
    - What's unclear: Whether to bundle into a single execution plan or split by concern (CI deletions, build/Make additions, doc edits).
    - Recommendation: Three small plans is the natural shape and parallelizable for execution-agent review, but a single plan is defensible. Planner decides per `.planning/config.json` `granularity: coarse`.
+   - **RESOLVED:** Four plans (50-01 deletions, 50-02 build/Make, 50-03 docs, 50-04 CI green confirmation) across three waves. 50-02 + 50-03 run in parallel after 50-01.
 
 3. **Optional: stale `benchgate` cleanup hint in CONTRIBUTING.md.**
    - What we know: Contributors who previously `go install ./test/bench/cmd/benchgate` have a stale binary in `$GOPATH/bin/`.
    - What's unclear: Whether to mention this in CONTRIBUTING.md (one extra sentence) or leave it for individual cleanup.
    - Recommendation: Skip — extremely low audience size (only those who explicitly ran `go install` against an in-tree CLI tool).
+   - **RESOLVED:** Skipped — no plan adds the hint.
 
 ## Environment Availability
 

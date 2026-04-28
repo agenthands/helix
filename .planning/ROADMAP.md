@@ -104,7 +104,17 @@ Plans:
   3. `bench.yml` and `capture-baseline.yml` workflows are removed; `test/bench/baselines/v1.*-github-hosted.txt` files are removed or relocated to clearly mark them as historical-local artifacts (decided during planning).
   4. The bench harness runs locally via documented commands (e.g. `make bench`, `make bench-baseline`) and the local-only flow is documented in `CONTRIBUTING.md` and `test/bench/baselines/README.md`.
   5. The benchmarks tech-debt note in `PROJECT.md` is removed or rewritten to reflect the local-only stance.
-**Plans**: TBD (to be created via /gsd-discuss-phase + /gsd-plan-phase — original CI-bench plans archived to `_superseded/`)
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+- [ ] 50-01-PLAN.md — Hosted-CI bench plumbing teardown (delete bench.yml, capture-baseline.yml, benchgate package, v1.*-github-hosted baselines; final benchgate grep gate)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 50-02-PLAN.md — Local bench command surface (Makefile bench/bench-baseline targets, .gitignore local.txt entry, test/bench/baselines/README.md rewrite)
+- [ ] 50-03-PLAN.md — Documentation & tech-debt cleanup (CONTRIBUTING.md gopls subsection + Running Benchmarks rewrite + delete CI Gate section; USAGE.md gopls troubleshooting rewrite; PROJECT.md line 139 surgical edit)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 50-04-PLAN.md — CI green confirmation (local go vet + go test smoke; full grep matrix; checkpoint: go-test.yml green on ubuntu-latest Go 1.25.x)
 
 Notes:
 - Original Phase 50 design assumed a CI bench gate on ubuntu-latest; that design violates the project's local-only bench rule and was archived on 2026-04-28. See `.planning/phases/50-toolchain-go1.25-bench-local/_superseded/README.md` for the original artifacts.

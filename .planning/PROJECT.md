@@ -136,7 +136,7 @@ Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-
 
 Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. RepoMap skill with tag extraction pipeline, cross-file reference graph, PageRank ranking, and token-budgeted tree rendering. Fuzzy edit engine with 4-strategy cascade integrated into 3 MCP tools.
 
-**Known tech debt:** Benchmark baselines captured locally (darwin/arm64) instead of CI ubuntu-latest due to gopls v0.17.1 incompatibility with Go 1.25 on linux/amd64. 3 redundant GrammarRegistry instances (functionally correct). rust-analyzer v1.90 `textDocument/rename` returns "No references found at position" in temp workspaces despite hover/references/search working at the same position — upstream LS bug, all other Rust operations work (see USAGE.md Troubleshooting). jdtls cold-start indexing exceeds 2min in temp workspaces — Java integration tests gated behind `-short=false`.
+**Known tech debt:** rust-analyzer v1.90 `textDocument/rename` returns "No references found at position" in temp workspaces despite hover/references/search working at the same position — upstream LS bug, all other Rust operations work (see USAGE.md Troubleshooting). jdtls cold-start indexing exceeds 2min in temp workspaces — Java integration tests gated behind `-short=false`.
 
 The `legacy/` directory contains the original Python-based prototype as a reference.
 

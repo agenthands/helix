@@ -216,3 +216,80 @@ When the user replies with the run URL approval:
 4. The follow-up note about `test/bench/memory_bench_test.go:16` should be filed as a tracker (issue, deferred-items, or next polish phase) before the phase is considered fully shipped.
 
 If the user reports RED, do NOT mark the phase complete — open a follow-up plan, fix the root cause, and re-run this checkpoint against a new merge commit.
+
+## Task 3 — CI run captured (post-checkpoint resolution)
+
+**Status:** ✓ green on a different sha than the original checkpoint, after two
+infrastructure fixes that Phase 50's verification gate surfaced.
+
+**Final CI run:** https://github.com/agenthands/helix/actions/runs/25068609876
+**Run sha:** `a8db8c17` — `go-test.yml` on `ubuntu-latest`, Go 1.25.x, 3m 46s, all steps green.
+
+The "PARTIAL — verified workflow file is correct and dispatchable" path was
+NOT taken. Instead, the gate exposed three real defects that were fixed live;
+the gate now reports the criterion-1 acceptance signal as fully captured.
+
+### Defects surfaced and resolved during Task 3
+
+1. **Fresh-repo Actions trigger pipeline (infrastructure).** The repo
+   `agenthands/helix` was created today (2026-04-28T13:27:51Z); no YAML
+   workflow had a recorded `push` or `pull_request` run. Resolved when the
+   user committed `.github/workflows/codeql.yml` via the GitHub UI
+   (`1673e9de`); after that first UI-mediated workflow commit, every
+   subsequent push to `main` triggers the full YAML workflow set normally.
+
+2. **Java toolchain mismatch (cherry-picked from Phase 56 branch).** jdtls
+   1.57.0 requires Java 21, but `go-test.yml` set up Java 17, so jdtls aborted
+   with "requires at least Java 21" before any LSP request, and `go test`
+   timed out at 600s. Cherry-picked `91fd8bd7` (CI LS-readiness budget
+   raise) and `38d925c1` (Java 17→21, restore 2m timeout) from
+   `gsd/phase-50-toolchain-go1.25-gopls-ci` to `main`. After this, full
+   suite ran in ~2.5m but the 3 documented Java tests still failed.
+
+3. **Symbol position semantics + jdtls method-name lookup (real Serena
+   bugs).** Captured in commit `a8db8c17 fix(50.1)`:
+   - The 7 positional symbol tools (go_to_definition, find_references,
+     get_hover_info, find_implementations, get_call_hierarchy,
+     get_type_hierarchy, analyze_blast_radius) accepted user line/col and
+     forwarded them to LSP unchanged. The schema docstring said "0-indexed"
+     but the result formatter (`formatLocations`) returns 1-indexed
+     positions, and tests pass 1-indexed inputs matching editor display.
+     Hover at `line 2, col 26` (helper() definition) was sent to jdtls as
+     LSP line 2 / char 26 — the third line in the file, past the symbol —
+     and jdtls correctly returned `{"contents":""}`. New helper
+     `userPosToLSP` subtracts 1 (clamped at 0) so input and output are
+     both 1-indexed. Schema docstrings updated.
+   - `findOutlineByName("helper")` did not match `Name="helper()"` because
+     jdtls reports method names with their parenthesised arg list.
+     `stripSymbolSignature` trims the trailing `(...)` before comparison.
+   - `JdtlsAdapter.PostInitialize` switched from `didOpenFirstFile` to
+     `didOpenAllFilesRecursive`, mirroring rust-analyzer for robustness on
+     `textDocument/hover` and `textDocument/references`.
+
+   With these three fixes, all 3 previously-failing Java integration tests
+   pass locally and on `ubuntu-latest`.
+
+### Acceptance verdict
+
+- TOOL-01 criterion 1 — `go-test.yml` runs green on `ubuntu-latest` with
+  Go 1.25.x against the merge commit: ✓ confirmed via run 25068609876.
+- TOOL-02 criteria — local-only bench surface, no hosted-CI bench plumbing,
+  docs reflect local stance: ✓ confirmed by Plan 01+02+03 grep matrix and
+  by Task 2's 28/28 gates.
+
+### Follow-ups for the next polish phase
+
+- `test/bench/memory_bench_test.go:16` retains a stale comment referencing
+  the deleted `.github/workflows/bench.yml`. Out of Phase 50 grep-matrix
+  scope (matrix only checks `*.md` for `bench.yml`).
+- The "fix(56):" cherry-picks (`91fd8bd7`, `38d925c1`) bypassed the GSD
+  workflow that authored them. They should be reconciled with whatever
+  Phase 56 plan owns those changes — the existing branch
+  `gsd/phase-50-toolchain-go1.25-gopls-ci` no longer needs to merge those
+  commits since they are now on `main`, and may benefit from being closed
+  or rebased.
+- The "fix(50.1):" semantics commit (`a8db8c17`) was authored under
+  Phase 50 because it was needed to make the Phase 50 verification gate
+  pass; it is properly a polish-phase fix and could be retroactively
+  re-attributed via a tag/note rather than a re-author.
+

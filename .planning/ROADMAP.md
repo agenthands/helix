@@ -21,7 +21,7 @@
 - [x] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround) (completed 2026-04-24)
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
-- [ ] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing)
+- [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
 - [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
@@ -114,7 +114,7 @@ Plans:
 - [x] 50-03-PLAN.md — Documentation & tech-debt cleanup (CONTRIBUTING.md gopls subsection + Running Benchmarks rewrite + delete CI Gate section; USAGE.md gopls troubleshooting rewrite; PROJECT.md line 139 surgical edit)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 50-04-PLAN.md — CI green confirmation (local go vet + go test smoke; full grep matrix; checkpoint: go-test.yml green on ubuntu-latest Go 1.25.x)
+- [x] 50-04-PLAN.md — CI green confirmation (local go vet + go test smoke; full grep matrix; checkpoint: go-test.yml green on ubuntu-latest Go 1.25.x)
 
 Notes:
 - Original Phase 50 design assumed a CI bench gate on ubuntu-latest; that design violates the project's local-only bench rule and was archived on 2026-04-28. See `.planning/phases/50-toolchain-go1.25-bench-local/_superseded/README.md` for the original artifacts.
@@ -198,7 +198,7 @@ Notes:
 | 47 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
-| 50 | v1.9 | 3/4 | In Progress|  |
+| 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 0/? | Not started | - |
 | 52 | v1.9 | 0/? | Not started | - |
 | 53 | v1.9 | 0/? | Not started | - |
@@ -211,7 +211,7 @@ Notes:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

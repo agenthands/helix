@@ -6,6 +6,9 @@ import (
 	"net/http"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	serr "github.com/postfix/serena/internal/errors"
 	"github.com/postfix/serena/internal/workspace"
@@ -28,6 +31,7 @@ type SerenaMCPServer struct {
 	logger           *slog.Logger
 	activateCallback ActivateCallback
 	toolSchemas      []*mcpsdk.Tool // stored for suggestion middleware schema introspection (D-07)
+	tracer           trace.Tracer   // Phase 55-01: emits skill.tool.{name} child spans; never nil
 }
 
 // PingArgs is the input schema for the ping diagnostic tool.
@@ -58,6 +62,10 @@ func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *Se
 		sdk:      server,
 		registry: registry,
 		logger:   logger,
+		// Default to a noop tracer; daemon overrides via SetTracer after
+		// constructing the obs.Provider (Phase 55-01). Existing tests that
+		// build the server without wiring tracing keep working.
+		tracer: tracenoop.NewTracerProvider().Tracer("mcp"),
 	}
 
 	// Middleware (TelemetryMiddleware for METRIC-02 + logging, and optional
@@ -198,17 +206,51 @@ func (s *SerenaMCPServer) SetActivateCallback(cb ActivateCallback) {
 	s.activateCallback = cb
 }
 
-// AddSkillTool registers a skill-provided tool with a generic ExecuteTool handler.
-// Uses the generic mcpsdk.AddTool so the SDK auto-generates an input schema.
-func (s *SerenaMCPServer) AddSkillTool(name, description, briefDescription, helpText string, executor SkillToolExecutor) {
-	toolName := name // capture for closure
-	tool := &mcpsdk.Tool{
-		Name:        toolName,
-		Description: description,
+// SetTracer installs the trace.Tracer used by AddSkillTool to wrap each
+// skill-registered handler in a `skill.tool.{name}` child span (Phase 55-01 /
+// OBS-04 #1). The daemon calls this immediately after constructing the server
+// so all subsequent skill registrations are span-wrapped. nil-safe: passing
+// nil falls back to a noop tracer so existing call sites stay correct.
+func (s *SerenaMCPServer) SetTracer(t trace.Tracer) {
+	if t == nil {
+		t = tracenoop.NewTracerProvider().Tracer("mcp")
 	}
-	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+	s.tracer = t
+}
+
+// Tracer returns the trace.Tracer this server uses for skill-tool span wrapping.
+// Never nil. Exposed for test introspection.
+func (s *SerenaMCPServer) Tracer() trace.Tracer { return s.tracer }
+
+// wrapSkillToolHandler returns the SDK handler closure used by AddSkillTool.
+// Extracted into a helper so unit tests can drive the wrapped handler directly
+// against a tracetest.InMemoryExporter without going through the MCP SDK
+// transport. Production callers do not invoke this directly.
+//
+// The wrapped handler:
+//   - Opens a `skill.tool.{toolName}` child span via the supplied tracer.
+//   - Sets NO attributes on the child (Phase 12 D-07: parent middleware span
+//     already carries tool_name / profile / mode / language / outcome).
+//   - On executor error, calls RecordError + SetStatus(codes.Error, …) and
+//     returns an MCP error result with IsError=true (preserving existing
+//     behavior — span is OTel-error, MCP result is IsError).
+func wrapSkillToolHandler(
+	tracer trace.Tracer,
+	toolName string,
+	executor SkillToolExecutor,
+) func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+	spanName := "skill.tool." + toolName
+	return func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+		ctx, span := tracer.Start(ctx, spanName)
+		defer span.End()
+		_ = ctx // ctx is propagated only as a future extension point; current
+		//        executors don't accept it. Suppress unused-write linter noise.
 		result, err := executor.ExecuteTool(toolName, args)
 		if err != nil {
+			if span.IsRecording() {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+			}
 			return &mcpsdk.CallToolResult{
 				Content: []mcpsdk.Content{
 					&mcpsdk.TextContent{Text: err.Error()},
@@ -221,7 +263,22 @@ func (s *SerenaMCPServer) AddSkillTool(name, description, briefDescription, help
 				&mcpsdk.TextContent{Text: result},
 			},
 		}, nil, nil
-	})
+	}
+}
+
+// AddSkillTool registers a skill-provided tool with a generic ExecuteTool handler.
+// Uses the generic mcpsdk.AddTool so the SDK auto-generates an input schema.
+//
+// Phase 55-01: every invocation is wrapped in a `skill.tool.{name}` child span
+// via wrapSkillToolHandler so the 11 skill-registered tools (memory:7,
+// workflow:2, repomap:2) appear as first-class nodes in the trace waterfall
+// alongside kernel.tool.* spans (OBS-04 #1).
+func (s *SerenaMCPServer) AddSkillTool(name, description, briefDescription, helpText string, executor SkillToolExecutor) {
+	tool := &mcpsdk.Tool{
+		Name:        name,
+		Description: description,
+	}
+	mcpsdk.AddTool(s.sdk, tool, wrapSkillToolHandler(s.tracer, name, executor))
 	s.registry.Register(&ToolDef{
 		Name:             name,
 		Description:      description,

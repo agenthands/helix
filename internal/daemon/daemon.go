@@ -227,6 +227,10 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 
 	// 7. Create MCP server.
 	mcpServer := serenaMCP.NewSerenaMCPServer(workspaces, logger)
+	// Phase 55-01: wire the obs tracer so AddSkillTool can wrap each
+	// skill-registered handler in a `skill.tool.{name}` child span. Tracer
+	// name matches the one used by TelemetryMiddleware (per obs.Provider.Tracer).
+	mcpServer.SetTracer(observability.Tracer())
 
 	// 8. Resolve profile per D-08.
 	globalDir := filepath.Join(homeDir, ".serena")

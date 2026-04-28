@@ -107,7 +107,7 @@ Plans:
 **Plans**: 4 plans
 Plans:
 **Wave 1**
-- [ ] 50-01-PLAN.md — Hosted-CI bench plumbing teardown (delete bench.yml, capture-baseline.yml, benchgate package, v1.*-github-hosted baselines; final benchgate grep gate)
+- [x] 50-01-PLAN.md — Hosted-CI bench plumbing teardown (delete bench.yml, capture-baseline.yml, benchgate package, v1.*-github-hosted baselines; final benchgate grep gate)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 50-02-PLAN.md — Local bench command surface (Makefile bench/bench-baseline targets, .gitignore local.txt entry, test/bench/baselines/README.md rewrite)
@@ -198,7 +198,7 @@ Notes:
 | 47 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
-| 50 | v1.9 | 0/? | Not started | - |
+| 50 | v1.9 | 1/4 | In Progress|  |
 | 51 | v1.9 | 0/? | Not started | - |
 | 52 | v1.9 | 0/? | Not started | - |
 | 53 | v1.9 | 0/? | Not started | - |
@@ -211,7 +211,7 @@ Notes:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 4/4 plans complete
+**Plans:** 1/4 plans executed
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

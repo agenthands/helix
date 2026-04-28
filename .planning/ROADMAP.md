@@ -172,7 +172,10 @@ Plans:
   2. A review artifact (`.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md`) lists every span attribute and certifies: no PII, no unbounded cardinality (paths, IDs are hashed/bucketed where appropriate).
   3. `USAGE.md` Observability section documents sampling configuration (ratio, head vs. tail) and how to adjust it via `ObservabilityConfig`.
   4. A smoke trace captured against a live OTLP collector shows the full request path from MCP handler → LS call with no orphan spans.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 55-01-PLAN.md — Close LS-call + skill-tool span coverage gaps (Worker.Request child span; AddSkillTool wrapping)
+- [ ] 55-02-PLAN.md — Registry-driven coverage audit + closed attribute allowlist tests
+- [ ] 55-03-PLAN.md — TRACE-AUDIT.md, USAGE.md sampling docs, and live-OTLP smoke-trace HUMAN-UAT
 
 ## Progress
 

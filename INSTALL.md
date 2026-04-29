@@ -13,16 +13,21 @@ VERSION=v1.9.0
 OS=linux
 ARCH=amd64
 
-# Download archive, signature, checksums, and (one-time) the project public key
+# Download archive, signatures, checksums, and (one-time) the project public key
 curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/serena_${VERSION}_${OS}_${ARCH}.tar.gz
 curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/serena_${VERSION}_${OS}_${ARCH}.tar.gz.minisig
 curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt.minisig
 curl -LO https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub  # one-time
 
-# Verify checksum
-sha256sum -c --ignore-missing checksums.txt
+# Verify the checksums file is signed by the project (catches a substituted checksums.txt)
+minisign -V -p minisign.pub -m checksums.txt
 
-# Verify signature
+# Verify the archive's sha256 is present in the (now-trusted) checksums.txt -- fails loud on typos
+sha256sum -c checksums.txt 2>&1 | grep "serena_${VERSION}_${OS}_${ARCH}.tar.gz: OK" \
+  || { echo "checksum FAILED"; exit 1; }
+
+# Verify the archive's minisign signature (independent of checksums.txt)
 minisign -V -p minisign.pub -m serena_${VERSION}_${OS}_${ARCH}.tar.gz
 
 # Extract and run
@@ -30,7 +35,7 @@ tar -xzf serena_${VERSION}_${OS}_${ARCH}.tar.gz
 ./serena --help
 ```
 
-**macOS users:** replace `sha256sum -c` with `shasum -a 256 -c`, and install minisign with `brew install minisign`. Everything else is identical.
+**macOS users:** replace `sha256sum -c` with `shasum -a 256 -c`, and install minisign with `brew install minisign`. The `grep "...: OK"` line works as-is on macOS. Everything else is identical.
 
 Supported `OS` values: `darwin`, `linux`, `windows`. Supported `ARCH` values: `amd64`, `arm64`. Modern Windows (10 1803+) ships `tar` in System32, so the same `.tar.gz` archive extracts on Windows without third-party tools.
 

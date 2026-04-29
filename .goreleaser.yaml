@@ -46,7 +46,7 @@ checksum:
 signs:
   - id: minisign
     cmd: minisign
-    artifacts: archive
+    artifacts: all
     signature: "${artifact}.minisig"
     args:
       - "-S"

@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot
 
 BINARY=serena
 GO=go
@@ -46,3 +46,6 @@ bench: ## Run the bench suite once and print results to stdout
 
 bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt (gitignored, overwrites)
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee test/bench/baselines/local.txt
+
+release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
+	goreleaser release --snapshot --clean --skip=sign

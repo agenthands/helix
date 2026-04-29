@@ -48,4 +48,6 @@ bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt 
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee test/bench/baselines/local.txt
 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
+	@command -v goreleaser >/dev/null 2>&1 || { \
+	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign

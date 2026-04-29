@@ -61,10 +61,7 @@ Agents connect via the **model context protocol (MCP)** through:
 
 ### Install
 
-```bash
-go install github.com/postfix/serena/cmd/serena@latest
-# Note: module path is github.com/postfix/serena pending a separate rename decision; the public repo lives at agenthands/helix.
-```
+Pre-built binaries for darwin/linux/windows on amd64/arm64 are published on the [Releases page](https://github.com/agenthands/helix/releases) with SHA-256 checksums and minisign signatures. See [INSTALL.md](INSTALL.md) for the full verification recipe.
 
 Or build from source:
 

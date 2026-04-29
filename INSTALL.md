@@ -2,6 +2,13 @@
 
 Serena is a single Go binary. Install it, point your coding agent at it, and you are ready to go.
 
+> **Note (pre-release):** No signed releases have been cut yet. The `minisign.pub`
+> committed to `main` is a `PLACEHOLDER` and the verification recipe below will
+> not succeed until the maintainer rotates in the real public key and pushes the
+> first `v*` tag (release CI fails closed on the placeholder). Track this in
+> `.planning/phases/51-packaging-goreleaser/deferred-items.md` (DEF-51-03).
+> Until then, prefer **Build from source** below.
+
 ## Install (pre-built binary)
 
 Pre-built binaries for darwin/linux/windows on amd64/arm64 are published on the [Releases page](https://github.com/agenthands/helix/releases) for every tagged version. Each archive ships with a SHA-256 checksum and a minisign signature.

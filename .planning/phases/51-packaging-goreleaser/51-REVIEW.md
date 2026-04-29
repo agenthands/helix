@@ -2,267 +2,362 @@
 phase: 51-packaging-goreleaser
 reviewed: 2026-04-29T00:00:00Z
 depth: standard
-files_reviewed: 7
+files_reviewed: 12
 files_reviewed_list:
+  - internal/treesitter/bindings/r/binding.go
+  - internal/treesitter/bindings/r/binding_nocgo.go
+  - internal/treesitter/bindings/swift/binding.go
+  - internal/treesitter/bindings/swift/binding_nocgo.go
+  - internal/treesitter/registry.go
   - .goreleaser.yaml
   - .github/workflows/release.yml
-  - minisign.pub
-  - INSTALL.md
-  - README.md
   - Makefile
+  - README.md
+  - INSTALL.md
   - CONTRIBUTING.md
+  - minisign.pub
 findings:
-  critical: 4
-  warning: 6
-  info: 5
-  total: 15
+  blocker: 3
+  warning: 5
+  info: 4
+  total: 12
 status: issues_found
 ---
 
-# Phase 51: Code Review Report
+# Phase 51 (Wave 3): Code Review Report
 
 **Reviewed:** 2026-04-29
 **Depth:** standard
-**Files Reviewed:** 7
+**Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-Phase 51 wires up a goreleaser-driven release pipeline (config, GH Actions workflow, minisign verification ceremony, docs, Makefile target). The high-level shape is sound — tag-triggered, three-pass reproducibility gate, archive signing, auto-generated changelog — and the workflow handles the minisign secret reasonably (`umask 077`, `printf '%s'` to avoid log leaks).
+Wave 3 closed the prior CR-01..CR-04 / WR-01..WR-06 / IN-01..IN-04 findings. The R/Swift CGO build-tag plumbing (`bindings/{r,swift}/binding.go` + `_nocgo.go` + nil-guarded registration in `registry.go`) is correct: stubs return `nil`, registration is guarded, and the language count narrative (21 vs 23) is consistent across binding.go, binding_nocgo.go, registry.go, and the deferred-items doc. The release workflow correctly fails-closed on the PLACEHOLDER public key (CR-02) and verifies the minisign tarball SHA-256 before extracting (CR-04).
 
-However, the phase prompt explicitly listed "README/INSTALL repo identity correction (`postfix/serena` → `agenthands/helix`)" as a deliverable, and README.md still publishes the wrong module path. There are also four supply-chain / correctness gaps that can ship a broken or compromised release: a placeholder public key that nothing prevents from being used, an unverified third-party tarball download that signs every release, a reproducibility gate that compares snapshot-to-snapshot but never validates the published artifacts, and unpinned third-party actions handling the signing key. Each is concrete and fixable; collectively they undermine the supply-chain story the phase is trying to establish.
+However, three BLOCKERs remain:
 
-## Critical Issues
+1. **The goreleaser pipeline cannot produce a binary at all under `CGO_ENABLED=0`** because every upstream tree-sitter Go binding (20 packages -- go, python, rust, typescript, c, cpp, csharp, java, javascript, kotlin, php, ruby, bash, haskell, julia, ocaml, scala, hcl, lua, zig) is CGO-only and is imported unconditionally in `internal/treesitter/registry.go`. I verified this directly: `CGO_ENABLED=0 go build ./cmd/serena` fails with 20 "build constraints exclude all Go files" errors. This is the structural blocker tracked as DEF-51-02 in `deferred-items.md`; it leaves SC-1 ("6 archives via goreleaser") unable to succeed end-to-end. Wave 3's fix only addressed the two locally-vendored bindings (R and Swift) and explicitly documents this gap, but the file under review (`registry.go`) imports the broken upstreams unconditionally and ships in main. Any tag pushed today will fail in CI.
 
-### CR-01: README.md still installs `github.com/postfix/serena`, contradicting the phase deliverable
+2. **The INSTALL.md verification recipe produces 404s** because of a goreleaser version-template mismatch: `name_template: "serena_{{ .Version }}_{{ .Os }}_{{ .Arch }}"` produces `serena_1.9.0_linux_amd64.tar.gz` (no `v` prefix; goreleaser strips it from `.Version`), but `INSTALL.md` tells users `VERSION=v1.9.0` and constructs URLs as `serena_${VERSION}_..._.tar.gz` -> `serena_v1.9.0_linux_amd64.tar.gz`. The two will never match. Every copy/paste user hits a 404.
 
-**File:** `README.md:64-67`
-**Issue:** The phase 51 brief explicitly calls for `postfix/serena` → `agenthands/helix` correction. `INSTALL.md` was updated, but `README.md` still publishes:
+3. **`minisign.pub` is committed as a literal `PLACEHOLDER`.** The release.yml pre-flight grep does block a release tag from publishing, but if a user follows INSTALL.md against `main` today (e.g., to verify a future signed release after rotating their local copy of the public key), they fetch garbage. The fix for this BLOCKER is operational (generate the real key, commit, set secrets), not code -- but it must happen before any v* tag is pushed and is in scope for "phase 51 must close" verification.
 
-```bash
-go install github.com/postfix/serena/cmd/serena@latest
-# Note: module path is github.com/postfix/serena pending a separate rename decision; the public repo lives at agenthands/helix.
+The remaining warnings are smaller-but-real correctness issues in the release workflow and documentation (sequence of secret-key disk lifetime, Makefile/CONTRIBUTING claims that overstate what the dry-run validates, identity drift between "Serena" and "Helix" naming).
+
+## Critical Issues (BLOCKER)
+
+### CR-01: `CGO_ENABLED=0 go build ./cmd/serena` fails -- registry.go unconditionally imports 20 CGO-only upstream bindings
+
+**File:** `internal/treesitter/registry.go:11-37`
+**Severity:** BLOCKER
+
+**Issue:**
+The Wave 3 fix introduced build-tag stubs only for the two locally-vendored bindings (`internal/treesitter/bindings/r` and `internal/treesitter/bindings/swift`). But every other tree-sitter binding imported by `registry.go` -- `tree-sitter-go`, `tree-sitter-python`, `tree-sitter-rust`, `tree-sitter-typescript`, `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-c-sharp`, `tree-sitter-java`, `tree-sitter-javascript`, `tree-sitter-kotlin`, `tree-sitter-php`, `tree-sitter-ruby`, `tree-sitter-bash`, `tree-sitter-haskell`, `tree-sitter-julia`, `tree-sitter-ocaml`, `tree-sitter-scala`, `tree-sitter-hcl`, `tree-sitter-lua`, `tree-sitter-zig` -- ships an upstream `binding.go` with `// #cgo CFLAGS: ... import "C"` and **no `//go:build cgo` tag**. Running `CGO_ENABLED=0 go build ./cmd/serena` therefore fails at compile time with 20 errors of the form `build constraints exclude all Go files in .../bindings/go`.
+
+I verified this directly against the working tree: `CGO_ENABLED=0 go build` produced exactly the 20 errors listed.
+
+`.goreleaser.yaml:13` sets `CGO_ENABLED=0`. The release pipeline therefore cannot build a single binary, let alone the 6-archive matrix that SC-1 requires. The `release.yml` workflow will fail at the first goreleaser invocation (the pass-1 reproducibility snapshot) before any signing or publishing happens. This is the same failure DEF-51-02 records in `deferred-items.md`.
+
+The Wave-3 R/Swift work is internally consistent and was a prerequisite, but it does not by itself unblock SC-1. Until DEF-51-02 lands a workable strategy (vendor every upstream binding with build tags, or split the registry under a `cgo`-tagged file with a non-CGO fallback that registers no tree-sitter languages), phase 51 cannot ship.
+
+**Fix:**
+Pick one of the two strategies sketched in `deferred-items.md` DEF-51-02 and execute it. Either:
+
+(a) Split `registry.go` into two files (`registry_cgo.go` with `//go:build cgo` and `registry_nocgo.go` with `//go:build !cgo`) where the no-CGO file builds an empty registry, and gate every consumer that calls into the registry to tolerate an empty languages map. This preserves a CGO_ENABLED=0 binary at the cost of zero tree-sitter language coverage.
+
+(b) Vendor every upstream binding the way R and Swift were vendored (drop a `bindings/{lang}/binding.go` with `//go:build cgo` plus a `_nocgo.go` stub returning `nil`), update `registry.go` to import the local copies, and accept the maintenance burden of tracking upstream parser/scanner.c updates.
+
+Either way: do NOT ship the current `registry.go` as-is and expect the goreleaser pipeline to succeed.
+
+---
+
+### CR-02: INSTALL.md verification recipe produces 404s -- archive name template uses `{{ .Version }}` (strips `v`) but recipe uses `VERSION=v1.9.0`
+
+**File:** `INSTALL.md:11-32` (cross-references `.goreleaser.yaml:35`)
+**Severity:** BLOCKER
+
+**Issue:**
+`INSTALL.md` instructs the user to set `VERSION=v1.9.0` (line 12) and then constructs every download URL as:
+
+```
+serena_${VERSION}_${OS}_${ARCH}.tar.gz
 ```
 
-Users following the README's primary install path will pull from a foreign module path that may or may not exist, may not be controlled by the project, and definitely is not the `agenthands/helix` repo this release pipeline is publishing to. The footnote does not save the copy-paste user. This is the exact identity-correction defect the phase set out to fix.
+which expands to `serena_v1.9.0_linux_amd64.tar.gz`. But `.goreleaser.yaml:35` uses `name_template: "serena_{{ .Version }}_{{ .Os }}_{{ .Arch }}"`. In goreleaser, `{{ .Version }}` is the version string with the leading `v` **stripped** (this is a long-standing goreleaser convention; the prefixed form is `{{ .Tag }}`). The actual published archive will therefore be `serena_1.9.0_linux_amd64.tar.gz` -- without the `v`.
 
-**Fix:** Either remove the `go install` block (binaries are now the recommended install per INSTALL.md) or update it to a path the project actually owns. If the module rename is genuinely deferred, replace the block with a pointer to `make build` / pre-built binaries:
+Result: every user who copy-pastes the verification recipe gets `HTTP 404` on the first `curl -LO`, then on every subsequent `curl -LO`, then never reaches the `minisign -V` line. The recipe block is the centerpiece of INSTALL.md and is documented as "a single block you can copy and paste end-to-end."
 
-```markdown
-### Install
+This is a hard correctness regression introduced (or at least preserved) in this wave because the same recipe is repeated in the release-process docs (`CONTRIBUTING.md`) and was not flagged when the goreleaser config was reviewed.
 
-Pre-built binaries for darwin/linux/windows on amd64/arm64 — see [INSTALL.md](INSTALL.md).
+**Fix:**
+Pick one of the two and apply consistently:
 
-Or build from source:
-
-```bash
-git clone https://github.com/agenthands/helix.git
-cd helix
-go build ./cmd/serena
-```
-```
-
-### CR-02: `minisign.pub` is an all-zeros placeholder with no CI guard against tagging a release
-
-**File:** `minisign.pub:1-2`
-**Issue:** The committed public key is literally `RWQAAAAA...` (32 zero bytes after the 2-byte algorithm/key-id prefix). `CONTRIBUTING.md:182-187` documents that `MINISIGN_PRIVATE_KEY` and `MINISIGN_PASSWORD` must be set on the repo before tagging, but nothing enforces that the public key in the repo matches the private key in CI. Failure mode if a `v*` tag is pushed today:
-
-1. CI signs archives with whatever key is in `MINISIGN_PRIVATE_KEY` (real or unset).
-2. Users follow `INSTALL.md:20` to fetch `minisign.pub` from `main` — they get the placeholder.
-3. `minisign -V` fails for every user, every download, with a confusing "Signature verification failed" — and the release is unrecoverable without re-tagging.
-
-Worse, if the placeholder is replaced post-tag, anyone who already cached the old `minisign.pub` from `INSTALL.md`'s one-time-fetch instruction is permanently broken.
-
-**Fix:** Add a workflow pre-flight check that refuses to release with the placeholder, e.g. as a step before the reproducibility gate:
+(a) **Easier:** change the goreleaser archive name template to use the prefixed tag:
 
 ```yaml
-- name: Refuse placeholder minisign public key
-  run: |
-    set -euo pipefail
-    if grep -q 'PLACEHOLDER' minisign.pub; then
-      echo "::error::minisign.pub is still the placeholder; replace it before tagging a release."
-      exit 1
-    fi
-    # Optional: assert the pubkey matches the secret keypair by re-deriving from the secret.
+# .goreleaser.yaml
+archives:
+  - id: serena
+    ids: [serena]
+    formats: ["tar.gz"]
+    name_template: "serena_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"  # add literal 'v'
 ```
 
-Until a real key is generated, the workflow should fail closed.
-
-### CR-03: Reproducibility gate compares snapshot-to-snapshot, never against the published artifacts
-
-**File:** `.github/workflows/release.yml:53-84`
-**Issue:** Pass 1 and Pass 2 both run `release --snapshot --clean --skip=sign`. The "real release" Pass 3 (line 86-91) runs `release --clean` (no `--snapshot`). Snapshot and real release embed different `-X main.version=...` ldflag values (snapshot uses a synthesized version like `0.0.0-next-...`, real uses the tag). The `name_template` also expands `{{ .Version }}` differently between modes.
-
-Concretely: the gate proves "two snapshot builds are byte-identical" but the artifacts that ship to users come from a third build that was never compared to anything. A non-determinism source that is gated behind real-release-only inputs (e.g., the version string interacting with a build cache, a tag-triggered code path, a future `release.extra_files`) will silently bypass the gate.
-
-**Fix:** Either (a) gate on Pass 3 too — checksum the real-release `dist/` and compare against a fourth build of the same tag — or (b) explicitly document that the gate validates *build-environment* determinism (toolchain, mod_timestamp, trimpath) and not artifact-content equality. Option (a):
-
-```yaml
-- name: Capture real release sha256s
-  run: |
-    set -euo pipefail
-    (cd dist && find . -name '*.tar.gz' -print0 | sort -z | xargs -0 sha256sum) > /tmp/real.sha256
-
-- name: Real release pass 2 (verify byte-identical)
-  uses: goreleaser/goreleaser-action@v7
-  with: { distribution: goreleaser, version: '~> v2', args: 'release --clean --skip=publish --skip=sign' }
-  # ... then diff /tmp/real.sha256 against the second pass
-```
-
-If gating Pass 3 is too expensive, at minimum tighten the language in `CONTRIBUTING.md:161` — "refuses to publish if two consecutive snapshot builds produce non-byte-identical archives" overstates what the gate actually proves.
-
-### CR-04: Minisign tarball is fetched without integrity verification — single point of supply-chain failure
-
-**File:** `.github/workflows/release.yml:34-39`
-**Issue:** The minisign binary is downloaded from GitHub releases over TLS but with no checksum or signature check:
+(b) **Equally valid:** change INSTALL.md to set `VERSION=1.9.0` (no `v`) and document URL paths as `download/v${VERSION}/serena_${VERSION}_...`:
 
 ```bash
-curl -fsSL -o /tmp/minisign.tar.gz \
-  "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz"
-tar -xzf /tmp/minisign.tar.gz -C /tmp
-sudo install -m 0755 /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
+VERSION=1.9.0  # without 'v' prefix; the GitHub release tag is v$VERSION
+OS=linux
+ARCH=amd64
+curl -LO https://github.com/agenthands/helix/releases/download/v$VERSION/serena_${VERSION}_${OS}_${ARCH}.tar.gz
 ```
 
-This `minisign` binary signs every release archive with the project's private key. If GitHub release infrastructure for `jedisct1/minisign` is compromised, or DNS/TLS is hijacked on the runner, an attacker-controlled `minisign` binary handles your secret key. The whole signing ceremony exists to defend against this exact class of compromise; doing it with an unverified third-party binary defeats the threat model.
+Either fix needs to land in BOTH `INSTALL.md` and `CONTRIBUTING.md` and be verified against an actual `goreleaser release --snapshot --clean --skip=sign` archive name in `dist/`.
 
-**Fix:** Pin a SHA-256 of the tarball and verify before extracting:
+---
 
-```bash
-MINISIGN_VERSION="0.12"
-MINISIGN_SHA256="<paste from upstream release notes / verified locally>"
-curl -fsSL -o /tmp/minisign.tar.gz \
-  "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz"
-echo "${MINISIGN_SHA256}  /tmp/minisign.tar.gz" | sha256sum -c -
-tar -xzf /tmp/minisign.tar.gz -C /tmp
-```
+### CR-03: `minisign.pub` is committed as the literal PLACEHOLDER
 
-Bonus: also verify the upstream minisign signature on the tarball (jedisct1 self-signs releases with a documented public key).
+**File:** `minisign.pub:1-3`
+**Severity:** BLOCKER
+
+**Issue:**
+The file ships in `main` with `untrusted comment: serena minisign public key -- PLACEHOLDER (release.yml pre-flight greps this marker; ...)` and a body of all-zero base64. Two consequences:
+
+1. The release pre-flight in `release.yml:22-33` correctly refuses to publish a tag with this file in place (this part is good).
+2. INSTALL.md tells users to `curl https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub` "one-time" and use that key to verify every future archive. Anyone who follows the recipe today downloads the placeholder. After the maintainer rotates the key and a real release is published, the user's locally-cached `minisign.pub` (downloaded at "one-time" step) verifies nothing -- and `minisign -V` will fail with a confusing parse error rather than a clear "wrong key" message, because the placeholder isn't even a syntactically valid key.
+
+The release.yml gate prevents catastrophic mis-signing in CI, but it does not prevent users from caching a placeholder as their root of trust.
+
+**Fix:**
+Generate the real keypair on a trusted local machine, commit `minisign.pub`, and upload the secret half + password as repo secrets (procedure already documented in `CONTRIBUTING.md`, "One-time keypair setup"). This must happen BEFORE the first `v*` tag is pushed AND before INSTALL.md is published as a stable installation guide. There is nothing the code review can fix here -- it is an operational blocker in the same commit set.
+
+If the team intentionally wants to ship INSTALL.md and the goreleaser config without a real key (i.e., phase-51 closes "build pipeline ready, tag-cutting deferred"), at minimum INSTALL.md should carry a top-of-document warning that no signed releases exist yet, and the recipe should be marked "not yet usable." The current INSTALL.md reads as if signed releases are already available.
+
+---
 
 ## Warnings
 
-### WR-01: Third-party actions are pinned to mutable major-version tags, not SHAs
+### WR-01: `/tmp/minisign.key` is on disk during both reproducibility-gate snapshot passes, even though those passes use `--skip=sign`
 
-**File:** `.github/workflows/release.yml:18, 23, 54, 69, 87`
-**Issue:** `actions/checkout@v4`, `actions/setup-go@v5`, `goreleaser/goreleaser-action@v7` are major-tag pins. Major tags are mutable references — the upstream repo can repoint `v4` at a different commit at any time, and a compromised maintainer account can do so silently. For a release pipeline that signs binaries with a private key (`MINISIGN_PRIVATE_KEY`, `MINISIGN_PASSWORD`), GitHub's own hardening guide recommends commit SHA pinning.
+**File:** `.github/workflows/release.yml:79-89, 91-122`
+**Severity:** WARNING
 
-**Fix:** Pin to commit SHAs and add a comment with the version for human readability:
+**Issue:**
+The "Write minisign secret key to disk (umask 077)" step runs before the snapshot pass-1, snapshot pass-2, the diff gate, and finally the real release. The two snapshot passes use `--skip=sign` and therefore do not need the key on disk; they nonetheless run with the key present at `/tmp/minisign.key` for several minutes of build time. The blast radius is small (ephemeral runner, umask 077), but a third-party GitHub Action invoked elsewhere in the build matrix (e.g., a future `goreleaser-action` upgrade, or a `setup-go` post-step) that scans `/tmp` could exfiltrate the key during work that does not actually require it.
+
+The runner is ephemeral so this is not a credential-persistence issue, but defense-in-depth has been the explicit goal of the wave-3 hardening (CR-04, the post-job `shred`).
+
+**Fix:**
+Move the "Write minisign secret key to disk" step to immediately before "Real release (sign + publish)", after the reproducibility gate has passed. The two snapshot passes do not read the key. Sketch:
 
 ```yaml
-- uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-- uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491  # v5.0.0
-- uses: goreleaser/goreleaser-action@7ec5c2b0c6cdda6e8bbb49444bc797dd33d74dd8  # v7.0.0
+- name: Reproducibility gate -- snapshot pass 1
+  uses: goreleaser/goreleaser-action@...
+  ...
+
+- name: Reproducibility gate -- snapshot pass 2
+  uses: goreleaser/goreleaser-action@...
+  ...
+
+- name: Diff sha256s -- fail if non-reproducible
+  run: |
+    ...
+
+- name: Write minisign secret key to disk (umask 077)   # <-- moved here
+  env:
+    MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+  run: |
+    set -euo pipefail
+    umask 077
+    printf '%s' "$MINISIGN_PRIVATE_KEY" > /tmp/minisign.key
+
+- name: Real release (sign + publish)
+  ...
 ```
 
-Use `dependabot` or `renovate` to keep them current.
+The post-job `shred` step continues to handle cleanup either way.
 
-### WR-02: `checksums.txt` is not signed; INSTALL.md's checksum step adds no integrity guarantee
+---
 
-**File:** `.goreleaser.yaml:46-49`, `INSTALL.md:22-23`
-**Issue:** `signs.artifacts: archive` signs only the `.tar.gz` files. `checksums.txt` is not signed. `INSTALL.md` instructs:
+### WR-02: README.md still mixes "Serena" and "Helix" branding inconsistently
 
-```bash
-sha256sum -c --ignore-missing checksums.txt   # step 1
-minisign -V -p minisign.pub -m serena_..._.tar.gz  # step 2
+**File:** `README.md:7-12, 64, 69, 71, 88, 137, 156-161, 318-330, 346`
+**Severity:** WARNING
+
+**Issue:**
+README.md announces the rename in lines 12 and 346 ("Helix started as a rewrite of Serena MCP. Full rename in progress; existing references to 'Serena' in this README will move to 'Helix' in an upcoming refactor."), but the rest of the document continues to use "Serena" throughout, including in user-facing CLI examples (`serena setup claude-code`), config snippets (`"serena": { ... }`), and architecture descriptions. INSTALL.md (line 1: "Serena is a single Go binary") and CONTRIBUTING.md (line 1: "Contributing to Serena") are similarly Serena-only.
+
+Users reading INSTALL.md against a repo named `helix` (and a release on `agenthands/helix`) get a slightly disorienting experience: the binary is `serena`, the verification recipe pulls archives named `serena_*`, but the GitHub URL says `helix`. This is not a correctness bug (the URLs all resolve), but it is a quality issue for first-time users and makes the README's own "rename in progress" disclaimer feel stale.
+
+**Fix:**
+Either complete the rename or pin the inconsistency to a tracked plan (e.g., link the disclaimer in README.md:12 to a specific phase in the roadmap). Current state where the disclaimer is open-ended ("upcoming refactor", no link) does not give the user a way to know whether `serena_v1.9.0_linux_amd64.tar.gz` or `helix_v1.9.0_linux_amd64.tar.gz` will be the artifact name they download next month.
+
+---
+
+### WR-03: CONTRIBUTING.md `Releasing` section claims the dry-run "validates the build matrix" -- but the dry-run currently fails
+
+**File:** `CONTRIBUTING.md:163-169, 213`
+**Severity:** WARNING
+
+**Issue:**
+CONTRIBUTING.md tells contributors:
+
+> To dry-run the build matrix locally (signs are skipped because the secret key lives only in CI):
+>
+> ```sh
+> make release-snapshot
+> ```
+>
+> Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`serena_<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file.
+
+Per CR-01, this command currently fails on a clean CGO_ENABLED=0 checkout (which is what `.goreleaser.yaml:13` enforces). A new contributor who runs `make release-snapshot` to "validate the build matrix" gets 20 build-constraint errors and no `dist/`. The doc is currently misleading.
+
+Line 213 makes the same implicit claim: "The dry-run still validates the build matrix, archive packaging, and checksums.txt generation." It does not, until DEF-51-02 closes.
+
+**Fix:**
+Until DEF-51-02 is resolved, either:
+- Add a clear note: "Until phase 51 DEF-51-02 closes, `make release-snapshot` is expected to fail with `build constraints exclude all Go files in .../tree-sitter-*/bindings/go`. The pipeline will be functional once we vendor the upstream bindings with build tags."
+- OR temporarily set `CGO_ENABLED=1` in `.goreleaser.yaml` and accept that releases ship CGO binaries (with the static-binary invariant relaxed). This is a phase-level decision, not a code-review nit.
+
+---
+
+### WR-04: `release.yml` minisign install only verifies an x86_64 Linux tarball -- relies on `ubuntu-latest` runner architecture
+
+**File:** `.github/workflows/release.yml:60-65, 13`
+**Severity:** WARNING
+
+**Issue:**
+The `ARCH != x86_64` check correctly fails the workflow loud (`exit 1`) if GitHub flips `ubuntu-latest` to a non-x86_64 runner. This is the right default. The warning is that **this never gets exercised in CI** until the day it actually flips, at which point every pending tag fails simultaneously. A more robust posture would be to additionally pin the runner to `ubuntu-22.04` (or whatever LTS the release matrix currently expects) so the architecture is fixed at the workflow level rather than detected at runtime.
+
+This is a quality / operational-resilience issue, not a correctness bug.
+
+**Fix:**
+```yaml
+jobs:
+  release:
+    runs-on: ubuntu-22.04   # was: ubuntu-latest -- pin so 'ubuntu-latest' rolling forward never silently breaks the minisign install
 ```
 
-If an attacker swaps both the archive and `checksums.txt`, step 1 passes. Only step 2 catches it. So the checksum step provides zero independent integrity — it is documentation theater unless the user runs minisign too. Worse, `--ignore-missing` silently exits 0 if the user accidentally downloaded only the signature file.
+The runtime `uname -m` check stays as a defense-in-depth backstop for future runner image changes within the pinned series.
 
-**Fix:** Either drop the checksum step from INSTALL.md (minisign alone is sufficient), or set `signs.artifacts: all` so `checksums.txt` is also signed, then have the user `minisign -V` on `checksums.txt` first and validate the archive against it. Pick one — current state is misleading without strengthening anything.
+---
 
-### WR-03: README.md HTTP-mode flag conflicts with INSTALL.md
+### WR-05: `INSTALL.md` checksum verification matches more files than the user downloaded -- typos can pass
 
-**File:** `README.md:134`, `INSTALL.md:248-249`
-**Issue:** Two different commands documented for the same feature:
+**File:** `INSTALL.md:27-28, 38`
+**Severity:** WARNING
 
-- `README.md:134`: `serena --serve --http-addr=:9091`
-- `INSTALL.md:248`: `serena --mode=http --http-addr=127.0.0.1:8080`
-
-At least one is wrong relative to the actual binary surface. Users will copy-paste one or the other and hit `unknown flag` or "served on the wrong port from what the next line says".
-
-**Fix:** Pick the canonical syntax (cross-reference `internal/cli/root.go` for the actual flag), update both docs to match, and pick one default port.
-
-### WR-04: README.md attribution is internally inconsistent
-
-**File:** `README.md:12, 348`
-**Issue:** Line 12 says "Helix started as a rewrite of [Serena MCP](https://github.com/oraios/serena)". Line 348 footnote says "Originally inspired by [Python Serena](https://github.com/lks-ai/serena)". Two different upstream URLs (`oraios/serena` vs `lks-ai/serena`) are credited as the origin in the same README. One of them is wrong.
-
-**Fix:** Verify the actual upstream and reconcile. If `oraios/serena` is correct, fix the footnote. If neither is correct, fix both.
-
-### WR-05: `--ignore-missing` on `sha256sum` hides "wrong file downloaded" failures
-
-**File:** `INSTALL.md:23`
-**Issue:** `sha256sum -c --ignore-missing checksums.txt` exits 0 even if the user downloaded zero matching files. A user who fat-fingers the archive name (typo in `OS` or `ARCH`) sees "OK" and proceeds to a confusing minisign error, never realizing the checksum step did nothing.
-
-**Fix:** Drop `--ignore-missing` and tell users to grep the line for their archive first, or replace the step with:
-
+**Issue:**
+The recipe runs:
 ```bash
 sha256sum -c checksums.txt 2>&1 | grep "serena_${VERSION}_${OS}_${ARCH}.tar.gz: OK" \
   || { echo "checksum FAILED"; exit 1; }
 ```
 
-### WR-06: `MINISIGN_PRIVATE_KEY` lives on disk in `/tmp/minisign.key` for the rest of the job with no cleanup
+`checksums.txt` lists 6 archives (one per OS/arch). The user has downloaded only one of them. `sha256sum -c` will print 5 `FAILED open or read` lines plus 1 `OK` line, and return non-zero. The pipe-to-grep then matches the OK line and the `||` branch never fires -- so the recipe works for the user, but the side output (`FAILED open or read` lines mixed with the OK line) looks alarming and contradicts the inline comment "fails loud on typos." If a user mis-types `OS` or `ARCH` such that the typo'd name is not in checksums.txt, the recipe still succeeds because grep matches some other archive's OK line that happened to be downloaded by accident -- or the mismatch only surfaces at the later `minisign -V` step, by which point the message is murkier.
 
-**File:** `.github/workflows/release.yml:41-51`
-**Issue:** `umask 077` is good defense for the file permissions, but the secret persists at `/tmp/minisign.key` for the duration of the runner job. Any subsequent step (e.g., a future-added "post-release announce" step that pulls a third-party action) can read it. The runner itself is ephemeral, but the in-job blast radius is unnecessarily large.
+**Fix:**
+Tighten the check to inspect only the file the user actually downloaded:
 
-**Fix:** Add a `post`-style cleanup step that runs `always()`:
-
-```yaml
-- name: Wipe minisign secret key
-  if: always()
-  run: shred -u /tmp/minisign.key 2>/dev/null || rm -f /tmp/minisign.key
+```bash
+# Verify the downloaded archive's sha256 is present in the (now-trusted) checksums.txt
+EXPECTED_HASH=$(grep "serena_${VERSION}_${OS}_${ARCH}.tar.gz" checksums.txt | awk '{print $1}')
+ACTUAL_HASH=$(sha256sum "serena_${VERSION}_${OS}_${ARCH}.tar.gz" | awk '{print $1}')
+if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+  echo "checksum FAILED: expected=$EXPECTED_HASH actual=$ACTUAL_HASH"; exit 1
+fi
+echo "checksum OK: $ACTUAL_HASH"
 ```
 
-Place it as the last step in the job so it runs whether sign succeeds or fails.
+This also avoids the macOS/Linux split for `sha256sum -c` vs `shasum -a 256 -c` since we always operate on a single file.
+
+---
 
 ## Info
 
-### IN-01: Makefile `release-snapshot` produces a confusing error when goreleaser is missing
+### IN-01: `internal/treesitter/registry.go:50` doc comment is stale
 
-**File:** `Makefile:50-51`
-**Issue:** `release-snapshot` invokes `goreleaser` directly. If a contributor doesn't have it installed, they see `make: goreleaser: No such file or directory` — `CONTRIBUTING.md:169` mentions `brew install goreleaser` but contributors typically discover this via the make target failing.
+**File:** `internal/treesitter/registry.go:50`
+**Severity:** INFO
 
-**Fix:** Guard the target with a `command -v` check:
+**Issue:**
+```go
+// NewGrammarRegistry creates a GrammarRegistry with Go, Python, TypeScript, TSX, and Rust grammars.
+```
 
-```makefile
+The function actually registers 23 languages (or 21 under CGO_ENABLED=0). The comment hasn't been updated since waves 1, 2a, 2b, and 2b-gap-closure expanded the registry.
+
+**Fix:**
+```go
+// NewGrammarRegistry creates a GrammarRegistry with all built-in tree-sitter
+// grammars (23 under CGO_ENABLED=1; 21 under CGO_ENABLED=0 -- R and Swift omit
+// when their CGO bindings are stubbed out). See the imports above for the full
+// list and bindings/{r,swift}/binding_nocgo.go for the CGO=0 fallback.
+func NewGrammarRegistry() *GrammarRegistry {
+```
+
+---
+
+### IN-02: README.md tool table claims "41+ MCP tools" but the table lists 40 rows
+
+**File:** `README.md:10, 40, 273-316`
+**Severity:** INFO
+
+**Issue:**
+Lines 10 and 40 advertise "41+ MCP tools." The auto-generated tool table (`<!-- BEGIN TOOLS --> ... <!-- END TOOLS -->`) contains 40 rows by my count. Either the count is off-by-one, or one tool is gated out of the table (some categories?) and not surfaced. Since `make docs` regenerates this table, the 41+ string is hand-written and may have drifted.
+
+**Fix:**
+Either:
+- Update the prose to "40+ MCP tools" until a 41st ships, or
+- Audit `cmd/docgen` to confirm whether any registered tool is being filtered out of the README table.
+
+The marketing copy ("41+") is forgiving but the discrepancy is the kind of thing an alert reader notices and files an issue against.
+
+---
+
+### IN-03: `Makefile:50-53` `release-snapshot` target's missing-binary error message is macOS-only
+
+**File:** `Makefile:50-53`
+**Severity:** INFO
+
+**Issue:**
+```make
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \
 	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign
 ```
 
-### IN-02: Minisign binary URL is hardcoded to `linux-x86_64` with no runner-arch guard
+The "brew install goreleaser" hint is macOS-only. Linux users who hit this branch don't get an actionable hint (CONTRIBUTING.md does mention the Linux tarball path, but the make output points only to `brew`).
 
-**File:** `.github/workflows/release.yml:36-38`
-**Issue:** `runs-on: ubuntu-latest` is x86_64 today, so the URL works. If ubuntu-latest ever flips to arm64 (or someone changes the runner) the curl 404s with a cryptic tar error. Not a current bug — flagging because release infrastructure outlives one's intentions.
-
-**Fix:** Add an explicit assertion or compute the URL from `uname -m`:
-
-```bash
-ARCH="$(uname -m)"
-[ "$ARCH" = "x86_64" ] || { echo "unsupported runner arch: $ARCH"; exit 1; }
+**Fix:**
+```make
+@command -v goreleaser >/dev/null 2>&1 || { \
+  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing)."; \
+  echo "  macOS:  brew install goreleaser"; \
+  echo "  Linux:  download tarball from https://github.com/goreleaser/goreleaser/releases"; \
+  exit 1; }
 ```
 
-### IN-03: `dist-pass-1` directory is left around after the gate
+---
 
-**File:** `.github/workflows/release.yml:63`
-**Issue:** `mv dist dist-pass-1` is never cleaned up. Pass 3's `--clean` only wipes `dist/`. Runners are ephemeral, but the leftover directory inflates cache snapshots if anyone later adds a workspace cache.
+### IN-04: `release.yml` reproducibility gate runs goreleaser THREE times per release -- two snapshot passes plus the real run
 
-**Fix:** Add `rm -rf dist-pass-1` after the diff step succeeds, or `if: always()` to clean both ways.
+**File:** `.github/workflows/release.yml:91-136`
+**Severity:** INFO
 
-### IN-04: CONTRIBUTING.md overstates the reproducibility guarantee
+**Issue:**
+On every `v*` tag push the workflow does:
+1. `goreleaser release --snapshot --clean --skip=sign` (pass 1)
+2. `goreleaser release --snapshot --clean --skip=sign` (pass 2)
+3. `goreleaser release --clean` (real)
 
-**File:** `CONTRIBUTING.md:161`
-**Issue:** "The CI-enforced reproducibility gate refuses to publish if two consecutive snapshot builds produce non-byte-identical archives, so a non-deterministic build cannot reach users." As detailed in CR-03, the gate only proves snapshot determinism. A non-determinism that lives behind the real-release code path can reach users despite the gate.
+Three full multi-arch builds. With the 30-minute `timeout-minutes: 30` already on the job, this leaves ~10 minutes per build on a single ubuntu-latest runner. For the current binary size that's fine, but the budget will tighten as the project grows (more dependencies, more LSP types). The reproducibility-gate design is fundamentally correct (CI must verify reproducibility before publishing); this is a budget-watch note, not a defect.
 
-**Fix:** Either fix CR-03 (extend the gate to real-release artifacts) or soften the claim — e.g. "two consecutive snapshot builds" → "two consecutive builds with identical inputs". Pair the doc with whatever the gate actually does.
-
-### IN-05: `untrusted comment:` in `minisign.pub` literally says "PLACEHOLDER, replace before first release"
-
-**File:** `minisign.pub:1`
-**Issue:** This is intentional and fine for a placeholder, but combined with CR-02 (no CI guard) it's a footgun the placeholder will outlive its welcome. The comment serves humans, not the workflow.
-
-**Fix:** See CR-02 for the actual gate. Once a real key replaces the placeholder, drop the "PLACEHOLDER" string from the untrusted comment so a future regression doesn't go unnoticed.
+**Fix:**
+None required for this phase. Consider adding a tracking note in `deferred-items.md` if the team wants to revisit the gate strategy (e.g., separate workflow on schedule, or compare pass-2 against the real-release archives instead of running pass-2 separately).
 
 ---
 

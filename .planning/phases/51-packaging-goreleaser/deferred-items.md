@@ -35,4 +35,93 @@ build failed: exit status 1: package github.com/postfix/serena/cmd/serena
 
 **Severity:** HIGH (Plan 51-01 cannot be smoke-tested locally; the first CI run on a real `v*` tag will fail until this is resolved). The goreleaser config itself is correct and lints clean.
 
-**Status:** OPEN -- deferred to a separate decision/phase per Plan 51-01 scope boundary.
+**Status:** PARTIALLY RESOLVED -- The R/Swift-specific build-constraint errors are fixed by Plan 51-03 (build tags + non-CGO stubs + nil-guarded registry); see Resolution section below. However, during 51-03 execution it was discovered that **all 19 upstream tree-sitter Go bindings are also CGO-only** -- not just R and Swift. Full CGO_ENABLED=0 build of `./cmd/serena` therefore still fails. The remaining (much larger) scope is now tracked as DEF-51-02. SC-1 ("6 archives via goreleaser") remains structurally blocked until DEF-51-02 is also closed.
+
+## Resolution (DEF-51-01 R/Swift-specific portion)
+
+Resolved by Plan 51-03 on 2026-04-29. The fix:
+- Added `//go:build cgo` tag to `internal/treesitter/bindings/{r,swift}/binding.go`.
+- Added `internal/treesitter/bindings/{r,swift}/binding_nocgo.go` stubs (`//go:build !cgo`) returning nil from `Language()`.
+- Updated `internal/treesitter/registry.go` to nil-check `Language()` before `NewLanguage`; skips registration for r and swift under CGO_ENABLED=0.
+
+Smoke test result (Plan 51-03 Task 4):
+- `CGO_ENABLED=0 go build ./cmd/serena` -- **STILL FAILS**, but for a different reason: 19 upstream tree-sitter bindings (go, python, rust, typescript, java, c, cpp, c-sharp, ruby, php, javascript, kotlin, scala, bash, haskell, julia, ocaml, lua, zig, hcl) all hit `build constraints exclude all Go files`. The R/Swift contribution to that error list is gone (locally vendored bindings now compile under CGO_ENABLED=0 -- they just register no language). The remaining 19 errors are upstream and out of 51-03 scope.
+- `CGO_ENABLED=1 go build ./cmd/serena` -- exit 0, byte-identical CGO behavior preserved.
+- `CGO_ENABLED=1 go test ./...` -- exit 0 (all 38 packages pass; treesitter and dependents continue to register and use R/Swift parsers).
+- `CGO_ENABLED=0 go test ./...` -- fails because `internal/treesitter` and downstream packages (repomap, integration tests) cannot compile when 19 upstream bindings are excluded. Same root cause as the build failure; documented in DEF-51-02.
+- `make release-snapshot` -- not run; would fail at the same upstream-binding wall as `CGO_ENABLED=0 go build`.
+
+Net effect of the R/Swift portion of the fix: when (and only when) DEF-51-02 lands a workable strategy for the upstream bindings, the R/Swift portion of the fix lets the CGO_ENABLED=0 binary support 21 tree-sitter languages (R and Swift omitted, gracefully). CGO_ENABLED=1 binaries continue to support all 23 languages. The R/Swift code is no longer an obstacle to CGO_ENABLED=0 cross-compilation.
+
+---
+
+## DEF-51-02: Upstream tree-sitter Go bindings are CGO-only across the board
+
+**Discovered during:** Plan 51-03 Task 4 Step A (CGO_ENABLED=0 go build smoke).
+
+**Symptom:** `CGO_ENABLED=0 go build ./cmd/serena` fails with 19 errors of the form:
+
+```
+github.com/tree-sitter/tree-sitter-go/bindings/go: build constraints exclude all Go files in /Users/.../tree-sitter-go@v0.25.0/bindings/go
+github.com/tree-sitter/tree-sitter-python/bindings/go: build constraints exclude all Go files in ...
+github.com/tree-sitter/tree-sitter-rust/bindings/go: build constraints exclude all Go files in ...
+github.com/tree-sitter/tree-sitter-typescript/bindings/go: ...
+github.com/tree-sitter/tree-sitter-java/bindings/go: ...
+github.com/tree-sitter/tree-sitter-c/bindings/go: ...
+github.com/tree-sitter/tree-sitter-cpp/bindings/go: ...
+github.com/tree-sitter/tree-sitter-c-sharp/bindings/go: ...
+github.com/tree-sitter/tree-sitter-ruby/bindings/go: ...
+github.com/tree-sitter/tree-sitter-php/bindings/go: ...
+github.com/tree-sitter/tree-sitter-javascript/bindings/go: ...
+github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go: ...
+github.com/tree-sitter/tree-sitter-scala/bindings/go: ...
+github.com/tree-sitter/tree-sitter-bash/bindings/go: ...
+github.com/tree-sitter/tree-sitter-haskell/bindings/go: ...
+github.com/tree-sitter/tree-sitter-julia/bindings/go: ...
+github.com/tree-sitter/tree-sitter-ocaml/bindings/go: ...
+github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go: ...
+github.com/tree-sitter-grammars/tree-sitter-zig/bindings/go: ...
+github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go: ...
+```
+
+(Total: 19 distinct upstream packages -- 20 import-line errors because tree-sitter-typescript exposes both `LanguageTypescript` and `LanguageTSX` via the same package. R/Swift errors are GONE post-51-03.)
+
+**Root cause:** Every official tree-sitter-* Go binding upstream is structured as a single `binding.go` with `import "C"` and a CGO `#include` of the parser sources, e.g.:
+
+```go
+package tree_sitter_go
+
+// #cgo CFLAGS: -std=c11 -fPIC
+// #include "../../src/parser.c"
+// #if __has_include("../../src/scanner.c")
+// #include "../../src/scanner.c"
+// #endif
+import "C"
+
+import "unsafe"
+
+func Language() unsafe.Pointer {
+	return unsafe.Pointer(C.tree_sitter_go())
+}
+```
+
+When the `import "C"` directive is present in any source file, the Go toolchain treats the whole file as cgo-implicit and applies an implicit `//go:build cgo` constraint. Under `CGO_ENABLED=0`, the file is excluded -- and because no other Go source exists in those binding packages, the toolchain reports "build constraints exclude all Go files."
+
+This is the same structural problem that DEF-51-01 documented for R and Swift -- but DEF-51-01's R/Swift fix only addressed the two locally-vendored bindings. The 19 upstream packages cannot be edited from this repo.
+
+**Why the 51-03 plan missed this:**
+- Plan 51-03 was scoped to the two locally-vendored packages where the project has direct write access. The plan's "<must_haves>" assumed the only CGO blockers were R and Swift (because those were the only two error lines visible in DEF-51-01's quoted output).
+- DEF-51-01's quoted goreleaser output stops at the R/Swift errors because Go's import-cycle / build-constraint reporter short-circuits on the first failing import in the dependency graph -- it does NOT enumerate every CGO-gated package. If R and Swift are removed from the graph, the next 19 errors surface. This was not visible until 51-03 actually built a CGO=0 binary post-stub-creation.
+- Per Plan 51-03 line 74 ("STOP and document the discovery in deferred-items.md as DEF-51-02 ... Do NOT silently expand scope"), this finding is recorded here rather than fixed in 51-03.
+
+**Resolution paths (for a future phase):**
+1. **Vendor + stub all 19 bindings (mirror the R/Swift pattern).** For each upstream binding, copy the CGO source into `internal/treesitter/bindings/<lang>/binding.go` with `//go:build cgo`, write a `binding_nocgo.go` returning nil, and update `registry.go` with 19 more nil-guarded calls. Pros: same proven pattern; CGO=1 binaries still parse 23 languages; CGO=0 binaries register 0 tree-sitter languages but still build and run with LSP-only RepoMap. Cons: ~19 packages * ~3 files * vendored source -- significant repo footprint; ongoing maintenance burden to track upstream parser updates; CGO=0 binaries lose ALL tree-sitter coverage which materially degrades RepoMap quality on user machines that get the no-CGO build.
+2. **Move tree-sitter behind a CGO-required interface.** Restructure `internal/treesitter/` so the package itself has a `//go:build cgo` constraint, with a `//go:build !cgo` stub that returns "tree-sitter unavailable" from every public method. Callers (RepoMap, edit subsystem) must already handle the not-registered case via the (lang, ok) idiom. Pros: minimal new code; clean separation; no per-binding vendoring. Cons: CGO=0 binaries have NO tree-sitter capability, only LSP `documentSymbol` fallback; harder to opt into "21 of 23 languages" partial coverage.
+3. **Re-enable CGO in goreleaser and accept cross-compile complexity.** Set `CGO_ENABLED=1` in `.goreleaser.yaml`, install a per-target C toolchain (e.g. `zig cc`, `xx`, or platform-specific cross-compilers) in the release CI image. Pros: keeps full 23-language coverage in release binaries; no source restructuring. Cons: directly contradicts the CLAUDE.md invariant "single Go binary with no CGO dependencies"; goreleaser CGO cross-compile is fragile (different toolchain per OS/arch); release CI image becomes much heavier.
+4. **Wait for upstream pure-Go tree-sitter bindings.** Tree-sitter has an experimental WASM runtime with pure-Go execution paths, but it is not API-compatible with the current `unsafe.Pointer` Language() interface. Watch upstream; revisit in 6-12 months.
+
+**Recommendation:** Defer to a dedicated phase (Phase 52 or later). The decision between paths 1, 2, and 3 is architectural and requires explicit sign-off on the trade-off between binary release surface (CGO=0 invariant) and runtime feature coverage (21+ tree-sitter parsers). Path 2 has the smallest 51-related footprint; path 3 keeps the strongest user feature parity but breaks the no-CGO invariant; path 1 is a middle ground but materially expands the repo.
+
+**Severity:** HIGH -- blocks Phase 51 success criterion 1 (the goreleaser pipeline produces 6 platform/arch archives). Plan 51-01's release matrix cannot run end-to-end on a real v* tag push until this is resolved. Plans 51-04 (signing), 51-05 (reproducibility doc), and 51-06 (release.yml hardening) build on archive existence -- their UATs are also blocked until DEF-51-02 closes.
+
+**Status:** OPEN -- requires architectural decision in a separate phase (Phase 52+ recommendation).

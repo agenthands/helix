@@ -156,6 +156,63 @@ Key details:
 - `test/bench/baselines/` is the conventional capture location; everything you save there is gitignored.
 - If your changes are likely to affect bench numbers, mention the local before/after deltas in your PR description. (Honor system — there is no PR-time gate.)
 
+## Releasing
+
+Releases ship as multi-arch signed binaries via a goreleaser pipeline (see `.goreleaser.yaml` and `.github/workflows/release.yml`). A `v*` git tag triggers the release workflow automatically -- there is no manual draft step. The CI-enforced reproducibility gate refuses to publish if two consecutive snapshot builds produce non-byte-identical archives, so a non-deterministic build cannot reach users.
+
+To dry-run the build matrix locally (signs are skipped because the secret key lives only in CI):
+
+```sh
+make release-snapshot
+```
+
+Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`serena_<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file. The local dry-run requires `goreleaser` on `$PATH`; install with `brew install goreleaser` on macOS, or download a release tarball from `github.com/goreleaser/goreleaser/releases` on Linux.
+
+To cut a release, push a version tag from a green-CI commit on `main`:
+
+```sh
+git tag v1.9.0
+git push origin v1.9.0
+```
+
+Pre-release tags (`v1.9.0-rc1`, `v1.9.0-beta1`, `v1.9.0-alpha1`) are auto-detected by goreleaser and marked as Pre-release on the GitHub Releases page. Production tags (`v1.9.0`) publish as a regular release.
+
+### Repository secrets
+
+The release workflow signs archives with the project's minisign keypair. Two GitHub Actions secrets must exist on the repo BEFORE the first `v*` tag is pushed:
+
+- `MINISIGN_PRIVATE_KEY` -- contents of the locally generated `minisign.key` file (NOT the file path; the actual file contents pasted into the secret)
+- `MINISIGN_PASSWORD` -- the password chosen during keypair generation
+
+These are uploaded under repo Settings > Secrets and variables > Actions.
+
+### One-time keypair setup
+
+The maintainer generates the keypair once on a trusted local machine, commits the public half to the repo, and uploads the private half plus password as repo secrets:
+
+```sh
+minisign -G -p minisign.pub -s minisign.key
+# minisign prompts for a password; choose a strong one and store it securely
+gh secret set MINISIGN_PRIVATE_KEY < minisign.key
+gh secret set MINISIGN_PASSWORD   # paste the password when prompted
+git add minisign.pub
+git commit -m "feat(release): commit minisign public key"
+git push
+```
+
+After this is done, delete the local `minisign.key` (the secret is now in GitHub's secret store; the local copy is no longer needed and should not linger on disk). The password should be stored in a password manager.
+
+### Key rotation
+
+To rotate the minisign keypair, repeat the one-time setup with a new pair, commit the new `minisign.pub`, and update both repo secrets. Users who have already downloaded the old `minisign.pub` will need to re-fetch it from `https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub` -- INSTALL.md tells them to re-fetch the key as part of the verification recipe, so users on the latest INSTALL.md instructions pick up the rotated key automatically.
+
+Key details:
+
+- The release workflow does NOT re-run `go test` or `go vet` -- tags are assumed to be cut from a commit that has already passed `go-test.yml` on `main`. If you tag a commit that has not been through CI, the release may publish a binary built from broken code (the reproducibility gate cannot catch logic bugs, only build determinism).
+- Release notes are auto-generated from the git log between tags using conventional-commit prefix grouping (`feat:`, `fix:`, `docs:`, `refactor:`). `CHANGELOG.md` stays hand-curated separately for human-readable narrative.
+- The local dry-run skips signing (`--skip=sign`) because contributors do not have access to the project's minisign secret key -- signing is exercised in CI only. The dry-run still validates the build matrix, archive packaging, and checksums.txt generation.
+- A typo'd tag publishes a release immediately; there is no draft step. The reproducibility gate is the safety net against non-deterministic artifacts, not against typo'd tags. If a release is published in error, delete it via the GitHub Releases UI and re-tag with a corrected version.
+
 ## Adding a New MCP Tool
 
 1. **Choose the right layer:**

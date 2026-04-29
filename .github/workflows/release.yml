@@ -76,18 +76,6 @@ jobs:
           sudo install -m 0755 /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
           minisign -v
 
-      - name: Write minisign secret key to disk (umask 077)
-        env:
-          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          umask 077
-          # Write secret key contents to /tmp/minisign.key for goreleaser signs: subprocess.
-          # umask 077 ensures only this runner user can read the file.
-          # The variable contents NEVER appear in logs because we use printf '%s'
-          # (no echo, no expansion in the command line).
-          printf '%s' "$MINISIGN_PRIVATE_KEY" > /tmp/minisign.key
-
       - name: Reproducibility gate -- snapshot pass 1
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
@@ -127,6 +115,22 @@ jobs:
           # The reproducibility gate kept dist-pass-1 around for the diff; remove
           # it before the real release pass so workspace caches stay tidy (IN-03).
           rm -rf dist-pass-1
+
+      - name: Write minisign secret key to disk (umask 077)
+        env:
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # Write secret key contents to /tmp/minisign.key for goreleaser signs: subprocess.
+          # umask 077 ensures only this runner user can read the file.
+          # The variable contents NEVER appear in logs because we use printf '%s'
+          # (no echo, no expansion in the command line).
+          # WR-01: written immediately before "Real release" so the key is NOT on
+          # disk during the two snapshot passes (which use --skip=sign and never
+          # read the key). Shrinks the in-job blast radius if a future third-party
+          # action scans /tmp during the reproducibility gate.
+          printf '%s' "$MINISIGN_PRIVATE_KEY" > /tmp/minisign.key
 
       - name: Real release (sign + publish)
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0

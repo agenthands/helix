@@ -9,7 +9,7 @@
 
 <p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
-<p align="center"><sub>Helix started as a rewrite of <a href="https://github.com/oraios/serena">Serena MCP</a>. Full rename in progress; existing references to "Serena" in this README will move to "Helix" in an upcoming refactor.</sub></p>
+<p align="center"><sub>Helix started as a rewrite of <a href="https://github.com/oraios/serena">Serena MCP</a>. The repository, releases, and GitHub URLs use <code>helix</code>; the binary, CLI, and config keys use <code>serena</code>. The full rename to <code>helix</code> is tracked as a future phase in <a href=".planning/ROADMAP.md"><code>.planning/ROADMAP.md</code></a> -- until then, expect both names side-by-side.</sub></p>
 
 * Serena provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.

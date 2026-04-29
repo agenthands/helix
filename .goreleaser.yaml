@@ -1,0 +1,93 @@
+# Source of truth: goreleaser v2 schema. Generated for Phase 51 (PKG-01).
+# Locked decisions: D-01 (minisign), D-03/D-03a (reproducibility), D-04 (INSTALL match),
+# D-06 (tag-triggered + auto pre-release), D-07 (auto-generated notes from git log).
+version: 2
+
+project_name: serena
+
+builds:
+  - id: serena
+    main: ./cmd/serena
+    binary: serena
+    env:
+      - CGO_ENABLED=0
+      - GOFLAGS=-mod=readonly
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: serena
+    ids: [serena]
+    formats: ["tar.gz"]
+    name_template: "serena_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README.md
+      - INSTALL.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+signs:
+  - id: minisign
+    cmd: minisign
+    artifacts: archive
+    signature: "${artifact}.minisig"
+    args:
+      - "-S"
+      - "-s"
+      - "/tmp/minisign.key"
+      - "-x"
+      - "${signature}"
+      - "-m"
+      - "${artifact}"
+    stdin: '{{ .Env.MINISIGN_PASSWORD }}'
+
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Refactor
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Documentation
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^test:'
+      - '^chore:'
+      - 'Merge pull request'
+      - 'Merge branch'
+
+release:
+  github:
+    owner: agenthands
+    name: helix
+  prerelease: auto
+  draft: false
+  mode: replace
+  name_template: "Serena {{ .Tag }}"

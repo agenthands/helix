@@ -2,25 +2,49 @@
 
 Serena is a single Go binary. Install it, point your coding agent at it, and you are ready to go.
 
-## Prerequisites
+## Install (pre-built binary)
 
-**Install the binary:**
+Pre-built binaries for darwin/linux/windows on amd64/arm64 are published on the [Releases page](https://github.com/agenthands/helix/releases) for every tagged version. Each archive ships with a SHA-256 checksum and a minisign signature.
+
+The verification recipe below downloads an archive, verifies the checksum, verifies the cryptographic signature, and extracts the binary -- a single block you can copy and paste end-to-end. Fill in `VERSION`, `OS`, and `ARCH` for your platform.
 
 ```bash
-go install github.com/postfix/serena/cmd/serena@latest
+VERSION=v1.9.0
+OS=linux
+ARCH=amd64
+
+# Download archive, signature, checksums, and (one-time) the project public key
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/serena_${VERSION}_${OS}_${ARCH}.tar.gz
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/serena_${VERSION}_${OS}_${ARCH}.tar.gz.minisig
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt
+curl -LO https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub  # one-time
+
+# Verify checksum
+sha256sum -c --ignore-missing checksums.txt
+
+# Verify signature
+minisign -V -p minisign.pub -m serena_${VERSION}_${OS}_${ARCH}.tar.gz
+
+# Extract and run
+tar -xzf serena_${VERSION}_${OS}_${ARCH}.tar.gz
+./serena --help
 ```
 
-Requires Go 1.25 or later.
+**macOS users:** replace `sha256sum -c` with `shasum -a 256 -c`, and install minisign with `brew install minisign`. Everything else is identical.
 
-Or build from source:
+Supported `OS` values: `darwin`, `linux`, `windows`. Supported `ARCH` values: `amd64`, `arm64`. Modern Windows (10 1803+) ships `tar` in System32, so the same `.tar.gz` archive extracts on Windows without third-party tools.
+
+## Build from source
+
+If you prefer to build the binary yourself:
 
 ```bash
-git clone https://github.com/postfix/serena.git
-cd serena
+git clone https://github.com/agenthands/helix.git
+cd helix
 go build ./cmd/serena
 ```
 
-Verify the binary is in your PATH:
+Requires Go 1.25 or later. Verify the binary is in your PATH:
 
 ```bash
 serena --help

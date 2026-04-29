@@ -22,7 +22,7 @@
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
-- [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels
+- [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-29)
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
@@ -137,7 +137,7 @@ Plans:
 - [x] 51-01-pipeline-config-workflow-PLAN.md — `.goreleaser.yaml` (6-arch + minisign + reproducibility flags), `.github/workflows/release.yml` (tag-trigger + three-pass diff gate), `minisign.pub` placeholder, delete legacy `publish.yml`
 
 **Wave 2** *(blocked on Wave 1 — references secret names + archive filenames + URLs from Plan 01)*
-- [ ] 51-02-docs-makefile-PLAN.md — INSTALL.md restructure (D-04 verify block, agenthands/helix URLs), README.md repo-identity fixes (lines 65, 71), Makefile `release-snapshot` target, CONTRIBUTING.md "Releasing" subsection
+- [x] 51-02-docs-makefile-PLAN.md — INSTALL.md restructure (D-04 verify block, agenthands/helix URLs), README.md repo-identity fixes (lines 65, 71), Makefile `release-snapshot` target, CONTRIBUTING.md "Releasing" subsection
 
 ### Phase 52: packaging-distribution-channels
 **Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.
@@ -206,7 +206,7 @@ Plans:
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
-| 51 | v1.9 | 1/2 | In Progress|  |
+| 51 | v1.9 | 2/2 | Complete   | 2026-04-29 |
 | 52 | v1.9 | 0/? | Not started | - |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
@@ -218,7 +218,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

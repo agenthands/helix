@@ -166,6 +166,8 @@ To dry-run the build matrix locally (signs are skipped because the secret key li
 make release-snapshot
 ```
 
+> **Known issue (phase 51, DEF-51-02):** Until the upstream tree-sitter Go bindings are vendored with `//go:build cgo` tags, `make release-snapshot` is expected to fail under the goreleaser-enforced `CGO_ENABLED=0` with `build constraints exclude all Go files in .../tree-sitter-*/bindings/go` errors. The pipeline will be functional once DEF-51-02 closes (see `.planning/phases/51-packaging-goreleaser/deferred-items.md`).
+
 Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`serena_v<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file. The local dry-run requires `goreleaser` on `$PATH`; install with `brew install goreleaser` on macOS, or download a release tarball from `github.com/goreleaser/goreleaser/releases` on Linux.
 
 To cut a release, push a version tag from a green-CI commit on `main`:
@@ -210,7 +212,7 @@ Key details:
 
 - The release workflow does NOT re-run `go test` or `go vet` -- tags are assumed to be cut from a commit that has already passed `go-test.yml` on `main`. If you tag a commit that has not been through CI, the release may publish a binary built from broken code (the reproducibility gate cannot catch logic bugs, only build determinism).
 - Release notes are auto-generated from the git log between tags using conventional-commit prefix grouping (`feat:`, `fix:`, `docs:`, `refactor:`). `CHANGELOG.md` stays hand-curated separately for human-readable narrative.
-- The local dry-run skips signing (`--skip=sign`) because contributors do not have access to the project's minisign secret key -- signing is exercised in CI only. The dry-run still validates the build matrix, archive packaging, and checksums.txt generation.
+- The local dry-run skips signing (`--skip=sign`) because contributors do not have access to the project's minisign secret key -- signing is exercised in CI only. Once DEF-51-02 closes, the dry-run will validate the build matrix, archive packaging, and checksums.txt generation; until then it fails at the build step (see the "Known issue" callout above).
 - A typo'd tag publishes a release immediately; there is no draft step. The reproducibility gate is the safety net against non-deterministic artifacts, not against typo'd tags. If a release is published in error, delete it via the GitHub Releases UI and re-tag with a corrected version.
 
 ## Adding a New MCP Tool

@@ -12,13 +12,16 @@ import (
 // instance is exercised at runtime (see internal/daemon/daemon.go).
 type TagExtractor struct{}
 
-// NewTagExtractor under !cgo returns an error sentinel. Loud failure per D-01.
+// NewTagExtractor under !cgo returns a non-nil empty stub to mirror sibling
+// stubs (NewBodyExtractor, NewElisionRenderer). Loud failure is delivered by
+// the daemon refusal hook before any caller is exercised; methods on this
+// stub still return errors as defense-in-depth if the refusal is bypassed.
 func NewTagExtractor(_ *treesitter.GrammarRegistry) (*TagExtractor, error) {
-	return nil, fmt.Errorf("repomap.TagExtractor is unavailable in this build (CGO_ENABLED=0)")
+	return &TagExtractor{}, nil
 }
 
-// Extract is unreachable under !cgo (constructor errored). Returns nil to keep
-// the public method set compilable for any reflective references.
+// Extract is unreachable under !cgo at runtime (daemon refuses). Returns an
+// error sentinel for safety if the stub is ever exercised directly.
 func (*TagExtractor) Extract(_ []byte, _ string, _ string) ([]Tag, error) {
 	return nil, fmt.Errorf("repomap.TagExtractor.Extract: tree-sitter unavailable (CGO_ENABLED=0)")
 }

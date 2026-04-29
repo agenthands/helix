@@ -30,9 +30,16 @@ curl -LO https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub  #
 # Verify the checksums file is signed by the project (catches a substituted checksums.txt)
 minisign -V -p minisign.pub -m checksums.txt
 
-# Verify the archive's sha256 is present in the (now-trusted) checksums.txt -- fails loud on typos
-sha256sum -c checksums.txt 2>&1 | grep "serena_${VERSION}_${OS}_${ARCH}.tar.gz: OK" \
-  || { echo "checksum FAILED"; exit 1; }
+# Verify the archive's sha256 matches the (now-trusted) checksums.txt entry --
+# fails loud on typos (and avoids the macOS sha256sum/shasum split since we
+# operate on a single file).
+EXPECTED_HASH=$(grep "serena_${VERSION}_${OS}_${ARCH}.tar.gz" checksums.txt | awk '{print $1}')
+ACTUAL_HASH=$(sha256sum "serena_${VERSION}_${OS}_${ARCH}.tar.gz" 2>/dev/null | awk '{print $1}')
+[ -z "$ACTUAL_HASH" ] && ACTUAL_HASH=$(shasum -a 256 "serena_${VERSION}_${OS}_${ARCH}.tar.gz" | awk '{print $1}')
+if [ -z "$EXPECTED_HASH" ] || [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+  echo "checksum FAILED: expected=$EXPECTED_HASH actual=$ACTUAL_HASH"; exit 1
+fi
+echo "checksum OK: $ACTUAL_HASH"
 
 # Verify the archive's minisign signature (independent of checksums.txt)
 minisign -V -p minisign.pub -m serena_${VERSION}_${OS}_${ARCH}.tar.gz
@@ -42,7 +49,7 @@ tar -xzf serena_${VERSION}_${OS}_${ARCH}.tar.gz
 ./serena --help
 ```
 
-**macOS users:** replace `sha256sum -c` with `shasum -a 256 -c`, and install minisign with `brew install minisign`. The `grep "...: OK"` line works as-is on macOS. Everything else is identical.
+**macOS users:** install minisign with `brew install minisign`. The checksum block above already falls back to `shasum -a 256` when `sha256sum` is unavailable, so the recipe runs as-is. Everything else is identical.
 
 Supported `OS` values: `darwin`, `linux`, `windows`. Supported `ARCH` values: `amd64`, `arm64`. Modern Windows (10 1803+) ships `tar` in System32, so the same `.tar.gz` archive extracts on Windows without third-party tools.
 

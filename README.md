@@ -343,4 +343,4 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 
-<sub>Originally inspired by [Python Serena](https://github.com/lks-ai/serena).</sub>
+<sub>Originally inspired by [Python Serena](https://github.com/oraios/serena).</sub>

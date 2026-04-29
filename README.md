@@ -128,8 +128,9 @@ Serena uses **lazy initialization** — workspaces are configured on first tool 
 
 **HTTP mode** (for IDEs, web clients, multi-client):
 ```bash
-serena --serve --http-addr=:9091
-# Connect your client to http://localhost:9091/mcp
+serena --mode=http --http-addr=127.0.0.1:8080
+# Connect your client to http://127.0.0.1:8080/mcp
+# Equivalent: serena --serve --http-addr=127.0.0.1:8080 (--serve and --mode=http both enter the daemon)
 ```
 
 For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and OpenCode — see [INSTALL.md#manual-configuration](INSTALL.md#manual-configuration) for full examples.

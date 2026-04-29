@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-29T18:16:06.574Z"
-last_activity: 2026-04-29 -- Phase 52 execution started
+last_updated: "2026-04-29T18:24:58.433Z"
+last_activity: 2026-04-29
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 33
-  completed_plans: 27
-  percent: 82
+  completed_plans: 28
+  percent: 85
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 ## Current Position
 
 Phase: 52 (packaging-distribution-channels) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 52
-Last activity: 2026-04-29 -- Phase 52 execution started
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-04-29
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Last activity: 2026-04-29 -- Phase 52 execution started
 | v1.7 (34-38) | 5 | 11 | 2 days |
 | v1.8 (39-45) | 7 | 19 | 1 day |
 | v1.9 (46-55) | 10 | 0 (planning) | in flight |
+| Phase 52 P01 | 5min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - [v1.9]: OBS-03 (metrics) before OBS-01/02 (dashboards/runbooks) so dashboards reference metrics that exist
 - [v1.8]: Acknowledge Python legacy briefly ("Originally inspired by") -- no "port" or "rewrite" framing
 - [v1.8]: Full doc overhaul scope -- README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md
+- [v1.9 / Phase 52-01]: D-13 build-time embed-copy mechanism shipped (embed-pubkey + verify-embed-pubkey Makefile targets; CI gate in release.yml); embedded internal/upgrade/minisign.pub is checked in (NOT gitignored) so verify-embed-pubkey has a baseline on a fresh clone
+- [v1.9 / Phase 52-01]: Test fixtures use https://example.invalid/... per RFC 6761 to ensure tests that miss the httptest stub fail loudly with DNS errors instead of silently leaking the runner IP
 
 ### Pending Todos
 

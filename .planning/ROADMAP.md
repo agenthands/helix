@@ -170,7 +170,7 @@ Plans:
 > **Phase rescoped during /gsd-discuss-phase 2026-04-29.** Original PKG-02 (Homebrew), PKG-03 (Scoop), PKG-04 (native Linux) deferred from v1.9; replaced with binary+product rename (`serena` → `helix`) + in-binary self-upgrade (`helix update` / `helix upgrade`) + embed-audit manifest. The full goal/success-criteria rewrite is performed by 52-06-PLAN.md when it executes; until then this entry preserves the original framing for traceability.
 
 Plans:
-- [ ] 52-01-PLAN.md — Wave 0 test scaffolding + Makefile embed-pubkey + CI gate
+- [x] 52-01-PLAN.md — Wave 0 test scaffolding + Makefile embed-pubkey + CI gate
 - [ ] 52-02-PLAN.md — Wave 1 module path + cmd dir + goreleaser + version wiring
 - [ ] 52-03-PLAN.md — Wave 2 env vars + config dirs + MCP registration name flip
 - [ ] 52-04-PLAN.md — Wave 3 internal/upgrade/ package + cobra subcommands
@@ -232,7 +232,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
-| 52 | v1.9 | 0/? | Not started | - |
+| 52 | v1.9 | 1/6 | In Progress|  |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |

@@ -22,7 +22,7 @@
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
-- [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added)
+- [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
@@ -140,10 +140,10 @@ Plans:
 - [x] 51-02-docs-makefile-PLAN.md — INSTALL.md restructure (D-04 verify block, agenthands/helix URLs), README.md repo-identity fixes (lines 65, 71), Makefile `release-snapshot` target, CONTRIBUTING.md "Releasing" subsection
 
 **Wave 3** *(gap closure from 51-VERIFICATION.md; all four plans run in parallel — no `files_modified` overlap)*
-- [ ] 51-03-cgo-optional-bindings-PLAN.md — DEF-51-01 / Concern A: //go:build cgo split for treesitter R + Swift bindings; CGO_ENABLED=0 builds support 21 languages without panicking; unblocks SC-1
-- [ ] 51-04-readme-identity-flags-PLAN.md — Concern D: README.md primary install path drops broken `go install postfix/serena`; HTTP-mode example reconciled with INSTALL.md (`--mode=http --http-addr=127.0.0.1:8080`); upstream attribution dedup'd (CR-01, WR-03, WR-04)
-- [ ] 51-05-checksums-signing-strict-PLAN.md — Concern B (build-config half) + IN-01: signs.artifacts changed from `archive` to `all` so checksums.txt is signed; INSTALL.md sha256sum step strict-grep instead of `--ignore-missing`; Makefile guards goreleaser missing (WR-02, WR-05, IN-01)
-- [ ] 51-06-release-yml-hardening-PLAN.md — Concern B (CI half) + Concern C + Concern E: PLACEHOLDER pre-flight; SHA-pinned third-party actions; minisign tarball SHA-256 verified before extraction; `/tmp/minisign.key` shred-on-always; uname -m guard; CONTRIBUTING.md reproducibility wording softened (CR-02, CR-03, CR-04, WR-01, WR-06, IN-02, IN-03, IN-04)
+- [x] 51-03-cgo-optional-bindings-PLAN.md — DEF-51-01 / Concern A: //go:build cgo split for treesitter R + Swift bindings; CGO_ENABLED=0 builds support 21 languages without panicking; unblocks SC-1
+- [x] 51-04-readme-identity-flags-PLAN.md — Concern D: README.md primary install path drops broken `go install postfix/serena`; HTTP-mode example reconciled with INSTALL.md (`--mode=http --http-addr=127.0.0.1:8080`); upstream attribution dedup'd (CR-01, WR-03, WR-04)
+- [x] 51-05-checksums-signing-strict-PLAN.md — Concern B (build-config half) + IN-01: signs.artifacts changed from `archive` to `all` so checksums.txt is signed; INSTALL.md sha256sum step strict-grep instead of `--ignore-missing`; Makefile guards goreleaser missing (WR-02, WR-05, IN-01)
+- [x] 51-06-release-yml-hardening-PLAN.md — Concern B (CI half) + Concern C + Concern E: PLACEHOLDER pre-flight; SHA-pinned third-party actions; minisign tarball SHA-256 verified before extraction; `/tmp/minisign.key` shred-on-always; uname -m guard; CONTRIBUTING.md reproducibility wording softened (CR-02, CR-03, CR-04, WR-01, WR-06, IN-02, IN-03, IN-04)
 
 ### Phase 52: packaging-distribution-channels
 **Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.
@@ -212,7 +212,7 @@ Plans:
 | 48 | v1.9 | 0/? | Not started | - |
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
-| 51 | v1.9 | 2/2 | Complete   | 2026-04-29 |
+| 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
 | 52 | v1.9 | 0/? | Not started | - |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
@@ -224,7 +224,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 2/2 plans complete
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

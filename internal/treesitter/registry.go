@@ -14,26 +14,26 @@ import (
 	tree_sitter_typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go" //nolint:importmismatch
 
 	// Wave 1 languages (per D-02)
-	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
+	tree_sitter_kotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
+	tree_sitter_csharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 	tree_sitter_c "github.com/tree-sitter/tree-sitter-c/bindings/go"
 	tree_sitter_cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
-	tree_sitter_csharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
-	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
-	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
+	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
-	tree_sitter_kotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
+	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
+	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 
 	// Wave 2a languages
-	tree_sitter_scala "github.com/tree-sitter/tree-sitter-scala/bindings/go"
 	tree_sitter_bash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 	tree_sitter_haskell "github.com/tree-sitter/tree-sitter-haskell/bindings/go"
 	tree_sitter_julia "github.com/tree-sitter/tree-sitter-julia/bindings/go"
 	tree_sitter_ocaml "github.com/tree-sitter/tree-sitter-ocaml/bindings/go"
+	tree_sitter_scala "github.com/tree-sitter/tree-sitter-scala/bindings/go"
 
 	// Wave 2b languages
+	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 	tree_sitter_lua "github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go"
 	tree_sitter_zig "github.com/tree-sitter-grammars/tree-sitter-zig/bindings/go"
-	tree_sitter_hcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 
 	// Wave 2b gap closure: local vendored bindings (upstream Go bindings broken)
 	tree_sitter_r_local "github.com/postfix/serena/internal/treesitter/bindings/r"
@@ -81,9 +81,17 @@ func NewGrammarRegistry() *GrammarRegistry {
 	r.languages["zig"] = tree_sitter.NewLanguage(tree_sitter_zig.Language())
 	r.languages["hcl"] = tree_sitter.NewLanguage(tree_sitter_hcl.Language())
 
-	// Wave 2b gap closure: local vendored bindings
-	r.languages["r"] = tree_sitter.NewLanguage(tree_sitter_r_local.Language())
-	r.languages["swift"] = tree_sitter.NewLanguage(tree_sitter_swift_local.Language())
+	// Wave 2b gap closure: local vendored bindings.
+	// CGO-only: under CGO_ENABLED=0, Language() returns nil from the binding_nocgo.go
+	// stubs and we skip registration so a release-build binary supports 21 languages
+	// instead of panicking. See .planning/phases/51-packaging-goreleaser/deferred-items.md
+	// DEF-51-01 (resolved by Plan 51-03).
+	if ptr := tree_sitter_r_local.Language(); ptr != nil {
+		r.languages["r"] = tree_sitter.NewLanguage(ptr)
+	}
+	if ptr := tree_sitter_swift_local.Language(); ptr != nil {
+		r.languages["swift"] = tree_sitter.NewLanguage(ptr)
+	}
 
 	return r
 }

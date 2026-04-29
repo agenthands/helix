@@ -865,32 +865,37 @@ The same pattern (httptest server returning canned responses + asset bytes) cove
 | A7 | The project version `2.0.0-dev` (currently hardcoded in `internal/cli/root.go:62`) gets replaced by the ldflag-injected `Version` variable in this phase. | Code Examples > `helix update` | Medium — if the planner doesn't introduce a `var Version = "dev"` at the top of `internal/cli/root.go` (or wherever) wired to `-X main.version=...`, then `helix update` reports a meaningless version. The current hardcoded "2.0.0-dev" is a legacy of the Go-rewrite naming; the ldflag is already wired in `.goreleaser.yaml:26` (`-X main.version={{.Version}}`) but does NOT have a `main.version` package-level variable to bind to. **The planner must add this**. |
 | A8 | The user-chosen v1.9 version bump is acceptable for a binary-name + env-var + config-dir break, even though semver-strictly this is v2.0 territory. | Open Questions, CHANGELOG | Low — the project is already at "2.0.0-dev" internally. The user picked v1.9 for the public version; the planner respects this without proposing v2.0. CHANGELOG calls out the breaking changes prominently regardless of the version number. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Module path mismatch** (the most important question)
    - What we know: `go.mod` says `module github.com/postfix/serena`. CONTEXT.md asserts the module path is `github.com/agenthands/helix` and won't change. These contradict. 392 import lines across the codebase reference `github.com/postfix/serena`.
    - What's unclear: did the user mean "leave the import path" (in which case the rebrand has a permanent residual) or "the path matches the repo" (in which case a 392-line rename is required)?
    - Recommendation: **The planner MUST re-confirm with the user before locking the wave plan.** Recommended answer: rename the module to `github.com/agenthands/helix` in Wave 1 — `go mod edit -module github.com/agenthands/helix` + project-wide find-replace + `gofmt -w .` + `go build ./...`. This is a noisy diff but it's deterministic and the build catches misses.
+   - **RESOLVED:** via CONTEXT.md D-01 (locked 2026-04-29) — module renames `github.com/postfix/serena` → `github.com/agenthands/helix`. Implemented in Plan 02 Task 1 via `go mod edit` + portable `perl -i -pe` find-replace + `gofmt -w .` + `go build ./cmd/helix`.
 
 2. **Version variable wiring**
    - What we know: `.goreleaser.yaml:26` injects `-X main.version=...`. `internal/cli/root.go:62` hardcodes `"serena version 2.0.0-dev"`. `cmd/serena/main.go` has no `var version` — the ldflag has nothing to bind to.
    - What's unclear: where should the `main.version` var live? CONTEXT.md's "ldflags-embedded version" comment in <specifics> assumes it already exists.
    - Recommendation: declare `var version = "dev"` in `cmd/helix/main.go` (the ldflag's `main.` prefix already targets package main); thread it into `internal/cli/` via `cli.SetVersion(version)`.
+   - **RESOLVED:** declare `var version = "dev"` in `cmd/helix/main.go` (Plan 02 Task 1); thread via `cli.SetVersion(version)` exported by `internal/cli/root.go`.
 
 3. **EMBED-AUDIT.md scope**
    - What we know: D-14 specifies the audit produces a written manifest classifying every runtime asset. D-15 says LSes are external-by-design.
    - What's unclear: how much depth does the audit go to? Every `os.Open`, every `embed.FS`, every `filepath.Join(home, ".serena", ...)`? Or only the "could be embedded" gray-area cases?
    - Recommendation: the planner produces the audit by `grep -rn "os.ReadFile\|os.Open\|embed:" --include="*.go"` and classifies each finding. ~50-100 entries expected. Sufficient depth.
+   - **RESOLVED:** Plan 05 produces the full manifest; classification per file (embedded / external-by-design / gap) per D-14. Gaps closed in-phase; manifest persists as living artifact.
 
 4. **CHANGELOG convention check**
    - What we know: CHANGELOG.md uses a "v1.X — Title (date)" header with subsections like `### Setup CLI`, `### Health & Status`. Not strictly Keep-a-Changelog ("Added/Changed/Deprecated/Removed/Fixed") but a project-specific narrative format.
    - What's unclear: should the v1.9 entry use a "BREAKING" tag or callout?
    - Recommendation: the v1.9 entry's first subsection should be `### Breaking Changes (v1.8 → v1.9)` with a 4-bullet list (binary name, env vars, config dir, MCP registration). The narrative subsections follow.
+   - **RESOLVED:** Plan 06 Task 2 adds a `### Breaking Changes (v1.8 → v1.9)` subsection per Keep-a-Changelog with the four user-visible breaks enumerated.
 
 5. **Pre-existing `2.0.0-dev` versus user-chosen `v1.9`**
    - What we know: `internal/cli/root.go:62` and `internal/mcp/server.go:51` both say `2.0.0-dev`. CONTEXT.md and the user choose v1.9 for the rename release.
    - What's unclear: is the `2.0.0-dev` placeholder intended to be replaced by ldflag injection at release time, or is it a stale legacy from the Python-to-Go transition?
    - Recommendation: ldflag-inject. Default fallback `"dev"`. The two strings flip together via the `cli.SetVersion()` thread.
+   - **RESOLVED:** irrelevant once `-X main.version=...` ldflag binds (Plan 02 Task 1 introduces `var version` in `cmd/helix/main.go`); the `2.0.0-dev` literal is removed in Plan 02/03 in favor of the ldflag-injected value threaded via `cli.SetVersion()`.
 
 ## Sources
 

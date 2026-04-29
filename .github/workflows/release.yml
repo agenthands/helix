@@ -1,0 +1,94 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required: create release, upload assets
+
+jobs:
+  release:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required: goreleaser changelog needs full git history
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Install minisign (pinned)
+        run: |
+          set -euo pipefail
+          # Pinned for reproducible CI behavior. Bump only after verifying the
+          # tarball URL pattern + signature format are unchanged.
+          # See .planning/phases/51-packaging-goreleaser/51-RESEARCH.md Pitfall 3.
+          MINISIGN_VERSION="0.12"
+          curl -fsSL -o /tmp/minisign.tar.gz \
+            "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz"
+          tar -xzf /tmp/minisign.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
+          minisign -v
+
+      - name: Write minisign secret key to disk (umask 077)
+        env:
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # Write secret key contents to /tmp/minisign.key for goreleaser signs: subprocess.
+          # umask 077 ensures only this runner user can read the file.
+          # The variable contents NEVER appear in logs because we use printf '%s'
+          # (no echo, no expansion in the command line).
+          printf '%s' "$MINISIGN_PRIVATE_KEY" > /tmp/minisign.key
+
+      - name: Reproducibility gate -- snapshot pass 1
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=sign
+
+      - name: Capture pass 1 sha256s
+        run: |
+          set -euo pipefail
+          mv dist dist-pass-1
+          (cd dist-pass-1 && find . -name '*.tar.gz' -print0 | sort -z | xargs -0 sha256sum) > /tmp/pass1.sha256
+          echo "Pass 1 archives:"
+          cat /tmp/pass1.sha256
+
+      - name: Reproducibility gate -- snapshot pass 2
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=sign
+
+      - name: Diff sha256s -- fail if non-reproducible
+        run: |
+          set -euo pipefail
+          (cd dist && find . -name '*.tar.gz' -print0 | sort -z | xargs -0 sha256sum) \
+            | sed 's| dist/| dist-pass-1/|' > /tmp/pass2.sha256
+          if ! diff -u /tmp/pass1.sha256 /tmp/pass2.sha256; then
+            echo "::error::archives are not byte-identical between two snapshot runs -- refusing to publish"
+            exit 1
+          fi
+          echo "Reproducibility gate PASS -- proceeding to real release"
+
+      - name: Real release (sign + publish)
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}

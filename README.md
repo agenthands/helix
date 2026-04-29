@@ -63,13 +63,14 @@ Agents connect via the **model context protocol (MCP)** through:
 
 ```bash
 go install github.com/postfix/serena/cmd/serena@latest
+# Note: module path is github.com/postfix/serena pending a separate rename decision; the public repo lives at agenthands/helix.
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/postfix/serena.git
-cd serena
+git clone https://github.com/agenthands/helix.git
+cd helix
 go build ./cmd/serena
 ```
 

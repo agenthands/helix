@@ -35,6 +35,15 @@ jobs:
           fi
           echo "minisign.pub pre-flight passed (no PLACEHOLDER marker found)."
 
+      - name: Verify embedded minisign.pub matches repo-root
+        # T-52-01-01 mitigation: fail the release fast if internal/upgrade/minisign.pub
+        # has drifted from repo-root minisign.pub. The embedded copy is what the
+        # binary verifies the next archive against; drift is a key-swap-class bug.
+        # Locally, contributors run `make build` which re-runs `embed-pubkey` first,
+        # so drift here means the synced copy was edited directly without going
+        # through the Makefile and the diff was never committed back.
+        run: make verify-embed-pubkey
+
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
         with:

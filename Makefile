@@ -1,9 +1,9 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot embed-pubkey verify-embed-pubkey
 
 BINARY=serena
 GO=go
 
-build:
+build: embed-pubkey
 	$(GO) build -o $(BINARY) ./cmd/serena
 
 clean:
@@ -51,3 +51,10 @@ release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (o
 	@command -v goreleaser >/dev/null 2>&1 || { \
 	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign
+
+embed-pubkey: ## Sync repo-root minisign.pub into internal/upgrade/minisign.pub before build
+	@cp minisign.pub internal/upgrade/minisign.pub
+
+verify-embed-pubkey: ## CI gate: assert internal/upgrade/minisign.pub matches repo-root copy byte-for-byte
+	@cmp -s minisign.pub internal/upgrade/minisign.pub || { \
+	  echo "internal/upgrade/minisign.pub drift; run: make embed-pubkey"; exit 1; }

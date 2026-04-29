@@ -1,0 +1,13 @@
+{
+  "tag_name": "v1.9.0",
+  "name": "v1.9.0 — Polish & Infra",
+  "body": "## Breaking Changes\n- Binary renamed serena → helix\n",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+    {"name": "helix_v1.9.0_linux_amd64.tar.gz", "browser_download_url": "https://example.invalid/helix_v1.9.0_linux_amd64.tar.gz"},
+    {"name": "helix_v1.9.0_linux_amd64.tar.gz.minisig", "browser_download_url": "https://example.invalid/helix_v1.9.0_linux_amd64.tar.gz.minisig"},
+    {"name": "checksums.txt", "browser_download_url": "https://example.invalid/checksums.txt"},
+    {"name": "checksums.txt.minisig", "browser_download_url": "https://example.invalid/checksums.txt.minisig"}
+  ]
+}

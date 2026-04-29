@@ -22,7 +22,7 @@
 - [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
-- [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (completed 2026-04-29)
+- [ ] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added)
 - [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
@@ -130,7 +130,7 @@ Notes:
   2. Each binary ships with a SHA-256 checksum file and a cryptographic signature (cosign or minisign) — documented in `INSTALL.md`.
   3. A user following `INSTALL.md` can verify a downloaded binary's signature and checksum in one terminal session.
   4. The pipeline is reproducible — a second dry-run against the same tag produces byte-identical archives (modulo signatures).
-**Plans**: 2 plans
+**Plans**: 6 plans (51-01, 51-02 complete; 51-03..51-06 gap-closure)
 
 Plans:
 **Wave 1**
@@ -138,6 +138,12 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 — references secret names + archive filenames + URLs from Plan 01)*
 - [x] 51-02-docs-makefile-PLAN.md — INSTALL.md restructure (D-04 verify block, agenthands/helix URLs), README.md repo-identity fixes (lines 65, 71), Makefile `release-snapshot` target, CONTRIBUTING.md "Releasing" subsection
+
+**Wave 3** *(gap closure from 51-VERIFICATION.md; all four plans run in parallel — no `files_modified` overlap)*
+- [ ] 51-03-cgo-optional-bindings-PLAN.md — DEF-51-01 / Concern A: //go:build cgo split for treesitter R + Swift bindings; CGO_ENABLED=0 builds support 21 languages without panicking; unblocks SC-1
+- [ ] 51-04-readme-identity-flags-PLAN.md — Concern D: README.md primary install path drops broken `go install postfix/serena`; HTTP-mode example reconciled with INSTALL.md (`--mode=http --http-addr=127.0.0.1:8080`); upstream attribution dedup'd (CR-01, WR-03, WR-04)
+- [ ] 51-05-checksums-signing-strict-PLAN.md — Concern B (build-config half) + IN-01: signs.artifacts changed from `archive` to `all` so checksums.txt is signed; INSTALL.md sha256sum step strict-grep instead of `--ignore-missing`; Makefile guards goreleaser missing (WR-02, WR-05, IN-01)
+- [ ] 51-06-release-yml-hardening-PLAN.md — Concern B (CI half) + Concern C + Concern E: PLACEHOLDER pre-flight; SHA-pinned third-party actions; minisign tarball SHA-256 verified before extraction; `/tmp/minisign.key` shred-on-always; uname -m guard; CONTRIBUTING.md reproducibility wording softened (CR-02, CR-03, CR-04, WR-01, WR-06, IN-02, IN-03, IN-04)
 
 ### Phase 52: packaging-distribution-channels
 **Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.

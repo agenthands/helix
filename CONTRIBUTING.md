@@ -158,7 +158,7 @@ Key details:
 
 ## Releasing
 
-Releases ship as multi-arch signed binaries via a goreleaser pipeline (see `.goreleaser.yaml` and `.github/workflows/release.yml`). A `v*` git tag triggers the release workflow automatically -- there is no manual draft step. The CI-enforced reproducibility gate refuses to publish if two consecutive snapshot builds produce non-byte-identical archives, so a non-deterministic build cannot reach users.
+Releases ship as multi-arch signed binaries via a goreleaser pipeline (see `.goreleaser.yaml` and `.github/workflows/release.yml`). A `v*` git tag triggers the release workflow automatically -- there is no manual draft step. The CI-enforced reproducibility gate runs two consecutive snapshot builds with identical inputs and refuses to publish if their archive sha256s differ, catching most build-environment non-determinism (toolchain drift, mod_timestamp, trimpath, GOFLAGS) before publication. The gate does not, however, compare against the real-release artifacts that ship to users -- a non-determinism source that lives only behind the real-release code path (e.g. tag-only build constants, changelog generation) would not be caught. If you suspect a real-release-only non-determinism, do a local build of the same tag with `goreleaser release --snapshot --clean --skip=sign` after your tag and diff against the published `dist/` from CI.
 
 To dry-run the build matrix locally (signs are skipped because the secret key lives only in CI):
 

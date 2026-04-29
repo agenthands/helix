@@ -165,8 +165,17 @@ Plans:
   2. `scoop install serena` on Windows amd64 produces a working `serena.exe`.
   3. The chosen Linux package (apt/deb, rpm, or AUR — decision captured in plan) installs via its native tooling and is documented in `INSTALL.md`.
   4. A release tag triggers automated formula/manifest updates in the tap and bucket repos without manual editing.
-**Plans**: TBD
-**Clustering rationale**: PKG-02/03/04 are all downstream consumers of the goreleaser pipeline (Phase 51). Delivering them as one phase with parallel plans keeps them synchronized; PKG-04 was not split into its own phase because goreleaser's `nfpms` integration handles deb/rpm packaging natively — distro complexity is bounded. If AUR ends up more bespoke, it can be isolated to its own plan within this phase.
+**Plans**: 6 plans
+
+> **Phase rescoped during /gsd-discuss-phase 2026-04-29.** Original PKG-02 (Homebrew), PKG-03 (Scoop), PKG-04 (native Linux) deferred from v1.9; replaced with binary+product rename (`serena` → `helix`) + in-binary self-upgrade (`helix update` / `helix upgrade`) + embed-audit manifest. The full goal/success-criteria rewrite is performed by 52-06-PLAN.md when it executes; until then this entry preserves the original framing for traceability.
+
+Plans:
+- [ ] 52-01-PLAN.md — Wave 0 test scaffolding + Makefile embed-pubkey + CI gate
+- [ ] 52-02-PLAN.md — Wave 1 module path + cmd dir + goreleaser + version wiring
+- [ ] 52-03-PLAN.md — Wave 2 env vars + config dirs + MCP registration name flip
+- [ ] 52-04-PLAN.md — Wave 3 internal/upgrade/ package + cobra subcommands
+- [ ] 52-05-PLAN.md — Wave 3 EMBED-AUDIT.md manifest
+- [ ] 52-06-PLAN.md — Wave 3 docs + REQUIREMENTS/ROADMAP/CHANGELOG/INSTALL/README/USAGE/CONTRIBUTING/CLAUDE
 
 ### Phase 53: obs-metrics-gaps
 **Goal**: Operators can observe cache hit-rate, RepoMap extraction latency, session lifecycle, and edit-tool outcomes via Prometheus metrics with bounded labels.

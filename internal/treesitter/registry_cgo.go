@@ -1,3 +1,5 @@
+//go:build cgo
+
 // Package treesitter provides a shared grammar registry for tree-sitter languages.
 // Both the edit package (BodyExtractor) and repomap package (TagExtractor) consume
 // this registry to avoid duplicating grammar initialization.

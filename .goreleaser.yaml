@@ -32,7 +32,11 @@ archives:
   - id: serena
     ids: [serena]
     formats: ["tar.gz"]
-    name_template: "serena_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Note: goreleaser strips the leading 'v' from `{{ .Version }}`, so the literal
+    # 'v' below restores the prefix to match the GitHub release tag (v1.9.0). This
+    # keeps the INSTALL.md verification recipe (which sets VERSION=v1.9.0) working
+    # end-to-end. See REVIEW CR-02.
+    name_template: "serena_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
       - README.md

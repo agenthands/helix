@@ -19,6 +19,19 @@ jobs:
         with:
           fetch-depth: 0   # required: goreleaser changelog needs full git history
 
+      - name: Refuse PLACEHOLDER minisign public key
+        run: |
+          set -euo pipefail
+          # If minisign.pub still contains the literal "PLACEHOLDER" marker, the
+          # maintainer has not yet generated and committed the real public key.
+          # Publishing a release in that state would silently break verification
+          # for every user (CR-02). Fail closed.
+          if grep -q 'PLACEHOLDER' minisign.pub; then
+            echo "::error file=minisign.pub::minisign.pub still contains the PLACEHOLDER marker; replace with the real public key before tagging a release. See CONTRIBUTING.md (Releasing > One-time keypair setup)."
+            exit 1
+          fi
+          echo "minisign.pub pre-flight passed (no PLACEHOLDER marker found)."
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -83,6 +96,13 @@ jobs:
           fi
           echo "Reproducibility gate PASS -- proceeding to real release"
 
+      - name: Clean dist-pass-1 after diff gate
+        run: |
+          set -euo pipefail
+          # The reproducibility gate kept dist-pass-1 around for the diff; remove
+          # it before the real release pass so workspace caches stay tidy (IN-03).
+          rm -rf dist-pass-1
+
       - name: Real release (sign + publish)
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -92,3 +112,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+
+      - name: Wipe minisign secret key
+        if: always()
+        run: |
+          # Defense-in-depth: shred the in-job copy of the secret key as soon as
+          # signing is complete (or aborted). The runner is ephemeral so this is
+          # belt-and-suspenders, but it shrinks the in-job blast radius if a
+          # future step pulls a third-party action that scans /tmp (WR-06).
+          shred -u /tmp/minisign.key 2>/dev/null || rm -f /tmp/minisign.key

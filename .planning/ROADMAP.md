@@ -145,6 +145,16 @@ Plans:
 - [x] 51-05-checksums-signing-strict-PLAN.md — Concern B (build-config half) + IN-01: signs.artifacts changed from `archive` to `all` so checksums.txt is signed; INSTALL.md sha256sum step strict-grep instead of `--ignore-missing`; Makefile guards goreleaser missing (WR-02, WR-05, IN-01)
 - [x] 51-06-release-yml-hardening-PLAN.md — Concern B (CI half) + Concern C + Concern E: PLACEHOLDER pre-flight; SHA-pinned third-party actions; minisign tarball SHA-256 verified before extraction; `/tmp/minisign.key` shred-on-always; uname -m guard; CONTRIBUTING.md reproducibility wording softened (CR-02, CR-03, CR-04, WR-01, WR-06, IN-02, IN-03, IN-04)
 
+### Phase 51.1: cgo-treesitter-gate: gate internal/treesitter behind //go:build cgo with !cgo stub. Closes DEF-51-02 (resolution Path 2). Unblocks Phase 51 SC-1 (CGO_ENABLED=0 cross-compile so goreleaser produces 6 archives) and Phase 52. Acceptance: CGO=0 build of ./cmd/serena exits 0; CGO=1 byte-identical with all 23 treesitter languages still registered; goreleaser snapshot produces 6 archives; CGO=0 build smoke gated in CI. (INSERTED)
+
+**Goal:** `internal/treesitter` is gated behind `//go:build cgo` with a `//go:build !cgo` stub set across `internal/treesitter`, `internal/repomap`, and `internal/kernel/edit`; the daemon refuses to start under `CGO_ENABLED=0` with a clear remediation message; `CGO_ENABLED=0 go build ./cmd/serena` exits 0; `CGO_ENABLED=1` builds remain byte-identical with all 23 grammars registered; `make release-snapshot` produces 6 archives; the existing release.yml reproducibility gate becomes the CGO=0 smoke gate (CONTRIBUTING.md expected-fail marker flipped); DEF-51-02 closes with Status: RESOLVED.
+**Requirements**: DEF-51-02, SC-1-Phase51, AC-1, AC-2, AC-3, AC-4
+**Depends on:** Phase 51
+**Plans:** 1 plan
+
+Plans:
+- [ ] 51.1-01-cgo-gate-PLAN.md — gate treesitter + repomap + kernel/edit behind //go:build cgo with !cgo stubs, daemon refusal hook, tagged tests, flip CONTRIBUTING.md marker, mark DEF-51-02 RESOLVED
+
 ### Phase 52: packaging-distribution-channels
 **Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.
 **Depends on**: Phase 51 (consumes goreleaser artifacts and release metadata)

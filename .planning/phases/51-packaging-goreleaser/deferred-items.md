@@ -124,4 +124,4 @@ This is the same structural problem that DEF-51-01 documented for R and Swift --
 
 **Severity:** HIGH -- blocks Phase 51 success criterion 1 (the goreleaser pipeline produces 6 platform/arch archives). Plan 51-01's release matrix cannot run end-to-end on a real v* tag push until this is resolved. Plans 51-04 (signing), 51-05 (reproducibility doc), and 51-06 (release.yml hardening) build on archive existence -- their UATs are also blocked until DEF-51-02 closes.
 
-**Status:** OPEN -- requires architectural decision in a separate phase (Phase 52+ recommendation).
+**Status:** RESOLVED via Phase 51.1 (Path 2). See `.planning/phases/51.1-cgo-treesitter-gate-gate-internal-treesitter-behind-go-build/` for PLAN, RESEARCH, and SUMMARY. The `internal/treesitter` package is now gated behind `//go:build cgo`; the daemon refuses to start under `CGO_ENABLED=0` with a clear remediation message. CGO=0 archives build but are placeholders -- DEF-51-03 (re-enable CGO in goreleaser, Path 3) tracks the follow-up to make them functional.

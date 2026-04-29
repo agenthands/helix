@@ -190,6 +190,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// the compile-time check lives in internal/daemon/wiring_test.go.
 	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
 
+	// 6a. Refuse to start under CGO_ENABLED=0 (DEF-51-02 / Phase 51.1 / D-02).
+	//     The CGO=0 binary is a goreleaser archive-count placeholder; tree-sitter
+	//     parsing, RepoMap tag extraction, and replace_symbol_body all depend on
+	//     CGO bindings. Surface the unavailability loudly rather than starting in
+	//     a permanently degraded state. Under CGO=1, treesitter.Available is a
+	//     compile-time const true and the Go compiler eliminates this branch.
+	if !treesitter.Available {
+		return nil, fmt.Errorf("tree-sitter is unavailable in this build " +
+			"(CGO_ENABLED=0): rebuild with CGO_ENABLED=1 or download the " +
+			"CGO=1 release binary (see CONTRIBUTING.md > Releasing)")
+	}
+
 	// 6. Create diagnostic store and body extractor.
 	// NOTE: step numbering preserved from original New() for git-blame continuity.
 	diagStore := diag.NewDiagnosticStore()

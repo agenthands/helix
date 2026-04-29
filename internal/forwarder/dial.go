@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -88,8 +87,8 @@ func startDaemon(socketPath string) error {
 	}
 
 	cmd := exec.Command(exe, "--serve", "--socket="+socketPath)
-	// Detach daemon from forwarder process group
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Detach daemon from forwarder process group (Unix only; no-op on Windows).
+	detachFromProcessGroup(cmd)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 

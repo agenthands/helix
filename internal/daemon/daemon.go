@@ -546,6 +546,10 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 		mcpServer: d.mcpServer,
 		kernel:    d.kernel,
 		logger:    d.logger,
+		// Phase 53 D-17: direct call to *obs.Metrics for stdio session
+		// lifecycle emission. observability.Metrics() is never nil per the
+		// Noop-default invariant — no nil guard needed inside the handler.
+		metrics: d.obs.Metrics(),
 	})
 
 	// Serve in a goroutine so we can wait for context cancellation
@@ -566,7 +570,10 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 // listenHTTP starts the Streamable HTTP listener for MCP (DMN-04, MCP-02).
 func (d *Daemon) listenHTTP(ctx context.Context) error {
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", d.mcpServer.HTTPHandler())
+	// Phase 53 D-09 + Q-1 Option 2: wrap the SDK HTTP handler with the
+	// session-lifecycle middleware to emit (started|ended|error, http).
+	// Best-effort `ended` semantic is documented in USAGE.md by Plan 06.
+	mux.Handle("/mcp", httpSessionMiddleware(d.mcpServer.HTTPHandler(), d.obs.Metrics()))
 
 	server := &http.Server{
 		Addr:    d.config.Daemon.HTTPAddr,
@@ -599,39 +606,93 @@ func (d *Daemon) Workspaces() *workspace.Registry {
 	return d.workspaces
 }
 
+// sessionRunner is the test seam that runs the MCP session for a forwarder
+// stream. The production implementation (defaultSessionRunner) wraps the
+// stream in a GRPCTransport, calls mcpServer.SDK().Connect, and waits for
+// the session to end. Tests inject a stub that bypasses the MCP runtime
+// while preserving the (started → ended | error) lifecycle classification
+// (Phase 53 D-08).
+type sessionRunner func(ctx context.Context, stream serenav1.ForwarderService_StreamMCPServer, firstMsg *serenav1.MCPMessage) error
+
 // forwarderServiceHandler implements the gRPC ForwarderService.
 type forwarderServiceHandler struct {
 	serenav1.UnimplementedForwarderServiceServer
 	mcpServer *helixMCP.SerenaMCPServer
 	kernel    *kernel.Kernel
 	logger    *slog.Logger
+
+	// metrics is the observability hook for session lifecycle events
+	// (Phase 53 D-17). Direct call instead of sink-interface because
+	// daemon.go already imports internal/obs and the field is a
+	// production-time pointer that never mutates.
+	metrics *obs.Metrics
+
+	// serveSession is the test seam for the MCP-runtime portion of
+	// StreamMCP. nil in production (defaultSessionRunner is used);
+	// non-nil in tests to stub Connect/Wait without spinning up a real
+	// MCP server.
+	serveSession sessionRunner
 }
 
 // StreamMCP handles a bidirectional MCP stream from a forwarder.
+//
+// Lifecycle emission contract (Phase 53 D-08):
+//   - (started, stdio) emitted ONCE after firstMsg is received (we know we
+//     have a session). NOT emitted if Recv() fails before firstMsg, because
+//     no session_id is known yet — emitting would inflate the started
+//     counter without a matching (ended, stdio) / (error, stdio).
+//   - (error, stdio) on Connect() failure or non-nil session.Wait() return.
+//   - (ended, stdio) on clean session.Wait() return.
 func (h *forwarderServiceHandler) StreamMCP(stream serenav1.ForwarderService_StreamMCPServer) error {
 	// Read the first message to get the session ID
 	firstMsg, err := stream.Recv()
 	if err != nil {
+		// No session_id known yet — do NOT emit a lifecycle event.
 		return fmt.Errorf("receiving first message: %w", err)
 	}
 
 	sessionID := firstMsg.SessionId
 	h.logger.Info("new forwarder stream", "session_id", sessionID)
+	// Phase 53 D-08: emit started AFTER firstMsg is received.
+	h.metrics.SessionLifecycleInc("started", "stdio")
 
-	// Create a GRPCTransport that bridges this stream to the MCP SDK.
-	// Pass firstMsg so it gets replayed into the transport pipe.
-	transport := helixMCP.NewGRPCTransport(stream, sessionID, firstMsg)
-
-	// Connect the MCP server to this transport
-	session, err := h.mcpServer.SDK().Connect(stream.Context(), transport, nil)
-	if err != nil {
-		return fmt.Errorf("connecting MCP session: %w", err)
+	runner := h.serveSession
+	if runner == nil {
+		runner = defaultSessionRunner(h.mcpServer)
 	}
-
-	// Wait for the session to end
-	err = session.Wait()
+	err = runner(stream.Context(), stream, firstMsg)
 	h.logger.Info("forwarder stream ended", "session_id", sessionID)
+	if err != nil {
+		// Phase 53 D-08: error covers both Connect-failure and
+		// session.Wait-failure paths (the seam collapses them — both
+		// surface as a non-nil err here).
+		h.metrics.SessionLifecycleInc("error", "stdio")
+	} else {
+		h.metrics.SessionLifecycleInc("ended", "stdio")
+	}
 	return err
+}
+
+// defaultSessionRunner returns the production sessionRunner that bridges
+// the gRPC stream to the MCP SDK. Extracted so tests can substitute a
+// stub via the forwarderServiceHandler.serveSession field without
+// reaching into the MCP runtime.
+func defaultSessionRunner(mcpServer *helixMCP.SerenaMCPServer) sessionRunner {
+	return func(ctx context.Context, stream serenav1.ForwarderService_StreamMCPServer, firstMsg *serenav1.MCPMessage) error {
+		sessionID := firstMsg.SessionId
+		// Create a GRPCTransport that bridges this stream to the MCP SDK.
+		// Pass firstMsg so it gets replayed into the transport pipe.
+		transport := helixMCP.NewGRPCTransport(stream, sessionID, firstMsg)
+
+		// Connect the MCP server to this transport
+		session, err := mcpServer.SDK().Connect(ctx, transport, nil)
+		if err != nil {
+			return fmt.Errorf("connecting MCP session: %w", err)
+		}
+
+		// Wait for the session to end
+		return session.Wait()
+	}
 }
 
 // GetStatus returns workspace health for the CLI status command.

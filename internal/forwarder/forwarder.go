@@ -12,8 +12,8 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
-	"github.com/postfix/serena/internal/obs"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // RunForwarder starts the stdio-to-gRPC forwarder (DMN-03).

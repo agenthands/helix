@@ -272,6 +272,7 @@ zz-misc/
 vue-implementation/
 
 # Go
+/helix
 /serena
 *.exe
 /bin/

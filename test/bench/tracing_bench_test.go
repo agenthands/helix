@@ -23,8 +23,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	serenamcp "github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/obs"
+	serenamcp "github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // BenchmarkTracingOffPath exercises TelemetryMiddleware with an obs.Noop

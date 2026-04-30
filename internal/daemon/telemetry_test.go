@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postfix/serena/internal/config"
+	"github.com/agenthands/helix/internal/config"
 )
 
 func TestValidateAdminAddr(t *testing.T) {

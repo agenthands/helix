@@ -11,7 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // TestSelection verifies that an LLM can select the correct tool for every

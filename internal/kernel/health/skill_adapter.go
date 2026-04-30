@@ -1,8 +1,8 @@
 package health
 
 import (
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // HealthSkill is a ToolProvider adapter that exposes the get_health

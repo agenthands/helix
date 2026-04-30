@@ -8,8 +8,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/internal/kernel"
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/mcp"
 )
 
 // GetToolHelpArgs is the input schema for the get_tool_help tool.

@@ -8,11 +8,11 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel"
-	"github.com/postfix/serena/internal/kernel/diag"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/workspace"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/kernel/diag"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // --- Argument structs ---

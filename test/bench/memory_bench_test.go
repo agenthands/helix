@@ -44,7 +44,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/postfix/serena/test/bench/rss"
+	"github.com/agenthands/helix/test/bench/rss"
 )
 
 // reportMemory logs and ReportMetric's both Go-managed sys bytes

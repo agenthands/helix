@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 func TestKinds(t *testing.T) {

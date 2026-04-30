@@ -11,7 +11,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // compileMetaSchema compiles the Draft 2020-12 meta-schema for validating

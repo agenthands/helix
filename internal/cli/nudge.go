@@ -24,10 +24,10 @@ type hookInput struct {
 
 // sessionStats tracks tool call counts per session for nudge threshold logic.
 type sessionStats struct {
-	SessionID      string `json:"session_id"`
-	GrepReadCount  int    `json:"grep_read_count"`
-	SerenaToolCount int   `json:"serena_tool_count"`
-	LastUpdated    string `json:"last_updated"`
+	SessionID       string `json:"session_id"`
+	GrepReadCount   int    `json:"grep_read_count"`
+	SerenaToolCount int    `json:"serena_tool_count"`
+	LastUpdated     string `json:"last_updated"`
 }
 
 // newNudgeCommand creates the nudge subcommand invoked by Claude Code's PreToolUse hook.
@@ -156,15 +156,15 @@ func saveSessionStats(path string, stats sessionStats) error {
 
 // serenaSymbolicTools lists Serena MCP tool names that indicate symbolic tool usage.
 var serenaSymbolicTools = map[string]bool{
-	"find_symbol":            true,
-	"get_symbol_details":     true,
-	"get_symbols_overview":   true,
-	"find_references":        true,
-	"get_hover_info":         true,
-	"find_implementations":   true,
-	"get_call_hierarchy":     true,
-	"get_type_hierarchy":     true,
-	"get_blast_radius":       true,
+	"find_symbol":          true,
+	"get_symbol_details":   true,
+	"get_symbols_overview": true,
+	"find_references":      true,
+	"get_hover_info":       true,
+	"find_implementations": true,
+	"get_call_hierarchy":   true,
+	"get_type_hierarchy":   true,
+	"get_blast_radius":     true,
 }
 
 // isSerenaSymbolicTool returns true if the tool name matches a Serena symbolic tool,

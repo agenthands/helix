@@ -12,7 +12,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 
-	"github.com/postfix/serena/internal/profile"
+	"github.com/agenthands/helix/internal/profile"
 )
 
 // Load builds a SerenaConfig from layered sources in precedence order:

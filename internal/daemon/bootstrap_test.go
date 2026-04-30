@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // newTestConfig returns a minimal config suitable for bootstrap tests.

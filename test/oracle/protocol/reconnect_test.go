@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // TestReconnect_DaemonStatePreserved verifies that daemon state (memories)

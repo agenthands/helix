@@ -5,8 +5,8 @@ package edit
 import (
 	"testing"
 
-	gen "github.com/postfix/serena/protocol/gen"
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
+	gen "github.com/agenthands/helix/protocol/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

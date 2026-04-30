@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // TestSessionIsolation_WorkspaceIndependence verifies that two separate daemon

@@ -12,11 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/repomap"
-	"github.com/postfix/serena/internal/skill"
-	"github.com/postfix/serena/internal/treesitter"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/skill"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 const (

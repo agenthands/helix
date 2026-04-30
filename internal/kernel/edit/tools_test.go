@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // TestDetectLangEdgeCases verifies detectLang for known and unknown extensions.

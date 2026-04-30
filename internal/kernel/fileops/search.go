@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // SearchOpts configures search behavior.

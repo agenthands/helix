@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	lspool "github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/repomap"
-	"github.com/postfix/serena/internal/skill"
-	"github.com/postfix/serena/internal/treesitter"
+	lspool "github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/skill"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // Compile-time assertion: WorkerLease satisfies SymbolRequester (D-33-04).

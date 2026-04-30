@@ -8,7 +8,7 @@ package profile
 import (
 	"sort"
 
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // Profile extends ContextSpec with agent-specific fields.

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // dotsRe matches a "..." marker on its own line with optional leading

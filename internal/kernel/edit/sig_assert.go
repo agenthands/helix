@@ -1,7 +1,7 @@
 package edit
 
 import (
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // Compile-time signature assertions: these interface satisfaction checks

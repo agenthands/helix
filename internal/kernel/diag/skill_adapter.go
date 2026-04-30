@@ -1,8 +1,8 @@
 package diag
 
 import (
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // DiagnosticsSkill is a ToolProvider adapter that exposes the 3 diagnostic

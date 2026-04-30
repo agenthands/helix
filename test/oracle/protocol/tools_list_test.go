@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // TestToolsList_UniqueNames verifies that tools/list returns tools with unique

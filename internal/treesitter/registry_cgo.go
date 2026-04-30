@@ -38,8 +38,8 @@ import (
 	tree_sitter_zig "github.com/tree-sitter-grammars/tree-sitter-zig/bindings/go"
 
 	// Wave 2b gap closure: local vendored bindings (upstream Go bindings broken)
-	tree_sitter_r_local "github.com/postfix/serena/internal/treesitter/bindings/r"
-	tree_sitter_swift_local "github.com/postfix/serena/internal/treesitter/bindings/swift"
+	tree_sitter_r_local "github.com/agenthands/helix/internal/treesitter/bindings/r"
+	tree_sitter_swift_local "github.com/agenthands/helix/internal/treesitter/bindings/swift"
 )
 
 // GrammarRegistry holds tree-sitter language grammars keyed by language name.

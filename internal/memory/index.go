@@ -18,7 +18,7 @@ import (
 type MemoryEntry struct {
 	Name     string
 	FilePath string
-	Scope    string  // "project" or "global"
+	Scope    string // "project" or "global"
 	Topic    string
 	Title    string
 	Summary  string

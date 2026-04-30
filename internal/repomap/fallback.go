@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	serr "github.com/postfix/serena/internal/errors"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // SymbolRequester abstracts the LSP documentSymbol request for testability.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // skipDirs contains directory names to skip during file walks.

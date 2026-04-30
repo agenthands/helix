@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/config"
+	"github.com/agenthands/helix/internal/config"
 )
 
 // TestGracefulShutdownMidRequest validates that cancelling the context while

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postfix/serena/internal/langregistry"
+	"github.com/agenthands/helix/internal/langregistry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

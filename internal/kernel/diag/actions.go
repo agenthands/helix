@@ -3,9 +3,9 @@ package diag
 import (
 	"context"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // CodeActionResult is a simplified view of a CodeAction returned by the LS.
@@ -66,7 +66,7 @@ func ApplyCodeAction(ctx context.Context, lease *lspool.WorkerLease, action Code
 	// Apply each edit via applyEdit or by notifying the client.
 	// For now we use workspace/applyEdit to let the LS client apply it.
 	applyParams := struct {
-		Label string          `json:"label,omitempty"`
+		Label string            `json:"label,omitempty"`
 		Edit  gen.WorkspaceEdit `json:"edit"`
 	}{
 		Label: action.Title,

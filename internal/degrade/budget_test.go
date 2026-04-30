@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postfix/serena/internal/config"
+	"github.com/agenthands/helix/internal/config"
 )
 
 // allToolNames is the exhaustive list of 38 registered tool names.

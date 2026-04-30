@@ -12,7 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // toolTaskDescriptions maps tool names to natural-language task descriptions
@@ -60,11 +60,11 @@ var toolTaskDescriptions = map[string]string{
 // designed to select the target tool from the pair.
 var disambiguationTasks = map[[3]string]string{
 	// search_symbols vs find_references
-	{"search_symbols", "find_references", "search_symbols"}:   "I know part of a symbol name and want to find matching symbols",
-	{"search_symbols", "find_references", "find_references"}:  "I have a specific symbol and want to find everywhere it's used",
+	{"search_symbols", "find_references", "search_symbols"}:  "I know part of a symbol name and want to find matching symbols",
+	{"search_symbols", "find_references", "find_references"}: "I have a specific symbol and want to find everywhere it's used",
 	// get_symbol_overview vs get_hover_info
 	{"get_symbol_overview", "get_hover_info", "get_symbol_overview"}: "I want to see all the methods and fields of a class",
-	{"get_symbol_overview", "get_hover_info", "get_hover_info"}:     "I need the type annotation and docstring for a variable at line 42",
+	{"get_symbol_overview", "get_hover_info", "get_hover_info"}:      "I need the type annotation and docstring for a variable at line 42",
 	// read_file vs read_memory
 	{"read_file", "read_memory", "read_file"}:   "I need to read the source code of a specific file in the project",
 	{"read_file", "read_memory", "read_memory"}: "I want to retrieve a previously saved note about the project architecture",
@@ -73,7 +73,7 @@ var disambiguationTasks = map[[3]string]string{
 	{"create_file", "write_memory", "write_memory"}: "I want to save a note about a design decision for future reference",
 	// find_files vs search_in_files
 	{"find_files", "search_in_files", "find_files"}:      "I need to find all files named config.yaml in the project",
-	{"find_files", "search_in_files", "search_in_files"}:  "I want to find all files containing the string TODO in their content",
+	{"find_files", "search_in_files", "search_in_files"}: "I want to find all files containing the string TODO in their content",
 	// list_directory vs find_files
 	{"list_directory", "find_files", "list_directory"}: "I want to see the immediate contents of the src/ directory",
 	{"list_directory", "find_files", "find_files"}:     "I need to locate all .go files anywhere in the project tree",
@@ -82,13 +82,13 @@ var disambiguationTasks = map[[3]string]string{
 	{"insert_before_symbol", "insert_after_symbol", "insert_after_symbol"}:  "I need to add a helper function right below an existing function",
 	// replace_symbol_body vs replace_in_file
 	{"replace_symbol_body", "replace_in_file", "replace_symbol_body"}: "I need to change the implementation inside a function while keeping its signature",
-	{"replace_symbol_body", "replace_in_file", "replace_in_file"}:    "I need to replace all occurrences of a text pattern throughout a file",
+	{"replace_symbol_body", "replace_in_file", "replace_in_file"}:     "I need to replace all occurrences of a text pattern throughout a file",
 	// get_call_hierarchy vs get_type_hierarchy
 	{"get_call_hierarchy", "get_type_hierarchy", "get_call_hierarchy"}: "I need to trace which functions call a given function and what it calls downstream",
 	{"get_call_hierarchy", "get_type_hierarchy", "get_type_hierarchy"}: "I want to see the parent types and subtypes in the inheritance chain of a class",
 	// search_symbols vs search_in_files
-	{"search_symbols", "search_in_files", "search_symbols"}:   "I want to find Go functions and types whose names contain 'Handler'",
-	{"search_symbols", "search_in_files", "search_in_files"}:  "I want to grep for the literal string 'FIXME' across all source files",
+	{"search_symbols", "search_in_files", "search_symbols"}:  "I want to find Go functions and types whose names contain 'Handler'",
+	{"search_symbols", "search_in_files", "search_in_files"}: "I want to grep for the literal string 'FIXME' across all source files",
 	// onboard_project vs list_directory
 	{"onboard_project", "list_directory", "onboard_project"}: "I want a high-level overview of the project's architecture, conventions, and key modules",
 	{"onboard_project", "list_directory", "list_directory"}:  "I want to see what files exist in the root directory of the project",

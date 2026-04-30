@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/config"
-	serenaMCP "github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/profile"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/config"
+	serenaMCP "github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/profile"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // newE2EConfig creates a config with temp dirs and a short socket path.

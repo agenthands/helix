@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // successPhrases are strings that should never appear in error responses.

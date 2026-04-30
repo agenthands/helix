@@ -7,9 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/langregistry"
-	"github.com/postfix/serena/internal/workspace"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/langregistry"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // WorkspaceRuntime extends Phase 1 workspace with LS pool integration.

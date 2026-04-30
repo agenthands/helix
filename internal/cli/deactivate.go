@@ -12,15 +12,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
-	"github.com/postfix/serena/internal/config"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
+	"github.com/agenthands/helix/internal/config"
 )
 
 func newDeactivateCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "deactivate",
-		Short: "Deactivate workspace for current project",
-		Long:  "Cleans up session-scoped state for the given directory. Used by Claude Code Stop hook.",
+		Use:           "deactivate",
+		Short:         "Deactivate workspace for current project",
+		Long:          "Cleans up session-scoped state for the given directory. Used by Claude Code Stop hook.",
 		RunE:          runDeactivate,
 		SilenceUsage:  true,
 		SilenceErrors: true,

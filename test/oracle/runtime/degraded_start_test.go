@@ -21,27 +21,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/daemon"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/internal/daemon"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
+	"github.com/agenthands/helix/test/harness"
 
 	// Blank imports to ensure skill init() registrations are available
 	// for Reset/re-register cycles.
-	_ "github.com/postfix/serena/internal/kernel/diag"
-	_ "github.com/postfix/serena/internal/kernel/edit"
-	_ "github.com/postfix/serena/internal/kernel/fileops"
-	_ "github.com/postfix/serena/internal/kernel/symbols"
-	_ "github.com/postfix/serena/internal/profile"
-	_ "github.com/postfix/serena/internal/skill/memory"
-	_ "github.com/postfix/serena/internal/skill/workflow"
+	_ "github.com/agenthands/helix/internal/kernel/diag"
+	_ "github.com/agenthands/helix/internal/kernel/edit"
+	_ "github.com/agenthands/helix/internal/kernel/fileops"
+	_ "github.com/agenthands/helix/internal/kernel/symbols"
+	_ "github.com/agenthands/helix/internal/profile"
+	_ "github.com/agenthands/helix/internal/skill/memory"
+	_ "github.com/agenthands/helix/internal/skill/workflow"
 )
 
 // failingSkill implements skill.Skill with an Init that always fails.
 type failingSkill struct{}
 
 func (f *failingSkill) Name() string        { return "test-failing-skill" }
-func (f *failingSkill) Description() string  { return "A skill that fails on init for testing" }
+func (f *failingSkill) Description() string { return "A skill that fails on init for testing" }
 func (f *failingSkill) Init(_ skill.SkillDeps) error {
 	return errors.New("simulated skill init failure")
 }
@@ -148,7 +148,7 @@ func TestRuntime_Degraded_MemoryStoreFailure(t *testing.T) {
 type failingMemorySkill struct{}
 
 func (f *failingMemorySkill) Name() string        { return "memory" }
-func (f *failingMemorySkill) Description() string  { return "Failing memory skill for testing" }
+func (f *failingMemorySkill) Description() string { return "Failing memory skill for testing" }
 func (f *failingMemorySkill) Init(_ skill.SkillDeps) error {
 	return errors.New("simulated memory store failure")
 }

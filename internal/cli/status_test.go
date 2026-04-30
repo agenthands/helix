@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 func TestStatusPrinter_PrintReport_AllHealthy(t *testing.T) {

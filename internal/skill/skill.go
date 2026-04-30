@@ -5,7 +5,7 @@ package skill
 import (
 	"log/slog"
 
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/mcp"
 )
 
 // SkillDeps provides dependencies that skills need during initialization.

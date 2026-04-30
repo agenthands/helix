@@ -15,9 +15,9 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/obs"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // fakeRequest is a minimal mcpsdk.Request-typed value for non-tools/call tests.

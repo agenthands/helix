@@ -3,7 +3,7 @@ package symbols
 import (
 	"context"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 // BlastRadius represents the combined impact analysis for a symbol.

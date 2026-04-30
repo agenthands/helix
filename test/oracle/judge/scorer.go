@@ -13,8 +13,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/postfix/serena/test/harness"
-	llm "github.com/postfix/serena/test/oracle/llm"
+	"github.com/agenthands/helix/test/harness"
+	llm "github.com/agenthands/helix/test/oracle/llm"
 )
 
 // ScoreTranscript calls the judge model to score a transcript via the rubric prompt.

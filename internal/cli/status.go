@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/kernel/lspool"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 // newStatusCommand creates the status subcommand for displaying workspace health.

@@ -5,7 +5,7 @@ package repomap
 import (
 	"testing"
 
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

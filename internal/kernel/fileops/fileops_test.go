@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // --- ValidatePath tests ---

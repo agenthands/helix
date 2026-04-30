@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	llm "github.com/postfix/serena/test/oracle/llm"
+	llm "github.com/agenthands/helix/test/oracle/llm"
 )
 
 // TestJudge reads transcripts produced by behavioral tests (Plan 01/02) and

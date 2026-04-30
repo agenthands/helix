@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/postfix/serena/internal/langregistry"
+	"github.com/agenthands/helix/internal/langregistry"
 )
 
 // skipDirs contains directory names to skip during language detection.

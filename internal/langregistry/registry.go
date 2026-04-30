@@ -20,13 +20,13 @@ type Registry struct {
 // yamlEntry mirrors LSEntry for YAML deserialization with pointer fields
 // so we can distinguish "not set" from zero-value during deep merge.
 type yamlEntry struct {
-	Command        *string           `yaml:"command"`
-	Args           []string          `yaml:"args"`
-	InitOptions    map[string]any    `yaml:"init_options"`
-	NeedsWorkspace *bool             `yaml:"needs_workspace"`
-	FileExts       []string          `yaml:"file_exts"`
-	Install        *yamlInstallInfo  `yaml:"install"`
-	IgnoredDirs    []string          `yaml:"ignored_dirs"`
+	Command        *string          `yaml:"command"`
+	Args           []string         `yaml:"args"`
+	InitOptions    map[string]any   `yaml:"init_options"`
+	NeedsWorkspace *bool            `yaml:"needs_workspace"`
+	FileExts       []string         `yaml:"file_exts"`
+	Install        *yamlInstallInfo `yaml:"install"`
+	IgnoredDirs    []string         `yaml:"ignored_dirs"`
 }
 
 type yamlInstallInfo struct {

@@ -1,8 +1,8 @@
 package fileops
 
 import (
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/fuzzy"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/fuzzy"
 )
 
 // FuzzyEdit reads a file, runs fuzzy.Match against its content, and writes

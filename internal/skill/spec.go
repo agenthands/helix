@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/mcp"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,8 +14,8 @@ type ContextSpec struct {
 	Name         string   `yaml:"name"`
 	Description  string   `yaml:"description"`
 	Skills       []string `yaml:"skills"`        // skill names to activate
-	Tools        []string `yaml:"tools"`          // individual tool names to include
-	ExcludeTools []string `yaml:"exclude_tools"`  // tools to exclude from active skills
+	Tools        []string `yaml:"tools"`         // individual tool names to include
+	ExcludeTools []string `yaml:"exclude_tools"` // tools to exclude from active skills
 }
 
 // ModeSpec defines an operational mode loaded from YAML (D-12).

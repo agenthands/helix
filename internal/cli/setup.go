@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/postfix/serena/internal/langregistry"
+	"github.com/agenthands/helix/internal/langregistry"
 )
 
 // newSetupCommand creates the setup subcommand for registering Serena with coding agents.
@@ -21,9 +21,9 @@ func newSetupCommand() *cobra.Command {
 
 Run without arguments to list available clients.
 Run with a client name to register Serena for that client.`,
-		ValidArgs: []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
-		Args:      cobra.MaximumNArgs(1),
-		RunE:      runSetup,
+		ValidArgs:     []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
+		Args:          cobra.MaximumNArgs(1),
+		RunE:          runSetup,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

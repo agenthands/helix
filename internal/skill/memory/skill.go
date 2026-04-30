@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/memory"
-	"github.com/postfix/serena/internal/skill"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/memory"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // MemorySkill implements skill.ToolProvider, wrapping MemoryStore as MCP tools.

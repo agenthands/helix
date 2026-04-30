@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 // InsertBefore inserts content immediately before a symbol's range start.

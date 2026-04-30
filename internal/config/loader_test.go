@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/postfix/serena/internal/profile" // ensure embedded profiles are loadable
+	_ "github.com/agenthands/helix/internal/profile" // ensure embedded profiles are loadable
 )
 
 func TestLoad_Defaults(t *testing.T) {

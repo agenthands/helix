@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // CreateFile creates a new file with the given content.

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // normalizeResponse replaces non-deterministic values with stable placeholders (D-04).
@@ -66,12 +66,12 @@ func goldenDir() string {
 
 // goldenCase describes one tool invocation for golden output capture.
 type goldenCase struct {
-	tool             string
-	args             map[string]any
-	needsWorkspace   bool   // true if tool requires activate_project
-	needsLS          bool   // true if tool requires running language server
-	needsMemory      string // if non-empty, write this memory name before calling
-	workspaceOnly    bool   // if true, filter output to workspace-local lines only
+	tool           string
+	args           map[string]any
+	needsWorkspace bool   // true if tool requires activate_project
+	needsLS        bool   // true if tool requires running language server
+	needsMemory    string // if non-empty, write this memory name before calling
+	workspaceOnly  bool   // if true, filter output to workspace-local lines only
 }
 
 // noWorkspaceCases returns tools that need no workspace (memory tools, onboarding tools).

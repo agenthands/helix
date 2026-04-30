@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/postfix/serena/internal/langregistry"
-	"github.com/postfix/serena/internal/workspace"
+	"github.com/agenthands/helix/internal/langregistry"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // PoolConfig holds configuration for the LS worker pool.
@@ -35,7 +35,6 @@ func DefaultPoolConfig() PoolConfig {
 
 // ErrMaxWorkersReached is returned when the pool has reached its maximum worker count.
 var ErrMaxWorkersReached = errors.New("maximum number of workers reached")
-
 
 // Pool manages a pool of LS workers with TTL, pressure eviction, and share-until-dirty policy.
 type Pool struct {

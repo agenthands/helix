@@ -4,10 +4,10 @@ import (
 	"context"
 	"sort"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/kernel/symbols"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/symbols"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // RenameStrategy enumerates the path a successful rename took.

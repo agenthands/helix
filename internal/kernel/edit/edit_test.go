@@ -3,7 +3,7 @@ package edit
 import (
 	"testing"
 
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

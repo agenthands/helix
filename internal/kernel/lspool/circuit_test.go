@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 func TestCircuitOpenError_Fields(t *testing.T) {

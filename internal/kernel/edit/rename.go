@@ -7,9 +7,9 @@ import (
 	"sort"
 	"time"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // RenameResult summarizes the outcome of a rename operation.

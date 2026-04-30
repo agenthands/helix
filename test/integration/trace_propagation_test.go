@@ -35,10 +35,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/daemon"
-	"github.com/postfix/serena/internal/obs"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/daemon"
+	"github.com/agenthands/helix/internal/obs"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // startTracingDaemon creates a daemon with a tracetest.InMemoryExporter for

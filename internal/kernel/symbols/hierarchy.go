@@ -3,9 +3,9 @@ package symbols
 import (
 	"context"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // maxHierarchyDepth limits recursion for call and type hierarchies.

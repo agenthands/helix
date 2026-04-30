@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 func TestDiagnosticStore_StoreAndRetrieve(t *testing.T) {

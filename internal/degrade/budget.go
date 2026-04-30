@@ -6,7 +6,7 @@ package degrade
 import (
 	"time"
 
-	"github.com/postfix/serena/internal/config"
+	"github.com/agenthands/helix/internal/config"
 )
 
 // ToolClass categorizes tools by their expected latency profile.

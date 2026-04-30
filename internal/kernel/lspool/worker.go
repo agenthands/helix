@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/postfix/serena/internal/kernel/jsonrpc"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/kernel/jsonrpc"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // WorkerState represents the lifecycle state of an LS worker.

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/postfix/serena/internal/fuzzy"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/fuzzy"
+	gen "github.com/agenthands/helix/protocol/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

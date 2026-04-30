@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/kernel/symbols"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/symbols"
 )
 
 // DeleteResult summarizes the outcome of a delete operation.

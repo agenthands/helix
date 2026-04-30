@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/postfix/serena/internal/fuzzy"
+	"github.com/agenthands/helix/internal/fuzzy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

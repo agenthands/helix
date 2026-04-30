@@ -1,4 +1,4 @@
-module github.com/postfix/serena
+module github.com/agenthands/helix
 
 go 1.25.1
 

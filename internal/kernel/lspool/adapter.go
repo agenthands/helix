@@ -3,7 +3,7 @@ package lspool
 import (
 	"context"
 
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // LSAdapter provides typed LSP methods on top of a Worker.

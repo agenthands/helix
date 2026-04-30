@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	gen "github.com/agenthands/helix/protocol/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -240,8 +240,8 @@ func TestBlastRadiusDeduplication(t *testing.T) {
 		}
 	}
 
-	refs := []SymbolLocation{loc1, loc2, loc3}     // loc1 and loc2 are duplicates
-	impls := []SymbolLocation{loc1, loc3}           // all duplicates of refs
+	refs := []SymbolLocation{loc1, loc2, loc3} // loc1 and loc2 are duplicates
+	impls := []SymbolLocation{loc1, loc3}      // all duplicates of refs
 	addLocations(refs)
 	addLocations(impls)
 

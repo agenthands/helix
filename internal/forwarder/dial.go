@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 )
 
 // ConnectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).

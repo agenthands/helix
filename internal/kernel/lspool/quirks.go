@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/postfix/serena/internal/langregistry"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/langregistry"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // ArgsModifier is an optional interface that QuirkAdapters can implement

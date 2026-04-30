@@ -14,9 +14,9 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/obs"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // newSpanTestProvider constructs an obs.Provider backed by the given in-memory

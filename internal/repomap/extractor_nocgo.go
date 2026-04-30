@@ -5,7 +5,7 @@ package repomap
 import (
 	"fmt"
 
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // TagExtractor under !cgo is a stub; the daemon refuses to start before any

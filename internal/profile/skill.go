@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // SessionProvider gives the profile skill access to the current session state.
@@ -36,7 +36,7 @@ func init() {
 }
 
 func (s *profileSkill) Name() string        { return "profile" }
-func (s *profileSkill) Description() string  { return "Agent profiles and mode switching (D-04)" }
+func (s *profileSkill) Description() string { return "Agent profiles and mode switching (D-04)" }
 
 // Init loads embedded profiles and applies overrides from global/project dirs.
 func (s *profileSkill) Init(deps skill.SkillDeps) error {
@@ -187,9 +187,9 @@ func (s *profileSkill) ExecuteSwitchMode(targetMode string) (*SwitchModeResult, 
 
 // TokenBudgetResult is the response payload for the get_token_budget tool.
 type TokenBudgetResult struct {
-	TotalTokens int              `json:"total_tokens"`
-	ToolCount   int              `json:"tool_count"`
-	PerTool     []ToolTokenInfo  `json:"per_tool,omitempty"`
+	TotalTokens int             `json:"total_tokens"`
+	ToolCount   int             `json:"tool_count"`
+	PerTool     []ToolTokenInfo `json:"per_tool,omitempty"`
 }
 
 // ToolTokenInfo holds per-tool token estimates.

@@ -8,11 +8,11 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/mcp"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/mcp"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // GetDiagnosticsArgs is the input schema for the get_diagnostics tool.

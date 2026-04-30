@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // DiagnosticStore collects and serves publishDiagnostics notifications from

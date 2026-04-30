@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/skill"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

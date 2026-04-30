@@ -15,19 +15,19 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/daemon"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/daemon"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/skill"
 
 	// Blank imports trigger skill registration via init() (Caddy-style).
-	_ "github.com/postfix/serena/internal/kernel/diag"
-	_ "github.com/postfix/serena/internal/kernel/edit"
-	_ "github.com/postfix/serena/internal/kernel/fileops"
-	_ "github.com/postfix/serena/internal/kernel/symbols"
-	_ "github.com/postfix/serena/internal/profile"
-	_ "github.com/postfix/serena/internal/skill/memory"
-	_ "github.com/postfix/serena/internal/skill/workflow"
+	_ "github.com/agenthands/helix/internal/kernel/diag"
+	_ "github.com/agenthands/helix/internal/kernel/edit"
+	_ "github.com/agenthands/helix/internal/kernel/fileops"
+	_ "github.com/agenthands/helix/internal/kernel/symbols"
+	_ "github.com/agenthands/helix/internal/profile"
+	_ "github.com/agenthands/helix/internal/skill/memory"
+	_ "github.com/agenthands/helix/internal/skill/workflow"
 )
 
 // Options configures a test daemon instance.

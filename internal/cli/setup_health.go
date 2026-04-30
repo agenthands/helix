@@ -4,7 +4,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/postfix/serena/internal/langregistry"
+	"github.com/agenthands/helix/internal/langregistry"
 )
 
 // runHealthCheck verifies that language server binaries are available and callable.

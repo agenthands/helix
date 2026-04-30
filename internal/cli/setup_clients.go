@@ -138,7 +138,7 @@ func userConfigDir() (string, error) {
 // ClaudeCodeRegistrar handles MCP registration for Claude Code (Anthropic CLI agent).
 type ClaudeCodeRegistrar struct{}
 
-func (r *ClaudeCodeRegistrar) Name() string       { return "claude-code" }
+func (r *ClaudeCodeRegistrar) Name() string        { return "claude-code" }
 func (r *ClaudeCodeRegistrar) Description() string { return "Claude Code (Anthropic CLI agent)" }
 
 func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
@@ -268,7 +268,7 @@ func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 // GeminiCLIRegistrar handles MCP registration for Gemini CLI.
 type GeminiCLIRegistrar struct{}
 
-func (r *GeminiCLIRegistrar) Name() string       { return "gemini-cli" }
+func (r *GeminiCLIRegistrar) Name() string        { return "gemini-cli" }
 func (r *GeminiCLIRegistrar) Description() string { return "Gemini CLI (Google)" }
 
 func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
@@ -427,7 +427,7 @@ func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 // NOTE: VS Code uses "servers" key, NOT "mcpServers" (Pitfall 1).
 type VSCodeRegistrar struct{}
 
-func (r *VSCodeRegistrar) Name() string       { return "vscode" }
+func (r *VSCodeRegistrar) Name() string        { return "vscode" }
 func (r *VSCodeRegistrar) Description() string { return "VS Code / Copilot (Microsoft)" }
 
 func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
@@ -480,7 +480,7 @@ func (r *VSCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
 // JetBrainsRegistrar handles MCP registration for JetBrains IDEs via Junie.
 type JetBrainsRegistrar struct{}
 
-func (r *JetBrainsRegistrar) Name() string       { return "jetbrains" }
+func (r *JetBrainsRegistrar) Name() string        { return "jetbrains" }
 func (r *JetBrainsRegistrar) Description() string { return "JetBrains IDEs via Junie" }
 
 func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
@@ -528,7 +528,7 @@ func (r *JetBrainsRegistrar) configPath(cfg RegistrationConfig) (string, error) 
 // Claude Desktop is global-only (the Global flag is ignored).
 type ClaudeDesktopRegistrar struct{}
 
-func (r *ClaudeDesktopRegistrar) Name() string       { return "claude-desktop" }
+func (r *ClaudeDesktopRegistrar) Name() string        { return "claude-desktop" }
 func (r *ClaudeDesktopRegistrar) Description() string { return "Claude Desktop app" }
 
 func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
@@ -590,7 +590,7 @@ func (r *ClaudeDesktopRegistrar) configPath() (string, error) {
 // OpenCode uses "mcp" key (not "mcpServers") and "command" is an array.
 type OpenCodeRegistrar struct{}
 
-func (r *OpenCodeRegistrar) Name() string       { return "opencode" }
+func (r *OpenCodeRegistrar) Name() string        { return "opencode" }
 func (r *OpenCodeRegistrar) Description() string { return "OpenCode" }
 
 func (r *OpenCodeRegistrar) Register(cfg RegistrationConfig) error {
@@ -645,7 +645,7 @@ func (r *OpenCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
 // Outputs JSON to stdout (default) or writes to a file via --output.
 type GenericRegistrar struct{}
 
-func (r *GenericRegistrar) Name() string       { return "generic" }
+func (r *GenericRegistrar) Name() string        { return "generic" }
 func (r *GenericRegistrar) Description() string { return "Generic MCP stdio config (any client)" }
 
 func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {

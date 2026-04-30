@@ -8,7 +8,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/mcp"
 )
 
 // mockProfileResolver is a test-only ProfileResolver that avoids importing the profile package.

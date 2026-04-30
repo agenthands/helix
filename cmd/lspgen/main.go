@@ -35,26 +35,26 @@ type MetaData struct {
 
 // Request is an LSP request definition.
 type Request struct {
-	Method            string  `json:"method"`
-	Params            *Type   `json:"params,omitempty"`
-	Result            *Type   `json:"result,omitempty"`
-	PartialResult     *Type   `json:"partialResult,omitempty"`
-	RegistrationOptions *Type `json:"registrationOptions,omitempty"`
-	Documentation     string  `json:"documentation,omitempty"`
-	Since             string  `json:"since,omitempty"`
-	Proposed          bool    `json:"proposed,omitempty"`
-	MessageDirection  string  `json:"messageDirection,omitempty"`
+	Method              string `json:"method"`
+	Params              *Type  `json:"params,omitempty"`
+	Result              *Type  `json:"result,omitempty"`
+	PartialResult       *Type  `json:"partialResult,omitempty"`
+	RegistrationOptions *Type  `json:"registrationOptions,omitempty"`
+	Documentation       string `json:"documentation,omitempty"`
+	Since               string `json:"since,omitempty"`
+	Proposed            bool   `json:"proposed,omitempty"`
+	MessageDirection    string `json:"messageDirection,omitempty"`
 }
 
 // Notification is an LSP notification definition.
 type Notification struct {
-	Method            string  `json:"method"`
-	Params            *Type   `json:"params,omitempty"`
-	RegistrationOptions *Type `json:"registrationOptions,omitempty"`
-	Documentation     string  `json:"documentation,omitempty"`
-	Since             string  `json:"since,omitempty"`
-	Proposed          bool    `json:"proposed,omitempty"`
-	MessageDirection  string  `json:"messageDirection,omitempty"`
+	Method              string `json:"method"`
+	Params              *Type  `json:"params,omitempty"`
+	RegistrationOptions *Type  `json:"registrationOptions,omitempty"`
+	Documentation       string `json:"documentation,omitempty"`
+	Since               string `json:"since,omitempty"`
+	Proposed            bool   `json:"proposed,omitempty"`
+	MessageDirection    string `json:"messageDirection,omitempty"`
 }
 
 // Structure is an LSP structure (struct) definition.
@@ -80,13 +80,13 @@ type Property struct {
 
 // Enumeration is an LSP enum type.
 type Enumeration struct {
-	Name               string             `json:"name"`
-	Type               Type               `json:"type"`
-	Values             []EnumerationEntry `json:"values"`
-	SupportsCustomValues bool             `json:"supportsCustomValues,omitempty"`
-	Documentation      string             `json:"documentation,omitempty"`
-	Since              string             `json:"since,omitempty"`
-	Proposed           bool               `json:"proposed,omitempty"`
+	Name                 string             `json:"name"`
+	Type                 Type               `json:"type"`
+	Values               []EnumerationEntry `json:"values"`
+	SupportsCustomValues bool               `json:"supportsCustomValues,omitempty"`
+	Documentation        string             `json:"documentation,omitempty"`
+	Since                string             `json:"since,omitempty"`
+	Proposed             bool               `json:"proposed,omitempty"`
 }
 
 // EnumerationEntry is a single value in an enumeration.
@@ -109,11 +109,11 @@ type TypeAlias struct {
 
 // Type represents a type reference in the metamodel.
 type Type struct {
-	Kind    string `json:"kind"`
-	Name    string `json:"name,omitempty"`
-	Items   []Type `json:"items,omitempty"`
-	Element *Type  `json:"element,omitempty"`
-	Key     *Type  `json:"key,omitempty"`
+	Kind    string      `json:"kind"`
+	Name    string      `json:"name,omitempty"`
+	Items   []Type      `json:"items,omitempty"`
+	Element *Type       `json:"element,omitempty"`
+	Key     *Type       `json:"key,omitempty"`
 	Value   interface{} `json:"value,omitempty"`
 }
 
@@ -141,10 +141,10 @@ func main() {
 		len(model.Requests), len(model.Notifications), len(model.TypeAliases))
 
 	g := &Generator{
-		model:      &model,
-		outDir:     outDir,
-		orTypes:    make(map[string]*OrType),
-		nameCache:  make(map[string]bool),
+		model:     &model,
+		outDir:    outDir,
+		orTypes:   make(map[string]*OrType),
+		nameCache: make(map[string]bool),
 	}
 
 	g.collectOrTypes()

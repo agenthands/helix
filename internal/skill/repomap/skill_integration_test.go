@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/repomap"
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // newIntegrationSkill creates a RepoMapSkill with a real TagExtractor and

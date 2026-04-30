@@ -9,10 +9,10 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/degrade"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/obs"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/degrade"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // slowHandler returns a MethodHandler that sleeps for the given duration.

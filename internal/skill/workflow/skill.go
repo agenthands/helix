@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // WorkflowSkill implements both skill.ToolProvider and skill.WorkflowProvider,
@@ -132,7 +132,7 @@ func (s *WorkflowSkill) execOnboard() (string, error) {
 
 func (s *WorkflowSkill) execHandoff(args map[string]interface{}) (string, error) {
 	data := HandoffData{
-		SessionID:  fmt.Sprintf("session-%s", time.Now().Format("2006-01-02T15-04-05")),
+		SessionID:   fmt.Sprintf("session-%s", time.Now().Format("2006-01-02T15-04-05")),
 		OpenContext: "",
 	}
 
@@ -184,26 +184,26 @@ func (s *WorkflowSkill) gatherProjectInfo() OnboardingData {
 	}
 
 	langExtensions := map[string]string{
-		".go":   "Go",
-		".py":   "Python",
-		".js":   "JavaScript",
-		".ts":   "TypeScript",
-		".java": "Java",
-		".rs":   "Rust",
-		".rb":   "Ruby",
-		".php":  "PHP",
-		".c":    "C",
-		".cpp":  "C++",
-		".cs":   "C#",
-		".kt":   "Kotlin",
+		".go":    "Go",
+		".py":    "Python",
+		".js":    "JavaScript",
+		".ts":    "TypeScript",
+		".java":  "Java",
+		".rs":    "Rust",
+		".rb":    "Ruby",
+		".php":   "PHP",
+		".c":     "C",
+		".cpp":   "C++",
+		".cs":    "C#",
+		".kt":    "Kotlin",
 		".swift": "Swift",
-		".ex":   "Elixir",
-		".hs":   "Haskell",
+		".ex":    "Elixir",
+		".hs":    "Haskell",
 		".scala": "Scala",
-		".vue":  "Vue",
-		".pl":   "Perl",
-		".sh":   "Shell",
-		".tf":   "Terraform",
+		".vue":   "Vue",
+		".pl":    "Perl",
+		".sh":    "Shell",
+		".tf":    "Terraform",
 	}
 
 	detectedLangs := make(map[string]bool)

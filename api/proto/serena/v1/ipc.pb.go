@@ -381,7 +381,7 @@ const file_api_proto_serena_v1_ipc_proto_rawDesc = "" +
 	"\tStreamMCP\x12\x15.serena.v1.MCPMessage\x1a\x15.serena.v1.MCPMessage(\x010\x01\x12@\n" +
 	"\tGetStatus\x12\x18.serena.v1.StatusRequest\x1a\x19.serena.v1.StatusResponse\x12L\n" +
 	"\x11ActivateWorkspace\x12\x1a.serena.v1.ActivateRequest\x1a\x1b.serena.v1.ActivateResponse\x12R\n" +
-	"\x13DeactivateWorkspace\x12\x1c.serena.v1.DeactivateRequest\x1a\x1d.serena.v1.DeactivateResponseB8Z6github.com/postfix/serena/api/proto/serena/v1;serenav1b\x06proto3"
+	"\x13DeactivateWorkspace\x12\x1c.serena.v1.DeactivateRequest\x1a\x1d.serena.v1.DeactivateResponseB:Z8github.com/agenthands/helix/api/proto/serena/v1;serenav1b\x06proto3"
 
 var (
 	file_api_proto_serena_v1_ipc_proto_rawDescOnce sync.Once

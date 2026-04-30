@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/langregistry"
-	"github.com/postfix/serena/internal/workspace"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/langregistry"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // KernelConfig holds configuration for the kernel.
@@ -24,8 +24,8 @@ type KernelConfig struct {
 type Kernel struct {
 	workspaces map[string]*WorkspaceRuntime // keyed by workspace key hash
 	pool       *lspool.Pool
-	registry   *workspace.Registry           // Phase 1 workspace registry
-	langReg    *langregistry.Registry         // language registry for extension-based detection
+	registry   *workspace.Registry    // Phase 1 workspace registry
+	langReg    *langregistry.Registry // language registry for extension-based detection
 	config     KernelConfig
 	logger     *slog.Logger
 	tracer     trace.Tracer // Phase 12: plumbed via constructor, noop-safe

@@ -3,8 +3,8 @@ package daemon
 import (
 	"testing"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/obs"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // Compile-time proof that *obs.Metrics satisfies lspool.MetricsSink.

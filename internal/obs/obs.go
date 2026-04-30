@@ -79,7 +79,7 @@ func (p *Provider) TracerProvider() trace.TracerProvider { return p.tracerProvid
 // Tracer returns a trace.Tracer scoped to the Serena module. Never returns
 // nil (D-04): even the noop path yields a functional (no-op) tracer.
 func (p *Provider) Tracer() trace.Tracer {
-	return p.tracerProvider.Tracer("github.com/postfix/serena", trace.WithInstrumentationVersion("v1.2"))
+	return p.tracerProvider.Tracer("github.com/agenthands/helix", trace.WithInstrumentationVersion("v1.2"))
 }
 
 // ShutdownTracing flushes and shuts down the TracerProvider if it implements

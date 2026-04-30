@@ -6,7 +6,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 )
 
 // GRPCStream abstracts the gRPC bidirectional stream for testability.

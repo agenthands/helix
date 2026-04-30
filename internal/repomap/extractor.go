@@ -11,8 +11,8 @@ import (
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/treesitter"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 //go:embed queries/go_tags.scm

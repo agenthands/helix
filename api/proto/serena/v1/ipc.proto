@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package serena.v1;
 
-option go_package = "github.com/postfix/serena/api/proto/serena/v1;serenav1";
+option go_package = "github.com/agenthands/helix/api/proto/serena/v1;serenav1";
 
 // ForwarderService handles bidirectional MCP message streaming
 // between the stdio forwarder and the daemon process.

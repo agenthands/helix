@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // ReplaceInFile replaces all occurrences of a pattern in a file.

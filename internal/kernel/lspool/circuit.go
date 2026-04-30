@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // CircuitBreaker implements decorrelated jitter backoff with restart budget
@@ -18,10 +18,10 @@ type CircuitBreaker struct {
 	lastFailure   time.Time
 	backoff       time.Duration
 	maxBackoff    time.Duration
-	restartBudget int          // max consecutive failures before permanent open (D-05)
-	state         float64      // CircuitClosed / CircuitHalfOpen / CircuitOpen (D-14)
+	restartBudget int     // max consecutive failures before permanent open (D-05)
+	state         float64 // CircuitClosed / CircuitHalfOpen / CircuitOpen (D-14)
 	sink          MetricsSink
-	probing       atomic.Bool  // single-probe half-open guard (D-06)
+	probing       atomic.Bool // single-probe half-open guard (D-06)
 	mu            sync.Mutex
 }
 

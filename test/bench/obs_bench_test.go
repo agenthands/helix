@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/postfix/serena/internal/obs"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // newDiscardJSONHandler returns the same base handler shape the daemon

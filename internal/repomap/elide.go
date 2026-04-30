@@ -10,7 +10,7 @@ import (
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // ElisionRenderer produces compact, token-efficient views of source files by
@@ -32,13 +32,13 @@ var bodyFieldNames = []string{"body", "block"}
 
 // structLikeTypes are AST node types where we show fields but elide method bodies (D-14).
 var structLikeTypes = map[string]bool{
-	"type_declaration":   true, // Go type ... struct {}
-	"struct_item":        true, // Rust
-	"class_declaration":  true, // TypeScript
-	"class_definition":   true, // Python
-	"interface_type":     true, // Go interface
-	"enum_item":          true, // Rust enum
-	"trait_item":         true, // Rust trait
+	"type_declaration":      true, // Go type ... struct {}
+	"struct_item":           true, // Rust
+	"class_declaration":     true, // TypeScript
+	"class_definition":      true, // Python
+	"interface_type":        true, // Go interface
+	"enum_item":             true, // Rust enum
+	"trait_item":            true, // Rust trait
 	"interface_declaration": true, // TypeScript
 }
 

@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/obs"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // adminDaemonWithMetrics builds a Daemon with the admin listener configured

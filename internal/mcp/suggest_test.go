@@ -11,7 +11,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/mcp"
 )
 
 func newCallToolReqWithArgs(name string, argsJSON string) *mcpsdk.CallToolRequest {

@@ -3,22 +3,22 @@ package main
 import "fmt"
 
 func main() {
-    fmt.Println("Hello, Go!")
-    Helper()
+	fmt.Println("Hello, Go!")
+	Helper()
 }
 
 func Helper() {
-    fmt.Println("Helper function called")
+	fmt.Println("Helper function called")
 }
 
 type DemoStruct struct {
-    Field int
+	Field int
 }
 
 func (d *DemoStruct) Value() int {
-    return d.Field
+	return d.Field
 }
 
 func UsingHelper() {
-    Helper()
+	Helper()
 }

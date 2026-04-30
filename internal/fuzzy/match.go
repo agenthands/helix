@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // Match runs the 4-strategy cascade over source and search, returning a

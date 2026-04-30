@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/kernel/jsonrpc"
+	"github.com/agenthands/helix/internal/kernel/jsonrpc"
 )
 
 // TestBuildDispatcher_KnownMethod asserts that a registered method is invoked

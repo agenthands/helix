@@ -2,7 +2,7 @@
 //
 // Import convention: use alias "serr" to avoid shadowing stdlib errors.
 //
-//	import serr "github.com/postfix/serena/internal/errors"
+//	import serr "github.com/agenthands/helix/internal/errors"
 package errors
 
 // Kind classifies errors for programmatic matching by agents.

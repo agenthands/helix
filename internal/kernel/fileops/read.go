@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // maxFileSize is the maximum file size for ReadFile (10 MB).

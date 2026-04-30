@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/postfix/serena/internal/mcp"
+	"github.com/agenthands/helix/internal/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +21,7 @@ type mockSkill struct {
 }
 
 func (m *mockSkill) Name() string        { return m.name }
-func (m *mockSkill) Description() string  { return m.desc }
+func (m *mockSkill) Description() string { return m.desc }
 func (m *mockSkill) Init(deps SkillDeps) error {
 	if m.initErr != nil {
 		return m.initErr

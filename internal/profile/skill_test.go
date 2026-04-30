@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -3,7 +3,7 @@ package lspool
 import (
 	"sort"
 
-	gen "github.com/postfix/serena/protocol/gen"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // WorkerHealth describes the health state of a single LS worker.
@@ -12,8 +12,8 @@ type WorkerHealth struct {
 	Language     string   `json:"language"`
 	WorkDir      string   `json:"work_dir"`
 	Command      string   `json:"command"`
-	State        string   `json:"state"`                  // "healthy", "healthy (indexing)", "degraded", "failed"
-	Capabilities []string `json:"capabilities"`            // e.g. ["hover", "definition", "references"]
+	State        string   `json:"state"`        // "healthy", "healthy (indexing)", "degraded", "failed"
+	Capabilities []string `json:"capabilities"` // e.g. ["hover", "definition", "references"]
 	Indexing     bool     `json:"indexing"`
 	IndexPct     int      `json:"index_pct,omitempty"`
 }

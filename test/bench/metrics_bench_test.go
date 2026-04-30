@@ -25,8 +25,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	serenamcp "github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/obs"
+	serenamcp "github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // noopInnerHandler is the innermost MethodHandler — returns a zero

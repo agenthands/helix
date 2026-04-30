@@ -21,7 +21,7 @@ type HandoffData struct {
 	ToolsUsed       []string
 	FilesModified   []string
 	MemoriesCreated []string
-	OpenContext      string
+	OpenContext     string
 }
 
 var onboardingTemplate = template.Must(template.New("onboarding").Parse(`# Project Onboarding

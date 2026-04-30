@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
+	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // ValidatePath resolves symlinks and ensures the path is within the workspace root.

@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/fuzzy"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/fuzzy"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // FuzzyMatchInfo carries fuzzy match metadata back to the tool handler

@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/postfix/serena/internal/kernel/jsonrpc"
+	"github.com/agenthands/helix/internal/kernel/jsonrpc"
 )
 
 // stderrRingSize is the number of last stderr lines captured for crash reports.
@@ -24,12 +24,12 @@ const stderrRingSize = 10
 // Per research Pattern 1 (Pitfall 1): never do pipe I/O from the Wait/reaper goroutine.
 // Separate goroutines for reading, writing, and waiting.
 type ProcessHandle struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	stderr io.ReadCloser
-	conn   *jsonrpc.Conn // JSON-RPC over stdin/stdout
-	done   chan struct{}  // closed when process exits
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  io.ReadCloser
+	stderr  io.ReadCloser
+	conn    *jsonrpc.Conn // JSON-RPC over stdin/stdout
+	done    chan struct{} // closed when process exits
 	exitErr error
 	mu      sync.Mutex
 	logger  *slog.Logger

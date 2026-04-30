@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postfix/serena/internal/langregistry"
-	"github.com/postfix/serena/internal/workspace"
+	"github.com/agenthands/helix/internal/langregistry"
+	"github.com/agenthands/helix/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

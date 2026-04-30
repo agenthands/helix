@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/internal/kernel/symbols"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/symbols"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // EditType enumerates the kinds of edits the planner can produce.

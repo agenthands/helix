@@ -8,10 +8,10 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/fuzzy"
-	"github.com/postfix/serena/internal/kernel"
-	"github.com/postfix/serena/internal/mcp"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/fuzzy"
+	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/mcp"
 )
 
 // ReadFileArgs is the input schema for the read_file tool.
@@ -436,4 +436,3 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "fuzzy_edit", Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)", BriefDescription: "Apply a fuzzy text edit using search/replace with context matching", HelpText: fuzzyEditHelp})
 }
-

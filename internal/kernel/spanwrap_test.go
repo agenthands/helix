@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/postfix/serena/internal/kernel"
+	"github.com/agenthands/helix/internal/kernel"
 )
 
 // newTestTracer returns a tracer backed by an in-memory exporter with

@@ -1,8 +1,8 @@
 package symbols
 
 import (
-	"github.com/postfix/serena/internal/mcp"
-	"github.com/postfix/serena/internal/skill"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/skill"
 )
 
 // SymbolRetrievalSkill is a ToolProvider adapter that exposes the 9 symbol

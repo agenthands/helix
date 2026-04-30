@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
-	"github.com/postfix/serena/test/integration/jdtlscache"
+	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/test/integration/jdtlscache"
 )
 
 // waitJavaReady blocks until jdtls has emitted both ServiceReady and

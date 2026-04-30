@@ -7,19 +7,36 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/daemon"
-	"github.com/postfix/serena/internal/forwarder"
-	"github.com/postfix/serena/internal/obs"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/daemon"
+	"github.com/agenthands/helix/internal/forwarder"
+	"github.com/agenthands/helix/internal/obs"
 )
+
+// currentVersion holds the binary version string. Defaults to "dev" and is
+// overwritten by SetVersion(), which the cmd/helix/main.go entrypoint calls
+// with the ldflag-injected `var version` from the goreleaser build (see
+// .goreleaser.yaml `-X main.version={{.Version}}`).
+var currentVersion = "dev"
+
+// SetVersion records the binary version string so `helix --version` reports
+// the goreleaser-injected value. Called once from cmd/helix/main.go before
+// Execute(). An empty argument is ignored so callers can pass a possibly-empty
+// ldflag value without clobbering the "dev" default.
+func SetVersion(v string) {
+	if v == "" {
+		return
+	}
+	currentVersion = v
+}
 
 // NewRootCommand creates the root cobra command with all flags.
 // Per D-02: flat CLI with flags, no subcommands.
 func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "serena",
-		Short: "Serena code intelligence MCP server",
-		Long:  "Serena 2.0 - LSP-backed MCP runtime for semantic code operations",
+		Use:   "helix",
+		Short: "Helix code intelligence MCP server",
+		Long:  "Helix - LSP-backed MCP runtime for semantic code operations",
 		RunE:  runRoot,
 		// Per Pitfall 6: prevent help on errors, allow no-args to enter stdio mode
 		SilenceUsage:  true,
@@ -59,7 +76,7 @@ func NewRootCommand() *cobra.Command {
 func runRoot(cmd *cobra.Command, args []string) error {
 	showVersion, _ := cmd.Flags().GetBool("version")
 	if showVersion {
-		fmt.Println("serena version 2.0.0-dev")
+		fmt.Printf("helix version %s\n", currentVersion)
 		return nil
 	}
 
@@ -107,7 +124,7 @@ func runForwarder(cmd *cobra.Command) error {
 	return forwarder.RunForwarder(cmd.Context(), socketPath, logger)
 }
 
-// runDaemon starts the Serena daemon with config loading and signal handling.
+// runDaemon starts the Helix daemon with config loading and signal handling.
 func runDaemon(cmd *cobra.Command) error {
 	jsonLog, _ := cmd.Flags().GetBool("json")
 	socketPath, _ := cmd.Flags().GetString("socket")

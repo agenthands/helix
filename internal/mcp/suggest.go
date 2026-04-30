@@ -19,7 +19,7 @@ type ToolParamInfo struct {
 // ToolSchemaMap maps tool names to their parameter information,
 // used by SuggestionMiddleware to provide "did you mean" suggestions.
 type ToolSchemaMap struct {
-	tools      map[string]*ToolParamInfo
+	tools       map[string]*ToolParamInfo
 	maxDistance int // Levenshtein threshold (default 2 per D-01)
 }
 
@@ -28,7 +28,7 @@ type ToolSchemaMap struct {
 // Tools whose schema fails to parse are skipped gracefully.
 func BuildToolSchemaMap(tools []*mcpsdk.Tool) *ToolSchemaMap {
 	m := &ToolSchemaMap{
-		tools:      make(map[string]*ToolParamInfo),
+		tools:       make(map[string]*ToolParamInfo),
 		maxDistance: 2,
 	}
 	for _, t := range tools {

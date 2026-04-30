@@ -23,8 +23,8 @@ func TestLoadSessionStats_DifferentSession(t *testing.T) {
 
 	// Save stats with session "A".
 	statsA := sessionStats{
-		SessionID:     "session-A",
-		GrepReadCount: 10,
+		SessionID:       "session-A",
+		GrepReadCount:   10,
 		SerenaToolCount: 5,
 	}
 	require.NoError(t, saveSessionStats(path, statsA))

@@ -8,7 +8,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 // StatusPrinter handles colored terminal output for the status command.

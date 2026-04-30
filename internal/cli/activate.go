@@ -11,16 +11,16 @@ import (
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
-	"github.com/postfix/serena/internal/config"
-	"github.com/postfix/serena/internal/forwarder"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
+	"github.com/agenthands/helix/internal/config"
+	"github.com/agenthands/helix/internal/forwarder"
 )
 
 func newActivateCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "activate",
-		Short: "Activate workspace for current project",
-		Long:  "Ensures the Serena daemon is running and activates the workspace for the given directory. Used by Claude Code SessionStart hook.",
+		Use:           "activate",
+		Short:         "Activate workspace for current project",
+		Long:          "Ensures the Serena daemon is running and activates the workspace for the given directory. Used by Claude Code SessionStart hook.",
 		RunE:          runActivate,
 		SilenceUsage:  true,
 		SilenceErrors: true,

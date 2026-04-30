@@ -10,9 +10,9 @@ import (
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/treesitter"
-	gen "github.com/postfix/serena/protocol/gen"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/treesitter"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // langConfig holds edit-specific tree-sitter metadata for a language.

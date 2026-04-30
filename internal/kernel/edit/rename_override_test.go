@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/kernel/lspool"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -3,8 +3,8 @@ package health_test
 import (
 	"testing"
 
-	"github.com/postfix/serena/internal/kernel/health"
-	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/health"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -7,8 +7,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/workspace"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // ActivateCallback is called when a project is activated via the activate_project tool.

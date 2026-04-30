@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/postfix/serena/test/harness"
+	"github.com/agenthands/helix/test/harness"
 )
 
 // AggregateReport summarizes judge scores across all transcripts (D-09).
@@ -21,8 +21,8 @@ type AggregateReport struct {
 	SoftFailCount    int                `json:"soft_fail_count"`
 	FailCount        int                `json:"fail_count"`
 	DimensionAvgs    map[string]float64 `json:"dimension_averages"`
-	WorstPerformers  []string           `json:"worst_performers"`  // scenario IDs with verdict=fail
-	WorstDimensions  []string           `json:"worst_dimensions"`  // dimensions with average below 0.7
+	WorstPerformers  []string           `json:"worst_performers"` // scenario IDs with verdict=fail
+	WorstDimensions  []string           `json:"worst_dimensions"` // dimensions with average below 0.7
 	SelfJudged       bool               `json:"self_judged"`
 }
 
@@ -43,7 +43,7 @@ func Aggregate(scores []*Score) *AggregateReport {
 		"description_use":       0,
 		"output_interpretation": 0,
 		"uncertainty_handling":  0,
-		"polyglot_reasoning":   0,
+		"polyglot_reasoning":    0,
 	}
 
 	for _, s := range scores {

@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	serr "github.com/postfix/serena/internal/errors"
-	"github.com/postfix/serena/internal/obs"
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // renameStrategySink is the package-level recorder wired by InstallMiddleware.

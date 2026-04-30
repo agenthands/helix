@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
-	serenav1 "github.com/postfix/serena/api/proto/serena/v1"
+	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 )
 
 func TestTryConnect_NoSocket(t *testing.T) {

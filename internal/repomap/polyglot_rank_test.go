@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // TestRepomap_PolyglotRanking reproduces BUG-01: on a synthetic polyglot

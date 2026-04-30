@@ -5,8 +5,8 @@ package edit
 import (
 	"fmt"
 
-	"github.com/postfix/serena/internal/treesitter"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/treesitter"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // BodyExtractor under !cgo is a stub; the daemon refuses to start before any

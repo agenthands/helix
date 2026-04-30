@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/postfix/serena/internal/kernel/diag"
-	gen "github.com/postfix/serena/protocol/gen"
+	"github.com/agenthands/helix/internal/kernel/diag"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // VerifyResult holds the outcome of post-edit diagnostic verification.

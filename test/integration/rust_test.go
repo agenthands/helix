@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/postfix/serena/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 )
 
 // TestRustAnalyzer_NotificationDispatchEndToEnd is the regression proof for

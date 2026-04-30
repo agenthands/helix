@@ -3,7 +3,7 @@
 package repomap
 
 import (
-	"github.com/postfix/serena/internal/treesitter"
+	"github.com/agenthands/helix/internal/treesitter"
 )
 
 // ElisionRenderer under !cgo is a stub; the daemon refuses to start before any

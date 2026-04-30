@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/postfix/serena/internal/workspace"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 func TestNewToolRegistry(t *testing.T) {

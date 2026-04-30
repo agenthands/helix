@@ -28,8 +28,8 @@ docs: ## Regenerate tool and language tables in README.md
 
 clean-jdtls-cache: ## Wipe warm jdtls workspaces under the platform user cache dir
 	@case "$$(uname -s)" in \
-	  Darwin) DIR="$$HOME/Library/Caches/serena-test/jdtls" ;; \
-	  *)      DIR="$${XDG_CACHE_HOME:-$$HOME/.cache}/serena-test/jdtls" ;; \
+	  Darwin) DIR="$$HOME/Library/Caches/helix-test/jdtls" ;; \
+	  *)      DIR="$${XDG_CACHE_HOME:-$$HOME/.cache}/helix-test/jdtls" ;; \
 	esac; \
 	rm -rf "$$DIR"; \
 	echo "cleared jdtls warm cache at $$DIR"

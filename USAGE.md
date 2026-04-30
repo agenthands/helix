@@ -855,7 +855,7 @@ old ones coexist until manually cleaned.
 
 **Test-only environment variable:**
 
-`SERENA_TEST_JDTLS_DATA_DIR` — when set to a non-empty absolute path, Helix's
+`HELIX_TEST_JDTLS_DATA_DIR` — when set to a non-empty absolute path, Helix's
 jdtls adapter uses that path as the `-data` argument instead of the default
 `workDir/.jdtls-data`. This is the seam the Java integration tests use to inject
 the warm cache directory. **Do not set this variable in production.**

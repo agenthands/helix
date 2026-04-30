@@ -85,7 +85,7 @@ jobs:
       - name: Cache warm jdtls workspace
         uses: actions/cache@v3
         with:
-          path: ~/.cache/serena-test/jdtls
+          path: ~/.cache/helix-test/jdtls
           key: jdtls-warm-${{ runner.os }}-${{ hashFiles('testdata/fixtures/java/**') }}-jdtls-${{ env.JDTLS_VERSION }}
           restore-keys: |
             jdtls-warm-${{ runner.os }}-

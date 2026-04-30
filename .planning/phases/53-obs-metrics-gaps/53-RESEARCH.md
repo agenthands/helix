@@ -678,9 +678,14 @@ detail flag. Option (b) is the cleanest and is the planner's discretion.
 | A4 | The CONTEXT D-12 list of 7 edit tools is incorrect: `delete_lines` does not exist in the codebase (no occurrence in `internal/kernel/`); `safe_delete_symbol` exists in `internal/kernel/edit/tools.go:407` and is presumably the intended target. | Edit-Tool Outcome Map; Correction C-1 | If the planner writes a task to "instrument `delete_lines`" the task will be unimplementable. Reconciliation MUST happen in the plan. |
 | A5 | The CONTEXT D-11 strategy enum `{exact, whitespace_normalized, indentation_flexible, ellipsis, none}` mismatches the `fuzzy.Strategy` source of truth `{exact, whitespace_normalized, indentation_flexible, failed}`. | Common Pitfalls #6; Correction C-2 | Plans that emit `strategy="ellipsis"` will cite a value that does not appear in `fuzzy.Strategy`. Plans that ALWAYS map `StrategyFailed` to `outcome=no_match` and never emit it as a `strategy` value need explicit handling. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolution stamped 2026-04-30 during plan verification.
+> All four questions are CLOSED — plans 01–06 are authorized to depend on these resolutions.
 
 ### Q-1 — How does `transport="http"` get wired given no SDK hook?
+
+**RESOLVED: Option 2** — wrapping `http.Handler` watches `Mcp-Session-Id` first-seen for `phase=started` + 5xx+first-seen for `phase=error`; best-effort `phase=ended` via `DELETE /mcp` + 404-on-stale. Plan 53-05 implements this in a new `internal/mcp/http_session_middleware.go`. USAGE.md (Plan 53-06) documents the best-effort `transport="http",phase="ended"` caveat.
 
 **What we know:** Three candidate seams exist.
 
@@ -695,6 +700,9 @@ detail flag. Option (b) is the cleanest and is the planner's discretion.
 **Planner action:** Pick option 1 / 2 / 3 in plan-checking. Each option produces a different task list.
 
 ### Q-2 — How does `cache.go:GetOrExtract` know which extractor was used?
+
+**RESOLVED: Option 2** — `cache.go` emits `helix_repomap_lookups_total{language, result}` only; the dispatcher in `skill.go` emits `helix_repomap_extract_duration_seconds{language, extractor}` from its own timing wrapper because it knows which extractor it picked. Plan 53-03 wires the `RepoMapMetricsSink` into both `cache.go` (lookup) and `skill.go` (dispatch + observe).
+
 
 **What we know:** `extractFn` is opaque to the cache (it's an injected closure
 from `skill.go:366-399` or `render.go:127-129`). The cache does not know
@@ -724,6 +732,9 @@ NoopSink default.
 
 ### Q-3 — Does `outcome=invalid_args` belong in the edit-outcome enum?
 
+**RESOLVED: Map to `outcome=internal`** — preserves the locked D-10 6-value enum; classified as a known under-classification scheduled for v1.3 (per existing TODO at `middleware.go:102`). Plan 53-04 Task 4.2 buckets missing-field / arg-shape errors as `internal` and adds a code comment pointing at the v1.3 deferred work.
+
+
 **What we know:** D-10 locks the outcome enum to 6 values:
 `{success, no_match, ambiguous_match, validation_failed, ls_error, internal}`.
 There is no `invalid_args`. The existing tool-call counter has a TODO comment
@@ -739,6 +750,9 @@ under-classification scheduled for v1.3. The cardinality table stays at 6
 outcomes × 7 tools × 5 strategies (or 4, post-correction) = 210 max.
 
 ### Q-4 — Should `safe_delete_symbol` be in scope?
+
+**RESOLVED: Yes — include `safe_delete_symbol`, exclude `delete_lines`** — `safe_delete_symbol` is a real edit tool at `internal/kernel/edit/tools.go:407`; CONTEXT D-12's `delete_lines` does not exist in the codebase. Cardinality stays at 7 tools. Plan 53-04 instruments `safe_delete_symbol` and updates USAGE.md (Plan 53-06) accordingly. CONTEXT.md D-12 is amended below to reflect the corrected list.
+
 
 **What we know:** CONTEXT D-12 omits `safe_delete_symbol` and includes the
 non-existent `delete_lines`. The actual edit-tool surface includes

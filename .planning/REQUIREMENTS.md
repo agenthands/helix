@@ -22,9 +22,9 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 ### Packaging & Distribution
 
 - [ ] **PKG-01**: GitHub Releases publish multi-arch binaries (darwin/linux/windows × amd64/arm64) with SHA-256 checksums and cryptographic signatures (cosign or minisign) via a reproducible goreleaser pipeline
-- [ ] **PKG-02** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-03): Users can install Serena on macOS and Linux via a Homebrew tap (`brew install <tap>/serena`), with automated formula-update on release
-- [ ] **PKG-03** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-04): Users can install Serena on Windows via a Scoop bucket (`scoop install serena`) with automated manifest update on release
-- [ ] **PKG-04** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-05): Users can install Serena on at least one major Linux distribution via a native package path (apt/deb, rpm, or AUR) — format chosen during planning, documented in INSTALL.md
+- [x] **PKG-02** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-03): Users can install Serena on macOS and Linux via a Homebrew tap (`brew install <tap>/serena`), with automated formula-update on release
+- [x] **PKG-03** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-04): Users can install Serena on Windows via a Scoop bucket (`scoop install serena`) with automated manifest update on release
+- [x] **PKG-04** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-05): Users can install Serena on at least one major Linux distribution via a native package path (apt/deb, rpm, or AUR) — format chosen during planning, documented in INSTALL.md
 - [ ] **PKG-05**: Binary + product renamed `serena` → `helix` at v1.9; module path renamed to `github.com/agenthands/helix`; env vars `SERENA_*` → `HELIX_*`; config dir `~/.serena/` → `~/.helix/`; MCP server registration name flipped — all per Phase 52 CONTEXT.md D-01..D-05 hard-cut policy
 - [ ] **PKG-06**: In-binary self-upgrade — `helix update` (read-only check) and `helix upgrade` (install with minisign signature verification, atomic swap, hard-refuse downgrade, daemon-aware) per Phase 52 CONTEXT.md D-06..D-12
 - [ ] **PKG-07**: `EMBED-AUDIT.md` manifest classifying every runtime asset; `minisign.pub` embedded via `//go:embed` with build-time-synced copy per Phase 52 CONTEXT.md D-13..D-15

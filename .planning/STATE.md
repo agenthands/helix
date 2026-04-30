@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
-status: executing
-last_updated: "2026-04-30T08:47:50.614Z"
+status: verifying
+last_updated: "2026-04-30T09:09:47.504Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 12
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 33
-  completed_plans: 32
-  percent: 97
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 Phase: 52 (packaging-distribution-channels) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-30
 
 ## Performance Metrics
@@ -56,6 +56,7 @@ Last activity: 2026-04-30
 | Phase 52 P03 | 11min | 2 tasks | 78 files |
 | Phase 52 P04 | 15min | 4 tasks | 27 files |
 | Phase 52 P05 | 6m | 1 tasks | 1 files |
+| Phase 52 P06 | 18m | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 52-05: EMBED-AUDIT.md ships with zero gaps + zero deferred — 24 //go:embed directives + 3 implicit/structural embeds (langregistry defaults, treesitter bindings, generated LSP types) + 14 external-by-design groups (52 LSes per D-15, ~/.helix/, project marker per D-02, memories, MCP client configs per D-05, hooks settings, /proc, os.Executable(), upgrade-time downloads, override YAMLs)
 - [Phase ?]: 52-05: internal/kernel/edit/queries/*.scm (22 files) recorded as Out-of-Scope dead-reference (Phase 31 documentation; never read by any production Go file) — cleanup deferred to Phase 53+ per executor scope-boundary rule
 - [Phase ?]: 52-05: cmd/docgen + cmd/lspgen excluded from audit surface — they are build-time dev tools, not part of the shipped helix binary
+- [Phase ?]: Plan 52-06: PKG-02/03/04 deferred to PKG-DEFER-03/04/05; PKG-05/06/07 added in-scope; ROADMAP Phase 52 rewritten with 8 success criteria and Rescope rationale; CHANGELOG v1.9 ships Breaking Changes + self-upgrade + embed-audit reference + Known Issues
+- [Phase ?]: Plan 52-06: README brand-asset image references DROPPED (broken since Go-native rewrite — SVGs only ship in legacy/); replaced with TODO for post-v1.9 brand-asset rename
+- [Phase ?]: Plan 52-06: .goreleaser.yaml release.name_template 'Serena {{ .Tag }}' → 'Helix {{ .Tag }}' flipped (Plan 02 deferred this single-line goreleaser docs/marketing string to Plan 06)
+- [Phase ?]: Plan 52-06: llms-install.md rewritten end-to-end (legacy Python-Serena uv-clone → Helix install + setup + upgrade) as Rule 3 blocking auto-fix; not in original files_modified list but discovered during smoke-check
 
 ### Pending Todos
 

@@ -23,7 +23,7 @@
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
-- [ ] **Phase 52: packaging-distribution-channels** -- Binary + product rename (`serena` → `helix`), in-binary self-upgrade (`helix update` / `helix upgrade`), embed-audit manifest (rescoped 2026-04-29 from original brew/scoop/native-Linux scope; PKG-02/03/04 deferred to PKG-DEFER-03/04/05)
+- [x] **Phase 52: packaging-distribution-channels** -- Binary + product rename (`serena` → `helix`), in-binary self-upgrade (`helix update` / `helix upgrade`), embed-audit manifest (rescoped 2026-04-29 from original brew/scoop/native-Linux scope; PKG-02/03/04 deferred to PKG-DEFER-03/04/05) (completed 2026-04-30)
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
@@ -178,7 +178,7 @@ Plans:
 - [x] 52-03-PLAN.md — Wave 2 env vars + config dirs + MCP registration name flip
 - [x] 52-04-PLAN.md — Wave 3 internal/upgrade/ package + cobra subcommands
 - [x] 52-05-PLAN.md — Wave 3 EMBED-AUDIT.md manifest
-- [ ] 52-06-PLAN.md — Wave 3 docs + REQUIREMENTS/ROADMAP/CHANGELOG/INSTALL/README/USAGE/CONTRIBUTING/CLAUDE
+- [x] 52-06-PLAN.md — Wave 3 docs + REQUIREMENTS/ROADMAP/CHANGELOG/INSTALL/README/USAGE/CONTRIBUTING/CLAUDE
 
 ### Phase 53: obs-metrics-gaps
 **Goal**: Operators can observe cache hit-rate, RepoMap extraction latency, session lifecycle, and edit-tool outcomes via Prometheus metrics with bounded labels.
@@ -235,7 +235,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
-| 52 | v1.9 | 5/6 | In Progress|  |
+| 52 | v1.9 | 6/6 | Complete   | 2026-04-30 |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
@@ -246,7 +246,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -275,6 +277,14 @@ func Upgrade(ctx context.Context, opts Options) error {
 		_ = err
 	}
 	if err := swap(exec, newBin); err != nil {
+		// REVIEW.md WR-01: the install-dir permission probe at step 2
+		// runs BEFORE network I/O and can race a sysadmin chmod or a
+		// changed effective UID before we reach the swap. Re-emit the
+		// SudoHint on permission errors so the user gets the actionable
+		// re-invocation hint instead of an opaque os.Rename wrap.
+		if errors.Is(err, fs.ErrPermission) {
+			fmt.Fprintln(out, SudoHint(exec, sudoHintArgs(opts)))
+		}
 		return serr.Wrap(serr.Internal, "atomic swap", err)
 	}
 	fmt.Fprintf(out, "upgraded helix to %s\n", rel.TagName)

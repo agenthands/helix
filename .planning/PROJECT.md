@@ -109,7 +109,7 @@ _v1.9 requirements pending — scoped in `.planning/REQUIREMENTS.md` after miles
 
 All public-facing documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md) now presents Serena as its own standalone Go-native product. Full current feature set through v1.7 is documented. Cross-doc drift is closed with grep-verifiable integration checks. Phase 39 retains 3 pending human-verification tests (subjective content-quality checks) as tech debt.
 
-**In flight:** v1.9 Polish & Infra (kicked off 2026-04-24) — defining requirements.
+**In flight:** v1.9 Polish & Infra. Phase 52 (packaging-distribution-channels) complete on 2026-04-30: module/binary renamed `serena → helix` (`github.com/agenthands/helix`), env vars `SERENA_* → HELIX_*`, config dirs `.serena → .helix`, MCP server identity flipped, in-binary self-upgrade (`helix update` / `helix upgrade`) shipped with minisign verification + atomic swap + downgrade refusal + daemon-aware short-circuit, EMBED-AUDIT.md manifest with zero open gaps, CHANGELOG v1.9 with `### Breaking Changes`, INSTALL `## Upgrading` section. PKG-05/06/07 validated; PKG-02/03/04 (Homebrew/Scoop/Linux distros) deferred with bookkeeping (PKG-DEFER-03/04/05). Code review found 12 issues (4 Critical + 8 Warning) — all auto-fixed. v1.9.0 release tag is gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push.
 
 ## Current Milestone: v1.9 Polish & Infra
 
@@ -200,4 +200,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 — v1.9 Polish & Infra milestone kicked off*
+*Last updated: 2026-04-30 — Phase 52 packaging-distribution-channels complete*

@@ -1,8 +1,9 @@
 ---
 phase: 52-packaging-distribution-channels
 verified: 2026-04-29T00:00:00Z
-status: human_needed
-score: 8/8 must-haves verified (1 minor doc-bookkeeping warning, 4 human-UAT items)
+updated: 2026-04-30T00:00:00Z
+status: passed
+score: 8/8 must-haves verified — all originally-flagged human-UAT items closed via test/CI coverage on 2026-04-30 (see 52-HUMAN-UAT.md status: covered_by_tests); both doc-bookkeeping warnings resolved in commits 23a9a98b + cdb4d301
 overrides_applied: 0
 human_verification:
   - test: "Run `helix upgrade` end-to-end against a real published GitHub release tag (or staged release in a fork)"
@@ -25,8 +26,8 @@ warnings:
 # Phase 52: packaging-distribution-channels Verification Report
 
 **Phase Goal:** Users can install Helix as a single self-contained signed binary and upgrade it in place via `helix upgrade`. The binary, env vars, config dirs, and MCP server registration name all flip from `serena` to `helix` as a hard-cut breaking change at v1.9. An embed-audit manifest documents what ships inside the binary versus what the binary downloads at runtime.
-**Verified:** 2026-04-29
-**Status:** human_needed
+**Verified:** 2026-04-29 (updated 2026-04-30: all UAT items closed via tests/CI gates)
+**Status:** passed
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

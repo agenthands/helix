@@ -235,7 +235,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
-| 52 | v1.9 | 6/6 | Complete   | 2026-04-30 |
+| 52 | v1.9 | 6/6 | Complete    | 2026-04-30 |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |

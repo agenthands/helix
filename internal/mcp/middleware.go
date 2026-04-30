@@ -43,6 +43,47 @@ func RecordRenameStrategy(ctx context.Context, strategy string) {
 	(*p)(ctx, strategy)
 }
 
+// editOutcomeSink is the package-level recorder wired by InstallMiddleware.
+// It accepts the closed-enum (toolName, outcome, strategy) tuple and
+// increments the corresponding Prometheus counter on obs.Metrics. Nil until
+// the first InstallMiddleware call; RecordEditOutcome no-ops until wiring
+// happens (e.g. during test setup).
+//
+// Phase 53 D-16: helix_edit_outcome_total bounded-label counter, mirroring
+// the renameStrategySink pattern from Phase 47 D-07. Both families coexist
+// — rename_symbol increments BOTH helix_edit_outcome_total (here) and
+// helix_rename_strategy_total (above) per D-11.
+var editOutcomeSink atomic.Pointer[func(ctx context.Context, toolName, outcome, strategy string)]
+
+// setEditOutcomeSink stores the recorder callback. Called from
+// InstallMiddleware with an adapter around provider.Metrics().EditOutcomeInc.
+// The sink accepts a ctx so a future OTel tracer can attach span attributes
+// without a signature churn on every call-site.
+func setEditOutcomeSink(fn func(ctx context.Context, toolName, outcome, strategy string)) {
+	editOutcomeSink.Store(&fn)
+}
+
+// RecordEditOutcome increments the helix_edit_outcome_total counter. Called
+// from edit (internal/kernel/edit/) and fileops (internal/kernel/fileops/)
+// tool handlers at return.
+//
+// Closed enums (Phase 53 D-10 + D-11 + Q-4):
+//
+//	outcome  ∈ {success, no_match, ambiguous_match, validation_failed, ls_error, internal}
+//	strategy ∈ {exact, whitespace_normalized, indentation_flexible, none}
+//
+// Unknown values are dropped silently at the *obs.Metrics layer
+// (EditOutcomeInc), mirroring the closed-enum drop-unknown discipline of
+// RenameStrategyInc. Q-4: "failed" is NEVER a valid strategy value at this
+// layer — fuzzy.StrategyFailed paths emit outcome="no_match", strategy="none".
+func RecordEditOutcome(ctx context.Context, toolName, outcome, strategy string) {
+	p := editOutcomeSink.Load()
+	if p == nil || *p == nil {
+		return
+	}
+	(*p)(ctx, toolName, outcome, strategy)
+}
+
 // InstallMiddleware wires Helix's receiving middleware onto the MCP SDK server
 // (MCP-04 + METRIC-02).
 //
@@ -82,6 +123,12 @@ func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver P
 			setRenameStrategySink(func(_ context.Context, strategy string) {
 				m.RenameStrategyInc(strategy)
 			})
+			// Phase 53 D-16: parallel sink for edit-tool outcomes.
+			// Both edit (internal/kernel/edit/) and fileops
+			// (internal/kernel/fileops/) tool handlers route through here.
+			setEditOutcomeSink(func(_ context.Context, toolName, outcome, strategy string) {
+				m.EditOutcomeInc(toolName, outcome, strategy)
+			})
 		}
 	}
 }
@@ -116,6 +163,60 @@ var outcomeEnum = []string{
 	outcomeLSCrash,
 	outcomeTimeout,
 	outcomeInternal,
+}
+
+// editOutcomeEnum is the closed-enum vocabulary for the helix_edit_outcome_total
+// "outcome" label (Phase 53 D-10). Mirrors the outcomeEnum discipline. Six
+// values:
+//
+//   - success           — edit applied (any strategy)
+//   - no_match          — fuzzy cascade exhausted (fuzzy.StrategyFailed)
+//   - ambiguous_match   — >1 fuzzy candidate refused with diff
+//   - validation_failed — post-edit verifier flagged regression
+//   - ls_error          — upstream LS failure
+//   - internal          — catch-all for unclassified errors
+//
+// Q-3 (RESOLVED 2026-04-30): "missing required field" validations bucket as
+// "internal" — preserves the locked D-10 enum; classified as a known
+// under-classification scheduled for v1.3 typed-error work (parallel to the
+// outcomeEnum invalid_args TODO at line 102).
+const (
+	editOutcomeSuccess          = "success"
+	editOutcomeNoMatch          = "no_match"
+	editOutcomeAmbiguousMatch   = "ambiguous_match"
+	editOutcomeValidationFailed = "validation_failed"
+	editOutcomeLSError          = "ls_error"
+	editOutcomeInternal         = "internal"
+)
+
+var editOutcomeEnum = []string{
+	editOutcomeSuccess,
+	editOutcomeNoMatch,
+	editOutcomeAmbiguousMatch,
+	editOutcomeValidationFailed,
+	editOutcomeLSError,
+	editOutcomeInternal,
+}
+
+// strategyEnum is the closed-enum vocabulary for the helix_edit_outcome_total
+// "strategy" label (Phase 53 D-11 + Q-4 correction).
+//
+// Q-4: NO "failed" entry — fuzzy.StrategyFailed paths emit outcome="no_match"
+// with strategy="none" instead of propagating "failed" as a strategy label
+// value. Cardinality bound 7 tools × 6 outcomes × 4 strategies = 168 (per
+// AMENDED D-11/D-12 in 53-CONTEXT.md, dropping ellipsis from the enum).
+const (
+	strategyExact           = "exact"
+	strategyWhitespaceNorm  = "whitespace_normalized"
+	strategyIndentationFlex = "indentation_flexible"
+	strategyNone            = "none"
+)
+
+var strategyEnum = []string{
+	strategyExact,
+	strategyWhitespaceNorm,
+	strategyIndentationFlex,
+	strategyNone,
 }
 
 // classifyOutcome maps a (result, err) pair to one of the 7 closed enum values.
@@ -268,6 +369,32 @@ func OutcomeEnumForTest() []string {
 	out := make([]string, len(outcomeEnum))
 	copy(out, outcomeEnum)
 	return out
+}
+
+// EditOutcomeEnumForTest returns a copy of the closed edit-outcome enum
+// (Phase 53 D-10) for test assertions that the 6-value vocabulary is
+// preserved.
+func EditOutcomeEnumForTest() []string {
+	out := make([]string, len(editOutcomeEnum))
+	copy(out, editOutcomeEnum)
+	return out
+}
+
+// StrategyEnumForTest returns a copy of the closed strategy enum (Phase 53
+// D-11 + Q-4) for test assertions that the 4-value vocabulary is preserved.
+// Note: "failed" is intentionally absent — see strategyEnum doc.
+func StrategyEnumForTest() []string {
+	out := make([]string, len(strategyEnum))
+	copy(out, strategyEnum)
+	return out
+}
+
+// SetEditOutcomeSinkForTest exposes setEditOutcomeSink to external tests
+// (e.g. internal/kernel/edit/tools_test.go) that need to install a recording
+// recorder without going through InstallMiddleware. Production code MUST
+// continue to wire via InstallMiddleware.
+func SetEditOutcomeSinkForTest(fn func(ctx context.Context, toolName, outcome, strategy string)) {
+	setEditOutcomeSink(fn)
 }
 
 // ProfileResolver provides profile information for middleware filtering.

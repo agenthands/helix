@@ -48,6 +48,31 @@ type Metrics struct {
 	// internal/mcp.RecordRenameStrategy). The "strategy" label is carved
 	// out of AllowedLabels in metrics_labels_test.go for this family only.
 	RenameStrategy *prometheus.CounterVec
+
+	// Phase 53 D-01/D-04: lspool worker-pool cache lookup counter.
+	// Closed-enum label "result" ∈ {"hit","miss"} — hit = shared warm worker,
+	// miss = spawn (or refusal); enforced at emission via LSPoolLookup helper.
+	LSPoolLookups *prometheus.CounterVec
+
+	// Phase 53 D-01/D-03/D-04: repomap TagCache mtime-match lookup counter.
+	// Closed-enum label "result" ∈ {"hit","miss"}.
+	RepoMapLookups *prometheus.CounterVec
+
+	// Phase 53 D-05/D-06/D-07: repomap extractor latency histogram (cache-miss path only).
+	// Closed-enum label "extractor" ∈ {"treesitter","lsp","fallback"}.
+	// Custom buckets target 1ms→2.5s to give fast-path resolution for tree-sitter
+	// and tail visibility for LSP fallback.
+	RepoMapExtract *prometheus.HistogramVec
+
+	// Phase 53 D-08/D-09: session lifecycle counter.
+	// Closed-enum "phase" ∈ {"started","ended","error"}; "transport" ∈ {"stdio","http"}.
+	SessionLifecycle *prometheus.CounterVec
+
+	// Phase 53 D-10/D-11/D-12: edit-tool outcome counter (7 tools).
+	// Closed-enum "outcome" ∈ {"success","no_match","ambiguous_match","validation_failed","ls_error","internal"};
+	// "strategy" ∈ {"exact","whitespace_normalized","indentation_flexible","none"} (per Q-4 resolution).
+	// "tool_name" reuses the existing AllowedLabels entry — NOT a carve-out.
+	EditOutcome *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -114,6 +139,42 @@ func newMetrics() *Metrics {
 			// for this family only (Phase 47 D-07). Enforced at emission sites.
 			[]string{"strategy"},
 		),
+		LSPoolLookups: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_lspool_lookups_total",
+				Help: "lspool AcquireLease lookups by result (hit=shared warm worker, miss=spawn or refusal). Phase 53 D-01.",
+			},
+			[]string{"language", "result"},
+		),
+		RepoMapLookups: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_repomap_lookups_total",
+				Help: "repomap TagCache GetOrExtract lookups by result (hit=mtime match, miss=extractFn invoked). Phase 53 D-01/D-03.",
+			},
+			[]string{"language", "result"},
+		),
+		RepoMapExtract: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "helix_repomap_extract_duration_seconds",
+				Help:    "repomap extractor latency in seconds, cache-miss path only. Phase 53 D-05/D-06.",
+				Buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5},
+			},
+			[]string{"language", "extractor"},
+		),
+		SessionLifecycle: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_session_lifecycle_total",
+				Help: "MCP session lifecycle phase transitions by transport. Phase 53 D-08/D-09. Note: transport=http phase=ended is best-effort (no SDK hook in v1.5.0).",
+			},
+			[]string{"phase", "transport"},
+		),
+		EditOutcome: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_edit_outcome_total",
+				Help: "edit-tool handler outcomes by tool, outcome bucket, and fuzzy strategy. Phase 53 D-10/D-11/D-12.",
+			},
+			[]string{"tool_name", "outcome", "strategy"},
+		),
 	}
 
 	reg.MustRegister(
@@ -124,6 +185,11 @@ func newMetrics() *Metrics {
 		m.LSPoolCircuitState,
 		m.LSPoolRestarts,
 		m.RenameStrategy,
+		m.LSPoolLookups,
+		m.RepoMapLookups,
+		m.RepoMapExtract,
+		m.SessionLifecycle,
+		m.EditOutcome,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -173,4 +239,67 @@ func (m *Metrics) RenameStrategyInc(strategy string) {
 		return
 	}
 	m.RenameStrategy.WithLabelValues(strategy).Inc()
+}
+
+// --- Phase 53 helper methods (D-01..D-12, drop-unknown closed-enum discipline) ---
+
+// LSPoolLookup increments helix_lspool_lookups_total. result ∈ {"hit","miss"};
+// any other value is dropped (Phase 53 D-04 closed enum, T-53-01 mitigation).
+func (m *Metrics) LSPoolLookup(language, result string) {
+	if result != "hit" && result != "miss" {
+		return
+	}
+	m.LSPoolLookups.WithLabelValues(language, result).Inc()
+}
+
+// RepoMapLookup increments helix_repomap_lookups_total. Mirrors LSPoolLookup
+// (Phase 53 D-04 closed enum, T-53-01 mitigation).
+func (m *Metrics) RepoMapLookup(language, result string) {
+	if result != "hit" && result != "miss" {
+		return
+	}
+	m.RepoMapLookups.WithLabelValues(language, result).Inc()
+}
+
+// RepoMapExtractObserve records seconds for the cache-miss extractor path.
+// extractor ∈ {"treesitter","lsp","fallback"}; any other value is dropped
+// (Phase 53 D-07 closed enum, T-53-01 mitigation).
+func (m *Metrics) RepoMapExtractObserve(language, extractor string, seconds float64) {
+	if extractor != "treesitter" && extractor != "lsp" && extractor != "fallback" {
+		return
+	}
+	m.RepoMapExtract.WithLabelValues(language, extractor).Observe(seconds)
+}
+
+// SessionLifecycleInc increments helix_session_lifecycle_total. phase ∈
+// {"started","ended","error"}; transport ∈ {"stdio","http"}; any other
+// value is dropped (Phase 53 D-08/D-09 closed enums, T-53-01 mitigation).
+func (m *Metrics) SessionLifecycleInc(phase, transport string) {
+	if phase != "started" && phase != "ended" && phase != "error" {
+		return
+	}
+	if transport != "stdio" && transport != "http" {
+		return
+	}
+	m.SessionLifecycle.WithLabelValues(phase, transport).Inc()
+}
+
+// EditOutcomeInc increments helix_edit_outcome_total. outcome ∈
+// {"success","no_match","ambiguous_match","validation_failed","ls_error","internal"};
+// strategy ∈ {"exact","whitespace_normalized","indentation_flexible","none"};
+// any other value is dropped (Phase 53 D-10/D-11/Q-4 closed enums,
+// T-53-01 mitigation). tool_name is unbounded by helper but bounded in
+// practice by the 7-tool surface (D-12).
+func (m *Metrics) EditOutcomeInc(toolName, outcome, strategy string) {
+	switch outcome {
+	case "success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal":
+	default:
+		return
+	}
+	switch strategy {
+	case "exact", "whitespace_normalized", "indentation_flexible", "none":
+	default:
+		return
+	}
+	m.EditOutcome.WithLabelValues(toolName, outcome, strategy).Inc()
 }

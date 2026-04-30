@@ -27,6 +27,12 @@ const (
 	acceptHeader    = "application/vnd.github+json"
 	apiVersionHeader = "2026-03-10"
 	defaultPageSize = 30
+
+	// maxDownloadBytes caps a single asset download so a runaway response
+	// body cannot fill the user's disk before the integrity check runs.
+	// Helix archives are well under 100 MiB; 256 MiB is a generous
+	// guardrail. See REVIEW.md WR-02.
+	maxDownloadBytes = 256 << 20
 )
 
 // userAgent is the User-Agent header value sent with every GitHub API
@@ -292,7 +298,11 @@ func downloadFile(ctx context.Context, url, destPath string) error {
 	if err != nil {
 		return serr.Wrap(serr.Internal, "creating "+destPath, err)
 	}
-	if _, err := io.Copy(out, resp.Body); err != nil {
+	// REVIEW.md WR-02: cap downloads at maxDownloadBytes (256 MiB) to
+	// defend against a runaway response body filling the disk before
+	// minisign verification ever runs. Helix archives are well under
+	// 100 MiB today; the ceiling is a guardrail, not a tight limit.
+	if _, err := io.Copy(out, io.LimitReader(resp.Body, maxDownloadBytes)); err != nil {
 		_ = out.Close()
 		return serr.Wrap(serr.Internal, "writing "+destPath, err)
 	}

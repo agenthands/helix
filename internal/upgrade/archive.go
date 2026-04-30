@@ -87,8 +87,12 @@ func extractTarGz(archivePath, destDir string) error {
 			if err != nil {
 				return serr.Wrap(serr.Internal, "opening "+clean, err)
 			}
-			// Limit copy to header-declared size to defend against zip-bombs.
-			if _, err := io.Copy(out, tr); err != nil {
+			// Limit copy to header-declared size to defend against zip-bombs
+			// (REVIEW.md WR-02). Honoring hdr.Size with io.LimitReader caps
+			// per-entry write at the size the tar header claims; a malicious
+			// archive whose actual entry body exceeds hdr.Size cannot fill
+			// the disk before the post-extraction integrity check runs.
+			if _, err := io.Copy(out, io.LimitReader(tr, hdr.Size)); err != nil {
 				_ = out.Close()
 				return serr.Wrap(serr.Internal, "writing "+clean, err)
 			}

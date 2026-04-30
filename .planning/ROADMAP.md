@@ -24,7 +24,7 @@
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
 - [x] **Phase 52: packaging-distribution-channels** -- Binary + product rename (`serena` → `helix`), in-binary self-upgrade (`helix update` / `helix upgrade`), embed-audit manifest (rescoped 2026-04-29 from original brew/scoop/native-Linux scope; PKG-02/03/04 deferred to PKG-DEFER-03/04/05) (completed 2026-04-30)
-- [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
+- [x] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes) (completed 2026-04-30)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
 
@@ -194,11 +194,11 @@ Plans:
 
 Plans:
 - [x] 53-01-PLAN.md — Wave 1 obs vectors + helpers + cardinality lint (5 new families)
-- [ ] 53-02-PLAN.md — Wave 2 lspool MetricsSink extension + AcquireLease lookup emission
-- [ ] 53-03-PLAN.md — Wave 2 repomap MetricsSink + TagCache lookup + per-extractor latency observation
-- [ ] 53-04-PLAN.md — Wave 2 mcp.RecordEditOutcome + 7 edit/fileops handler instrumentation
-- [ ] 53-05-PLAN.md — Wave 2 forwarder stdio lifecycle + new http_session_middleware.go (Q-1 Option 2)
-- [ ] 53-06-PLAN.md — Wave 3 USAGE.md docs (5 metric rows + 2 PromQL examples + http best-effort caveat) + ROADMAP serena→helix correction
+- [x] 53-02-PLAN.md — Wave 2 lspool MetricsSink extension + AcquireLease lookup emission
+- [x] 53-03-PLAN.md — Wave 2 repomap MetricsSink + TagCache lookup + per-extractor latency observation
+- [x] 53-04-PLAN.md — Wave 2 mcp.RecordEditOutcome + 7 edit/fileops handler instrumentation
+- [x] 53-05-PLAN.md — Wave 2 forwarder stdio lifecycle + new http_session_middleware.go (Q-1 Option 2)
+- [x] 53-06-PLAN.md — Wave 3 USAGE.md docs (5 metric rows + 2 PromQL examples + http best-effort caveat) + ROADMAP serena→helix correction
 
 ### Phase 54: obs-dashboards-runbooks
 **Goal**: Operators can import ready-made Grafana dashboards and follow written runbooks for the four most common failure modes.
@@ -244,7 +244,7 @@ Plans:
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
 | 52 | v1.9 | 6/6 | Complete    | 2026-04-30 |
-| 53 | v1.9 | 1/6 | In Progress|  |
+| 53 | v1.9 | 6/6 | Complete   | 2026-04-30 |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
@@ -254,7 +254,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 1/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

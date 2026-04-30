@@ -193,7 +193,7 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 53-01-PLAN.md — Wave 1 obs vectors + helpers + cardinality lint (5 new families)
+- [x] 53-01-PLAN.md — Wave 1 obs vectors + helpers + cardinality lint (5 new families)
 - [ ] 53-02-PLAN.md — Wave 2 lspool MetricsSink extension + AcquireLease lookup emission
 - [ ] 53-03-PLAN.md — Wave 2 repomap MetricsSink + TagCache lookup + per-extractor latency observation
 - [ ] 53-04-PLAN.md — Wave 2 mcp.RecordEditOutcome + 7 edit/fileops handler instrumentation
@@ -244,7 +244,7 @@ Plans:
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
 | 52 | v1.9 | 6/6 | Complete    | 2026-04-30 |
-| 53 | v1.9 | 0/? | Not started | - |
+| 53 | v1.9 | 1/6 | In Progress|  |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
@@ -254,7 +254,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 6/6 plans complete
+**Plans:** 1/6 plans executed
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

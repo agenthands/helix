@@ -22,6 +22,12 @@ type MetricsSink interface {
 
 	// LSPoolRestart increments the restart counter for a language (D-15).
 	LSPoolRestart(language string)
+
+	// LSPoolLookup increments the helix_lspool_lookups_total counter for a
+	// (language, result) pair. result must be one of the LookupXxx constants
+	// below (Phase 53 D-04 closed enum). Emitted at the share-vs-spawn
+	// boundary in Pool.AcquireLease (Phase 53 D-02). Phase 53 D-14.
+	LSPoolLookup(language, result string)
 }
 
 // Eviction reason constants — closed enum per D-13. The label space for
@@ -42,6 +48,15 @@ const (
 	CircuitOpen     float64 = 2
 )
 
+// Lookup result constants — closed enum per Phase 53 D-04. The label space
+// for helix_lspool_lookups_total{result} MUST stay bounded to this set so
+// the cardinality bound test in internal/obs/metrics_labels_test.go can
+// prove the bound 2 × N_languages.
+const (
+	LookupHit  = "hit"
+	LookupMiss = "miss"
+)
+
 // NoopSink is used by tests and bootstrap paths where metrics are not wired.
 // All methods are lock-free no-ops; a value-receiver keeps them trivially
 // inlinable.
@@ -58,6 +73,9 @@ func (NoopSink) LSPoolCircuitStateSet(string, float64) {}
 
 // LSPoolRestart implements MetricsSink.
 func (NoopSink) LSPoolRestart(string) {}
+
+// LSPoolLookup implements MetricsSink.
+func (NoopSink) LSPoolLookup(string, string) {}
 
 // Compile-time assertion that NoopSink satisfies MetricsSink.
 var _ MetricsSink = NoopSink{}

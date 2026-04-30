@@ -117,9 +117,16 @@ func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspa
 			lease := NewWorkerLease(sessionID, w, false)
 			p.leases[sessionID] = lease
 			p.logger.Info("shared lease acquired", "session", sessionID, "worker", w.ID())
+			// Phase 53 D-02: share-path is the canonical "cache hit" boundary.
+			p.metrics.LSPoolLookup(wsKey.Language, LookupHit)
 			return lease, nil
 		}
 	}
+
+	// Phase 53 D-02: miss is recorded BEFORE circuit/max-workers checks so
+	// refusals count as misses. Dirty acquires also reach this point because
+	// they bypass the workerForKeyLocked share branch by design.
+	p.metrics.LSPoolLookup(wsKey.Language, LookupMiss)
 
 	// Need a new worker. Check circuit breaker first.
 	cb := p.circuitForLanguage(wsKey.Language)

@@ -1,11 +1,13 @@
 package lspool
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // recordingSink is a thread-safe MetricsSink that captures every call for
@@ -278,9 +280,13 @@ func TestPool_AcquireLease_LookupEmission(t *testing.T) {
 		p := newTestPoolWithSink(t, sink)
 
 		// Pre-warm a Ready worker matching the workspace key so
-		// workerForKeyLocked finds it.
+		// workerForKeyLocked finds it. The workspace key's RepoRoot must
+		// equal Worker.WorkDir() (see workerForKeyLocked predicate); the
+		// shared `fakeWorker` helper hard-codes "/tmp/test-<lang>", so we
+		// build the worker directly with the test key's RepoRoot here.
 		key := testKey()
-		w := fakeWorker("w-go-1", key.Language)
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w.state.Store(int32(WorkerReady))
 		p.mu.Lock()
 		p.workers[w.ID()] = w
 		p.mu.Unlock()
@@ -326,8 +332,11 @@ func TestPool_AcquireLease_LookupEmission(t *testing.T) {
 
 		// Pre-warm a Ready worker that WOULD satisfy the share path if not for
 		// dirty=true. Dirty bypasses workerForKeyLocked by design (D-02).
+		// Build the worker directly so its WorkDir matches the test key's
+		// RepoRoot — same reason as the share-path sub-test above.
 		key := testKey()
-		w := fakeWorker("w-go-1", key.Language)
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w.state.Store(int32(WorkerReady))
 		p.mu.Lock()
 		p.workers[w.ID()] = w
 		p.mu.Unlock()

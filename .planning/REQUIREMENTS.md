@@ -22,9 +22,12 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 ### Packaging & Distribution
 
 - [ ] **PKG-01**: GitHub Releases publish multi-arch binaries (darwin/linux/windows × amd64/arm64) with SHA-256 checksums and cryptographic signatures (cosign or minisign) via a reproducible goreleaser pipeline
-- [ ] **PKG-02**: Users can install Serena on macOS and Linux via a Homebrew tap (`brew install <tap>/serena`), with automated formula-update on release
-- [ ] **PKG-03**: Users can install Serena on Windows via a Scoop bucket (`scoop install serena`) with automated manifest update on release
-- [ ] **PKG-04**: Users can install Serena on at least one major Linux distribution via a native package path (apt/deb, rpm, or AUR) — format chosen during planning, documented in INSTALL.md
+- [ ] **PKG-02** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-03): Users can install Serena on macOS and Linux via a Homebrew tap (`brew install <tap>/serena`), with automated formula-update on release
+- [ ] **PKG-03** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-04): Users can install Serena on Windows via a Scoop bucket (`scoop install serena`) with automated manifest update on release
+- [ ] **PKG-04** (deferred from v1.9, see Phase 52 rescope; tracked as PKG-DEFER-05): Users can install Serena on at least one major Linux distribution via a native package path (apt/deb, rpm, or AUR) — format chosen during planning, documented in INSTALL.md
+- [ ] **PKG-05**: Binary + product renamed `serena` → `helix` at v1.9; module path renamed to `github.com/agenthands/helix`; env vars `SERENA_*` → `HELIX_*`; config dir `~/.serena/` → `~/.helix/`; MCP server registration name flipped — all per Phase 52 CONTEXT.md D-01..D-05 hard-cut policy
+- [ ] **PKG-06**: In-binary self-upgrade — `helix update` (read-only check) and `helix upgrade` (install with minisign signature verification, atomic swap, hard-refuse downgrade, daemon-aware) per Phase 52 CONTEXT.md D-06..D-12
+- [ ] **PKG-07**: `EMBED-AUDIT.md` manifest classifying every runtime asset; `minisign.pub` embedded via `//go:embed` with build-time-synced copy per Phase 52 CONTEXT.md D-13..D-15
 
 ### Observability
 
@@ -46,6 +49,9 @@ Deferred to a later milestone, tracked here to prevent loss.
 
 - **PKG-DEFER-01**: Second Linux package format (whichever of apt/rpm/AUR is not shipped in PKG-04)
 - **PKG-DEFER-02**: Docker / container images published to GHCR
+- **PKG-DEFER-03**: Homebrew tap (originally PKG-02; deferred from v1.9 per Phase 52 rescope — original scope abandoned in favor of self-contained-binary + in-binary self-upgrade)
+- **PKG-DEFER-04**: Scoop bucket (originally PKG-03; deferred from v1.9 per Phase 52 rescope — see PKG-DEFER-03 rationale)
+- **PKG-DEFER-05**: Native Linux package (deb/rpm/AUR; originally PKG-04; deferred from v1.9 per Phase 52 rescope — see PKG-DEFER-03 rationale)
 
 ### Observability expansion
 
@@ -61,7 +67,6 @@ Explicitly excluded from v1.9 to prevent scope creep.
 | New MCP tools | v1.9 is polish + infra; new capabilities belong to a future feature milestone |
 | Breaking config changes | v1.9 is a minor release; migrations are deferred to v2.0 |
 | Custom LS implementations | Out of scope project-wide — wrap existing LSP servers, don't reimplement |
-| Auto-update mechanism inside the binary | Package managers (brew/scoop/apt) own updates; in-binary updater adds security surface |
 | Docker / container images | Deferred to PKG-DEFER-02 — binary-first story is stronger for local dev agents |
 | Alertmanager rules | Dashboards + runbooks first; alerting rules require production deployment context |
 
@@ -78,19 +83,22 @@ Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 | TOOL-01 | Phase 50 | Pending |
 | TOOL-02 | Phase 50 | Pending |
 | PKG-01 | Phase 51 | Pending |
-| PKG-02 | Phase 52 | Pending |
-| PKG-03 | Phase 52 | Pending |
-| PKG-04 | Phase 52 | Pending |
+| PKG-02 | Deferred | Rescoped out of v1.9 — see PKG-DEFER-03 |
+| PKG-03 | Deferred | Rescoped out of v1.9 — see PKG-DEFER-04 |
+| PKG-04 | Deferred | Rescoped out of v1.9 — see PKG-DEFER-05 |
+| PKG-05 | Phase 52 | Pending |
+| PKG-06 | Phase 52 | Pending |
+| PKG-07 | Phase 52 | Pending |
 | OBS-01 | Phase 54 | Pending |
 | OBS-02 | Phase 54 | Pending |
 | OBS-03 | Phase 53 | Pending |
 | OBS-04 | Phase 55 | Pending |
 
 **Coverage:**
-- v1.9 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0
+- v1.9 requirements: 17 total (14 original + PKG-05/06/07 added per Phase 52 rescope)
+- Mapped to in-scope phases: 14
+- Deferred from v1.9: 3 (PKG-02/03/04 → PKG-DEFER-03/04/05)
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 — traceability filled at roadmap creation (10 phases, 46–55)*
+*Last updated: 2026-04-30 — Phase 52 rescope: PKG-02/03/04 deferred to PKG-DEFER-03/04/05; PKG-05/06/07 added in-scope; the previous "in-binary auto-update" out-of-scope row was inverted (now in scope and delivered as PKG-06).*

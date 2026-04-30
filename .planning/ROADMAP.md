@@ -23,7 +23,7 @@
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
-- [ ] **Phase 52: packaging-distribution-channels** -- Homebrew tap, Scoop bucket, and Linux native-package install paths wired to the goreleaser pipeline
+- [ ] **Phase 52: packaging-distribution-channels** -- Binary + product rename (`serena` → `helix`), in-binary self-upgrade (`helix update` / `helix upgrade`), embed-audit manifest (rescoped 2026-04-29 from original brew/scoop/native-Linux scope; PKG-02/03/04 deferred to PKG-DEFER-03/04/05)
 - [ ] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes)
 - [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
@@ -156,18 +156,21 @@ Plans:
 - [x] 51.1-01-cgo-gate-PLAN.md — gate treesitter + repomap + kernel/edit behind //go:build cgo with !cgo stubs, daemon refusal hook, tagged tests, flip CONTRIBUTING.md marker, mark DEF-51-02 RESOLVED
 
 ### Phase 52: packaging-distribution-channels
-**Goal**: Users can install Serena via Homebrew (`brew install <tap>/serena`), Scoop (`scoop install serena`), and a native Linux package manager; all three channels auto-update on release.
-**Depends on**: Phase 51 (consumes goreleaser artifacts and release metadata)
-**Requirements**: PKG-02, PKG-03, PKG-04
+**Goal**: Users can install Helix as a single self-contained signed binary (continued from Phase 51) and upgrade it in place via `helix upgrade`. The binary, env vars, config dirs, and MCP server registration name all flip from `serena` to `helix` as a hard-cut breaking change at v1.9. An embed-audit manifest documents what ships inside the binary versus what the binary downloads at runtime.
+**Depends on**: Phase 51 (consumes goreleaser archives + minisign signing key + reproducibility CI gate)
+**Requirements**: PKG-05, PKG-06, PKG-07 (PKG-02/03/04 deferred from v1.9 per phase rescope — see PKG-DEFER-03/04/05)
 **Sizing**: L
 **Success Criteria** (what must be TRUE):
-  1. `brew install <tap>/serena` on macOS arm64 and linux amd64 produces a working `serena` binary whose `serena --version` matches the tagged release.
-  2. `scoop install serena` on Windows amd64 produces a working `serena.exe`.
-  3. The chosen Linux package (apt/deb, rpm, or AUR — decision captured in plan) installs via its native tooling and is documented in `INSTALL.md`.
-  4. A release tag triggers automated formula/manifest updates in the tap and bucket repos without manual editing.
+  1. `cmd/helix/main.go` builds CGO=0 and produces a `helix` binary; `cmd/serena/` does not exist; the Go module path is `github.com/agenthands/helix`.
+  2. `goreleaser --snapshot --clean` produces 6 `helix_v*` archives in `dist/` with no leftover `serena_v*` archives.
+  3. `helix update` queries the GitHub Releases API and prints `current: vX / latest: vY` plus release-notes body without making any filesystem mutation.
+  4. `helix upgrade` end-to-end: daemon-detect → permission probe → API fetch → semver compare (hard-refuse downgrade) → archive download → minisign verify → extract → atomic swap → `os.Exec` re-launch with same args minus `upgrade`.
+  5. Tampered or wrong-key signatures are rejected with a single canonical error message; signature verification uses the build-time-synced embedded `minisign.pub`.
+  6. `EMBED-AUDIT.md` exists in the phase directory classifying every runtime asset as embedded / external-by-design / gap; gap-flagged items are closed in-phase.
+  7. INSTALL.md, CHANGELOG.md, README.md, USAGE.md, CONTRIBUTING.md, CLAUDE.md all use `helix` as the binary/product name; CHANGELOG v1.9 includes a Breaking Changes subsection enumerating the rename, env-var, config-dir, and MCP registration breaks.
+  8. `go test ./...`, `go vet ./...`, `make verify-embed-pubkey`, `make release-snapshot` all green.
 **Plans**: 6 plans
-
-> **Phase rescoped during /gsd-discuss-phase 2026-04-29.** Original PKG-02 (Homebrew), PKG-03 (Scoop), PKG-04 (native Linux) deferred from v1.9; replaced with binary+product rename (`serena` → `helix`) + in-binary self-upgrade (`helix update` / `helix upgrade`) + embed-audit manifest. The full goal/success-criteria rewrite is performed by 52-06-PLAN.md when it executes; until then this entry preserves the original framing for traceability.
+**Rescope rationale**: Original scope (PKG-02 Homebrew, PKG-03 Scoop, PKG-04 native Linux) abandoned during /gsd-discuss-phase 2026-04-29 in favor of self-contained-binary + in-binary self-upgrade. PKG-02/03/04 deferred to a future milestone (PKG-DEFER-03/04/05). Decision recorded in 52-CONTEXT.md.
 
 Plans:
 - [x] 52-01-PLAN.md — Wave 0 test scaffolding + Makefile embed-pubkey + CI gate

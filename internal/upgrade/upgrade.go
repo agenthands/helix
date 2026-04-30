@@ -268,18 +268,66 @@ func selectRelease(ctx context.Context, opts Options) (*Release, error) {
 	return fetchReleaseInfoFrom(ctx, base, opts.Prerelease)
 }
 
-// stripUpgradeVerb returns args with the first "upgrade" or "update"
-// argument removed so the relaunched binary doesn't immediately try to
-// upgrade itself again. Preserves the binary path at args[0].
+// stripUpgradeVerb returns args with the first "upgrade" / "update"
+// subcommand removed AND any upgrade-only flags that follow it dropped,
+// so the relaunched binary does not immediately try to upgrade itself
+// again or get tripped up by flags that only make sense for the upgrade
+// subcommand.
+//
+// Specifically: if either verb appears in args, we strip the verb plus
+// `--prerelease`, `--check`, `--dry-run`, and `--version[=value]` (with
+// the following positional value when given as a separate arg). All
+// other args (including pre-verb global flags) pass through unchanged.
+//
+// This matters because the root cobra command at internal/cli/root.go
+// declares `--version` as a Bool flag — leaving `--version v1.10.0` in
+// the relaunch arglist would parse as `--version=true` plus a positional
+// and print "helix version <ver>" instead of running normally. See
+// REVIEW.md CR-02.
 func stripUpgradeVerb(args []string) []string {
+	// Find the verb position. Verb-less invocations (e.g., bare
+	// `helix --version`) pass through unchanged so callers that invoke
+	// stripUpgradeVerb opportunistically don't drop user flags.
+	verbIdx := -1
+	for i, a := range args {
+		if a == "upgrade" || a == "update" {
+			verbIdx = i
+			break
+		}
+	}
+	if verbIdx < 0 {
+		// No verb found — return args unchanged (preserve the slice
+		// semantics of the original implementation by copying).
+		out := make([]string, len(args))
+		copy(out, args)
+		return out
+	}
+
+	// Pre-verb args pass through verbatim. Post-verb args are filtered:
+	// drop the verb itself + any upgrade-only flag (and its detached value
+	// when applicable).
 	out := make([]string, 0, len(args))
-	stripped := false
-	for _, a := range args {
-		if !stripped && (a == "upgrade" || a == "update") {
-			stripped = true
+	out = append(out, args[:verbIdx]...)
+
+	skipNext := false
+	for _, a := range args[verbIdx+1:] {
+		if skipNext {
+			skipNext = false
 			continue
 		}
-		out = append(out, a)
+		switch {
+		case a == "--prerelease", a == "--check", a == "--dry-run":
+			continue
+		case a == "--version":
+			// Detached form: `--version v1.10.0`. Drop the value too.
+			skipNext = true
+			continue
+		case strings.HasPrefix(a, "--version="):
+			// Attached form: `--version=v1.10.0`. Single token, just drop.
+			continue
+		default:
+			out = append(out, a)
+		}
 	}
 	return out
 }

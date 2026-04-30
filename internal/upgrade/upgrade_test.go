@@ -246,15 +246,39 @@ func TestUpgradeDaemonShortCircuit(t *testing.T) {
 
 func TestUpgradeStripUpgradeVerb(t *testing.T) {
 	t.Parallel()
+	// stripUpgradeVerb strips the upgrade verb AND all upgrade-only flags
+	// (--prerelease, --version <v>, --check, --dry-run) from the relaunch
+	// command line. The relaunched binary must NOT receive flags that only
+	// make sense for the upgrade subcommand — root-level cobra parsing
+	// would either misinterpret them (e.g., --version is a Bool at root
+	// level so `--version v1.10.0` is parsed as `--version=true` plus a
+	// positional, printing "helix version dev" instead of running) or
+	// hard-error on unknown flags. See REVIEW.md CR-02.
 	cases := []struct {
 		in   []string
 		want []string
 	}{
+		// Bare verb removal.
 		{[]string{"helix", "upgrade"}, []string{"helix"}},
-		{[]string{"helix", "upgrade", "--prerelease"}, []string{"helix", "--prerelease"}},
 		{[]string{"helix", "update"}, []string{"helix"}},
+		// Upgrade-only flags must be dropped along with the verb.
+		{[]string{"helix", "upgrade", "--prerelease"}, []string{"helix"}},
+		{[]string{"helix", "upgrade", "--check"}, []string{"helix"}},
+		{[]string{"helix", "upgrade", "--dry-run"}, []string{"helix"}},
+		// --version at root would be parsed as the boolean version flag —
+		// the relaunched process must NOT see it.
+		{[]string{"helix", "upgrade", "--version", "v1.10.0"}, []string{"helix"}},
+		{[]string{"helix", "upgrade", "--version=v1.10.0"}, []string{"helix"}},
+		// Combined flags.
+		{[]string{"helix", "upgrade", "--prerelease", "--dry-run"}, []string{"helix"}},
+		{[]string{"helix", "upgrade", "--version", "v1.10.0", "--dry-run"}, []string{"helix"}},
+		// Pre-verb flags that are NOT upgrade-only must be preserved
+		// (e.g., a global --json flag the user threaded before the verb).
+		{[]string{"helix", "--json", "upgrade"}, []string{"helix", "--json"}},
+		// A bare `helix --version` invocation is NOT an upgrade — the verb
+		// is absent, so the args pass through unchanged.
 		{[]string{"helix", "--version"}, []string{"helix", "--version"}},
-		// Only first occurrence is stripped (defensive).
+		// Only first occurrence of the verb is stripped (defensive).
 		{[]string{"helix", "upgrade", "upgrade"}, []string{"helix", "upgrade"}},
 	}
 	for _, tc := range cases {

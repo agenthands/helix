@@ -3,7 +3,7 @@
 // Verifies:
 //   - GET /metrics returns 200
 //   - Content-Type is text/plain (Prometheus exposition format)
-//   - Body contains the six serena_* metric families plus the Go + Process
+//   - Body contains the six helix_* metric families plus the Go + Process
 //     runtime collectors (METRIC-04)
 //   - /healthz and /readyz still work alongside /metrics (Phase 10 regression)
 package daemon
@@ -90,8 +90,8 @@ func TestAdmin_MetricsEndpoint(t *testing.T) {
 		t.Errorf("Content-Type = %q, want contains text/plain", contentType)
 	}
 
-	// Serena-owned families (METRIC-01).
-	wantSerena := []string{
+	// Helix-owned families (METRIC-01).
+	wantHelix := []string{
 		"helix_tool_calls_total",
 		"helix_tool_duration_seconds",
 		"helix_lspool_workers",
@@ -99,7 +99,7 @@ func TestAdmin_MetricsEndpoint(t *testing.T) {
 		"helix_lspool_circuit_state",
 		"helix_lspool_restarts_total",
 	}
-	for _, name := range wantSerena {
+	for _, name := range wantHelix {
 		if !strings.Contains(body, name) {
 			t.Errorf("/metrics body missing %q", name)
 		}

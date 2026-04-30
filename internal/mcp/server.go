@@ -20,7 +20,26 @@ type SkillToolExecutor interface {
 	ExecuteTool(name string, args map[string]interface{}) (string, error)
 }
 
-// SerenaMCPServer wraps the official MCP SDK server with Serena's tool registry,
+// currentVersion holds the binary version string reported as the MCP
+// `Implementation.Version` field. Defaults to "dev" until SetVersion() is
+// called from the daemon bootstrap (which threads the ldflag-injected value
+// from cmd/helix/main.go via a daemon-level version accessor). Per RESEARCH.md
+// A6 the MCP `Implementation.Name` and the per-client registration name in
+// `internal/cli/setup_clients.go` MUST stay in lockstep — both flip to "helix".
+var currentVersion = "dev"
+
+// SetVersion records the binary version reported as MCP `Implementation.Version`.
+// Called once from internal/daemon/daemon.go during bootstrap with the
+// ldflag-injected value (which the daemon receives via an optional version
+// argument; see daemon.New for the wiring).
+func SetVersion(v string) {
+	if v == "" {
+		return
+	}
+	currentVersion = v
+}
+
+// SerenaMCPServer wraps the official MCP SDK server with Helix's tool registry,
 // structured errors, and middleware (MCP-01, MCP-02, MCP-03, MCP-05, MCP-06).
 type SerenaMCPServer struct {
 	sdk              *mcpsdk.Server
@@ -48,7 +67,7 @@ type ActivateProjectArgs struct {
 // NewSerenaMCPServer creates a new MCP server with dummy tools registered.
 func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *SerenaMCPServer {
 	server := mcpsdk.NewServer(
-		&mcpsdk.Implementation{Name: "serena", Version: "2.0.0-dev"},
+		&mcpsdk.Implementation{Name: "helix", Version: currentVersion},
 		nil,
 	)
 

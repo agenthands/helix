@@ -20,8 +20,8 @@ func TestMergeJSONConfigNewFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 
-	err := mergeJSONConfig(path, "mcpServers", "serena", map[string]any{
-		"command": "/usr/local/bin/serena",
+	err := mergeJSONConfig(path, "mcpServers", "helix", map[string]any{
+		"command": "/usr/local/bin/helix",
 		"args":    []string{"--mode=stdio"},
 	})
 	require.NoError(t, err)
@@ -35,9 +35,9 @@ func TestMergeJSONConfigNewFile(t *testing.T) {
 	servers, ok := result["mcpServers"].(map[string]any)
 	require.True(t, ok, "mcpServers key should exist")
 
-	serena, ok := servers["serena"].(map[string]any)
-	require.True(t, ok, "serena entry should exist")
-	assert.Equal(t, "/usr/local/bin/serena", serena["command"])
+	entry, ok := servers["helix"].(map[string]any)
+	require.True(t, ok, "helix entry should exist")
+	assert.Equal(t, "/usr/local/bin/helix", entry["command"])
 }
 
 func TestMergeJSONConfigExistingFile(t *testing.T) {
@@ -53,9 +53,9 @@ func TestMergeJSONConfigExistingFile(t *testing.T) {
 	data, _ := json.MarshalIndent(initial, "", "  ")
 	require.NoError(t, os.WriteFile(path, data, 0644))
 
-	// Merge serena entry.
-	err := mergeJSONConfig(path, "mcpServers", "serena", map[string]any{
-		"command": "/usr/local/bin/serena",
+	// Merge helix entry.
+	err := mergeJSONConfig(path, "mcpServers", "helix", map[string]any{
+		"command": "/usr/local/bin/helix",
 	})
 	require.NoError(t, err)
 
@@ -67,16 +67,16 @@ func TestMergeJSONConfigExistingFile(t *testing.T) {
 
 	servers := result["mcpServers"].(map[string]any)
 	assert.Contains(t, servers, "other-server", "existing entries must be preserved")
-	assert.Contains(t, servers, "serena", "new entry must be added")
+	assert.Contains(t, servers, "helix", "new entry must be added")
 }
 
 func TestMergeJSONConfigVSCodeServersKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp.json")
 
-	err := mergeJSONConfig(path, "servers", "serena", map[string]any{
+	err := mergeJSONConfig(path, "servers", "helix", map[string]any{
 		"type":    "stdio",
-		"command": "/usr/local/bin/serena",
+		"command": "/usr/local/bin/helix",
 	})
 	require.NoError(t, err)
 
@@ -101,8 +101,8 @@ func TestMergeJSONConfigPreservesNonMCPKeys(t *testing.T) {
 	data, _ := json.MarshalIndent(initial, "", "  ")
 	require.NoError(t, os.WriteFile(path, data, 0644))
 
-	err := mergeJSONConfig(path, "mcpServers", "serena", map[string]any{
-		"command": "/usr/local/bin/serena",
+	err := mergeJSONConfig(path, "mcpServers", "helix", map[string]any{
+		"command": "/usr/local/bin/helix",
 	})
 	require.NoError(t, err)
 
@@ -125,14 +125,14 @@ func TestRemoveFromJSONConfigExists(t *testing.T) {
 
 	initial := map[string]any{
 		"mcpServers": map[string]any{
-			"serena": map[string]any{"command": "serena"},
-			"other":  map[string]any{"command": "other"},
+			"helix": map[string]any{"command": "helix"},
+			"other": map[string]any{"command": "other"},
 		},
 	}
 	data, _ := json.MarshalIndent(initial, "", "  ")
 	require.NoError(t, os.WriteFile(path, data, 0644))
 
-	err := removeFromJSONConfig(path, "mcpServers", "serena")
+	err := removeFromJSONConfig(path, "mcpServers", "helix")
 	require.NoError(t, err)
 
 	data, err = os.ReadFile(path)
@@ -142,12 +142,12 @@ func TestRemoveFromJSONConfigExists(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &result))
 
 	servers := result["mcpServers"].(map[string]any)
-	assert.NotContains(t, servers, "serena", "serena should be removed")
+	assert.NotContains(t, servers, "helix", "helix should be removed")
 	assert.Contains(t, servers, "other", "other entries should remain")
 }
 
 func TestRemoveFromJSONConfigMissingFile(t *testing.T) {
-	err := removeFromJSONConfig("/nonexistent/path/config.json", "mcpServers", "serena")
+	err := removeFromJSONConfig("/nonexistent/path/config.json", "mcpServers", "helix")
 	assert.NoError(t, err, "removing from nonexistent file should not error")
 }
 
@@ -159,7 +159,7 @@ func TestClaudeCodeRegistrarDryRun(t *testing.T) {
 
 	printer := &SetupPrinter{DryRun: true}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     true,
 		ProjectDir: t.TempDir(),
 		Printer:    printer,
@@ -174,7 +174,7 @@ func TestGeminiCLIRegistrarDryRun(t *testing.T) {
 
 	printer := &SetupPrinter{DryRun: true}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     true,
 		ProjectDir: t.TempDir(),
 		Printer:    printer,
@@ -187,7 +187,7 @@ func TestVSCodeRegistrarRegister(t *testing.T) {
 	dir := t.TempDir()
 	printer := &SetupPrinter{}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     false,
 		ProjectDir: dir,
 		Printer:    printer,
@@ -207,17 +207,17 @@ func TestVSCodeRegistrarRegister(t *testing.T) {
 	servers, ok := result["servers"].(map[string]any)
 	require.True(t, ok, "VS Code config must use 'servers' key")
 
-	serena, ok := servers["serena"].(map[string]any)
-	require.True(t, ok, "serena entry must exist")
-	assert.Equal(t, "stdio", serena["type"])
-	assert.Equal(t, "/usr/local/bin/serena", serena["command"])
+	entry, ok := servers["helix"].(map[string]any)
+	require.True(t, ok, "helix entry must exist")
+	assert.Equal(t, "stdio", entry["type"])
+	assert.Equal(t, "/usr/local/bin/helix", entry["command"])
 }
 
 func TestJetBrainsRegistrarRegister(t *testing.T) {
 	dir := t.TempDir()
 	printer := &SetupPrinter{}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     false,
 		ProjectDir: dir,
 		Printer:    printer,
@@ -236,7 +236,7 @@ func TestJetBrainsRegistrarRegister(t *testing.T) {
 
 	servers, ok := result["mcpServers"].(map[string]any)
 	require.True(t, ok, "JetBrains config must use 'mcpServers' key")
-	assert.Contains(t, servers, "serena")
+	assert.Contains(t, servers, "helix")
 }
 
 func TestClaudeDesktopRegistrarDryRun(t *testing.T) {
@@ -245,7 +245,7 @@ func TestClaudeDesktopRegistrarDryRun(t *testing.T) {
 
 	printer := &SetupPrinter{DryRun: true}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     true,
 		Printer:    printer,
 	}
@@ -258,7 +258,7 @@ func TestGenericRegistrarRegister(t *testing.T) {
 	outputPath := filepath.Join(dir, "mcp-config.json")
 	printer := &SetupPrinter{}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     false,
 		OutputPath: outputPath,
 		Printer:    printer,
@@ -277,9 +277,9 @@ func TestGenericRegistrarRegister(t *testing.T) {
 	servers, ok := result["mcpServers"].(map[string]any)
 	require.True(t, ok)
 
-	serena, ok := servers["serena"].(map[string]any)
+	entry, ok := servers["helix"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "/usr/local/bin/serena", serena["command"])
+	assert.Equal(t, "/usr/local/bin/helix", entry["command"])
 }
 
 func TestGenericRegistrarStdout(t *testing.T) {
@@ -291,7 +291,7 @@ func TestGenericRegistrarStdout(t *testing.T) {
 
 	printer := &SetupPrinter{}
 	cfg := RegistrationConfig{
-		BinaryPath: "/usr/local/bin/serena",
+		BinaryPath: "/usr/local/bin/helix",
 		DryRun:     false,
 		OutputPath: "", // empty = stdout
 		Printer:    printer,

@@ -47,7 +47,7 @@ func TestDeactivate_CleansSessionFiles(t *testing.T) {
 func TestDeactivate_MissingDaemonSilentSuccess(t *testing.T) {
 	// Test the stat check pattern used in runDeactivate:
 	// when socket doesn't exist, deactivate should silently succeed
-	nonExistentSocket := "/tmp/serena-nonexistent-test-socket-12345/daemon.sock"
+	nonExistentSocket := "/tmp/helix-nonexistent-test-socket-12345/daemon.sock"
 
 	_, err := os.Stat(nonExistentSocket)
 	assert.True(t, os.IsNotExist(err), "non-existent socket should trigger silent success path (D-15)")

@@ -1,4 +1,4 @@
-// Package integration_test provides end-to-end integration tests for Serena's MCP tools.
+// Package integration_test provides end-to-end integration tests for Helix's MCP tools.
 // Tests exercise the full protocol path: MCP client -> daemon -> kernel -> tool -> response.
 //
 // The Java subset (java_test.go) runs under default `go test ./...` by sharing a warm

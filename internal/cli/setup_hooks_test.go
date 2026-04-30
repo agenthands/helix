@@ -14,7 +14,7 @@ func TestMergeHooksIntoSettings_NewFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".claude", "settings.json")
 
-	err := mergeHooksIntoSettings(path, "/usr/local/bin/serena")
+	err := mergeHooksIntoSettings(path, "/usr/local/bin/helix")
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)
@@ -31,11 +31,11 @@ func TestMergeHooksIntoSettings_NewFile(t *testing.T) {
 		require.True(t, ok, "%s should be an array", eventType)
 		require.NotEmpty(t, arr, "%s should have entries", eventType)
 
-		// Check that the entry has serena_managed marker.
+		// Check that the entry has helix_managed marker.
 		matcher := arr[0].(map[string]any)
 		hooksArr := matcher["hooks"].([]any)
 		hookCmd := hooksArr[0].(map[string]any)
-		assert.Equal(t, true, hookCmd["serena_managed"], "%s hook should have serena_managed", eventType)
+		assert.Equal(t, true, hookCmd["helix_managed"], "%s hook should have helix_managed", eventType)
 	}
 }
 
@@ -62,7 +62,7 @@ func TestMergeHooksIntoSettings_ExistingHooks(t *testing.T) {
 	data, _ := json.MarshalIndent(initial, "", "  ")
 	require.NoError(t, os.WriteFile(path, data, 0644))
 
-	err := mergeHooksIntoSettings(path, "/usr/local/bin/serena")
+	err := mergeHooksIntoSettings(path, "/usr/local/bin/helix")
 	require.NoError(t, err)
 
 	data, err = os.ReadFile(path)
@@ -74,16 +74,16 @@ func TestMergeHooksIntoSettings_ExistingHooks(t *testing.T) {
 	hooks := result["hooks"].(map[string]any)
 	preToolUse := hooks["PreToolUse"].([]any)
 
-	// Should have both user hook and Serena hook.
-	assert.Len(t, preToolUse, 2, "should have user hook + Serena hook")
+	// Should have both user hook and Helix hook.
+	assert.Len(t, preToolUse, 2, "should have user hook + Helix hook")
 
 	// First entry should be the user's linter hook (preserved).
 	userMatcher := preToolUse[0].(map[string]any)
 	assert.Equal(t, "Lint", userMatcher["matcher"])
 
-	// Second entry should be the Serena hook.
-	serenaMatcher := preToolUse[1].(map[string]any)
-	assert.Equal(t, "Grep|Read|Bash", serenaMatcher["matcher"])
+	// Second entry should be the Helix hook.
+	helixMatcher := preToolUse[1].(map[string]any)
+	assert.Equal(t, "Grep|Read|Bash", helixMatcher["matcher"])
 }
 
 func TestMergeHooksIntoSettings_Idempotent(t *testing.T) {
@@ -91,10 +91,10 @@ func TestMergeHooksIntoSettings_Idempotent(t *testing.T) {
 	path := filepath.Join(dir, "settings.json")
 
 	// Merge twice with same binary path.
-	err := mergeHooksIntoSettings(path, "/usr/local/bin/serena")
+	err := mergeHooksIntoSettings(path, "/usr/local/bin/helix")
 	require.NoError(t, err)
 
-	err = mergeHooksIntoSettings(path, "/usr/local/bin/serena")
+	err = mergeHooksIntoSettings(path, "/usr/local/bin/helix")
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)
@@ -105,18 +105,18 @@ func TestMergeHooksIntoSettings_Idempotent(t *testing.T) {
 
 	hooks := result["hooks"].(map[string]any)
 
-	// Each event type should have exactly one Serena entry (not duplicated).
+	// Each event type should have exactly one Helix entry (not duplicated).
 	for _, eventType := range []string{"SessionStart", "PreToolUse", "Stop"} {
 		arr := hooks[eventType].([]any)
 		assert.Len(t, arr, 1, "%s should have exactly one entry after double merge", eventType)
 	}
 }
 
-func TestRemoveHooksFromSettings_RemovesSerenaOnly(t *testing.T) {
+func TestRemoveHooksFromSettings_RemovesHelixOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
 
-	// Write settings with both Serena and user hooks.
+	// Write settings with both Helix and user hooks.
 	initial := map[string]any{
 		"hooks": map[string]any{
 			"PreToolUse": []any{
@@ -134,8 +134,8 @@ func TestRemoveHooksFromSettings_RemovesSerenaOnly(t *testing.T) {
 					"hooks": []any{
 						map[string]any{
 							"type":           "command",
-							"command":        "/usr/local/bin/serena nudge",
-							"serena_managed": true,
+							"command":        "/usr/local/bin/helix nudge",
+							"helix_managed": true,
 						},
 					},
 				},
@@ -146,8 +146,8 @@ func TestRemoveHooksFromSettings_RemovesSerenaOnly(t *testing.T) {
 					"hooks": []any{
 						map[string]any{
 							"type":           "command",
-							"command":        "/usr/local/bin/serena activate",
-							"serena_managed": true,
+							"command":        "/usr/local/bin/helix activate",
+							"helix_managed": true,
 						},
 					},
 				},
@@ -174,7 +174,7 @@ func TestRemoveHooksFromSettings_RemovesSerenaOnly(t *testing.T) {
 	userMatcher := preToolUse[0].(map[string]any)
 	assert.Equal(t, "Lint", userMatcher["matcher"])
 
-	// SessionStart had only Serena entries, so it should be removed entirely.
+	// SessionStart had only Helix entries, so it should be removed entirely.
 	_, hasSessionStart := hooks["SessionStart"]
 	assert.False(t, hasSessionStart, "SessionStart should be removed (no user hooks)")
 }
@@ -184,8 +184,8 @@ func TestRemoveHooksFromSettings_MissingFile(t *testing.T) {
 	assert.NoError(t, err, "removing from nonexistent file should not error")
 }
 
-func TestSerenaHookConfig_Structure(t *testing.T) {
-	config := serenaHookConfig("/usr/local/bin/serena")
+func TestHelixHookConfig_Structure(t *testing.T) {
+	config := helixHookConfig("/usr/local/bin/helix")
 
 	// SessionStart
 	sessionStart := config["SessionStart"]
@@ -194,10 +194,10 @@ func TestSerenaHookConfig_Structure(t *testing.T) {
 	assert.Equal(t, "startup", ss["matcher"])
 	ssHooks := ss["hooks"].([]any)
 	ssCmd := ssHooks[0].(map[string]any)
-	assert.Contains(t, ssCmd["command"], "/usr/local/bin/serena")
+	assert.Contains(t, ssCmd["command"], "/usr/local/bin/helix")
 	assert.Contains(t, ssCmd["command"], "activate")
 	assert.Equal(t, 30, ssCmd["timeout"])
-	assert.Equal(t, true, ssCmd["serena_managed"])
+	assert.Equal(t, true, ssCmd["helix_managed"])
 
 	// PreToolUse
 	preToolUse := config["PreToolUse"]
@@ -206,7 +206,7 @@ func TestSerenaHookConfig_Structure(t *testing.T) {
 	assert.Equal(t, "Grep|Read|Bash", ptu["matcher"])
 	ptuHooks := ptu["hooks"].([]any)
 	ptuCmd := ptuHooks[0].(map[string]any)
-	assert.Contains(t, ptuCmd["command"], "/usr/local/bin/serena")
+	assert.Contains(t, ptuCmd["command"], "/usr/local/bin/helix")
 	assert.Contains(t, ptuCmd["command"], "nudge")
 	assert.Equal(t, 5, ptuCmd["timeout"])
 
@@ -218,7 +218,7 @@ func TestSerenaHookConfig_Structure(t *testing.T) {
 	assert.False(t, hasMatcher, "Stop should not have a matcher")
 	stHooks := st["hooks"].([]any)
 	stCmd := stHooks[0].(map[string]any)
-	assert.Contains(t, stCmd["command"], "/usr/local/bin/serena")
+	assert.Contains(t, stCmd["command"], "/usr/local/bin/helix")
 	assert.Contains(t, stCmd["command"], "deactivate")
 	assert.Equal(t, 10, stCmd["timeout"])
 }

@@ -20,7 +20,7 @@ func newActivateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "activate",
 		Short:         "Activate workspace for current project",
-		Long:          "Ensures the Serena daemon is running and activates the workspace for the given directory. Used by Claude Code SessionStart hook.",
+		Long:          "Ensures the Helix daemon is running and activates the workspace for the given directory. Used by Claude Code SessionStart hook.",
 		RunE:          runActivate,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -68,6 +68,6 @@ func runActivate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Output for Claude Code hook stdout (added to agent context)
-	fmt.Fprintf(os.Stdout, "Serena workspace activated: %s (status: %s)\n", absPath, resp.Status)
+	fmt.Fprintf(os.Stdout, "Helix workspace activated: %s (status: %s)\n", absPath, resp.Status)
 	return nil
 }

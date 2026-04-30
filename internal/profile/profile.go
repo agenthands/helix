@@ -1,4 +1,4 @@
-// Package profile defines agent profiles and operational modes for Serena.
+// Package profile defines agent profiles and operational modes for Helix.
 // Profiles are curated tool subsets with prompt overrides targeting specific
 // agent environments (Claude Code, Codex, IDE assistants, CI bots).
 // Modes define behavioral patterns (read, edit, review, admin) with tool

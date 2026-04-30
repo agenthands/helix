@@ -54,7 +54,7 @@ func TestSaveAndLoadSessionStats_RoundTrip(t *testing.T) {
 	assert.NotEmpty(t, loaded.LastUpdated, "LastUpdated should be set by save")
 }
 
-func TestIsSerenaSymbolicTool(t *testing.T) {
+func TestIsHelixSymbolicTool(t *testing.T) {
 	// Should return true for bare names.
 	assert.True(t, isHelixSymbolicTool("find_symbol"))
 	assert.True(t, isHelixSymbolicTool("get_symbols_overview"))
@@ -151,7 +151,7 @@ func TestNudgeThreshold_ResetBySymbolicTool(t *testing.T) {
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
-	// Simulate a Serena symbolic tool call (resets grep count).
+	// Simulate a Helix symbolic tool call (resets grep count).
 	loaded := loadSessionStats(path, "test-session")
 	assert.True(t, isHelixSymbolicTool("find_symbol"))
 	loaded.HelixToolCount++

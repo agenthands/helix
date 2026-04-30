@@ -31,7 +31,7 @@ func TestMetrics_NewMetricsReturnsIsolatedRegistry(t *testing.T) {
 }
 
 // TestMetrics_RegisteredFamilies asserts the registry gathers the expected
-// metric families: 6 serena_* vectors plus Go + Process runtime collectors.
+// metric families: 6 helix_* vectors plus Go + Process runtime collectors.
 func TestMetrics_RegisteredFamilies(t *testing.T) {
 	m := newMetrics()
 	// Touch each vector so the family shows up in Gather() even without

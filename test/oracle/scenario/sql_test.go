@@ -13,7 +13,7 @@ import (
 // TestScenario_SQL_FullCycle exercises a complete agent workflow against the SQL fixture:
 // activate -> search (content scan) -> read -> edit -> verify read-back.
 // SQL has no standard language server, so this tests file operations only.
-// This verifies Serena handles SQL files correctly for read/write/search.
+// This verifies Helix handles SQL files correctly for read/write/search.
 func TestScenario_SQL_FullCycle(t *testing.T) {
 	fixtureDir := harness.PrepareFixture(t, "sql")
 	runner := harness.StartRunner(t, harness.RunnerOptions{

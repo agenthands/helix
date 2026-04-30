@@ -12,7 +12,7 @@ type ModeTransition struct {
 	Timestamp time.Time
 }
 
-// SessionInfo tracks Serena-specific session state layered on top of MCP SDK sessions.
+// SessionInfo tracks Helix-specific session state layered on top of MCP SDK sessions.
 // Per DMN-06: session keyed by MCP session + dirty buffer overlay + mode/capability profile.
 //
 // Thread-safety: All fields are guarded by mu. Callers MUST use the accessor methods

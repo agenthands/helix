@@ -25,7 +25,7 @@ type MetricsSink interface {
 }
 
 // Eviction reason constants — closed enum per D-13. The label space for
-// serena_lspool_evictions_total{reason} MUST stay bounded to this set so the
+// helix_lspool_evictions_total{reason} MUST stay bounded to this set so the
 // CI cardinality lint can prove the bound.
 const (
 	EvictIdle     = "idle"

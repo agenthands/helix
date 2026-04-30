@@ -22,10 +22,10 @@ func hookSettingsPath(projectDir string, global bool) string {
 	return filepath.Join(projectDir, ".claude", "settings.json")
 }
 
-// serenaHookConfig returns the hook configuration map for Claude Code.
+// helixHookConfig returns the hook configuration map for Claude Code.
 // Each event type maps to an array of matcher objects containing hook commands.
-// All Serena hook commands include "serena_managed": true for idempotent add/remove.
-func serenaHookConfig(binaryPath string) map[string][]any {
+// All Helix hook commands include "helix_managed": true for idempotent add/remove.
+func helixHookConfig(binaryPath string) map[string][]any {
 	return map[string][]any{
 		"SessionStart": {
 			map[string]any{
@@ -35,8 +35,8 @@ func serenaHookConfig(binaryPath string) map[string][]any {
 						"type":           "command",
 						"command":        fmt.Sprintf("%s activate --workspace \"$CLAUDE_PROJECT_DIR\"", binaryPath),
 						"timeout":        30,
-						"statusMessage":  "Activating Serena workspace...",
-						"serena_managed": true,
+						"statusMessage":  "Activating Helix workspace...",
+						"helix_managed": true,
 					},
 				},
 			},
@@ -49,7 +49,7 @@ func serenaHookConfig(binaryPath string) map[string][]any {
 						"type":           "command",
 						"command":        fmt.Sprintf("%s nudge", binaryPath),
 						"timeout":        5,
-						"serena_managed": true,
+						"helix_managed": true,
 					},
 				},
 			},
@@ -61,7 +61,7 @@ func serenaHookConfig(binaryPath string) map[string][]any {
 						"type":           "command",
 						"command":        fmt.Sprintf("%s deactivate --workspace \"$CLAUDE_PROJECT_DIR\"", binaryPath),
 						"timeout":        10,
-						"serena_managed": true,
+						"helix_managed": true,
 					},
 				},
 			},
@@ -70,9 +70,9 @@ func serenaHookConfig(binaryPath string) map[string][]any {
 }
 
 // mergeHooksIntoSettings reads existing settings.json (or creates a new one),
-// merges Serena hook entries for each event type, and writes back.
-// Existing user hooks are preserved. Previous Serena entries (identified by
-// "serena_managed": true) are removed before adding new ones (idempotent).
+// merges Helix hook entries for each event type, and writes back.
+// Existing user hooks are preserved. Previous Helix entries (identified by
+// "helix_managed": true) are removed before adding new ones (idempotent).
 // Uses encoding/json Marshal (never string concat) per T-36-02.
 func mergeHooksIntoSettings(path string, binaryPath string) error {
 	existing := make(map[string]any)
@@ -87,8 +87,8 @@ func mergeHooksIntoSettings(path string, binaryPath string) error {
 		hooks = make(map[string]any)
 	}
 
-	serenaHooks := serenaHookConfig(binaryPath)
-	for eventType, newMatchers := range serenaHooks {
+	helixHooks := helixHookConfig(binaryPath)
+	for eventType, newMatchers := range helixHooks {
 		// Get existing matchers for this event type.
 		var existingMatchers []any
 		if raw, ok := hooks[eventType]; ok {
@@ -97,10 +97,10 @@ func mergeHooksIntoSettings(path string, binaryPath string) error {
 			}
 		}
 
-		// Filter out previous Serena entries.
-		filtered := filterOutSerenaEntries(existingMatchers)
+		// Filter out previous Helix entries.
+		filtered := filterOutHelixEntries(existingMatchers)
 
-		// Append new Serena entries.
+		// Append new Helix entries.
 		filtered = append(filtered, newMatchers...)
 		hooks[eventType] = filtered
 	}
@@ -122,7 +122,7 @@ func mergeHooksIntoSettings(path string, binaryPath string) error {
 	return nil
 }
 
-// removeHooksFromSettings removes all Serena-managed hook entries from settings.json.
+// removeHooksFromSettings removes all Helix-managed hook entries from settings.json.
 // User hooks are preserved. If the file doesn't exist, returns nil.
 // If no matchers remain for an event type, the event type key is removed.
 // If the hooks object is empty, it is removed.
@@ -150,7 +150,7 @@ func removeHooksFromSettings(path string) error {
 		if !ok {
 			continue
 		}
-		filtered := filterOutSerenaEntries(arr)
+		filtered := filterOutHelixEntries(arr)
 		if len(filtered) == 0 {
 			delete(hooks, eventType)
 		} else {
@@ -172,9 +172,9 @@ func removeHooksFromSettings(path string) error {
 	return os.WriteFile(path, append(out, '\n'), 0644)
 }
 
-// filterOutSerenaEntries removes matcher objects where any hook command has
-// "serena_managed": true. Returns only non-Serena matcher objects.
-func filterOutSerenaEntries(matchers []any) []any {
+// filterOutHelixEntries removes matcher objects where any hook command has
+// "helix_managed": true. Returns only non-Helix matcher objects.
+func filterOutHelixEntries(matchers []any) []any {
 	var result []any
 	for _, m := range matchers {
 		matcher, ok := m.(map[string]any)
@@ -182,7 +182,7 @@ func filterOutSerenaEntries(matchers []any) []any {
 			result = append(result, m)
 			continue
 		}
-		if isSerenaManaged(matcher) {
+		if isHelixManaged(matcher) {
 			continue
 		}
 		result = append(result, m)
@@ -190,9 +190,9 @@ func filterOutSerenaEntries(matchers []any) []any {
 	return result
 }
 
-// isSerenaManaged checks whether a matcher object contains any hook command
-// with the "serena_managed" field set to true.
-func isSerenaManaged(matcher map[string]any) bool {
+// isHelixManaged checks whether a matcher object contains any hook command
+// with the "helix_managed" field set to true.
+func isHelixManaged(matcher map[string]any) bool {
 	hooksRaw, ok := matcher["hooks"]
 	if !ok {
 		return false
@@ -206,7 +206,7 @@ func isSerenaManaged(matcher map[string]any) bool {
 		if !ok {
 			continue
 		}
-		if managed, ok := hookMap["serena_managed"].(bool); ok && managed {
+		if managed, ok := hookMap["helix_managed"].(bool); ok && managed {
 			return true
 		}
 	}

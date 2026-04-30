@@ -53,7 +53,7 @@ func TestTracingDegradedFallback(t *testing.T) {
 	// Empty endpoint: WithTracing returns early with noop.
 	p := WithTracing(slog.NewTextHandler(io.Discard, nil), TracingConfig{
 		Endpoint:    "",
-		ServiceName: "test-serena",
+		ServiceName: "test-helix",
 		SampleRatio: 1.0,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -77,7 +77,7 @@ func TestTracingDegradedFallback(t *testing.T) {
 	// connects lazily), but the returned provider is a real SDK provider.
 	p2 := WithTracing(slog.NewTextHandler(io.Discard, nil), TracingConfig{
 		Endpoint:    "localhost:0",
-		ServiceName: "test-serena",
+		ServiceName: "test-helix",
 		SampleRatio: 1.0,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 

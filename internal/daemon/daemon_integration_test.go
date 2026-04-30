@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agenthands/helix/internal/config"
-	serenaMCP "github.com/agenthands/helix/internal/mcp"
+	helixMCP "github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/profile"
 	"github.com/agenthands/helix/internal/skill"
 )
@@ -96,7 +96,7 @@ func TestE2EModeSwitching(t *testing.T) {
 	require.NotNil(t, ps, "profile skill should be available")
 
 	// Wire a session provider with initial mode="edit" and profile="full".
-	session := &serenaMCP.SessionInfo{
+	session := &helixMCP.SessionInfo{
 		Profile: "full",
 		Mode:    "edit",
 	}
@@ -257,9 +257,9 @@ func TestE2EWorkflowOnboarding(t *testing.T) {
 
 // testSessionProvider is a minimal SessionProvider for testing mode switching.
 type testSessionProvider struct {
-	session *serenaMCP.SessionInfo
+	session *helixMCP.SessionInfo
 }
 
-func (p *testSessionProvider) CurrentSession() *serenaMCP.SessionInfo {
+func (p *testSessionProvider) CurrentSession() *helixMCP.SessionInfo {
 	return p.session
 }

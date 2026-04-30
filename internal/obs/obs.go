@@ -1,4 +1,4 @@
-// Package obs holds the observability scaffolding for Serena.
+// Package obs holds the observability scaffolding for Helix.
 //
 // Phase 10 shipped the noop slog ContextHandler wrapper. Phase 11 adds
 // Prometheus metrics (see metrics.go) — the obs package is now the single
@@ -76,7 +76,7 @@ func (p *Provider) Metrics() *Metrics { return p.metrics }
 // otelgrpc.WithTracerProvider) use this accessor.
 func (p *Provider) TracerProvider() trace.TracerProvider { return p.tracerProvider }
 
-// Tracer returns a trace.Tracer scoped to the Serena module. Never returns
+// Tracer returns a trace.Tracer scoped to the Helix module. Never returns
 // nil (D-04): even the noop path yields a functional (no-op) tracer.
 func (p *Provider) Tracer() trace.Tracer {
 	return p.tracerProvider.Tracer("github.com/agenthands/helix", trace.WithInstrumentationVersion("v1.2"))

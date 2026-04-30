@@ -51,7 +51,7 @@ type Metrics struct {
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
-// All serena_* vectors plus the Go runtime + Process collectors (D-16) are
+// All helix_* vectors plus the Go runtime + Process collectors (D-16) are
 // registered. Calling newMetrics() multiple times is safe: each call gets
 // its own registry, so double-registration panics cannot occur.
 func newMetrics() *Metrics {

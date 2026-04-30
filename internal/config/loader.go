@@ -85,7 +85,7 @@ func ResolveProfile(cfg *SerenaConfig, globalDir string) (*profile.ProfileStore,
 		return nil, nil, fmt.Errorf("loading embedded profiles: %w", err)
 	}
 
-	// Apply overrides from the global Serena directory if available.
+	// Apply overrides from the global Helix directory if available.
 	if globalDir != "" {
 		_ = profile.LoadOverrides(store, filepath.Join(globalDir, "profiles"), filepath.Join(globalDir, "modes"))
 	}

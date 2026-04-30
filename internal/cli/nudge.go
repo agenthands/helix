@@ -81,7 +81,7 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 	// Load stats for the current session.
 	stats := loadSessionStats(statsPath, input.SessionID)
 
-	// Check if this is a Serena symbolic tool call.
+	// Check if this is a Helix symbolic tool call.
 	if isHelixSymbolicTool(toolName) {
 		stats.HelixToolCount++
 		stats.GrepReadCount = 0 // Reset -- agent is using symbolic tools (D-12).
@@ -96,7 +96,7 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 
 		// Check threshold (D-10).
 		if stats.GrepReadCount >= 5 && stats.HelixToolCount == 0 {
-			fmt.Println("Tip: Serena provides find_symbol and get_symbols_overview for code navigation. These give you precise symbol locations, references, and type hierarchies instead of text pattern matching with grep.")
+			fmt.Println("Tip: Helix provides find_symbol and get_symbols_overview for code navigation. These give you precise symbol locations, references, and type hierarchies instead of text pattern matching with grep.")
 		}
 		return nil
 	}
@@ -154,8 +154,8 @@ func saveSessionStats(path string, stats sessionStats) error {
 	return nil
 }
 
-// serenaSymbolicTools lists Serena MCP tool names that indicate symbolic tool usage.
-var serenaSymbolicTools = map[string]bool{
+// helixSymbolicTools lists Helix MCP tool names that indicate symbolic tool usage.
+var helixSymbolicTools = map[string]bool{
 	"find_symbol":          true,
 	"get_symbol_details":   true,
 	"get_symbols_overview": true,
@@ -167,16 +167,16 @@ var serenaSymbolicTools = map[string]bool{
 	"get_blast_radius":     true,
 }
 
-// isHelixSymbolicTool returns true if the tool name matches a Serena symbolic tool,
+// isHelixSymbolicTool returns true if the tool name matches a Helix symbolic tool,
 // either with or without the "mcp__helix__" prefix.
 func isHelixSymbolicTool(name string) bool {
-	if serenaSymbolicTools[name] {
+	if helixSymbolicTools[name] {
 		return true
 	}
 	// Strip "mcp__helix__" prefix for flexibility.
 	const prefix = "mcp__helix__"
 	if strings.HasPrefix(name, prefix) {
-		return serenaSymbolicTools[strings.TrimPrefix(name, prefix)]
+		return helixSymbolicTools[strings.TrimPrefix(name, prefix)]
 	}
 	return false
 }

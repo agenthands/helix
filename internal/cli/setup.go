@@ -12,15 +12,15 @@ import (
 	"github.com/agenthands/helix/internal/langregistry"
 )
 
-// newSetupCommand creates the setup subcommand for registering Serena with coding agents.
+// newSetupCommand creates the setup subcommand for registering Helix with coding agents.
 func newSetupCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup [client]",
-		Short: "Register Serena as MCP server for a coding agent",
-		Long: `Register Serena as an MCP server for a supported coding agent.
+		Short: "Register Helix as MCP server for a coding agent",
+		Long: `Register Helix as an MCP server for a supported coding agent.
 
 Run without arguments to list available clients.
-Run with a client name to register Serena for that client.`,
+Run with a client name to register Helix for that client.`,
 		ValidArgs:     []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          runSetup,
@@ -29,7 +29,7 @@ Run with a client name to register Serena for that client.`,
 	}
 
 	cmd.Flags().Bool("global", false, "Register globally (user-scoped) instead of project-scoped")
-	cmd.Flags().Bool("uninstall", false, "Remove Serena registration from the client")
+	cmd.Flags().Bool("uninstall", false, "Remove Helix registration from the client")
 	cmd.Flags().Bool("skip-install", false, "Skip language server pre-installation")
 	cmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
 	cmd.Flags().String("output", "", "Output path for generic client config (default: stdout)")
@@ -157,12 +157,12 @@ func listClients(registry map[string]ClientRegistrar, printer *SetupPrinter) {
 	}
 }
 
-// resolveBinaryPath returns the absolute path to the serena binary.
+// resolveBinaryPath returns the absolute path to the helix binary.
 // Uses os.Executable() + filepath.EvalSymlinks(), falling back to unresolved if symlink eval fails.
 func resolveBinaryPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("cannot determine serena binary path: %w", err)
+		return "", fmt.Errorf("cannot determine helix binary path: %w", err)
 	}
 	resolved, err := filepath.EvalSymlinks(exe)
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 )
 
 // TestSelection verifies that an LLM can select the correct tool for every
-// exposed Serena tool given a natural-language task description (LLM-01).
+// exposed Helix tool given a natural-language task description (LLM-01).
 // One subtest per tool. Sequential execution with inter-call delays (D-19).
 func TestSelection(t *testing.T) {
 	SkipWithoutAPIKey(t)

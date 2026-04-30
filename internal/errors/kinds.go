@@ -1,4 +1,4 @@
-// Package errors defines a typed error taxonomy for Serena's MCP tools.
+// Package errors defines a typed error taxonomy for Helix's MCP tools.
 //
 // Import convention: use alias "serr" to avoid shadowing stdlib errors.
 //

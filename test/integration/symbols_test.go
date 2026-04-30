@@ -136,7 +136,7 @@ func TestSymbols_GoFixture(t *testing.T) {
 	})
 }
 
-// TestSymbols_CodebaseSmoke exercises symbol tools against Serena's own codebase
+// TestSymbols_CodebaseSmoke exercises symbol tools against Helix's own codebase
 // with strict assertions (callTool fatals on error).
 func TestSymbols_CodebaseSmoke(t *testing.T) {
 	requireGopls(t)

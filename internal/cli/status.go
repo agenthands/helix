@@ -22,7 +22,7 @@ func newStatusCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show workspace health and language server status",
-		Long: `Query the running Serena daemon and display language server health.
+		Long: `Query the running Helix daemon and display language server health.
 Defaults to showing only unhealthy servers. Use --verbose for full output.`,
 		RunE:          runStatus,
 		SilenceUsage:  true,

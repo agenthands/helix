@@ -30,6 +30,15 @@ func SetVersion(v string) {
 	currentVersion = v
 }
 
+// CurrentVersion returns the binary version string set via SetVersion().
+// Defaults to "dev" until the cmd/helix/main.go entrypoint threads the
+// ldflag-injected value. Used by internal/mcp/server.go to populate the
+// MCP `Implementation.Version` field so the MCP client identity stays in
+// lockstep with the CLI `--version` output (per RESEARCH.md A6).
+func CurrentVersion() string {
+	return currentVersion
+}
+
 // NewRootCommand creates the root cobra command with all flags.
 // Per D-02: flat CLI with flags, no subcommands.
 func NewRootCommand() *cobra.Command {

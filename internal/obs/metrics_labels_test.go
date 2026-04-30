@@ -13,7 +13,7 @@ import (
 // closed enum enforced at emission sites (not at scrape-time), and exists
 // only because the dimension is orthogonal to the RED tool-call labels.
 //
-// CONTEXT.md D-13: serena_lspool_evictions_total carries a "reason" label
+// CONTEXT.md D-13: helix_lspool_evictions_total carries a "reason" label
 // whose value is one of {idle, pressure, crash, shutdown}. "reason" is an
 // internal dimensional slice on lspool worker lifecycle, not a request
 // label on tool calls, so it lives outside the AllowedLabels set. The
@@ -29,7 +29,7 @@ var carveOuts = map[string]map[string]bool{
 
 // runtimeFamilyPrefixes names metric families contributed by
 // collectors.NewGoCollector() and collectors.NewProcessCollector(). These
-// are not Serena-owned, carry whatever labels upstream Prometheus chooses,
+// are not Helix-owned, carry whatever labels upstream Prometheus chooses,
 // and are exempt from the D-04 allowlist.
 var runtimeFamilyPrefixes = []string{"go_", "process_"}
 
@@ -83,7 +83,7 @@ func lintLabels(t *testing.T, gatherer prometheus.Gatherer) []string {
 }
 
 // TestMetricsLabelsAllowlist enforces METRIC-05: every label on every
-// Serena-owned metric vector is a member of AllowedLabels (or an explicitly
+// Helix-owned metric vector is a member of AllowedLabels (or an explicitly
 // carved-out dimension like D-13's lspool eviction reason). Adding a new
 // vector with label "user_id" in a future plan must break this test.
 func TestMetricsLabelsAllowlist(t *testing.T) {

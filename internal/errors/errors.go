@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Error is the structured error type for all Serena MCP tools.
+// Error is the structured error type for all Helix MCP tools.
 // It carries a Kind for programmatic matching, a human-readable Message,
 // an optional Tool name, an optional Detail string, and an unexported
 // cause for error chain traversal.

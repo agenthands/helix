@@ -16,15 +16,15 @@ type ClientRegistrar interface {
 	Name() string
 	// Description returns a one-line description for help output.
 	Description() string
-	// Register adds Serena as an MCP server for this client.
+	// Register adds Helix as an MCP server for this client.
 	Register(cfg RegistrationConfig) error
-	// Unregister removes Serena from this client.
+	// Unregister removes Helix from this client.
 	Unregister(cfg RegistrationConfig) error
 }
 
 // RegistrationConfig holds common registration parameters.
 type RegistrationConfig struct {
-	BinaryPath string        // Absolute path to serena binary (resolved via os.Executable + filepath.EvalSymlinks)
+	BinaryPath string        // Absolute path to helix binary (resolved via os.Executable + filepath.EvalSymlinks)
 	Global     bool          // --global flag
 	DryRun     bool          // --dry-run flag
 	ProjectDir string        // Current working directory
@@ -48,7 +48,7 @@ func clientRegistry() map[string]ClientRegistrar {
 
 // --- Shared helpers ---
 
-// serverConfigJSON returns the standard MCP server config for serena.
+// serverConfigJSON returns the standard MCP server config for helix.
 func serverConfigJSON(binaryPath string) map[string]any {
 	return map[string]any{
 		"command": binaryPath,
@@ -152,7 +152,7 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 		scope = "user"
 	}
 
-	addArgs := []string{"mcp", "add-json", "serena", string(serverJSON), "--scope", scope}
+	addArgs := []string{"mcp", "add-json", "helix", string(serverJSON), "--scope", scope}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(addArgs, " "))
@@ -171,7 +171,7 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 			configPath = filepath.Join(home, ".claude", "settings.json")
 		}
 		if !cfg.Global {
-			return mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+			return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 		}
 		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first or add manually")
 	}
@@ -181,14 +181,14 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 	if err != nil {
 		// If "already exists", remove then re-add to update the config
 		if strings.Contains(string(output), "already exists") {
-			cfg.Printer.Info("serena already registered — updating")
-			rmCmd := exec.Command("claude", "mcp", "remove", "serena", "--scope", scope)
+			cfg.Printer.Info("helix already registered — updating")
+			rmCmd := exec.Command("claude", "mcp", "remove", "helix", "--scope", scope)
 			rmCmd.Stdout = os.Stderr
 			rmCmd.Stderr = os.Stderr
 			if rmErr := rmCmd.Run(); rmErr != nil {
 				// Remove failed — fall back to direct file write
 				cfg.Printer.Info("could not remove via CLI; writing directly to .mcp.json")
-				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 			}
 			// Retry add after remove
 			retryCmd := exec.Command("claude", addArgs...)
@@ -197,12 +197,12 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 			if retryErr := retryCmd.Run(); retryErr != nil {
 				// CLI still failing — fall back to direct file write
 				cfg.Printer.Info("CLI retry failed; writing directly to .mcp.json")
-				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 			}
 		} else {
 			// Non-duplicate error — fall back to direct file write
 			cfg.Printer.Info("claude CLI failed (%s); writing directly to .mcp.json", strings.TrimSpace(string(output)))
-			return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+			return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 		}
 	}
 
@@ -230,7 +230,7 @@ func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 		scope = "user"
 	}
 
-	cmdArgs := []string{"mcp", "remove", "serena", "--scope", scope}
+	cmdArgs := []string{"mcp", "remove", "helix", "--scope", scope}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(cmdArgs, " "))
@@ -277,11 +277,11 @@ func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
 		scope = "user"
 	}
 
-	cmdArgs := []string{"mcp", "add", "--scope", scope, "-t", "stdio", "serena", cfg.BinaryPath, "--", "--mode=stdio"}
+	cmdArgs := []string{"mcp", "add", "--scope", scope, "-t", "stdio", "helix", cfg.BinaryPath, "--", "--mode=stdio"}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
-		cfg.Printer.DryRunAction("would enable serena in mcp-server-enablement.json")
+		cfg.Printer.DryRunAction("would enable helix in mcp-server-enablement.json")
 		return nil
 	}
 
@@ -306,23 +306,23 @@ func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
 		if err != nil {
 			return err
 		}
-		if err := mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath)); err != nil {
+		if err := mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath)); err != nil {
 			return err
 		}
 	}
 
-	// Always ensure serena is enabled in the enablement file.
+	// Always ensure helix is enabled in the enablement file.
 	// Gemini CLI uses a separate mcp-server-enablement.json to gate which servers are active.
 	// Without this, the server is registered but invisible.
 	if err := r.ensureEnabled(cfg); err != nil {
-		cfg.Printer.Failure("could not enable serena in mcp-server-enablement.json: %s", err)
+		cfg.Printer.Failure("could not enable helix in mcp-server-enablement.json: %s", err)
 		cfg.Printer.Info("MCP registration succeeded; enable manually in ~/.gemini/mcp-server-enablement.json")
 	}
 
 	return nil
 }
 
-// ensureDisabled sets {"serena": {"enabled": false}} in Gemini's mcp-server-enablement.json.
+// ensureDisabled sets {"helix": {"enabled": false}} in Gemini's mcp-server-enablement.json.
 func (r *GeminiCLIRegistrar) ensureDisabled() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -335,7 +335,7 @@ func (r *GeminiCLIRegistrar) ensureDisabled() error {
 		_ = json.Unmarshal(data, &existing)
 	}
 
-	existing["serena"] = map[string]any{"enabled": false}
+	existing["helix"] = map[string]any{"enabled": false}
 
 	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
@@ -345,7 +345,7 @@ func (r *GeminiCLIRegistrar) ensureDisabled() error {
 	return os.WriteFile(enablementPath, append(data, '\n'), 0644)
 }
 
-// ensureEnabled writes {"serena": {"enabled": true}} into Gemini's mcp-server-enablement.json.
+// ensureEnabled writes {"helix": {"enabled": true}} into Gemini's mcp-server-enablement.json.
 func (r *GeminiCLIRegistrar) ensureEnabled(cfg RegistrationConfig) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -358,7 +358,7 @@ func (r *GeminiCLIRegistrar) ensureEnabled(cfg RegistrationConfig) error {
 		_ = json.Unmarshal(data, &existing)
 	}
 
-	existing["serena"] = map[string]any{"enabled": true}
+	existing["helix"] = map[string]any{"enabled": true}
 
 	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
@@ -390,11 +390,11 @@ func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 		scope = "user"
 	}
 
-	cmdArgs := []string{"mcp", "remove", "serena", "--scope", scope}
+	cmdArgs := []string{"mcp", "remove", "helix", "--scope", scope}
 
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
-		cfg.Printer.DryRunAction("would disable serena in mcp-server-enablement.json")
+		cfg.Printer.DryRunAction("would disable helix in mcp-server-enablement.json")
 		return nil
 	}
 
@@ -409,7 +409,7 @@ func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 		if pathErr != nil {
 			return pathErr
 		}
-		return removeFromJSONConfig(configPath, "mcpServers", "serena")
+		return removeFromJSONConfig(configPath, "mcpServers", "helix")
 	}
 
 	cmd := exec.Command("gemini", cmdArgs...)
@@ -443,11 +443,11 @@ func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: servers.serena = %v", configPath, serverEntry)
+		cfg.Printer.DryRunAction("would write to %s: servers.helix = %v", configPath, serverEntry)
 		return nil
 	}
 
-	return mergeJSONConfig(configPath, "servers", "serena", serverEntry)
+	return mergeJSONConfig(configPath, "servers", "helix", serverEntry)
 }
 
 func (r *VSCodeRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -457,11 +457,11 @@ func (r *VSCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
+		cfg.Printer.DryRunAction("would remove helix from %s", configPath)
 		return nil
 	}
 
-	return removeFromJSONConfig(configPath, "servers", "serena")
+	return removeFromJSONConfig(configPath, "servers", "helix")
 }
 
 func (r *VSCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
@@ -490,11 +490,11 @@ func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcpServers.serena", configPath)
+		cfg.Printer.DryRunAction("would write to %s: mcpServers.helix", configPath)
 		return nil
 	}
 
-	return mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 }
 
 func (r *JetBrainsRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -504,11 +504,11 @@ func (r *JetBrainsRegistrar) Unregister(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
+		cfg.Printer.DryRunAction("would remove helix from %s", configPath)
 		return nil
 	}
 
-	return removeFromJSONConfig(configPath, "mcpServers", "serena")
+	return removeFromJSONConfig(configPath, "mcpServers", "helix")
 }
 
 func (r *JetBrainsRegistrar) configPath(cfg RegistrationConfig) (string, error) {
@@ -538,11 +538,11 @@ func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcpServers.serena", configPath)
+		cfg.Printer.DryRunAction("would write to %s: mcpServers.helix", configPath)
 		return nil
 	}
 
-	return mergeJSONConfig(configPath, "mcpServers", "serena", serverConfigJSON(cfg.BinaryPath))
+	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
 }
 
 func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -552,11 +552,11 @@ func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
+		cfg.Printer.DryRunAction("would remove helix from %s", configPath)
 		return nil
 	}
 
-	return removeFromJSONConfig(configPath, "mcpServers", "serena")
+	return removeFromJSONConfig(configPath, "mcpServers", "helix")
 }
 
 // configPath returns the platform-specific Claude Desktop config path.
@@ -607,11 +607,11 @@ func (r *OpenCodeRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcp.serena = %v", configPath, serverEntry)
+		cfg.Printer.DryRunAction("would write to %s: mcp.helix = %v", configPath, serverEntry)
 		return nil
 	}
 
-	return mergeJSONConfig(configPath, "mcp", "serena", serverEntry)
+	return mergeJSONConfig(configPath, "mcp", "helix", serverEntry)
 }
 
 func (r *OpenCodeRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -621,11 +621,11 @@ func (r *OpenCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would remove serena from %s", configPath)
+		cfg.Printer.DryRunAction("would remove helix from %s", configPath)
 		return nil
 	}
 
-	return removeFromJSONConfig(configPath, "mcp", "serena")
+	return removeFromJSONConfig(configPath, "mcp", "helix")
 }
 
 func (r *OpenCodeRegistrar) configPath(cfg RegistrationConfig) (string, error) {
@@ -651,7 +651,7 @@ func (r *GenericRegistrar) Description() string { return "Generic MCP stdio conf
 func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {
 	fullConfig := map[string]any{
 		"mcpServers": map[string]any{
-			"serena": serverConfigJSON(cfg.BinaryPath),
+			"helix": serverConfigJSON(cfg.BinaryPath),
 		},
 	}
 
@@ -688,10 +688,10 @@ func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {
 func (r *GenericRegistrar) Unregister(cfg RegistrationConfig) error {
 	if cfg.OutputPath != "" {
 		if cfg.DryRun {
-			cfg.Printer.DryRunAction("would remove serena from %s", cfg.OutputPath)
+			cfg.Printer.DryRunAction("would remove helix from %s", cfg.OutputPath)
 			return nil
 		}
-		return removeFromJSONConfig(cfg.OutputPath, "mcpServers", "serena")
+		return removeFromJSONConfig(cfg.OutputPath, "mcpServers", "helix")
 	}
 	cfg.Printer.Info("generic config was printed to stdout and cannot be unregistered automatically")
 	return nil

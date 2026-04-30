@@ -43,7 +43,7 @@ func RecordRenameStrategy(ctx context.Context, strategy string) {
 	(*p)(ctx, strategy)
 }
 
-// InstallMiddleware wires Serena's receiving middleware onto the MCP SDK server
+// InstallMiddleware wires Helix's receiving middleware onto the MCP SDK server
 // (MCP-04 + METRIC-02).
 //
 // TelemetryMiddleware absorbs the previous Phase 8 logging closure: it

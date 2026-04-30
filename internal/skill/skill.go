@@ -1,5 +1,5 @@
 // Package skill defines the plugin/skill interface and registration system
-// for extending Serena's tool set without touching core (WFL-03).
+// for extending Helix's tool set without touching core (WFL-03).
 package skill
 
 import (

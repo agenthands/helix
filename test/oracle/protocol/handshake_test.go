@@ -23,7 +23,7 @@ func TestHandshake_InMemory(t *testing.T) {
 	require.NotNil(t, result, "InitializeResult must not be nil")
 	require.NotEmpty(t, result.ProtocolVersion, "ProtocolVersion must not be empty")
 	require.NotNil(t, result.ServerInfo, "ServerInfo must not be nil")
-	require.Equal(t, "serena", result.ServerInfo.Name, "server name must be 'serena'")
+	require.Equal(t, "helix", result.ServerInfo.Name, "server name must be 'helix'")
 	require.NotNil(t, result.Capabilities, "Capabilities must not be nil")
 	require.NotNil(t, result.Capabilities.Tools, "Capabilities.Tools must not be nil")
 
@@ -43,7 +43,7 @@ func TestHandshake_HTTP(t *testing.T) {
 	require.NotNil(t, result, "HTTP InitializeResult must not be nil")
 	require.NotEmpty(t, result.ProtocolVersion, "HTTP ProtocolVersion must not be empty")
 	require.NotNil(t, result.ServerInfo, "HTTP ServerInfo must not be nil")
-	require.Equal(t, "serena", result.ServerInfo.Name, "HTTP server name must be 'serena'")
+	require.Equal(t, "helix", result.ServerInfo.Name, "HTTP server name must be 'helix'")
 	require.NotNil(t, result.Capabilities, "HTTP Capabilities must not be nil")
 	require.NotNil(t, result.Capabilities.Tools, "HTTP Capabilities.Tools must not be nil")
 

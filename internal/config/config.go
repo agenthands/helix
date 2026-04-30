@@ -1,7 +1,7 @@
 package config
 
 // SerenaConfig is the top-level configuration for the Serena daemon.
-// Mirrors the Python Serena config schema (D-11) with Go types.
+// Mirrors the Python Helix config schema (D-11) with Go types.
 type SerenaConfig struct {
 	// Daemon settings
 	Daemon DaemonConfig `koanf:"daemon"`

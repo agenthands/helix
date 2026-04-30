@@ -32,7 +32,7 @@ import (
 	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/agenthands/helix/internal/kernel/symbols"
 	"github.com/agenthands/helix/internal/langregistry"
-	serenaMCP "github.com/agenthands/helix/internal/mcp"
+	helixMCP "github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/profile"
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
@@ -51,10 +51,10 @@ type SkillToolExecutor interface {
 
 // daemonSessionProvider is a minimal SessionProvider for the profile skill.
 type daemonSessionProvider struct {
-	session *serenaMCP.SessionInfo
+	session *helixMCP.SessionInfo
 }
 
-func (p *daemonSessionProvider) CurrentSession() *serenaMCP.SessionInfo {
+func (p *daemonSessionProvider) CurrentSession() *helixMCP.SessionInfo {
 	return p.session
 }
 
@@ -105,7 +105,7 @@ type Daemon struct {
 	logger         *slog.Logger
 	obs            *obs.Provider
 	workspaces     *workspace.Registry
-	mcpServer      *serenaMCP.SerenaMCPServer
+	mcpServer      *helixMCP.SerenaMCPServer
 	grpcServer     *grpc.Server
 	socketListener net.Listener
 	kernel         *kernel.Kernel
@@ -209,7 +209,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	bodyExtractor := edit.NewBodyExtractor(grammarRegistry)
 
 	// 7. Create MCP server.
-	mcpServer := serenaMCP.NewSerenaMCPServer(workspaces, logger)
+	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger)
 
 	// 8. Resolve profile per D-08.
 	globalDir := filepath.Join(homeDir, ".helix")
@@ -277,7 +277,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// is filtered from session start (not only after the first switch_mode call).
 	initialAllowedTools := resolveAllowedToolsForMode(profileStore, activeProfile, initialMode)
 	sessionProvider := &daemonSessionProvider{
-		session: &serenaMCP.SessionInfo{
+		session: &helixMCP.SessionInfo{
 			Profile:      cfg.Profile,
 			Mode:         initialMode,
 			AllowedTools: initialAllowedTools,
@@ -326,22 +326,22 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches
 	// tools/list.
-	getSessionFn := func(ctx context.Context) *serenaMCP.SessionInfo {
+	getSessionFn := func(ctx context.Context) *helixMCP.SessionInfo {
 		return sessionProvider.CurrentSession()
 	}
 	degradeCfg := cfg.Degradation
-	budgetFn := serenaMCP.BudgetFunc(func(toolName string) time.Duration {
+	budgetFn := helixMCP.BudgetFunc(func(toolName string) time.Duration {
 		return degrade.BudgetFor(toolName, degradeCfg)
 	})
-	serenaMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, mcpServer.Registry(), logger)
+	helixMCP.InstallMiddleware(mcpServer.SDK(), observability, profileStore, getSessionFn, budgetFn, mcpServer.Registry(), logger)
 
 	// 14b. Install suggestion middleware: enriches error responses with "did you mean"
 	// parameter corrections (SERR-01, SERR-02, SERR-03). Schema map built from all
 	// registered tools (steps 10-11 complete). Must run AFTER InstallMiddleware so
 	// SuggestionMiddleware sits between the tool handler and TelemetryMiddleware --
 	// errors are enriched before telemetry classifies the outcome.
-	suggestionSchemaMap := serenaMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
-	serenaMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
+	suggestionSchemaMap := helixMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
+	helixMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
 
 	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST
 	// so it runs FIRST in the LIFO middleware chain (before TelemetryMiddleware deadline).
@@ -364,7 +364,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return nil
 	}
 	isActiveFn := func() bool { return activeWSKey.RepoRoot != "" }
-	serenaMCP.InstallLazyInitMiddleware(mcpServer.SDK(), lazyActivateFn, isActiveFn, "", logger)
+	helixMCP.InstallLazyInitMiddleware(mcpServer.SDK(), lazyActivateFn, isActiveFn, "", logger)
 
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session
@@ -408,7 +408,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 }
 
 // MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
-func (d *Daemon) MCPServer() *serenaMCP.SerenaMCPServer { return d.mcpServer }
+func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }
 
 // KernelInstance returns the kernel for lifecycle management in tests.
 func (d *Daemon) KernelInstance() *kernel.Kernel { return d.kernel }
@@ -419,14 +419,14 @@ func (d *Daemon) ObsProvider() *obs.Provider { return d.obs }
 
 // registerSkillTools registers all tools from a ToolProvider with the MCP server.
 // Skills with ExecuteTool (memory, workflow) get live handlers; others are catalog-only.
-func registerSkillTools(server *serenaMCP.SerenaMCPServer, tp skill.ToolProvider, logger *slog.Logger) {
+func registerSkillTools(server *helixMCP.SerenaMCPServer, tp skill.ToolProvider, logger *slog.Logger) {
 	executor, hasExecutor := tp.(SkillToolExecutor)
 	for _, td := range tp.Tools() {
 		if hasExecutor {
 			server.AddSkillTool(td.Name, td.Description, td.BriefDescription, td.HelpText, executor)
 		} else {
 			// Catalog-only registration (e.g., profile skill with custom Execute* methods).
-			server.Registry().Register(&serenaMCP.ToolDef{
+			server.Registry().Register(&helixMCP.ToolDef{
 				Name:             td.Name,
 				Description:      td.Description,
 				BriefDescription: td.BriefDescription,
@@ -579,7 +579,7 @@ func (d *Daemon) Workspaces() *workspace.Registry {
 // forwarderServiceHandler implements the gRPC ForwarderService.
 type forwarderServiceHandler struct {
 	serenav1.UnimplementedForwarderServiceServer
-	mcpServer *serenaMCP.SerenaMCPServer
+	mcpServer *helixMCP.SerenaMCPServer
 	kernel    *kernel.Kernel
 	logger    *slog.Logger
 }
@@ -597,7 +597,7 @@ func (h *forwarderServiceHandler) StreamMCP(stream serenav1.ForwarderService_Str
 
 	// Create a GRPCTransport that bridges this stream to the MCP SDK.
 	// Pass firstMsg so it gets replayed into the transport pipe.
-	transport := serenaMCP.NewGRPCTransport(stream, sessionID, firstMsg)
+	transport := helixMCP.NewGRPCTransport(stream, sessionID, firstMsg)
 
 	// Connect the MCP server to this transport
 	session, err := h.mcpServer.SDK().Connect(stream.Context(), transport, nil)

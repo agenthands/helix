@@ -1,6 +1,6 @@
 package bench_test
 
-// fullrepo_smoke_test.go implements D-05 full-Serena-codebase indexing smoke:
+// fullrepo_smoke_test.go implements D-05 full-Helix-codebase indexing smoke:
 // index the ~25,779-LOC repo root as a real-world scale validation of the LSP
 // indexing path. This is intentionally separate from BenchmarkLSPIndex_Cold
 // (which targets the small Go fixture) because repo-scale indexing has a long
@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-// repoRoot walks up from this source file to the Serena repository root by
+// repoRoot walks up from this source file to the Helix repository root by
 // locating the parent directory containing go.mod. Panics (via tb.Fatalf) if
 // no go.mod is found, which would indicate the file was moved out of
 // test/bench/ without updating this helper.
@@ -47,7 +47,7 @@ func repoRoot(tb testing.TB) string {
 	return ""
 }
 
-// BenchmarkFullRepoSmoke indexes the full Serena codebase (~25,779 LOC per
+// BenchmarkFullRepoSmoke indexes the full Helix codebase (~25,779 LOC per
 // D-05) as a real-world scale validation. Short-gated per Pitfall 11 to keep
 // PR CI under budget — each iteration takes 15-30s because gopls must load
 // and type-check the entire module graph. Run manually with

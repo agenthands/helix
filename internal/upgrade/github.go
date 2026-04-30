@@ -141,6 +141,12 @@ func fetchJSON(ctx context.Context, url string, out any) error {
 		return serr.Wrap(serr.Internal, "github request failed", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	// REVIEW.md WR-06: ctx cancellation aborts the body read. Without
+	// this, a stuck json.Decode (server hangs after sending headers, or
+	// user Ctrl-Cs mid-decode) blocks indefinitely. Closing the body on
+	// ctx.Done() forces in-flight reads to error out.
+	cancelOnCtx := watchContextClose(ctx, resp.Body)
+	defer cancelOnCtx()
 
 	// Rate-limit branch (RESEARCH.md Pitfall 6): 429 explicit; or 403 with
 	// X-RateLimit-Remaining=0. Return a typed Timeout error with an
@@ -289,6 +295,11 @@ func downloadFile(ctx context.Context, url, destPath string) error {
 		return serr.Wrap(serr.Internal, "downloading "+url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	// REVIEW.md WR-06: ctx cancellation aborts the multi-MB io.Copy
+	// below. Closing the body forces an in-flight Read to return an
+	// error immediately instead of waiting on a stuck server.
+	cancelOnCtx := watchContextClose(ctx, resp.Body)
+	defer cancelOnCtx()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return serr.New(serr.Internal, fmt.Sprintf("download failed: HTTP %d for %s", resp.StatusCode, url))
@@ -310,6 +321,28 @@ func downloadFile(ctx context.Context, url, destPath string) error {
 		return serr.Wrap(serr.Internal, "closing "+destPath, err)
 	}
 	return nil
+}
+
+// watchContextClose spawns a goroutine that closes body when ctx is
+// canceled, forcing an in-flight Read on body to return an error
+// instead of blocking. The returned stop function tears the goroutine
+// down on the normal request-completion path so it does not leak.
+//
+// Use case: HTTP responses where the headers arrive but the body read
+// (json.Decode, io.Copy) blocks indefinitely if the server stalls or
+// the user Ctrl-Cs mid-stream. The Go stdlib NewRequestWithContext
+// covers connect/header timeouts but not the post-header body read.
+// See REVIEW.md WR-06.
+func watchContextClose(ctx context.Context, body io.Closer) func() {
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = body.Close()
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
 }
 
 // sortReleasesBySemverDesc sorts in-place by descending semver tag.

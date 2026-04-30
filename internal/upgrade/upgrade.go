@@ -180,6 +180,28 @@ func Upgrade(ctx context.Context, opts Options) error {
 	checksumsAsset := rel.FindAsset("checksums.txt")
 	checksumsSigAsset := rel.FindAsset("checksums.txt.minisig")
 
+	// Asymmetric checksum-pair guard (REVIEW.md CR-03). The cross-check
+	// between checksums.txt and the archive sha256 is defense-in-depth
+	// against a tampered single-asset replacement on a compromised
+	// release page. If a release ships ONE file but not the other, that
+	// is a positive signal that the release-signing pipeline failed (or
+	// that an attacker who can replace checksums.txt also deleted the
+	// .minisig sidecar to disable the cross-check). Either case fails
+	// closed: refuse to upgrade rather than silently falling back to
+	// archive-signature-only verification, which is exactly the surface
+	// the cross-check was added to defend.
+	if (checksumsAsset != nil) != (checksumsSigAsset != nil) {
+		var present, missing string
+		if checksumsAsset != nil {
+			present, missing = "checksums.txt", "checksums.txt.minisig"
+		} else {
+			present, missing = "checksums.txt.minisig", "checksums.txt"
+		}
+		fmt.Fprintf(out, "warning: release asset %s present but %s missing — refusing to upgrade (release artifact is incomplete)\n", present, missing)
+		return serr.New(serr.NotFound, "release artifacts incomplete: "+present+" present without "+missing).
+			WithDetail("tag=" + rel.TagName)
+	}
+
 	stageArchive := filepath.Join(stage, archiveName)
 	stageSig := filepath.Join(stage, sigName)
 	if err := downloadFile(ctx, archiveAsset.BrowserDownloadURL, stageArchive); err != nil {
@@ -191,7 +213,8 @@ func Upgrade(ctx context.Context, opts Options) error {
 
 	// Defense-in-depth: if checksums.txt + sig are present, verify them
 	// and cross-check the archive sha256. Phase 51 51-05 signs both
-	// files; this triple-check matches the INSTALL.md ceremony.
+	// files; this triple-check matches the INSTALL.md ceremony. The
+	// asymmetric-pair case is rejected above before we reach this branch.
 	if checksumsAsset != nil && checksumsSigAsset != nil {
 		stageChecksums := filepath.Join(stage, "checksums.txt")
 		stageChecksumsSig := filepath.Join(stage, "checksums.txt.minisig")

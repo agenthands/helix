@@ -31,6 +31,7 @@ Hard refusals (no override flags):
 - **Downgrades:** if the chosen target is `<= current`, `helix upgrade` exits 0 with "already up to date". Use the manual GitHub Releases verification recipe in INSTALL.md to install older versions explicitly.
 - **In-daemon upgrades:** running `helix upgrade` from inside a daemon child prints "restart the daemon manually" and exits 0. Stop the daemon first.
 - **Unwritable install path:** prints the exact `sudo helix upgrade <flags>` re-invocation and exits non-zero. No internal sudo prompt.
+- **Asymmetric checksum-pair release:** if a release ships `checksums.txt` without `checksums.txt.minisig` (or vice versa), `helix upgrade` refuses to proceed and prints `release artifact is incomplete`. The pair is required so a tampered single-asset replacement on a compromised release page cannot silently disable the cross-check. Either both files are present and verified, or neither is — there is no fallback to archive-signature-only verification.
 
 Rate-limit guidance: `helix update`/`helix upgrade` use the GitHub anonymous API (60 req/hr/IP). Set `GITHUB_TOKEN` (a fine-grained PAT with `public_repo` scope is enough) to lift to 5000/hr in CI environments.
 

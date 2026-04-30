@@ -303,6 +303,67 @@ func TestUpgradeSanitizeReleaseBody(t *testing.T) {
 	}
 }
 
+// TestUpgradeAsymmetricChecksumsRefused covers REVIEW.md CR-03: when a
+// release ships checksums.txt without checksums.txt.minisig (or vice
+// versa) the upgrade flow MUST fail closed with a clear error rather
+// than silently fall back to archive-signature-only verification. The
+// cross-check is the surface that defends against a tampered single-
+// asset substitution; an attacker who can replace checksums.txt and
+// also delete the .minisig sidecar would otherwise turn it off.
+func TestUpgradeAsymmetricChecksumsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission probe path is POSIX-flavored")
+	}
+	withTestKey(t)
+
+	tag := "v1.9.0"
+	assetName := archiveAssetName(tag, runtime.GOOS, runtime.GOARCH)
+	sigName := assetName + ".minisig"
+
+	mux := http.NewServeMux()
+	var server *httptest.Server
+	mux.HandleFunc("/repos/agenthands/helix/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		// Asset list includes archive + sig + checksums.txt but NOT
+		// checksums.txt.minisig — the asymmetric case. Production code
+		// must refuse to proceed.
+		_ = json.NewEncoder(w).Encode(Release{
+			TagName: tag,
+			Assets: []Asset{
+				{Name: assetName, BrowserDownloadURL: server.URL + "/dl/archive"},
+				{Name: sigName, BrowserDownloadURL: server.URL + "/dl/sig"},
+				{Name: "checksums.txt", BrowserDownloadURL: server.URL + "/dl/checksums"},
+				// checksums.txt.minisig intentionally omitted.
+			},
+		})
+	})
+	mux.HandleFunc("/dl/archive", func(w http.ResponseWriter, r *http.Request) {
+		serveFile(t, w, testdataArchive)
+	})
+	mux.HandleFunc("/dl/sig", func(w http.ResponseWriter, r *http.Request) {
+		serveFile(t, w, testdataMinisig)
+	})
+
+	server = httptest.NewServer(mux)
+	defer server.Close()
+
+	var out bytes.Buffer
+	err := Upgrade(context.Background(), Options{
+		Current: "v1.8.0",
+		DryRun:  true,
+		Stdout:  &out,
+		baseURL: server.URL,
+	})
+	if err == nil {
+		t.Fatal("Upgrade(asymmetric checksum pair) = nil, want refusal")
+	}
+	// Permission probe might fire first in some CI environments — accept
+	// either signal that the upgrade was refused.
+	if !strings.Contains(err.Error(), "release artifacts incomplete") &&
+		!strings.Contains(err.Error(), "not writable") {
+		t.Errorf("Upgrade(asymmetric) err = %q, want 'release artifacts incomplete' refusal", err.Error())
+	}
+}
+
 func TestUpgradeVerifyTamperedFails(t *testing.T) {
 	// The full Upgrade flow against tampered fixtures fails at verify and
 	// returns the canonical signature-failure error. Set up the server to

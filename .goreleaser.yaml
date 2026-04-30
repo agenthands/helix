@@ -3,12 +3,12 @@
 # D-06 (tag-triggered + auto pre-release), D-07 (auto-generated notes from git log).
 version: 2
 
-project_name: serena
+project_name: helix
 
 builds:
-  - id: serena
-    main: ./cmd/serena
-    binary: serena
+  - id: helix
+    main: ./cmd/helix
+    binary: helix
     env:
       - CGO_ENABLED=0
       - GOFLAGS=-mod=readonly
@@ -29,14 +29,14 @@ builds:
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
-  - id: serena
-    ids: [serena]
+  - id: helix
+    ids: [helix]
     formats: ["tar.gz"]
     # Note: goreleaser strips the leading 'v' from `{{ .Version }}`, so the literal
     # 'v' below restores the prefix to match the GitHub release tag (v1.9.0). This
     # keeps the INSTALL.md verification recipe (which sets VERSION=v1.9.0) working
     # end-to-end. See REVIEW CR-02.
-    name_template: "serena_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "helix_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
       - README.md

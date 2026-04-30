@@ -1,10 +1,10 @@
 .PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot embed-pubkey verify-embed-pubkey
 
-BINARY=serena
+BINARY=helix
 GO=go
 
 build: embed-pubkey
-	$(GO) build -o $(BINARY) ./cmd/serena
+	$(GO) build -o $(BINARY) ./cmd/helix
 
 clean:
 	rm -f $(BINARY)

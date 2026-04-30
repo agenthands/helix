@@ -118,6 +118,18 @@ func Upgrade(ctx context.Context, opts Options) error {
 		return nil
 	}
 
+	// Step 1b: placeholder-pubkey guard (REVIEW.md WR-05). A binary built
+	// before the maintainer rotated in the production minisign key
+	// embeds an all-zeros placeholder; every signature verification under
+	// that key fails closed with the canonical "signature verification
+	// FAILED" message — indistinguishable from a tampered archive at the
+	// caller. Surface a distinct, actionable error instead of letting the
+	// user descend through download + verify and see the generic message.
+	if IsPlaceholderPubKey() {
+		return serr.New(serr.Unsupported,
+			"this build was made before the maintainer rotated in the production minisign key — `helix upgrade` is unavailable; install from GitHub Releases (see INSTALL.md > Upgrading)")
+	}
+
 	// Step 2: permission probe (D-09) — BEFORE network I/O.
 	exec, err := os.Executable()
 	if err != nil {

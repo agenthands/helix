@@ -244,6 +244,43 @@ func TestUpgradeDaemonShortCircuit(t *testing.T) {
 	}
 }
 
+// TestUpgradePlaceholderPubKeyDistinguished covers REVIEW.md WR-05:
+// when the embedded minisign key still carries the PLACEHOLDER marker
+// (i.e., the maintainer has not rotated in the production key yet),
+// `helix upgrade` must print a distinct, actionable error rather than
+// the canonical "signature verification FAILED" — the latter is
+// indistinguishable from a tampered archive at the caller and gives a
+// developer building from main no clue why upgrade is broken.
+func TestUpgradePlaceholderPubKeyDistinguished(t *testing.T) {
+	// Cannot run in parallel: mutates testPubKeyOverride.
+	prev := testPubKeyOverride
+	testPubKeyOverride = []byte("untrusted comment: helix minisign public key -- PLACEHOLDER\nRWQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n")
+	t.Cleanup(func() { testPubKeyOverride = prev })
+
+	if !IsPlaceholderPubKey() {
+		t.Fatal("IsPlaceholderPubKey() = false with PLACEHOLDER override, want true")
+	}
+
+	var out bytes.Buffer
+	err := Upgrade(context.Background(), Options{
+		Current: "v1.8.0",
+		Stdout:  &out,
+	})
+	if err == nil {
+		t.Fatal("Upgrade(placeholder key) = nil, want refusal")
+	}
+	msg := err.Error()
+	// Must be the placeholder-distinct error, NOT the canonical signature
+	// verification failure (which would conflate two very different
+	// failure modes).
+	if !strings.Contains(msg, "production minisign key") {
+		t.Errorf("Upgrade(placeholder) err = %q, want 'production minisign key' actionable hint", msg)
+	}
+	if strings.Contains(msg, "signature verification FAILED") {
+		t.Errorf("Upgrade(placeholder) err = %q, must NOT use canonical signature failure message", msg)
+	}
+}
+
 func TestUpgradeStripUpgradeVerb(t *testing.T) {
 	t.Parallel()
 	// stripUpgradeVerb strips the upgrade verb AND all upgrade-only flags

@@ -12,7 +12,10 @@
 // (golang/go#46056). See 52-CONTEXT.md D-13 for the resolution.
 package upgrade
 
-import _ "embed"
+import (
+	_ "embed"
+	"bytes"
+)
 
 // pubKeyBytes is the embedded minisign public key. The byte content is the
 // `minisign.pub` text emitted by `minisign -G` (a `untrusted comment:` line
@@ -21,3 +24,27 @@ import _ "embed"
 //
 //go:embed minisign.pub
 var pubKeyBytes []byte
+
+// placeholderMarker is the literal that release.yml's pre-flight grep
+// gates on (and that minisign.pub's `untrusted comment:` line carries
+// until the maintainer rotates in the production keypair). A binary
+// built before key rotation embeds the all-zeros placeholder; every
+// signature verification under that key fails closed with the canonical
+// "signature verification FAILED" message, which is indistinguishable
+// from a tampered archive. See REVIEW.md WR-05.
+const placeholderMarker = "PLACEHOLDER"
+
+// IsPlaceholderPubKey reports whether the active minisign public key
+// is the pre-rotation placeholder. Callers (the `helix upgrade`
+// subcommand wiring) print a developer-experience-friendly error
+// distinguishing "this build was made before the maintainer rotated in
+// the production minisign key" from the generic signature-verification
+// failure path that fires on tampered archives.
+//
+// The check inspects the active key bytes via currentPubKey() so tests
+// that substitute a real test_keypair.pub via testPubKeyOverride are
+// NOT flagged as placeholder builds — only an actual placeholder
+// (whether embedded or test-override) reports true.
+func IsPlaceholderPubKey() bool {
+	return bytes.Contains(currentPubKey(), []byte(placeholderMarker))
+}

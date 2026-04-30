@@ -41,7 +41,7 @@ created: 2026-04-30
 | TBD-01 | TBD | 1 | OBS-03 | — | All 5 new metric families register on the obs.Metrics owned registry | unit | `go test ./internal/obs -run TestMetrics_RegisteredFamilies -v` | ✅ extend `want[]` | ⬜ pending |
 | TBD-02 | TBD | 1 | OBS-03 | — | New label carve-outs (`result`, `extractor`, `phase`, `transport`) accepted by lint | unit | `go test ./internal/obs -run TestMetricsLabelsAllowlist -v` | ✅ extend primed vectors + carveOuts | ⬜ pending |
 | TBD-03 | TBD | 1 | OBS-03 | — | Lint still rejects unknown label names | unit | `go test ./internal/obs -run TestMetricsLabelsAllowlist_catchesDrift -v` | ✅ no change | ⬜ pending |
-| TBD-04 | TBD | 1 | OBS-03 | — | lspool emits `result=hit` on share path, `result=miss` on spawn path | unit | `go test ./internal/kernel/lspool -run TestPool_AcquireLease_LookupEmission -v` | ❌ W0 | ⬜ pending |
+| 53-02-2.2 | 02 | 2 | OBS-03 | — | lspool emits `result=hit` on share path, `result=miss` on spawn path | unit | `go test ./internal/kernel/lspool -run TestPool_AcquireLease_LookupEmission -v` | ✅ extended in 53-02-2.1 (RED) → 53-02-2.2 (GREEN) | ✅ green |
 | TBD-05 | TBD | 1 | OBS-03 | — | repomap cache emits `result=hit` on mtime match, `result=miss` on extractFn path | unit | `go test ./internal/repomap -run TestTagCache_GetOrExtract_LookupEmission -v` | ❌ W0 | ⬜ pending |
 | TBD-06 | TBD | 1 | OBS-03 | — | repomap extract histogram observes seconds with `extractor∈{treesitter,lsp,fallback}`, drops unknown | unit | `go test ./internal/repomap -run TestRepoMapExtractObserve -v` | ❌ W0 | ⬜ pending |
 | TBD-07 | TBD | 1 | OBS-03 | — | session lifecycle counter emits `phase∈{started,ended,error}` × `transport∈{stdio,http}` from forwarder + http handler | unit | `go test ./internal/daemon -run TestForwarderHandler_SessionLifecycle -v` | ❌ W0 | ⬜ pending |
@@ -54,7 +54,7 @@ created: 2026-04-30
 | TBD-14 | TBD | 1 | OBS-03 | — | Cardinality bound: edit_outcome ≤ 7 × 6 × strategy_count = 168 | unit | `go test ./internal/obs -run TestMetrics_CardinalityBounds_EditOutcome -v` | ❌ W0 | ⬜ pending |
 | TBD-15 | TBD | 1 | OBS-03 | — | Noop-default invariant preserved: `obs.Noop(...)` Metrics() exposes all new helpers without panic | unit | `go test ./internal/obs -run TestMetrics_NoopProviderReturnsUsableSink -v` | ✅ extend helper-call list | ⬜ pending |
 | TBD-16 | TBD | 1 | OBS-03 | — | Compile-time assertion: `*obs.Metrics` satisfies new `repomap.MetricsSink` | unit | `go test ./internal/daemon -run TestObsMetricsIsRepoMapSink -v` | ❌ W0 | ⬜ pending |
-| TBD-17 | TBD | 1 | OBS-03 | — | Compile-time assertion: `*obs.Metrics` satisfies extended `lspool.MetricsSink` (with new LSPoolLookup) | unit | `go test ./internal/daemon -run TestObsMetricsIsLSPoolSink -v` | ✅ existing must still pass | ⬜ pending |
+| 53-02-2.2 | 02 | 2 | OBS-03 | — | Compile-time assertion: `*obs.Metrics` satisfies extended `lspool.MetricsSink` (with new LSPoolLookup) | unit | `go test ./internal/daemon -run TestObsMetricsIsLSPoolSink -v` | ✅ existing wiring_test.go assertion auto-validates | ✅ green |
 | TBD-18 | TBD | 1 | OBS-03 | — | ROADMAP.md success-criterion-1 uses `helix_*` not `serena_*` | shell | `! grep -q 'serena_lspool_cache_hits_total\|serena_repomap_cache_hits_total\|serena_repomap_extract_duration_seconds\|serena_session_lifecycle_total\|serena_edit_outcome_total' .planning/ROADMAP.md` | manual W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*

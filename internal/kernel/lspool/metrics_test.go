@@ -1,11 +1,13 @@
 package lspool
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // recordingSink is a thread-safe MetricsSink that captures every call for
@@ -18,6 +20,7 @@ type recordingSink struct {
 	evictions     []evictionEvent
 	circuitStates []circuitEvent
 	restarts      []string
+	lookups       []lookupEvent
 }
 
 type workerEvent struct {
@@ -33,6 +36,11 @@ type evictionEvent struct {
 type circuitEvent struct {
 	lang  string
 	state float64
+}
+
+type lookupEvent struct {
+	lang   string
+	result string
 }
 
 func (r *recordingSink) LSPoolWorkersSet(language string, delta float64) {
@@ -59,14 +67,23 @@ func (r *recordingSink) LSPoolRestart(language string) {
 	r.restarts = append(r.restarts, language)
 }
 
-// snapshot returns a consistent copy of all recorded events.
-func (r *recordingSink) snapshot() (w []workerEvent, e []evictionEvent, c []circuitEvent, rs []string) {
+func (r *recordingSink) LSPoolLookup(language, result string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lookups = append(r.lookups, lookupEvent{lang: language, result: result})
+}
+
+// snapshot returns a consistent copy of all recorded events. The lookups slice
+// is the LAST return value to keep ordering stable when adding new event
+// families (Phase 53 D-14).
+func (r *recordingSink) snapshot() (w []workerEvent, e []evictionEvent, c []circuitEvent, rs []string, lk []lookupEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	w = append(w, r.workers...)
 	e = append(e, r.evictions...)
 	c = append(c, r.circuitStates...)
 	rs = append(rs, r.restarts...)
+	lk = append(lk, r.lookups...)
 	return
 }
 
@@ -77,7 +94,7 @@ func TestMetricsSink_NoopSinkSatisfiesInterface(t *testing.T) {
 }
 
 func TestNoopSink_safe(t *testing.T) {
-	// All four methods must be callable without panic on the zero value.
+	// All methods must be callable without panic on the zero value.
 	var sink MetricsSink = NoopSink{}
 	sink.LSPoolWorkersSet("go", +1)
 	sink.LSPoolWorkersSet("go", -1)
@@ -89,6 +106,8 @@ func TestNoopSink_safe(t *testing.T) {
 	sink.LSPoolCircuitStateSet("go", CircuitHalfOpen)
 	sink.LSPoolCircuitStateSet("go", CircuitOpen)
 	sink.LSPoolRestart("go")
+	sink.LSPoolLookup("go", LookupHit)
+	sink.LSPoolLookup("go", LookupMiss)
 }
 
 func TestMetricsSink_EvictionReasonConstants(t *testing.T) {
@@ -96,6 +115,13 @@ func TestMetricsSink_EvictionReasonConstants(t *testing.T) {
 	assert.Equal(t, "pressure", EvictPressure)
 	assert.Equal(t, "crash", EvictCrash)
 	assert.Equal(t, "shutdown", EvictShutdown)
+}
+
+// TestMetricsSink_LookupResultConstants pins the closed-enum result label
+// values for helix_lspool_lookups_total. Phase 53 D-04.
+func TestMetricsSink_LookupResultConstants(t *testing.T) {
+	assert.Equal(t, "hit", LookupHit)
+	assert.Equal(t, "miss", LookupMiss)
 }
 
 func TestMetricsSink_CircuitStateConstants(t *testing.T) {
@@ -143,7 +169,7 @@ func TestPool_evictWorkerLocked_EmitsGaugeAndReason(t *testing.T) {
 			p.evictWorkerLocked(w.ID(), w, tc.reason)
 			p.mu.Unlock()
 
-			wEvents, eEvents, _, _ := sink.snapshot()
+			wEvents, eEvents, _, _, _ := sink.snapshot()
 			if assert.Len(t, wEvents, 1, "expected exactly one gauge event") {
 				assert.Equal(t, "go", wEvents[0].lang)
 				assert.Equal(t, float64(-1), wEvents[0].delta)
@@ -173,7 +199,7 @@ func TestPool_stopAll_EmitsShutdownEvictions(t *testing.T) {
 
 	p.stopAll(nil)
 
-	wEvents, eEvents, _, _ := sink.snapshot()
+	wEvents, eEvents, _, _, _ := sink.snapshot()
 	assert.Len(t, wEvents, 2)
 	assert.Len(t, eEvents, 2)
 	langs := map[string]bool{}
@@ -192,7 +218,7 @@ func TestCircuit_stateReport(t *testing.T) {
 	cb := NewCircuitBreaker("go", 10*time.Millisecond, 3, sink)
 
 	// Construction emits initial closed state.
-	_, _, states, _ := sink.snapshot()
+	_, _, states, _, _ := sink.snapshot()
 	if assert.Len(t, states, 1) {
 		assert.Equal(t, "go", states[0].lang)
 		assert.Equal(t, CircuitClosed, states[0].state)
@@ -200,18 +226,18 @@ func TestCircuit_stateReport(t *testing.T) {
 
 	// Failure -> open.
 	cb.RecordFailure()
-	_, _, states, _ = sink.snapshot()
+	_, _, states, _, _ = sink.snapshot()
 	assert.Equal(t, CircuitOpen, states[len(states)-1].state)
 
 	// Wait out backoff, probe -> half-open.
 	time.Sleep(15 * time.Millisecond)
 	assert.True(t, cb.CanAttempt())
-	_, _, states, _ = sink.snapshot()
+	_, _, states, _, _ = sink.snapshot()
 	assert.Equal(t, CircuitHalfOpen, states[len(states)-1].state)
 
 	// Success -> closed.
 	cb.RecordSuccess()
-	_, _, states, _ = sink.snapshot()
+	_, _, states, _, _ = sink.snapshot()
 	assert.Equal(t, CircuitClosed, states[len(states)-1].state)
 }
 
@@ -237,4 +263,92 @@ func TestPool_nilMetricsDefaultsToNoop(t *testing.T) {
 	p.workers[w.ID()] = w
 	p.evictWorkerLocked(w.ID(), w, EvictIdle)
 	p.mu.Unlock()
+}
+
+// --- AcquireLease lookup emission (Phase 53 D-02) ------------------------
+
+// TestPool_AcquireLease_LookupEmission pins the canonical hit/miss boundary
+// per D-02:
+//   - workerForKeyLocked share-path returns non-nil  → LookupHit
+//   - any spawn-path execution (success, refusal, dirty bypass) → LookupMiss
+//
+// Dirty acquires bypass the share branch by design and therefore always emit
+// miss, even when a warm worker exists for the key.
+func TestPool_AcquireLease_LookupEmission(t *testing.T) {
+	t.Run("share_path_emits_hit", func(t *testing.T) {
+		sink := &recordingSink{}
+		p := newTestPoolWithSink(t, sink)
+
+		// Pre-warm a Ready worker matching the workspace key so
+		// workerForKeyLocked finds it. The workspace key's RepoRoot must
+		// equal Worker.WorkDir() (see workerForKeyLocked predicate); the
+		// shared `fakeWorker` helper hard-codes "/tmp/test-<lang>", so we
+		// build the worker directly with the test key's RepoRoot here.
+		key := testKey()
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w.state.Store(int32(WorkerReady))
+		p.mu.Lock()
+		p.workers[w.ID()] = w
+		p.mu.Unlock()
+
+		lease, err := p.AcquireLease(context.Background(), "sess-1", key, false /* dirty */)
+		require.NoError(t, err)
+		require.NotNil(t, lease)
+		assert.False(t, lease.Dirty)
+
+		_, _, _, _, lookups := sink.snapshot()
+		if assert.Len(t, lookups, 1, "expected exactly one lookup event on the share path") {
+			assert.Equal(t, key.Language, lookups[0].lang)
+			assert.Equal(t, LookupHit, lookups[0].result)
+		}
+	})
+
+	t.Run("spawn_path_emits_miss", func(t *testing.T) {
+		sink := &recordingSink{}
+		// MaxWorkers=0 forces ErrMaxWorkersReached AFTER the miss emit (the
+		// miss is recorded BEFORE the circuit/max-workers gate per D-02), so
+		// we observe the emission without spawning a real LS process.
+		cfg := testPoolConfig()
+		cfg.MaxWorkers = 0
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+
+		key := testKey()
+		lease, err := p.AcquireLease(context.Background(), "sess-2", key, false /* dirty */)
+		require.Error(t, err, "expected refusal at MaxWorkers=0")
+		assert.Nil(t, lease)
+
+		_, _, _, _, lookups := sink.snapshot()
+		if assert.Len(t, lookups, 1, "expected exactly one lookup event on the spawn path (miss)") {
+			assert.Equal(t, key.Language, lookups[0].lang)
+			assert.Equal(t, LookupMiss, lookups[0].result)
+		}
+	})
+
+	t.Run("dirty_path_emits_miss", func(t *testing.T) {
+		sink := &recordingSink{}
+		cfg := testPoolConfig()
+		cfg.MaxWorkers = 0
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+
+		// Pre-warm a Ready worker that WOULD satisfy the share path if not for
+		// dirty=true. Dirty bypasses workerForKeyLocked by design (D-02).
+		// Build the worker directly so its WorkDir matches the test key's
+		// RepoRoot — same reason as the share-path sub-test above.
+		key := testKey()
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w.state.Store(int32(WorkerReady))
+		p.mu.Lock()
+		p.workers[w.ID()] = w
+		p.mu.Unlock()
+
+		lease, err := p.AcquireLease(context.Background(), "sess-3", key, true /* dirty */)
+		require.Error(t, err, "expected refusal at MaxWorkers=0 on dirty acquire")
+		assert.Nil(t, lease)
+
+		_, _, _, _, lookups := sink.snapshot()
+		if assert.Len(t, lookups, 1, "dirty acquire should emit one miss (cache bypassed)") {
+			assert.Equal(t, key.Language, lookups[0].lang)
+			assert.Equal(t, LookupMiss, lookups[0].result)
+		}
+	})
 }

@@ -1,6 +1,7 @@
 package upgrade
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -31,6 +32,14 @@ const stageDirName = ".helix-upgrade-stage"
 // inspection (VALIDATION.md State row).
 func NewStageDir(installPath string) (string, func(), error) {
 	dir := filepath.Join(filepath.Dir(installPath), stageDirName)
+	// REVIEW.md WR-07: a previous failed upgrade may have left postmortem
+	// artifacts here (verifyKept=true path in Upgrade). Warn loudly to
+	// stderr before wiping so the operator notices that an investigation
+	// surface is being overwritten — silent wipe is the worst-of-both-
+	// worlds case the review flagged.
+	if _, statErr := os.Stat(dir); statErr == nil {
+		fmt.Fprintf(os.Stderr, "warning: removing stale upgrade stage dir at %s (may contain postmortem artifacts from a prior failed upgrade)\n", dir)
+	}
 	// Best-effort clean of any stale stage from a previous failed upgrade.
 	// This is safe because the dir name is deterministic and Helix-owned.
 	_ = os.RemoveAll(dir)

@@ -175,7 +175,14 @@ func Upgrade(ctx context.Context, opts Options) error {
 	defer func() {
 		if !verifyKept {
 			cleanup()
+			return
 		}
+		// REVIEW.md WR-07: when the verify step fails we deliberately
+		// retain the stage dir for postmortem inspection. Surface the
+		// path on stderr so the user knows where to look (and where the
+		// next `helix upgrade` invocation will silently wipe artifacts
+		// from); without this, the retained dir is invisible.
+		fmt.Fprintf(os.Stderr, "verify failed; staged artifacts retained for postmortem at %s (a subsequent `helix upgrade` run will overwrite this directory)\n", stage)
 	}()
 
 	archiveName := archiveAssetName(rel.TagName, runtime.GOOS, runtime.GOARCH)

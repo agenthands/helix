@@ -11,6 +11,7 @@ import (
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/fuzzy"
 	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/kernel/edit"
 	"github.com/agenthands/helix/internal/mcp"
 )
 
@@ -361,21 +362,32 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		Name:        "replace_in_file",
 		Description: "Replace all occurrences of a pattern in a file (literal or regex)",
 	}, kernel.WrapToolSpan(tracer, "replace_in_file", func(ctx context.Context, req *mcpsdk.CallToolRequest, args ReplaceInFileArgs) (*mcpsdk.CallToolResult, any, error) {
+		// Phase 53 D-16 emission. Strategy starts "none" (literal match path)
+		// and is overwritten on the fuzzy fallback path with the real
+		// fuzzy.Strategy value. Q-4: fuzzy.StrategyFailed cannot reach the
+		// success path because Match returns ErrNoMatch on that branch.
+		outcome, strategy := "success", "none"
+		defer func() { mcp.RecordEditOutcome(ctx, "replace_in_file", outcome, strategy) }()
+
 		root := rootFn()
 		if root == "" {
+			outcome = "internal"
 			return noWorkspaceError(), nil, nil
 		}
 		if args.Path == "" {
+			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("replace_in_file").Error()), nil, nil
 		}
 		if args.Pattern == "" {
+			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
 				WithTool("replace_in_file").Error()), nil, nil
 		}
 
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)
 		if err != nil {
+			outcome = edit.ClassifyEditError(err)
 			return errorResult(err.Error()), nil, nil
 		}
 
@@ -383,6 +395,9 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		if count == 0 && !args.IsRegex {
 			content, readErr := ReadFile(root, args.Path)
 			if readErr != nil {
+				// File-read failure on the fuzzy-fallback path: treat as
+				// success with 0 replacements (existing behavior); strategy
+				// stays "none".
 				return textResult(fmt.Sprintf("0 replacement(s) made in %s", args.Path)), nil, nil
 			}
 			fResult, fErr := fuzzy.Match(content, args.Pattern, fuzzy.Options{
@@ -390,17 +405,28 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 				AllowEllipsis: false, // replace_in_file is literal-oriented
 			})
 			if fErr != nil {
+				outcome = edit.ClassifyEditError(fErr)
 				return errorResult(fErr.Error()), nil, nil
 			}
 			newContent := content[:fResult.StartByte] + fResult.ReplacementText + content[fResult.EndByte:]
 			if wErr := OverwriteFile(root, args.Path, newContent); wErr != nil {
+				outcome = "internal"
 				return errorResult(wErr.Error()), nil, nil
 			}
+			// Q-4: fResult.Strategy is one of {exact, whitespace_normalized,
+			// indentation_flexible} on the success branch. StrategyFailed
+			// returns ErrNoMatch above before reaching here.
+			strategy = string(fResult.Strategy)
 			text := fmt.Sprintf("1 replacement made in %s (fuzzy)\nmatch_strategy: %s\nsimilarity_score: %.2f",
 				args.Path, fResult.Strategy, fResult.Score)
 			return textResult(text), nil, nil
 		}
 
+		// Literal match success path: the literal substring matched, so
+		// strategy is "exact" (Phase 53 D-11 semantics — exact byte match).
+		if count > 0 {
+			strategy = "exact"
+		}
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)", BriefDescription: "Replace text in a file using exact string matching", HelpText: replaceInFileHelp})
@@ -411,15 +437,27 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 		Name:        "fuzzy_edit",
 		Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)",
 	}, kernel.WrapToolSpan(tracer, "fuzzy_edit", func(ctx context.Context, req *mcpsdk.CallToolRequest, args FuzzyEditArgs) (*mcpsdk.CallToolResult, any, error) {
+		// Phase 53 D-16 emission. fuzzy_edit ALWAYS runs fuzzy.Match, so the
+		// strategy on the success path is always one of {exact,
+		// whitespace_normalized, indentation_flexible}. Q-4: StrategyFailed
+		// is filtered into outcome=no_match,strategy=none by the
+		// fuzzy.ErrNoMatch path through ClassifyEditError BEFORE we touch
+		// the strategy variable.
+		outcome, strategy := "success", "none"
+		defer func() { mcp.RecordEditOutcome(ctx, "fuzzy_edit", outcome, strategy) }()
+
 		root := rootFn()
 		if root == "" {
+			outcome = "internal"
 			return noWorkspaceError(), nil, nil
 		}
 		if args.Path == "" {
+			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
 		if args.Search == "" {
+			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: search").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
@@ -427,8 +465,15 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 		allowEllipsis := !args.DisableEllipsis
 		result, err := FuzzyEdit(root, args.Path, args.Search, args.Replacement, allowEllipsis)
 		if err != nil {
+			// Q-4: ErrNoMatch / ErrAmbiguous classify to no_match /
+			// ambiguous_match; strategy stays "none". Other errors
+			// (file-I/O, validate-path) classify to "internal".
+			outcome = edit.ClassifyEditError(err)
 			return errorResult(err.Error()), nil, nil
 		}
+
+		// Success path: strategy is the matched cascade tier.
+		strategy = string(result.Strategy)
 
 		text := fmt.Sprintf("Fuzzy edit applied to %s\nmatch_strategy: %s\nsimilarity_score: %.2f",
 			args.Path, result.Strategy, result.Score)

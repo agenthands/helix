@@ -16,7 +16,7 @@ import (
 )
 
 func TestEnsureSocket_NoFile(t *testing.T) {
-	err := ensureSocket("/tmp/serena-test-nonexistent.sock")
+	err := ensureSocket("/tmp/helix-test-nonexistent.sock")
 	assert.NoError(t, err)
 }
 
@@ -33,7 +33,7 @@ func TestEnsureSocket_StaleFile(t *testing.T) {
 // shortSocketPath returns a short path for Unix sockets (macOS has 104-char limit).
 func shortSocketPath(t *testing.T, name string) string {
 	t.Helper()
-	dir := filepath.Join("/tmp", "serena-test-"+name)
+	dir := filepath.Join("/tmp", "helix-test-"+name)
 	os.MkdirAll(dir, 0700)
 	path := filepath.Join(dir, "s.sock")
 	t.Cleanup(func() { os.RemoveAll(dir) })

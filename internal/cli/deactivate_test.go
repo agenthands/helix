@@ -25,11 +25,11 @@ func TestNewDeactivateCommand_Structure(t *testing.T) {
 func TestDeactivate_CleansSessionFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create .serena/session-stats.json
-	serenaDir := filepath.Join(tmpDir, ".serena")
-	require.NoError(t, os.MkdirAll(serenaDir, 0o755))
+	// Create .helix/session-stats.json
+	helixDir := filepath.Join(tmpDir, ".helix")
+	require.NoError(t, os.MkdirAll(helixDir, 0o755))
 
-	statsPath := filepath.Join(serenaDir, "session-stats.json")
+	statsPath := filepath.Join(helixDir, "session-stats.json")
 	require.NoError(t, os.WriteFile(statsPath, []byte(`{"sessions": 1}`), 0o644))
 
 	// Verify file exists

@@ -169,7 +169,7 @@ func (s *WorkflowSkill) execHandoff(args map[string]interface{}) (string, error)
 
 // gatherProjectInfo walks the project directory to collect onboarding data.
 func (s *WorkflowSkill) gatherProjectInfo() OnboardingData {
-	// The project dir is .serena/, so the actual project root is one level up.
+	// The project dir is .helix/, so the actual project root is one level up.
 	projectRoot := filepath.Dir(s.projectDir)
 
 	data := OnboardingData{

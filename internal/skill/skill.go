@@ -10,9 +10,9 @@ import (
 
 // SkillDeps provides dependencies that skills need during initialization.
 type SkillDeps struct {
-	// ProjectDir is the .serena/ directory for project-scoped data.
+	// ProjectDir is the .helix/ directory for project-scoped data.
 	ProjectDir string
-	// GlobalDir is the ~/.serena/ directory for global data.
+	// GlobalDir is the ~/.helix/ directory for global data.
 	GlobalDir string
 	// Logger is the structured logger for skill output.
 	Logger *slog.Logger

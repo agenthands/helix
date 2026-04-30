@@ -19,7 +19,7 @@ import (
 // It accepts the closed-enum strategy string and increments the corresponding
 // Prometheus counter on obs.Metrics. Nil until the first InstallMiddleware call;
 // RecordRenameStrategy no-ops until wiring happens (e.g. during test setup).
-// Phase 47 D-07: serena_rename_strategy_total bounded-label counter.
+// Phase 47 D-07: helix_rename_strategy_total bounded-label counter.
 var renameStrategySink atomic.Pointer[func(ctx context.Context, strategy string)]
 
 // setRenameStrategySink stores the recorder callback. Called from
@@ -30,7 +30,7 @@ func setRenameStrategySink(fn func(ctx context.Context, strategy string)) {
 	renameStrategySink.Store(&fn)
 }
 
-// RecordRenameStrategy increments the serena_rename_strategy_total counter.
+// RecordRenameStrategy increments the helix_rename_strategy_total counter.
 // The strategy string MUST be one of {"lsp-native","rust-client-side"}; any
 // other value is dropped by the underlying obs.Metrics.RenameStrategyInc
 // (closed-enum cardinality discipline, threat T-47-08). ctx is threaded
@@ -86,7 +86,7 @@ func InstallMiddleware(server *mcpsdk.Server, provider *obs.Provider, resolver P
 	}
 }
 
-// Outcome enum for the "outcome" metric label on serena_tool_calls_total.
+// Outcome enum for the "outcome" metric label on helix_tool_calls_total.
 //
 // NOTE: a deny-outcome bucket is intentionally absent. ProfileFilterMiddleware
 // only filters tools/list in v1.2; there is no rejection path at tools/call

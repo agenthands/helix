@@ -87,8 +87,8 @@ func startBenchDaemon(tb testing.TB) *benchDaemon {
 	// Initialize skills with temp dirs so each benchmark function gets a
 	// fresh memory store / onboarding scratchpad.
 	tmpDir := tb.TempDir()
-	projectDir := filepath.Join(tmpDir, ".serena")
-	globalDir := filepath.Join(tmpDir, ".serena-global")
+	projectDir := filepath.Join(tmpDir, ".helix")
+	globalDir := filepath.Join(tmpDir, ".helix-global")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		tb.Fatalf("creating project dir: %v", err)
 	}

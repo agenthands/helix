@@ -23,7 +23,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	serenamcp "github.com/agenthands/helix/internal/mcp"
+	helixmcp "github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 )
 
@@ -34,14 +34,14 @@ import (
 func BenchmarkTracingOffPath(b *testing.B) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sess := &serenamcp.SessionInfo{
+	sess := &helixmcp.SessionInfo{
 		Profile:  "claude-code",
 		Mode:     "edit",
 		Language: "go",
 	}
-	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
+	getSession := func(ctx context.Context) *helixmcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
+	mw := helixmcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := &mcpsdk.CallToolRequest{
 		Params: &mcpsdk.CallToolParamsRaw{
@@ -70,14 +70,14 @@ func BenchmarkTracingOnPath(b *testing.B) {
 	)
 	provider := obs.NewForTest(tp)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sess := &serenamcp.SessionInfo{
+	sess := &helixmcp.SessionInfo{
 		Profile:  "claude-code",
 		Mode:     "edit",
 		Language: "go",
 	}
-	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
+	getSession := func(ctx context.Context) *helixmcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
+	mw := helixmcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := &mcpsdk.CallToolRequest{
 		Params: &mcpsdk.CallToolParamsRaw{

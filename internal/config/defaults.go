@@ -14,14 +14,14 @@ func DefaultConfig() map[string]interface{} {
 		"daemon.shutdown_timeout":            10,
 		"logging.format":                     "text",
 		"logging.level":                      "info",
-		"logging.dir":                        filepath.Join(homeDir, ".serena", "logs"),
+		"logging.dir":                        filepath.Join(homeDir, ".helix", "logs"),
 		"profile":                            "full",     // default profile is the neutral escape hatch (D-02)
 		"mode":                               "",         // empty = use profile's default_mode
 		"observability.admin_addr":           "",         // empty = admin listener disabled (D-02, D-05)
 		"observability.enable_pprof":         false,      // zero attack surface by default (D-12)
 		"observability.tracing_endpoint":     "",         // empty = tracing disabled (D-11)
 		"observability.tracing_sample_ratio": float64(0), // 0.0 = off by default (D-11)
-		"observability.service_name":         "serena",   // OTel resource service.name (D-11)
+		"observability.service_name":         "helix",    // OTel resource service.name (D-11)
 		"degradation.timeout_read":           5,          // seconds (D-02)
 		"degradation.timeout_search":         15,         // seconds (D-02)
 		"degradation.timeout_edit":           10,         // seconds (D-02)

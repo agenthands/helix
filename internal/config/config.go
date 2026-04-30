@@ -52,7 +52,7 @@ type ObservabilityConfig struct {
 	// 0.0 = off (default), 1.0 = sample everything (D-11).
 	TracingSampleRatio float64 `koanf:"tracing_sample_ratio"`
 	// ServiceName is the OTel resource service.name attribute.
-	// Default: "serena" (D-11).
+	// Default: "helix" (D-11).
 	ServiceName string `koanf:"service_name"`
 }
 
@@ -72,7 +72,7 @@ type WorkerPoolConfig struct {
 
 // DaemonConfig holds daemon-specific settings.
 type DaemonConfig struct {
-	// SocketPath overrides default /tmp/serena-$UID/daemon.sock (D-14)
+	// SocketPath overrides default /tmp/helix-$UID/daemon.sock (D-14)
 	SocketPath string `koanf:"socket_path"`
 	// HTTPAddr is the listen address for Streamable HTTP (default ":8080")
 	HTTPAddr string `koanf:"http_addr"`
@@ -86,7 +86,7 @@ type LoggingConfig struct {
 	Format string `koanf:"format"`
 	// Level: "debug", "info", "warn", "error" (default: "info")
 	Level string `koanf:"level"`
-	// Dir: log file directory (default: ~/.serena/logs/) (D-17)
+	// Dir: log file directory (default: ~/.helix/logs/) (D-17)
 	Dir string `koanf:"dir"`
 }
 

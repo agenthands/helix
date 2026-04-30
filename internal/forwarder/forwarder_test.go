@@ -16,7 +16,7 @@ import (
 )
 
 func TestTryConnect_NoSocket(t *testing.T) {
-	conn, client, err := tryConnect(context.Background(), "/tmp/serena-test-nonexistent.sock", tracenoop.NewTracerProvider())
+	conn, client, err := tryConnect(context.Background(), "/tmp/helix-test-nonexistent.sock", tracenoop.NewTracerProvider())
 	assert.Error(t, err)
 	assert.Nil(t, conn)
 	assert.Nil(t, client)
@@ -33,7 +33,7 @@ func TestStartDaemon_ExecutableLookup(t *testing.T) {
 func TestWaitForDaemon_Timeout(t *testing.T) {
 	ctx := context.Background()
 	// Use a nonexistent socket path with a very short timeout
-	client, conn, err := waitForDaemon(ctx, "/tmp/serena-test-timeout-"+generateSessionID()+".sock", 200*time.Millisecond, tracenoop.NewTracerProvider())
+	client, conn, err := waitForDaemon(ctx, "/tmp/helix-test-timeout-"+generateSessionID()+".sock", 200*time.Millisecond, tracenoop.NewTracerProvider())
 	assert.Error(t, err)
 	assert.Nil(t, client)
 	assert.Nil(t, conn)
@@ -43,7 +43,7 @@ func TestWaitForDaemon_Timeout(t *testing.T) {
 func TestWaitForDaemon_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
-	client, conn, err := waitForDaemon(ctx, "/tmp/serena-test-cancel.sock", 5*time.Second, tracenoop.NewTracerProvider())
+	client, conn, err := waitForDaemon(ctx, "/tmp/helix-test-cancel.sock", 5*time.Second, tracenoop.NewTracerProvider())
 	assert.Error(t, err)
 	assert.Nil(t, client)
 	assert.Nil(t, conn)

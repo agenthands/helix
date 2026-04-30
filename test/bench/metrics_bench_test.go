@@ -25,7 +25,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	serenamcp "github.com/agenthands/helix/internal/mcp"
+	helixmcp "github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 )
 
@@ -89,14 +89,14 @@ func BenchmarkBaselineMiddleware(b *testing.B) {
 func BenchmarkTelemetryMiddleware(b *testing.B) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sess := &serenamcp.SessionInfo{
+	sess := &helixmcp.SessionInfo{
 		Profile:  "claude-code",
 		Mode:     "edit",
 		Language: "go",
 	}
-	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
+	getSession := func(ctx context.Context) *helixmcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
+	mw := helixmcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := newBenchCallToolReq("find_symbol")
 	ctx := context.Background()
@@ -116,14 +116,14 @@ func BenchmarkTelemetryMiddleware(b *testing.B) {
 func BenchmarkTelemetryMiddleware_ToolsList(b *testing.B) {
 	provider := obs.Noop(slog.NewTextHandler(io.Discard, nil))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sess := &serenamcp.SessionInfo{
+	sess := &helixmcp.SessionInfo{
 		Profile:  "claude-code",
 		Mode:     "edit",
 		Language: "go",
 	}
-	getSession := func(ctx context.Context) *serenamcp.SessionInfo { return sess }
+	getSession := func(ctx context.Context) *helixmcp.SessionInfo { return sess }
 
-	mw := serenamcp.TelemetryMiddleware(provider, getSession, nil, logger)
+	mw := helixmcp.TelemetryMiddleware(provider, getSession, nil, logger)
 	wrapped := mw(noopInnerHandler)
 	req := newBenchCallToolReq("find_symbol")
 	ctx := context.Background()

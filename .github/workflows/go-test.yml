@@ -18,7 +18,7 @@ jobs:
       JDTLS_VERSION: "1.57.0"
       # jdtls 1.57.0 indexes the Java fixture in <1s on Java 21. Keep a 2m
       # ceiling as cold-runner safety margin; warm runs return instantly.
-      SERENA_TEST_LS_TIMEOUT: "2m"
+      HELIX_TEST_LS_TIMEOUT: "2m"
     steps:
       - uses: actions/checkout@v4
 

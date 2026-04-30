@@ -14,7 +14,7 @@ func TestLoadSessionStats_NewFile(t *testing.T) {
 	stats := loadSessionStats("/nonexistent/session-stats.json", "session-123")
 	assert.Equal(t, "session-123", stats.SessionID)
 	assert.Equal(t, 0, stats.GrepReadCount)
-	assert.Equal(t, 0, stats.SerenaToolCount)
+	assert.Equal(t, 0, stats.HelixToolCount)
 }
 
 func TestLoadSessionStats_DifferentSession(t *testing.T) {
@@ -25,7 +25,7 @@ func TestLoadSessionStats_DifferentSession(t *testing.T) {
 	statsA := sessionStats{
 		SessionID:       "session-A",
 		GrepReadCount:   10,
-		SerenaToolCount: 5,
+		HelixToolCount: 5,
 	}
 	require.NoError(t, saveSessionStats(path, statsA))
 
@@ -33,49 +33,49 @@ func TestLoadSessionStats_DifferentSession(t *testing.T) {
 	stats := loadSessionStats(path, "session-B")
 	assert.Equal(t, "session-B", stats.SessionID)
 	assert.Equal(t, 0, stats.GrepReadCount)
-	assert.Equal(t, 0, stats.SerenaToolCount)
+	assert.Equal(t, 0, stats.HelixToolCount)
 }
 
 func TestSaveAndLoadSessionStats_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".serena", "session-stats.json")
+	path := filepath.Join(dir, ".helix", "session-stats.json")
 
 	original := sessionStats{
 		SessionID:       "session-xyz",
 		GrepReadCount:   7,
-		SerenaToolCount: 3,
+		HelixToolCount: 3,
 	}
 	require.NoError(t, saveSessionStats(path, original))
 
 	loaded := loadSessionStats(path, "session-xyz")
 	assert.Equal(t, original.SessionID, loaded.SessionID)
 	assert.Equal(t, original.GrepReadCount, loaded.GrepReadCount)
-	assert.Equal(t, original.SerenaToolCount, loaded.SerenaToolCount)
+	assert.Equal(t, original.HelixToolCount, loaded.HelixToolCount)
 	assert.NotEmpty(t, loaded.LastUpdated, "LastUpdated should be set by save")
 }
 
 func TestIsSerenaSymbolicTool(t *testing.T) {
 	// Should return true for bare names.
-	assert.True(t, isSerenaSymbolicTool("find_symbol"))
-	assert.True(t, isSerenaSymbolicTool("get_symbols_overview"))
-	assert.True(t, isSerenaSymbolicTool("get_symbol_details"))
-	assert.True(t, isSerenaSymbolicTool("find_references"))
-	assert.True(t, isSerenaSymbolicTool("get_hover_info"))
-	assert.True(t, isSerenaSymbolicTool("find_implementations"))
-	assert.True(t, isSerenaSymbolicTool("get_call_hierarchy"))
-	assert.True(t, isSerenaSymbolicTool("get_type_hierarchy"))
-	assert.True(t, isSerenaSymbolicTool("get_blast_radius"))
+	assert.True(t, isHelixSymbolicTool("find_symbol"))
+	assert.True(t, isHelixSymbolicTool("get_symbols_overview"))
+	assert.True(t, isHelixSymbolicTool("get_symbol_details"))
+	assert.True(t, isHelixSymbolicTool("find_references"))
+	assert.True(t, isHelixSymbolicTool("get_hover_info"))
+	assert.True(t, isHelixSymbolicTool("find_implementations"))
+	assert.True(t, isHelixSymbolicTool("get_call_hierarchy"))
+	assert.True(t, isHelixSymbolicTool("get_type_hierarchy"))
+	assert.True(t, isHelixSymbolicTool("get_blast_radius"))
 
-	// Should return true with mcp__serena__ prefix.
-	assert.True(t, isSerenaSymbolicTool("mcp__serena__find_symbol"))
-	assert.True(t, isSerenaSymbolicTool("mcp__serena__get_symbols_overview"))
+	// Should return true with mcp__helix__ prefix.
+	assert.True(t, isHelixSymbolicTool("mcp__helix__find_symbol"))
+	assert.True(t, isHelixSymbolicTool("mcp__helix__get_symbols_overview"))
 
 	// Should return false for non-symbolic tools.
-	assert.False(t, isSerenaSymbolicTool("Grep"))
-	assert.False(t, isSerenaSymbolicTool("Read"))
-	assert.False(t, isSerenaSymbolicTool("Bash"))
-	assert.False(t, isSerenaSymbolicTool("Write"))
-	assert.False(t, isSerenaSymbolicTool("mcp__serena__read_file"))
+	assert.False(t, isHelixSymbolicTool("Grep"))
+	assert.False(t, isHelixSymbolicTool("Read"))
+	assert.False(t, isHelixSymbolicTool("Bash"))
+	assert.False(t, isHelixSymbolicTool("Write"))
+	assert.False(t, isHelixSymbolicTool("mcp__helix__read_file"))
 }
 
 func TestIsGrepReadTool(t *testing.T) {
@@ -105,7 +105,7 @@ func TestNudgeThreshold_BelowThreshold(t *testing.T) {
 	stats := sessionStats{
 		SessionID:       "test-session",
 		GrepReadCount:   4,
-		SerenaToolCount: 0,
+		HelixToolCount: 0,
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
@@ -122,7 +122,7 @@ func TestNudgeThreshold_AtThreshold(t *testing.T) {
 	stats := sessionStats{
 		SessionID:       "test-session",
 		GrepReadCount:   4,
-		SerenaToolCount: 0,
+		HelixToolCount: 0,
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
@@ -134,10 +134,10 @@ func TestNudgeThreshold_AtThreshold(t *testing.T) {
 	// Now at threshold.
 	final := loadSessionStats(path, "test-session")
 	assert.Equal(t, 5, final.GrepReadCount)
-	assert.Equal(t, 0, final.SerenaToolCount)
-	// Nudge should fire: GrepReadCount >= 5 && SerenaToolCount == 0.
-	assert.True(t, final.GrepReadCount >= 5 && final.SerenaToolCount == 0,
-		"nudge should fire at count=%d with serena_count=%d", final.GrepReadCount, final.SerenaToolCount)
+	assert.Equal(t, 0, final.HelixToolCount)
+	// Nudge should fire: GrepReadCount >= 5 && HelixToolCount == 0.
+	assert.True(t, final.GrepReadCount >= 5 && final.HelixToolCount == 0,
+		"nudge should fire at count=%d with helix_count=%d", final.GrepReadCount, final.HelixToolCount)
 }
 
 func TestNudgeThreshold_ResetBySymbolicTool(t *testing.T) {
@@ -147,25 +147,25 @@ func TestNudgeThreshold_ResetBySymbolicTool(t *testing.T) {
 	stats := sessionStats{
 		SessionID:       "test-session",
 		GrepReadCount:   6,
-		SerenaToolCount: 0,
+		HelixToolCount: 0,
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
 	// Simulate a Serena symbolic tool call (resets grep count).
 	loaded := loadSessionStats(path, "test-session")
-	assert.True(t, isSerenaSymbolicTool("find_symbol"))
-	loaded.SerenaToolCount++
+	assert.True(t, isHelixSymbolicTool("find_symbol"))
+	loaded.HelixToolCount++
 	loaded.GrepReadCount = 0
 	require.NoError(t, saveSessionStats(path, loaded))
 
 	final := loadSessionStats(path, "test-session")
 	assert.Equal(t, 0, final.GrepReadCount, "GrepReadCount should reset to 0")
-	assert.Equal(t, 1, final.SerenaToolCount, "SerenaToolCount should increment")
+	assert.Equal(t, 1, final.HelixToolCount, "HelixToolCount should increment")
 }
 
 func TestSaveSessionStats_AtomicWrite(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".serena", "session-stats.json")
+	path := filepath.Join(dir, ".helix", "session-stats.json")
 
 	stats := sessionStats{SessionID: "atomic-test", GrepReadCount: 1}
 	require.NoError(t, saveSessionStats(path, stats))

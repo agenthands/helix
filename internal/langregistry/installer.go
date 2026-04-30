@@ -19,7 +19,7 @@ type InstallerConfig struct {
 	// AutoInstall enables managed download when a binary is not found in PATH.
 	// Default: true.
 	AutoInstall bool
-	// BinDir is the directory for managed installs (default ~/.serena/bin/).
+	// BinDir is the directory for managed installs (default ~/.helix/bin/).
 	BinDir string
 }
 

@@ -47,7 +47,7 @@ func OverwriteFile(root, path, content string) error {
 	}
 
 	// Write to temp file in the same directory for atomic rename
-	tmp, err := os.CreateTemp(dir, ".serena-write-*")
+	tmp, err := os.CreateTemp(dir, ".helix-write-*")
 	if err != nil {
 		return serr.Wrap(serr.Internal, "creating temp file", err)
 	}

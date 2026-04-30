@@ -25,7 +25,7 @@ import (
 // for a given fixture and resolved jdtls binary. It creates the directory if
 // missing.
 //
-// Path layout: $UserCacheDir/serena-test/jdtls/<fixtureName>-<fixtureHash[:12]>-<jdtlsHash[:12]>/
+// Path layout: $UserCacheDir/helix-test/jdtls/<fixtureName>-<fixtureHash[:12]>-<jdtlsHash[:12]>/
 func ResolveDataDir(fixtureName, fixtureRoot, jdtlsPath string) (string, error) {
 	fh, err := hashTree(fixtureRoot)
 	if err != nil {
@@ -41,7 +41,7 @@ func ResolveDataDir(fixtureName, fixtureRoot, jdtlsPath string) (string, error) 
 		return "", fmt.Errorf("user cache dir: %w", err)
 	}
 
-	dir := filepath.Join(cache, "serena-test", "jdtls",
+	dir := filepath.Join(cache, "helix-test", "jdtls",
 		fmt.Sprintf("%s-%s-%s", fixtureName, fh, jh))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("mkdir warm jdtls dir: %w", err)

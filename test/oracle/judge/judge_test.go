@@ -86,8 +86,8 @@ func TestJudge(t *testing.T) {
 // The canonical path is offline: run -tags=llm first to generate transcripts,
 // then -tags=llmjudge to judge them.
 func TestJudgeInline(t *testing.T) {
-	if os.Getenv("SERENA_INLINE_JUDGE") != "1" {
-		t.Skip("SERENA_INLINE_JUDGE not set to 1 — skipping inline mode")
+	if os.Getenv("HELIX_INLINE_JUDGE") != "1" {
+		t.Skip("HELIX_INLINE_JUDGE not set to 1 — skipping inline mode")
 	}
 	llm.SkipWithoutAPIKey(t)
 

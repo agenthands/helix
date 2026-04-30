@@ -89,8 +89,8 @@ func TestResolveDataDir_CreatesUnderUserCache(t *testing.T) {
 	dir, err := ResolveDataDir("java", fixtureRoot, jdtlsPath)
 	require.NoError(t, err)
 
-	// Path must contain the serena-test/jdtls segments somewhere.
-	wantSegment := filepath.Join("serena-test", "jdtls")
+	// Path must contain the helix-test/jdtls segments somewhere.
+	wantSegment := filepath.Join("helix-test", "jdtls")
 	assert.True(t, strings.Contains(dir, wantSegment),
 		"returned path %q must contain segment %q", dir, wantSegment)
 

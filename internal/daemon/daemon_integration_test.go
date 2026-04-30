@@ -38,8 +38,8 @@ func TestE2EMemoryToolInvocation(t *testing.T) {
 
 	// Re-initialize skills with our temp project dir so memory writes go to tmpDir.
 	deps := skill.SkillDeps{
-		ProjectDir: filepath.Join(tmpDir, ".serena"),
-		GlobalDir:  filepath.Join(tmpDir, ".serena-global"),
+		ProjectDir: filepath.Join(tmpDir, ".helix"),
+		GlobalDir:  filepath.Join(tmpDir, ".helix-global"),
 		Logger:     logger,
 	}
 	require.NoError(t, os.MkdirAll(deps.ProjectDir, 0o755))
@@ -186,7 +186,7 @@ func TestE2ECleanShutdown(t *testing.T) {
 
 func TestE2EProfileConfigLayering(t *testing.T) {
 	tmpDir := t.TempDir()
-	globalDir := filepath.Join(tmpDir, ".serena")
+	globalDir := filepath.Join(tmpDir, ".helix")
 	require.NoError(t, os.MkdirAll(globalDir, 0o755))
 
 	cfg := &config.SerenaConfig{
@@ -232,8 +232,8 @@ func TestE2EWorkflowOnboarding(t *testing.T) {
 
 	// Re-initialize skills with project dir pointing inside our temp project.
 	deps := skill.SkillDeps{
-		ProjectDir: filepath.Join(projectRoot, ".serena"),
-		GlobalDir:  filepath.Join(tmpDir, ".serena-global"),
+		ProjectDir: filepath.Join(projectRoot, ".helix"),
+		GlobalDir:  filepath.Join(tmpDir, ".helix-global"),
 		Logger:     slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 	}
 	require.NoError(t, os.MkdirAll(deps.ProjectDir, 0o755))

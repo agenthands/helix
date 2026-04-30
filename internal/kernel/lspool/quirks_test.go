@@ -232,15 +232,15 @@ func TestQuirkAdapter_ClangdNoCompileCommands(t *testing.T) {
 }
 
 // TestJdtlsAdapter_ExtraArgs_DefaultDataDir verifies the production codepath when
-// SERENA_TEST_JDTLS_DATA_DIR is unset: the adapter prepends `-data <workDir>/.jdtls-data`
+// HELIX_TEST_JDTLS_DATA_DIR is unset: the adapter prepends `-data <workDir>/.jdtls-data`
 // and creates that dir on disk. Backs Phase 48 BUG-03.
 func TestJdtlsAdapter_ExtraArgs_DefaultDataDir(t *testing.T) {
 	// Ensure env is unset (some shells may leak in CI).
-	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", "")
+	t.Setenv("HELIX_TEST_JDTLS_DATA_DIR", "")
 	// t.Setenv with empty string still sets the var; explicitly unset for the "unset" branch
 	// by using os.Unsetenv. t.Setenv guarantees auto-restore for the empty value, then
 	// we unset; both branches share fallback semantics so behavior is identical.
-	require.NoError(t, os.Unsetenv("SERENA_TEST_JDTLS_DATA_DIR"))
+	require.NoError(t, os.Unsetenv("HELIX_TEST_JDTLS_DATA_DIR"))
 
 	workDir := t.TempDir()
 	adapter := &JdtlsAdapter{}
@@ -255,10 +255,10 @@ func TestJdtlsAdapter_ExtraArgs_DefaultDataDir(t *testing.T) {
 }
 
 // TestJdtlsAdapter_ExtraArgs_EnvOverride verifies the test-only override branch:
-// when SERENA_TEST_JDTLS_DATA_DIR is set, that path is used verbatim and created.
+// when HELIX_TEST_JDTLS_DATA_DIR is set, that path is used verbatim and created.
 func TestJdtlsAdapter_ExtraArgs_EnvOverride(t *testing.T) {
 	overridePath := filepath.Join(t.TempDir(), "warm")
-	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", overridePath)
+	t.Setenv("HELIX_TEST_JDTLS_DATA_DIR", overridePath)
 
 	workDir := t.TempDir()
 	adapter := &JdtlsAdapter{}
@@ -278,7 +278,7 @@ func TestJdtlsAdapter_ExtraArgs_EnvOverride(t *testing.T) {
 // TestJdtlsAdapter_ExtraArgs_EnvEmptyFallsBack verifies that an explicitly-empty
 // env var falls back to the default branch (treated identically to unset).
 func TestJdtlsAdapter_ExtraArgs_EnvEmptyFallsBack(t *testing.T) {
-	t.Setenv("SERENA_TEST_JDTLS_DATA_DIR", "")
+	t.Setenv("HELIX_TEST_JDTLS_DATA_DIR", "")
 
 	workDir := t.TempDir()
 	adapter := &JdtlsAdapter{}
@@ -295,7 +295,7 @@ func TestJdtlsAdapter_ExtraArgs_EnvEmptyFallsBack(t *testing.T) {
 // TestJdtlsAdapter_ExtraArgs_PreservesExtraArgs verifies argv composition:
 // `-data <dir>` is prepended and the tail args are preserved in order.
 func TestJdtlsAdapter_ExtraArgs_PreservesExtraArgs(t *testing.T) {
-	require.NoError(t, os.Unsetenv("SERENA_TEST_JDTLS_DATA_DIR"))
+	require.NoError(t, os.Unsetenv("HELIX_TEST_JDTLS_DATA_DIR"))
 
 	workDir := t.TempDir()
 	adapter := &JdtlsAdapter{}

@@ -12,17 +12,17 @@ import (
 type Scope string
 
 const (
-	// ScopeProject stores memories in the project's .serena/memories/ directory.
+	// ScopeProject stores memories in the project's .helix/memories/ directory.
 	ScopeProject Scope = "project"
-	// ScopeGlobal stores memories in ~/.serena/memories/.
+	// ScopeGlobal stores memories in ~/.helix/memories/.
 	ScopeGlobal Scope = "global"
 )
 
 // MemoryStore provides CRUD operations for markdown-based memories with
 // SQLite FTS5 indexing. It manages two directories: project-local and global.
 type MemoryStore struct {
-	projectDir string // e.g. /path/to/project/.serena/memories/
-	globalDir  string // e.g. ~/.serena/memories/
+	projectDir string // e.g. /path/to/project/.helix/memories/
+	globalDir  string // e.g. ~/.helix/memories/
 	index      *Index
 	logger     *slog.Logger
 }

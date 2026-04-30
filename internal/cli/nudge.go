@@ -26,7 +26,7 @@ type hookInput struct {
 type sessionStats struct {
 	SessionID       string `json:"session_id"`
 	GrepReadCount   int    `json:"grep_read_count"`
-	SerenaToolCount int    `json:"serena_tool_count"`
+	HelixToolCount int    `json:"helix_tool_count"`
 	LastUpdated     string `json:"last_updated"`
 }
 
@@ -76,14 +76,14 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 	// Resolve to absolute path per T-36-03.
 	wsDir, _ = filepath.Abs(wsDir)
 
-	statsPath := filepath.Join(wsDir, ".serena", "session-stats.json")
+	statsPath := filepath.Join(wsDir, ".helix", "session-stats.json")
 
 	// Load stats for the current session.
 	stats := loadSessionStats(statsPath, input.SessionID)
 
 	// Check if this is a Serena symbolic tool call.
-	if isSerenaSymbolicTool(toolName) {
-		stats.SerenaToolCount++
+	if isHelixSymbolicTool(toolName) {
+		stats.HelixToolCount++
 		stats.GrepReadCount = 0 // Reset -- agent is using symbolic tools (D-12).
 		_ = saveSessionStats(statsPath, stats)
 		return nil
@@ -95,7 +95,7 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 		_ = saveSessionStats(statsPath, stats)
 
 		// Check threshold (D-10).
-		if stats.GrepReadCount >= 5 && stats.SerenaToolCount == 0 {
+		if stats.GrepReadCount >= 5 && stats.HelixToolCount == 0 {
 			fmt.Println("Tip: Serena provides find_symbol and get_symbols_overview for code navigation. These give you precise symbol locations, references, and type hierarchies instead of text pattern matching with grep.")
 		}
 		return nil
@@ -167,14 +167,14 @@ var serenaSymbolicTools = map[string]bool{
 	"get_blast_radius":     true,
 }
 
-// isSerenaSymbolicTool returns true if the tool name matches a Serena symbolic tool,
-// either with or without the "mcp__serena__" prefix.
-func isSerenaSymbolicTool(name string) bool {
+// isHelixSymbolicTool returns true if the tool name matches a Serena symbolic tool,
+// either with or without the "mcp__helix__" prefix.
+func isHelixSymbolicTool(name string) bool {
 	if serenaSymbolicTools[name] {
 		return true
 	}
-	// Strip "mcp__serena__" prefix for flexibility.
-	const prefix = "mcp__serena__"
+	// Strip "mcp__helix__" prefix for flexibility.
+	const prefix = "mcp__helix__"
 	if strings.HasPrefix(name, prefix) {
 		return serenaSymbolicTools[strings.TrimPrefix(name, prefix)]
 	}

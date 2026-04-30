@@ -310,7 +310,7 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 
 // skipDirs contains directory names to skip during workspace walk.
 var skipDirs = map[string]bool{
-	".git": true, "node_modules": true, "__pycache__": true, ".serena": true,
+	".git": true, "node_modules": true, "__pycache__": true, ".helix": true,
 	"vendor": true, ".venv": true, "dist": true, "build": true,
 }
 

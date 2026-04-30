@@ -16,7 +16,7 @@ import (
 func setupTestSkill(t *testing.T) *MemorySkill {
 	t.Helper()
 	tmpDir := t.TempDir()
-	projectDir := filepath.Join(tmpDir, ".serena")
+	projectDir := filepath.Join(tmpDir, ".helix")
 	globalDir := filepath.Join(tmpDir, "global")
 
 	s := &MemorySkill{}

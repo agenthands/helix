@@ -103,8 +103,8 @@ func StartRunner(tb testing.TB, opts RunnerOptions) *Runner {
 
 	// Initialize skills with temp dirs.
 	tmpDir := tb.TempDir()
-	projectDir := filepath.Join(tmpDir, ".serena")
-	globalDir := filepath.Join(tmpDir, ".serena-global")
+	projectDir := filepath.Join(tmpDir, ".helix")
+	globalDir := filepath.Join(tmpDir, ".helix-global")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		tb.Fatalf("creating project dir: %v", err)
 	}

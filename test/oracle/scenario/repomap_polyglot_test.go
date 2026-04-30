@@ -20,13 +20,13 @@ import (
 // internal/repomap/polyglot_rank_test.go.
 //
 // Test-environment note: daemon.New() re-runs skill.InitAll with
-// $HOME/.serena/default-project as ProjectDir, which in practice points at
+// $HOME/.helix/default-project as ProjectDir, which in practice points at
 // a populated tag cache for the developer's own repo. We point $HOME at an
 // isolated tb.TempDir() for the duration of this test so the daemon's
 // RepoMapSkill.Init binds to a fresh empty tag cache, and activate_project
 // rebinds the workspace root to our polyglot fixture.
 func TestScenario_RepoMap_Polyglot(t *testing.T) {
-	// Isolate daemon's ~/.serena lookup from the developer's populated cache.
+	// Isolate daemon's ~/.helix lookup from the developer's populated cache.
 	t.Setenv("HOME", t.TempDir())
 
 	fixtureDir := harness.PrepareFixture(t, "polyglot_lua")

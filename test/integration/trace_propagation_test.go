@@ -63,8 +63,8 @@ func startTracingDaemon(t *testing.T) (*daemon.Daemon, *mcp.ClientSession, *trac
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	projectDir := filepath.Join(tmpDir, ".serena")
-	globalDir := filepath.Join(tmpDir, ".serena-global")
+	projectDir := filepath.Join(tmpDir, ".helix")
+	globalDir := filepath.Join(tmpDir, ".helix-global")
 	require.NoError(t, os.MkdirAll(projectDir, 0o755))
 	require.NoError(t, os.MkdirAll(globalDir, 0o755))
 	require.NoError(t, skill.InitAll(skill.SkillDeps{

@@ -28,7 +28,7 @@ func goldenDir() string {
 // is rewritten instead of compared.
 //
 // Per D-01/D-02: the golden file is the ORACLE. Tests must not compute expected
-// output from `.serena/profiles/*.yaml` — that would share the code-under-test's
+// output from `.helix/profiles/*.yaml` — that would share the code-under-test's
 // source of truth and mask bad YAML changes.
 func assertGoldenTools(t *testing.T, name string, actual []string) {
 	t.Helper()

@@ -61,14 +61,14 @@ func newMetrics() *Metrics {
 		registry: reg,
 		ToolCalls: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "serena_tool_calls_total",
+				Name: "helix_tool_calls_total",
 				Help: "MCP tool calls by outcome (RED: errors).",
 			},
 			[]string{"tool_name", "profile", "mode", "language", "outcome"},
 		),
 		ToolDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "serena_tool_duration_seconds",
+				Name:    "helix_tool_duration_seconds",
 				Help:    "MCP tool call latency in seconds (RED: duration).",
 				Buckets: prometheus.DefBuckets, // D-01
 			},
@@ -76,14 +76,14 @@ func newMetrics() *Metrics {
 		),
 		LSPoolWorkers: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "serena_lspool_workers",
+				Name: "helix_lspool_workers",
 				Help: "Active LS workers per language.",
 			},
 			[]string{"language"},
 		),
 		LSPoolEvictions: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "serena_lspool_evictions_total",
+				Name: "helix_lspool_evictions_total",
 				Help: "LS worker evictions by reason (idle/pressure/crash/shutdown).",
 			},
 			// CONTEXT.md D-13: "reason" is a closed 4-value enum enforced at
@@ -93,21 +93,21 @@ func newMetrics() *Metrics {
 		),
 		LSPoolCircuitState: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "serena_lspool_circuit_state",
+				Name: "helix_lspool_circuit_state",
 				Help: "LS pool circuit breaker state per language (0=closed, 1=half-open, 2=open).",
 			},
 			[]string{"language"},
 		),
 		LSPoolRestarts: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "serena_lspool_restarts_total",
+				Name: "helix_lspool_restarts_total",
 				Help: "LS worker restarts per language.",
 			},
 			[]string{"language"},
 		),
 		RenameStrategy: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "serena_rename_strategy_total",
+				Name: "helix_rename_strategy_total",
 				Help: "rename_symbol successes by strategy (lsp-native | rust-client-side).",
 			},
 			// "strategy" is a closed-enum dimension carved out of AllowedLabels

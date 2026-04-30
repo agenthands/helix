@@ -20,13 +20,13 @@ const (
 	// EnvDeepSeekKey is the environment variable for the DeepSeek API key.
 	EnvDeepSeekKey = "DEEPSEEK_API_KEY"
 	// EnvTestModel overrides the subject model for behavioral tests.
-	EnvTestModel = "SERENA_TEST_MODEL"
+	EnvTestModel = "HELIX_TEST_MODEL"
 	// EnvJudgeModel overrides the judge model for scoring.
-	EnvJudgeModel = "SERENA_JUDGE_MODEL"
+	EnvJudgeModel = "HELIX_JUDGE_MODEL"
 	// EnvInlineJudge enables inline judge mode when set to "1".
-	EnvInlineJudge = "SERENA_INLINE_JUDGE"
+	EnvInlineJudge = "HELIX_INLINE_JUDGE"
 	// EnvLLMProvider selects the LLM provider: "anthropic" (default) or "deepseek".
-	EnvLLMProvider = "SERENA_LLM_PROVIDER"
+	EnvLLMProvider = "HELIX_LLM_PROVIDER"
 	// DefaultSubjectModel is the cheapest Claude model for behavioral tests (D-11).
 	DefaultSubjectModel = "claude-haiku-4-5-20251001"
 	// DefaultDeepSeekModel is the default DeepSeek model.
@@ -69,7 +69,7 @@ func NewClient() anthropic.Client {
 }
 
 // SubjectModel returns the model ID for behavioral tests.
-// Uses SERENA_TEST_MODEL if set, otherwise defaults per provider (D-10/D-11).
+// Uses HELIX_TEST_MODEL if set, otherwise defaults per provider (D-10/D-11).
 func SubjectModel() string {
 	if m := os.Getenv(EnvTestModel); m != "" {
 		return m
@@ -81,7 +81,7 @@ func SubjectModel() string {
 }
 
 // JudgeModel returns the model ID for judge scoring and whether the run is self-judged.
-// Uses SERENA_JUDGE_MODEL if set, otherwise falls back to SubjectModel (D-10/D-12).
+// Uses HELIX_JUDGE_MODEL if set, otherwise falls back to SubjectModel (D-10/D-12).
 func JudgeModel() (model string, selfJudged bool) {
 	if m := os.Getenv(EnvJudgeModel); m != "" {
 		return m, false

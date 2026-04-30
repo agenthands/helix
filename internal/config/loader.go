@@ -17,8 +17,8 @@ import (
 
 // Load builds a SerenaConfig from layered sources in precedence order:
 // 1. Built-in defaults
-// 2. Global config (~/.serena/serena_config.yml)
-// 3. Project config (.serena/project.yml) (D-09)
+// 2. Global config (~/.helix/helix_config.yml)
+// 3. Project config (.helix/project.yml) (D-09)
 // 4. CLI flag overrides
 func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (*SerenaConfig, error) {
 	k := koanf.New(".")
@@ -28,10 +28,10 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 		return nil, fmt.Errorf("loading defaults: %w", err)
 	}
 
-	// 2. Global config (~/.serena/serena_config.yml)
+	// 2. Global config (~/.helix/helix_config.yml)
 	if globalPath == "" {
 		homeDir, _ := os.UserHomeDir()
-		globalPath = filepath.Join(homeDir, ".serena", "serena_config.yml")
+		globalPath = filepath.Join(homeDir, ".helix", "helix_config.yml")
 	}
 	if _, err := os.Stat(globalPath); err == nil {
 		if err := k.Load(file.Provider(globalPath), yaml.Parser()); err != nil {
@@ -39,7 +39,7 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 		}
 	}
 
-	// 3. Project config (.serena/project.yml) (D-09, WRK-04)
+	// 3. Project config (.helix/project.yml) (D-09, WRK-04)
 	if projectPath != "" {
 		if _, err := os.Stat(projectPath); err == nil {
 			if err := k.Load(file.Provider(projectPath), yaml.Parser()); err != nil {
@@ -63,7 +63,7 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 	// Apply computed defaults
 	if cfg.Daemon.SocketPath == "" {
 		uid := strconv.Itoa(int(syscall.Getuid()))
-		cfg.Daemon.SocketPath = filepath.Join(os.TempDir(), "serena-"+uid, "daemon.sock")
+		cfg.Daemon.SocketPath = filepath.Join(os.TempDir(), "helix-"+uid, "daemon.sock")
 	}
 
 	return &cfg, nil
@@ -72,7 +72,7 @@ func Load(globalPath, projectPath string, cliOverrides map[string]interface{}) (
 // DefaultSocketPath returns the default Unix socket path for the daemon.
 func DefaultSocketPath() string {
 	uid := strconv.Itoa(int(syscall.Getuid()))
-	return filepath.Join(os.TempDir(), "serena-"+uid, "daemon.sock")
+	return filepath.Join(os.TempDir(), "helix-"+uid, "daemon.sock")
 }
 
 // ResolveProfile loads the ProfileStore and returns the active profile based on

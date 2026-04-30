@@ -14,7 +14,7 @@ var skipDirs = map[string]bool{
 	".git":         true,
 	"node_modules": true,
 	"__pycache__":  true,
-	".serena":      true,
+	".helix":      true,
 }
 
 // maxFindResults is the maximum number of results from FindFiles.

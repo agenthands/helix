@@ -48,7 +48,7 @@ type Options struct {
 	Mode string
 	// MaxWorkers overrides cfg.WorkerPool.MaxWorkers (default 2 preserves existing behavior).
 	MaxWorkers int
-	// JdtlsDataDir, if non-empty, is exported via the SERENA_TEST_JDTLS_DATA_DIR
+	// JdtlsDataDir, if non-empty, is exported via the HELIX_TEST_JDTLS_DATA_DIR
 	// environment variable so that JdtlsAdapter.ExtraArgs uses it as jdtls's -data
 	// path (shared warm workspace across test runs; Phase 48, BUG-03).
 	JdtlsDataDir string
@@ -109,7 +109,7 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 	tb.Helper()
 
 	if opts.JdtlsDataDir != "" {
-		tb.Setenv("SERENA_TEST_JDTLS_DATA_DIR", opts.JdtlsDataDir)
+		tb.Setenv("HELIX_TEST_JDTLS_DATA_DIR", opts.JdtlsDataDir)
 	}
 
 	cfg := defaultTestConfig(tb)
@@ -126,15 +126,15 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 		cfg.WorkerPool.MaxWorkers = opts.MaxWorkers
 	}
 	var logOut io.Writer = io.Discard
-	if os.Getenv("SERENA_TEST_LS_DEBUG") != "" {
+	if os.Getenv("HELIX_TEST_LS_DEBUG") != "" {
 		logOut = os.Stderr
 	}
 	logger := slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// Initialize skills with temp dirs.
 	tmpDir := tb.TempDir()
-	projectDir := filepath.Join(tmpDir, ".serena")
-	globalDir := filepath.Join(tmpDir, ".serena-global")
+	projectDir := filepath.Join(tmpDir, ".helix")
+	globalDir := filepath.Join(tmpDir, ".helix-global")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		tb.Fatalf("creating project dir: %v", err)
 	}
@@ -213,7 +213,7 @@ func StartTestDaemon(tb testing.TB, opts Options) *TestDaemon {
 			// Env-var override lets slow environments (CI cold-start, low-spec
 			// machines) raise the LS-readiness limit without code changes. Local
 			// dev stays fast-fail at the test-defined default.
-			if v := os.Getenv("SERENA_TEST_LS_TIMEOUT"); v != "" {
+			if v := os.Getenv("HELIX_TEST_LS_TIMEOUT"); v != "" {
 				if d, err := time.ParseDuration(v); err == nil && d > timeout {
 					timeout = d
 				}

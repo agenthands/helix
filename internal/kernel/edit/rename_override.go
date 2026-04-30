@@ -12,7 +12,7 @@ import (
 
 // RenameStrategy enumerates the path a successful rename took.
 // String values are a public contract: they appear in rename_symbol tool
-// responses AND in the serena_rename_strategy_total metric label set.
+// responses AND in the helix_rename_strategy_total metric label set.
 // MUST NOT change without a coordinated telemetry-schema update.
 type RenameStrategy string
 

@@ -20,11 +20,11 @@ import (
 // emission code in plan 11-03 is the single source of truth for the value
 // enum — the CI lint only carves the label NAME, not its values.
 var carveOuts = map[string]map[string]bool{
-	"serena_lspool_evictions_total": {"reason": true},
+	"helix_lspool_evictions_total": {"reason": true},
 	// Phase 47 D-07: closed-enum "strategy" label on the rename dispatcher
 	// counter. Values enforced at emission (see *Metrics.RenameStrategyInc);
 	// the CI lint only carves the label NAME.
-	"serena_rename_strategy_total": {"strategy": true},
+	"helix_rename_strategy_total": {"strategy": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -115,7 +115,7 @@ func TestMetricsLabelsAllowlist_catchesDrift(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	bad := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "serena_drift_test_total",
+			Name: "helix_drift_test_total",
 			Help: "Deliberately broken vector for drift-detection.",
 		},
 		[]string{"user_id"},
@@ -130,7 +130,7 @@ func TestMetricsLabelsAllowlist_catchesDrift(t *testing.T) {
 	// The problem message must identify both the metric name and the label
 	// so operators can act on a CI failure without a debugger.
 	joined := strings.Join(problems, "|")
-	if !strings.Contains(joined, "serena_drift_test_total") {
+	if !strings.Contains(joined, "helix_drift_test_total") {
 		t.Errorf("problem missing metric name: %v", problems)
 	}
 	if !strings.Contains(joined, "user_id") {

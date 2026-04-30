@@ -53,12 +53,12 @@ func TestMetrics_RegisteredFamilies(t *testing.T) {
 		found[mf.GetName()] = true
 	}
 	want := []string{
-		"serena_tool_calls_total",
-		"serena_tool_duration_seconds",
-		"serena_lspool_workers",
-		"serena_lspool_evictions_total",
-		"serena_lspool_circuit_state",
-		"serena_lspool_restarts_total",
+		"helix_tool_calls_total",
+		"helix_tool_duration_seconds",
+		"helix_lspool_workers",
+		"helix_lspool_evictions_total",
+		"helix_lspool_circuit_state",
+		"helix_lspool_restarts_total",
 		"go_goroutines",
 		"process_resident_memory_bytes",
 	}

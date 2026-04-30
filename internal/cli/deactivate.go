@@ -46,7 +46,7 @@ func runDeactivate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Clean up local session files first (always, regardless of daemon state)
-	statsPath := filepath.Join(absPath, ".serena", "session-stats.json")
+	statsPath := filepath.Join(absPath, ".helix", "session-stats.json")
 	os.Remove(statsPath) // Ignore error -- file may not exist
 
 	// Try to notify daemon, but silently succeed if daemon is not running (D-15)

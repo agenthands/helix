@@ -19,8 +19,8 @@ func setupTestWorkflow(t *testing.T) *WorkflowSkill {
 
 	// Create a fake project structure.
 	projectRoot := tmpDir
-	serenaDir := filepath.Join(projectRoot, ".serena")
-	require.NoError(t, os.MkdirAll(serenaDir, 0o755))
+	helixDir := filepath.Join(projectRoot, ".helix")
+	require.NoError(t, os.MkdirAll(helixDir, 0o755))
 
 	// Create some sample files to detect.
 	require.NoError(t, os.MkdirAll(filepath.Join(projectRoot, "src"), 0o755))
@@ -33,7 +33,7 @@ func setupTestWorkflow(t *testing.T) *WorkflowSkill {
 
 	s := &WorkflowSkill{}
 	err := s.Init(skill.SkillDeps{
-		ProjectDir: serenaDir,
+		ProjectDir: helixDir,
 		GlobalDir:  globalDir,
 		Logger:     slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
 	})

@@ -167,7 +167,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	homeDir, _ := os.UserHomeDir()
 	installer := langregistry.NewInstaller(langregistry.InstallerConfig{
 		AutoInstall: true,
-		BinDir:      filepath.Join(homeDir, ".serena", "bin"),
+		BinDir:      filepath.Join(homeDir, ".helix", "bin"),
 	}, logger)
 
 	// 3. Memory pressure (platform-specific).
@@ -212,7 +212,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	mcpServer := serenaMCP.NewSerenaMCPServer(workspaces, logger)
 
 	// 8. Resolve profile per D-08.
-	globalDir := filepath.Join(homeDir, ".serena")
+	globalDir := filepath.Join(homeDir, ".helix")
 	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving profile: %w", err)

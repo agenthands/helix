@@ -124,6 +124,16 @@ func (r *TreeRenderer) renderFileContent(filePath string) string {
 	lang := LangFromExt(filePath)
 
 	// Try to load tags from cache.
+	//
+	// Phase 53 Q-2 Option 2: this caller passes a no-op extractFn that returns
+	// (nil, nil) — there's no real extractor available at render time. This
+	// means:
+	//   - The cache lookup hit/miss counter (D-03) WILL fire from
+	//     internal/repomap/cache.go on both branches.
+	//   - No RepoMapExtractObserve fires here because no real extractor ran.
+	// This is intentional — observing 0s for a no-op extractor would muddy the
+	// helix_repomap_extract_duration_seconds histogram. The dispatcher in
+	// internal/skill/repomap/skill.go owns extract-latency observation.
 	tags, err := r.cache.GetOrExtract(filePath, func() ([]Tag, error) {
 		return nil, nil // no extraction function available at render time
 	})

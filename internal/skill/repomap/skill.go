@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/mcp"
@@ -42,6 +43,13 @@ type RepoMapSkill struct {
 	enrichFn       func(graph *repomap.FileGraph) // optional LSP enrichment callback
 	registry       *treesitter.GrammarRegistry
 	fallbackDeps   *FallbackDeps
+
+	// metrics is the optional MetricsSink wired by the daemon at startup
+	// (Phase 53 D-15). Defaults to repomap.NoopSink{} so a never-wired
+	// skill is safe. Used by walkAndExtract's GetOrExtract dispatcher to
+	// observe per-extractor latency (Q-2 Option 2 — extractor type is
+	// known here, not in cache.go).
+	metrics repomap.MetricsSink
 }
 
 // FallbackDeps holds dependencies for LSP-based fallback tag extraction.
@@ -79,6 +87,10 @@ func (s *RepoMapSkill) Init(deps skill.SkillDeps) error {
 	}
 	s.cache = cache
 
+	// Default metrics sink to a no-op so a never-wired skill is safe.
+	// Daemon post-init (12d) overwrites this with *obs.Metrics.
+	s.metrics = repomap.NoopSink{}
+
 	return nil
 }
 
@@ -112,6 +124,36 @@ func (s *RepoMapSkill) SetFallbackDeps(deps *FallbackDeps) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.fallbackDeps = deps
+}
+
+// SetMetricsSink wires the repomap.MetricsSink for per-extractor latency
+// observation (Q-2 Option 2). Called from internal/daemon/daemon.go post-init
+// (block 12d). Phase 53 D-15. A nil argument is normalized to NoopSink{} so
+// the dispatcher's emission sites never need nil-checks.
+//
+// Decision (Plan 53-03 setter pattern): adding the sink as a setter rather
+// than a constructor argument matches the existing SetEnrichFn / SetFallbackDeps
+// pattern and keeps daemon post-init wiring uniform.
+func (s *RepoMapSkill) SetMetricsSink(sink repomap.MetricsSink) {
+	if sink == nil {
+		sink = repomap.NoopSink{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.metrics = sink
+}
+
+// metricsSink returns the wired sink, normalizing nil to NoopSink{}. Used
+// by walkAndExtract so test-constructed skills (e.g. &RepoMapSkill{}, which
+// bypasses Init) never panic on a nil dereference at the emission site.
+func (s *RepoMapSkill) metricsSink() repomap.MetricsSink {
+	s.mu.Lock()
+	sink := s.metrics
+	s.mu.Unlock()
+	if sink == nil {
+		return repomap.NoopSink{}
+	}
+	return sink
 }
 
 // SetRegistry injects the canonical GrammarRegistry constructed at daemon bootstrap
@@ -363,14 +405,28 @@ func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 			return nil // skip unsupported file types
 		}
 
+		// Resolve the sink once per file so the closure captures a stable
+		// reference even if SetMetricsSink races with walkAndExtract.
+		sink := s.metricsSink()
+
 		_, extractErr := s.cache.GetOrExtract(path, func() ([]repomap.Tag, error) {
+			// Q-2 Option 2: extract latency observation lives here, not in
+			// internal/repomap/cache.go, because the extractor type is only
+			// known at this dispatch layer. The cache emits the hit/miss
+			// counter (D-03); this dispatcher emits the latency histogram
+			// (D-05/D-06/D-07). Observe AFTER the call so failed extractions
+			// (returning err) still record their latency.
+			//
 			// Primary path: tree-sitter extraction
 			if s.extractor != nil && (s.registry == nil || s.registry.SupportsLanguage(lang)) {
+				start := time.Now()
 				source, readErr := os.ReadFile(path)
 				if readErr != nil {
+					sink.RepoMapExtractObserve(lang, repomap.ExtractorTreesitter, time.Since(start).Seconds())
 					return nil, readErr
 				}
 				tags, tagErr := s.extractor.Extract(source, path, lang)
+				sink.RepoMapExtractObserve(lang, repomap.ExtractorTreesitter, time.Since(start).Seconds())
 				if tagErr != nil {
 					// Log and skip: unsupported language for this extractor is not fatal.
 					s.logger.Debug("tag extraction skipped", "path", path, "lang", lang, "error", tagErr)
@@ -381,8 +437,10 @@ func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 
 			// Fallback path: LSP documentSymbol for languages without tree-sitter grammars (D-33-01)
 			if s.fallbackDeps != nil && s.fallbackDeps.AcquireFn != nil {
+				start := time.Now()
 				requester, release, acqErr := s.fallbackDeps.AcquireFn(ctx, lang)
 				if acqErr != nil {
+					sink.RepoMapExtractObserve(lang, repomap.ExtractorLSP, time.Since(start).Seconds())
 					// D-33-02: missing LSP is debug log + empty tags, not an error
 					s.logger.Debug("fallback extraction skipped: no LS available", "path", path, "lang", lang, "error", acqErr)
 					return nil, nil
@@ -390,6 +448,7 @@ func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 				defer release()
 				uri := "file://" + path
 				tags, fbErr := s.fallbackDeps.Extractor.Extract(ctx, requester, path, uri)
+				sink.RepoMapExtractObserve(lang, repomap.ExtractorLSP, time.Since(start).Seconds())
 				if fbErr != nil {
 					s.logger.Debug("fallback extraction failed", "path", path, "lang", lang, "error", fbErr)
 					return nil, nil
@@ -397,7 +456,11 @@ func (s *RepoMapSkill) walkAndExtract(ctx context.Context, root string) error {
 				return tags, nil
 			}
 
-			// No extractor available for this language
+			// No extractor available for this language — third "fallback" branch
+			// per D-07 (extractor=="fallback"). Still observe so operators can
+			// see how often files in unsupported languages reach this branch.
+			start := time.Now()
+			sink.RepoMapExtractObserve(lang, repomap.ExtractorFallback, time.Since(start).Seconds())
 			return nil, nil
 		})
 		if extractErr != nil {

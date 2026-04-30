@@ -74,7 +74,12 @@ func extractTarGz(archivePath, destDir string) error {
 			if err := os.MkdirAll(clean, os.FileMode(hdr.Mode)&0o777); err != nil {
 				return serr.Wrap(serr.Internal, "mkdir "+clean, err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
+			// tar.Reader.Next() normalizes the legacy '\x00' typeflag
+			// (formerly tar.TypeRegA, since deprecated and equal to
+			// TypeReg) to TypeReg before returning the header, so a
+			// single case clause covers both modern and legacy regular-
+			// file entries. See REVIEW.md CR-04.
 			if err := os.MkdirAll(filepath.Dir(clean), 0o755); err != nil {
 				return serr.Wrap(serr.Internal, "mkdir parent for "+clean, err)
 			}

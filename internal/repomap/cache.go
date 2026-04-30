@@ -18,6 +18,12 @@ type TagCache struct {
 	db      *sql.DB
 	mu      sync.Mutex
 	version int64
+
+	// metrics is the optional MetricsSink wired by the daemon at startup
+	// (Phase 53 D-15). Defaults to NoopSink{} when never wired so cache
+	// tests do not need a sink-wiring step. NEVER import internal/obs
+	// from this package — the sink interface is the entire decoupling.
+	metrics MetricsSink
 }
 
 // NewTagCache opens (or creates) the SQLite tag cache at dbPath,
@@ -48,7 +54,26 @@ func NewTagCache(dbPath string) (*TagCache, error) {
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 
-	return &TagCache{db: db}, nil
+	return &TagCache{db: db, metrics: NoopSink{}}, nil
+}
+
+// SetMetricsSink wires the MetricsSink at startup (called from
+// internal/daemon/daemon.go post-init wiring; see Phase 53 D-15). Safe to
+// call multiple times; overwrites the previous sink. A nil argument is
+// normalized to NoopSink{} so the GetOrExtract emission sites never need
+// nil-checks.
+//
+// Decision (Plan 53-03 setter pattern): adding the sink as a setter rather
+// than a NewTagCache constructor argument avoids touching every existing
+// NewTagCache caller (skill repomap, tests, future seams). Mirrors the
+// existing post-init wiring pattern at daemon.go:290-323 (12a/12b/12c).
+func (c *TagCache) SetMetricsSink(sink MetricsSink) {
+	if sink == nil {
+		sink = NoopSink{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.metrics = sink
 }
 
 // GetOrExtract returns cached tags for filePath if the file's mtime has
@@ -80,11 +105,20 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 		if loadErr != nil {
 			return nil, fmt.Errorf("loading cached tags: %w", loadErr)
 		}
+		// Phase 53 D-03: emit hit at the canonical mtime-match boundary.
+		c.metrics.RepoMapLookup(LangFromExt(filePath), LookupHit)
 		return tags, nil
 	}
 
 	// Cache miss or mtime mismatch: extract fresh tags.
 	c.mu.Unlock()
+
+	// Phase 53 D-03: emit miss at the canonical extractFn-invocation
+	// boundary. Q-2 Option 2: extract latency is observed by the caller
+	// (skill.go) where the extractor type {treesitter, lsp, fallback} is
+	// known. cache.go only knows that extractFn ran, not which extractor —
+	// observing 0s for render.go's no-op extractFn would muddy the histogram.
+	c.metrics.RepoMapLookup(LangFromExt(filePath), LookupMiss)
 
 	tags, err := extractFn()
 	if err != nil {

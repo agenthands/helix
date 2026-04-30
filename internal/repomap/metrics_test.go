@@ -83,3 +83,90 @@ func (r *recordingSink) snapshot() ([]lookupEvent, []extractEvent) {
 	copy(ex, r.extracts)
 	return lk, ex
 }
+
+// TestTagCache_GetOrExtract_LookupEmission pins the hit/miss emission contract
+// per Phase 53 D-03:
+//   - mtime-match branch (cache.go:101-109)            → LookupHit, no extract observation.
+//   - extractFn-invocation branch (cache.go:111-122)   → LookupMiss, extract observation
+//     happens upstream in skill.go (Q-2 Option 2), NOT here.
+func TestTagCache_GetOrExtract_LookupEmission(t *testing.T) {
+	t.Run("hit_branch_emits_hit", func(t *testing.T) {
+		sink := &recordingSink{}
+		cache := newTestCache(t)
+		cache.SetMetricsSink(sink)
+
+		dir := t.TempDir()
+		filePath := writeTempFile(t, dir, "hello.go", "package main\n\nfunc Hello() {}\n")
+
+		// Prime the cache via a real GetOrExtract call. The first call
+		// emits LookupMiss (priming); we then reset the sink and assert
+		// the second call (mtime-match) emits exactly one LookupHit.
+		_, err := cache.GetOrExtract(filePath, func() ([]Tag, error) {
+			return []Tag{
+				{Name: "Hello", Kind: TagDef, File: filePath, Line: 2, Column: 5, StartByte: 20, EndByte: 50},
+			}, nil
+		})
+		assert.NoError(t, err)
+
+		// Reset the recorder before the second (hit) call.
+		sink.mu.Lock()
+		sink.lookups = nil
+		sink.extracts = nil
+		sink.mu.Unlock()
+
+		_, err = cache.GetOrExtract(filePath, func() ([]Tag, error) {
+			t.Fatal("extractFn must not run on cache hit")
+			return nil, nil
+		})
+		assert.NoError(t, err)
+
+		lk, ex := sink.snapshot()
+		if assert.Len(t, lk, 1, "expected exactly one lookup event on hit") {
+			assert.Equal(t, "go", lk[0].lang)
+			assert.Equal(t, LookupHit, lk[0].result)
+		}
+		assert.Empty(t, ex, "cache.go must not emit extract observations (Q-2 Option 2)")
+	})
+
+	t.Run("miss_branch_emits_miss", func(t *testing.T) {
+		sink := &recordingSink{}
+		cache := newTestCache(t)
+		cache.SetMetricsSink(sink)
+
+		dir := t.TempDir()
+		filePath := writeTempFile(t, dir, "hello.go", "package main\n\nfunc Hello() {}\n")
+
+		extractCalled := false
+		_, err := cache.GetOrExtract(filePath, func() ([]Tag, error) {
+			extractCalled = true
+			return []Tag{
+				{Name: "Hello", Kind: TagDef, File: filePath, Line: 2, Column: 5, StartByte: 20, EndByte: 50},
+			}, nil
+		})
+		assert.NoError(t, err)
+		assert.True(t, extractCalled, "extractFn must run on cache miss")
+
+		lk, ex := sink.snapshot()
+		if assert.Len(t, lk, 1, "expected exactly one lookup event on miss") {
+			assert.Equal(t, "go", lk[0].lang)
+			assert.Equal(t, LookupMiss, lk[0].result)
+		}
+		assert.Empty(t, ex, "cache.go must not emit extract observations (Q-2 Option 2)")
+	})
+
+	t.Run("nil_sink_default_is_safe", func(t *testing.T) {
+		// A TagCache from NewTagCache() that is never wired with a sink
+		// must default to NoopSink{} so emissions are safe no-ops.
+		cache := newTestCache(t)
+		// Explicit nil to also exercise the SetMetricsSink nil-normalization.
+		cache.SetMetricsSink(nil)
+
+		dir := t.TempDir()
+		filePath := writeTempFile(t, dir, "hello.go", "package main\n\nfunc Hello() {}\n")
+
+		_, err := cache.GetOrExtract(filePath, func() ([]Tag, error) {
+			return []Tag{}, nil
+		})
+		assert.NoError(t, err)
+	})
+}

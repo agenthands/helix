@@ -649,6 +649,11 @@ Key metrics to monitor:
 | `helix_lspool_evictions_total` | counter | Total worker evictions (labels: `language`, `reason`). Reason values: `idle`, `pressure`, `crash`, `shutdown` |
 | `helix_lspool_circuit_state` | gauge | Circuit breaker state per language (0=closed, 1=half-open, 2=open) (labels: `language`) |
 | `helix_lspool_restarts_total` | counter | Language server worker restarts per language (labels: `language`) |
+| `helix_lspool_lookups_total` | counter | LSP worker-pool cache lookups by result (labels: `language`, `result`). `result` ∈ `{hit, miss}` -- hit = shared warm worker via `workerForKeyLocked`; miss = spawn (or refusal due to circuit-open / max-workers). Dirty acquires count as misses (Phase 53 D-02). |
+| `helix_repomap_lookups_total` | counter | RepoMap TagCache lookups by result (labels: `language`, `result`). `result` ∈ `{hit, miss}` -- hit = mtime match; miss = extractor invoked (Phase 53 D-03). |
+| `helix_repomap_extract_duration_seconds` | histogram | RepoMap extractor latency, cache-miss path only (labels: `language`, `extractor`). `extractor` ∈ `{treesitter, lsp, fallback}`. Custom buckets `{1ms, 2.5ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s}` give p50 visibility for tree-sitter and tail visibility for LSP fallback (Phase 53 D-05/D-06). |
+| `helix_session_lifecycle_total` | counter | MCP session lifecycle phase transitions by transport (labels: `phase`, `transport`). `phase` ∈ `{started, ended, error}`; `transport` ∈ `{stdio, http}`. **Note:** for `transport=http`, `phase=ended` is best-effort -- emitted on `DELETE /mcp` only; sessions that disappear due to server-side timeout do not register (the MCP SDK v1.5.0 does not expose a per-session lifecycle hook). For `transport=stdio`, all three phases are reliably emitted from the forwarder stream lifecycle (Phase 53 D-08/D-09). |
+| `helix_edit_outcome_total` | counter | Edit-tool handler outcomes (labels: `tool_name`, `outcome`, `strategy`). `tool_name` ∈ the 7 production edit/fileops tools (`replace_symbol_body`, `insert_before_symbol`, `insert_after_symbol`, `rename_symbol`, `safe_delete_symbol`, `replace_in_file`, `fuzzy_edit`); `outcome` ∈ `{success, no_match, ambiguous_match, validation_failed, ls_error, internal}`; `strategy` ∈ `{exact, whitespace_normalized, indentation_flexible, none}`. `none` is emitted by non-fuzzy tools and by failure paths where no fuzzy strategy ran. The existing `helix_rename_strategy_total` (Phase 47) tracks an orthogonal LSP-native vs. client-side dispatch dimension and continues to coexist (Phase 53 D-10/D-11/D-12). |
 
 Example Prometheus scrape config:
 
@@ -675,6 +680,21 @@ helix_lspool_workers
 # Eviction rate by reason
 rate(helix_lspool_evictions_total[5m])
 ```
+
+```promql
+# Phase 53 D-01: lspool cache hit-ratio (5-minute window).
+# Closer to 1.0 = more sessions reuse warm workers; closer to 0 = more spawns.
+sum(rate(helix_lspool_lookups_total{result="hit"}[5m]))
+  / sum(rate(helix_lspool_lookups_total[5m]))
+```
+
+```promql
+# Phase 53 D-05/D-06: per-extractor p95 RepoMap extraction latency.
+# Surfaces "is the LSP fallback dragging us down for $LANG?" in one query.
+histogram_quantile(0.95, sum by (le, extractor) (rate(helix_repomap_extract_duration_seconds_bucket[5m])))
+```
+
+> **HTTP session `ended` is best-effort.** `helix_session_lifecycle_total{transport="http", phase="ended"}` only fires on a client-issued `DELETE /mcp` (the MCP-spec clean termination signal). Sessions that disappear because the SDK times them out internally are NOT counted as `ended`. For reliable session tracking on HTTP, use `started` minus `error` and treat the gap as outstanding sessions plus quietly-timed-out ones. For stdio transport (the default), all three phases are reliably emitted.
 
 ### Enable Tracing
 

@@ -25,6 +25,23 @@ var carveOuts = map[string]map[string]bool{
 	// counter. Values enforced at emission (see *Metrics.RenameStrategyInc);
 	// the CI lint only carves the label NAME.
 	"helix_rename_strategy_total": {"strategy": true},
+	// Phase 53 D-04: closed-enum "result" ∈ {hit,miss} on lspool/repomap
+	// cache lookup counters. Values enforced at emission; lint carves the NAME only.
+	"helix_lspool_lookups_total":  {"result": true},
+	"helix_repomap_lookups_total": {"result": true},
+	// Phase 53 D-07: closed-enum "extractor" ∈ {treesitter,lsp,fallback}
+	// on repomap extraction histogram.
+	"helix_repomap_extract_duration_seconds": {"extractor": true},
+	// Phase 53 D-08/D-09: closed-enum "phase" ∈ {started,ended,error} and
+	// "transport" ∈ {stdio,http} on session lifecycle counter.
+	"helix_session_lifecycle_total": {"phase": true, "transport": true},
+	// Phase 53 D-11: closed-enum "strategy" ∈ {exact, whitespace_normalized,
+	// indentation_flexible, none} on edit-tool outcome counter. Note:
+	// "tool_name" and "outcome" are already in AllowedLabels — only "strategy"
+	// is carved out here. Per AMENDED D-11 + Q-4 resolution, "ellipsis" is
+	// NOT a valid value (no fuzzy.Strategy declares it) and "failed" is not
+	// emitted (it maps to outcome=no_match,strategy=none at call sites).
+	"helix_edit_outcome_total": {"strategy": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -98,6 +115,14 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.LSPoolCircuitState.WithLabelValues("go").Set(0)
 	m.LSPoolRestarts.WithLabelValues("go").Inc()
 	m.RenameStrategy.WithLabelValues("lsp-native").Inc()
+	// Phase 53 D-13: prime new vectors so TestMetricsLabelsAllowlist actually
+	// scans their labels. RESEARCH Pitfall #3: an unprimed vector silently
+	// bypasses lintLabels because Gather() omits empty families.
+	m.LSPoolLookups.WithLabelValues("go", "hit").Inc()
+	m.RepoMapLookups.WithLabelValues("go", "hit").Inc()
+	m.RepoMapExtract.WithLabelValues("go", "treesitter").Observe(0.001)
+	m.SessionLifecycle.WithLabelValues("started", "stdio").Inc()
+	m.EditOutcome.WithLabelValues("replace_symbol_body", "success", "exact").Inc()
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

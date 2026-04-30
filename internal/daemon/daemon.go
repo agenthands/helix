@@ -440,6 +440,16 @@ func registerSkillTools(server *helixMCP.SerenaMCPServer, tp skill.ToolProvider,
 // Run starts the daemon and blocks until shutdown (DMN-01, DMN-12).
 // Signal handlers are registered FIRST per Pitfall 3.
 func (d *Daemon) Run(ctx context.Context) error {
+	// Mark this process (and every child it spawns — LS workers, hypothetical
+	// `helix upgrade` exec) as running inside the daemon's process tree by
+	// setting HELIX_RUNNING_AS_DAEMON=1. Read by internal/upgrade/daemon_detect.go
+	// (RunningInDaemon) so `helix upgrade` invoked from inside the daemon
+	// short-circuits with a "restart the daemon manually" hint instead of
+	// tearing out the running binary from under the daemon (D-08, threat
+	// T-52-04-08). os.Setenv mutates the calling process's environment in
+	// place and is inherited by exec.Command children via os.Environ().
+	_ = os.Setenv("HELIX_RUNNING_AS_DAEMON", "1")
+
 	// Register signal handlers FIRST (Pitfall 3: before any goroutine starts)
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()

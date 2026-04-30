@@ -1,11 +1,28 @@
 package fuzzy
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	serr "github.com/agenthands/helix/internal/errors"
 )
+
+// ErrNoMatch is the sentinel for fuzzy.Match's "no fuzzy match found" failure
+// (StrategyFailed — the cascade exhausted all four tiers without producing a
+// unique match). Use errors.Is(err, fuzzy.ErrNoMatch) to detect this branch
+// from callers that need to distinguish it from ambiguity or other invalid
+// argument errors. Phase 53 D-10: classifier maps this sentinel to
+// outcome="no_match" and strategy="none" (Q-4: failed is never emitted as a
+// strategy label value).
+var ErrNoMatch = errors.New("fuzzy: no match")
+
+// ErrAmbiguous is the sentinel for fuzzy.Match's ambiguity refusal (CONTEXT.md
+// S4: when a strategy returns N>1 candidates, the cascade halts and the engine
+// returns an error rather than silently picking one). Use
+// errors.Is(err, fuzzy.ErrAmbiguous) to detect this branch. Phase 53 D-10:
+// classifier maps this sentinel to outcome="ambiguous_match".
+var ErrAmbiguous = errors.New("fuzzy: ambiguous match")
 
 // Match runs the 4-strategy cascade over source and search, returning a
 // Result on success or an error on ambiguity / no-match / invalid input.
@@ -268,18 +285,26 @@ func buildResult(source string, sourceLines, searchLines []string, byteOffsets [
 // ambiguityError builds the FUZZ-07 error payload using formatAmbiguity.
 // Hit indices from the sweep are 0-indexed line numbers; we translate to
 // 1-indexed before formatting (CONTEXT.md S4 mandate).
+//
+// The returned error wraps ErrAmbiguous so callers can detect it via
+// errors.Is(err, fuzzy.ErrAmbiguous) (Phase 53 D-10 outcome classification)
+// AND retains Kind=InvalidArgs so legacy serr.ErrInvalidArgs matchers still
+// work. Both errors.Is checks coexist via the Unwrap chain.
 func ambiguityError(strategy Strategy, hits []int) error {
 	oneIndexed := make([]int, len(hits))
 	for i, h := range hits {
 		oneIndexed[i] = h + 1
 	}
 	msg := formatAmbiguity(oneIndexed)
-	return serr.New(serr.InvalidArgs, msg).
+	return serr.Wrap(serr.InvalidArgs, msg, ErrAmbiguous).
 		WithDetail(fmt.Sprintf("strategy=%s count=%d", strategy, len(hits)))
 }
 
 // failureError builds the FUZZ-01 fail-tier error payload using formatFailureDiff.
+//
+// The returned error wraps ErrNoMatch so callers can detect it via
+// errors.Is(err, fuzzy.ErrNoMatch) (Phase 53 D-10 outcome classification).
 func failureError(search, nearest string) error {
-	return serr.New(serr.InvalidArgs, "no fuzzy match found").
+	return serr.Wrap(serr.InvalidArgs, "no fuzzy match found", ErrNoMatch).
 		WithDetail(formatFailureDiff(search, nearest))
 }

@@ -245,3 +245,29 @@ func TestMatch_ByteOffsets(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "one", source[res.StartByte:res.EndByte])
 }
+
+// TestMatch_ErrNoMatchSentinel verifies the no-fuzzy-match path returns an
+// error matching ErrNoMatch via errors.Is. Phase 53 D-10 outcome
+// classification depends on this sentinel.
+func TestMatch_ErrNoMatchSentinel(t *testing.T) {
+	source := "alpha\nbeta\n"
+	search := "completely\nunrelated"
+	_, err := Match(source, search, Options{Replacement: "x"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoMatch)
+	// Legacy serr.ErrInvalidArgs match still works (Kind preserved).
+	assert.ErrorIs(t, err, serr.ErrInvalidArgs)
+}
+
+// TestMatch_ErrAmbiguousSentinel verifies the ambiguity path returns an error
+// matching ErrAmbiguous via errors.Is. Phase 53 D-10 outcome classification
+// depends on this sentinel.
+func TestMatch_ErrAmbiguousSentinel(t *testing.T) {
+	source := "foo\nbar\nfoo\nbar\n"
+	search := "foo\nbar"
+	_, err := Match(source, search, Options{Replacement: "x"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAmbiguous)
+	// Legacy serr.ErrInvalidArgs match still works (Kind preserved).
+	assert.ErrorIs(t, err, serr.ErrInvalidArgs)
+}

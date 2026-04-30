@@ -143,3 +143,141 @@ func TestMetricsLabelsAllowlist_catchesDrift(t *testing.T) {
 // canonical home for LabelPair etc. and we want the import tracked so
 // future refactors don't silently drop it.
 var _ = (*dto.MetricFamily)(nil)
+
+// --- Phase 53 cardinality bound tests (D-01..D-12) ---
+//
+// Each test primes a closed-enum sample of label combinations, calls
+// Gather(), and asserts the per-family `len(mf.GetMetric())` (label-combo
+// count, NOT scraped-line count) does not exceed the documented ceiling.
+// RESEARCH.md Pitfall #1 + C-4: histograms emit (N_buckets+3) lines per
+// label-combo, but `len(mf.GetMetric())` returns label-combo count only.
+
+// gatherFamily walks the registry's Gather() output and returns the named
+// MetricFamily, or nil if absent. Helper for cardinality assertions.
+func gatherFamily(t *testing.T, gatherer prometheus.Gatherer, name string) *dto.MetricFamily {
+	t.Helper()
+	mfs, err := gatherer.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	return nil
+}
+
+// TestMetrics_CardinalityBounds_LSPoolLookups asserts the helix_lspool_lookups_total
+// label-combo count stays within the per-language × {hit,miss} ceiling (2*N).
+// We prime 5 languages × 2 results and assert ≤ 2*52 (registry-wide cap).
+func TestMetrics_CardinalityBounds_LSPoolLookups(t *testing.T) {
+	m := newMetrics()
+	for _, lang := range []string{"go", "rust", "java", "typescript", "python"} {
+		m.LSPoolLookups.WithLabelValues(lang, "hit").Inc()
+		m.LSPoolLookups.WithLabelValues(lang, "miss").Inc()
+	}
+	mf := gatherFamily(t, m.Registry(), "helix_lspool_lookups_total")
+	if mf == nil {
+		t.Fatal("helix_lspool_lookups_total not registered")
+	}
+	if got, max := len(mf.GetMetric()), 2*52; got > max {
+		t.Errorf("helix_lspool_lookups_total cardinality = %d, want ≤ %d (2 × N_languages)", got, max)
+	}
+}
+
+// TestMetrics_CardinalityBounds_RepoMapLookups mirrors LSPoolLookups: per-language ×
+// {hit,miss} ≤ 2*N_languages.
+func TestMetrics_CardinalityBounds_RepoMapLookups(t *testing.T) {
+	m := newMetrics()
+	for _, lang := range []string{"go", "rust", "java", "typescript", "python"} {
+		m.RepoMapLookups.WithLabelValues(lang, "hit").Inc()
+		m.RepoMapLookups.WithLabelValues(lang, "miss").Inc()
+	}
+	mf := gatherFamily(t, m.Registry(), "helix_repomap_lookups_total")
+	if mf == nil {
+		t.Fatal("helix_repomap_lookups_total not registered")
+	}
+	if got, max := len(mf.GetMetric()), 2*52; got > max {
+		t.Errorf("helix_repomap_lookups_total cardinality = %d, want ≤ %d (2 × N_languages)", got, max)
+	}
+}
+
+// TestMetrics_CardinalityBounds_RepoMapExtract asserts the histogram's label-combo
+// count stays within per-language × {treesitter,lsp,fallback} ≤ 3*N_languages.
+//
+// RESEARCH Pitfall #1 + C-4: scraped-line count is 3*N*(N_buckets+3) but
+// `len(mf.GetMetric())` returns label-combo count = 3*N. This test asserts
+// the latter — the former is naturally bounded by N_buckets being a constant.
+func TestMetrics_CardinalityBounds_RepoMapExtract(t *testing.T) {
+	m := newMetrics()
+	for _, lang := range []string{"go", "rust", "java"} {
+		for _, extractor := range []string{"treesitter", "lsp", "fallback"} {
+			m.RepoMapExtract.WithLabelValues(lang, extractor).Observe(0.005)
+		}
+	}
+	mf := gatherFamily(t, m.Registry(), "helix_repomap_extract_duration_seconds")
+	if mf == nil {
+		t.Fatal("helix_repomap_extract_duration_seconds not registered")
+	}
+	if got, max := len(mf.GetMetric()), 3*52; got > max {
+		t.Errorf("helix_repomap_extract_duration_seconds cardinality = %d, want ≤ %d (3 × N_languages)", got, max)
+	}
+}
+
+// TestMetrics_CardinalityBounds_SessionLifecycle asserts the closed-enum bound
+// 3 phases × 2 transports = 6 combos.
+func TestMetrics_CardinalityBounds_SessionLifecycle(t *testing.T) {
+	m := newMetrics()
+	for _, phase := range []string{"started", "ended", "error"} {
+		for _, transport := range []string{"stdio", "http"} {
+			m.SessionLifecycle.WithLabelValues(phase, transport).Inc()
+		}
+	}
+	mf := gatherFamily(t, m.Registry(), "helix_session_lifecycle_total")
+	if mf == nil {
+		t.Fatal("helix_session_lifecycle_total not registered")
+	}
+	if got, max := len(mf.GetMetric()), 6; got > max {
+		t.Errorf("helix_session_lifecycle_total cardinality = %d, want ≤ %d (3 phases × 2 transports)", got, max)
+	}
+}
+
+// TestMetrics_CardinalityBounds_EditOutcome asserts the closed-enum bound:
+// 7 tools × 6 outcomes × 4 strategies = 168 combos.
+//
+// Cardinality bound: 7 tools (replace_symbol_body, insert_before_symbol,
+// insert_after_symbol, rename_symbol, safe_delete_symbol, replace_in_file,
+// fuzzy_edit) × 6 outcomes (success, no_match, ambiguous_match,
+// validation_failed, ls_error, internal) × 4 strategies (exact,
+// whitespace_normalized, indentation_flexible, none) = 168. `failed` is not
+// emitted as a strategy — fuzzy.StrategyFailed paths map to outcome=no_match
+// with strategy=none per Q-4 (D-11 amended 2026-04-30).
+func TestMetrics_CardinalityBounds_EditOutcome(t *testing.T) {
+	m := newMetrics()
+	tools := []string{
+		"replace_symbol_body",
+		"insert_before_symbol",
+		"insert_after_symbol",
+		"rename_symbol",
+		"safe_delete_symbol",
+		"replace_in_file",
+		"fuzzy_edit",
+	}
+	outcomes := []string{"success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal"}
+	strategies := []string{"exact", "whitespace_normalized", "indentation_flexible", "none"}
+	for _, tool := range tools {
+		for _, outcome := range outcomes {
+			for _, strategy := range strategies {
+				m.EditOutcome.WithLabelValues(tool, outcome, strategy).Inc()
+			}
+		}
+	}
+	mf := gatherFamily(t, m.Registry(), "helix_edit_outcome_total")
+	if mf == nil {
+		t.Fatal("helix_edit_outcome_total not registered")
+	}
+	if got, max := len(mf.GetMetric()), 168; got > max {
+		t.Errorf("helix_edit_outcome_total cardinality = %d, want ≤ %d (7 tools × 6 outcomes × 4 strategies)", got, max)
+	}
+}

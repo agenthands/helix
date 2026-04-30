@@ -166,7 +166,7 @@ To dry-run the build matrix locally (signs are skipped because the secret key li
 make release-snapshot
 ```
 
-Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`serena_v<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file. The local dry-run requires `goreleaser` on `$PATH`; install with `brew install goreleaser` on macOS, or download a release tarball from `github.com/goreleaser/goreleaser/releases` on Linux.
+Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`helix_v<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file. The local dry-run requires `goreleaser` on `$PATH`; install with `brew install goreleaser` on macOS, or download a release tarball from `github.com/goreleaser/goreleaser/releases` on Linux.
 
 To cut a release, push a version tag from a green-CI commit on `main`:
 

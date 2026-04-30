@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-30T08:15:51.702Z"
+last_updated: "2026-04-30T08:38:09.167Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 33
-  completed_plans: 30
-  percent: 91
+  completed_plans: 31
+  percent: 94
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 ## Current Position
 
 Phase: 52 (packaging-distribution-channels) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-04-30
 
@@ -54,6 +54,7 @@ Last activity: 2026-04-30
 | Phase 52 P01 | 5min | 2 tasks | 10 files |
 | Phase 52 P02 | 3min | 2 tasks | 206 files |
 | Phase 52 P03 | 11min | 2 tasks | 78 files |
+| Phase 52 P04 | 15min | 4 tasks | 27 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 52-03: D-05 'previous serena MCP registration' nudge deferred to v1.10
 - [Phase ?]: Plan 52-03: SerenaConfig + SerenaMCPServer types not renamed (89 refs, structural change out of scope)
 - [Phase ?]: Plan 52-03: mcp.SetVersion package-local setter avoids cli<->daemon<->mcp import cycle
+- [Phase ?]: 52-04: Daemon env-var setter at Daemon.Run() entry via os.Setenv — descendants inherit through os.Environ() rather than threading through every spawn site
+- [Phase ?]: 52-04: Asset-name template constant pinned to helix_v{version}_{os}_{arch}.tar.gz with parity test against .goreleaser.yaml — drift detected at PR-review time
+- [Phase ?]: 52-04: Single canonical 'signature verification FAILED' error literal at three return sites in verify.go — keeps grep-based CI gate auditable as a guard against future refactors
 
 ### Pending Todos
 

@@ -173,7 +173,7 @@ Plans:
 - [x] 52-01-PLAN.md — Wave 0 test scaffolding + Makefile embed-pubkey + CI gate
 - [x] 52-02-PLAN.md — Wave 1 module path + cmd dir + goreleaser + version wiring
 - [x] 52-03-PLAN.md — Wave 2 env vars + config dirs + MCP registration name flip
-- [ ] 52-04-PLAN.md — Wave 3 internal/upgrade/ package + cobra subcommands
+- [x] 52-04-PLAN.md — Wave 3 internal/upgrade/ package + cobra subcommands
 - [ ] 52-05-PLAN.md — Wave 3 EMBED-AUDIT.md manifest
 - [ ] 52-06-PLAN.md — Wave 3 docs + REQUIREMENTS/ROADMAP/CHANGELOG/INSTALL/README/USAGE/CONTRIBUTING/CLAUDE
 
@@ -232,7 +232,7 @@ Plans:
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
-| 52 | v1.9 | 3/6 | In Progress|  |
+| 52 | v1.9 | 4/6 | In Progress|  |
 | 53 | v1.9 | 0/? | Not started | - |
 | 54 | v1.9 | 0/? | Not started | - |
 | 55 | v1.9 | 0/? | Not started | - |
@@ -243,7 +243,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

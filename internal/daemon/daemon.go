@@ -570,7 +570,10 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 // listenHTTP starts the Streamable HTTP listener for MCP (DMN-04, MCP-02).
 func (d *Daemon) listenHTTP(ctx context.Context) error {
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", d.mcpServer.HTTPHandler())
+	// Phase 53 D-09 + Q-1 Option 2: wrap the SDK HTTP handler with the
+	// session-lifecycle middleware to emit (started|ended|error, http).
+	// Best-effort `ended` semantic is documented in USAGE.md by Plan 06.
+	mux.Handle("/mcp", httpSessionMiddleware(d.mcpServer.HTTPHandler(), d.obs.Metrics()))
 
 	server := &http.Server{
 		Addr:    d.config.Daemon.HTTPAddr,

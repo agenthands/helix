@@ -186,7 +186,7 @@ Plans:
 **Requirements**: OBS-03
 **Sizing**: M
 **Success Criteria** (what must be TRUE):
-  1. `/metrics` exposes new series: `serena_lspool_cache_hits_total`, `serena_repomap_cache_hits_total`, `serena_repomap_extract_duration_seconds` (histogram), `serena_session_lifecycle_total` (counter by phase), `serena_edit_outcome_total` (counter by tool + outcome).
+  1. `/metrics` exposes new series: `helix_lspool_lookups_total{language, result}` (counter; `result` ∈ {hit, miss}), `helix_repomap_lookups_total{language, result}` (counter), `helix_repomap_extract_duration_seconds{language, extractor}` (histogram), `helix_session_lifecycle_total{phase, transport}` (counter), `helix_edit_outcome_total{tool_name, outcome, strategy}` (counter).
   2. All new labels are bounded (no unbounded cardinality) — a cardinality test asserts max series per metric.
   3. `USAGE.md` Observability section documents each new metric with its labels and semantics.
   4. Noop-default invariant preserved — metrics are zero-alloc when observability is disabled.

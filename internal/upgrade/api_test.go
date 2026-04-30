@@ -168,6 +168,52 @@ func TestApiFetchReleaseInfoPrerelease(t *testing.T) {
 	}
 }
 
+// TestHttpClientStripsAuthOnCrossHostRedirect is the regression test for
+// REVIEW.md CR-01: a 302 redirect from one host to another must NOT carry
+// the Authorization header on the second hop, otherwise a GITHUB_TOKEN
+// PAT would leak to the redirect target. Sets GITHUB_TOKEN, drives a
+// fetchJSON through a same-host server that 302-redirects to a sibling
+// httptest server, and asserts the second hop's Authorization header is
+// empty while the first hop carried the bearer token.
+func TestHttpClientStripsAuthOnCrossHostRedirect(t *testing.T) {
+	// Cannot run in parallel: mutates GITHUB_TOKEN env via t.Setenv.
+	t.Setenv("GITHUB_TOKEN", "secret-pat-token")
+
+	var firstAuth, secondAuth string
+	var secondCalled bool
+
+	// Second server (redirect target) on a different port → different host.
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondCalled = true
+		secondAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer second.Close()
+
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstAuth = r.Header.Get("Authorization")
+		// Redirect to the second httptest server. Different port = different
+		// Host header = cross-host hop. CheckRedirect must strip Authorization.
+		http.Redirect(w, r, second.URL+"/redirected", http.StatusFound)
+	}))
+	defer first.Close()
+
+	var dst map[string]any
+	if err := fetchJSON(context.Background(), first.URL+"/start", &dst); err != nil {
+		t.Fatalf("fetchJSON: %v", err)
+	}
+
+	if !secondCalled {
+		t.Fatal("redirect target was not called")
+	}
+	if firstAuth != "Bearer secret-pat-token" {
+		t.Errorf("first-hop Authorization = %q, want %q", firstAuth, "Bearer secret-pat-token")
+	}
+	if secondAuth != "" {
+		t.Errorf("second-hop Authorization = %q, want empty (token must be stripped on cross-host redirect)", secondAuth)
+	}
+}
+
 func TestApiUserAgentVersionWiring(t *testing.T) {
 	prev := currentVersion
 	t.Cleanup(func() { currentVersion = prev })

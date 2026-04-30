@@ -3,6 +3,7 @@ package upgrade
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -92,7 +93,26 @@ func (r *Release) FindAsset(name string) *Asset {
 // httpClient is the package-level HTTP client used for all GitHub API
 // requests and asset downloads. Configured with a sensible timeout so a
 // hung GitHub call cannot wedge the upgrade flow.
-var httpClient = &http.Client{Timeout: 60 * time.Second}
+//
+// CheckRedirect strips the Authorization header on cross-host hops so a
+// GITHUB_TOKEN bearer credential is not leaked when GitHub redirects an
+// asset download from api.github.com to objects.githubusercontent.com
+// (or any other CDN). Go's default redirect policy forwards Authorization
+// to subdomains under some matching rules; an explicit cross-host strip
+// is the only credential-safe behavior. See REVIEW.md CR-01.
+var httpClient = &http.Client{
+	Timeout: 60 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many redirects")
+		}
+		// Drop Authorization on cross-host redirects.
+		if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+			req.Header.Del("Authorization")
+		}
+		return nil
+	},
+}
 
 // fetchJSON GETs url, decodes the JSON body into out, and surfaces the
 // rate-limit branch as a typed Timeout error per RESEARCH.md Pitfall 6.

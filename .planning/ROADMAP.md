@@ -190,7 +190,15 @@ Plans:
   2. All new labels are bounded (no unbounded cardinality) — a cardinality test asserts max series per metric.
   3. `USAGE.md` Observability section documents each new metric with its labels and semantics.
   4. Noop-default invariant preserved — metrics are zero-alloc when observability is disabled.
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 53-01-PLAN.md — Wave 1 obs vectors + helpers + cardinality lint (5 new families)
+- [ ] 53-02-PLAN.md — Wave 2 lspool MetricsSink extension + AcquireLease lookup emission
+- [ ] 53-03-PLAN.md — Wave 2 repomap MetricsSink + TagCache lookup + per-extractor latency observation
+- [ ] 53-04-PLAN.md — Wave 2 mcp.RecordEditOutcome + 7 edit/fileops handler instrumentation
+- [ ] 53-05-PLAN.md — Wave 2 forwarder stdio lifecycle + new http_session_middleware.go (Q-1 Option 2)
+- [ ] 53-06-PLAN.md — Wave 3 USAGE.md docs (5 metric rows + 2 PromQL examples + http best-effort caveat) + ROADMAP serena→helix correction
 
 ### Phase 54: obs-dashboards-runbooks
 **Goal**: Operators can import ready-made Grafana dashboards and follow written runbooks for the four most common failure modes.

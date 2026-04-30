@@ -1,22 +1,23 @@
-<p align="center" style="text-align:center;">
-  <img src="resources/serena-logo.svg#gh-light-mode-only" style="width:500px">
-  <img src="resources/serena-logo-dark-mode.svg#gh-dark-mode-only" style="width:500px">
-</p>
+<h1 align="center">Helix</h1>
 
 <h3 align="center">
-    Serena is the IDE for your coding agent.
+    Helix is the IDE for your coding agent.
 </h3>
+
+<!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the brand
+     assets are produced; the original Python-Serena SVGs live under legacy/resources/ and
+     are not part of the active product surface. -->
 
 <p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
-<p align="center"><sub>Helix started as a rewrite of <a href="https://github.com/oraios/serena">Serena MCP</a>. The repository, releases, and GitHub URLs use <code>helix</code>; the binary, CLI, and config keys use <code>serena</code>. The full rename to <code>helix</code> is tracked as a future phase in <a href=".planning/ROADMAP.md"><code>.planning/ROADMAP.md</code></a> -- until then, expect both names side-by-side.</sub></p>
+<p align="center"><sub>Helix originally started as a rewrite of <a href="https://github.com/oraios/serena">Python Serena</a>. The full rename of binary, CLI, env vars, config dirs, and MCP server identity from the project's prior name to <code>helix</code> shipped at v1.9 (see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes). The <code>legacy/</code> tree retains the historical name for read-only reference.</sub></p>
 
-* Serena provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
+* Helix provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
 * It integrates with any client/LLM via the model context protocol (**MCP**).
 * Ships as a **single Go binary** — no Python, no Docker, no runtime dependencies beyond the binary itself.
 
-Serena's **agent-first tool design** involves robust high-level abstractions, distinguishing it from
+Helix's **agent-first tool design** involves robust high-level abstractions, distinguishing it from
 approaches that rely on low-level concepts like line numbers or primitive search patterns.
 
 Practically, this means that your agent operates **faster, more efficiently and more reliably**, especially in larger and
@@ -24,7 +25,7 @@ more complex codebases.
 
 ## Table of Contents
 
-- [How Serena Works](#how-serena-works)
+- [How Helix Works](#how-helix-works)
 - [Key Advantages](#key-advantages-over-file-based-approaches)
 - [Quick Start](#quick-start)
 - [Key Features](#key-features)
@@ -35,21 +36,21 @@ more complex codebases.
 - [Architecture](#architecture)
 - [Acknowledgements](#acknowledgements)
 
-## How Serena Works
+## How Helix Works
 
-Serena provides 41+ MCP tools for coding workflows, backed by real language servers.
+Helix provides 41+ MCP tools for coding workflows, backed by real language servers.
 An LLM orchestrates these tools to navigate, understand, and edit code.
 
-Serena runs as a **persistent daemon** that keeps language servers warm between sessions.
+Helix runs as a **persistent daemon** that keeps language servers warm between sessions.
 Agents connect via the **model context protocol (MCP)** through:
 * **stdio** — direct integration with Claude Code, Codex, OpenCode, Gemini-CLI
 * **Streamable HTTP** — for IDEs, web clients, and multi-client scenarios
 
-<img src="resources/serena-block-diagram.svg">
+<!-- Block diagram asset deferred — see TODO at top of file. -->
 
 ## Key Advantages Over File-Based Approaches
 
-| | File-based tools | Serena |
+| | File-based tools | Helix |
 |---|---|---|
 | **Navigation** | grep, find, read whole files | Go to definition, find references, symbol search, call hierarchy |
 | **Editing** | Line-number replacements, regex | Replace symbol body, insert before/after, rename across files |
@@ -68,34 +69,34 @@ Or build from source:
 ```bash
 git clone https://github.com/agenthands/helix.git
 cd helix
-go build ./cmd/serena
+go build ./cmd/helix
 ```
 
 ### Configure Your Client
 
 ```bash
-serena setup claude-code    # Claude Code
-serena setup vscode         # VS Code
-serena setup jetbrains      # JetBrains IDEs
-serena setup gemini-cli     # Gemini CLI
-serena setup claude-desktop # Claude Desktop
-serena setup opencode       # OpenCode
-serena setup generic        # Generic MCP client
+helix setup claude-code    # Claude Code
+helix setup vscode         # VS Code
+helix setup jetbrains      # JetBrains IDEs
+helix setup gemini-cli     # Gemini CLI
+helix setup claude-desktop # Claude Desktop
+helix setup opencode       # OpenCode
+helix setup generic        # Generic MCP client
 ```
 
-Add `--global` for user-wide registration. Run `serena setup --help` for all options.
+Add `--global` for user-wide registration. Run `helix setup --help` for all options.
 
-Serena uses **lazy initialization** — workspaces are configured on first tool call, so there is no upfront indexing delay.
+Helix uses **lazy initialization** — workspaces are configured on first tool call, so there is no upfront indexing delay.
 
 <details>
-<summary>Manual configuration (without serena setup)</summary>
+<summary>Manual configuration (without helix setup)</summary>
 
 **Claude Code** (`.claude/settings.json`):
 ```json
 {
   "mcpServers": {
-    "serena": {
-      "command": "serena",
+    "helix": {
+      "command": "helix",
       "args": ["--mode=stdio"]
     }
   }
@@ -106,8 +107,8 @@ Serena uses **lazy initialization** — workspaces are configured on first tool 
 ```json
 {
   "mcpServers": {
-    "serena": {
-      "command": "serena",
+    "helix": {
+      "command": "helix",
       "args": ["--mode=stdio", "--profile=codex"]
     }
   }
@@ -118,8 +119,8 @@ Serena uses **lazy initialization** — workspaces are configured on first tool 
 ```json
 {
   "mcpServers": {
-    "serena": {
-      "command": "serena",
+    "helix": {
+      "command": "helix",
       "args": ["--mode=stdio", "--profile=ide-assistant"]
     }
   }
@@ -128,9 +129,9 @@ Serena uses **lazy initialization** — workspaces are configured on first tool 
 
 **HTTP mode** (for IDEs, web clients, multi-client):
 ```bash
-serena --mode=http --http-addr=127.0.0.1:8080
+helix --mode=http --http-addr=127.0.0.1:8080
 # Connect your client to http://127.0.0.1:8080/mcp
-# Equivalent: serena --serve --http-addr=127.0.0.1:8080 (--serve and --mode=http both enter the daemon)
+# Equivalent: helix --serve --http-addr=127.0.0.1:8080 (--serve and --mode=http both enter the daemon)
 ```
 
 For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and OpenCode — see [INSTALL.md#manual-configuration](INSTALL.md#manual-configuration) for full examples.
@@ -140,11 +141,11 @@ For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and Ope
 ### Select a Profile
 
 ```bash
-serena --profile=claude-code    # Curated for Claude Code (excludes file tools it already has)
-serena --profile=codex          # Curated for Codex
-serena --profile=ide-assistant  # Read-focused for IDE assistants
-serena --profile=ci-bot         # Read-only for CI/review bots
-serena --profile=full           # All tools (default)
+helix --profile=claude-code    # Curated for Claude Code (excludes file tools it already has)
+helix --profile=codex          # Curated for Codex
+helix --profile=ide-assistant  # Read-focused for IDE assistants
+helix --profile=ci-bot         # Read-only for CI/review bots
+helix --profile=full           # All tools (default)
 ```
 
 For full profile and mode reference, see [USAGE.md](USAGE.md).
@@ -158,18 +159,18 @@ For full profile and mode reference, see [USAGE.md](USAGE.md).
 | **Progressive Descriptions** | Tools expose short descriptions for listing; full documentation available on demand via `get_tool_help` |
 | **Health Monitoring** | `get_health` reports runtime status of language servers and worker pool |
 | **Lazy Initialization** | Workspaces initialize on first tool call — no upfront indexing delay |
-| **Setup CLI** | One-command client registration: `serena setup claude-code` with language detection and health check |
+| **Setup CLI** | One-command client registration: `helix setup claude-code` with language detection and health check |
 
 ## RepoMap
 
-Serena includes a structural code intelligence engine for understanding repository layout and finding task-relevant context:
+Helix includes a structural code intelligence engine for understanding repository layout and finding task-relevant context:
 
 - **`get_repo_map`** — Generates a structural overview of the repository using tree-sitter tag extraction and PageRank ranking. Token-budget-aware output scales to any repository size.
 - **`get_context`** — Given a set of files relevant to your task, returns ranked symbols and definitions across the codebase that are most relevant, using dependency graph analysis.
 
 ## Production & Observability
 
-Serena ships with built-in production infrastructure — metrics, tracing, health checks, and graceful degradation — so you can deploy it as a long-running service with confidence.
+Helix ships with built-in production infrastructure — metrics, tracing, health checks, and graceful degradation — so you can deploy it as a long-running service with confidence.
 
 ### Metrics & Monitoring
 
@@ -205,7 +206,7 @@ A dedicated loopback admin listener, isolated from MCP traffic, exposes:
 
 ## Programming Language Support
 
-Serena supports **52 programming languages** via Language Server Protocol (LSP):
+Helix supports **52 programming languages** via Language Server Protocol (LSP):
 
 <!-- BEGIN LANGUAGES -->
 | Language | LS Command | File Extensions | Install |
@@ -317,7 +318,7 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 
 ## Architecture
 
-Serena is built as a 4-layer Go binary:
+Helix is built as a 4-layer Go binary:
 
 ```
 MCP Runtime (stdio/HTTP transports, tool registry, profile middleware)
@@ -335,12 +336,8 @@ The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus
 
 ## Acknowledgements
 
-A significant part of Serena, especially support for various languages, was contributed by the open source community.
-We are very grateful for the many contributors who made this possible and who played an important role in making Serena
+A significant part of Helix, especially support for various languages, was contributed by the open source community.
+We are very grateful for the many contributors who made this possible and who played an important role in making Helix
 what it is today.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
-
----
-
-<sub>Originally inspired by [Python Serena](https://github.com/oraios/serena).</sub>

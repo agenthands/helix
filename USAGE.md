@@ -1,44 +1,44 @@
-# Serena Usage Guide
+# Helix Usage Guide
 
-This guide covers operational usage of Serena: tutorials for common workflows, profile and mode reference, configuration, troubleshooting, observability, and performance tuning.
+This guide covers operational usage of Helix: tutorials for common workflows, profile and mode reference, configuration, troubleshooting, observability, and performance tuning.
 
-For installation and feature overview, see [README.md](README.md). If you haven't installed Serena yet, see [INSTALL.md](INSTALL.md) first.
+For installation and feature overview, see [README.md](README.md). If you haven't installed Helix yet, see [INSTALL.md](INSTALL.md) first.
 
 ## Quick Tutorials
 
 ### Tutorial 1: Onboarding a New Project
 
-This tutorial walks through setting up Serena for a new codebase from scratch.
+This tutorial walks through setting up Helix for a new codebase from scratch.
 
-**Step 1: Install Serena**
+**Step 1: Install Helix**
 
 ```bash
-go install github.com/postfix/serena/cmd/serena@latest
+go install github.com/agenthands/helix/cmd/helix@latest
 ```
 
 **Step 2: Register with your MCP client**
 
 ```bash
-serena setup claude-code
+helix setup claude-code
 ```
 
-This auto-detects your project, registers Serena as an MCP server, detects programming languages, pre-installs language servers, and runs a health check. Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `opencode`, `generic`.
+This auto-detects your project, registers Helix as an MCP server, detects programming languages, pre-installs language servers, and runs a health check. Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `opencode`, `generic`.
 
 For HTTP mode (IDEs, web clients, multi-client):
 
 ```bash
-serena --serve --http-addr=:9091
+helix --serve --http-addr=:9091
 ```
 
 **Step 3: Start a session and onboard**
 
-Once connected, the agent can use the `onboard_project` tool. This triggers Serena to:
+Once connected, the agent can use the `onboard_project` tool. This triggers Helix to:
 
 1. Analyze the repository structure
 2. Detect programming languages and locate language servers
 3. Create an onboarding memory summarizing the project's architecture
 
-Expected output: Serena produces a structured project overview including detected languages, key directories, symbol counts, and architectural notes. This is stored as a persistent memory for future sessions.
+Expected output: Helix produces a structured project overview including detected languages, key directories, symbol counts, and architectural notes. This is stored as a persistent memory for future sessions.
 
 **Step 4: Session handoff**
 
@@ -46,7 +46,7 @@ When ending a session, use `prepare_for_new_conversation` to create a handoff su
 
 ### Tutorial 2: Refactoring Workflow
 
-This tutorial demonstrates renaming a Go function across an entire workspace using Serena's symbolic tools.
+This tutorial demonstrates renaming a Go function across an entire workspace using Helix's symbolic tools.
 
 **Step 1: Find the symbol**
 
@@ -78,7 +78,7 @@ This combines `find_references` and hierarchy analysis to show every file and sy
 rename_symbol("HandleRequest", "ProcessRequest", "internal/api/handler.go")
 ```
 
-Serena renames the symbol across all files in the workspace. Post-edit diagnostics run automatically to verify the rename didn't break anything.
+Helix renames the symbol across all files in the workspace. Post-edit diagnostics run automatically to verify the rename didn't break anything.
 
 **Step 5: Verify**
 
@@ -90,7 +90,7 @@ Check for any new errors or warnings after the refactoring.
 
 ### Tutorial 3: Code Review Workflow
 
-This tutorial shows how to use Serena for code review, leveraging read-only tools and diagnostics.
+This tutorial shows how to use Helix for code review, leveraging read-only tools and diagnostics.
 
 **Step 1: Switch to review mode**
 
@@ -138,7 +138,7 @@ The `ci-bot` profile is purpose-built for this workflow -- it restricts tools to
 
 ### Fuzzy Editing
 
-Serena's `fuzzy_edit` tool matches search blocks against file content using a 4-strategy cascade that tolerates whitespace and indentation differences. The strategies, in order: **exact match** (byte-for-byte), **whitespace-normalized** (ignores leading/trailing whitespace per line), **indentation-flexible** (tabs and spaces interchangeable at line start), and **ellipsis-placeholder** (allows `...` in the search block to skip intermediate content). If all four strategies miss, the tool returns a unified-diff envelope showing the nearest candidate match. If multiple matches are found at any strategy level, the tool returns an error asking you to add more context to disambiguate.
+Helix's `fuzzy_edit` tool matches search blocks against file content using a 4-strategy cascade that tolerates whitespace and indentation differences. The strategies, in order: **exact match** (byte-for-byte), **whitespace-normalized** (ignores leading/trailing whitespace per line), **indentation-flexible** (tabs and spaces interchangeable at line start), and **ellipsis-placeholder** (allows `...` in the search block to skip intermediate content). If all four strategies miss, the tool returns a unified-diff envelope showing the nearest candidate match. If multiple matches are found at any strategy level, the tool returns an error asking you to add more context to disambiguate.
 
 Search and replacement blocks support **ellipsis** (`...` on its own line) to skip intermediate content. Segments match in forward-only order, and search and replacement must have the same number of segments.
 
@@ -162,32 +162,32 @@ get_context(files=["src/api/handler.go", "src/models/user.go"])
 
 ### Setup CLI
 
-The `serena setup <client>` command registers Serena with your MCP client in one step. It resolves the Serena binary path, writes the MCP configuration, detects programming languages in your project, pre-installs required language servers, and runs a post-setup health check.
+The `helix setup <client>` command registers Helix with your MCP client in one step. It resolves the Helix binary path, writes the MCP configuration, detects programming languages in your project, pre-installs required language servers, and runs a post-setup health check.
 
 ```bash
-serena setup claude-code          # Project-scoped (default)
-serena setup vscode --global      # User-scoped registration
-serena setup jetbrains --dry-run  # Preview without changes
+helix setup claude-code          # Project-scoped (default)
+helix setup vscode --global      # User-scoped registration
+helix setup jetbrains --dry-run  # Preview without changes
 ```
 
 Supported clients: `claude-code`, `vscode`, `jetbrains`, `claude-desktop`, `gemini-cli`, `opencode`, `generic`.
 
-For Claude Code, setup also installs **session hooks** that automatically activate and deactivate workspaces. Three hooks are registered: `SessionStart` (activates the workspace), `PreToolUse` (nudges the agent toward Serena tools on Grep/Read/Bash), and `Stop` (deactivates the workspace). Use `--no-hooks` to skip hook installation.
+For Claude Code, setup also installs **session hooks** that automatically activate and deactivate workspaces. Three hooks are registered: `SessionStart` (activates the workspace), `PreToolUse` (nudges the agent toward Helix tools on Grep/Read/Bash), and `Stop` (deactivates the workspace). Use `--no-hooks` to skip hook installation.
 
 ```bash
-serena setup claude-code --no-hooks     # Skip hook installation
-serena setup claude-code --uninstall    # Remove registration and hooks
+helix setup claude-code --no-hooks     # Skip hook installation
+helix setup claude-code --uninstall    # Remove registration and hooks
 ```
 
 ### Smart Errors
 
-When a tool call contains a misspelled parameter name or incorrect enum value, Serena suggests corrections using Levenshtein distance matching. For example, passing `path` instead of `relative_path` returns a "Did you mean `relative_path`?" suggestion alongside the validation error. Exact substring matches (like `path` within `relative_path`) are prioritized for high-confidence suggestions.
+When a tool call contains a misspelled parameter name or incorrect enum value, Helix suggests corrections using Levenshtein distance matching. For example, passing `path` instead of `relative_path` returns a "Did you mean `relative_path`?" suggestion alongside the validation error. Exact substring matches (like `path` within `relative_path`) are prioritized for high-confidence suggestions.
 
 This is automatic middleware behavior -- no tool call needed.
 
 ### Progressive Descriptions
 
-Serena uses a two-tier description system to reduce token consumption. When agents enumerate tools via `tools/list`, each tool returns a brief description (under 100 tokens). Full documentation -- including parameter details, usage examples, and patterns -- is available on demand via the `get_tool_help` tool.
+Helix uses a two-tier description system to reduce token consumption. When agents enumerate tools via `tools/list`, each tool returns a brief description (under 100 tokens). Full documentation -- including parameter details, usage examples, and patterns -- is available on demand via the `get_tool_help` tool.
 
 ```
 get_tool_help(tool_name="fuzzy_edit")
@@ -195,9 +195,9 @@ get_tool_help(tool_name="fuzzy_edit")
 
 ### Lazy Workspace Init
 
-Serena transparently activates a workspace on the first `tools/call` if no workspace is currently active. The workspace path is resolved from the `repo_path` argument of the tool call or falls back to the configured default root. This eliminates the need to explicitly call `activate_project` before using tools.
+Helix transparently activates a workspace on the first `tools/call` if no workspace is currently active. The workspace path is resolved from the `repo_path` argument of the tool call or falls back to the configured default root. This eliminates the need to explicitly call `activate_project` before using tools.
 
-If automatic activation fails, Serena returns an actionable error message suggesting you call `activate_project` explicitly with the correct path.
+If automatic activation fails, Helix returns an actionable error message suggesting you call `activate_project` explicitly with the correct path.
 
 This is automatic middleware behavior -- no tool call needed.
 
@@ -243,10 +243,10 @@ Profiles define which skills and tools are available to an agent. Each profile i
 Select a profile at startup:
 
 ```bash
-serena --profile=claude-code
-serena --profile=codex
-serena --profile=ci-bot
-serena --profile=full          # default
+helix --profile=claude-code
+helix --profile=codex
+helix --profile=ci-bot
+helix --profile=full          # default
 ```
 
 ### Modes
@@ -289,14 +289,14 @@ This returns the current profile, mode, and tool count.
 
 ### Config Precedence
 
-Serena uses a 4-layer configuration system. Higher layers override lower ones:
+Helix uses a 4-layer configuration system. Higher layers override lower ones:
 
 1. **CLI flags** (highest priority) -- e.g., `--profile=codex`, `--http-addr=:9091`
-2. **Project config** -- `.serena/project.yml` in the project root
-3. **User config** -- `~/.serena/serena_config.yml`
+2. **Project config** -- `.helix/project.yml` in the project root
+3. **User config** -- `~/.helix/helix_config.yml`
 4. **Profile defaults** (lowest priority) -- built-in defaults
 
-Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--profile=codex` on the CLI, Codex is used.
+Example: if `~/.helix/helix_config.yml` sets `profile: full` but you pass `--profile=codex` on the CLI, Codex is used.
 
 ### Configuration Keys
 
@@ -304,7 +304,7 @@ Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--p
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `daemon.socket_path` | string | `/tmp/serena-$UID/daemon.sock` | Unix socket path for daemon IPC |
+| `daemon.socket_path` | string | `/tmp/helix-$UID/daemon.sock` | Unix socket path for daemon IPC |
 | `daemon.http_addr` | string | `:8080` | Listen address for Streamable HTTP transport |
 | `daemon.shutdown_timeout` | int | - | Graceful shutdown timeout in seconds |
 
@@ -314,7 +314,7 @@ Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--p
 |-----|------|---------|-------------|
 | `logging.format` | string | `text` | Log format: `text` or `json` |
 | `logging.level` | string | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `logging.dir` | string | `~/.serena/logs/` | Log file directory |
+| `logging.dir` | string | `~/.helix/logs/` | Log file directory |
 
 #### Worker Pool Settings
 
@@ -341,7 +341,7 @@ Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--p
 | `observability.enable_pprof` | bool | `false` | Enable pprof endpoints (requires admin mode) |
 | `observability.tracing_endpoint` | string | (disabled) | OTLP/gRPC collector endpoint for distributed tracing |
 | `observability.tracing_sample_ratio` | float | `0.0` | Tracing sample ratio (0.0 to 1.0) |
-| `observability.service_name` | string | `serena` | Service name used in tracing span attributes (OTel `service.name`) |
+| `observability.service_name` | string | `helix` | Service name used in tracing span attributes (OTel `service.name`) |
 
 #### Degradation Settings
 
@@ -357,7 +357,7 @@ Example: if `~/.serena/serena_config.yml` sets `profile: full` but you pass `--p
 
 ### Example Configuration
 
-A complete `~/.serena/serena_config.yml` with common settings:
+A complete `~/.helix/helix_config.yml` with common settings:
 
 ```yaml
 # Profile and mode
@@ -373,7 +373,7 @@ daemon:
 logging:
   format: json
   level: info
-  dir: ~/.serena/logs/
+  dir: ~/.helix/logs/
 
 # Worker pool tuning
 worker_pool:
@@ -387,7 +387,7 @@ worker_pool:
 observability:
   admin_addr: "127.0.0.1:9100"
   enable_pprof: false
-  service_name: "my-serena-instance"
+  service_name: "my-helix-instance"
 
 # Graceful degradation
 degradation:
@@ -400,7 +400,7 @@ degradation:
   restart_budget: 3
 ```
 
-Project-level overrides go in `.serena/project.yml`:
+Project-level overrides go in `.helix/project.yml`:
 
 ```yaml
 # Override profile for this specific project
@@ -430,7 +430,7 @@ worker_pool:
    which typescript-language-server  # TypeScript
    ```
 
-2. Serena uses a three-tier resolution strategy:
+2. Helix uses a three-tier resolution strategy:
    - **Tier 1: PATH lookup** -- finds existing installations
    - **Tier 2: Managed download** -- auto-installs via npm, pip, cargo, or binary download
    - **Tier 3: Helpful error** -- provides the exact install command if auto-install fails
@@ -453,18 +453,18 @@ worker_pool:
    # JDT Language Server -- see https://github.com/eclipse-jdtls/eclipse.jdt.ls
    ```
 
-4. After installing, verify the binary is accessible and restart Serena.
+4. After installing, verify the binary is accessible and restart Helix.
 
 ### Cache Issues / Stale Results
 
 **Symptom:** Symbol definitions point to old locations after refactoring, or search results don't reflect recent changes.
 
-**Cause:** The worker pool uses share-until-dirty semantics. When you edit through Serena's tools, the cache is automatically invalidated and the worker is marked dirty. However, edits made outside Serena (e.g., directly in your editor or via git operations) are not detected.
+**Cause:** The worker pool uses share-until-dirty semantics. When you edit through Helix's tools, the cache is automatically invalidated and the worker is marked dirty. However, edits made outside Helix (e.g., directly in your editor or via git operations) are not detected.
 
 **Fix:**
 
-- Edit through Serena whenever possible -- cache invalidation is automatic
-- If you edited outside Serena: restart the session to force fresh workers
+- Edit through Helix whenever possible -- cache invalidation is automatic
+- If you edited outside Helix: restart the session to force fresh workers
 - For large-scale external changes (e.g., `git checkout` to a different branch): restart the daemon
 
 ### Mode Restrictions
@@ -498,13 +498,13 @@ worker_pool:
 
 **Fix:**
 
-1. Increase the indexing timeout for Java projects in `.serena/project.yml`:
+1. Increase the indexing timeout for Java projects in `.helix/project.yml`:
    ```yaml
    degradation:
      timeout_index: 300  # 5 minutes for jdtls cold-start
    ```
 
-2. Wait for indexing to complete before issuing symbol queries. Serena creates a workspace-specific data directory (`.jdtls-data`) to avoid cross-workspace conflicts.
+2. Wait for indexing to complete before issuing symbol queries. Helix creates a workspace-specific data directory (`.jdtls-data`) to avoid cross-workspace conflicts.
 
 3. Subsequent sessions reuse the cached index, so cold-start delay is only on first activation per workspace.
 
@@ -520,7 +520,7 @@ worker_pool:
 go install golang.org/x/tools/gopls@latest
 ```
 
-Serena does not pin a gopls version — `internal/langregistry` invokes whatever `gopls` is on `$PATH`. Use `>=v0.21` as a floor, not as a pin.
+Helix does not pin a gopls version — `internal/langregistry` invokes whatever `gopls` is on `$PATH`. Use `>=v0.21` as a floor, not as a pin.
 
 ### `rename_symbol` on Rust symbols
 
@@ -556,9 +556,9 @@ rename.
 
 **Recovery:**
 
-1. Check the Serena logs for the underlying language server crash reason:
+1. Check the Helix logs for the underlying language server crash reason:
    ```bash
-   tail -f ~/.serena/logs/serena.log
+   tail -f ~/.helix/logs/helix.log
    ```
 
 2. Common causes:
@@ -568,7 +568,7 @@ rename.
 
 3. Fix the underlying issue (install newer LS version, increase memory, fix corrupted files).
 
-4. The circuit breaker auto-recovers via a half-open probe with decorrelated jitter. After the backoff period, Serena retries the language server. If it succeeds, the circuit closes and normal operation resumes.
+4. The circuit breaker auto-recovers via a half-open probe with decorrelated jitter. After the backoff period, Helix retries the language server. If it succeeds, the circuit closes and normal operation resumes.
 
 5. To force immediate recovery: restart the daemon.
 
@@ -576,7 +576,7 @@ rename.
 
 **Symptom:** Workers are evicted, performance degrades, or you see "pressure eviction" in logs.
 
-**Cause:** The combined memory usage of language server workers exceeds system thresholds. Serena monitors memory via platform-aware checks (Linux cgroups, macOS `vm_stat`).
+**Cause:** The combined memory usage of language server workers exceeds system thresholds. Helix monitors memory via platform-aware checks (Linux cgroups, macOS `vm_stat`).
 
 **Fix:**
 
@@ -594,19 +594,19 @@ rename.
 
 3. Monitor evictions via the admin listener metrics:
    ```bash
-   curl http://127.0.0.1:9100/metrics | grep serena_lspool_evictions_total
+   curl http://127.0.0.1:9100/metrics | grep helix_lspool_evictions_total
    ```
 
 ## Observability Quickstart
 
-Serena's observability features are opt-in. Nothing is enabled by default.
+Helix's observability features are opt-in. Nothing is enabled by default.
 
 ### Enable the Admin Listener
 
 The admin listener exposes health checks, Prometheus metrics, and pprof endpoints on a loopback address.
 
 ```yaml
-# ~/.serena/serena_config.yml
+# ~/.helix/helix_config.yml
 observability:
   admin_addr: "127.0.0.1:9100"
 ```
@@ -614,7 +614,7 @@ observability:
 Or via CLI:
 
 ```bash
-serena --admin-addr=127.0.0.1:9100
+helix --admin-addr=127.0.0.1:9100
 ```
 
 The admin listener binds to loopback only. Bind failure is non-fatal -- the daemon continues without admin endpoints.
@@ -643,42 +643,42 @@ Key metrics to monitor:
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `serena_tool_duration_seconds` | histogram | MCP tool call latency in seconds (labels: `tool_name`, `profile`, `mode`, `language`) |
-| `serena_tool_calls_total` | counter | Total MCP tool calls by outcome (labels: `tool_name`, `profile`, `mode`, `language`, `outcome`) |
-| `serena_lspool_workers` | gauge | Active language server workers per language (labels: `language`) |
-| `serena_lspool_evictions_total` | counter | Total worker evictions (labels: `language`, `reason`). Reason values: `idle`, `pressure`, `crash`, `shutdown` |
-| `serena_lspool_circuit_state` | gauge | Circuit breaker state per language (0=closed, 1=half-open, 2=open) (labels: `language`) |
-| `serena_lspool_restarts_total` | counter | Language server worker restarts per language (labels: `language`) |
+| `helix_tool_duration_seconds` | histogram | MCP tool call latency in seconds (labels: `tool_name`, `profile`, `mode`, `language`) |
+| `helix_tool_calls_total` | counter | Total MCP tool calls by outcome (labels: `tool_name`, `profile`, `mode`, `language`, `outcome`) |
+| `helix_lspool_workers` | gauge | Active language server workers per language (labels: `language`) |
+| `helix_lspool_evictions_total` | counter | Total worker evictions (labels: `language`, `reason`). Reason values: `idle`, `pressure`, `crash`, `shutdown` |
+| `helix_lspool_circuit_state` | gauge | Circuit breaker state per language (0=closed, 1=half-open, 2=open) (labels: `language`) |
+| `helix_lspool_restarts_total` | counter | Language server worker restarts per language (labels: `language`) |
 
 Example Prometheus scrape config:
 
 ```yaml
 scrape_configs:
-  - job_name: serena
+  - job_name: helix
     static_configs:
       - targets: ["127.0.0.1:9100"]
     scrape_interval: 15s
 ```
 
-**Metric labels:** The `serena_tool_duration_seconds` and `serena_tool_calls_total` metrics share four label dimensions: `tool_name`, `profile`, `mode`, and `language`. The `serena_tool_calls_total` counter adds a fifth label, `outcome`, for error tracking. Use these for targeted queries:
+**Metric labels:** The `helix_tool_duration_seconds` and `helix_tool_calls_total` metrics share four label dimensions: `tool_name`, `profile`, `mode`, and `language`. The `helix_tool_calls_total` counter adds a fifth label, `outcome`, for error tracking. Use these for targeted queries:
 
 ```promql
 # Error rate per tool (last 5 minutes)
-rate(serena_tool_calls_total{outcome="error"}[5m])
+rate(helix_tool_calls_total{outcome="error"}[5m])
 
 # p95 tool latency
-histogram_quantile(0.95, rate(serena_tool_duration_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(helix_tool_duration_seconds_bucket[5m]))
 
 # Active workers by language
-serena_lspool_workers
+helix_lspool_workers
 
 # Eviction rate by reason
-rate(serena_lspool_evictions_total[5m])
+rate(helix_lspool_evictions_total[5m])
 ```
 
 ### Enable Tracing
 
-Serena supports distributed tracing via OpenTelemetry (OTLP/gRPC):
+Helix supports distributed tracing via OpenTelemetry (OTLP/gRPC):
 
 ```yaml
 observability:
@@ -690,7 +690,7 @@ Traces include spans for tool execution, language server communication, and work
 
 ### Enable pprof
 
-For profiling the Serena daemon process:
+For profiling the Helix daemon process:
 
 ```yaml
 observability:
@@ -715,7 +715,7 @@ curl http://127.0.0.1:9100/debug/pprof/goroutine?debug=2
 
 ### Benchmarks
 
-Serena ships a benchmark suite in `test/bench/` for measuring tool response times, LSP indexing throughput, observability overhead, and memory usage. Benchmarks require `gopls` installed and use `testing.B.Loop` (Go 1.24+).
+Helix ships a benchmark suite in `test/bench/` for measuring tool response times, LSP indexing throughput, observability overhead, and memory usage. Benchmarks require `gopls` installed and use `testing.B.Loop` (Go 1.24+).
 
 **Run all benchmarks:**
 
@@ -811,7 +811,7 @@ Workers are evicted under memory pressure before OOM occurs. The eviction order 
 
 **Recommendations:**
 
-- Set `memory_limit_mb` to ~75% of available system memory for dedicated Serena hosts
+- Set `memory_limit_mb` to ~75% of available system memory for dedicated Helix hosts
 - For shared development machines, set to a conservative value (e.g., 1024-2048 MB)
 - Monitor actual usage via the `/metrics` endpoint before tuning
 
@@ -822,7 +822,7 @@ degradation:
   restart_budget: 3  # Max consecutive LS crashes before circuit opens (default)
 ```
 
-When a language server crashes, Serena automatically restarts it. If it crashes more than `restart_budget` times consecutively, the circuit breaker opens and Serena stops attempting restarts for that language.
+When a language server crashes, Helix automatically restarts it. If it crashes more than `restart_budget` times consecutively, the circuit breaker opens and Helix stops attempting restarts for that language.
 
 - Increase `restart_budget` if a language server occasionally crashes but recovers (e.g., during indexing of very large projects)
 - Keep it low (2-3) for development machines to avoid crash loops consuming resources
@@ -832,16 +832,16 @@ When a language server crashes, Serena automatically restarts it. If it crashes 
 
 ### Java integration tests (warm jdtls cache)
 
-Serena's Java integration suite (`test/integration/java_test.go`) runs as part of
+Helix's Java integration suite (`test/integration/java_test.go`) runs as part of
 the default `go test ./...`. First-time runs are slow because jdtls must index the
 Java fixture; subsequent runs reuse a persistent workspace under the user cache
 directory, cutting wall-clock dramatically.
 
 **Cache location:**
 
-- Linux: `$XDG_CACHE_HOME/serena-test/jdtls/<fixture-hash>-<jdtls-hash>/` (default `~/.cache/...`).
-- macOS: `~/Library/Caches/serena-test/jdtls/...`.
-- Windows: `%LocalAppData%\serena-test\jdtls\...`.
+- Linux: `$XDG_CACHE_HOME/helix-test/jdtls/<fixture-hash>-<jdtls-hash>/` (default `~/.cache/...`).
+- macOS: `~/Library/Caches/helix-test/jdtls/...`.
+- Windows: `%LocalAppData%\helix-test\jdtls\...`.
 
 The cache key is derived from the Java fixture contents (`testdata/fixtures/java/**`)
 and the resolved `jdtls` binary identity. Changing either produces a new directory;
@@ -851,11 +851,11 @@ old ones coexist until manually cleaned.
 
 - `go test ./test/integration/ -run 'TestSymbols_JavaFixture|TestEdit_JavaFixture' -count=1` — run the Java suite once. Skips cleanly if `jdtls` is not on PATH.
 - `make bench-jdtls-warm` — wipe the cache, run the Java suite cold, then run it warm; prints both wall-clocks.
-- `make clean-jdtls-cache` — remove `$XDG_CACHE_HOME/serena-test/jdtls/` (POSIX only; on Windows delete the folder manually).
+- `make clean-jdtls-cache` — remove `$XDG_CACHE_HOME/helix-test/jdtls/` (POSIX only; on Windows delete the folder manually).
 
 **Test-only environment variable:**
 
-`SERENA_TEST_JDTLS_DATA_DIR` — when set to a non-empty absolute path, Serena's
+`SERENA_TEST_JDTLS_DATA_DIR` — when set to a non-empty absolute path, Helix's
 jdtls adapter uses that path as the `-data` argument instead of the default
 `workDir/.jdtls-data`. This is the seam the Java integration tests use to inject
 the warm cache directory. **Do not set this variable in production.**

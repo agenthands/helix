@@ -94,4 +94,4 @@ release:
   prerelease: auto
   draft: false
   mode: replace
-  name_template: "Serena {{ .Tag }}"
+  name_template: "Helix {{ .Tag }}"

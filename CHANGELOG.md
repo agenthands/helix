@@ -1,6 +1,53 @@
 # Changelog
 
-All notable changes to Serena (Go) are documented here.
+All notable changes to Helix (Go) are documented here. Releases prior to v1.9 shipped under the project's previous name, Serena; the binary, env vars, config dirs, and MCP server registration all renamed to `helix` at v1.9 (see Breaking Changes below).
+
+## v1.9 — Polish & Infra (2026-04-30)
+
+### Breaking Changes (v1.8 → v1.9)
+
+This release renames the binary and reorganizes user-visible state. Existing users must take one manual step after upgrading. See `INSTALL.md` > **Upgrading** for the full upgrade workflow.
+
+- **Binary renamed:** `serena` → `helix`. The archive shipped on GitHub Releases is now `helix_v1.9.0_<os>_<arch>.tar.gz` (was `serena_v*`). Scripts that invoke `serena` will fail with "command not found"; rename the symlink or update the script. There is no backwards-compat symlink (Phase 52 D-04).
+- **Env vars renamed:** every `SERENA_*` becomes `HELIX_*`. Examples: `SERENA_LOG_LEVEL` → `HELIX_LOG_LEVEL`; `SERENA_TEST_*` → `HELIX_TEST_*`; `SERENA_TEST_LS_TIMEOUT` → `HELIX_TEST_LS_TIMEOUT`; `SERENA_TEST_JDTLS_DATA_DIR` → `HELIX_TEST_JDTLS_DATA_DIR`. There is no fallback (Phase 52 D-02).
+- **Config dirs renamed:** `~/.serena/` → `~/.helix/`; `<project>/.serena/project.yml` → `<project>/.helix/project.yml`; `<project>/.serena/memories/` → `<project>/.helix/memories/`. The global config file moved from `~/.serena/serena_config.yml` to `~/.helix/helix_config.yml`. Daemon socket moved from `/tmp/serena-$UID/daemon.sock` to `/tmp/helix-$UID/daemon.sock`. There is no migration tool. To free disk after upgrade: `rm -rf ~/.serena`.
+- **MCP server registration name flipped:** existing `serena` registrations in `.mcp.json`, `claude_desktop_config.json`, `.junie/mcp/mcp.json`, `.cursor/mcp.json`, `opencode.json`, etc. silently stop working. Re-run `helix setup <client>` (e.g., `helix setup claude-code`) to register the new identity. If you have an old registration: `claude mcp remove serena` first.
+- **MCP server identity flipped:** the `Implementation.Name` returned during the MCP handshake is now `"helix"` (was `"serena"`); `Implementation.Version` is now ldflag-bound to the release tag (no more hardcoded literal).
+- **Module path renamed:** `github.com/postfix/serena` → `github.com/agenthands/helix`. Affects only contributors who import the module from outside the repo (rare).
+- **Claude Code hooks installed by `serena setup` reference the old binary name** and will silently fail. Re-run `helix setup claude-code` to regenerate hooks against the new binary. The internal `serena_managed` JSON marker also flipped to `helix_managed`.
+- **Prometheus metric series names renamed:** `serena_tool_calls_total`, `serena_tool_duration_seconds`, `serena_lspool_*`, `serena_rename_strategy_total`, `serena_drift_test_total` all flipped to `helix_*`. Prometheus scrapers must update PromQL queries.
+
+### Self-upgrade subcommand pair (NEW)
+
+Helix can now upgrade itself in place. Two verbs (modeled after `apt update` / `apt upgrade`):
+
+- `helix update` — read-only check. Queries the GitHub Releases API; prints `current: vX / latest: vY` plus the release-notes body. No mutation.
+- `helix upgrade` — installs the latest release. Permission-probes the install path before any network I/O; downloads the archive + signature; verifies the minisign signature against the embedded public key; atomic-swaps the binary in place (inode-replace on Unix, rename-current-to-`.old` on Windows); re-launches with the same arguments minus `upgrade`.
+
+Flags: `--prerelease` (include `v*-rc*`/`v*-beta*`/`v*-alpha*` releases), `--version vX.Y.Z` (pin to specific version; overrides `--prerelease`), `--check` (alias for `helix update`), `--dry-run` (download + verify but do not swap).
+
+Hard refusals (no override flags):
+
+- **Downgrades:** if the chosen target is `<= current`, `helix upgrade` exits 0 with "already up to date". Use the manual GitHub Releases verification recipe in INSTALL.md to install older versions explicitly.
+- **In-daemon upgrades:** running `helix upgrade` from inside a daemon child prints "restart the daemon manually" and exits 0. Stop the daemon first.
+- **Unwritable install path:** prints the exact `sudo helix upgrade <flags>` re-invocation and exits non-zero. No internal sudo prompt.
+
+Rate-limit guidance: `helix update`/`helix upgrade` use the GitHub anonymous API (60 req/hr/IP). Set `GITHUB_TOKEN` (a fine-grained PAT with `public_repo` scope is enough) to lift to 5000/hr in CI environments.
+
+See `INSTALL.md` > **Upgrading** for full details.
+
+### Embed audit manifest (NEW)
+
+Phase 52 produced `.planning/phases/52-packaging-distribution-channels/EMBED-AUDIT.md`: a living manifest of every runtime asset the binary reads, classified embedded / external-by-design / gap. Future contributors adding new disk-read code consult this manifest. The classification matters because Helix maintains a "single self-contained binary" property except for explicitly-listed exceptions (LS binaries are external-by-design — `internal/langregistry/installer.go` downloads them on demand).
+
+### Removed
+
+- Phase 52 originally targeted Homebrew tap (PKG-02), Scoop bucket (PKG-03), and native Linux packages (PKG-04). The maintainer re-scoped during planning in favor of self-contained-binary + in-binary self-upgrade. PKG-02/03/04 are deferred to a future milestone (see `.planning/REQUIREMENTS.md` PKG-DEFER-03/04/05).
+
+### Known Issues
+
+- On Windows, `helix upgrade` leaves a `helix.exe.old` file next to the new binary (acceptable property of Windows in-place self-replacement; the old file is removable manually). A future v1.10 polish phase may mark it hidden.
+- The minisign keypair shipped at v1.9.0 is the placeholder put in place in Phase 51; the maintainer must rotate to a real keypair before the first user-facing release. CONFIRM via `head -1 minisign.pub` showing the real signing identity, not "PLACEHOLDER" — until rotated, signature verification fails closed and `helix upgrade` cannot be used (the read-only `helix update` check still works).
 
 ## v1.7 — Developer Experience & Auto-Setup (2026-04-22)
 

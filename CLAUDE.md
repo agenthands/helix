@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Go Development Commands
 
-- `go build ./cmd/serena` - Build the serena binary
+- `go build ./cmd/helix` - Build the helix binary
 - `go test ./...` - Run all Go tests
 - `go vet ./...` - Run Go vet
 - `gofmt -w .` - Format Go code
@@ -28,15 +28,15 @@ Available pytest markers for selective testing:
 
 ## Project
 
-**Serena** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
+**Helix** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
 
-Serena provides 41+ MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
+Helix provides 41+ MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
 
 Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need symbol-level operations — go-to-definition, find references, rename across files, replace symbol body, blast-radius analysis — backed by real language servers with warm persistent caching, a ranked RepoMap for structural context, and fuzzy editing that tolerates LLM output drift.
 
 **Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, serves ranked structural context on demand, and exposes semantic code operations as agent tools — all from a single binary with one-command client setup.
 
-**Legacy reference:** The `legacy/` directory contains the original Python Serena as a read-only reference. All active development is in Go. Serena is a standalone Go product originally inspired by Python Serena, not a port or rewrite.
+**Legacy reference:** The `legacy/` directory contains the original Python Serena as a read-only reference. All active development is in Go. Helix is a standalone Go product originally inspired by Python Serena, not a port or rewrite. The product was renamed Serena → Helix at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes); the `legacy/` tree retains the historical Serena name.
 
 ## Architecture
 
@@ -46,7 +46,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 - `internal/mcp/` -- MCP server with official Go SDK, tool registry, structured errors, profile filtering middleware
 - `internal/daemon/` -- Persistent supervisor daemon with errgroup orchestration, signal-first lifecycle
 - `internal/forwarder/` -- Stdio-to-gRPC proxy with auto-start
-- `api/proto/serena/v1/` -- gRPC IPC between forwarder and daemon
+- `api/proto/serena/v1/` -- gRPC IPC between forwarder and daemon (proto package directory name retained as a wire-format lineage artifact; see Phase 52-03 SUMMARY)
 - Transports: stdio (via forwarder), Streamable HTTP (direct)
 
 ### Layer 1: Code Intelligence Kernel
@@ -73,10 +73,10 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 
 ### Layer 3: Agent Profiles & Setup
 - `internal/profile/` -- 5 agent profiles (claude-code, codex, ide-assistant, ci-bot, full), 4 modes (read/edit/review/admin)
-- `internal/config/` -- 4-layer config: CLI > project (.serena/) > user (~/.serena/) > profile defaults
-- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `serena setup <client>` one-command MCP registration for 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic) with language detection, LS pre-installation, and Claude Code hook installer
-- `internal/cli/status.go`, `internal/cli/status_output.go` -- `serena status` CLI producing human-readable workspace health summary (`--json`, `--verbose` modes)
-- `cmd/serena/main.go` -- single entrypoint; all CLI subcommands (setup, status, activate, deactivate, nudge, root, daemon wiring) live in `internal/cli/` and are mounted via cobra in `internal/cli/root.go`
+- `internal/config/` -- 4-layer config: CLI > project (.helix/) > user (~/.helix/) > profile defaults
+- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `helix setup <client>` one-command MCP registration for 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic) with language detection, LS pre-installation, and Claude Code hook installer
+- `internal/cli/status.go`, `internal/cli/status_output.go` -- `helix status` CLI producing human-readable workspace health summary (`--json`, `--verbose` modes)
+- `cmd/helix/main.go` -- single entrypoint; all CLI subcommands (setup, status, activate, deactivate, nudge, root, daemon wiring) live in `internal/cli/` and are mounted via cobra in `internal/cli/root.go`
 
 ### MCP Middleware Stack (installed in `internal/daemon/daemon.go` steps 14, 14b, 14c)
 Four real middlewares, defined in `internal/mcp/`:
@@ -110,7 +110,7 @@ Four real middlewares, defined in `internal/mcp/`:
 ## Key Patterns
 
 ### Tool Registration
-- Kernel tools use `RegisterTools(server *mcp.SerenaMCPServer, ...)` with typed args + `mcpsdk.AddTool`
+- Kernel tools use `RegisterTools(server *mcp.SerenaMCPServer, ...)` with typed args + `mcpsdk.AddTool` (the `SerenaMCPServer` Go identifier is retained for internal-API stability per Phase 52-03 SUMMARY; user-facing MCP `Implementation.Name` is `helix`)
 - Skill tools use `ToolProvider.Tools()` returning `[]*mcp.ToolDef`, daemon registers centrally
 - Kernel tools wrapped as thin skill adapters for uniform ToolProvider interface
 - "Skills for composition, tool names for execution"
@@ -123,7 +123,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - Kernel-resident tools (`internal/kernel/health/`, `internal/kernel/help/`) are exposed as skills via their `skill_adapter.go`, keeping the ToolProvider surface uniform
 
 ### Configuration
-- 4-layer precedence: CLI flags > project `.serena/project.yml` > user `~/.serena/serena_config.yml` > profile defaults
+- 4-layer precedence: CLI flags > project `.helix/project.yml` > user `~/.helix/helix_config.yml` > profile defaults
 - Profile YAMLs define tool subsets, description overrides, mode transitions
 - `config.ResolveProfile()` bridges config profile name to ProfileStore
 
@@ -141,8 +141,8 @@ Four real middlewares, defined in `internal/mcp/`:
 - Token budget fitting uses binary search over the elided tree; output scales to any repository size
 
 ### Setup & Hooks
-- `serena setup <client>` (implemented in `internal/cli/setup*.go`) invokes client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
-- Claude Code hooks installed during `serena setup claude-code` (see `internal/cli/setup_hooks.go`): SessionStart (activate workspace), PreToolUse (nudge toward symbolic tools), Stop (cleanup); `--no-hooks` opts out
+- `helix setup <client>` (implemented in `internal/cli/setup*.go`) invokes client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
+- Claude Code hooks installed during `helix setup claude-code` (see `internal/cli/setup_hooks.go`): SessionStart (activate workspace), PreToolUse (nudge toward symbolic tools), Stop (cleanup); `--no-hooks` opts out
 - Language detection (`internal/cli/setup_detect.go`) scans the project directory for known file extensions and pre-installs LSs via the three-tier installer before registering the MCP server
 
 ### Middleware Execution Order (LIFO)
@@ -174,6 +174,76 @@ Use these entry points:
 - `/gsd:execute-phase` for planned phase work
 
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+
+## Code intelligence: SMTC-first tool routing
+
+For code-aware operations, prefer SMTC MCP tools over `Bash` / `Grep` / `Read`. SMTC parses the AST and (for first-class languages) consults the LSP, so it returns *semantic* results — actual definitions, real callers, type-resolved references — instead of string matches. Pick by the question being asked, not by tool habit.
+
+### Decision matrix
+
+| Question | Use this | Not this |
+|---|---|---|
+| Where is symbol `X` defined? | `mcp__smtc__goto_definition` | `Grep "X"` |
+| Find declarations matching a pattern | `mcp__smtc__find_declarations` | `grep "func \w+"` |
+| Who calls function `Y`? | `mcp__smtc__get_callers` / `find_references` | `grep -r "Y("` |
+| What does `Y` call? | `mcp__smtc__get_callees` | manual Read chain |
+| Can `A` transitively reach `B`? | `mcp__smtc__get_reachability` | recursive grep |
+| Multi-source / multi-sink reachability | `mcp__smtc__get_multi_reachability` | — |
+| Callers + callees around `Y` | `mcp__smtc__get_neighborhood` | two grep passes |
+| All references to a symbol | `mcp__smtc__find_references` | `Grep "name"` |
+| Call sites by signature / receiver / arg | `mcp__smtc__find_call_sites_matching` | regex on file |
+| File outline (declarations + imports) | `mcp__smtc__list_file_outline` | `Read <file>` |
+| Type hierarchy (super / sub) | `mcp__smtc__get_type_hierarchy` | `grep "extends"` |
+| Type of an expression | `mcp__smtc__get_type_info` | infer by reading |
+| Imports of a file or directory | `mcp__smtc__get_import_graph` | `grep "^import"` |
+| Field reads / writes (Java) | `mcp__smtc__get_field_flow` | grep field name |
+| Def-use chains within a function | `mcp__smtc__get_dataflow` | manual trace |
+| Cross-function data flow | `mcp__smtc__get_interprocedural_flow` | manual trace |
+| Control flow graph of a function | `mcp__smtc__get_cfg` | read + reason |
+| SSA / IR view | `mcp__smtc__get_ir` | — |
+| Backward / forward / thin slice | `mcp__smtc__get_slice` | — |
+| Tree-sitter S-expression query | `mcp__smtc__run_ast_query` | complex regex |
+| Find by annotation / kind / visibility | `mcp__smtc__search_pattern` | regex |
+| Literal values (strings, numbers, bools) | `mcp__smtc__find_literals` | `Grep '"…"'` |
+| Syntactic identifier occurrences | `mcp__smtc__find_name_occurrences` | `Grep` |
+| Externally reachable entry points | `mcp__smtc__find_entry_points` | grep `@RestController` |
+| Taint sinks by CWE category | `mcp__smtc__find_taint_sinks` | grep `Runtime.exec` |
+| Trace taint source → sink | `mcp__smtc__trace_taint_path` | manual reasoning |
+| Why X reaches Y (with chain) | `mcp__smtc__why_reaches` / `explain_taint_path` | — |
+| Sibling methods missing a check | `mcp__smtc__find_defense_gaps` | — |
+| Unsafe deserialization reachable from net | `mcp__smtc__find_unsafe_deser` | grep `readObject` |
+
+### Activation (only when the workspace language matches a capability)
+
+Security tools are gated behind capability activation, and capabilities are **language-specific**. Always run `mcp__smtc__list_capabilities` first; only activate a capability whose language matches the workspace.
+
+- **Java projects** → `mcp__smtc__activate_capabilities(["java-security"])`
+- **Go / Rust / TS / JS / Python / others** → no security capability ships today; skip activation and treat the security rows of the decision matrix as not applicable
+- **This repo (Helix, Go-native)** → no security capability available; do **not** activate `java-security` here. The security rows exist in the matrix for cross-project portability of this guidance, not for use against this codebase.
+
+Tools gated behind activation: `find_taint_sinks`, `trace_taint_path`, `find_entry_points`, `find_unsafe_deser`, `find_defense_gaps`, `explain_taint_path`, `trace_to_sources`, `why_reaches`.
+
+### When grep / Bash / Read IS still correct
+- Free-text search in comments, READMEs, docstrings, log messages
+- Non-code files: YAML, JSON, TOML, Markdown, Dockerfiles, shell scripts
+- You don't yet know the symbol name — grep first to find candidates, then switch to SMTC once you have a name to anchor on
+- Build / test output inspection, env-var checks, file-system shape
+
+### Anti-patterns (do not do these)
+- `Grep "func X"` to locate a definition → use `goto_definition` or `find_declarations` (handles overloads, receivers, generics)
+- `Grep "X("` to find callers → use `get_callers` (resolves dynamic dispatch, ignores comments / strings)
+- `Read file.go` to understand structure → use `list_file_outline` (smaller, just the shape)
+- Multiple `Grep` passes to trace a data flow → use `get_interprocedural_flow` or `get_slice`
+- Manual recursion through callers / callees → use `get_reachability` or `get_multi_reachability`
+- Grep-based security audit → activate `java-security`, then `find_taint_sinks` + `trace_taint_path`
+- `Read` an entire large file just to check one symbol's definition → `goto_definition`
+
+### Language tier matters
+SMTC accuracy depends on language tier:
+- **First-class** (full LSP-backed resolution): Java, Go, Rust, TypeScript, JavaScript
+- **Best-effort** (tree-sitter only, no cross-file symbol resolution): C, C++, PHP, Kotlin, Python, Ruby, Swift, HTML, CSS, others
+
+For first-class languages there is **no efficiency reason** to fall back to grep for semantic questions. For best-effort languages SMTC tools still work but `find_references` / `goto_definition` may miss cross-file edges — in that case, SMTC for the in-file part, grep to widen.
 
 ## Developer Profile
 

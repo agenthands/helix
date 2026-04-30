@@ -1,12 +1,12 @@
-# Contributing to Serena
+# Contributing to Helix
 
-Thank you for your interest in contributing to Serena! We welcome contributions that improve and extend the project.
+Thank you for your interest in contributing to Helix! We welcome contributions that improve and extend the project.
 
 ## Scope of Contributions
 
 The following types of contributions can be submitted directly via pull requests:
 
-- Isolated additions that extend Serena along existing lines (e.g., adding support for a new language server)
+- Isolated additions that extend Helix along existing lines (e.g., adding support for a new language server)
 - Small bug fixes
 - Documentation improvements
 
@@ -24,7 +24,7 @@ Every PR should cover a single logical change or a set of closely related change
 
 | Command | Description |
 |---------|-------------|
-| `go build ./cmd/serena` | Build the serena binary |
+| `go build ./cmd/helix` | Build the helix binary |
 | `go test ./...` | Run all tests |
 | `go vet ./...` | Run static analysis |
 | `gofmt -w .` | Format code |
@@ -39,9 +39,9 @@ Every PR should cover a single logical change or a set of closely related change
 
 ## Project Structure
 
-Serena uses a 4-layer architecture shipping as a single Go binary:
+Helix uses a 4-layer architecture shipping as a single Go binary:
 
-- `cmd/serena/` -- CLI entry point
+- `cmd/helix/` -- CLI entry point
 - `internal/mcp/` -- MCP runtime, smart error suggestions, lazy workspace init (Layer 0)
 - `internal/daemon/` -- Persistent supervisor daemon (Layer 0)
 - `internal/forwarder/` -- Stdio-to-gRPC proxy (Layer 0)
@@ -70,7 +70,7 @@ Serena uses a 4-layer architecture shipping as a single Go binary:
 - `internal/obs/` -- Observability (metrics, tracing, admin listener)
 - `internal/degrade/` -- Graceful degradation
 - `internal/workspace/` -- Workspace key and state
-- `api/proto/serena/v1/` -- gRPC IPC definitions
+- `api/proto/serena/v1/` -- gRPC IPC definitions (proto package directory retained as a wire-format lineage artifact from the v1.8 Serena lineage; see CHANGELOG.md v1.9)
 - `protocol/gen/` -- Generated LSP 3.17 types
 - `test/harness/` -- Test harness: Runner, tool helpers, golden file comparison, fixtures
 - `test/oracle/` -- Oracle test suite (6 layers: protocol, contract, runtime, scenario, llm, judge)
@@ -79,7 +79,7 @@ Serena uses a 4-layer architecture shipping as a single Go binary:
 
 ## Running Integration Tests
 
-The integration test harness lives in `test/integration/`. It starts a real Serena daemon with a Go fixture project and exercises MCP round-trips via stdio transport against live language servers.
+The integration test harness lives in `test/integration/`. It starts a real Helix daemon with a Go fixture project and exercises MCP round-trips via stdio transport against live language servers.
 
 Run all integration tests:
 
@@ -234,7 +234,7 @@ Key details:
 ## Adding Language Support
 
 - Language definitions live in `internal/langregistry/languages.yaml`.
-- See the memory guide: [`.serena/memories/adding_new_language_support_guide.md`](.serena/memories/adding_new_language_support_guide.md).
+- See the memory guide: [`.helix/memories/adding_new_language_support_guide.md`](.helix/memories/adding_new_language_support_guide.md).
 - After adding a language, run `make docs` to regenerate the README language table.
 
 ## gopls Compatibility
@@ -245,4 +245,4 @@ Key details:
 
 ## Legacy Python
 
-The `legacy/` directory contains the original Python Serena for reference only. It is not actively developed.
+The `legacy/` directory contains the original Python Serena (the project's prior name; renamed to Helix at v1.9) for reference only. It is not actively developed.

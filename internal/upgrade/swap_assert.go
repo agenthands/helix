@@ -15,3 +15,15 @@ package upgrade
 // and the type identity is what `var _ =` checks.
 var _ = swap
 var _ = relaunch
+
+// swapFn and relaunchFn are package-level indirections so tests can
+// drive Upgrade through Step 9 (swap) and Step 10 (relaunch) without
+// actually mutating os.Executable() or replacing the test runner
+// process image. Production code dispatches through these variables;
+// tests overwrite them via t.Cleanup-restored swaps. The real relaunch
+// never returns (syscall.Exec on Unix, os.Exit on Windows), so any
+// test that observes a return value did so via the override.
+var (
+	swapFn     = swap
+	relaunchFn = relaunch
+)

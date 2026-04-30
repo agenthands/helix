@@ -479,3 +479,133 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+// TestUpgradeRelaunchInvokesExecWithStrippedArgs covers the agent-level
+// integration gap that human UAT-1 was guarding: that Upgrade reaches
+// Step 10 and dispatches to relaunchFn with the verb + upgrade-only
+// flags removed from os.Args. The httptest server + test keypair drive
+// the orchestrator through API → semver → permission → download →
+// verify → extract → swap → relaunch; swapFn and relaunchFn are
+// overridden so the test runner's binary is not actually replaced and
+// the test process is not actually exec'd away.
+func TestUpgradeRelaunchInvokesExecWithStrippedArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Permission probe path + path semantics are POSIX-flavored;
+		// the swap_windows.go relaunch uses os.Exit(0) which we cannot
+		// observe even via override. Coverage on Unix is sufficient.
+		t.Skip("relaunch dispatch coverage is POSIX-flavored")
+	}
+	withTestKey(t)
+
+	uts := newUpgradeTestServer(t, "v1.9.0")
+
+	// Override swapFn so the running test binary is not actually
+	// replaced. Capture the swap arguments to confirm Step 9 fired
+	// before Step 10.
+	var swapCalls int
+	prevSwap := swapFn
+	swapFn = func(currentPath, newPath string) error {
+		swapCalls++
+		// Sanity: the caller passed the running executable as the
+		// target and the extracted helix binary as the source.
+		if !strings.Contains(currentPath, "/") {
+			t.Errorf("swapFn currentPath = %q, want absolute path", currentPath)
+		}
+		if !strings.HasSuffix(newPath, "helix") {
+			t.Errorf("swapFn newPath = %q, want path ending in 'helix'", newPath)
+		}
+		return nil
+	}
+	t.Cleanup(func() { swapFn = prevSwap })
+
+	// Override relaunchFn to capture (and return nil instead of
+	// never-returning). The production implementation calls
+	// syscall.Exec which replaces the process image — observing the
+	// captured args is the whole point of this indirection.
+	type relaunchCall struct {
+		binPath string
+		args    []string
+		env     []string
+	}
+	var captured []relaunchCall
+	prevRelaunch := relaunchFn
+	relaunchFn = func(binPath string, args, env []string) error {
+		captured = append(captured, relaunchCall{
+			binPath: binPath,
+			args:    append([]string(nil), args...),
+			env:     append([]string(nil), env...),
+		})
+		return nil
+	}
+	t.Cleanup(func() { relaunchFn = prevRelaunch })
+
+	// Simulate a real user invocation: `helix upgrade --version v1.9.0
+	// --prerelease`. The relaunched binary must NOT see those flags or
+	// the verb (REVIEW.md CR-02), so after the upgrade the process
+	// would re-exec as bare `helix` with no args.
+	prevArgs := os.Args
+	os.Args = []string{"helix", "upgrade", "--version", "v1.9.0", "--prerelease"}
+	t.Cleanup(func() { os.Args = prevArgs })
+
+	var out bytes.Buffer
+	err := Upgrade(context.Background(), Options{
+		Current: "v1.8.0",
+		Stdout:  &out,
+		baseURL: uts.server.URL,
+	})
+
+	// Permission probe may fail in restricted environments — accept that as
+	// a clean skip rather than a failure.
+	if err != nil && strings.Contains(err.Error(), "not writable") {
+		t.Skip("install path not writable in this test environment; relaunch path not exercised")
+	}
+	if err != nil {
+		t.Fatalf("Upgrade: %v", err)
+	}
+
+	// Step 9 must have run before Step 10.
+	if swapCalls != 1 {
+		t.Errorf("swapFn invocations = %d, want 1", swapCalls)
+	}
+
+	// Step 10 must have run exactly once.
+	if len(captured) != 1 {
+		t.Fatalf("relaunchFn invocations = %d, want 1", len(captured))
+	}
+	got := captured[0]
+
+	// binPath: must be the running executable (swap target). We accept
+	// any non-empty absolute path because os.Executable() returns the
+	// test runner's path which varies per platform / temp dir.
+	if got.binPath == "" {
+		t.Error("relaunchFn binPath is empty, want absolute exec path")
+	}
+
+	// args: must NOT contain the verb or any upgrade-only flag — that's
+	// the CR-02 contract. Pre-verb args (here just "helix") pass through.
+	for _, banned := range []string{"upgrade", "update", "--prerelease", "--check", "--dry-run", "--version"} {
+		for _, a := range got.args {
+			if a == banned {
+				t.Errorf("relaunchFn args = %v, contains banned token %q (CR-02 contract violation)", got.args, banned)
+			}
+		}
+	}
+	// Cross-check: stripUpgradeVerb of the same input produces the same
+	// stripped slice the orchestrator passed to relaunchFn.
+	want := stripUpgradeVerb(os.Args)
+	if len(got.args) != len(want) {
+		t.Errorf("relaunchFn args = %v (len %d), want stripUpgradeVerb(os.Args) = %v (len %d)", got.args, len(got.args), want, len(want))
+	} else {
+		for i := range want {
+			if got.args[i] != want[i] {
+				t.Errorf("relaunchFn args[%d] = %q, want %q", i, got.args[i], want[i])
+			}
+		}
+	}
+
+	// env: must be a snapshot of os.Environ(). We don't compare verbatim
+	// (PATH etc. drift during test setup) but we sanity-check non-empty.
+	if len(got.env) == 0 {
+		t.Error("relaunchFn env is empty, want os.Environ() snapshot")
+	}
+}

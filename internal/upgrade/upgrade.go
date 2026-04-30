@@ -283,7 +283,7 @@ func Upgrade(ctx context.Context, opts Options) error {
 		// filesystems disallow chmod. Continue.
 		_ = err
 	}
-	if err := swap(exec, newBin); err != nil {
+	if err := swapFn(exec, newBin); err != nil {
 		// REVIEW.md WR-01: the install-dir permission probe at step 2
 		// runs BEFORE network I/O and can race a sysadmin chmod or a
 		// changed effective UID before we reach the swap. Re-emit the
@@ -300,7 +300,7 @@ func Upgrade(ctx context.Context, opts Options) error {
 	// Unix syscall.Exec never returns on success; on Windows
 	// relaunch calls os.Exit(0) which also doesn't return.
 	relaunchArgs := stripUpgradeVerb(os.Args)
-	if err := relaunch(exec, relaunchArgs, os.Environ()); err != nil {
+	if err := relaunchFn(exec, relaunchArgs, os.Environ()); err != nil {
 		return serr.Wrap(serr.Internal, "relaunch", err)
 	}
 	return nil

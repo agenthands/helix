@@ -105,6 +105,15 @@ func extractTarGz(archivePath, destDir string) error {
 			// later swap step into installing arbitrary content.
 			return serr.New(serr.InvalidArgs, "symlinks not allowed in archive").
 				WithDetail("entry=" + hdr.Name)
+		case tar.TypeXHeader, tar.TypeXGlobalHeader:
+			// PAX extended/global header records carry metadata for the
+			// following entry (e.g., long path overrides). tar.NewReader
+			// already consumes the body and applies the metadata to the
+			// next hdr internally, so we just skip the header itself
+			// here. Calling it out explicitly (REVIEW.md WR-08) protects
+			// against a future maintainer who reads the bare `default:`
+			// branch and assumes PAX entries are unsupported.
+			continue
 		default:
 			// Skip device files, fifos, etc. — Helix archives never legitimately
 			// contain them.

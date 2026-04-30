@@ -322,6 +322,19 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		})
 	}
 
+	// 12d. Wire repomap skill metrics sink (Phase 53 D-15). *obs.Metrics
+	// satisfies repomap.MetricsSink ad-hoc via the helper methods declared in
+	// internal/obs/metrics.go (compile-time-checked in wiring_test.go).
+	// Two seams: the skill dispatcher emits per-extractor latency
+	// (helix_repomap_extract_duration_seconds), and the underlying TagCache
+	// emits hit/miss lookups (helix_repomap_lookups_total).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetMetricsSink(observability.Metrics())
+		if cache := rs.Cache(); cache != nil {
+			cache.SetMetricsSink(observability.Metrics())
+		}
+	}
+
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches

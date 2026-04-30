@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Polish & Infra
 status: executing
-last_updated: "2026-04-29T18:24:58.433Z"
-last_activity: 2026-04-29
+last_updated: "2026-04-30T07:58:44.016Z"
+last_activity: 2026-04-30
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 33
-  completed_plans: 28
-  percent: 85
+  completed_plans: 29
+  percent: 88
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 ## Current Position
 
 Phase: 52 (packaging-distribution-channels) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
-Last activity: 2026-04-29
+Last activity: 2026-04-30
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Last activity: 2026-04-29
 | v1.8 (39-45) | 7 | 19 | 1 day |
 | v1.9 (46-55) | 10 | 0 (planning) | in flight |
 | Phase 52 P01 | 5min | 2 tasks | 10 files |
+| Phase 52 P02 | 3min | 2 tasks | 206 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [v1.8]: Full doc overhaul scope -- README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md
 - [v1.9 / Phase 52-01]: D-13 build-time embed-copy mechanism shipped (embed-pubkey + verify-embed-pubkey Makefile targets; CI gate in release.yml); embedded internal/upgrade/minisign.pub is checked in (NOT gitignored) so verify-embed-pubkey has a baseline on a fresh clone
 - [v1.9 / Phase 52-01]: Test fixtures use https://example.invalid/... per RFC 6761 to ensure tests that miss the httptest stub fail loudly with DNS errors instead of silently leaking the runner IP
+- [v1.9 / Phase 52-02]: Module path rename to github.com/agenthands/helix executed via mechanical perl rewrite + `go build` verification gate (Phase 52 D-01) — gopls rename does not operate on module paths; layered build/vet/test verification catches misses
+- [v1.9 / Phase 52-02]: Protobuf rawDesc rule — any project-wide textual rewrite touching `.proto` files MUST be followed by `make proto` regeneration; rawDesc length-prefix bytes encode descriptor lengths and `perl` substitution invalidates the descriptor hash even when length is preserved
 
 ### Pending Todos
 

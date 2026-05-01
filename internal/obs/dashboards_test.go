@@ -14,23 +14,15 @@
 //
 // The test FAIL-CLOSES when deploy/grafana/ or docs/runbooks/ is empty.
 //
-// As of Plan 54-02 (this file's most-recent edit), the dashboards branch is
+// As of Plan 54-04 (this file's most-recent edit), BOTH branches are
 // UNCONDITIONALLY fail-closed — `deploy/grafana/*.json` MUST contain at least
-// one dashboard. The runbooks branch is still gated behind
-// HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1 because Plan 54-04 has not yet shipped
-// runbook content; that plan's FIRST action is to remove the remaining gate
-// clause below.
-//
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Plan 54-04 (runbooks): the FIRST action when shipping runbook content is to
-// REMOVE the `os.Getenv("HELIX_DASHBOARDS_TEST_ALLOW_EMPTY") != "1"` clause
-// from the runbooks-empty fatal check below. Leaving the gate in place after
-// runbook content lands silently weakens the fail-closed contract.
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// one dashboard, and `docs/runbooks/*.md` MUST contain at least one runbook.
+// The previous Wave 0 env-var gate has been fully removed now that Phase 54
+// Wave 1 has shipped runbook content; both fatal branches are unconditional.
 //
 // TestDashboardsAndRunbooksValidatorFailsClosedOnEmpty proves the empty-dir
-// fail-closed contract independently of the env-var gate, so Wave 1's removal
-// of the gate will land on a working invariant.
+// fail-closed contract by independently validating the glob pre-condition,
+// pinning the contract against accidental regressions.
 package obs
 
 import (
@@ -271,9 +263,8 @@ func validateExpr(t *testing.T, expr string, families map[string]bool, source st
 // dashboard and every Markdown runbook, validating every PromQL expression
 // against the registered Prometheus registry (D-10..D-14).
 //
-// The dashboards branch is unconditionally fail-closed (Plan 54-02). The
-// runbooks branch is still gated behind HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1
-// until Plan 54-04 ships content (see file-level comment).
+// Both branches are unconditionally fail-closed as of Plan 54-04: empty
+// deploy/grafana/ or docs/runbooks/ trees fail the test loudly.
 func TestDashboardsAndRunbooksReferenceRegisteredMetrics(t *testing.T) {
 	root := projectRoot(t)
 	families := registeredFamilies(t)
@@ -297,9 +288,8 @@ func TestDashboardsAndRunbooksReferenceRegisteredMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob runbooks: %v", err)
 	}
-	if len(rbs) == 0 && os.Getenv("HELIX_DASHBOARDS_TEST_ALLOW_EMPTY") != "1" {
-		t.Fatalf("no runbooks found at %s — Wave 1 must populate docs/runbooks/. "+
-			"Set HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1 only during Phase 54 Wave 0.", rbGlob)
+	if len(rbs) == 0 {
+		t.Fatalf("no runbooks found at %s — docs/runbooks/ must contain at least one *.md runbook.", rbGlob)
 	}
 	for _, p := range rbs {
 		for _, expr := range extractPromQLFromRunbook(t, p) {
@@ -330,14 +320,14 @@ func TestDashboardsAndRunbooksReferenceRegisteredMetrics_catchesDrift(t *testing
 }
 
 // TestDashboardsAndRunbooksValidatorFailsClosedOnEmpty proves the empty-dir
-// fail-closed precondition INDEPENDENTLY of the HELIX_DASHBOARDS_TEST_ALLOW_EMPTY
-// env-var gate. It builds an empty deploy/grafana / docs/runbooks tree under
-// t.TempDir() and asserts the same Glob shape used in production yields zero
-// matches — which is the trigger condition for the production t.Fatalf.
+// fail-closed precondition independently of any env-var. It builds an empty
+// deploy/grafana / docs/runbooks tree under t.TempDir() and asserts the same
+// Glob shape used in production yields zero matches — which is the trigger
+// condition for the production t.Fatalf.
 //
-// Once Wave 1 removes the env-var clause from the production check, an
-// accidentally-empty deploy/grafana/ would loudly fail CI; this test pins
-// the precondition.
+// Now that Plan 54-04 has removed the env-var clauses from the production
+// checks, an accidentally-empty deploy/grafana/ or docs/runbooks/ would
+// loudly fail CI; this test pins the precondition.
 func TestDashboardsAndRunbooksValidatorFailsClosedOnEmpty(t *testing.T) {
 	tmp := t.TempDir()
 	for _, sub := range []string{"deploy/grafana", "docs/runbooks"} {

@@ -668,8 +668,17 @@ scrape_configs:
 **Metric labels:** The `helix_tool_duration_seconds` and `helix_tool_calls_total` metrics share four label dimensions: `tool_name`, `profile`, `mode`, and `language`. The `helix_tool_calls_total` counter adds a fifth label, `outcome`, for error tracking. Use these for targeted queries:
 
 ```promql
-# Error rate per tool (last 5 minutes)
-rate(helix_tool_calls_total{outcome="error"}[5m])
+# Error rate per tool (last 5 minutes). The `outcome` label is a closed
+# enum {success, invalid_args, not_found, circuit_open, ls_crash, timeout,
+# internal}; in v1.2 the practical failure set is {circuit_open, timeout,
+# internal} (invalid_args, not_found, ls_crash are reserved for v1.3
+# typed-error work). Union the failure outcomes:
+rate(helix_tool_calls_total{outcome=~"timeout|circuit_open|internal"}[5m])
+  / rate(helix_tool_calls_total[5m])
+
+# Equivalent inverse — non-success rate, robust to enum additions:
+1 - rate(helix_tool_calls_total{outcome="success"}[5m])
+  / rate(helix_tool_calls_total[5m])
 
 # p95 tool latency
 histogram_quantile(0.95, rate(helix_tool_duration_seconds_bucket[5m]))

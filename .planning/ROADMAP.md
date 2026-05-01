@@ -210,7 +210,14 @@ Plans:
   2. `docs/runbooks/` contains four runbooks: `ErrCircuitOpen.md`, `deadline-timeouts.md`, `ls-crash-restart.md`, `memory-pressure-eviction.md` — each with symptoms, triage steps, PromQL queries, and remediation.
   3. `USAGE.md` Observability section links to `deploy/grafana/` with a screenshot of the primary dashboard.
   4. Every PromQL expression in the dashboards and runbooks references a metric that actually exists in the registered Prom registry (validated by test).
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 54-01-PLAN.md — Wave 0: add prometheus/prometheus@v3.11.0 dep + author internal/obs/dashboards_test.go validator (registry-driven, fail-closed) + drift-detection companion + .gitkeep stubs for new top-level dirs
+- [ ] 54-02-PLAN.md — Wave 1: deploy/grafana/helix-overview.json (RED + sessions + best-effort caveat text panel; 6–9 panels; ${DS_PROMETHEUS} + $language/$instance template vars) + remove dashboard env-var gate from validator
+- [ ] 54-03-PLAN.md — Wave 1: deploy/grafana/helix-engine.json (lspool + repomap + edits; verbatim Phase 53 D-01 hit-ratio + D-05/D-06 per-extractor p95 PromQL; 9 panels)
+- [ ] 54-04-PLAN.md — Wave 2: four runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction) with shared D-15 frontmatter + D-16 H2 order + D-17 ## Code references + remove runbook env-var gate from validator
+- [ ] 54-05-PLAN.md — Wave 3: capture docs/images/helix-overview-dashboard.png (manual checkpoint) + insert ### Grafana Dashboards and ### Runbooks H3 subsections into USAGE.md before ### Prometheus Metrics
 
 ### Phase 55: obs-trace-coverage-audit
 **Goal**: Every MCP tool handler and every outbound LS call produces a span; sampling configuration is documented; trace attributes pass a hygiene review.

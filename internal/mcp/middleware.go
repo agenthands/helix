@@ -26,6 +26,10 @@ var renameStrategySink atomic.Pointer[func(ctx context.Context, strategy string)
 // InstallMiddleware with an adapter around provider.Metrics().RenameStrategyInc.
 // The sink accepts a ctx so a future OTel tracer can attach span attributes
 // without a signature churn on every call-site (Phase 47 REVIEW IN-03).
+//
+// Process-global state — same parallel-safety caveat as
+// SetEditOutcomeSinkForTest applies (WR-05): tests that swap the sink must
+// not run in parallel and should restore via t.Cleanup.
 func setRenameStrategySink(fn func(ctx context.Context, strategy string)) {
 	renameStrategySink.Store(&fn)
 }
@@ -76,6 +80,14 @@ func setEditOutcomeSink(fn func(ctx context.Context, toolName, outcome, strategy
 // (EditOutcomeInc), mirroring the closed-enum drop-unknown discipline of
 // RenameStrategyInc. Q-4: "failed" is NEVER a valid strategy value at this
 // layer — fuzzy.StrategyFailed paths emit outcome="no_match", strategy="none".
+//
+// Test-only sink wiring: the editOutcomeSink package-level pointer is
+// process-global. Tests that mutate it via SetEditOutcomeSinkForTest MUST
+// NOT use t.Parallel() — concurrent goroutines would race over the shared
+// recorder and observe each other's emissions. WR-05: prefer paired
+// t.Cleanup(func() { mcp.SetEditOutcomeSinkForTest(nil) }) in any test
+// that installs a custom sink so the leak does not bleed into adjacent
+// tests. Same caveat applies to setRenameStrategySink (Phase 47 D-07).
 func RecordEditOutcome(ctx context.Context, toolName, outcome, strategy string) {
 	p := editOutcomeSink.Load()
 	if p == nil || *p == nil {
@@ -393,6 +405,11 @@ func StrategyEnumForTest() []string {
 // (e.g. internal/kernel/edit/tools_test.go) that need to install a recording
 // recorder without going through InstallMiddleware. Production code MUST
 // continue to wire via InstallMiddleware.
+//
+// WR-05: this mutates process-global state. Callers MUST NOT use
+// t.Parallel() on tests that touch the sink, and SHOULD pair the call with
+// t.Cleanup(func() { SetEditOutcomeSinkForTest(nil) }) so the recorder
+// does not leak into adjacent tests in the same package.
 func SetEditOutcomeSinkForTest(fn func(ctx context.Context, toolName, outcome, strategy string)) {
 	setEditOutcomeSink(fn)
 }

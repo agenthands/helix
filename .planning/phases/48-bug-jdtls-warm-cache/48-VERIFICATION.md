@@ -1,7 +1,12 @@
 ---
 phase: 48-bug-jdtls-warm-cache
 verified: 2026-04-25T00:00:00Z
-status: human_needed
+reverified: 2026-05-01T00:00:00Z
+status: verified
+human_needed_resolved_by: "Phase 56 (LS notification dispatch + WaitUntilJavaReady gate). CI run 25068895178 (workflow go-test.yml, SHA c1a6cf55, 2026-04-28T17:50Z, conclusion=success) is downstream of all Phase 56 commits and passes the full Java fixture suite (TestSymbols_JavaFixture, TestEdit_JavaFixture). BUG-48-FOLLOWUP-04 (CI Java tests hit 120s LSTimeout cold start) is closed: phase 56's WaitUntilJavaReady waits on the actual `language/status` ServiceReady + ProjectStatus=OK signals rather than a wall-clock LSTimeout, removing the race that surfaced in CI run 24928606594. Local TestEdit_JavaFixture passes in 16.87s, TestSymbols_JavaFixture in 2.74s (2026-05-01)."
+human_needed_resolved_at: "2026-05-01T00:00:00Z"
+human_needed_resolved_by_command: "/gsd-autonomous --interactive (user-confirmed Phase 56 resolution)"
+status_orig: human_needed
 score: 4/4 must-haves verified (1 deferred to manual)
 overrides_applied: 1
 overrides:

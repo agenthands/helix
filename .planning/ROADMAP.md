@@ -19,7 +19,7 @@
 
 - [x] **Phase 46: bug-repomap-lua-fixture** -- Fix `get_repo_map` returning Lua testdata fixture instead of Go sources on Serena's own workspace (completed 2026-04-24)
 - [x] **Phase 47: bug-rust-analyzer-rename** -- Make `rename_symbol` succeed on Rust symbols in temp workspaces (or ship a documented tool-level workaround) (completed 2026-04-24)
-- [ ] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...`
+- [x] **Phase 48: bug-jdtls-warm-cache** -- Reuse a warm jdtls workspace across test runs so Java integration tests pass in default `go test ./...` (completed 2026-05-01)
 - [x] **Phase 49: bug-grammar-registry-consolidation** -- Collapse 3 redundant `GrammarRegistry` instances into one canonical registry at daemon bootstrap (completed 2026-04-25)
 - [x] **Phase 50: toolchain-go1.25-bench-local** -- Unblock Go 1.25 / gopls on `ubuntu-latest` for build/vet/test, and convert the benchmark harness to local-only (remove all CI bench plumbing) (completed 2026-04-28)
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
@@ -73,11 +73,11 @@ Plans:
   4. CI wall-clock for the Java suite is documented before/after.
 **Plans**: 5 plans
 Plans:
-- [ ] 48-01-PLAN.md — jdtlscache helper package (pure-stdlib hash + ResolveDataDir)
-- [ ] 48-02-PLAN.md — JdtlsAdapter env-var override (SERENA_TEST_JDTLS_DATA_DIR)
-- [ ] 48-03-PLAN.md — Drop build tags + wire Options.JdtlsDataDir + remove Short() skip
-- [ ] 48-04-PLAN.md — Makefile targets clean-jdtls-cache and bench-jdtls-warm
-- [ ] 48-05-PLAN.md — go-test.yml CI workflow + USAGE.md doc section
+- [x] 48-01-PLAN.md — jdtlscache helper package (pure-stdlib hash + ResolveDataDir)
+- [x] 48-02-PLAN.md — JdtlsAdapter env-var override (SERENA_TEST_JDTLS_DATA_DIR)
+- [x] 48-03-PLAN.md — Drop build tags + wire Options.JdtlsDataDir + remove Short() skip
+- [x] 48-04-PLAN.md — Makefile targets clean-jdtls-cache and bench-jdtls-warm
+- [x] 48-05-PLAN.md — go-test.yml CI workflow + USAGE.md doc section
 
 ### Phase 49: bug-grammar-registry-consolidation
 **Goal**: A single canonical `GrammarRegistry` is constructed at daemon bootstrap and shared by all consumers; the two redundant instances are deleted.
@@ -150,7 +150,7 @@ Plans:
 **Goal:** `internal/treesitter` is gated behind `//go:build cgo` with a `//go:build !cgo` stub set across `internal/treesitter`, `internal/repomap`, and `internal/kernel/edit`; the daemon refuses to start under `CGO_ENABLED=0` with a clear remediation message; `CGO_ENABLED=0 go build ./cmd/serena` exits 0; `CGO_ENABLED=1` builds remain byte-identical with all 23 grammars registered; `make release-snapshot` produces 6 archives; the existing release.yml reproducibility gate becomes the CGO=0 smoke gate (CONTRIBUTING.md expected-fail marker flipped); DEF-51-02 closes with Status: RESOLVED.
 **Requirements**: DEF-51-02, SC-1-Phase51, AC-1, AC-2, AC-3, AC-4
 **Depends on:** Phase 51
-**Plans:** 1/1 plans complete
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 51.1-01-cgo-gate-PLAN.md — gate treesitter + repomap + kernel/edit behind //go:build cgo with !cgo stubs, daemon refusal hook, tagged tests, flip CONTRIBUTING.md marker, mark DEF-51-02 RESOLVED
@@ -246,7 +246,7 @@ Plans:
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46 | v1.9 | 3/3 | Complete   | 2026-04-24 |
 | 47 | v1.9 | 3/3 | Complete   | 2026-04-24 |
-| 48 | v1.9 | 0/? | Not started | - |
+| 48 | v1.9 | 5/5 | Complete    | 2026-05-01 |
 | 49 | v1.9 | 1/1 | Complete   | 2026-04-25 |
 | 50 | v1.9 | 4/4 | Complete   | 2026-04-28 |
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |

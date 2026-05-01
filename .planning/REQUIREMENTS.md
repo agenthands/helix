@@ -11,7 +11,7 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 
 - [ ] **BUG-01**: `get_repo_map` returns Go sources (not the Lua fixture) when invoked on a Go workspace that contains polyglot testdata fixtures — closes backlog Phase 999.1
 - [ ] **BUG-02**: `rename_symbol` succeeds against a Rust symbol in a temp workspace via rust-analyzer (or a documented, tool-level workaround is shipped if the upstream bug cannot be closed in-milestone)
-- [ ] **BUG-03**: Java integration tests run without `-short=false` by reusing a warm jdtls workspace across test runs (target: the Java integration suite is green in default `go test ./...`)
+- [x] **BUG-03**: Java integration tests run without `-short=false` by reusing a warm jdtls workspace across test runs (target: the Java integration suite is green in default `go test ./...`)
 - [ ] **BUG-04**: A single canonical `GrammarRegistry` instance is constructed at daemon bootstrap and shared across repomap, tagcache, and grammar consumers — the two redundant instances are removed without behavioral regression
 
 ### Infra — Toolchain
@@ -78,7 +78,7 @@ Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 |-------------|-------|--------|
 | BUG-01 | Phase 46 | Pending |
 | BUG-02 | Phase 47 | Pending |
-| BUG-03 | Phase 48 | Pending |
+| BUG-03 | Phase 48 | Complete |
 | BUG-04 | Phase 49 | Pending |
 | TOOL-01 | Phase 50 | Pending |
 | TOOL-02 | Phase 50 | Pending |

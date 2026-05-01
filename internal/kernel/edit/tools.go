@@ -67,6 +67,17 @@ func ClassifyEditError(err error) string {
 	// than introducing a 7th outcome value. Same for all other error
 	// kinds (serr.Internal, serr.NoWorkspace, serr.NotFound, etc.). v1.3
 	// will introduce typed errors for finer classification.
+	//
+	// TODO(v1.3, WR-06): When the typed-error layer lands, route
+	// missing-field / invalid-arg errors to a new outcome="invalid_args"
+	// bucket. Adding a 7th outcome requires updating:
+	//   1. editOutcomeEnum in internal/mcp/middleware.go (currently 6 values)
+	//   2. The EditOutcomeInc allowlist in internal/obs/metrics.go
+	//   3. TestMetrics_CardinalityBounds_EditOutcome in internal/obs/
+	//      (bound moves from 7×6×4=168 to 7×7×4=196)
+	//   4. The helix_edit_outcome_total row in USAGE.md
+	// Until then operators cannot distinguish "agent sent garbage args"
+	// from "kernel imploded" via outcome="internal" alone.
 	return "internal"
 }
 

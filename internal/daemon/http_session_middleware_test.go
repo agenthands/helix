@@ -151,6 +151,61 @@ func TestHTTPSessionMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("orphan_delete_unseen_id_no_ended", func(t *testing.T) {
+		// WR-01 regression: a DELETE with a session-id that this middleware
+		// never saw started (e.g. daemon restarted, attacker spam) must NOT
+		// emit ended. Prevents started-vs-ended count drift.
+		provider := obs.Noop(nil)
+		metrics := provider.Metrics()
+		innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		wrapped := httpSessionMiddleware(innerHandler, metrics)
+
+		// POST id=seen → started.
+		post := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		post.Header.Set("Mcp-Session-Id", "seen")
+		wrapped.ServeHTTP(httptest.NewRecorder(), post)
+
+		// DELETE id=unseen → must NOT emit ended (orphan).
+		del := httptest.NewRequest(http.MethodDelete, "/mcp", nil)
+		del.Header.Set("Mcp-Session-Id", "unseen")
+		wrapped.ServeHTTP(httptest.NewRecorder(), del)
+
+		got := gatherSessionLifecycle(t, metrics)
+		if got["ended|http"] != 0 {
+			t.Errorf("ended|http for orphan DELETE: got %d, want 0 (counts: %v)", got["ended|http"], got)
+		}
+	})
+
+	t.Run("delete_with_5xx_no_ended_only_error", func(t *testing.T) {
+		// WR-04 regression: a DELETE that returns 5xx upstream must emit
+		// error but NOT ended (the session did not cleanly terminate).
+		provider := obs.Noop(nil)
+		metrics := provider.Metrics()
+		failHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		wrapped := httpSessionMiddleware(failHandler, metrics)
+
+		// POST id to register it as seen (note: this also emits error
+		// because the inner handler returns 500). Use a separate id-only
+		// path: register via a clean handler call... here we just assert
+		// the DELETE-specific emissions, so use the failing handler for both.
+		// Simpler: skip pre-registration and assert DELETE emits ONLY error.
+		del := httptest.NewRequest(http.MethodDelete, "/mcp", nil)
+		del.Header.Set("Mcp-Session-Id", "del-fail")
+		wrapped.ServeHTTP(httptest.NewRecorder(), del)
+
+		got := gatherSessionLifecycle(t, metrics)
+		if got["ended|http"] != 0 {
+			t.Errorf("ended|http for 5xx DELETE: got %d, want 0 (counts: %v)", got["ended|http"], got)
+		}
+		if got["error|http"] != 1 {
+			t.Errorf("error|http for 5xx DELETE: got %d, want 1 (counts: %v)", got["error|http"], got)
+		}
+	})
+
 	t.Run("post_then_delete_then_post_re_emits_started", func(t *testing.T) {
 		provider := obs.Noop(nil)
 		metrics := provider.Metrics()

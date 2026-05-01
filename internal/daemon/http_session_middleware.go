@@ -35,23 +35,32 @@ func httpSessionMiddleware(next http.Handler, metrics *obs.Metrics) http.Handler
 	var seen sync.Map // sessionID -> struct{}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sessionID := r.Header.Get("Mcp-Session-Id")
-		if sessionID != "" {
+		isDelete := r.Method == http.MethodDelete && sessionID != ""
+		// WR-01: only register a session as "seen" on non-DELETE requests.
+		// A DELETE is a termination signal; registering its session-id
+		// would let an orphan DELETE (id we never saw started) spuriously
+		// emit started→ended via LoadOrStore + LoadAndDelete, drifting the
+		// started-vs-ended count.
+		if sessionID != "" && !isDelete {
 			if _, loaded := seen.LoadOrStore(sessionID, struct{}{}); !loaded {
 				metrics.SessionLifecycleInc("started", "http")
 			}
 		}
-		if r.Method == http.MethodDelete && sessionID != "" {
-			// Best-effort `ended` semantic — see CAVEAT above. The
-			// emission fires BEFORE next.ServeHTTP so a panic in the
-			// inner handler still leaves the metric consistent with
-			// the client's intent (the client has already signalled
-			// session termination by reaching the DELETE endpoint).
-			metrics.SessionLifecycleInc("ended", "http")
-			seen.Delete(sessionID)
-		}
 		rw := &statusRecorder{ResponseWriter: w}
 		next.ServeHTTP(rw, r)
-		if rw.effectiveStatus() >= 500 {
+		status := rw.effectiveStatus()
+		// WR-01 + WR-04: only emit `ended` for DELETEs that (a) reference a
+		// session this middleware actually saw started, and (b) returned a
+		// non-5xx upstream status. Orphan DELETEs (unseen ID) and 5xx DELETEs
+		// no longer drift the started-vs-ended count. LoadAndDelete
+		// (Go 1.20+) atomically combines the existence check and removal so
+		// concurrent DELETEs for the same ID emit at most one `ended`.
+		if isDelete && status < 500 {
+			if _, loaded := seen.LoadAndDelete(sessionID); loaded {
+				metrics.SessionLifecycleInc("ended", "http")
+			}
+		}
+		if status >= 500 {
 			metrics.SessionLifecycleInc("error", "http")
 		}
 	})

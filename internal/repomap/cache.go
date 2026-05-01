@@ -90,6 +90,10 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 	mtime := info.ModTime().UnixNano()
 
 	c.mu.Lock()
+	// Capture the metrics sink under the lock so the field read is
+	// synchronized with SetMetricsSink (CR-01 fix). Mirrors the
+	// lock-then-capture pattern in skill/repomap/skill.go::metricsSink().
+	sink := c.metrics
 
 	// Check if we have a cached mtime for this file.
 	var cachedMtime int64
@@ -106,7 +110,7 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 			return nil, fmt.Errorf("loading cached tags: %w", loadErr)
 		}
 		// Phase 53 D-03: emit hit at the canonical mtime-match boundary.
-		c.metrics.RepoMapLookup(LangFromExt(filePath), LookupHit)
+		sink.RepoMapLookup(LangFromExt(filePath), LookupHit)
 		return tags, nil
 	}
 
@@ -118,7 +122,7 @@ func (c *TagCache) GetOrExtract(filePath string, extractFn func() ([]Tag, error)
 	// (skill.go) where the extractor type {treesitter, lsp, fallback} is
 	// known. cache.go only knows that extractFn ran, not which extractor —
 	// observing 0s for render.go's no-op extractFn would muddy the histogram.
-	c.metrics.RepoMapLookup(LangFromExt(filePath), LookupMiss)
+	sink.RepoMapLookup(LangFromExt(filePath), LookupMiss)
 
 	tags, err := extractFn()
 	if err != nil {

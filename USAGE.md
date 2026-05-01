@@ -631,6 +631,32 @@ curl http://127.0.0.1:9100/healthz
 curl http://127.0.0.1:9100/readyz
 ```
 
+### Grafana Dashboards
+
+![Helix overview dashboard](docs/images/helix-overview-dashboard.png)
+
+Two dashboards live in `deploy/grafana/`:
+
+- [`helix-overview.json`](deploy/grafana/helix-overview.json) — RED metrics + workspace activity. Primary operator view.
+- [`helix-engine.json`](deploy/grafana/helix-engine.json) — lspool, repomap, edit-tool internals. On-call deep-dive.
+
+In Grafana, **Dashboards → New → Import**, upload the JSON, and select your
+Prometheus datasource when prompted for `DS_PROMETHEUS`.
+
+The dashboards expose `$language` and `$instance` template variables for
+drill-down — leave both at `All` for a global view.
+
+### Runbooks
+
+Operational runbooks for the four most common Helix failure modes live in `docs/runbooks/`:
+
+- [`ErrCircuitOpen.md`](docs/runbooks/ErrCircuitOpen.md) — circuit breaker tripped on a language pool.
+- [`deadline-timeouts.md`](docs/runbooks/deadline-timeouts.md) — tool calls hitting the configured deadline.
+- [`ls-crash-restart.md`](docs/runbooks/ls-crash-restart.md) — language server process crashing.
+- [`memory-pressure-eviction.md`](docs/runbooks/memory-pressure-eviction.md) — workers evicted under memory pressure.
+
+Each runbook lists symptoms, triage PromQL, likely causes, and remediation steps.
+
 ### Prometheus Metrics
 
 Scrape metrics from the admin listener:

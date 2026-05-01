@@ -150,7 +150,7 @@ Plans:
 **Goal:** `internal/treesitter` is gated behind `//go:build cgo` with a `//go:build !cgo` stub set across `internal/treesitter`, `internal/repomap`, and `internal/kernel/edit`; the daemon refuses to start under `CGO_ENABLED=0` with a clear remediation message; `CGO_ENABLED=0 go build ./cmd/serena` exits 0; `CGO_ENABLED=1` builds remain byte-identical with all 23 grammars registered; `make release-snapshot` produces 6 archives; the existing release.yml reproducibility gate becomes the CGO=0 smoke gate (CONTRIBUTING.md expected-fail marker flipped); DEF-51-02 closes with Status: RESOLVED.
 **Requirements**: DEF-51-02, SC-1-Phase51, AC-1, AC-2, AC-3, AC-4
 **Depends on:** Phase 51
-**Plans:** 5/5 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
 - [x] 51.1-01-cgo-gate-PLAN.md — gate treesitter + repomap + kernel/edit behind //go:build cgo with !cgo stubs, daemon refusal hook, tagged tests, flip CONTRIBUTING.md marker, mark DEF-51-02 RESOLVED

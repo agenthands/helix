@@ -395,9 +395,14 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		if count == 0 && !args.IsRegex {
 			content, readErr := ReadFile(root, args.Path)
 			if readErr != nil {
-				// File-read failure on the fuzzy-fallback path: treat as
-				// success with 0 replacements (existing behavior); strategy
-				// stays "none".
+				// File-read failure on the fuzzy-fallback path. WR-02 fix:
+				// classify the outcome as "internal" so a real I/O error
+				// (file vanished between the literal pass and this read,
+				// permission flipped, transient EIO) does not report
+				// outcome="success" on the helix_edit_outcome_total counter.
+				// The textResult shape is preserved for caller backwards-compat;
+				// only the metric classification changes.
+				outcome = "internal"
 				return textResult(fmt.Sprintf("0 replacement(s) made in %s", args.Path)), nil, nil
 			}
 			fResult, fErr := fuzzy.Match(content, args.Pattern, fuzzy.Options{

@@ -12,16 +12,20 @@
 //     in carveOuts[base] (metrics_labels_test.go), or in the PromQL-internal
 //     allowlist {__name__, le, job, instance} ($instance template variable).
 //
-// The test FAIL-CLOSES when deploy/grafana/ or docs/runbooks/ is empty. Wave 0
-// commits ONLY .gitkeep stubs in those directories, so to keep CI green for
-// Wave 0 the empty-dir fatal is gated behind HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1.
+// The test FAIL-CLOSES when deploy/grafana/ or docs/runbooks/ is empty.
+//
+// As of Plan 54-02 (this file's most-recent edit), the dashboards branch is
+// UNCONDITIONALLY fail-closed — `deploy/grafana/*.json` MUST contain at least
+// one dashboard. The runbooks branch is still gated behind
+// HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1 because Plan 54-04 has not yet shipped
+// runbook content; that plan's FIRST action is to remove the remaining gate
+// clause below.
 //
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Wave 1 plans (54-02, 54-03, 54-04): the FIRST action when shipping dashboard
-// or runbook content is to REMOVE the `os.Getenv("HELIX_DASHBOARDS_TEST_ALLOW_EMPTY")
-// != "1"` clause from BOTH fatal checks below. Leaving the gate in place after
-// Wave 1 silently weakens the fail-closed contract — the validator will still
-// pass with an accidentally-empty deploy/grafana/ if the env var leaks into CI.
+// Plan 54-04 (runbooks): the FIRST action when shipping runbook content is to
+// REMOVE the `os.Getenv("HELIX_DASHBOARDS_TEST_ALLOW_EMPTY") != "1"` clause
+// from the runbooks-empty fatal check below. Leaving the gate in place after
+// runbook content lands silently weakens the fail-closed contract.
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //
 // TestDashboardsAndRunbooksValidatorFailsClosedOnEmpty proves the empty-dir
@@ -267,9 +271,9 @@ func validateExpr(t *testing.T, expr string, families map[string]bool, source st
 // dashboard and every Markdown runbook, validating every PromQL expression
 // against the registered Prometheus registry (D-10..D-14).
 //
-// Wave 0 mode: when HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1 is set the empty-dir
-// fatal is suppressed. Wave 1 plans MUST remove that escape (see file-level
-// comment).
+// The dashboards branch is unconditionally fail-closed (Plan 54-02). The
+// runbooks branch is still gated behind HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1
+// until Plan 54-04 ships content (see file-level comment).
 func TestDashboardsAndRunbooksReferenceRegisteredMetrics(t *testing.T) {
 	root := projectRoot(t)
 	families := registeredFamilies(t)
@@ -279,9 +283,8 @@ func TestDashboardsAndRunbooksReferenceRegisteredMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob dashboards: %v", err)
 	}
-	if len(dashes) == 0 && os.Getenv("HELIX_DASHBOARDS_TEST_ALLOW_EMPTY") != "1" {
-		t.Fatalf("no dashboards found at %s — Wave 1 must populate deploy/grafana/. "+
-			"Set HELIX_DASHBOARDS_TEST_ALLOW_EMPTY=1 only during Phase 54 Wave 0.", dashGlob)
+	if len(dashes) == 0 {
+		t.Fatalf("no dashboards found at %s — deploy/grafana/ must contain at least one *.json dashboard.", dashGlob)
 	}
 	for _, p := range dashes {
 		for _, expr := range extractPromQLFromDashboard(t, p) {

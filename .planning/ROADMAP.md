@@ -229,7 +229,23 @@ Plans:
   2. A review artifact (`.planning/phases/55-obs-trace-coverage-audit/TRACE-AUDIT.md`) lists every span attribute and certifies: no PII, no unbounded cardinality (paths, IDs are hashed/bucketed where appropriate).
   3. `USAGE.md` Observability section documents sampling configuration (ratio, head vs. tail) and how to adjust it via `ObservabilityConfig`.
   4. A smoke trace captured against a live OTLP collector shows the full request path from MCP handler → LS call with no orphan spans.
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1** (parallel — no files_modified overlap)
+- [ ] 55-01-PLAN.md — Wrap jsonrpc.Conn.Call/Notify in lspool.lsp.{method} spans + thread tracer Pool→Worker→ProcessHandle (TDD)
+- [ ] 55-02-PLAN.md — Wrap SerenaMCPServer.AddSkillTool handlers in kernel.tool.{name} spans (TDD)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 55-03-PLAN.md — Author internal/obs/trace_audit_test.go registry-driven coverage audit (5 tests + drift companion)
+
+**Wave 3** *(parallel, blocked on Wave 2)*
+- [ ] 55-04-PLAN.md — Author TRACE-AUDIT.md per-span attribute hygiene review (zero FAIL attributes)
+- [ ] 55-05-PLAN.md — Insert ### Trace Sampling H3 in USAGE.md (after ### Enable Tracing per RESEARCH Pitfall 5)
+- [ ] 55-06-PLAN.md — docs/runbooks/trace-smoke.md + Jaeger screenshot (manual checkpoint)
+
+**Wave 4** *(blocked on Waves 1-3)*
+- [ ] 55-07-PLAN.md — Final go vet + go test gate + invariant audit (D-01/D-07/D-11/D-17)
 
 ## Progress
 

@@ -1,13 +1,14 @@
 ---
 phase: 56-bug-ls-notification-dispatch-and-jdtls-readiness
 verified: 2026-04-25T00:00:00Z
-status: human_needed
-score: 10/10 must-haves verified (with documented out-of-scope local Java-fixture failures)
+reverified: 2026-05-01T00:00:00Z
+status: verified
+score: 10/10 must-haves verified
 overrides_applied: 0
-human_verification:
+human_verification_resolved:
   - test: "CI run of full suite including TestSymbols_JavaFixture and TestEdit_JavaFixture"
-    expected: "Both Java fixture tests pass deterministically in CI (fresh jdtls, not warm cache)."
-    why_human: "Per task brief, the Java fixture tests fail PRE-EXISTING locally on this machine (verified via git stash at base commit 088b072f). Documented as out-of-scope; CI is authoritative. Phase 56 wires waitJavaReady correctly — both readiness gates close in ~2s — but downstream symbol queries flake against the warm-cache jdtls on this host. Needs CI green to confirm JDTLS-RDY-02 satisfaction."
+    resolution: "CI confirmed green — gh run 25068895178 (workflow go-test.yml, SHA c1a6cf55, 2026-04-28T17:50Z) conclusion=success. SHA c1a6cf55 is downstream of all Phase 56 commits (56-01 through 56-04). Java 21 + fresh jdtls install via Eclipse JDT.LS milestones; full `go test ./...` (no skip) green means TestSymbols_JavaFixture + TestEdit_JavaFixture passed with the dispatcher fix and waitJavaReady gate active. Two more recent runs (25068848930, 25068609876) also green. JDTLS-RDY-02 satisfied. The previously reported local warm-cache flakiness is no longer reproducing on this host (TestSymbols_JavaFixture PASS in 2.74s, TestEdit_JavaFixture PASS in 16.87s — 2026-05-01)."
+    resolved_by: "/gsd-verify-work 56 (UAT Test 2 + Test 3 + Test 5)"
 ---
 
 # Phase 56: bug-ls-notification-dispatch-and-jdtls-readiness Verification Report

@@ -31,8 +31,8 @@ Requirements for v1.9 (Polish & Infra). Each maps to exactly one roadmap phase d
 
 ### Observability
 
-- [ ] **OBS-01**: Ship JSON Grafana dashboards in `deploy/grafana/` covering RED metrics, lspool worker health, and workspace activity — documented in USAGE.md with screenshots
-- [ ] **OBS-02**: Ship written runbooks (in `docs/runbooks/`) for the four most common operational failure modes: `ErrCircuitOpen`, deadline timeouts, LS crash / restart, and memory-pressure eviction
+- [x] **OBS-01**: Ship JSON Grafana dashboards in `deploy/grafana/` covering RED metrics, lspool worker health, and workspace activity — documented in USAGE.md with screenshots
+- [x] **OBS-02**: Ship written runbooks (in `docs/runbooks/`) for the four most common operational failure modes: `ErrCircuitOpen`, deadline timeouts, LS crash / restart, and memory-pressure eviction
 - [ ] **OBS-03**: Close the v1.2 metrics gaps — add cache hit-rate (lspool + repomap), RepoMap extraction latency histogram, session lifecycle counters, and edit-tool outcome counters with bounded labels
 - [ ] **OBS-04**: Audit and close trace coverage gaps — every MCP tool handler and every outbound LS call has a span, sampling configuration is documented, and trace attributes pass a hygiene review (no PII, no unbounded cardinality)
 
@@ -89,8 +89,8 @@ Maps each REQ-ID to exactly one phase. Filled by the roadmapper at v1.9 kickoff.
 | PKG-05 | Phase 52 | Complete |
 | PKG-06 | Phase 52 | Complete |
 | PKG-07 | Phase 52 | Complete |
-| OBS-01 | Phase 54 | Pending |
-| OBS-02 | Phase 54 | Pending |
+| OBS-01 | Phase 54 | Complete |
+| OBS-02 | Phase 54 | Complete |
 | OBS-03 | Phase 53 | Pending |
 | OBS-04 | Phase 55 | Pending |
 

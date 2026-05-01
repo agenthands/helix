@@ -25,7 +25,7 @@
 - [x] **Phase 51: packaging-goreleaser** -- Multi-arch signed release pipeline via goreleaser as the foundation for downstream channels (gaps_found 2026-04-29; gap-closure plans 51-03..51-06 added) (completed 2026-04-29)
 - [x] **Phase 52: packaging-distribution-channels** -- Binary + product rename (`serena` → `helix`), in-binary self-upgrade (`helix update` / `helix upgrade`), embed-audit manifest (rescoped 2026-04-29 from original brew/scoop/native-Linux scope; PKG-02/03/04 deferred to PKG-DEFER-03/04/05) (completed 2026-04-30)
 - [x] **Phase 53: obs-metrics-gaps** -- Close v1.2 metrics gaps (cache hit-rate, repomap latency, session lifecycle, edit outcomes) (completed 2026-04-30)
-- [ ] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/`
+- [x] **Phase 54: obs-dashboards-runbooks** -- Ship Grafana dashboards in `deploy/grafana/` and operational runbooks in `docs/runbooks/` (completed 2026-05-01)
 - [ ] **Phase 55: obs-trace-coverage-audit** -- Audit and close trace coverage gaps across MCP tool handlers and outbound LS calls
 
 ## Phase Details
@@ -213,11 +213,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 54-01-PLAN.md — Wave 0: add prometheus/prometheus@v3.11.0 dep + author internal/obs/dashboards_test.go validator (registry-driven, fail-closed) + drift-detection companion + .gitkeep stubs for new top-level dirs
-- [ ] 54-02-PLAN.md — Wave 1: deploy/grafana/helix-overview.json (RED + sessions + best-effort caveat text panel; 6–9 panels; ${DS_PROMETHEUS} + $language/$instance template vars) + remove dashboard env-var gate from validator
-- [ ] 54-03-PLAN.md — Wave 1: deploy/grafana/helix-engine.json (lspool + repomap + edits; verbatim Phase 53 D-01 hit-ratio + D-05/D-06 per-extractor p95 PromQL; 9 panels)
-- [ ] 54-04-PLAN.md — Wave 2: four runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction) with shared D-15 frontmatter + D-16 H2 order + D-17 ## Code references + remove runbook env-var gate from validator
-- [ ] 54-05-PLAN.md — Wave 3: capture docs/images/helix-overview-dashboard.png (manual checkpoint) + insert ### Grafana Dashboards and ### Runbooks H3 subsections into USAGE.md before ### Prometheus Metrics
+- [x] 54-01-PLAN.md — Wave 0: add prometheus/prometheus@v3.11.0 dep + author internal/obs/dashboards_test.go validator (registry-driven, fail-closed) + drift-detection companion + .gitkeep stubs for new top-level dirs
+- [x] 54-02-PLAN.md — Wave 1: deploy/grafana/helix-overview.json (RED + sessions + best-effort caveat text panel; 6–9 panels; ${DS_PROMETHEUS} + $language/$instance template vars) + remove dashboard env-var gate from validator
+- [x] 54-03-PLAN.md — Wave 1: deploy/grafana/helix-engine.json (lspool + repomap + edits; verbatim Phase 53 D-01 hit-ratio + D-05/D-06 per-extractor p95 PromQL; 9 panels)
+- [x] 54-04-PLAN.md — Wave 2: four runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction) with shared D-15 frontmatter + D-16 H2 order + D-17 ## Code references + remove runbook env-var gate from validator
+- [x] 54-05-PLAN.md — Wave 3: capture docs/images/helix-overview-dashboard.png (manual checkpoint) + insert ### Grafana Dashboards and ### Runbooks H3 subsections into USAGE.md before ### Prometheus Metrics
 
 ### Phase 55: obs-trace-coverage-audit
 **Goal**: Every MCP tool handler and every outbound LS call produces a span; sampling configuration is documented; trace attributes pass a hygiene review.
@@ -252,7 +252,7 @@ Plans:
 | 51 | v1.9 | 6/6 | Complete   | 2026-04-29 |
 | 52 | v1.9 | 6/6 | Complete    | 2026-04-30 |
 | 53 | v1.9 | 6/6 | Complete   | 2026-04-30 |
-| 54 | v1.9 | 0/? | Not started | - |
+| 54 | v1.9 | 5/5 | Complete    | 2026-05-01 |
 | 55 | v1.9 | 0/? | Not started | - |
 | 56 | v1.9 | 4/4 | Complete   | 2026-04-25 |
 
@@ -261,7 +261,7 @@ Plans:
 **Goal:** Wire jsonrpc.Conn.OnNotification in Worker.Start so QuirkAdapter notification handlers actually run in production, and ship a deterministic JdtlsAdapter.WaitUntilJavaReady(ctx) gate so Java integration tests pass in default `go test ./...`.
 **Requirements**: LSDISP-01, LSDISP-02, LSDISP-03, LSDISP-04, LSDISP-04b, JDTLS-RDY-01a, JDTLS-RDY-01b, JDTLS-RDY-01c, JDTLS-RDY-02, LSDISP-REG-01
 **Depends on:** Phase 55
-**Plans:** 6/6 plans complete
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 56-01-PLAN.md — Restructure ProcessHandle.Start lifecycle + add StartListen(ctx) + process_test.go (D-02, D-03)

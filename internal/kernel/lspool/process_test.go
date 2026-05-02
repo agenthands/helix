@@ -34,7 +34,7 @@ func TestProcessHandle_StartListenSeparate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ph := NewProcessHandle("cat", nil, "", nil, testLogger())
+	ph := NewProcessHandle("cat", nil, "", nil, testLogger(), nil)
 	require.NoError(t, ph.Start(ctx, "test-proc"))
 	defer func() {
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)

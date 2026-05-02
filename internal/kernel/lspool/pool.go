@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/agenthands/helix/internal/langregistry"
 	"github.com/agenthands/helix/internal/workspace"
 )
@@ -51,6 +54,10 @@ type Pool struct {
 	nextID    int
 	done      chan struct{}
 	runCtx    context.Context // lifecycle context from Run(); workers use this instead of request ctx
+	// tracer is propagated to spawned workers (and through them to ProcessHandle
+	// → jsonrpc.Conn) so every outbound LS frame produces a child span.
+	// Phase 55 D-01: injected via constructor; nil → noop fallback.
+	tracer trace.Tracer
 }
 
 // NewPool creates a new LS worker pool.
@@ -58,9 +65,12 @@ type Pool struct {
 // The installer uses three-tier resolution (PATH/download/error) to find LS binaries.
 // metrics is the MetricsSink receiving worker lifecycle and circuit state
 // events; pass NoopSink{} (or nil, which is converted) to disable.
-func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger, metrics MetricsSink) *Pool {
+func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langregistry.Installer, pressure MemoryPressure, logger *slog.Logger, metrics MetricsSink, tracer trace.Tracer) *Pool {
 	if metrics == nil {
 		metrics = NoopSink{}
+	}
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("lspool-noop")
 	}
 	return &Pool{
 		workers:   make(map[string]*Worker),
@@ -73,6 +83,7 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 		logger:    logger.With("component", "lspool"),
 		metrics:   metrics,
 		done:      make(chan struct{}),
+		tracer:    tracer,
 	}
 }
 
@@ -282,7 +293,7 @@ func (p *Pool) spawnWorkerLocked(ctx context.Context, wsKey workspace.WorkspaceK
 	}
 
 	quirks := GetQuirkAdapter(entry)
-	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger)
+	worker := NewWorker(id, wsKey.Language, wsKey.RepoRoot, command, args, p.logger, p.tracer)
 	worker.SetQuirks(quirks)
 
 	// Start the worker with the pool's lifecycle context (not the request context)

@@ -40,7 +40,7 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 	if tracer == nil {
 		tracer = tracenoop.NewTracerProvider().Tracer("kernel-fallback")
 	}
-	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics)
+	pool := lspool.NewPool(cfg.Pool, langReg, installer, pressure, logger, metrics, tracer)
 	return &Kernel{
 		workspaces: make(map[string]*WorkspaceRuntime),
 		pool:       pool,

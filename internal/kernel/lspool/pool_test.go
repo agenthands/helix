@@ -204,7 +204,7 @@ func TestPoolConfig_Defaults(t *testing.T) {
 func TestPool_NewPool(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 	require.NotNil(t, pool)
 	assert.Equal(t, 0, pool.WorkerCount())
 	assert.Equal(t, 0, pool.LeaseCount())
@@ -280,7 +280,7 @@ func TestWorkerMetrics_ConcurrentReuse(t *testing.T) {
 func TestPool_RunAndShutdown(t *testing.T) {
 	pressure := &mockPressure{level: PressureNone}
 	cfg := testPoolConfig()
-	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{})
+	pool := NewPool(cfg, testRegistry(), nil, pressure, testLogger(), NoopSink{}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

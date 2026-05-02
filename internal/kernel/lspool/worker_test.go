@@ -93,7 +93,7 @@ func TestWorker_DispatcherWiringRegression(t *testing.T) {
 		handlers := map[string]func(json.RawMessage){
 			"x/y": func(json.RawMessage) {},
 		}
-		conn := jsonrpc.NewConn(&nopRWC{}, "test")
+		conn := jsonrpc.NewConn(&nopRWC{}, "test", nil)
 		conn.OnNotification = func(string, json.RawMessage) {}
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
@@ -104,7 +104,7 @@ func TestWorker_DispatcherWiringRegression(t *testing.T) {
 		handlers := map[string]func(json.RawMessage){
 			"x/y": func(json.RawMessage) {},
 		}
-		conn := jsonrpc.NewConn(&nopRWC{}, "test")
+		conn := jsonrpc.NewConn(&nopRWC{}, "test", nil)
 		// Intentionally do NOT set OnNotification.
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
@@ -117,7 +117,7 @@ func TestWorker_DispatcherWiringRegression(t *testing.T) {
 	})
 
 	t.Run("empty handlers + nil OnNotification returns nil", func(t *testing.T) {
-		conn := jsonrpc.NewConn(&nopRWC{}, "test")
+		conn := jsonrpc.NewConn(&nopRWC{}, "test", nil)
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		require.NoError(t, assertDispatcherWired(nil, conn, logger, "w-noop"))
 		require.NoError(t, assertDispatcherWired(map[string]func(json.RawMessage){}, conn, logger, "w-noop"))

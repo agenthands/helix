@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/agenthands/helix/internal/kernel/jsonrpc"
 	gen "github.com/agenthands/helix/protocol/gen"
@@ -140,10 +141,20 @@ type Worker struct {
 	pendingOpen  []pendingDidOpen // buffered during Initializing (per Pitfall 2)
 	capabilities gen.ServerCapabilities
 	logger       *slog.Logger
+	// tracer is forwarded to ProcessHandle and ultimately jsonrpc.Conn so every
+	// LS Call/Notify emits a child span. Phase 55 D-01: nil → noop fallback.
+	tracer trace.Tracer
 }
 
 // NewWorker creates a new LS worker.
-func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, logger *slog.Logger) *Worker {
+//
+// tracer is propagated to the underlying jsonrpc.Conn so each outbound LS
+// JSON-RPC frame produces a lspool.lsp.{method} child span. A nil tracer
+// falls back to a noop tracer (Phase 55 D-01).
+func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, logger *slog.Logger, tracer trace.Tracer) *Worker {
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("worker-noop")
+	}
 	w := &Worker{
 		id:        id,
 		language:  language,
@@ -151,6 +162,7 @@ func NewWorker(id, language, workDir string, lsCommand string, lsArgs []string, 
 		lsCommand: lsCommand,
 		lsArgs:    lsArgs,
 		logger:    logger.With("worker_id", id, "language", language),
+		tracer:    tracer,
 	}
 	w.state.Store(int32(WorkerStarting))
 	return w
@@ -176,7 +188,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	}
 
 	// Start the process.
-	w.process = NewProcessHandle(command, args, w.workDir, nil, w.logger)
+	w.process = NewProcessHandle(command, args, w.workDir, nil, w.logger, w.tracer)
 	if err := w.process.Start(ctx, w.id); err != nil {
 		w.state.Store(int32(WorkerStopped))
 		return fmt.Errorf("starting LS process: %w", err)

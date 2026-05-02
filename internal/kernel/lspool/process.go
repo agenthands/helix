@@ -14,6 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/agenthands/helix/internal/kernel/jsonrpc"
 )
 
@@ -37,19 +40,30 @@ type ProcessHandle struct {
 	// stderrRing captures the last N lines of stderr for crash diagnostics.
 	stderrRing []string
 	stderrMu   sync.Mutex
+
+	// tracer is forwarded to the jsonrpc.Conn created in Start so every LS
+	// frame emits a child span. Phase 55 D-01: nil → noop fallback.
+	tracer trace.Tracer
 }
 
 // NewProcessHandle creates a new ProcessHandle for the given LS command.
-func NewProcessHandle(command string, args []string, workDir string, env []string, logger *slog.Logger) *ProcessHandle {
+//
+// tracer is propagated to the jsonrpc.Conn created during Start. A nil tracer
+// falls back to a noop tracer (Phase 55 D-01).
+func NewProcessHandle(command string, args []string, workDir string, env []string, logger *slog.Logger, tracer trace.Tracer) *ProcessHandle {
 	cmd := exec.Command(command, args...)
 	cmd.Dir = workDir
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("process-noop")
+	}
 	return &ProcessHandle{
 		cmd:    cmd,
 		done:   make(chan struct{}),
 		logger: logger,
+		tracer: tracer,
 	}
 }
 
@@ -82,7 +96,7 @@ func (p *ProcessHandle) Start(ctx context.Context, sessionPrefix string) error {
 
 	// Create JSON-RPC connection wrapping stdin/stdout.
 	rwc := &stdinStdoutRWC{stdin: p.stdin, stdout: p.stdout}
-	p.conn = jsonrpc.NewConn(rwc, sessionPrefix)
+	p.conn = jsonrpc.NewConn(rwc, sessionPrefix, p.tracer)
 
 	// Launch stderr drain goroutine — captures last N lines for crash reports.
 	go p.drainStderr()

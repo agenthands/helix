@@ -179,7 +179,7 @@ func (m *mockRWC) writeNotification(method string, params interface{}) {
 
 func TestConn_Call(t *testing.T) {
 	mock := newMockRWC()
-	conn := NewConn(mock, "test-sess")
+	conn := NewConn(mock, "test-sess", nil)
 
 	// Pre-load a response with the expected ID.
 	expectedID := "test-sess:1"
@@ -211,7 +211,7 @@ func TestConn_Call(t *testing.T) {
 
 func TestConn_Notify(t *testing.T) {
 	mock := newMockRWC()
-	conn := NewConn(mock, "test-sess")
+	conn := NewConn(mock, "test-sess", nil)
 
 	ctx := context.Background()
 	err := conn.Notify(ctx, "textDocument/didOpen", map[string]string{"uri": "file:///tmp/test.go"})
@@ -227,7 +227,7 @@ func TestConn_Notify(t *testing.T) {
 
 func TestConn_Notification_Handler(t *testing.T) {
 	mock := newMockRWC()
-	conn := NewConn(mock, "test-sess")
+	conn := NewConn(mock, "test-sess", nil)
 
 	// Pre-load a notification.
 	mock.writeNotification("textDocument/publishDiagnostics", map[string]string{"uri": "file:///tmp/test.go"})
@@ -261,7 +261,7 @@ func TestConn_Notification_Handler(t *testing.T) {
 // where Listen accidentally adds a method allow-list at the Conn layer.
 func TestConn_NotificationUnknownMethod(t *testing.T) {
 	mock := newMockRWC()
-	conn := NewConn(mock, "test-sess")
+	conn := NewConn(mock, "test-sess", nil)
 
 	// Pre-load a notification with a method name that no real LSP server
 	// would ever emit and that no quirk handler would ever register for.
@@ -288,8 +288,8 @@ func TestConn_NotificationUnknownMethod(t *testing.T) {
 func TestConn_SessionPrefixedIDs(t *testing.T) {
 	mock1 := newMockRWC()
 	mock2 := newMockRWC()
-	conn1 := NewConn(mock1, "sess-abc")
-	conn2 := NewConn(mock2, "sess-xyz")
+	conn1 := NewConn(mock1, "sess-abc", nil)
+	conn2 := NewConn(mock2, "sess-xyz", nil)
 
 	ctx := context.Background()
 
@@ -307,7 +307,7 @@ func TestConn_SessionPrefixedIDs(t *testing.T) {
 
 func TestConn_ClosedConnection(t *testing.T) {
 	mock := newMockRWC()
-	conn := NewConn(mock, "test-sess")
+	conn := NewConn(mock, "test-sess", nil)
 	_ = conn.Close()
 
 	ctx := context.Background()

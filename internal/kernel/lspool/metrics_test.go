@@ -136,14 +136,14 @@ func TestMetricsSink_CircuitStateConstants(t *testing.T) {
 // same testRegistry/testLogger helpers already present in pool_test.go.
 func newTestPoolWithSink(t *testing.T, sink MetricsSink) *Pool {
 	t.Helper()
-	return NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+	return NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink, nil)
 }
 
 // fakeWorker returns a Worker stub with just enough fields populated for the
 // lifecycle hooks to exercise. We bypass Start() because those tests would
 // need a real LS binary.
 func fakeWorker(id, lang string) *Worker {
-	w := NewWorker(id, lang, "/tmp/test-"+lang, "true", nil, testLogger())
+	w := NewWorker(id, lang, "/tmp/test-"+lang, "true", nil, testLogger(), nil)
 	w.state.Store(int32(WorkerReady))
 	return w
 }
@@ -254,7 +254,7 @@ func TestCircuit_nilSinkReplacedWithNoop(t *testing.T) {
 func TestPool_nilMetricsDefaultsToNoop(t *testing.T) {
 	// Passing a nil sink must not panic; the Pool should default to NoopSink
 	// internally so later hook calls are safe.
-	p := NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), nil)
+	p := NewPool(testPoolConfig(), testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), nil, nil)
 	assert.NotNil(t, p.metrics)
 
 	// Exercise an eviction path with a fake worker to prove no panic.
@@ -285,7 +285,7 @@ func TestPool_AcquireLease_LookupEmission(t *testing.T) {
 		// shared `fakeWorker` helper hard-codes "/tmp/test-<lang>", so we
 		// build the worker directly with the test key's RepoRoot here.
 		key := testKey()
-		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger(), nil)
 		w.state.Store(int32(WorkerReady))
 		p.mu.Lock()
 		p.workers[w.ID()] = w
@@ -310,7 +310,7 @@ func TestPool_AcquireLease_LookupEmission(t *testing.T) {
 		// we observe the emission without spawning a real LS process.
 		cfg := testPoolConfig()
 		cfg.MaxWorkers = 0
-		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink, nil)
 
 		key := testKey()
 		lease, err := p.AcquireLease(context.Background(), "sess-2", key, false /* dirty */)
@@ -328,14 +328,14 @@ func TestPool_AcquireLease_LookupEmission(t *testing.T) {
 		sink := &recordingSink{}
 		cfg := testPoolConfig()
 		cfg.MaxWorkers = 0
-		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink)
+		p := NewPool(cfg, testRegistry(), nil, &mockPressure{level: PressureNone}, testLogger(), sink, nil)
 
 		// Pre-warm a Ready worker that WOULD satisfy the share path if not for
 		// dirty=true. Dirty bypasses workerForKeyLocked by design (D-02).
 		// Build the worker directly so its WorkDir matches the test key's
 		// RepoRoot — same reason as the share-path sub-test above.
 		key := testKey()
-		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger())
+		w := NewWorker("w-go-1", key.Language, key.RepoRoot, "true", nil, testLogger(), nil)
 		w.state.Store(int32(WorkerReady))
 		p.mu.Lock()
 		p.workers[w.ID()] = w

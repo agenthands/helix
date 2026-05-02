@@ -82,7 +82,8 @@ func (p *ProcessHandle) Start(ctx context.Context, sessionPrefix string) error {
 
 	// Create JSON-RPC connection wrapping stdin/stdout.
 	rwc := &stdinStdoutRWC{stdin: p.stdin, stdout: p.stdout}
-	p.conn = jsonrpc.NewConn(rwc, sessionPrefix)
+	// TODO Phase 55-01 Task 2: replace nil with p.tracer once Worker/Pool plumbing lands.
+	p.conn = jsonrpc.NewConn(rwc, sessionPrefix, nil)
 
 	// Launch stderr drain goroutine — captures last N lines for crash reports.
 	go p.drainStderr()

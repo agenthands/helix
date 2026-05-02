@@ -8,6 +8,10 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
 // NotificationFunc is a callback for handling incoming notifications.
@@ -32,17 +36,29 @@ type Conn struct {
 
 	// OnNotification is called for incoming notifications during Listen.
 	OnNotification NotificationFunc
+
+	// tracer is used to wrap Call/Notify in lspool.lsp.{method} child spans.
+	// Phase 55: injected via constructor; nil → noop fallback per D-01.
+	tracer trace.Tracer
 }
 
 // NewConn creates a new JSON-RPC connection wrapping the given stream.
 // sessionPrefix is prepended to request IDs to avoid collisions when multiple
 // sessions share an LS worker (per Pitfall 4: sequential integer IDs).
-func NewConn(rwc io.ReadWriteCloser, sessionPrefix string) *Conn {
+//
+// tracer is used to emit lspool.lsp.{method} child spans on Call and
+// lspool.lsp.notify.{method} on Notify. A nil tracer falls back to a noop
+// tracer (Phase 55 D-01: never reach for the global tracer provider).
+func NewConn(rwc io.ReadWriteCloser, sessionPrefix string, tracer trace.Tracer) *Conn {
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("jsonrpc-noop")
+	}
 	return &Conn{
 		rwc:           rwc,
 		reader:        bufio.NewReader(rwc),
 		sessionPrefix: sessionPrefix,
 		pending:       make(map[string]chan *Response),
+		tracer:        tracer,
 	}
 }
 
@@ -83,6 +99,10 @@ func (c *Conn) Send(ctx context.Context, method string, params interface{}) (str
 // Call sends a JSON-RPC request and waits for the response.
 // The result is unmarshaled into the provided result pointer.
 func (c *Conn) Call(ctx context.Context, method string, params interface{}, result interface{}) error {
+	ctx, span := c.tracer.Start(ctx, "lspool.lsp."+method,
+		trace.WithAttributes(attribute.String("lsp.method", method)))
+	defer span.End()
+
 	id := c.nextRequestID()
 	req, err := NewRequest(id, method, params)
 	if err != nil {
@@ -121,6 +141,9 @@ func (c *Conn) Call(ctx context.Context, method string, params interface{}, resu
 		return ctx.Err()
 	case resp := <-ch:
 		if resp.Error != nil {
+			if span.IsRecording() {
+				span.RecordError(resp.Error)
+			}
 			return resp.Error
 		}
 		if result != nil && resp.Result != nil {
@@ -134,6 +157,11 @@ func (c *Conn) Call(ctx context.Context, method string, params interface{}, resu
 
 // Notify sends a JSON-RPC notification (no ID, no response expected).
 func (c *Conn) Notify(ctx context.Context, method string, params interface{}) error {
+	ctx, span := c.tracer.Start(ctx, "lspool.lsp.notify."+method,
+		trace.WithAttributes(attribute.String("lsp.method", method)))
+	defer span.End()
+	_ = ctx // ctx reassignment preserves span context for future ctx-aware extensions
+
 	notif, err := NewNotification(method, params)
 	if err != nil {
 		return fmt.Errorf("creating notification: %w", err)

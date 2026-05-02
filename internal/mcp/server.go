@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/workspace"
@@ -47,6 +49,7 @@ type SerenaMCPServer struct {
 	logger           *slog.Logger
 	activateCallback ActivateCallback
 	toolSchemas      []*mcpsdk.Tool // stored for suggestion middleware schema introspection (D-07)
+	tracer           trace.Tracer   // OBS-04 (Phase 55-02): used by AddSkillTool to emit kernel.tool.{name} spans (D-01: injected, never global)
 }
 
 // PingArgs is the input schema for the ping diagnostic tool.
@@ -65,7 +68,16 @@ type ActivateProjectArgs struct {
 }
 
 // NewSerenaMCPServer creates a new MCP server with dummy tools registered.
-func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *SerenaMCPServer {
+//
+// The tracer is used by AddSkillTool to emit kernel.tool.{name} spans on
+// invocation (Phase 55-02 / OBS-04). Per Phase 12 D-01 the tracer is injected
+// (never resolved via otel.GetTracerProvider). When tracer is nil, a
+// process-local noop tracer is substituted so all paths stay safe.
+func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger, tracer trace.Tracer) *SerenaMCPServer {
+	if tracer == nil {
+		tracer = tracenoop.NewTracerProvider().Tracer("mcp-server-noop")
+	}
+
 	server := mcpsdk.NewServer(
 		&mcpsdk.Implementation{Name: "helix", Version: currentVersion},
 		nil,
@@ -77,6 +89,7 @@ func NewSerenaMCPServer(workspaces *workspace.Registry, logger *slog.Logger) *Se
 		sdk:      server,
 		registry: registry,
 		logger:   logger,
+		tracer:   tracer,
 	}
 
 	// Middleware (TelemetryMiddleware for METRIC-02 + logging, and optional
@@ -226,8 +239,19 @@ func (s *SerenaMCPServer) AddSkillTool(name, description, briefDescription, help
 		Description: description,
 	}
 	mcpsdk.AddTool(s.sdk, tool, func(ctx context.Context, req *mcpsdk.CallToolRequest, args map[string]any) (*mcpsdk.CallToolResult, any, error) {
+		// OBS-04 (Phase 55-02): emit kernel.tool.{name} span — same shape as
+		// kernel.WrapToolSpan but adapted to SkillToolExecutor's signature.
+		// Per D-07 NO attributes are set on this span; TelemetryMiddleware's
+		// daemon.mcp.tools.call span owns tool_name / profile / mode /
+		// language / outcome.
+		ctx, span := s.tracer.Start(ctx, "kernel.tool."+toolName)
+		defer span.End()
+		_ = ctx // kept for symmetry with WrapToolSpan; SkillToolExecutor does not consume ctx today
 		result, err := executor.ExecuteTool(toolName, args)
 		if err != nil {
+			if span.IsRecording() {
+				span.RecordError(err)
+			}
 			return &mcpsdk.CallToolResult{
 				Content: []mcpsdk.Content{
 					&mcpsdk.TextContent{Text: err.Error()},

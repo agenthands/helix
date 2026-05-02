@@ -42,7 +42,7 @@ func TestSessionInfo_NilAllowedTools(t *testing.T) {
 func TestNewSerenaMCPServer(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	reg := workspace.NewRegistry()
-	srv := NewSerenaMCPServer(reg, logger)
+	srv := NewSerenaMCPServer(reg, logger, nil)
 
 	assert.NotNil(t, srv)
 	assert.NotNil(t, srv.SDK())
@@ -59,7 +59,7 @@ func TestNewSerenaMCPServer(t *testing.T) {
 func TestSerenaMCPServer_DynamicToolAddRemove(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	reg := workspace.NewRegistry()
-	srv := NewSerenaMCPServer(reg, logger)
+	srv := NewSerenaMCPServer(reg, logger, nil)
 
 	initialCount := srv.Registry().Count()
 

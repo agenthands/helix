@@ -209,7 +209,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	bodyExtractor := edit.NewBodyExtractor(grammarRegistry)
 
 	// 7. Create MCP server.
-	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger)
+	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger, observability.Tracer())
 
 	// 8. Resolve profile per D-08.
 	globalDir := filepath.Join(homeDir, ".helix")

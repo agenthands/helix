@@ -3,7 +3,7 @@ title: Smoke-Test the Trace Pipeline
 severity: info
 metric: none — smoke procedure
 since_phase: 55
-last_reviewed: 2026-05-02
+last_reviewed: 2026-05-02 (podman supported alongside docker)
 ---
 
 # Smoke-Test the Trace Pipeline
@@ -20,9 +20,9 @@ Run this procedure when:
 
 ## Prerequisites
 
-- Docker (for the Jaeger all-in-one image; any OTLP/gRPC collector on
-  `localhost:4317` works — Jaeger is the example because the all-in-one image
-  is one command).
+- A container runtime — `podman` or `docker` (for the Jaeger all-in-one image;
+  any OTLP/gRPC collector on `localhost:4317` works — Jaeger is the example
+  because the all-in-one image is one command).
 - A working `helix` binary (built via `make build` or downloaded from a release).
 - A workspace with at least one supported language (Go, TypeScript, Python, etc.).
 
@@ -31,8 +31,10 @@ Run this procedure when:
 ### 1. Start a local Jaeger collector
 
 ```bash
-docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/all-in-one
+podman run --rm -p 4317:4317 -p 16686:16686 jaegertracing/all-in-one
 ```
+
+(`docker run ...` works identically if you use Docker instead.)
 
 Ports: `4317` = OTLP/gRPC ingest (Helix -> Jaeger); `16686` = Jaeger Query UI (browser).
 
@@ -87,7 +89,7 @@ Verify:
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
 | No traces in Jaeger UI | `tracing_endpoint` empty or wrong port | Confirm `localhost:4317` matches Docker port mapping. |
-| Helix logs `OTLP exporter failure: ...` | Jaeger not running | Re-run the `docker run` command in Step 1. |
+| Helix logs `OTLP exporter failure: ...` | Jaeger not running | Re-run the `podman run` (or `docker run`) command in Step 1. |
 | Traces appear but `lspool.lsp.*` missing | LS path not exercised | Use a tool that hits the LS (`goto_definition`, `find_references`); `read_file` won't. |
 | Only the root span appears | `tracing_sample_ratio = 0.0` | Set ratio to `1.0` for the smoke run. |
 | `kernel.tool.{name}` span missing | Skill tool registered without WrapToolSpan/AddSkillTool wrap | Run `go test ./internal/obs/ -run TestEveryRegisteredToolWrappedWithKernelSpan` — the audit gate should have caught this. |

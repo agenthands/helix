@@ -743,6 +743,45 @@ observability:
 
 Traces include spans for tool execution, language server communication, and worker pool operations. Connect to any OTLP-compatible backend (Jaeger, Tempo, Honeycomb, etc.).
 
+### Trace Sampling
+
+Helix uses head-based sampling — the decision to record a trace is made at the
+root span and propagated to every child via the W3C tracecontext spec. The
+sampler is `ParentBased(TraceIDRatioBased(tracing_sample_ratio))` (see
+`internal/obs/tracing.go`).
+
+**Configuration:**
+
+```yaml
+observability:
+  tracing_endpoint: "localhost:4317"   # OTLP/gRPC collector; empty = tracing OFF
+  tracing_sample_ratio: 0.1            # 0.0 = none, 1.0 = all, 0.1 = 10%
+  service_name: "helix"                # populates resource.service.name
+```
+
+**Behavior:**
+
+| `tracing_endpoint` | `tracing_sample_ratio` | Result |
+|--------------------|-----------------------|--------|
+| empty / unset      | (any)                 | Tracing fully OFF — noop tracer, zero allocations on hot path. |
+| set                | `0.0`                 | Tracer wired, ratio sampler drops every trace. Useful for verifying the export path without volume. |
+| set                | `0.1`                 | 10% of root traces are sampled; child spans inherit the parent decision. |
+| set                | `1.0`                 | Every trace is sampled; recommended only for debugging or smoke runs. |
+
+**Operational guidance:**
+
+- Production: start at `0.01` (1%); raise during incident response.
+- Development: `1.0` to capture every trace.
+- Smoke tests: see `docs/runbooks/trace-smoke.md` for a one-command Jaeger smoke setup using `1.0`.
+
+**What is NOT shipped today:**
+
+- **Tail-sampling** (deciding to keep/drop traces *after* all spans complete, e.g.
+  "always keep traces with errors"). Helix uses head-only sampling. Tail-sampling
+  is on the future-scope backlog; if you need it today, run a tail-aware OTLP
+  collector (Grafana Agent, OpenTelemetry Collector with `tail_sampling`
+  processor) downstream of Helix.
+
 ### Enable pprof
 
 For profiling the Helix daemon process:

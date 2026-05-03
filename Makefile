@@ -14,11 +14,17 @@ proto:
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		api/proto/serena/v1/*.proto
 
-test:
+test: vet
 	$(GO) test ./...
 
-vet:
+VETTOOL=$(shell go env GOPATH)/bin/vet-noduckdb
+
+vet: $(VETTOOL)
 	$(GO) vet ./...
+	$(GO) vet -vettool=$(VETTOOL) ./...
+
+$(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
+	$(GO) install ./cmd/vet-noduckdb
 
 fmt:
 	gofmt -w .

@@ -39,3 +39,17 @@ func TestEvalPipelineValidates(t *testing.T) {
 		t.Errorf("Order len = %d, want %d", len(g.Order), len(pipelines.EvalPhases))
 	}
 }
+
+// TestPipelineCount_MatchesSpec: SemanticIndexPhases has 12 entries (SPEC §39.5),
+// LiveUpdatePhases has 9 (SPEC §39.6), EvalPhases has 10 (SPEC §39.7).
+func TestPipelineCount_MatchesSpec(t *testing.T) {
+	if got, want := len(pipelines.SemanticIndexPhases), 12; got != want {
+		t.Errorf("SemanticIndexPhases len = %d, want %d (SPEC §39.5)", got, want)
+	}
+	if got, want := len(pipelines.LiveUpdatePhases), 9; got != want {
+		t.Errorf("LiveUpdatePhases len = %d, want %d (SPEC §39.6)", got, want)
+	}
+	if got, want := len(pipelines.EvalPhases), 10; got != want {
+		t.Errorf("EvalPhases len = %d, want %d (SPEC §39.7)", got, want)
+	}
+}

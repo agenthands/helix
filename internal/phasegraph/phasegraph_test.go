@@ -285,3 +285,52 @@ func TestWriteDOT_EmitsDigraph(t *testing.T) {
 		t.Errorf("output missing edge: %q", out)
 	}
 }
+
+// TestValidate_WritesDOTOnCycleWhenWriterProvided: when the caller passes an
+// io.Writer via ValidateOptions{DOTSink}, a cycle error causes a digraph to be
+// written to the sink containing the cycle nodes.
+func TestValidate_WritesDOTOnCycleWhenWriterProvided(t *testing.T) {
+	phases := []phasegraph.PhaseSpec{
+		{ID: "A", Requires: []phasegraph.PhaseID{"C"}, Run: noopRun},
+		{ID: "B", Requires: []phasegraph.PhaseID{"A"}, Run: noopRun},
+		{ID: "C", Requires: []phasegraph.PhaseID{"B"}, Run: noopRun},
+	}
+	var sb strings.Builder
+	_, err := phasegraph.ValidatePhaseGraphWithOptions(phases, phasegraph.ValidateOptions{DOTSink: &sb})
+	if err == nil {
+		t.Fatal("expected cycle error, got nil")
+	}
+	var pgErr phasegraph.PhaseGraphError
+	if !errors.As(err, &pgErr) {
+		t.Fatalf("expected PhaseGraphError, got %T", err)
+	}
+	if pgErr.Kind != "cycle" {
+		t.Errorf("Kind = %q, want cycle", pgErr.Kind)
+	}
+	out := sb.String()
+	if !strings.Contains(out, "digraph") {
+		t.Errorf("DOTSink output missing 'digraph' header: %q", out)
+	}
+	for _, id := range []string{"\"A\"", "\"B\"", "\"C\""} {
+		if !strings.Contains(out, id) {
+			t.Errorf("DOTSink output missing %s: %q", id, out)
+		}
+	}
+}
+
+// TestValidate_NoDOTOnSuccess: ValidatePhaseGraphWithOptions does NOT write
+// to the sink when validation succeeds.
+func TestValidate_NoDOTOnSuccess(t *testing.T) {
+	phases := []phasegraph.PhaseSpec{
+		{ID: "A", Run: noopRun},
+		{ID: "B", Requires: []phasegraph.PhaseID{"A"}, Run: noopRun},
+	}
+	var sb strings.Builder
+	_, err := phasegraph.ValidatePhaseGraphWithOptions(phases, phasegraph.ValidateOptions{DOTSink: &sb})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sb.Len() != 0 {
+		t.Errorf("expected no DOT output on success, got: %q", sb.String())
+	}
+}

@@ -6,16 +6,16 @@ import (
 
 // Eval phase IDs (SPEC §39.7, verbatim).
 const (
-	PhasePrepareWorkspace   phasegraph.PhaseID = "prepare_workspace"
-	PhaseConfigureMode      phasegraph.PhaseID = "configure_mode"
-	PhaseRunAgent           phasegraph.PhaseID = "run_agent"
-	PhaseCollectTrace       phasegraph.PhaseID = "collect_trace"
-	PhaseApplyPatchCheck    phasegraph.PhaseID = "apply_patch_check"
-	PhaseRunTests           phasegraph.PhaseID = "run_tests"
-	PhaseRunDiagnostics     phasegraph.PhaseID = "run_diagnostics"
-	PhaseScoreToolBehavior  phasegraph.PhaseID = "score_tool_behavior"
-	PhaseScoreGuardrails    phasegraph.PhaseID = "score_guardrails"
-	PhaseAggregateReport    phasegraph.PhaseID = "aggregate_report"
+	PhasePrepareWorkspace  phasegraph.PhaseID = "prepare_workspace"
+	PhaseConfigureMode     phasegraph.PhaseID = "configure_mode"
+	PhaseRunAgent          phasegraph.PhaseID = "run_agent"
+	PhaseCollectTrace      phasegraph.PhaseID = "collect_trace"
+	PhaseApplyPatchCheck   phasegraph.PhaseID = "apply_patch_check"
+	PhaseRunTests          phasegraph.PhaseID = "run_tests"
+	PhaseRunDiagnostics    phasegraph.PhaseID = "run_diagnostics"
+	PhaseScoreToolBehavior phasegraph.PhaseID = "score_tool_behavior"
+	PhaseScoreGuardrails   phasegraph.PhaseID = "score_guardrails"
+	PhaseAggregateReport   phasegraph.PhaseID = "aggregate_report"
 )
 
 // EvalPhases ships the SHAPE only — Run bodies are noopRun placeholders that

@@ -27,14 +27,12 @@ type SerenaConfig struct {
 	Degradation DegradationConfig `koanf:"degradation"`
 	// SemanticIndex holds Phase 57+ semantic graph settings (SPEC §25).
 	//
-	// STUB FIELD: Phase 57 plan P02 adds the typed field with zero values
-	// so daemon step 6b's `cfg.SemanticIndex.Enabled` reference compiles
-	// at end of wave 1. Phase 57 plan P03 adds the `koanf:"semantic_index"`
-	// binding tag and populates SPEC §25 defaults so the field actually
-	// carries runtime values. Until P03 lands, SemanticIndex.Enabled
-	// defaults to Go's bool zero value (false), which means daemon step 6b
-	// skips the Open call — safe degradation.
-	SemanticIndex semantic.Config
+	// Phase 57 plan P02 landed this field as a stub (zero values, no koanf
+	// tag); Phase 57 plan P03 (this commit) attaches the
+	// `koanf:"semantic_index"` binding tag so the SPEC §25 defaults from
+	// internal/config/defaults.go and any user/project YAML files actually
+	// populate the field through the standard 4-layer precedence.
+	SemanticIndex semantic.Config `koanf:"semantic_index"`
 }
 
 // DegradationConfig holds timeout budgets and resilience settings (Phase 13).

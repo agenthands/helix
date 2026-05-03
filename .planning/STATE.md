@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
 status: executing
-last_updated: "2026-05-03T17:01:20.447Z"
-last_activity: 2026-05-03
+last_updated: "2026-05-03T17:57:03.086Z"
+last_activity: 2026-05-03 -- Phase 58 execution started
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 4
+  total_plans: 8
   completed_plans: 4
-  percent: 100
+  percent: 50
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 57 — semantic-store-foundation-pipeline-dag-library
+**Current focus:** Phase 58 — v1-9-carryover-release-distribution
 
 ## Current Position
 
-Phase: 57
-Plan: Not started
-Status: Executing Phase 57
-Last activity: 2026-05-03
+Phase: 58 (v1-9-carryover-release-distribution) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 58
+Last activity: 2026-05-03 -- Phase 58 execution started
 
 ## Performance Metrics
 

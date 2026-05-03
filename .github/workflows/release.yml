@@ -7,13 +7,14 @@ on:
 
 permissions:
   contents: write   # required: create release, upload assets
+  id-token: write   # Phase 58 D-02: cosign keyless OIDC token (Fulcio short-lived cert)
 
 jobs:
   release:
     name: goreleaser
-    # WR-04: pin to ubuntu-22.04 (LTS) so the x86_64 minisign install URL stays
-    # valid as ubuntu-latest rolls forward. The runtime `uname -m` check below
-    # remains as a defense-in-depth backstop for future runner image changes.
+    # WR-04: pin to ubuntu-22.04 (LTS) for a stable runner image. The runtime
+    # `uname -m` checks below remain as defense-in-depth backstops for future
+    # runner image changes.
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -22,71 +23,16 @@ jobs:
         with:
           fetch-depth: 0   # required: goreleaser changelog needs full git history
 
-      - name: Refuse PLACEHOLDER minisign public key
-        run: |
-          set -euo pipefail
-          # If minisign.pub still contains the literal "PLACEHOLDER" marker, the
-          # maintainer has not yet generated and committed the real public key.
-          # Publishing a release in that state would silently break verification
-          # for every user (CR-02). Fail closed.
-          if grep -q 'PLACEHOLDER' minisign.pub; then
-            echo "::error file=minisign.pub::minisign.pub still contains the PLACEHOLDER marker; replace with the real public key before tagging a release. See CONTRIBUTING.md (Releasing > One-time keypair setup)."
-            exit 1
-          fi
-          echo "minisign.pub pre-flight passed (no PLACEHOLDER marker found)."
-
-      - name: Verify embedded minisign.pub matches repo-root
-        # T-52-01-01 mitigation: fail the release fast if internal/upgrade/minisign.pub
-        # has drifted from repo-root minisign.pub. The embedded copy is what the
-        # binary verifies the next archive against; drift is a key-swap-class bug.
-        # Locally, contributors run `make build` which re-runs `embed-pubkey` first,
-        # so drift here means the synced copy was edited directly without going
-        # through the Makefile and the diff was never committed back.
-        run: make verify-embed-pubkey
-
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
         with:
           go-version: '1.25.x'
           cache: true
 
-      - name: Install minisign (pinned)
-        run: |
-          set -euo pipefail
-          # Pinned for reproducible CI behavior. Bump only after verifying the
-          # tarball URL pattern + signature format are unchanged.
-          # See .planning/phases/51-packaging-goreleaser/51-RESEARCH.md Pitfall 3
-          # and 51-REVIEW.md CR-04 (sha256 verification rationale).
-          MINISIGN_VERSION="0.12"
-          # SHA-256 of minisign-${MINISIGN_VERSION}-linux.tar.gz. Upstream
-          # jedisct1/minisign 0.12 does not publish a signing.txt; the digest
-          # below was computed locally against the GitHub release tarball and
-          # then verified by checking the upstream-signed .minisig sidecar
-          # (https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz.minisig)
-          # against jedisct1's published public key
-          # RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3
-          # (documented in https://github.com/jedisct1/minisign README).
-          # Last verified by maintainer: 2026-04-29. Bump alongside MINISIGN_VERSION.
-          MINISIGN_TARBALL_SHA256="9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
-
-          # IN-02: fail loud if ubuntu-latest ever flips to a non-x86_64 arch.
-          ARCH="$(uname -m)"
-          if [ "$ARCH" != "x86_64" ]; then
-            echo "::error::release.yml minisign install assumes x86_64 runner; got $ARCH. Update the URL + checksum and re-run."
-            exit 1
-          fi
-
-          curl -fsSL -o /tmp/minisign.tar.gz \
-            "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz"
-
-          # CR-04: verify SHA-256 BEFORE extracting. If the tarball hosting is
-          # compromised, this fails the workflow before any attacker-controlled
-          # binary handles MINISIGN_PRIVATE_KEY.
-          echo "${MINISIGN_TARBALL_SHA256}  /tmp/minisign.tar.gz" | sha256sum -c -
-
-          tar -xzf /tmp/minisign.tar.gz -C /tmp
-          sudo install -m 0755 /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
-          minisign -v
+      - name: Install cosign  # Phase 58 D-02: keyless signing via Fulcio + Rekor.
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5  # v3.10.1
+        with:
+          cosign-release: 'v2.4.1'
 
       - name: Reproducibility gate -- snapshot pass 1
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
@@ -128,23 +74,9 @@ jobs:
           # it before the real release pass so workspace caches stay tidy (IN-03).
           rm -rf dist-pass-1
 
-      - name: Write minisign secret key to disk (umask 077)
-        env:
-          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          umask 077
-          # Write secret key contents to /tmp/minisign.key for goreleaser signs: subprocess.
-          # umask 077 ensures only this runner user can read the file.
-          # The variable contents NEVER appear in logs because we use printf '%s'
-          # (no echo, no expansion in the command line).
-          # WR-01: written immediately before "Real release" so the key is NOT on
-          # disk during the two snapshot passes (which use --skip=sign and never
-          # read the key). Shrinks the in-job blast radius if a future third-party
-          # action scans /tmp during the reproducibility gate.
-          printf '%s' "$MINISIGN_PRIVATE_KEY" > /tmp/minisign.key
-
       - name: Real release (sign + publish)
+        # Phase 58 D-02: cosign keyless. Signing key material is the short-lived
+        # Fulcio cert minted from the workflow's id-token; no long-lived secrets.
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
           distribution: goreleaser
@@ -152,13 +84,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-
-      - name: Wipe minisign secret key
-        if: always()
-        run: |
-          # Defense-in-depth: shred the in-job copy of the secret key as soon as
-          # signing is complete (or aborted). The runner is ephemeral so this is
-          # belt-and-suspenders, but it shrinks the in-job blast radius if a
-          # future step pulls a third-party action that scans /tmp (WR-06).
-          shred -u /tmp/minisign.key 2>/dev/null || rm -f /tmp/minisign.key

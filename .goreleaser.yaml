@@ -1,6 +1,7 @@
 # Source of truth: goreleaser v2 schema. Generated for Phase 51 (PKG-01).
-# Locked decisions: D-01 (minisign), D-03/D-03a (reproducibility), D-04 (INSTALL match),
+# Locked decisions: Phase 51 D-03/D-03a (reproducibility), D-04 (INSTALL match),
 # D-06 (tag-triggered + auto pre-release), D-07 (auto-generated notes from git log).
+# Phase 58 D-02/D-03: cosign keyless signing (replaces the prior signer at v1.10.0; hard cut, no coexistence).
 version: 2
 
 project_name: helix
@@ -48,19 +49,15 @@ checksum:
   algorithm: sha256
 
 signs:
-  - id: minisign
-    cmd: minisign
+  - id: cosign
+    cmd: cosign
     artifacts: all
-    signature: "${artifact}.minisig"
+    signature: "${artifact}.sigstore.json"
     args:
-      - "-S"
-      - "-s"
-      - "/tmp/minisign.key"
-      - "-x"
-      - "${signature}"
-      - "-m"
+      - "sign-blob"
+      - "--bundle=${signature}"
       - "${artifact}"
-    stdin: '{{ .Env.MINISIGN_PASSWORD }}'
+      - "--yes"
 
 changelog:
   use: git

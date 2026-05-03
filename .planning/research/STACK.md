@@ -1,289 +1,339 @@
-# Technology Stack
+# Technology Stack — v1.10 Live Semantic Index (Additions)
 
-**Project:** Serena v1.7 Developer Experience & Auto-Setup
-**Researched:** 2026-04-20
+**Project:** Helix v1.10 Live Semantic Index
+**Researched:** 2026-05-03
+**Scope:** NEW dependencies only — existing v1.9 stack (Go 1.25.1, MCP SDK, koanf, modernc.org/sqlite, go-tree-sitter, gRPC, Prometheus, OTel, cobra, koanf, fsnotify v1.9.0) is fixed and not re-evaluated.
 
-## Recommended Stack Additions
+---
 
-### Zero New Go Dependencies Required
+## TL;DR — Recommended Additions
 
-The v1.7 milestone features are **integration code** and **new MCP tools** -- they compose existing capabilities rather than requiring new libraries. Every feature maps cleanly to stdlib + existing deps.
+| Component | Library | Version | CGO | Confidence |
+|-----------|---------|---------|-----|------------|
+| Fact store driver | `github.com/duckdb/duckdb-go` | v2.10502.0 (DuckDB 1.5.2) | **REQUIRES CGO=1** | HIGH |
+| File watcher | `github.com/fsnotify/fsnotify` (already in go.mod) | v1.9.0 | none | HIGH |
+| Graph algorithms (validation only) | `gonum.org/v1/gonum` | v0.16.x | none | HIGH |
+| PageRank / clustering (production) | hand-rolled in `internal/semantic/rank/` and `internal/semantic/graph/` | — | none | HIGH |
+| Pipeline DAG | stdlib only (Kahn topo sort, ~80 LOC) | — | none | HIGH |
+| Token counting (eval) | `github.com/tiktoken-go/tokenizer` | v0.6.x | none (pure Go, embedded vocab) | MEDIUM |
+| Patch apply (eval) | `github.com/bluekeyes/go-gitdiff` | v0.8.x | none | MEDIUM |
 
-### Core Framework (No Changes)
+**CGO posture impact:** v1.10 BREAKS the CGO=0 stub policy at the runtime level for the semantic-index feature. Must extend the existing Phase 51.1 stub pattern (`//go:build cgo` / `!cgo`) to `internal/semantic/store/duckdb.go` so CGO=0 builds compile but `semantic_index.enabled=true` produces a structured "feature requires CGO=1 build" error at activation. This is a continuation of policy, not a violation — the stub path was *designed* for exactly this case.
 
-| Technology | Version | Purpose | Status |
-|------------|---------|---------|--------|
-| Go | 1.25.1 | Language runtime | Already in use |
-| cobra | v1.9.1 | CLI framework -- add `setup` subcommand | Already in use |
-| koanf/v2 | v2.3.4 | Config reading (not writing -- client configs use json.Marshal) | Already in use |
-| MCP Go SDK | v1.5.0 | Register health/status MCP tool | Already in use |
-| modernc.org/sqlite | v1.48.1 | Available if state persistence needed | Already in use |
-| gRPC + protobuf | v1.80.0 / v1.36.11 | Hook CLI <-> daemon IPC | Already in use |
+---
 
-### Standard Library Packages Used Per Feature
+## 1. DuckDB Go Bindings
 
-| Feature | Stdlib Packages | Notes |
-|---------|----------------|-------|
-| `serena setup <client>` | `encoding/json`, `os`, `path/filepath`, `runtime` | JSON config generation + file writing |
-| Language detection in setup | (none new) | Reuse `internal/langregistry` + `internal/kernel/workspace.go` DetectLanguages |
-| LS pre-installation | (none new) | Reuse `internal/langregistry/installer.go` three-tier installer |
-| Client hooks generation | `encoding/json` | Write hooks JSON into `.claude/settings.json` |
-| Health/status MCP tool | (none new) | New skill querying existing lspool/kernel state |
-| Smart error responses | (none new) | Add `Suggestion` field to existing `internal/errors` builder |
-| Progressive descriptions | (none new) | Extend profile YAML schema, existing koanf reads it |
-| Lazy workspace init | (none new) | Middleware in existing MCP request pipeline |
-| Hook subcommands | `encoding/json`, `os` | Read stdin JSON, write stdout JSON, gRPC to daemon |
+### Recommended: `github.com/duckdb/duckdb-go` v2.10502.0
 
-## Architecture Decisions
+**Why this one:**
+- Official DuckDB org repository — `marcboeker/go-duckdb` was donated to DuckDB Labs and v2.5.0+ lives at `duckdb/duckdb-go`. Use the canonical path going forward; pin to a specific tag.
+- Versioning encodes upstream DuckDB: `v2.MAJOR_MINOR_PATCH.x` → `v2.10502.0` ⇒ DuckDB 1.5.2.
+- Implements `database/sql.Driver` (works with the existing `database/sql` patterns we already use for `modernc.org/sqlite`), plus a lower-level Appender API for bulk-loading symbol/reference rows during full reindex.
+- Pre-built static libs bundled for darwin/{amd64,arm64}, linux/{amd64,arm64}, windows/amd64 — matches our 6-archive goreleaser matrix exactly. **No FreeBSD** (dropped at v2; we don't ship FreeBSD).
+- Default build links the bundled static lib — no `libduckdb.so` required on user systems. Single-binary property preserved at the goreleaser archive level.
 
-### 1. CLI: Introduce Subcommands (Evolving from Flat Design)
+**CGO Reality (HARD CONSTRAINT):**
+- `CGO_ENABLED=1` REQUIRED. There is no pure-Go DuckDB driver and there will not be one — DuckDB itself is a 200kLOC C++ analytical engine; the maintainers explicitly rejected a native-Go port discussion (see Discussion #232).
+- Cross-compilation requires `CC=<cross-toolchain> CGO_ENABLED=1`. Goreleaser already runs per-arch builders for the v1.9 release matrix, so this is incremental, not net-new infra.
+- Build tags: default = bundled static link (what we want). `-tags=duckdb_use_lib` (system dynamic link) and `-tags=duckdb_use_static_lib` (custom prebuilt) are alternatives we should NOT use — bundled static is the single-binary path.
+- `-tags=duckdb_arrow` is **opt-in** at v2 — leave OFF (Arrow connections are not pool-safe and we don't need Arrow IPC).
 
-Current CLI is flat ("Per D-02: flat CLI with flags, no subcommands" in root.go). For v1.7, add subcommand trees because setup/hook are distinct from server operation:
+**Concurrency model:**
+- Single DuckDB database file is a process-wide singleton. Use one `*sql.DB` per workspace, with `MaxOpenConns=N` to leverage `database/sql`'s pool.
+- DuckDB is *single-writer, multi-reader* at the file level. Live overlay writes must be serialized (single goroutine queue feeding the writer) — fits ADR-002's overlay model naturally. Snapshot reads run on read-only connections.
+- Snapshot/checkpoint operations (`CHECKPOINT`, `EXPORT DATABASE`) require quiescence — coordinate with the live update queue's compaction trigger.
+
+### Alternatives Considered (and rejected)
+
+| Alternative | Why Not |
+|-------------|---------|
+| `marcboeker/go-duckdb` v1 | Donated upstream; v1 is unmaintained going forward. Use `duckdb/duckdb-go`. |
+| `duckdb/duckdb-go-bindings` | Lower-level CGO-only bindings, no `database/sql` driver. Too much surface area for us. |
+| Pure-Go SQLite + manual columnar | We already use `modernc.org/sqlite` for FTS5 memory. Re-purposing for analytical workloads (200k symbols × millions of references with PageRank-friendly aggregation) loses 10–100× on the queries SPEC §8 implies. ADR-001 explicitly chose DuckDB; revisiting that is out of scope. |
+| `chDB-go` (ClickHouse embedded) | Same CGO requirement as DuckDB but heavier runtime, less mature Go binding, and no `database/sql` driver. No advantage. |
+| Gonum-based in-memory store | Loses durability (ADR-002 requires committed snapshots survive restart) and reproducibility (ADR-007 eval needs deterministic snapshots). |
+| BadgerDB / Pebble (KV) | Wrong shape — we need analytical SQL with joins across symbols/references/edges, not KV. |
+
+**Decision rationale:** ADR-001 already made this call. The research question for v1.10 is *which DuckDB binding*, not *whether DuckDB*. Answer: official `duckdb/duckdb-go` v2.10502.0, default static-bundled build.
+
+### CGO Policy Reconciliation
+
+v1.9 Phase 51.1 established the `//go:build cgo` stub pattern so `CGO_ENABLED=0` builds still compile (with a runtime refusal). v1.10 extends that pattern:
 
 ```
-serena                         # existing: stdio/http/daemon (unchanged)
-serena setup claude-code       # NEW: write MCP config + hooks
-serena setup vscode            # NEW: write .vscode/mcp.json
-serena setup jetbrains         # NEW: write .junie/mcp/mcp.json
-serena setup --detect          # NEW: detect languages, report what would be installed
-serena status                  # NEW: query daemon health (terminal output)
-serena hook pre-tool-use       # NEW: hook handler (stdin JSON -> stdout JSON)
-serena hook session-start      # NEW: hook handler
-serena hook stop               # NEW: hook handler
+internal/semantic/store/duckdb.go        // //go:build cgo
+internal/semantic/store/duckdb_stub.go   // //go:build !cgo
 ```
 
-**Why subcommands are correct here:** Setup and hook handlers are *not* server modes -- they're utility commands. Cobra supports this natively. The root command RunE stays untouched for backward compatibility.
+The stub path returns a `Kind: Unsupported` error when `semantic_index.enabled=true` on a CGO=0 build, with remediation text pointing at the CGO=1 install instructions. CGO=0 builds keep working for everything except the new semantic feature — same shape as the v1.9 tree-sitter stub. **Document this in EMBED-AUDIT.md and CONTRIBUTING.md.**
 
-**File structure:**
-```
-internal/cli/
-  root.go          # existing, unchanged
-  setup.go         # NEW: setup subcommand + client-specific logic
-  status.go        # NEW: status subcommand
-  hook.go          # NEW: hook subcommand handlers
-```
+---
 
-### 2. Client MCP Config Formats (Verified)
+## 2. File Watcher
 
-| Client | Config File | JSON Schema | Confidence |
-|--------|-------------|-------------|------------|
-| Claude Code | `.claude/settings.json` (project) or `~/.claude/settings.json` (global) | `{ "mcpServers": { "serena": { "command": "serena", "args": [] } } }` | HIGH |
-| VS Code | `.vscode/mcp.json` | `{ "servers": { "serena": { "type": "stdio", "command": "serena", "args": [] } } }` | HIGH |
-| JetBrains (Junie) | `.junie/mcp/mcp.json` (project) or `~/.junie/mcp/mcp.json` (user) | `{ "mcpServers": { "serena": { "command": "serena", "args": [] } } }` | MEDIUM |
+### Recommended: `github.com/fsnotify/fsnotify` v1.9.0 (already vendored)
 
-**Implementation:** Pure `encoding/json` with `json.MarshalIndent`. No templating library needed -- these are small deterministic JSON structures.
+**Why no change:**
+- Already in `go.mod` (used by memory FTS index watcher). Adding a second watching library is gratuitous.
+- Cross-platform backend selection is automatic: inotify (Linux), FSEvents (macOS), kqueue (BSD), ReadDirectoryChangesW (Windows).
+- v1.9.0 (current) is the actively maintained line.
 
-**Merge strategy:** Read existing file if present, unmarshal to `map[string]any`, merge serena entry, re-marshal. Preserves user's other MCP servers.
+**Critical gaps fsnotify imposes (we own the workarounds):**
 
-### 3. Claude Code Hooks Integration (Verified via Official Docs)
+| Gap | Impact | Mitigation |
+|-----|--------|------------|
+| No recursive watch on Linux/Windows | Each subdirectory is a separate watch FD. 10k-file repo ≈ ~1k–3k dirs. | Walk repo once at start, register each dir; on `Create`(dir) events, register the new dir; on `Remove`(dir), unregister. Mirrors the pattern in `rfsnotify` but in-tree (≈150 LOC). |
+| Linux `inotify` per-user watch limit (`fs.inotify.max_user_watches`, default 8192–524288) | Repos with >8k dirs blow the limit on stock Ubuntu. | (a) Detect `ENOSPC` from fsnotify and degrade to manifest polling for that workspace. (b) Surface the limit in `get_semantic_graph_status` and include a sysctl-tuning runbook. (c) Already covered by SPEC §27.2 "Watcher Misses" mitigation. |
+| macOS FSEvents coalesces and may drop events under load | Edit storms can lose events | SPEC §27.2 already mandates "periodic manifest check" + content-hash check on query. Implement these as belt-and-suspenders. |
+| Symlinks not followed automatically | `node_modules`-style symlinked sub-projects miss events | Resolve symlinks during the initial walk, watch the resolved target if inside workspace; otherwise skip and document. |
+| No event-ordering guarantees | Rename = (Remove, Create) pair, possibly out of order | Coalesce by path with debounce (SPEC §16.2 already specifies `debounce_ms: 250`, `bulk_change_threshold: 200`). |
 
-Claude Code hooks (v2.1.114, 26 lifecycle events) use JSON in `.claude/settings.json`:
+### Alternatives Considered
 
-```json
-{
-  "hooks": {
-    "SessionStart": [{
-      "matcher": "*",
-      "hooks": [{
-        "type": "command",
-        "command": "serena hook session-start",
-        "once": true,
-        "timeout": 30
-      }]
-    }],
-    "PreToolUse": [{
-      "matcher": "mcp__serena__.*",
-      "hooks": [{
-        "type": "command",
-        "command": "serena hook pre-tool-use",
-        "timeout": 10
-      }]
-    }],
-    "Stop": [{
-      "matcher": "*",
-      "hooks": [{
-        "type": "command",
-        "command": "serena hook stop",
-        "timeout": 10
-      }]
-    }]
-  }
-}
-```
+| Alternative | Why Not |
+|-------------|---------|
+| `andreaskoch/go-fswatch` (polling) | Avoids inotify limits but O(N) polling cost on 10k files. Dead-last on latency. Useful only as a fallback. |
+| `rjeczalik/notify` | Has recursive watch on macOS/Windows but Linux still emulates by walk-and-register, and the project is much less actively maintained than fsnotify. Not worth the swap. |
+| `rfsnotify` wrapper | Thin wrapper over fsnotify; we'd inherit the same fd-per-dir cost AND a third-party dep. Implement the wrapper logic in-tree instead. |
 
-**Hook handler protocol:**
-- Stdin: JSON with hook context (event, tool name, arguments)
-- Stdout: JSON response (empty = allow, structured = modify/block)
-- Exit 0 = success/allow, Exit 2 = block (stderr becomes error message)
+**Decision:** Keep fsnotify v1.9.0. Build the recursive walker + ENOSPC fallback in `internal/semantic/live/watcher.go` (already in SPEC §6 package layout). No new dependency.
 
-**What each hook does:**
-- `SessionStart` (once=true): Triggers lazy workspace init, language detection, LS warm-up
-- `PreToolUse` (matcher: serena tools): Inject context reminders, validate workspace readiness
-- `Stop`: Signal daemon for session cleanup, persist session state
+---
 
-### 4. Health/Status MCP Tool
+## 3. Graph Algorithms
 
-New skill: `internal/skill/health/` implementing `skill.ToolProvider`:
+### Recommended: hand-rolled in production, gonum for **validation/testing only**
+
+**Production code (in `internal/semantic/rank/` and `internal/semantic/graph/`):**
+
+| Algorithm | Why hand-rolled |
+|-----------|-----------------|
+| Weighted PageRank (multiple projections) | SPEC §18.2 specifies edge-weight + damping + sparse iteration. Existing repomap PageRank is ~60 LOC. v1.10 needs (a) per-projection weight, (b) personalized restart vector, (c) **incremental local repair** (SPEC §18.4). Gonum's `network.PageRank` does (a) but not (b) or (c). Forking it is more code than writing it. |
+| Personalized PageRank | Not in gonum. Custom restart vector ⇒ trivial extension of weighted PR (~20 LOC delta). |
+| Incremental local PageRank repair | Not in gonum. Bounded-BFS frontier + local power iteration. Custom — this is core v1.10 IP per ADR-005. |
+| Weak components | Stdlib-friendly union-find, ~40 LOC. Gonum has it but we don't want to load gonum's `graph.Graph` adapter just for this. |
+| Label propagation | SPEC §19.3 needs a specific tie-break + freshness-aware variant. Not in gonum. ~80 LOC. |
+| Bounded BFS / reverse reachability | Stdlib. ~30 LOC each. |
+
+ADR-005 explicitly says: *"Implement hot graph operations directly in Go… Gonum may be used for validation or non-critical algorithms, but not as the core storage or graph model."* This research confirms that's the right call:
+- Gonum's graph model uses `int64` node IDs through its `graph.Node` interface — forcing a translation layer between our compact symbol IDs (FNV-64 of stable key, SPEC §11.1) and gonum's internal IDs.
+- Gonum's `network.PageRank` is dense-vector-friendly; our graphs are sparse and projection-filtered. We'd be adapting around it more than benefiting from it.
+
+### Recommended: `gonum.org/v1/gonum` v0.16+ — **test-only dependency**
+
+Use cases:
+- Cross-check our weighted PageRank against `network.PageRank` on small synthetic graphs as an oracle in unit tests.
+- `topo.ConnectedComponents` as an oracle for our weak-component impl.
+- Validate clustering output against `community.Modularize` on small fixtures.
+
+This keeps gonum out of the runtime closure (it pulls in a chunk of `gonum/blas/cgo`-adjacent transitive deps if you're not careful — but the pure-Go subset under `gonum/graph` and `gonum/graph/network` does NOT require CGO).
 
 ```go
-// Exposes: get_health MCP tool
-// Returns: active language servers, indexing progress, workspace capabilities,
-//          circuit breaker states, memory pressure level
+// in test file only
+require gonum.org/v1/gonum v0.16.0 // test-only oracle
 ```
 
-Data sources (all existing, query only):
-- `lspool.Pool` -- active workers, languages, circuit states
-- `WorkspaceRuntime` -- detected languages, root path
-- `langregistry.Registry` -- installed vs available LSes
-- Daemon uptime, version from `daemon.go`
+### Alternatives Considered
 
-### 5. Smart Error Responses (Extend Existing Taxonomy)
+| Alternative | Why Not |
+|-------------|---------|
+| Gonum in production | ADR-005 already rejected. Translation layer overhead, doesn't cover personalized/incremental cases. |
+| `alixaxel/pagerank` | Single-file, weighted only, no personalized/incremental. Strictly subset of what we need. |
+| `dominikbraun/graph` | Generic graph library, but we'd still write PR ourselves; doesn't help. |
 
-The existing `internal/errors` package has a builder pattern with Kind enum. Add suggestion metadata:
+---
 
-```go
-// New field in Error struct (internal/errors/errors.go)
-type Suggestion struct {
-    CorrectTool string `json:"correct_tool,omitempty"`
-    CorrectArgs map[string]string `json:"correct_args,omitempty"`
-    Reason      string `json:"reason"`
-}
+## 4. Eval Harness Dependencies
 
-// Builder extension
-func (b *Builder) WithSuggestion(s Suggestion) *Builder
+### Token Counting: `github.com/tiktoken-go/tokenizer` v0.6.x
+
+**Why this one:**
+- **Pure Go**, no CGO, embeds OpenAI vocabularies as Go maps at compile time (no runtime download, important for our offline/single-binary stance).
+- Covers `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base` (GPT-3.5/4/4o family).
+- For Anthropic Claude: we already have `github.com/anthropics/anthropic-sdk-go v1.35.0` in go.mod, which has the official `messages.CountTokens` server-side endpoint. Use that for Claude exact counts; use tiktoken locally as a heuristic fallback when we don't want to hit the network.
+
+**NOT recommended:** `pkoukk/tiktoken-go` — downloads vocab to a cache dir on first use. Breaks the offline/airgapped story and adds a network failure mode to eval runs. Strictly worse than `tiktoken-go/tokenizer` for our use case.
+
+**For DeepSeek / other OpenAI-compatible providers:** they re-use `cl100k_base` or `o200k_base`; tiktoken-go/tokenizer covers them.
+
+### Patch Application: `github.com/bluekeyes/go-gitdiff` v0.8.x
+
+**Why this one:**
+- Pure Go, parses git-style and standard unified diffs, exposes an `Apply` function for both text and binary patches.
+- Maintained by Palantir (active 2025–2026 commits on main).
+- The eval harness needs to apply LLM-emitted patches to a repo snapshot, run tests, and score. `go-gitdiff` is the cleanest "patch in, mutated bytes out" API in Go.
+
+**NOT recommended:** `sourcegraph/go-diff` is parser-only (no apply), `sourcegraph/go-diff-patch` only generates patches. Both are incomplete for the eval use case.
+
+**Note:** The original prompt asked about `bluekeyes/go-patch` — that's not the actual repo name. The library is `bluekeyes/go-gitdiff`.
+
+### Test Runner Orchestration: stdlib `os/exec` + `context`
+
+The eval harness runs `go test`, `pytest`, etc. as subprocesses with bounded timeouts. No new library needed — `os/exec.CommandContext` + `errgroup` (already in go.mod via `golang.org/x/sync`) covers it. Anything heavier (e.g., a dedicated test-runner abstraction) is over-engineering for SPEC §32's eval modes.
+
+---
+
+## 5. Pipeline DAG (ADR-010)
+
+### Recommended: stdlib only
+
+**Rationale:** Kahn's topological sort over `map[Phase][]Phase` adjacency is ~30 LOC. Cycle detection is the same pass (if not all nodes are emitted, there's a cycle). DOT-format dump for `dump_dot_on_error: true` (SPEC §25) is another ~20 LOC. Total: ~80 LOC in `internal/semantic/phasegraph/`.
+
+**No third-party DAG/workflow library is justified.** Anything we'd consider (`graphkit`, `dag`, etc.) brings:
+- Generics gymnastics or `interface{}`-flavored APIs.
+- Extra abstractions (Pipeline, Step, Worker) we don't want.
+- Test-and-maintenance burden for code we'd write in an afternoon.
+
+This matches the v1.6 RepoMap precedent: hand-rolled PageRank in ~60 LOC was cheaper and clearer than pulling gonum.
+
+---
+
+## 6. Type Resolution / Fixpoint Iteration
+
+### Recommended: no library
+
+**Rationale:** Fixpoint iteration is a `for { changed := false; ... if !changed { break } }` loop. The complexity is in the *resolution rules per language* (JSDoc/PHPDoc/YARD/Python typing comments per ADR-009), not in the iteration scaffolding.
+
+Worth studying for patterns:
+- **Go's `go/types` package** — its iterative method-set resolution is a clean reference for tiered confidence + fixpoint iteration. Stdlib, no dep.
+- **gopls' `internal/typeparams`** — similar.
+
+For **comment-based fallback parsing** (JSDoc, PHPDoc, YARD, Python type comments):
+
+| Language | Parser source |
+|----------|---------------|
+| JSDoc | Hand-roll lightweight comment scanner; full JSDoc is huge but we only need `@param {Type}` / `@returns {Type}` / `@type` / `@typedef`. ~200 LOC. |
+| PHPDoc | Same shape as JSDoc. Hand-roll. |
+| YARD (Ruby) | `# @param [Type] name` — regex-tractable. Hand-roll. |
+| Python typing comments / docstrings | `# type: T` + `:type x:` — regex-tractable. Hand-roll. For full docstring parsing later, defer to v1.11. |
+
+Pulling JS/PHP/Ruby AST libraries to parse comments is overkill — comments are line-based and the syntax we need is a tiny subset. Tree-sitter already gives us the comment node positions; we just regex inside.
+
+**No new dependency.**
+
+---
+
+## 7. Trace / Metrics Additions
+
+### Existing infra reused
+
+All v1.10 metrics (SPEC §28.1, 25 new families) plug into the existing `internal/obs/` Prometheus registry. The v1.9 PromQL validator (registry-driven, fail-closed) extends to cover them automatically — same `RegisterCounter`/`RegisterHistogram` pattern, same bounded-label discipline.
+
+All v1.10 tracing spans (SPEC §28.2, 14 new spans) use the existing OTel tracer; spans nest under the v1.9 `tools/call` parent span. No new exporter or instrumentation library needed.
+
+### Cardinality concerns flagged
+
+The bounded-label allowlist must extend to:
+
+| Label | Allowed values | Cardinality risk if not bounded |
+|-------|----------------|----------------------------------|
+| `language` | enum of 23 grammars + `unknown` | LOW (closed set) |
+| `mode` (live update kind) | `change`, `create`, `delete`, `rename`, `bulk` | LOW |
+| `outcome` | `success`, `timeout`, `error`, `circuit_open`, `skipped`, `degraded` | LOW |
+| `projection` | `imports`, `references`, `calls`, `types`, `mixed` | LOW |
+| `algorithm` | `pagerank`, `personalized_pagerank`, `weak_components`, `label_propagation` | LOW |
+| `edge_kind` | enum from SPEC §12.1/§12.2 (~15 values) | LOW |
+| `confidence_tier` | `high`, `medium`, `low`, `unresolved` | LOW |
+| `query_kind` | enum of named query templates | **MEDIUM — must be a closed allowlist, not free-form SQL hashes** |
+| `phase` | enum of registered phase names | LOW |
+| `repo_state` | `idle`, `bulk_change`, `live`, `compacting` | LOW |
+
+**Anti-cardinality rules (must encode in `internal/obs/labels.go`):**
+- `tool_name` must remain restricted to the registered MCP tool set (already enforced in v1.9).
+- NEVER include `repo_id`, `file_path`, `symbol_name`, `cluster_id`, `snapshot_id` as label values. Use trace span attributes for those (high-cardinality, but traces are sampled). SPEC §28.1's bounded-labels list does not include any of these — keep it that way.
+- Histograms cost 10× their label cardinality (one series per bucket). Watch `helix_semantic_lsp_enrichment_duration_seconds{language}` — 23 languages × 10 buckets = 230 series, fine.
+
+The v1.9 cardinality test (`TestMetricsBoundedCardinality` per Phase 53) must extend to the new families. Add a test fixture enumerating the allowed label combinations and assert no unbounded labels are registered.
+
+---
+
+## Installation / go.mod Diff (projected)
+
+```diff
+require (
++   github.com/duckdb/duckdb-go v2.10502.0
++   github.com/tiktoken-go/tokenizer v0.6.0
++   github.com/bluekeyes/go-gitdiff v0.8.0
+    // ... existing v1.9 deps unchanged
+)
+
+require (
++   gonum.org/v1/gonum v0.16.0 // test-only, used in internal/semantic/.../*_test.go
+)
 ```
 
-Suggestions are populated by tool-specific validation logic (already inline at 24 kernel tool boundaries). No new deps.
+**Build matrix impact:**
+- `make build` (CGO=1, default): adds DuckDB static-bundle link step, ~5–10s extra compile, ~12 MB binary size increase.
+- `make build-nocgo` (existing CGO=0 stub path): unchanged binary size; semantic feature returns `Unsupported` at activation.
+- Goreleaser: existing 6-archive matrix already runs CGO-aware per-arch builders for tree-sitter — no new release-pipeline work.
 
-### 6. Progressive Tool Descriptions
+---
 
-Extend profile YAML with description tiers:
+## Integration with Existing Daemon Bootstrap
 
-```yaml
-# profiles/claude-code.yml
-tools:
-  get_symbol_definition:
-    description_brief: "Get symbol definition by name"
-    description_detailed: "Find where a symbol is defined. Use name_path for nested symbols (e.g., 'ClassName/method'). Supports substring matching."
-    description_tutorial: "Use this when you need to read the source code of a function, class, or method. Provide the symbol name and optionally the file path to narrow scope."
-```
+`internal/daemon/daemon.go` currently has 14+ steps (kernel init, skill init, middleware install, etc.). v1.10 inserts:
 
-The MCP SDK's tool description field is a string set at registration time. Progressive disclosure works by:
-1. Starting with `description_brief` in tools/list response
-2. Including `description_detailed` in error responses when the agent misuses the tool
-3. Offering `description_tutorial` via the health tool when an agent asks for help
+1. **Step 9.5 (post-kernel, pre-skill):** `semantic.NewService(deps)` — opens DuckDB at `<workspace>/.helix/semantic.duckdb`, runs migrations, validates schema version. Fail-fast on corruption (per SPEC §29.1 — but with the timestamped-`.corrupt` rename + degraded-mode advance, NOT a hard daemon abort). On CGO=0, the stub `NewService` returns a degraded-mode service that refuses semantic operations with `Kind: Unsupported`.
+2. **Step 9.6:** Wire `service.LiveQueue()` into the file watcher; start the watcher goroutine under the daemon errgroup.
+3. **Step 9.7:** Start the LSP revalidation worker pool (single goroutine + bounded channel, per SPEC §21).
+4. **Step 9.8:** Start the idle compaction worker (single goroutine, idle-debounced, per SPEC §22).
+5. **Step 13.5 (post-skill registration):** Register the 10 new semantic MCP tools (SPEC §23) via the existing `ToolProvider` skill adapter pattern.
+6. **Step 14.5 (post-middleware):** Install the guardrail middleware (SPEC §24's edit-tool integration) — runs *after* `LazyInitMiddleware`, *before* the tool handler. Order: `LazyInit → Suggestion → ProfileFilter → Telemetry → **Guardrail** → handler`.
+7. **Shutdown order:** semantic service shuts down BEFORE the kernel (live update queue must drain into a clean overlay state before LSP workers go away). Add to the kernel-first shutdown sequence in `daemon.Stop()`.
 
-No new library needed -- koanf already reads nested YAML, and the profile system already supports description overrides.
+The pipeline DAG (ADR-010) describes exactly this ordering and is validated on startup (`phase_graph.validate_on_startup: true`). A cycle or missing dep dumps a `.dot` file and fails fast — this *replaces* the comment-driven middleware-order doc currently in `internal/mcp/lazy_init.go`.
 
-### 7. Lazy Workspace Init
+---
 
-Implement as middleware in the existing MCP request pipeline (`internal/mcp/middleware.go`):
+## What NOT to Pull In
 
-```go
-// LazyInitMiddleware checks if workspace is initialized before tool execution.
-// If not, triggers DetectLanguages + LS warm-up, then proceeds.
-func LazyInitMiddleware(kernel *kernel.Kernel) mcp.Middleware
-```
+| Library | Why we don't want it |
+|---------|----------------------|
+| Any pure-Go DuckDB clone (chDB-go, etc.) | Doesn't exist in mature form; ADR-001 commits to DuckDB. |
+| Heavy DAG/workflow engines (`temporalio/sdk-go`, `mvdan/sh`-style) | 80 LOC of Kahn's algorithm. |
+| Embedding/vector libs (`milvus`, `chroma-go`, FAISS bindings) | Out of Scope per PROJECT.md ("Vector/embedding search — Augment Context Engine does this better"). |
+| Graph DBs (`dgraph`, `neo4j-go-driver`) | ADR-001: graph DBs are optional later accelerators, not source of truth. |
+| Python interop (`go-python`, gopy) | Out of Scope: native Go, no Python interop. |
+| Docker / container libs | Out of Scope: single binary. |
+| `pkoukk/tiktoken-go` | Network-on-first-use breaks offline; use `tiktoken-go/tokenizer`. |
+| `sourcegraph/go-diff` | Parser-only; we need apply. |
+| `gonum` in production code | ADR-005. |
+| Recursive-watch wrappers (`rfsnotify`) | Implement in-tree on existing fsnotify. |
 
-The kernel and workspace runtime already support this flow -- `DetectLanguages` + pool acquire. The middleware just makes it automatic on first tool call.
-
-### 8. gRPC Proto Extension (Minimal)
-
-Add to existing `api/proto/serena/v1/serena.proto`:
-
-```protobuf
-// Hook notification from CLI -> daemon
-rpc NotifyHook(HookRequest) returns (HookResponse);
-
-// Health query from CLI status command
-rpc GetHealth(HealthRequest) returns (HealthResponse);
-```
-
-This follows the existing forwarder pattern. `protoc` generates the Go code -- no new tooling deps.
-
-## What NOT to Add
-
-| Library | Why Tempting | Why Skip |
-|---------|--------------|----------|
-| go-enry/go-enry | Language detection for setup | Serena's langregistry already has 52 languages with FileExts + marker file detection. go-enry adds ~15MB binary overhead. |
-| charmbracelet/bubbletea | Interactive setup wizard | Agents call `serena setup` non-interactively. Humans get plain text output. |
-| charmbracelet/lipgloss | Pretty terminal status | Same -- agents don't see colors. `fmt.Fprintf` suffices. |
-| survey/huh | Interactive prompts | Setup must be non-interactive (zero-friction means no prompts). |
-| viper | Config file writing | `json.MarshalIndent` + `os.WriteFile` for 3 simple JSON formats. Viper is 10x the complexity. |
-| text/template | Config generation | Templates add indirection for trivial JSON structures. Direct struct marshaling is clearer. |
-| embed | Template files | No template files needed -- JSON structures built in Go code. |
-| fatih/color | Colored CLI output | Agents ignore ANSI. Keep output parseable. |
-
-## Integration Points with Existing Stack
-
-### Cobra CLI Extension (internal/cli/root.go)
-
-```go
-rootCmd.AddCommand(newSetupCmd())   // serena setup <client>
-rootCmd.AddCommand(newStatusCmd())  // serena status
-rootCmd.AddCommand(newHookCmd())    // serena hook <event>
-```
-
-### Health Skill Registration (Caddy pattern)
-
-```go
-// internal/skill/health/health.go
-func init() { skill.Register(&HealthSkill{}) }
-
-// internal/daemon/imports.go -- add blank import
-_ "github.com/postfix/serena/internal/skill/health"
-```
-
-### Error Taxonomy Extension (internal/errors/)
-
-Add `Suggestion` struct and `WithSuggestion` builder method. Serializes into existing JSON error response. All 24 kernel validation points can optionally attach suggestions.
-
-### Profile YAML Extension (internal/profile/)
-
-Add `description_brief`, `description_detailed`, `description_tutorial` fields to tool YAML schema. The profile loader already uses koanf for nested YAML -- just add struct fields.
-
-### gRPC Service Extension (api/proto/serena/v1/)
-
-Add `NotifyHook` and `GetHealth` RPCs to existing service definition. The forwarder already connects to daemon via gRPC.
-
-## Installation
-
-```bash
-# No new dependencies. Build as before:
-go build ./cmd/serena
-
-# If proto changes for hook/health RPCs:
-protoc --go_out=. --go-grpc_out=. api/proto/serena/v1/serena.proto
-```
-
-## Dependency Impact
-
-| Metric | Before (v1.6) | After (v1.7) | Delta |
-|--------|---------------|--------------|-------|
-| Direct dependencies | 20 | 20 | +0 |
-| Binary size | ~49MB | ~49MB | No change |
-| CGO required | No | No | No change |
-| New packages | 0 | 0 | Zero new external deps |
-| New internal packages | -- | +3 | `skill/health`, `cli/setup`, `cli/hook` (within existing dirs) |
+---
 
 ## Confidence Assessment
 
-| Decision | Confidence | Rationale |
-|----------|------------|-----------|
-| Zero new deps | HIGH | Verified go.mod covers all needs; features are integration code |
-| Claude Code hooks format | HIGH | Verified via official docs (code.claude.com/docs/en/hooks) |
-| VS Code mcp.json format | HIGH | Verified via VS Code official docs |
-| JetBrains mcp.json format | MEDIUM | .junie/mcp/mcp.json path may shift as Junie evolves |
-| Cobra subcommands | HIGH | Standard pattern, existing dep |
-| Skip go-enry | HIGH | langregistry already handles 52 languages |
-| gRPC for hooks | HIGH | Existing proto + forwarder IPC pattern proven |
-| Health as skill | HIGH | Follows established Caddy-style skill pattern |
+| Claim | Confidence | Source |
+|-------|------------|--------|
+| `duckdb/duckdb-go` v2.10502.0 = current, official, CGO-required | HIGH | Direct fetch from github.com/duckdb/duckdb-go README + pkg.go.dev |
+| Bundled static libs cover darwin/linux × amd64/arm64 + windows/amd64 | HIGH | duckdb-go README distribution table |
+| fsnotify lacks recursive watch; inotify watch-limit is real | HIGH | Multiple project issues, fsnotify own docs |
+| Gonum `network.PageRank` exists, supports weighted, lacks personalized/incremental | HIGH | pkg.go.dev/gonum.org/v1/gonum/graph/network direct read |
+| `tiktoken-go/tokenizer` is pure-Go with embedded vocab | MEDIUM | Project README; not directly verified at file level |
+| `bluekeyes/go-gitdiff` supports apply for text + binary | MEDIUM | Project README; recent activity confirmed via libraries.io |
+| ADR-005 (custom Go graph) is the right call vs gonum-in-prod | HIGH | ADR is in SPEC-DRAFT; research confirms gonum's missing capabilities (personalized, incremental) |
+| CGO=0 stub policy compatible via existing Phase 51.1 pattern | HIGH | Direct read of v1.9 phase outcome in PROJECT.md + CLAUDE.md |
+| Bounded-label discipline extends cleanly to new metrics | HIGH | SPEC §28.1 explicit allowlist + v1.9 PromQL validator already enforces |
 
 ## Sources
 
-- [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks) -- Official hooks API with 26 lifecycle events, handler types, matcher patterns
-- [VS Code MCP Configuration Reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration) -- mcp.json schema
-- [VS Code MCP Server Setup](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) -- .vscode/mcp.json format
-- [JetBrains AI Assistant MCP](https://www.jetbrains.com/help/ai-assistant/configure-an-mcp-server.html) -- MCP config docs
-- [Junie MCP Configuration](https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html) -- .junie/mcp/mcp.json paths
-- [go-enry/go-enry](https://github.com/go-enry/go-enry) -- Evaluated and rejected (existing langregistry sufficient)
+- [duckdb/duckdb-go (official, post-donation)](https://github.com/duckdb/duckdb-go)
+- [marcboeker/go-duckdb (legacy, pre-donation)](https://github.com/marcboeker/go-duckdb)
+- [duckdb-go on pkg.go.dev (v2)](https://pkg.go.dev/github.com/marcboeker/go-duckdb/v2)
+- [go-duckdb V2 General Discussion #232](https://github.com/marcboeker/go-duckdb/discussions/232)
+- [DuckDB Go Client Documentation](https://duckdb.org/docs/current/clients/go)
+- [fsnotify/fsnotify](https://github.com/fsnotify/fsnotify)
+- [fsnotify Issue #18: User-space recursive watcher](https://github.com/fsnotify/fsnotify/issues/18)
+- [farmergreg/rfsnotify (recursive wrapper reference)](https://github.com/farmergreg/rfsnotify)
+- [gonum graph/network package](https://pkg.go.dev/gonum.org/v1/gonum/graph/network)
+- [gonum/gonum repository](https://github.com/gonum/gonum)
+- [tiktoken-go/tokenizer (pure Go, embedded vocab)](https://github.com/tiktoken-go/tokenizer)
+- [pkoukk/tiktoken-go (rejected — downloads vocab)](https://github.com/pkoukk/tiktoken-go)
+- [bluekeyes/go-gitdiff](https://github.com/bluekeyes/go-gitdiff)
+- [bluekeyes/go-gitdiff on Libraries.io](https://libraries.io/go/github.com%2Fbluekeyes%2Fgo-gitdiff)
+- [sourcegraph/go-diff (parser-only, rejected)](https://github.com/sourcegraph/go-diff)
+- [SPEC-DRAFT.md §4 ADRs, §6 Package Layout, §25 Configuration, §28 Observability](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/SPEC-DRAFT.md)
+- [PROJECT.md v1.10 milestone declaration](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/.planning/PROJECT.md)
+- [go.mod v1.9 dependency state](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/go.mod)

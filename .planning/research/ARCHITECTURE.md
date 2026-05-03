@@ -1,374 +1,331 @@
-# Architecture Patterns
+# ARCHITECTURE — Helix v1.10 Live Semantic Index integration
 
-**Domain:** Developer Experience & Auto-Setup for MCP Code Intelligence Platform
-**Researched:** 2026-04-20
+**Confidence:** HIGH for integration points and middleware ordering (verified against `internal/daemon/daemon.go` and SPEC §5/6/24/36/39); MEDIUM for build-order edge cases (depends on whether DuckDB driver is CGO-required — see open question 1).
 
-## Recommended Architecture
+---
 
-The v1.7 DX features map cleanly onto the existing 4-layer architecture. No new layers needed. Each feature is either a new component in an existing layer or a modification to an existing component.
+## 1. Where `internal/semantic/` sits — Layer 1.5
 
-### Integration Map
+**Decision:** New layer **between kernel (Layer 1) and skills (Layer 2)**, not part of the kernel.
+
+**Rationale & dependency direction:**
 
 ```
-Layer 0 (MCP Runtime)
-  internal/mcp/server.go       -- MODIFY: lazy init interceptor, smart error wrapper
-  internal/mcp/middleware.go    -- MODIFY: add ErrorEnrichmentMiddleware
-  internal/mcp/registry.go     -- MODIFY: progressive description support
-
-Layer 0 (CLI)
-  internal/cli/root.go         -- MODIFY: register setup subcommand
-  internal/cli/setup.go        -- NEW: setup command orchestrator
-  internal/cli/hooks.go        -- NEW: client hook generation/installation
-
-Layer 1 (Kernel)
-  internal/kernel/workspace.go -- MODIFY: expose health state (active LSes, indexing status)
-
-Layer 2 (Skills)
-  internal/skill/health/       -- NEW: health/status MCP tool skill
-
-Layer 3 (Profiles)
-  internal/profile/profiles/   -- MODIFY: hook templates per client, progressive descriptions
-  internal/profile/hooks/      -- NEW: hook spec + generator per client type
+Layer 0  internal/mcp, internal/daemon, internal/forwarder
+Layer 1  internal/kernel/{lspool, symbols, edit, fileops, diag, jsonrpc, health, help}
+         internal/repomap, internal/fuzzy, internal/treesitter, internal/workspace
+Layer 1.5 internal/semantic/{store, indexer, live, extract, resolve, lspenrich,
+            graph, rank, cluster, retrieve, typeresolve, tools, testutil}
+         internal/phasegraph
+         internal/guardrails
+Layer 2  internal/skill/{memory, repomap, workflow, semantic (NEW)}
+Layer 3  internal/profile, internal/config, internal/cli
 ```
 
-### Component Boundaries
+**Allowed import edges (kept acyclic):**
 
-| Component | Responsibility | Communicates With | New/Modified |
-|-----------|---------------|-------------------|--------------|
-| `internal/cli/setup.go` | Orchestrates `serena setup <client>`: detect languages, install LSes, write MCP config, install hooks | langregistry, installer, profile, hooks | NEW |
-| `internal/cli/hooks.go` | Generate and install client-specific hook files (Claude Code, VS Code, JetBrains) | profile/hooks, filesystem | NEW |
-| `internal/profile/hooks/` | Hook templates and specs per client type (PreToolUse, SessionStart, Stop) | profile store | NEW |
-| `internal/skill/health/` | `get_health` MCP tool: active LSes, indexing state, workspace capabilities | kernel (Pool, WorkspaceRuntime), langregistry | NEW |
-| `internal/mcp/lazyinit.go` | Middleware that triggers workspace activation on first tool call if no workspace active | daemon's ActivateCallback, workspace.Registry | NEW |
-| `internal/mcp/smarterror.go` | ErrorEnrichmentMiddleware: intercepts tool errors, adds suggestions | errors package (Kind-based matching), tool registry (for name similarity) | NEW |
-| `internal/mcp/registry.go` | Extended ToolDef with progressive description tiers | existing registry | MODIFIED |
+| From | To | Why |
+|---|---|---|
+| `internal/semantic/lspenrich` | `internal/kernel/lspool` (lease API only) | Reuses worker pool — see §4 |
+| `internal/semantic/extract` | `internal/treesitter` (GrammarRegistry) | Single canonical registry per BUG-04 |
+| `internal/semantic/resolve` | `protocol/gen` (LSP types) | Same as repomap enrichment today |
+| `internal/semantic/tools` | `internal/mcp` (tool registration types) | Tool definitions |
+| `internal/skill/semantic` | `internal/semantic` (SemanticService interface) | Skill is the thin MCP adapter |
+| `internal/guardrails` | `internal/semantic` (read freshness, scores) | Policy needs graph state |
+| `internal/eval` | `internal/cli` subprocess + `internal/semantic` (modes config only) | See §7 |
 
-### Data Flow
+**Forbidden edges (would create cycles):**
+- `internal/kernel/edit → internal/semantic` — broken via callback (see §3)
+- `internal/repomap → internal/semantic` — broken via lookup function injected from daemon (see §8)
+- `internal/skill/repomap → internal/semantic` — same; daemon wires `SetSemanticLookupFn` analogous to existing `SetEnrichFn`
 
-**Setup CLI flow:**
-```
-serena setup claude-code
-  |
-  +--> langregistry.NewRegistry() -- detect languages in cwd
-  +--> installer.Resolve() per detected language -- pre-install LSes
-  +--> profile/hooks.Generate("claude-code") -- emit hook files
-  +--> write MCP config JSON to client's config location
-  +--> print summary: languages detected, LSes installed, hooks written
-```
+**New components vs modified:**
+- **NEW:** all of `internal/semantic/*`, `internal/phasegraph/`, `internal/guardrails/`, `internal/eval/`, `internal/skill/semantic/`
+- **MODIFIED:** `internal/daemon/daemon.go` (add bootstrap steps 2.5, 12e–12i, 14d), `internal/kernel/edit/{rename,replace,delete,insert}.go` (post-success hook), `internal/skill/repomap/skill.go` (semantic lookup callback), `internal/repomap` package (no source change — daemon wires alternate enrich path), `internal/kernel/health` (add semantic section to report), `cmd/helix/main.go` (no source change; CLI subcommands added under `internal/cli/eval/`).
 
-**Lazy init flow (first tool call without activate_project):**
-```
-Agent calls any kernel tool (e.g., get_symbols_overview)
-  |
-  +--> LazyInitMiddleware intercepts (receiving middleware on tools/call)
-  |    Check: is workspace active? (activeWSKey.RepoRoot != "")
-  |    NO  --> infer repo root from tool args or cwd
-  |            call daemon's ActivateCallback(ctx, inferredRoot)
-  |            proceed to actual tool handler
-  |    YES --> pass through
-```
+---
 
-**Health tool flow:**
-```
-Agent calls get_health
-  |
-  +--> health skill queries kernel.Pool().Stats()
-  +--> health skill queries kernel active WorkspaceRuntime
-  +--> health skill queries langregistry for capabilities
-  +--> returns structured JSON: {active_ls: [...], indexing: bool, languages: [...], capabilities: {...}}
+## 2. DuckDB lifecycle
+
+**Bootstrap phase (in current imperative `daemon.New`):** new step **2.5** — between language registry (step 1/2) and worker pool/kernel creation (steps 4/5). DuckDB open is fail-fast (per SPEC §29.1, store corruption recovers via quarantine + auto-reindex, but driver open itself must succeed); kernel can refer to a `*semantic.Service` handle for `get_health` aggregation.
+
+**Owner:** `internal/semantic.Service` owns the `*sql.DB` (or driver-native `duckdb.Connector`). Daemon holds `service *semantic.Service` as a struct field next to `kernel`.
+
+**Open path:**
+```go
+// daemon.go step 2.5 (new):
+semSvc, err := semantic.New(semantic.Config{
+    Path: filepath.Join(globalDir, "semantic.duckdb"),
+    Cfg:  cfg.SemanticIndex,
+}, logger, observability.Metrics(), observability.Tracer())
+if err != nil { return nil, fmt.Errorf("opening semantic store: %w", err) }
 ```
 
-**Smart error flow:**
-```
-Tool handler returns *serr.Error
-  |
-  +--> ErrorEnrichmentMiddleware (receiving middleware, runs after tool handler)
-  |    Match error Kind:
-  |    - InvalidArgs --> suggest correct param names/types from tool schema
-  |    - NotFound    --> suggest similar tool names or check workspace activation
-  |    - NoWorkspace --> suggest "call activate_project first" or trigger lazy init
-  |    - Unsupported --> explain which languages/capabilities support the operation
-  |    Append suggestion to error text field in CallToolResult
-```
+**Disable path:** if `cfg.SemanticIndex.Enabled == false`, `semantic.New` returns a `nil` service and all callsites guard with `if d.semantic != nil`. Preserves the **single-binary + CGO=0 fallback policy**: when `treesitter.Available == false` (existing CGO=0 guard at daemon.go:199-203), set `cfg.SemanticIndex.Enabled = false` automatically with a warn log — semantic index is undefined without tree-sitter extraction. No second hard-fail point.
 
-**Progressive descriptions flow:**
-```
-Agent calls tools/list
-  |
-  +--> ProfileFilterMiddleware filters tools as today
-  +--> DescriptionMiddleware (or registry enhancement):
-  |    For each tool, select description tier based on session state:
-  |    - Tier 0 (cold start): full description with usage examples
-  |    - Tier 1 (after first successful call): compact description
-  |    Tier selection from session call counter or explicit mode
-```
+**Shutdown ordering** (current is *kernel-first* via `errgroup` — kernel.Run is the first `g.Go` at daemon.go:481-483; sockets/HTTP shut down on `ctx.Done()` simultaneously):
 
-## Detailed Design Per Feature
+The new ordering: **(1) accept no new work → (2) drain live update queue + commit overlay flush → (3) close DuckDB → (4) kernel shuts down LS workers**.
 
-### 1. Setup CLI (`internal/cli/setup.go`)
+- Add `g.Go(func() error { return d.semantic.Run(gctx) })` running the live-update + compaction goroutines.
+- The live queue's `Run` method on context cancel: stops accepting new events, drains pending overlay writes within `live_updates.compact_after_idle_ms`-sized timeout, then `store.Close()` (DuckDB checkpoint).
+- Kernel shutdown happens *after* `g.Wait()` returns in `d.shutdown()` (daemon.go:524). DuckDB close must happen before kernel's `Run` exits to ensure overlay flush isn't racing LSP enrichment lease releases.
 
-**What:** New cobra subcommand `serena setup <client>` breaking the current "flat CLI with flags, no subcommands" pattern (D-02). This is intentional -- setup is a one-time user-facing operation distinct from the daemon runtime.
+**Compaction timing on shutdown:** flush only — do not run compaction. Compaction during shutdown risks aborting mid-snapshot and is unnecessary because compaction is not durability (overlay alone is durable).
 
-**Integration points:**
-- Reuses `langregistry.NewRegistry()` for language detection (same as daemon.New step 1)
-- Reuses `langregistry.NewInstaller()` for LS pre-installation (same as daemon.New step 2)
-- Reads `profile.ProfileStore` to know which hooks a client needs
-- Writes to client-specific config locations (e.g., `~/.claude/claude_desktop_config.json` for Claude Code)
+---
 
-**Decision: subcommand vs flag.** Setup is not a daemon mode -- it runs once and exits. A subcommand is the right pattern. Add `rootCmd.AddCommand(setupCmd)` in root.go.
+## 3. Live overlay + edit tool hook (SPEC §24.4)
 
-**Supported clients (initial):**
-- `claude-code` -- write to MCP settings, install hooks in `~/.claude/`
-- `vscode` -- write to VS Code settings.json MCP section
-- `cursor` -- same as vscode but different settings path
+**Decision:** **Per-tool hook in `internal/kernel/edit`, called via injected callback** — not middleware, not daemon interceptor.
+
+**Why not middleware:** middleware operates on MCP request/response envelopes; it does not know which files an edit tool actually wrote. Brittle to re-parse responses for `ChangedFiles`.
+
+**Why not daemon interceptor:** daemon doesn't see individual tool result structs.
+
+**Implementation:** Add a `PostEditHook` field to `edit.RegisterTools`:
 
 ```go
-// internal/cli/setup.go
-type SetupConfig struct {
-    Client      string   // "claude-code", "vscode", "cursor"
-    ProjectDir  string   // defaults to cwd
-    Languages   []string // auto-detected if empty
-    SkipInstall bool     // skip LS pre-installation
-    SkipHooks   bool     // skip hook installation
+// CHANGE in internal/kernel/edit/tools.go:131
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel,
+    extractor *BodyExtractor, diagStore *diag.DiagnosticStore,
+    wsKeyFn func() workspace.WorkspaceKey,
+    postEditHook func(ctx context.Context, changedFiles []string, source string)) // NEW
+
+// Inside each tool handler, after a successful write, just before returning OK:
+if postEditHook != nil {
+    postEditHook(ctx, result.ChangedFiles, "helix_edit")
 }
 ```
 
-### 2. Lazy Workspace Init (`internal/mcp/lazyinit.go`)
-
-**What:** Receiving middleware that auto-activates workspace on first kernel tool call.
-
-**Why middleware, not per-tool logic:** Every kernel tool already checks `NoWorkspace` and returns an error. Intercepting at the middleware level avoids modifying 24+ tool handlers. The middleware runs before the tool handler, checks workspace state, and activates if needed.
-
-**Integration points:**
-- Needs access to `activeWSKey` (or a func that returns it) -- same pattern as `wsKeyFn` in daemon.go
-- Needs access to `ActivateCallback` -- already exposed on SerenaMCPServer
-- Needs to infer repo root: check tool args for `relative_path`, fall back to cwd detection
-
-**Key design decision:** The middleware must be idempotent and fast. After first activation, it becomes a no-op check (single atomic load). Use `sync.Once` or atomic bool.
-
+**Daemon wiring:**
 ```go
-// internal/mcp/lazyinit.go
-func LazyInitMiddleware(
-    isActive func() bool,
-    activate func(ctx context.Context, root string) error,
-    inferRoot func(args map[string]any) string,
-) mcpsdk.ReceivingMiddleware
+var editHook func(context.Context, []string, string)
+if d.semantic != nil {
+    editHook = d.semantic.LiveQueue().EnqueueChangeEventsFunc()
+}
+edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn, editHook)
 ```
 
-**Wiring in daemon.go:** Install after profile middleware, before telemetry.
+**Coupling property:** kernel/edit gains exactly one new function-typed parameter. It does not import `internal/semantic`. Hook is `nil`-safe. Mirrors `RepoMapSkill.SetEnrichFn` (daemon.go:298) — clean inversion-of-control.
 
-### 3. Client Hooks (`internal/profile/hooks/`)
+**Bonus seam — replace_in_file / fuzzy_edit:** thread the same hook through `fileops.RegisterTools` (currently daemon.go:243).
 
-**What:** Hook templates that clients execute at lifecycle events.
+---
 
-**Claude Code hooks:**
-- `PreToolUse` -- remind agent of workspace context, suggest activate_project if not active
-- `SessionStart` -- activate workspace, run health check
-- `Stop` -- cleanup (deactivate workspace, flush memory)
+## 4. Graph cache + worker pool sharing (no parallel pool)
 
-**Format:** Claude Code uses hook files. VS Code uses tasks.json. JetBrains uses run configurations.
+**Decision:** Reuse `kernel.Pool().AcquireLease(...)` exactly as `enrichRepoMapFromLSP` does today (daemon.go:765-825). No second pool.
 
-**Integration points:**
-- Hook templates live in `internal/profile/hooks/` as embedded Go templates
-- `setup.go` calls hook generator to produce client-specific files
-- Templates reference Serena tool names (e.g., `activate_project`, `get_health`)
+**Interface (semantic takes a small interface, not the kernel struct):**
 
 ```go
-// internal/profile/hooks/hooks.go
-type HookSpec struct {
-    Event   string // "pre_tool_use", "session_start", "stop"
-    Client  string // "claude-code", "vscode"
-    Content string // rendered template
-    Path    string // where to write
-}
-
-func GenerateHooks(client string, projectDir string) ([]HookSpec, error)
-```
-
-### 4. Health/Status MCP Tool (`internal/skill/health/`)
-
-**What:** New `get_health` MCP tool as a skill (Caddy-style init registration).
-
-**Why skill, not kernel tool:** Health is cross-cutting -- it reports on kernel state, LS pool, workspace, and language capabilities. It does not need direct LS communication. Skill is the right abstraction.
-
-**Integration points:**
-- Needs read access to `kernel.Pool().Stats()` -- Pool already has Stats() or similar
-- Needs read access to workspace runtime languages
-- Needs langregistry for capability reporting
-- SkillDeps needs extension: add `KernelHealthProvider` interface to avoid importing kernel directly
-
-**Design: dependency injection via interface.**
-
-```go
-// internal/skill/health/health.go
-type KernelHealth interface {
-    ActiveWorkers() []WorkerInfo
-    IsIndexing() bool
-    WorkspaceLanguages() []string
-    WorkspaceRoot() string
-}
-
-// Skill implements skill.Skill + skill.ToolProvider
-type HealthSkill struct {
-    health KernelHealth
+// internal/semantic/lspenrich/budget.go
+type LeaseAcquirer interface {
+    AcquireLease(ctx context.Context, sessionID string,
+        key workspace.WorkspaceKey, dirty bool) (*lspool.WorkerLease, error)
+    ReleaseLease(sessionID string)
 }
 ```
 
-**Wiring:** Use a setter pattern like `repomap.SetWorkspaceRoot()`. After daemon creates kernel, call `health.SetKernelHealth(adapter)` where adapter wraps kernel.Pool and workspace state.
+Daemon passes `k.Pool()` into `semantic.Service` at construction. Semantic never imports `internal/kernel` — only `internal/kernel/lspool` (lease types) and `internal/workspace`.
 
-### 5. Smart Error Responses (`internal/mcp/smarterror.go`)
+**Backpressure:** LSP enrichment is a passive background reader; never claims `dirty=true`; uses session IDs prefixed with `lspenrich-` (matching `enrich-repomap` and `diag-` conventions at daemon.go:251, 766).
 
-**What:** Post-execution error enrichment in middleware.
+**Priority ordering (per SPEC §14.3):**
+1. Foreground MCP tool calls — implicit priority via `LazyInitMiddleware` + `TelemetryMiddleware` per-tool budgets.
+2. High-priority revalidation (file just edited via `ChangeHelixEdit`) — head-of-line, 5s budget.
+3. Background enrichment (initial index, idle revalidation) — tail of queue, yields on context cancel.
 
-**Why middleware:** Errors already flow through TelemetryMiddleware which classifies by Kind. Adding suggestion text is a natural extension of the same pipeline.
+Single goroutine `Service.runEnrichmentLoop` pulls from a priority queue (`container/heap`). **Lease acquisition itself is the natural backpressure** — when foreground tools hold leases, enrichment waits. No semaphore needed at the semantic layer.
 
-**Recommendation: separate middleware.** Keeps concerns clean. TelemetryMiddleware records metrics; ErrorEnrichmentMiddleware adds user-facing suggestions.
+**Cache:** `internal/semantic/graph/cache.go` (in-memory, per repo) is separate from the LS worker pool. Loaded from DuckDB on first query, repaired by `internal/semantic/live/update.go` events.
 
-**Integration points:**
-- Reads `*serr.Error` Kind from tool results (already available -- v1.5 migrated all tools)
-- Reads tool schema from registry for InvalidArgs suggestions
-- Reads tool names from registry for "did you mean?" on NotFound
+---
 
-**Suggestion rules:**
+## 5. Pipeline DAG migration (SPEC §39)
 
-| Error Kind | Suggestion |
-|------------|-----------|
-| `NoWorkspace` | "Call activate_project with your repo path first, or use `serena setup` for automatic configuration." |
-| `InvalidArgs` | "Parameter '{param}' expects {type}. See tool schema." + list valid params |
-| `NotFound` | "Symbol '{name}' not found. Check spelling, or use search_symbols for fuzzy matching." |
-| `Unsupported` | "Operation not supported for {language}. Supported: {list}." |
-| `CircuitOpen` | "Language server for {lang} is temporarily unavailable. It will retry automatically." |
+**Decision:** **Strangler fig**, not big-bang. v1.10 ships `internal/phasegraph/` library + uses it for the **new graphs** (semantic-index, live-update, eval) immediately. Daemon bootstrap stays imperative in v1.10; migrated opportunistically later.
 
-### 6. Progressive Tool Descriptions (`internal/mcp/registry.go` modification)
+**Reasoning:**
+- v1.9 closed a clean `daemon.New` flow with 16 numbered steps + git-blame continuity (daemon.go:206 comment). Rewriting it touches every test that constructs a daemon.
+- DAG validation value (cycle/missing-dep detection) accrues mostly to the *new* graphs.
+- Bootstrap order today is in one file, reviewable; the risk isn't ordering bugs, it's coupling.
 
-**What:** Tool descriptions that adapt based on session state.
+**Boundary:**
+- `internal/phasegraph` is a generic library: PhaseSpec, PhaseGraph, ValidatePhaseGraph, RunPhaseGraph (per SPEC §39.2/3/8).
+- New consumers: `internal/semantic/indexer/planner.go`, `internal/semantic/live/update.go`, `internal/eval/runner.go`.
+- Bootstrap migration deferred. TODO at top of daemon.go: `// TODO(v1.11): migrate to phasegraph.RunPhaseGraph(BootstrapPhases)`.
 
-**Recommendation: Two tiers -- detailed and compact.** Keep it simple. Two description fields: `Description` (compact, always present) and `DetailedDescription` (verbose, shown to cold sessions). Session tracks tool call count; after N successful calls, tools/list returns compact descriptions.
+---
 
-**Integration points:**
-- Modify `ToolDef` in `internal/mcp/registry.go` to add `DetailedDescription`
-- Modify `ProfileFilterMiddleware` (it already touches tools/list) to swap descriptions based on session state
-- Session state: add `ToolCallCount` to `SessionInfo` in `internal/mcp/session.go`
+## 6. MCP middleware ordering (with guardrail middleware)
 
-### 7. Error-Only Reporting
+**Current LIFO install order** (daemon.go:349-380):
+1. `InstallMiddleware` → `TelemetryMiddleware` then `ProfileFilterMiddleware` (step 14)
+2. `InstallSuggestionMiddleware` (step 14b)
+3. `InstallLazyInitMiddleware` (step 14c, must be LAST so it runs FIRST)
 
-**What:** Suppress verbose success output, surface only actionable failures.
+**Execution order on incoming request (LIFO reverses):** `LazyInit → Suggestion → ProfileFilter → Telemetry → handler`
 
-**This is not a new component.** It is a policy change in existing tool handlers. Each tool's success response should return structured data without verbose explanatory text. Error responses should include actionable guidance (handled by smart error middleware above).
+**Decision:** install guardrail middleware **between SuggestionMiddleware and LazyInitMiddleware** — new step **14b.5**.
 
-**Implementation:** Audit existing tool response strings. Remove "Success: " prefixes and explanatory padding. Return clean structured data. This is a refactoring task across tool handlers, not an architecture change.
+**New install order:** Telemetry+ProfileFilter → Suggestion → **Guardrail (NEW)** → LazyInit (last)
 
-## Patterns to Follow
+**New execution order:** `LazyInit → Guardrail → Suggestion → ProfileFilter → Telemetry → handler`
 
-### Pattern 1: Middleware for Cross-Cutting Concerns
-**What:** Use MCP SDK receiving middleware for lazy init, error enrichment, and description adaptation.
-**When:** Feature needs to intercept all tool calls or tools/list without modifying individual tool handlers.
-**Why:** Serena already uses this pattern for telemetry and profile filtering. Adding more middleware is low-risk and consistent.
+**Why this position:**
+- **After LazyInit:** guardrail policy may need to read semantic graph state (freshness, score status) — workspace must be activated first.
+- **Before ProfileFilter:** guardrail must run for every tool call regardless of profile description overrides.
+- **Before Suggestion:** guardrail decisions are not parameter-typo errors.
 
-### Pattern 2: Skill for New MCP Tools
-**What:** New MCP tools (health) register as skills via Caddy-style init().
-**When:** The tool does not need direct LS communication and can work through interfaces.
-**Why:** Consistent with memory, workflow, repomap skills. Daemon registers centrally.
+**Invariant preserved:** `LazyInit must remain installed last (executes first)`. CLAUDE.md > Middleware Execution Order unchanged. Guardrail does NOT need to run before LazyInit — guardrail evaluation requires workspace state.
 
-### Pattern 3: Interface-Based Dependency Injection for Skills
-**What:** Skills depend on kernel state through narrow interfaces, not direct kernel imports.
-**When:** Skill needs kernel data (pool stats, workspace state) but should not import kernel package.
-**Why:** Avoids import cycles. RepoMap skill already uses setter pattern with FallbackDeps.
+**Telemetry classification extension:** add new outcome classes `guardrail_blocked` and `guardrail_warned` to `TelemetryMiddleware`.
 
-### Pattern 4: Cobra Subcommand for User-Facing CLI
-**What:** `serena setup` as a subcommand, breaking D-02 flat CLI for good reason.
-**When:** One-time user operations that are not daemon modes.
-**Why:** Setup is fundamentally different from runtime -- it configures the environment and exits. Flags would be confusing.
+**Mode gating (SPEC §30.2):** orthogonal to middleware order. Implemented inside `GuardrailPolicy.Evaluate` by reading active mode from `SessionInfo`.
 
-## Anti-Patterns to Avoid
+---
 
-### Anti-Pattern 1: Per-Tool Lazy Init Checks
-**What:** Adding `if !workspaceActive { activate() }` to each of 24+ kernel tool handlers.
-**Why bad:** Duplicated logic, easy to miss tools, inconsistent behavior.
-**Instead:** Single middleware intercept point.
+## 7. Eval harness placement & process model
 
-### Anti-Pattern 2: Health Tool in Kernel Package
-**What:** Putting get_health as a kernel tool alongside symbol/edit/fileops tools.
-**Why bad:** Health is cross-cutting, not an LSP operation. Kernel tools all go through LS workers.
-**Instead:** Skill with interface-based access to kernel state.
+**Decision:** **Out-of-process by default** (subprocess MCP forwarders), with **in-process baseline mode** for fast local CI.
 
-### Anti-Pattern 3: Hardcoded Client Paths
-**What:** Embedding client config paths (e.g., `~/.claude/`) directly in setup logic.
-**Why bad:** Paths change between OS and client versions.
-**Instead:** Client spec structs with configurable paths, OS-aware defaults.
+**Why:**
+- `baseline` mode (no Helix) must NOT have Helix tools available — cleanest if the agent talks to a different process or none at all.
+- `native` / `semantic` / `semantic_guarded` need real production-equivalent profile/mode gating, middleware stack, and tool registration. Spawning a real `helix daemon` subprocess per task matches a real Claude Code session.
+- Avoids circular deps: `internal/eval` does not import the daemon's tool registration code; only `internal/cli` (consumer-facing) to invoke `helix setup` / `helix daemon`, plus `internal/semantic.Config` types for mode-specific configuration.
 
-### Anti-Pattern 4: Over-Engineering Progressive Descriptions
-**What:** Complex ML-driven description adaptation, per-agent learning, or multi-tier cascades.
-**Why bad:** Two tiers (verbose/compact) cover 95% of the value. More complexity means more bugs.
-**Instead:** Two tiers, simple session call counter threshold.
+**Process layout per task:**
+```
+internal/eval/runner.go
+  └── spawns: helix daemon (subprocess, isolated config dir under .helix/eval/<task>/)
+       └── baseline: --profile=baseline (new minimal profile, no Helix tools)
+       └── native: --profile=full + semantic_index.enabled=false
+       └── semantic: --profile=full + semantic_index.enabled=true + guardrails.enforcement=off
+       └── semantic_guarded: --profile=full + semantic_index.enabled=true + guardrails.enforcement=warn
+  └── spawns: agent process (Anthropic/DeepSeek client, similar to test/oracle/llm/)
+       └── connects to daemon via stdio forwarder (helix forwarder ...)
+```
 
-## New vs Modified Components
+**Reuse existing oracle infrastructure:** `test/oracle/llm/` (multi-provider LLM tests, judge scoring) provides Anthropic + DeepSeek client wrappers, judge prompts, recorder patterns. Move/refactor to `internal/eval/agents/` and `internal/eval/scoring/`.
 
-### New Components (create from scratch)
+**In-process variant:** `internal/eval/runner_inproc.go` uses `daemon.New` + `mcpServer.SDK().Connect(ctx, transport, nil)` (same pattern as `test/harness/Runner`). Useful for `make eval-quick`, not for cost/latency measurements.
 
-| Component | Package | Layer | LOC Estimate | Dependencies |
-|-----------|---------|-------|-------------|-------------|
-| Setup CLI command | `internal/cli/setup.go` | 0 | 200-300 | langregistry, installer, profile/hooks |
-| Hook generator | `internal/cli/hooks.go` | 0 | 150-200 | profile/hooks |
-| Hook specs/templates | `internal/profile/hooks/` | 3 | 200-250 | embed, text/template |
-| Health skill | `internal/skill/health/` | 2 | 150-200 | skill interface, KernelHealth interface |
-| Lazy init middleware | `internal/mcp/lazyinit.go` | 0 | 80-120 | mcp sdk, workspace state |
-| Error enrichment middleware | `internal/mcp/smarterror.go` | 0 | 150-200 | errors package, tool registry |
+---
 
-### Modified Components
+## 8. Compatibility with `get_repo_map` / `get_context` (strangler fig)
 
-| Component | Change | Scope |
-|-----------|--------|-------|
-| `internal/cli/root.go` | Add setup subcommand | Small (5-10 lines) |
-| `internal/mcp/registry.go` | Add DetailedDescription to ToolDef | Small (10-20 lines) |
-| `internal/mcp/session.go` | Add ToolCallCount to SessionInfo | Small (5-10 lines) |
-| `internal/mcp/middleware.go` | Wire new middleware in InstallMiddleware | Small (10-15 lines) |
-| `internal/daemon/daemon.go` | Wire health skill deps, lazy init, setup imports | Medium (30-50 lines) |
-| `internal/daemon/imports.go` | Blank import for health skill | Trivial (1 line) |
-| `internal/skill/skill.go` | Extend SkillDeps with KernelHealthProvider | Small (5-10 lines) |
-| `internal/kernel/lspool/` | Expose pool stats if not already public | Small (20-30 lines) |
-| Tool handlers (scattered) | Trim verbose success messages for error-only reporting | Medium (audit 41+ tools) |
+**Decision:** **Lookup-callback inversion**, mirroring `repomapSkill.SetEnrichFn` (daemon.go:296-307).
 
-## Suggested Build Order
+```go
+// internal/skill/repomap/skill.go (new method)
+type SemanticLookup interface {
+    GraphScores(ctx context.Context, repoID string) (*ScoresResult, error)
+    Available() bool
+}
 
-Based on dependency analysis:
+func (s *RepoMapSkill) SetSemanticLookup(lookup SemanticLookup) { ... }
+```
 
-1. **Progressive descriptions + error-only reporting** -- Lowest risk. Modify existing ToolDef and tool handlers. No new packages. Tests: update golden files for profile contracts.
+**Daemon wiring (new step 12e):**
+```go
+if rs := repomapSkill.GetRepoMapSkill(); rs != nil && d.semantic != nil {
+    rs.SetSemanticLookup(d.semantic.RepoMapAdapter())
+}
+```
 
-2. **Smart error middleware** -- Depends only on existing error kinds and tool registry. Self-contained new file. Tests: unit test middleware with mock tool results.
+**Inside `get_repo_map` handler:**
+```go
+if s.semanticLookup != nil && s.semanticLookup.Available() {
+    if scores, err := s.semanticLookup.GraphScores(ctx, repoID); err == nil {
+        // SPEC §24.1: use persisted graph scores, clusters, effective overlay
+        return renderFromSemantic(scores, ...)
+    }
+    // Fall through on error — never block on semantic
+}
+return s.renderTreeSitterTags(ctx, ...) // existing path unchanged
+```
 
-3. **Lazy init middleware** -- Depends on workspace activation callback (already exists). Self-contained. Tests: unit test with mock workspace state.
+**Property:** zero source change to `internal/repomap` (the engine). Skill-level decision. Fallback automatic when `semantic == nil`, `Available()` returns false, or lookup errors.
 
-4. **Health skill** -- Needs KernelHealth interface definition and pool stats exposure. New skill package. Tests: unit test skill with mock health provider.
+`get_context`: same pattern. `analyze_blast_radius` (`internal/kernel/symbols`): same callback through `symbols.RegisterTools` (daemon.go:241). `get_health` (daemon.go:254): nullable `semanticStatus func() *SemanticHealthSection`, populated from `d.semantic.HealthSnapshot()`. Output structure matches SPEC §24.5.
 
-5. **Hook specs and templates** -- New package, no runtime dependencies. Pure template generation. Tests: render templates, verify output.
+---
 
-6. **Setup CLI** -- Depends on all above components being available. Orchestrates langregistry, installer, hooks. Tests: integration test with temp directories.
+## Suggested build order (honoring dependency edges)
 
-**Rationale:** Items 1-3 are modifications/middleware with minimal blast radius. Items 4-5 are new packages with clear interfaces. Item 6 ties everything together last, reducing integration risk.
+| # | Phase (SPEC §32 numbering) | Files touched | Rationale |
+|---|---|---|---|
+| 1 | Phase 0 — Schema & Store | `internal/semantic/{store,types,config}` | Foundation; no other deps |
+| 2 | Phase 12 (early) — phasegraph library | `internal/phasegraph/*` | Used by Phases 1, 2, 10 |
+| 3 | Phase 1 — Tree-sitter Extraction | `internal/semantic/{extract,resolve}` | Depends on `internal/treesitter.GrammarRegistry` |
+| 4 | Phase 2 — Live Overlay Updates | `internal/semantic/live/*` + edit-tool hook | First daemon integration (§3) |
+| 5 | Phase 3 — LSP Enrichment | `internal/semantic/lspenrich/*` | Depends on lspool lease API (§4) |
+| 6 | Phase 4 — Graph Scores | `internal/semantic/{graph,rank}/*` | In-process; pure Go |
+| 7 | Phase 5 — Clustering | `internal/semantic/cluster/*` | Builds on graph |
+| 8 | Phase 6 — 10 new MCP Tools | `internal/semantic/tools/*` + `internal/skill/semantic/*` | Existing skill registration pattern |
+| 9 | Phase 7 — Existing Tool Integration | repomap callback, symbols callback, health | Strangler fig (§8) |
+| 10 | Phase 8 — Compaction & Retention | `internal/semantic/indexer/compaction.go` | Background worker; reuses store |
+| 11 | Phase 11 — Type Resolution | `internal/semantic/typeresolve/*` | Improves edge precision; doesn't gate other phases |
+| 12 | Phase 9 — Guardrails + Middleware | `internal/guardrails/*`, `internal/mcp/guardrail_middleware.go`, daemon step 14b.5 | §6 |
+| 13 | Phase 10 — Eval Harness | `internal/eval/*`, `internal/cli/eval/*` | §7; depends on `--profile=baseline` |
 
-## Scalability Considerations
+**Order rationale:** store first (durability anchor), extract → live update (write path), enrichment (LS reuse), ranking + clustering (in-process compute), tools (user-visible), strangler integration last (lowest risk), guardrails + eval (depend on a working semantic stack).
 
-| Concern | At 1 client | At 5 clients | At 20 clients |
-|---------|-------------|--------------|---------------|
-| Setup templates | Trivial | 5 client specs | Registry pattern, embed all |
-| Hook generation | Single file write | Multiple format outputs | Template engine, no perf concern |
-| Health queries | Single pool.Stats() call | Same (pool is shared) | Same |
-| Progressive descriptions | 41 tools x 2 tiers | Same | Same (descriptions are static strings) |
-| Error enrichment | Map lookup per error | Same | Same |
+---
 
-No scalability concerns for v1.7 -- all features are bounded by the fixed tool count and operate per-request.
+## Data-flow change: live update path
 
-## Sources
+```
+agent calls replace_symbol_body
+  → middleware chain: LazyInit → Guardrail → Suggestion → ProfileFilter → Telemetry
+  → kernel/edit/replace.go writes file via fileops
+  → on success: postEditHook(ctx, []string{"path/to/file.go"}, "helix_edit")
+       └── semantic.LiveQueue.Enqueue(SourceChangeEvent{Kind: ChangeHelixEdit, Path: ...})
+  → tool returns success response to agent
 
-- Existing codebase: `internal/daemon/daemon.go` (bootstrap wiring, middleware installation)
-- Existing codebase: `internal/mcp/middleware.go` (receiving middleware pattern)
-- Existing codebase: `internal/mcp/registry.go` (ToolDef structure)
-- Existing codebase: `internal/skill/skill.go` (Skill/ToolProvider interfaces)
-- Existing codebase: `internal/cli/root.go` (cobra command structure)
-- Existing codebase: `internal/errors/kinds.go` (7-kind error taxonomy)
-- Existing codebase: `internal/kernel/workspace.go` (language detection, workspace runtime)
-- Existing codebase: `internal/langregistry/installer.go` (three-tier LS resolution)
-- Existing codebase: `internal/skill/repomap/` (setter pattern for skill wiring)
-- Project: `.planning/PROJECT.md` (v1.7 requirements)
-- Confidence: HIGH -- all integration points verified against existing source code
+[asynchronously, semantic.Service goroutine pool]
+LiveQueue
+  → coalesce (debounce 250ms per SPEC §16.2)
+  → parse changed file with tree-sitter (semantic/extract)
+  → diff old effective facts vs new (semantic/store: LoadEffectiveFileFacts)
+  → BeginOverlayTx → UpsertSymbols/References/Edges + Tombstones → Commit
+  → repair graph cache (semantic/graph/repair.go) — incremental PageRank repair
+  → mark affected scores/clusters as approximate (SPEC §18.4)
+  → enqueue HIGH-priority LSP revalidation (head-of-line for ChangeHelixEdit)
+
+[asynchronously, lspenrich worker]
+  → AcquireLease (shared with foreground; backpressure via pool)
+  → fetch hover/references/diagnostics
+  → write LSP-confirmed edges with confidence=1.0 to overlay
+  → mark validation_state=validated
+
+[asynchronously, idle compaction goroutine]
+  → after compact_after_idle_ms (5s default)
+  → BeginSnapshot → merge overlay into new committed snapshot
+  → ClearOverlay on commit success
+```
+
+**Subsequent `get_repo_map` call:** reads through `semanticLookup.GraphScores()` → DuckDB effective query (snapshot ⊕ overlay) → up-to-date ranking *without* re-extracting tree-sitter tags. Fallback to existing tree-sitter path is automatic if semantic is disabled or scores are missing.
+
+---
+
+## Files referenced
+
+- `internal/daemon/daemon.go` — bootstrap; lines 199-203 (CGO=0 guard), 241-255 (kernel tool registration), 296-336 (repomap skill wiring), 349-380 (middleware install order), 481-525 (Run/errgroup/shutdown), 765-825 (existing LSP enrichment pattern)
+- `internal/kernel/edit/tools.go:131` — `RegisterTools` signature to extend
+- `internal/kernel/edit/{rename,replace,delete,insert}.go` — per-tool hook callsites
+- `internal/kernel/lspool/lease.go` — lease API consumed by semantic enrichment
+- `internal/skill/repomap/skill.go` — pattern for `SetSemanticLookup`
+- `internal/mcp/lazy_init.go:106-108` — middleware-order invariant
+- `SPEC-DRAFT.md` §5, §6, §24.4, §32, §36, §37, §39
+
+---
+
+## Open questions / risks
+
+1. **DuckDB driver CGO requirement.** `marcboeker/go-duckdb` (and the official `duckdb/duckdb-go` v2 successor) require CGO. Consistent with Helix's CGO=1 norm (tree-sitter), but the CGO=0 placeholder binary must hard-disable `semantic_index.enabled` automatically. No pure-Go DuckDB exists.
+2. **Test harness impact.** `test/harness/Runner` constructs daemons in-process. With semantic enabled, every test creates a DuckDB file. Use `:memory:` for harness tests, real file only for end-to-end eval and integration tests that exercise compaction.
+3. **Bootstrap step renumbering.** daemon.go preserves step numbers in comments for git-blame continuity. Decimal additions (2.5 / 12e–12i / 14b.5) follow existing convention.
+4. **Forwarder gRPC propagation.** Live update events from edit tools are in-process — no gRPC boundary. Eval harness subprocess setup needs programmatic profile + semantic_index config (likely via `HELIX_CONFIG_PATH` per existing 4-layer precedence; confirm).

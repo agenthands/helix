@@ -143,6 +143,9 @@ func NewWithObsProvider(cfg *config.SerenaConfig, logger *slog.Logger, provider 
 
 // newDaemon is the shared daemon construction logic.
 func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs.Provider) (*Daemon, error) {
+	// TODO(v1.11): migrate to phasegraph.RunPhaseGraph(BootstrapPhases) (DAG-04).
+	// The numbered imperative steps below are the future PhaseSpec set.
+	// See internal/phasegraph/pipelines/ for the consumer-side shape declarations.
 	workspaces := workspace.NewRegistry()
 
 	// Wire soft memory limit from config (D-09). Only call SetMemoryLimit when

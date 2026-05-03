@@ -42,6 +42,14 @@ var carveOuts = map[string]map[string]bool{
 	// NOT a valid value (no fuzzy.Strategy declares it) and "failed" is not
 	// emitted (it maps to outcome=no_match,strategy=none at call sites).
 	"helix_edit_outcome_total": {"strategy": true},
+	// Phase 57 D-06/D-07: closed-enum "reason" ∈ {corrupt_file,
+	// schema_forward_incompat, schema_unreadable, unknown} on semantic store
+	// quarantine counter. workspace_label is a bounded hashed identifier
+	// (T-57-02-06 mitigation) — also carved out.
+	"helix_semantic_store_quarantine_total": {"workspace_label": true, "reason": true},
+	// Phase 57: closed-enum "outcome" ∈ {opened, quarantined, created} on
+	// semantic store open counter. workspace_label is bounded.
+	"helix_semantic_store_open_total": {"workspace_label": true, "outcome": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -123,6 +131,11 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.RepoMapExtract.WithLabelValues("go", "treesitter").Observe(0.001)
 	m.SessionLifecycle.WithLabelValues("started", "stdio").Inc()
 	m.EditOutcome.WithLabelValues("replace_symbol_body", "success", "exact").Inc()
+	// Phase 57: prime the semantic-store vectors so TestMetricsLabelsAllowlist
+	// scans their labels (Pitfall #3 from Phase 53 D-13 — empty families are
+	// dropped by Gather()).
+	m.SemanticStoreQuarantine.WithLabelValues("ws-aaa", "corrupt_file").Inc()
+	m.SemanticStoreOpen.WithLabelValues("ws-aaa", "opened").Inc()
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

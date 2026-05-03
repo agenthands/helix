@@ -1,5 +1,9 @@
 package config
 
+import (
+	"github.com/agenthands/helix/internal/semantic"
+)
+
 // SerenaConfig is the top-level configuration for the Serena daemon.
 // Mirrors the Python Helix config schema (D-11) with Go types.
 type SerenaConfig struct {
@@ -21,6 +25,16 @@ type SerenaConfig struct {
 	Observability ObservabilityConfig `koanf:"observability"`
 	// Degradation holds timeout budgets and resilience settings (Phase 13).
 	Degradation DegradationConfig `koanf:"degradation"`
+	// SemanticIndex holds Phase 57+ semantic graph settings (SPEC §25).
+	//
+	// STUB FIELD: Phase 57 plan P02 adds the typed field with zero values
+	// so daemon step 6b's `cfg.SemanticIndex.Enabled` reference compiles
+	// at end of wave 1. Phase 57 plan P03 adds the `koanf:"semantic_index"`
+	// binding tag and populates SPEC §25 defaults so the field actually
+	// carries runtime values. Until P03 lands, SemanticIndex.Enabled
+	// defaults to Go's bool zero value (false), which means daemon step 6b
+	// skips the Open call — safe degradation.
+	SemanticIndex semantic.Config
 }
 
 // DegradationConfig holds timeout budgets and resilience settings (Phase 13).

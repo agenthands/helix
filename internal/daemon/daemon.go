@@ -36,6 +36,7 @@ import (
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/profile"
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
+	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
 	"github.com/agenthands/helix/internal/treesitter"
@@ -114,6 +115,11 @@ type Daemon struct {
 	activeProfile  *profile.Profile
 	diagStore      *diag.DiagnosticStore
 	bodyExtractor  *edit.BodyExtractor
+	// semanticStore is the DuckDB-backed semantic fact store (Phase 57+).
+	// nil when cfg.SemanticIndex.Enabled is false; nil also under CGO=0
+	// (step 6a refuses to start before this field is read). Downstream
+	// consumers (P64+) MUST nil-check.
+	semanticStore *semanticstore.Store
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -143,6 +149,9 @@ func NewWithObsProvider(cfg *config.SerenaConfig, logger *slog.Logger, provider 
 
 // newDaemon is the shared daemon construction logic.
 func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs.Provider) (*Daemon, error) {
+	// TODO(v1.11): migrate to phasegraph.RunPhaseGraph(BootstrapPhases) (DAG-04).
+	// The numbered imperative steps below are the future PhaseSpec set.
+	// See internal/phasegraph/pipelines/ for the consumer-side shape declarations.
 	workspaces := workspace.NewRegistry()
 
 	// Wire soft memory limit from config (D-09). Only call SetMemoryLimit when
@@ -200,6 +209,23 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return nil, fmt.Errorf("tree-sitter is unavailable in this build " +
 			"(CGO_ENABLED=0): rebuild with CGO_ENABLED=1 or download the " +
 			"CGO=1 release binary (see CONTRIBUTING.md > Releasing)")
+	}
+
+	// 6b. Open semantic fact store when enabled (Phase 57, STORE-01..06).
+	//     Fail-fast core subsystem; on Tier-2 corruption auto-quarantines to
+	//     `<path>.corrupt.<ts>` and rebuilds fresh (SPEC §29.1, STORE-01).
+	//     Tier-3 (rebuild failed) returns an error so the daemon refuses to
+	//     start. When semantic_index.enabled=false, semanticStore is nil and
+	//     downstream consumers (P64+ tools) MUST guard. Under CGO=0, step 6a
+	//     already returned, so this code is unreachable in production stubs.
+	var semanticStore *semanticstore.Store
+	if cfg.SemanticIndex.Enabled {
+		s, err := semanticstore.Open(context.Background(), cfg.SemanticIndex,
+			logger, observability.Metrics())
+		if err != nil {
+			return nil, fmt.Errorf("opening semantic store: %w", err)
+		}
+		semanticStore = s
 	}
 
 	// 6. Create diagnostic store and body extractor.
@@ -417,8 +443,14 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		activeProfile: activeProfile,
 		diagStore:     diagStore,
 		bodyExtractor: bodyExtractor,
+		semanticStore: semanticStore,
 	}, nil
 }
+
+// SemanticStore returns the semantic fact store, or nil when
+// cfg.SemanticIndex.Enabled is false. Downstream consumers (Phase 64+
+// MCP tools) MUST nil-check.
+func (d *Daemon) SemanticStore() *semanticstore.Store { return d.semanticStore }
 
 // MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
 func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }

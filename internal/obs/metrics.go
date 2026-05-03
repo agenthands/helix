@@ -73,6 +73,17 @@ type Metrics struct {
 	// "strategy" ∈ {"exact","whitespace_normalized","indentation_flexible","none"} (per Q-4 resolution).
 	// "tool_name" reuses the existing AllowedLabels entry — NOT a carve-out.
 	EditOutcome *prometheus.CounterVec
+
+	// Phase 57 D-06/D-07: semantic store DuckDB-file quarantine counter.
+	// Closed-enum "reason" ∈ {"corrupt_file","schema_forward_incompat",
+	// "schema_unreadable","unknown"}; "workspace_label" is the bounded
+	// hashed/truncated identifier used by the existing helix_lspool_*
+	// metrics (T-57-02-06 mitigation — no raw paths).
+	SemanticStoreQuarantine *prometheus.CounterVec
+
+	// Phase 57: semantic store open-attempt counter.
+	// Closed-enum "outcome" ∈ {"opened","quarantined","created"}.
+	SemanticStoreOpen *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -175,6 +186,22 @@ func newMetrics() *Metrics {
 			},
 			[]string{"tool_name", "outcome", "strategy"},
 		),
+		SemanticStoreQuarantine: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_store_quarantine_total",
+				Help: "Semantic store DuckDB file quarantines by reason (corrupt_file/schema_forward_incompat/schema_unreadable/unknown). Phase 57 D-06/D-07.",
+			},
+			// Phase 57 D-06: closed-enum "reason" + per-workspace hashed label.
+			[]string{"workspace_label", "reason"},
+		),
+		SemanticStoreOpen: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_store_open_total",
+				Help: "Semantic store open attempts by outcome (opened/quarantined/created). Phase 57.",
+			},
+			// Phase 57: closed-enum "outcome" + per-workspace hashed label.
+			[]string{"workspace_label", "outcome"},
+		),
 	}
 
 	reg.MustRegister(
@@ -190,6 +217,8 @@ func newMetrics() *Metrics {
 		m.RepoMapExtract,
 		m.SessionLifecycle,
 		m.EditOutcome,
+		m.SemanticStoreQuarantine,
+		m.SemanticStoreOpen,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -302,4 +331,29 @@ func (m *Metrics) EditOutcomeInc(toolName, outcome, strategy string) {
 		return
 	}
 	m.EditOutcome.WithLabelValues(toolName, outcome, strategy).Inc()
+}
+
+// --- Phase 57 helper methods (D-06/D-07, drop-unknown closed-enum discipline) ---
+
+// SemanticStoreQuarantineInc increments helix_semantic_store_quarantine_total.
+// reason ∈ {"corrupt_file","schema_forward_incompat","schema_unreadable","unknown"};
+// any other value is dropped (Phase 57 D-07 closed enum, T-57-02-06 mitigation).
+func (m *Metrics) SemanticStoreQuarantineInc(workspaceLabel, reason string) {
+	switch reason {
+	case "corrupt_file", "schema_forward_incompat", "schema_unreadable", "unknown":
+	default:
+		return
+	}
+	m.SemanticStoreQuarantine.WithLabelValues(workspaceLabel, reason).Inc()
+}
+
+// SemanticStoreOpenInc increments helix_semantic_store_open_total.
+// outcome ∈ {"opened","quarantined","created"}; any other value is dropped.
+func (m *Metrics) SemanticStoreOpenInc(workspaceLabel, outcome string) {
+	switch outcome {
+	case "opened", "quarantined", "created":
+	default:
+		return
+	}
+	m.SemanticStoreOpen.WithLabelValues(workspaceLabel, outcome).Inc()
 }

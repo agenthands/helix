@@ -139,12 +139,71 @@
 - Highly parallel Phase 23 (8 plans) was the bulk of the work
 - Sessions: ~3
 
+## Milestone: v1.9 — Polish & Infra
+
+**Shipped:** 2026-05-03
+**Phases:** 12 (46–56, including emergent 51.1) | **Plans:** 51 | **Commits:** 326
+**Files changed:** 517 (+57,759 / -3,120 LOC) | **Timeline:** 7 days (2026-04-24 → 2026-05-01)
+
+### What Was Built
+- All 4 known LSP/tooling bugs closed (BUG-01..BUG-04): repomap PageRank starvation on polyglot workspaces (Phase 46), rust-analyzer rename via experimental/serverStatus readiness + RenameOverride QuirkAdapter (Phase 47), jdtls warm cache for `go test ./...` Java integration (Phase 48), single canonical `GrammarRegistry` (Phase 49)
+- Go 1.25 + gopls green on `ubuntu-latest`; benchmark harness converted to local-only — `bench.yml` / `capture-baseline.yml` / `*-github-hosted.txt` baselines all removed (Phase 50)
+- Reproducible multi-arch signed release pipeline via goreleaser — 6 archives × darwin/linux/windows × amd64/arm64 with minisign signing (Phase 51)
+- CGO=0 build path via `//go:build cgo` stubs across treesitter/repomap/edit; daemon refuses CGO=0 with remediation (Phase 51.1, emergent)
+- **Product rename `serena → helix` as a hard-cut breaking change**: binary, module path `github.com/agenthands/helix`, env vars `SERENA_* → HELIX_*`, config dir `~/.serena/ → ~/.helix/`, MCP server identity (Phase 52)
+- In-binary self-upgrade — `helix update` (read-only) + `helix upgrade` (minisign verify + atomic swap + downgrade refusal + daemon-aware re-launch) (Phase 52)
+- EMBED-AUDIT.md manifest classifying every runtime asset; build-time-synced `minisign.pub` embed with CI gate (Phase 52)
+- 5 new Prometheus metric families with bounded labels (lspool/repomap cache hit-rate, repomap extract latency histogram, session lifecycle, edit outcomes); cardinality test enforced (Phase 53)
+- 2 Grafana dashboards (`helix-overview.json`, `helix-engine.json`) + 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction); registry-driven PromQL validator (Phase 54)
+- Per-MCP-tool + per-outbound-LS-call trace coverage; TRACE-AUDIT.md hygiene review (no PII, bounded cardinality); real Jaeger smoke trace captured (Phase 55)
+- LS notification dispatch wired in production: `jsonrpc.Conn.OnNotification` set in `Worker.Start` with regression assertion; `JdtlsAdapter.WaitUntilJavaReady(ctx)` deterministic gate (Phase 56, emergent)
+
+### What Worked
+- **One phase per bug** for BUG-01..BUG-04 — small blast radius, easy rollback, clear ownership per LS quirk; all 4 closed cleanly
+- **Mechanical perl rewrite + go build verification gate** for the module path rename — gopls rename does not operate on module paths; layered build/vet/test caught misses across 200+ files
+- **Build-time embed-copy with CI gate** for `minisign.pub` — placeholder pubkey fails loudly at release time, can't accidentally ship
+- **Registry-driven PromQL validator (fail-closed)** for dashboards/runbooks — every PromQL expression must reference a real registered metric, enforced in `go test`
+- **OBS-03 metrics before OBS-01/02 dashboards** — natural dependency ordering, dashboards never reference nonexistent metrics
+- **Phase 51.1 inserted emergently** when DEF-51-01 (CGO=0 cross-compile) blocked goreleaser SC-1 — small, focused phase rather than rolling fix into Phase 51
+- **Phase 56 inserted emergently** after Phase 55 trace audit surfaced that `jsonrpc.Conn.OnNotification` was never wired in production — audit found a real prod bug, not just doc drift
+
+### What Was Inefficient
+- **Phase 51 needed 4 gap-closure plans (51-03..51-06)** after `gaps_found` audit — original 2-plan scope underestimated CGO + signing + CI hardening
+- **Phase 52 rescope mid-milestone** (PKG-02/03/04 → self-contained-binary + self-upgrade) was the right call but cost discussion-phase time; could have been caught in `/gsd-discuss-phase` for v1.9 if the binary-first story had been articulated upfront
+- **Multiple SUMMARY.md decision entries logged with `[Phase ?]`** instead of phase number — STATE.md decision log entries 79–91 (the entire Phase 52 sub-decision set) lost phase attribution; structural problem in how SUMMARY → STATE flows
+- **Protobuf rawDesc invalidated by perl rewrite** during Phase 52-02 module rename — required `make proto` follow-up; should be a documented post-rewrite hook
+- **PKG-01 SC-3 was always going to be deployment-gated** but wasn't called out as such until the audit — the success criterion as written was unverifiable in CI by definition; better to mark deployment-gated SCs as such at planning time
+
+### Patterns Established
+- **Emergent phases get a sub-decimal numbering** (Phase 51.1, not Phase 56-promoted-from-50.1) — preserves the original phase numbering and keeps the "this came from a discovered gap" semantics readable
+- **`//go:build cgo` + `//go:build !cgo` stub pair** for any package that must support both build modes — daemon refuses CGO=0 startup with a clear remediation message; CGO=1 path remains byte-identical
+- **CI pre-flight grep gate for placeholder values** (`release.yml:25-37` PLACEHOLDER detection) — turns deployment misconfiguration into a blocking failure rather than a silent bad release
+- **Registry-driven validators (PromQL, trace coverage)** as fail-closed `go test` gates — compile-time-equivalent guarantees for dashboards/runbooks/spans
+- **Asset-name template constant pinned with parity test against `.goreleaser.yaml`** — drift detected at PR-review time
+- **Single canonical error literal at all return sites** (Phase 51 "signature verification FAILED") — keeps grep-based CI gates auditable as a guard against future refactors
+- **Test fixtures use `https://example.invalid/...` per RFC 6761** — tests that miss the httptest stub fail loudly with DNS errors instead of silently leaking the runner IP
+
+### Key Lessons
+- **Verification audits find real bugs** — Phase 55 trace audit surfaced Phase 56's production LS-dispatch bug. Audit work is feature work.
+- **Mark deployment-gated success criteria as such at planning time** — PKG-01 SC-3 was never engineering-completable; calling it deployment-gated upfront would have saved audit cycles
+- **Hard-cut renames are easier than transition periods** — `serena → helix` shipped clean as a breaking-change with a CHANGELOG `### Breaking Changes` section; trying to support both would have been months of compat code
+- **Small emergent phases (Phase 51.1, Phase 56) > rolling unbounded scope into the parent phase** — easier to verify, audit, and roll back
+- **Local-only benchmark rule must be enforced architecturally** — Phase 50 had to delete CI bench plumbing accumulated since v1.2; the rule existed but the codebase had drifted
+- **Forwarder-level tracing is genuinely architectural** — Phase 55 forwarder.tools.call deferral to v1.10 isn't an implementation problem, it's a v1.2 boundary decision (gRPC server span as root) that needs revisiting
+
+### Cost Observations
+- 51 plans across 12 phases in 7 days — by far the largest milestone by plan count and LOC
+- Phase 52 (rename + self-upgrade + embed-audit) and Phase 56 (LS dispatch + jdtls) were the heaviest individual phases
+- 2 emergent phases (51.1, 56) added ~25% to original phase count (from 10 planned to 12 shipped)
+- Audit work (`/gsd-audit-milestone`, `/gsd-eval-review`, integration check) consumed ~20% of milestone wall-clock — well-spent given Phase 56 discovery
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 | v1.5 |
-|--------|------|------|------|------|------|------|
-| Phases | 5 | 3 | 7 | 2 | 4 | 3 |
-| Plans | 20 | 11 | 25 | 4 | 11 | 12 |
-| Duration | 2 days | 1 day | 2 days | 1 day | 4 days | 1 day |
-| Go LOC (cumulative) | ~26K | ~30K | ~36K | ~36K | ~41K | ~48K |
-| Test coverage focus | Unit | Integration | Benchmark + E2E | Documentation | Oracle tests | Error contracts |
+| Metric | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 | v1.5 | v1.9 |
+|--------|------|------|------|------|------|------|------|
+| Phases | 5 | 3 | 7 | 2 | 4 | 3 | 12 |
+| Plans | 20 | 11 | 25 | 4 | 11 | 12 | 51 |
+| Duration | 2 days | 1 day | 2 days | 1 day | 4 days | 1 day | 7 days |
+| Go LOC (cumulative) | ~26K | ~30K | ~36K | ~36K | ~41K | ~48K | ~70K+ |
+| Test coverage focus | Unit | Integration | Benchmark + E2E | Documentation | Oracle tests | Error contracts | Trace coverage + dashboards/runbooks |
+| Emergent phases | 0 | 0 | 0 | 0 | 0 | 0 | 2 (51.1, 56) |

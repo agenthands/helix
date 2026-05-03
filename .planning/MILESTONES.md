@@ -1,5 +1,33 @@
 # Milestones
 
+## v1.9 Polish & Infra (Shipped: 2026-05-03)
+
+**Phases completed:** 12 phases (46–56, including emergent 51.1), 51 plans
+**Files changed:** 517 files, +57,759 / -3,120 lines (326 commits)
+**Timeline:** 7 days (2026-04-24 → 2026-05-01; close 2026-05-03)
+**Tag:** v1.9
+
+**Key accomplishments:**
+
+- Closed all 4 known LSP/tooling bugs (BUG-01..BUG-04): repomap PageRank starvation on polyglot workspaces, rust-analyzer rename via experimental/serverStatus readiness + RenameOverride QuirkAdapter, jdtls warm cache for Java integration tests in default `go test ./...`, single canonical `GrammarRegistry` shared across all consumers
+- Resolved Go 1.25 + gopls linux/amd64 incompatibility on `ubuntu-latest` and converted the benchmark harness to local-only (per the project's local-only bench rule) — removed `bench.yml`, `capture-baseline.yml`, `*-github-hosted.txt` baselines
+- Shipped reproducible multi-arch signed release pipeline via goreleaser (6 archives × darwin/linux/windows × amd64/arm64 with minisign signing); CGO=0 build path preserved via Phase 51.1 `//go:build cgo` stubs across treesitter/repomap/edit
+- **Renamed product `serena → helix` as a hard-cut breaking change at v1.9** — binary, module path (`github.com/agenthands/helix`), env vars (`SERENA_* → HELIX_*`), config dir (`~/.serena/ → ~/.helix/`), MCP server registration name. Shipped in-binary self-upgrade (`helix update` / `helix upgrade`) with minisign verify + atomic swap + downgrade refusal + daemon-aware re-launch. EMBED-AUDIT.md manifest classifies every runtime asset
+- Closed v1.2 observability gaps: 5 new Prometheus metric families (cache hit-rate lspool+repomap, repomap extract latency histogram, session lifecycle, edit outcomes — all bounded labels), 2 Grafana dashboards (`helix-overview.json`, `helix-engine.json`) with registry-driven PromQL validator, 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction), full per-MCP-tool + per-LS-call trace coverage with TRACE-AUDIT.md hygiene review and real Jaeger smoke capture
+- **Phase 56 (emergent)** — surfaced and fixed that `jsonrpc.Conn.OnNotification` was never wired in production; QuirkAdapter notification handlers were silently dropped. Wired dispatch in `Worker.Start` with regression assertion + shipped `JdtlsAdapter.WaitUntilJavaReady(ctx)` deterministic gate
+
+**Audit result:** `tech_debt` — 14/14 in-scope requirements satisfied (PKG-01 SC-3 deployment-gated on maintainer keypair + first v* tag); 25/25 cross-phase integration wires verified; 4/4 E2E flows wired.
+
+**Deferred to v1.10 / future milestones:**
+
+- PKG-DEFER-03/04/05: Homebrew tap, Scoop bucket, native Linux package (deb/rpm/AUR) — Phase 52 rescoped from these to self-contained-binary + in-binary self-upgrade
+- Phase 51 reproducibility gate scope (snapshot-vs-snapshot, not real-release-vs-Pass-3)
+- Phase 55 forwarder.tools.call span via Noop tracer (pre-v1.2 architectural limitation; application chain daemon → kernel → lspool fully verified)
+
+**Known deferred items at close:** 5 (see STATE.md Deferred Items)
+
+---
+
 ## v1.8 Documentation Overhaul (Shipped: 2026-04-23)
 
 **Phases completed:** 8 phases, 19 plans, 11 tasks

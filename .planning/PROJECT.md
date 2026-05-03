@@ -1,8 +1,8 @@
-# Serena
+# Helix
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 38+ callable MCP tools, 52-language support. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching. Every tool returns typed, structured errors for reliable programmatic error handling.
+A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 41+ callable MCP tools, 52-language support across 23 tree-sitter grammars. Ships as `helix` (renamed from `serena` at v1.9 — module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`) with reproducible multi-arch signed releases via goreleaser, in-binary self-upgrade (`helix update` / `helix upgrade` with minisign verify + atomic swap), full Prometheus + OpenTelemetry observability (5 RED metric families plus cache/repomap/session/edit families, 2 packaged Grafana dashboards, 4 runbooks), and per-MCP-tool + per-LS-call tracing. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching. Every tool returns typed, structured errors for reliable programmatic error handling.
 
 ## Core Value
 
@@ -89,9 +89,30 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Closed F-02 (README manual-config explicit 7-client pointer to INSTALL.md#manual-configuration), F-12 (README→CHANGELOG + USAGE→INSTALL cross-links), confirmed F-06 rust-analyzer troubleshooting metadata current — v1.8 Phase 45
 - ✓ Python legacy acknowledgment scoped to a single CLAUDE.md disclaimer; no "port" or "rewrite" language anywhere else — v1.8 Phase 42
 
+- ✓ `get_repo_map` returns ranked Go sources (not Lua testdata fixture) on polyglot workspaces — v1.9 Phase 46 (BUG-01)
+- ✓ `rename_symbol` succeeds on Rust symbols via experimental/serverStatus readiness + RenameOverride QuirkAdapter — v1.9 Phase 47 (BUG-02)
+- ✓ Java integration tests run in default `go test ./...` via warm jdtls cache (`jdtlscache` helper + env-var override + `Options.JdtlsDataDir`) — v1.9 Phase 48 + Phase 56 (BUG-03)
+- ✓ Single canonical `GrammarRegistry` injected from daemon bootstrap into all consumers — v1.9 Phase 49 (BUG-04)
+- ✓ Go 1.25 + gopls green on `ubuntu-latest`; benchmark harness converted to local-only (CI bench plumbing removed) — v1.9 Phase 50 (TOOL-01, TOOL-02)
+- ✓ Reproducible multi-arch signed release pipeline via goreleaser — 6 archives × darwin/linux/windows × amd64/arm64 with minisign signing + reproducibility gate — v1.9 Phase 51 (PKG-01, 3/4 SC verified; SC-3 deployment-gated)
+- ✓ CGO=0 build path preserved via `//go:build cgo` stubs across treesitter/repomap/edit; daemon refuses CGO=0 with remediation — v1.9 Phase 51.1 (DEF-51-01, emergent)
+- ✓ Product rename `serena → helix`: binary, module path `github.com/agenthands/helix`, env vars `SERENA_* → HELIX_*`, config dir `~/.serena → ~/.helix`, MCP server identity — hard-cut breaking change at v1.9 — v1.9 Phase 52 (PKG-05)
+- ✓ In-binary self-upgrade: `helix update` (read-only check) + `helix upgrade` (minisign verify + atomic swap + downgrade refusal + daemon-aware re-launch) — v1.9 Phase 52 (PKG-06)
+- ✓ EMBED-AUDIT.md manifest classifying every runtime asset; build-time-synced `minisign.pub` embed with CI gate — v1.9 Phase 52 (PKG-07)
+- ✓ 5 new Prometheus metric families (lspool/repomap cache hit-rate, repomap extract latency histogram, session lifecycle, edit outcomes — all bounded labels with cardinality test) — v1.9 Phase 53 (OBS-03)
+- ✓ 2 Grafana dashboards (`helix-overview.json`, `helix-engine.json`) + 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction); registry-driven PromQL validator — v1.9 Phase 54 (OBS-01, OBS-02)
+- ✓ Full per-MCP-tool + per-outbound-LS-call trace coverage; TRACE-AUDIT.md hygiene review (no PII, bounded cardinality); real Jaeger smoke capture — v1.9 Phase 55 (OBS-04, application chain fully verified; forwarder span deferred to v1.10)
+- ✓ LS notification dispatch wired in production: `jsonrpc.Conn.OnNotification` set in `Worker.Start` (was silently dropped); `JdtlsAdapter.WaitUntilJavaReady(ctx)` deterministic gate — v1.9 Phase 56 (LSDISP-01..04b, JDTLS-RDY-01a/b/c, JDTLS-RDY-02, LSDISP-REG-01, emergent)
+
 ### Active
 
-_v1.9 requirements pending — scoped in `.planning/REQUIREMENTS.md` after milestone kickoff._
+_v1.10 requirements to be defined via `/gsd-new-milestone`._
+
+Carry-over follow-ups:
+- [ ] **PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag (cuts the deployment-gated asterisk on v1.9)
+- [ ] **Phase 51 reproducibility gate** (architectural): extend gate scope to real-release-vs-Pass-3 OR soften CONTRIBUTING.md:161 wording
+- [ ] **Phase 55 forwarder.tools.call span** (architectural): unify with `serena.v1.ForwarderService/StreamMCP` gRPC server span (pre-v1.2 limitation)
+- [ ] **PKG-DEFER-03/04/05**: Homebrew tap, Scoop bucket, native Linux package — re-evaluate priority once v1.9 is in user hands
 
 ### Out of Scope
 
@@ -105,40 +126,39 @@ _v1.9 requirements pending — scoped in `.planning/REQUIREMENTS.md` after miles
 
 ## Current State
 
-**Shipped:** v1.8 Documentation Overhaul (2026-04-24) — Phases 39–45, 19 plans, 16/16 REQs satisfied.
+**Shipped:** v1.9 Polish & Infra (2026-05-03) — 12 phases (46–56, including emergent 51.1), 51 plans, 14/14 in-scope REQs satisfied (PKG-01 SC-3 deployment-gated), +2 emergent (Phase 51.1 CGO gate, Phase 56 LS dispatch), 3 deferred (PKG-DEFER-03/04/05). 25/25 cross-phase integration wires verified. Audit status: `tech_debt`.
 
-All public-facing documentation (README, USAGE, INSTALL, CONTRIBUTING, CHANGELOG, CLAUDE.md) now presents Serena as its own standalone Go-native product. Full current feature set through v1.7 is documented. Cross-doc drift is closed with grep-verifiable integration checks. Phase 39 retains 3 pending human-verification tests (subjective content-quality checks) as tech debt.
+Helix now ships as a single self-contained signed binary with reproducible multi-arch goreleaser releases (6 archives × darwin/linux/windows × amd64/arm64), in-binary self-upgrade with minisign verification + atomic swap + daemon-aware re-launch, full Prometheus + OpenTelemetry observability (5 new metric families, 2 packaged Grafana dashboards, 4 runbooks, full trace coverage), and CGO=0 build path preserved via tree-sitter stubs. All 4 known LSP/tooling bugs (BUG-01..BUG-04) closed. Product rename `serena → helix` executed as a hard-cut breaking change at v1.9 (binary, module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`, MCP server identity).
 
-**In flight:** v1.9 Polish & Infra. Phase 52 (packaging-distribution-channels) complete on 2026-04-30: module/binary renamed `serena → helix` (`github.com/agenthands/helix`), env vars `SERENA_* → HELIX_*`, config dirs `.serena → .helix`, MCP server identity flipped, in-binary self-upgrade (`helix update` / `helix upgrade`) shipped with minisign verification + atomic swap + downgrade refusal + daemon-aware short-circuit, EMBED-AUDIT.md manifest with zero open gaps, CHANGELOG v1.9 with `### Breaking Changes`, INSTALL `## Upgrading` section. PKG-05/06/07 validated; PKG-02/03/04 (Homebrew/Scoop/Linux distros) deferred with bookkeeping (PKG-DEFER-03/04/05). Code review found 12 issues (4 Critical + 8 Warning) — all auto-fixed. v1.9.0 release tag is gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push.
+v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push — engineering work is complete.
 
-## Current Milestone: v1.9 Polish & Infra
+## Next Milestone: v1.10 (Planning)
 
-**Goal:** Close accumulated tech debt and harden infrastructure — fix known LSP/tooling quirks, resolve the Go 1.25 / gopls linux/amd64 incompatibility, ship proper packaging, and fill remaining observability gaps.
+**Probable goals** (to be confirmed via `/gsd-new-milestone`):
 
-**Target features:**
-
-*Bug fixes / polish*
-- Fix backlog 999.1 — `get_repo_map` returning lua fixture instead of go sources
-- Fix rust-analyzer `textDocument/rename` "No references found" quirk in temp workspaces
-- Mitigate jdtls cold-start > 2min (currently gates Java integration tests behind `-short=false`)
-- Consolidate 3 redundant `GrammarRegistry` instances into a single canonical registry
-
-*Infra*
-- Resolve Go 1.25 / gopls v0.17.1 linux/amd64 incompatibility (unblocks CI bench gate on ubuntu-latest)
-- Packaging & distribution (release artifacts, installers, signing — scope locked in REQUIREMENTS.md)
-- Observability polish (fill metric/tracing/logging gaps, dashboards, runbooks — scope locked in REQUIREMENTS.md)
+- Close the v1.9 deployment-gated PKG-01 SC-3 (publish first signed release with real keypair)
+- Re-scope or land PKG-DEFER-03/04/05 (Homebrew tap, Scoop bucket, native Linux package) based on user feedback from first signed release
+- Phase 51 reproducibility gate architectural fix (real-release-vs-Pass-3, or CONTRIBUTING.md wording softening)
+- Phase 55 forwarder.tools.call span unification with gRPC server span
+- New feature work TBD
 
 ## Context
 
-Shipped v1.0 through v1.6. Current codebase: 49,369 Go LOC, 41 MCP tools, 52-language support, 23 tree-sitter grammars. Single binary, 4-layer architecture, persistent daemon. v1.6 added fuzzy editing (4-strategy cascade with ellipsis support), RepoMap context intelligence (tree-sitter tag extraction → SQLite cache → PageRank → token-budgeted rendering via get_repo_map/get_context), and 23-language grammar expansion (full aider parity). Multi-oracle test harness covers protocol, contract, scenario (14+ language fixtures + v1.6 repomap/fuzzy tests), LLM behavioral, and judge scoring. Error taxonomy: 7 kinds, builder pattern, cause-chain wrapping.
+Shipped v1.0 through v1.9. Single binary (`helix`, renamed from `serena` at v1.9), 4-layer architecture, persistent daemon. 41+ MCP tools, 52-language support, 23 tree-sitter grammars. Multi-oracle test harness (protocol, contract, scenario, LLM behavioral, judge scoring) plus per-MCP-tool + per-LS-call trace coverage with TRACE-AUDIT.md hygiene review. Reproducible signed multi-arch releases via goreleaser (6 archives × darwin/linux/windows × amd64/arm64 with minisign). In-binary self-upgrade. Full observability: 5 new Prometheus metric families landed at v1.9 (cache hit-rate, repomap latency, session lifecycle, edit outcomes — all bounded labels), 2 packaged Grafana dashboards (`helix-overview.json`, `helix-engine.json`), 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction).
 
-Tech stack: Go 1.25, official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace).
+Tech stack: Go 1.25 (gopls compatibility resolved at v1.9), official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars; CGO=0 stub path preserved via Phase 51.1), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace), goreleaser, minisign.
 
-Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction. RepoMap skill with tag extraction pipeline, cross-file reference graph, PageRank ranking, and token-budgeted tree rendering. Fuzzy edit engine with 4-strategy cascade integrated into 3 MCP tools.
+Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction, and **production-wired LS notification dispatch** (`jsonrpc.Conn.OnNotification` set in `Worker.Start`, regression-asserted; was silently dropped pre-v1.9). Single canonical `GrammarRegistry` injected from daemon bootstrap. RepoMap skill with PageRank using ambiguity-weighted edges (Phase 46 fix) + token-budgeted tree rendering. Fuzzy edit engine (4-strategy cascade) integrated into 3 MCP tools. Worker pool consumes structured LS readiness signals (rust-analyzer `experimental/serverStatus`, jdtls `language/status: ServiceReady`).
 
-**Known tech debt:** rust-analyzer v1.90 `textDocument/rename` returns "No references found at position" in temp workspaces despite hover/references/search working at the same position — upstream LS bug, all other Rust operations work (see USAGE.md Troubleshooting). jdtls cold-start indexing exceeds 2min in temp workspaces — Java integration tests gated behind `-short=false`.
+**Tech debt accepted at v1.9 close (carried to v1.10):**
+- PKG-01 SC-3 deployment-gated on maintainer minisign keypair + first v* tag
+- Phase 51 reproducibility gate is snapshot-vs-snapshot, not real-release-vs-Pass-3
+- Phase 55 forwarder.tools.call span emits via Noop tracer (pre-v1.2 architectural limitation; root span is `serena.v1.ForwarderService/StreamMCP` gRPC server span)
+- PKG-DEFER-03/04/05: Homebrew tap, Scoop bucket, native Linux package (deferred from v1.9 Phase 52 rescope)
 
-The `legacy/` directory contains the original Python-based prototype as a reference.
+**Resolved at v1.9:** rust-analyzer rename quirk (Phase 47), jdtls cold-start in `go test ./...` (Phases 48 + 56), Go 1.25 / gopls linux/amd64 (Phase 50), GrammarRegistry duplication (Phase 49), repomap polyglot ranking (Phase 46).
+
+The `legacy/` directory contains the original Python-based prototype (Serena name retained there as a historical reference). Helix is its own standalone Go-native product, not a port or rewrite.
 
 ## Constraints
 
@@ -181,6 +201,16 @@ The `legacy/` directory contains the original Python-based prototype as a refere
 | Kind-based error taxonomy (internal/errors/) | Typed errors for agent consumption, builder pattern, JSON serialization | ✓ Good — 7 kinds, cause-chain wrapping, all tools migrated |
 | Inline validation before workspace check | Fail fast on invalid params, avoid LS startup for bad input | ✓ Good — 24 kernel tools validate at entry |
 | extractKind test helper for Kind assertions | Replace brittle string matching with structured error validation | ✓ Good — covers SDK and inline validation formats |
+| One phase per bug for BUG-01..BUG-04 (v1.9) | Smaller blast radius, easier rollback, clear ownership per LS quirk | ✓ Good — all 4 bugs closed cleanly |
+| Phase 50: bench harness local-only (no CI) | Project's local-only bench rule — hosted-runner baselines are misleading | ✓ Good — `bench.yml`/`capture-baseline.yml` removed; `make bench` documented |
+| Phase 51.1 emergent: CGO=0 build path via `//go:build cgo` stubs (v1.9) | DEF-51-01 blocker — goreleaser cross-compile fails when treesitter requires CGO | ✓ Good — daemon refuses CGO=0 with remediation; CGO=1 byte-identical |
+| Phase 52 rescope: serena → helix hard-cut + self-upgrade (v1.9) | Original Homebrew/Scoop/Linux scope abandoned in favor of self-contained binary + in-binary upgrade — better leverage for the work, defer distros until release shape proves out | ✓ Good — clean rename, working `helix update`/`helix upgrade` with minisign + atomic swap + downgrade refusal |
+| Module path rename via mechanical perl rewrite + go build gate | gopls rename does not operate on module paths; layered build/vet/test catches misses | ✓ Good — clean rename across 200+ files, no functional regressions |
+| Build-time embed-copy for `minisign.pub` with CI gate | Embedded pubkey must match checked-in source of truth; placeholder must fail loudly before release | ✓ Good — `make embed-pubkey` + `make verify-embed-pubkey` + `release.yml` PLACEHOLDER pre-flight |
+| OBS-03 (metrics) before OBS-01/02 (dashboards/runbooks) (v1.9) | Dashboards must reference metrics that exist | ✓ Good — registry-driven PromQL validator (fail-closed) catches drift |
+| Registry-driven PromQL validator for dashboards/runbooks | Compile-time-equivalent check that every PromQL expression references a real registered metric | ✓ Good — fail-closed, runs in `go test` |
+| Phase 56 emergent: wire LS notification dispatch (v1.9) | Phase 55 trace audit surfaced that `jsonrpc.Conn.OnNotification` was never set in production — all `QuirkAdapter.NotificationHandlers()` were silently dropped | ✓ Good — fix shipped with regression assertion in `worker_test.go`; `JdtlsAdapter.WaitUntilJavaReady(ctx)` deterministic gate |
+| PKG-01 SC-3 acceptance as deployment-gated, not engineering-gated (v1.9) | End-to-end signed-release verify requires real maintainer keypair + first v* tag — not a code change | ✓ Good — CI pre-flight grep-fails on PLACEHOLDER, so a placeholder-signed release cannot publish |
 
 ## Evolution
 
@@ -200,4 +230,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-30 — Phase 52 packaging-distribution-channels complete*
+*Last updated: 2026-05-03 after v1.9 Polish & Infra milestone close*

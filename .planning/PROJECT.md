@@ -132,15 +132,26 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push — engineering work is complete.
 
-## Next Milestone: v1.10 (Planning)
+## Current Milestone: v1.10 Live Semantic Index
 
-**Probable goals** (to be confirmed via `/gsd-new-milestone`):
+**Goal:** Turn Helix's online LSP/tree-sitter capabilities into a durable, live, evidence-backed semantic graph — DuckDB committed snapshots + live overlay + LSP validation — exposed through new MCP context tools, agent guardrails, and a first-class evaluation harness that proves Helix improves agent success/cost/safety.
 
-- Close the v1.9 deployment-gated PKG-01 SC-3 (publish first signed release with real keypair)
-- Re-scope or land PKG-DEFER-03/04/05 (Homebrew tap, Scoop bucket, native Linux package) based on user feedback from first signed release
-- Phase 51 reproducibility gate architectural fix (real-release-vs-Pass-3, or CONTRIBUTING.md wording softening)
-- Phase 55 forwarder.tools.call span unification with gRPC server span
-- New feature work TBD
+**Target features:**
+
+- **Semantic fact store (DuckDB)** — snapshots, live overlay, effective-read semantics, schema versioning, compaction
+- **Tree-sitter extraction (Go / TS+JS / Python first-class)** — symbols, references, imports, syntax edges, stable symbol IDs across renames
+- **Live update pipeline** — fsnotify watcher, event coalescing, overlay writes, graph cache repair, LSP revalidation queue, idle compaction
+- **LSP enrichment layer** — hover/definition/references/call-hierarchy/type-hierarchy/implementations/diagnostics with budgets and prioritization
+- **Graph engine** — weighted + personalized PageRank across multiple projections, weak-component + label-propagation clustering, score/cluster freshness states
+- **Type resolution + access-chain resolver** — tiered confidence, fixpoint loop, JSDoc/PHPDoc/YARD/Python comment fallbacks
+- **10 new MCP tools** — `index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`, `explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`
+- **Existing tool integration** — `get_repo_map` / `get_context` / `analyze_blast_radius` / `get_health` / edit tools emit live graph events
+- **Agent guardrails (G-001..G-010)** — policy engine, safety receipts, GUARDRAILS.md + DoD.md, profile/mode-gated enforcement
+- **Evaluation harness** — baseline / native / semantic / semantic_guarded modes with success/cost/latency/tool-behavior/safety reports
+- **Typed pipeline DAG** — phase validation for daemon bootstrap, semantic indexing, live updates, eval; cycle + missing-dep detection
+- **v1.9 carryover** — close PKG-01 SC-3 (cut first signed release with real minisign keypair); re-scope or land PKG-DEFER-03/04/05 (Homebrew/Scoop/Linux pkg); Phase 51 reproducibility-gate architectural fix; Phase 55 `forwarder.tools.call` span unification with gRPC server span
+
+**Source of truth:** `SPEC-DRAFT.md` (40 sections, 12 SPEC-internal phases, full schema/algorithms/tool contracts).
 
 ## Context
 
@@ -230,4 +241,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 after v1.9 Polish & Infra milestone close*
+*Last updated: 2026-05-03 — v1.10 Live Semantic Index milestone started*

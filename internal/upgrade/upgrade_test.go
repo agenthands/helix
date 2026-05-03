@@ -31,7 +31,7 @@ func newUpgradeTestServer(t *testing.T, tag string) *upgradeTestServer {
 
 	// Compose the per-platform asset name to match runtime.GOOS/GOARCH.
 	assetName := archiveAssetName(tag, runtime.GOOS, runtime.GOARCH)
-	sigName := assetName + ".minisig"
+	sigName := assetName + ".sigstore.json"
 
 	rel := Release{
 		TagName: tag,
@@ -53,7 +53,7 @@ func newUpgradeTestServer(t *testing.T, tag string) *upgradeTestServer {
 		serveFile(t, w, testdataArchive)
 	})
 	mux.HandleFunc("/dl/"+sigName, func(w http.ResponseWriter, r *http.Request) {
-		serveFile(t, w, testdataMinisig)
+		serveFile(t, w, testdataBundle)
 	})
 
 	uts.server = httptest.NewServer(mux)
@@ -107,7 +107,7 @@ func TestUpgradeArchiveNameTemplateGoreleaserParity(t *testing.T) {
 
 func TestUpgradeUpdateHappyPath(t *testing.T) {
 	uts := newUpgradeTestServer(t, "v1.9.0")
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	var out bytes.Buffer
 	err := Update(context.Background(), Options{
@@ -135,7 +135,7 @@ func TestUpgradeUpdateHappyPath(t *testing.T) {
 
 func TestUpgradeUpdateUpToDate(t *testing.T) {
 	uts := newUpgradeTestServer(t, "v1.9.0")
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	var out bytes.Buffer
 	err := Update(context.Background(), Options{
@@ -160,7 +160,7 @@ func TestUpgradeDryRun(t *testing.T) {
 		t.Skip("dry-run test exercises POSIX-style probe")
 	}
 	uts := newUpgradeTestServer(t, "v1.9.0")
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	// Create a fake "running binary" location. The orchestrator probes
 	// os.Executable() for write access — the test fakes this by setting
@@ -204,7 +204,7 @@ func TestUpgradeDryRun(t *testing.T) {
 
 func TestUpgradeDowngradeRefused(t *testing.T) {
 	uts := newUpgradeTestServer(t, "v1.7.0")
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	var out bytes.Buffer
 	err := Upgrade(context.Background(), Options{
@@ -244,42 +244,11 @@ func TestUpgradeDaemonShortCircuit(t *testing.T) {
 	}
 }
 
-// TestUpgradePlaceholderPubKeyDistinguished covers REVIEW.md WR-05:
-// when the embedded minisign key still carries the PLACEHOLDER marker
-// (i.e., the maintainer has not rotated in the production key yet),
-// `helix upgrade` must print a distinct, actionable error rather than
-// the canonical "signature verification FAILED" — the latter is
-// indistinguishable from a tampered archive at the caller and gives a
-// developer building from main no clue why upgrade is broken.
-func TestUpgradePlaceholderPubKeyDistinguished(t *testing.T) {
-	// Cannot run in parallel: mutates testPubKeyOverride.
-	prev := testPubKeyOverride
-	testPubKeyOverride = []byte("untrusted comment: helix minisign public key -- PLACEHOLDER\nRWQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n")
-	t.Cleanup(func() { testPubKeyOverride = prev })
-
-	if !IsPlaceholderPubKey() {
-		t.Fatal("IsPlaceholderPubKey() = false with PLACEHOLDER override, want true")
-	}
-
-	var out bytes.Buffer
-	err := Upgrade(context.Background(), Options{
-		Current: "v1.8.0",
-		Stdout:  &out,
-	})
-	if err == nil {
-		t.Fatal("Upgrade(placeholder key) = nil, want refusal")
-	}
-	msg := err.Error()
-	// Must be the placeholder-distinct error, NOT the canonical signature
-	// verification failure (which would conflate two very different
-	// failure modes).
-	if !strings.Contains(msg, "production minisign key") {
-		t.Errorf("Upgrade(placeholder) err = %q, want 'production minisign key' actionable hint", msg)
-	}
-	if strings.Contains(msg, "signature verification FAILED") {
-		t.Errorf("Upgrade(placeholder) err = %q, must NOT use canonical signature failure message", msg)
-	}
-}
+// (Phase 58 D-02): the placeholder-pubkey distinct-error path
+// (TestUpgradePlaceholderPubKeyDistinguished + IsPlaceholderPubKey) is
+// deleted alongside the minisign embed. There is no longer a
+// "pre-rotation key" concept under cosign keyless — the embedded asset is
+// a sigstore TUF trust root, refreshed via `make update-trust-root`.
 
 func TestUpgradeStripUpgradeVerb(t *testing.T) {
 	t.Parallel()
@@ -351,25 +320,25 @@ func TestUpgradeAsymmetricChecksumsRefused(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission probe path is POSIX-flavored")
 	}
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	tag := "v1.9.0"
 	assetName := archiveAssetName(tag, runtime.GOOS, runtime.GOARCH)
-	sigName := assetName + ".minisig"
+	sigName := assetName + ".sigstore.json"
 
 	mux := http.NewServeMux()
 	var server *httptest.Server
 	mux.HandleFunc("/repos/agenthands/helix/releases/latest", func(w http.ResponseWriter, r *http.Request) {
-		// Asset list includes archive + sig + checksums.txt but NOT
-		// checksums.txt.minisig — the asymmetric case. Production code
-		// must refuse to proceed.
+		// Asset list includes archive + bundle + checksums.txt but NOT
+		// checksums.txt.sigstore.json — the asymmetric case. Production
+		// code must refuse to proceed.
 		_ = json.NewEncoder(w).Encode(Release{
 			TagName: tag,
 			Assets: []Asset{
 				{Name: assetName, BrowserDownloadURL: server.URL + "/dl/archive"},
 				{Name: sigName, BrowserDownloadURL: server.URL + "/dl/sig"},
 				{Name: "checksums.txt", BrowserDownloadURL: server.URL + "/dl/checksums"},
-				// checksums.txt.minisig intentionally omitted.
+				// checksums.txt.sigstore.json intentionally omitted.
 			},
 		})
 	})
@@ -377,7 +346,7 @@ func TestUpgradeAsymmetricChecksumsRefused(t *testing.T) {
 		serveFile(t, w, testdataArchive)
 	})
 	mux.HandleFunc("/dl/sig", func(w http.ResponseWriter, r *http.Request) {
-		serveFile(t, w, testdataMinisig)
+		serveFile(t, w, testdataBundle)
 	})
 
 	server = httptest.NewServer(mux)
@@ -404,29 +373,27 @@ func TestUpgradeAsymmetricChecksumsRefused(t *testing.T) {
 func TestUpgradeVerifyTamperedFails(t *testing.T) {
 	// The full Upgrade flow against tampered fixtures fails at verify and
 	// returns the canonical signature-failure error. Set up the server to
-	// serve a tampered .minisig.
+	// serve a tampered sigstore bundle.
 	if runtime.GOOS == "windows" {
 		t.Skip("permission probe path is POSIX-flavored")
 	}
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	mux := http.NewServeMux()
 	tag := "v1.9.0"
 	assetName := archiveAssetName(tag, runtime.GOOS, runtime.GOARCH)
-	sigName := assetName + ".minisig"
+	sigName := assetName + ".sigstore.json"
 
-	// Tamper signature in-memory: flip a byte.
-	rawSig, err := os.ReadFile(testdataMinisig)
+	// Tamper bundle in-memory: flip a byte deep in the JSON payload.
+	rawSig, err := os.ReadFile(testdataBundle)
 	if err != nil {
-		t.Fatalf("reading sig: %v", err)
+		t.Fatalf("reading bundle: %v", err)
 	}
 	tampered := append([]byte(nil), rawSig...)
-	for i, b := range tampered {
-		if b == '\n' && i+5 < len(tampered) {
-			tampered[i+5] ^= 0x01
-			break
-		}
+	if len(tampered) < 200 {
+		t.Fatalf("bundle fixture too short to tamper")
 	}
+	tampered[len(tampered)-30] ^= 0x01
 
 	var server *httptest.Server
 	mux.HandleFunc("/repos/agenthands/helix/releases/latest", func(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +462,7 @@ func TestUpgradeRelaunchInvokesExecWithStrippedArgs(t *testing.T) {
 		// observe even via override. Coverage on Unix is sufficient.
 		t.Skip("relaunch dispatch coverage is POSIX-flavored")
 	}
-	withTestKey(t)
+	withTestTrustRoot(t)
 
 	uts := newUpgradeTestServer(t, "v1.9.0")
 

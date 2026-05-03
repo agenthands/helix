@@ -186,12 +186,13 @@ Output: Updated `.goreleaser.yaml` and `.github/workflows/release.yml` with cosi
     **No code edits in this task** — it is a verification gate. If verification fails, the plan re-enters Task 1 with the specific error.
   </action>
   <verify>
-    <automated>command -v cosign &gt;/dev/null &amp;&amp; command -v goreleaser &gt;/dev/null &amp;&amp; (COSIGN_YES=true goreleaser release --snapshot --skip=publish --clean 2&gt;&amp;1 | tee /tmp/58-01-snapshot.log; ls dist/*.sigstore.json 2&gt;/dev/null | wc -l | grep -qE '^[1-9]' || grep -q 'cosign sign-blob' /tmp/58-01-snapshot.log)</automated>
+    <automated>command -v cosign &gt;/dev/null &amp;&amp; command -v goreleaser &gt;/dev/null &amp;&amp; set -o pipefail &amp;&amp; (COSIGN_YES=true goreleaser release --snapshot --skip=publish --skip=announce --clean 2&gt;&amp;1 | tee /tmp/58-01-snapshot.log) &amp;&amp; (ls dist/*.sigstore.json 2&gt;/dev/null | head -1 || grep -q 'cosign sign-blob' /tmp/58-01-snapshot.log) &amp;&amp; ! grep -E 'yaml: line|error parsing' /tmp/58-01-snapshot.log</automated>
   </verify>
   <acceptance_criteria>
+    - `set -o pipefail` is honored: if goreleaser exits non-zero, the verify gate fails (no silent OR-fallback)
     - Either: `dist/` contains at least one `*.sigstore.json` file after the snapshot run (full local OIDC available), OR
     - `/tmp/58-01-snapshot.log` shows goreleaser invoked the `cosign sign-blob` command with the configured args (OIDC-acquisition failure is acceptable on dev workstation; CI will succeed)
-    - No YAML parse errors from goreleaser
+    - **No YAML parse errors:** `! grep -E 'yaml: line|error parsing' /tmp/58-01-snapshot.log` (split assertion — the previous OR-fallback could mask YAML parse failures)
     - Cosign binary is on PATH at v2.4+ (`cosign version` reports v2.4 or later)
     - The local result is captured in the plan SUMMARY with a note distinguishing "local snapshot OIDC-gated" vs "CI snapshot will succeed end-to-end"
   </acceptance_criteria>

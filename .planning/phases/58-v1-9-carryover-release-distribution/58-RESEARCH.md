@@ -406,13 +406,18 @@ The CONTEXT.md §Specifics passage pins this literally: `- [~]` is the marker. P
 
 **Alternative considered:** combining P1 + P2 into one mega-plan. Rejected because (a) the diff is ~15 files which is at the edge of reviewable in one PR, (b) the security-critical identity-pinning regex deserves its own focused review pass per R-2, (c) worktree isolation is cleaner with two separate plans. The "P1 must merge before P2" constraint is a documentation/sequencing detail, not an argument against splitting.
 
-## Open questions for planner
+## Open questions for planner (RESOLVED)
 
 1. **Q-1: D-04 strict reading — does "online Rekor" mean the SET-based offline check, or an additional online tlog-tree-head freshness check?** The bundle's embedded SET satisfies inclusion-proof verification offline. Forcing an online tlog-tree-head check is extra code and an extra failure mode. Default: treat the SET as satisfying D-04. If user wants a stricter online check, the planner should raise this back via discuss-phase before P2 implementation starts. Confidence on default reading: MEDIUM — the cosign documentation on this nuance is thin.
+   - **RESOLVED:** SET-based offline tlog inclusion-proof check is sufficient for D-04. A future maintainer wanting strict tlog-tree-head freshness adds the extra Rekor call (TODO comment lives in verify.go).
 2. **Q-2: Trusted root sourcing — embed `trusted_root.json` or fetch via TUF at runtime?** §"Trust root sourcing" recommends embed; user-side intent (single-binary ethos) supports embed. Confirm before P2.
+   - **RESOLVED:** Embed `trusted_root.json` (sigstore TUF root snapshot) at release time. Add `make update-trust-root` target for periodic refresh. Document refresh cadence in CONTRIBUTING.md.
 3. **Q-3: INSTALL.md update scope.** INSTALL.md owns the user-side `cosign verify-blob` recipe today (with minisign instructions). It is NOT in CONTEXT §In scope but is structurally tied to P2 — users who follow INSTALL.md after P2 ships will fail with minisign instructions. Recommend adding to P2; confirm.
+   - **RESOLVED:** Fold INSTALL.md (or README.md §Installation) cosign-verify recipe update into Plan 58-02 Task 4.
 4. **Q-4: Canonical error string vs developer-mode debug logs.** Pitfall 4 mandates a single error string at default verbosity. Should `--debug` or `HELIX_DEBUG=1` un-collapse it (so a developer can see "cert SAN mismatch" vs "Rekor missing")? The current minisign code has no such escape hatch. Recommend matching the existing posture (no escape hatch) for consistency, but note the trade-off.
+   - **RESOLVED:** Match existing minisign no-escape posture — every cosign verifier failure branch returns the literal "signature verification FAILED" with `// canonical: …` comment above each fmt.Errorf site. No `--debug` escape hatch.
 5. **Q-5: Who actually runs the forwarder with a non-Noop TracerProvider?** §REL-06 §"TracerProvider sourcing" recommends env-var (`OTEL_EXPORTER_OTLP_ENDPOINT`). For the test in P3 we use `obs.NewForTest`. For real usage, who sets the env var? Likely no one in the v1.10 default install; the test asserts the *capability* exists. Confirm this is sufficient for D-06's "verified by an end-to-end trace assertion in an integration test."
+   - **RESOLVED:** TracerProvider env-var-driven via `OTEL_EXPORTER_OTLP_ENDPOINT` (matches existing `obs/tracing.go` pattern). Production path is opt-in. Integration test asserts capability via in-memory exporter (`tracetest.InMemoryExporter`).
 
 ## Code Examples
 

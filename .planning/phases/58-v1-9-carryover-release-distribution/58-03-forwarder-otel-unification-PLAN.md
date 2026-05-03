@@ -242,7 +242,7 @@ defer func() { _ = tp.Shutdown(context.Background()) }()
     6. Commit shape: `test(58-03): add failing trace-continuity integration test (RED)`.
   </action>
   <verify>
-    <automated>! go test ./test/integration/ -run TestE2ETraceContinuity -count=1 2&gt;&amp;1 | tee /tmp/58-03-red.log; grep -qE '(FAIL|trace IDs differ|forwarder span missing)' /tmp/58-03-red.log</automated>
+    <automated>if go test ./test/integration/ -run TestE2ETraceContinuity -count=1 2&gt;/dev/null; then exit 1; fi; go test ./test/integration/ -run TestE2ETraceContinuity -count=1 2&gt;&amp;1 | tee /tmp/58-03-red.log | grep -qE 'FAIL|trace IDs differ|forwarder span missing'</automated>
   </verify>
   <acceptance_criteria>
     - `test/integration/trace_continuity_test.go` exists

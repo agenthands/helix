@@ -161,7 +161,7 @@ Output: Three documentation files in their final post-Phase-58 state.
        ```
   </action>
   <verify>
-    <automated>[ "$(grep -cE '^- \[~\] \*\*REL-(02|03|04)' .planning/REQUIREMENTS.md)" = "3" ] &amp;&amp; grep -c "won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience" .planning/REQUIREMENTS.md | grep -qE '^[3-9]' &amp;&amp; grep -q 'Status legend' .planning/REQUIREMENTS.md &amp;&amp; grep -q '\\- \[~\\] won.t-do' .planning/REQUIREMENTS.md</automated>
+    <automated>[ "$(grep -cE '^- \[~\] \*\*REL-(02|03|04)' .planning/REQUIREMENTS.md)" = "3" ] &amp;&amp; [ "$(grep -c -- "won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience" .planning/REQUIREMENTS.md)" -ge 3 ] &amp;&amp; grep -q 'Status legend' .planning/REQUIREMENTS.md &amp;&amp; grep -q -- '- \[~\] \*\*REL-' .planning/REQUIREMENTS.md</automated>
   </verify>
   <acceptance_criteria>
     - `grep -cE '^- \[~\] \*\*REL-(02|03|04)' .planning/REQUIREMENTS.md` returns exactly 3
@@ -205,12 +205,19 @@ Output: Three documentation files in their final post-Phase-58 state.
        - [ ] 58-04-wontdo-and-repro-doc-PLAN.md — REL-02/03/04 won't-do recording + REL-05 Pass-3 limitation doc [REL-05]
        ```
 
-    5. Do NOT touch any other phase's entry in this roadmap. Verify Phase 57 / Phase 59 shapes are unchanged.
+    5. **Rewrite the top-of-file Phase 58 one-line summary at line 13** of `.planning/milestones/v1.10-ROADMAP.md`. The current line reads `"first signed Helix release with real maintainer minisign keypair, Homebrew tap, Scoop bucket, native Linux package, Phase 51 reproducibility-gate fix, Phase 55 forwarder.tools.call span unification"` — after Phase 58 ships this contradicts the won't-do decision and the cosign migration. Replace with (planner may refine wording while preserving the keyword set):
+       ```
+       first signed Helix release using sigstore cosign keyless signing, Phase 51 reproducibility-gate Pass-3 limitation documented, Phase 55 forwarder.tools.call span unified with the gRPC server span
+       ```
+       MUST: remove every occurrence of `minisign`, `Homebrew`, `Scoop`, and `native Linux package` from line 13. MUST: add `cosign` to line 13.
 
-    6. Verify:
+    6. Do NOT touch any other phase's entry in this roadmap. Verify Phase 57 / Phase 59 shapes are unchanged.
+
+    7. Verify:
        ```bash
        grep -A 20 '^### Phase 58' .planning/milestones/v1.10-ROADMAP.md | grep -E 'Requirements.*REL-01.*REL-05.*REL-06'
        grep -A 20 '^### Phase 58' .planning/milestones/v1.10-ROADMAP.md | grep -v 'REL-02\|REL-03\|REL-04'
+       sed -n '13p' .planning/milestones/v1.10-ROADMAP.md
        ```
   </action>
   <verify>
@@ -222,6 +229,8 @@ Output: Three documentation files in their final post-Phase-58 state.
     - The Phase 58 `**Plans**:` line names all 4 plan files (`58-01-release-side-cosign-PLAN.md`, `58-02-verifier-rewrite-PLAN.md`, `58-03-forwarder-otel-unification-PLAN.md`, `58-04-wontdo-and-repro-doc-PLAN.md`)
     - The Phase 58 entry contains a reference to CONTEXT D-01 (`grep -q 'D-01'` passes within the Phase 58 block)
     - No other phase's entry in this roadmap is changed
+    - Line 13 of `.planning/milestones/v1.10-ROADMAP.md` no longer mentions minisign / Homebrew / Scoop / native Linux package: `! sed -n '13p' .planning/milestones/v1.10-ROADMAP.md | grep -E 'minisign|Homebrew|Scoop|native Linux package'`
+    - Line 13 of `.planning/milestones/v1.10-ROADMAP.md` references cosign: `sed -n '13p' .planning/milestones/v1.10-ROADMAP.md | grep -q 'cosign'`
   </acceptance_criteria>
   <done>
     Phase 58 entry in v1.10-ROADMAP.md lists only REL-01/05/06; SC-2/SC-3 removed; 4 plan files enumerated; D-01 cross-reference present.
@@ -231,6 +240,8 @@ Output: Three documentation files in their final post-Phase-58 state.
 </tasks>
 
 <threat_model>
+> **Cross-reference:** T-58-01..05 are covered by upstream plans 58-01/02/03. Plan 58-04 is doc-only and adds repudiation-class doc threats (T-58-doc-01/02/03) only.
+
 ## Trust Boundaries
 
 | Boundary | Description |

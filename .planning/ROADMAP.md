@@ -12,6 +12,7 @@
 - [x] **v1.7 Developer Experience & Auto-Setup** -- Phases 34-38 (shipped 2026-04-22)
 - [x] **v1.8 Documentation Overhaul** -- Phases 39-45 (shipped 2026-04-24)
 - [x] **v1.9 Polish & Infra** -- Phases 46-56 (shipped 2026-05-03)
+- [ ] **v1.10 Live Semantic Index** -- Phases 57-67 (planning)
 
 ## Phases
 
@@ -127,9 +128,21 @@
 
 </details>
 
-### v1.10 (Planning)
+### v1.10 Live Semantic Index (Planning) -- Phases 57-67
 
-_Next milestone goals to be defined via `/gsd-new-milestone`._
+- [ ] Phase 57: Semantic Store Foundation + Pipeline DAG Library (0/0 plans)
+- [ ] Phase 58: v1.9 Carryover -- Release & Distribution (0/0 plans)
+- [ ] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans)
+- [ ] Phase 60: Live Update Pipeline (0/0 plans)
+- [ ] Phase 61: LSP Enrichment Worker (0/0 plans)
+- [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)
+- [ ] Phase 63: Compaction & Retention (0/0 plans)
+- [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
+- [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
+- [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
+- [ ] Phase 67: Evaluation Harness (0/0 plans)
+
+**Full details:** `.planning/milestones/v1.10-ROADMAP.md`
 
 ## Progress
 
@@ -145,6 +158,7 @@ _Next milestone goals to be defined via `/gsd-new-milestone`._
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46-56 | v1.9 | 51/51 | Complete | 2026-05-03 |
+| 57-67 | v1.10 | 0/0 | Planning | -- |
 
 ## Backlog
 

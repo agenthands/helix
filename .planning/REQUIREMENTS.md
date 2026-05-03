@@ -153,6 +153,77 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ## Traceability
 
-| REQ-ID | Phase |
-|---|---|
-| (filled by `gsd-roadmapper` after roadmap is created) | |
+| REQ-ID | Phase | Status |
+|---|---|---|
+| STORE-01 | Phase 57 | Pending |
+| STORE-02 | Phase 57 | Pending |
+| STORE-03 | Phase 57 | Pending |
+| STORE-04 | Phase 57 | Pending |
+| STORE-05 | Phase 57 | Pending |
+| STORE-06 | Phase 57 | Pending |
+| DAG-01 | Phase 57 | Pending |
+| DAG-02 | Phase 57 | Pending |
+| DAG-03 | Phase 57 | Pending |
+| DAG-04 | Phase 57 | Pending |
+| REL-01 | Phase 58 | Pending |
+| REL-02 | Phase 58 | Pending |
+| REL-03 | Phase 58 | Pending |
+| REL-04 | Phase 58 | Pending |
+| REL-05 | Phase 58 | Pending |
+| REL-06 | Phase 58 | Pending |
+| EXTRACT-01 | Phase 59 | Pending |
+| EXTRACT-02 | Phase 59 | Pending |
+| EXTRACT-03 | Phase 59 | Pending |
+| EXTRACT-04 | Phase 59 | Pending |
+| EXTRACT-05 | Phase 59 | Pending |
+| LIVE-01 | Phase 60 | Pending |
+| LIVE-02 | Phase 60 | Pending |
+| LIVE-03 | Phase 60 | Pending |
+| LIVE-04 | Phase 60 | Pending |
+| LIVE-05 | Phase 60 | Pending |
+| LIVE-06 | Phase 60 | Pending |
+| LIVE-07 | Phase 60 | Pending |
+| ENRICH-01 | Phase 61 | Pending |
+| ENRICH-02 | Phase 61 | Pending |
+| ENRICH-03 | Phase 61 | Pending |
+| ENRICH-04 | Phase 61 | Pending |
+| ENRICH-05 | Phase 61 | Pending |
+| GRAPH-01 | Phase 62 | Pending |
+| GRAPH-02 | Phase 62 | Pending |
+| GRAPH-03 | Phase 62 | Pending |
+| GRAPH-04 | Phase 62 | Pending |
+| GRAPH-05 | Phase 62 | Pending |
+| GRAPH-06 | Phase 62 | Pending |
+| TYPES-01 | Phase 62 | Pending |
+| TYPES-02 | Phase 62 | Pending |
+| TYPES-03 | Phase 62 | Pending |
+| TYPES-04 | Phase 62 | Pending |
+| COMPACT-01 | Phase 63 | Pending |
+| COMPACT-02 | Phase 63 | Pending |
+| COMPACT-03 | Phase 63 | Pending |
+| COMPACT-04 | Phase 63 | Pending |
+| COMPACT-05 | Phase 63 | Pending |
+| TOOL-01 | Phase 64 | Pending |
+| TOOL-02 | Phase 64 | Pending |
+| TOOL-03 | Phase 64 | Pending |
+| TOOL-04 | Phase 64 | Pending |
+| TOOL-05 | Phase 64 | Pending |
+| INTEG-01 | Phase 65 | Pending |
+| INTEG-02 | Phase 65 | Pending |
+| INTEG-03 | Phase 65 | Pending |
+| INTEG-04 | Phase 65 | Pending |
+| INTEG-05 | Phase 65 | Pending |
+| GUARD-01 | Phase 66 | Pending |
+| GUARD-02 | Phase 66 | Pending |
+| GUARD-03 | Phase 66 | Pending |
+| GUARD-04 | Phase 66 | Pending |
+| GUARD-05 | Phase 66 | Pending |
+| GUARD-06 | Phase 66 | Pending |
+| GUARD-07 | Phase 66 | Pending |
+| EVAL-01 | Phase 67 | Pending |
+| EVAL-02 | Phase 67 | Pending |
+| EVAL-03 | Phase 67 | Pending |
+| EVAL-04 | Phase 67 | Pending |
+| EVAL-05 | Phase 67 | Pending |
+| EVAL-06 | Phase 67 | Pending |
+| EVAL-07 | Phase 67 | Pending |

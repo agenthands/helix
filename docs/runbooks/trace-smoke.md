@@ -3,7 +3,7 @@ title: Smoke-Test the Trace Pipeline
 severity: info
 metric: none — smoke procedure
 since_phase: 55
-last_reviewed: 2026-05-02 (podman supported alongside docker)
+last_reviewed: 2026-05-03
 ---
 
 # Smoke-Test the Trace Pipeline

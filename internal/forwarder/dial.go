@@ -9,14 +9,13 @@ import (
 	"os/exec"
 	"time"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
+	"github.com/agenthands/helix/internal/obs"
 )
 
 // ConnectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
@@ -65,19 +64,12 @@ func tryConnect(_ context.Context, socketPath string, tp trace.TracerProvider) (
 			PermitWithoutStream: true,
 		}),
 		// Phase 12 / Phase 58 D-06: otelgrpc client handler for trace
-		// propagation (D-01, D-12). WithTracerProvider is MANDATORY — without
-		// it otelgrpc falls back to the OTel global, violating the no-global
-		// rule. WithPropagators(TraceContext{}) is MANDATORY — without it
-		// otelgrpc falls back to otel.GetTextMapPropagator() (NoOp by default
-		// per D-01) and traceparent is never injected into gRPC metadata,
-		// breaking the forwarder→daemon trace continuity contract enforced
-		// by test/integration/trace_continuity_test.go.
+		// propagation (D-01, D-12). obs.ClientStatsHandler centralises the
+		// TracerProvider + WithPropagators(TraceContext{}) option set so the
+		// client and server sites cannot drift — see internal/obs/grpc.go.
 		// Pitfall 5: only one WithStatsHandler call (gRPC silently overwrites
 		// duplicates).
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
-			otelgrpc.WithTracerProvider(tp),
-			otelgrpc.WithPropagators(propagation.TraceContext{}),
-		)),
+		grpc.WithStatsHandler(obs.ClientStatsHandler(tp)),
 	)
 	if err != nil {
 		return nil, nil, err

@@ -120,17 +120,11 @@ func Upgrade(ctx context.Context, opts Options) error {
 		return nil
 	}
 
-	// Step 1b: placeholder-pubkey guard (REVIEW.md WR-05). A binary built
-	// before the maintainer rotated in the production minisign key
-	// embeds an all-zeros placeholder; every signature verification under
-	// that key fails closed with the canonical "signature verification
-	// FAILED" message — indistinguishable from a tampered archive at the
-	// caller. Surface a distinct, actionable error instead of letting the
-	// user descend through download + verify and see the generic message.
-	if IsPlaceholderPubKey() {
-		return serr.New(serr.Unsupported,
-			"this build was made before the maintainer rotated in the production minisign key — `helix upgrade` is unavailable; install from GitHub Releases (see INSTALL.md > Upgrading)")
-	}
+	// Phase 58 D-02: the placeholder-pubkey guard (REVIEW.md WR-05) is
+	// removed alongside the minisign embed. Cosign keyless has no
+	// pre-rotation placeholder concept — the embedded asset is a
+	// sigstore TUF trust root (refreshed via `make update-trust-root`),
+	// not a per-project keypair.
 
 	// Step 2: permission probe (D-09) — BEFORE network I/O.
 	exec, err := os.Executable()
@@ -186,20 +180,20 @@ func Upgrade(ctx context.Context, opts Options) error {
 	}()
 
 	archiveName := archiveAssetName(rel.TagName, runtime.GOOS, runtime.GOARCH)
-	sigName := archiveName + ".minisig"
+	bundleName := archiveName + ".sigstore.json"
 
 	archiveAsset := rel.FindAsset(archiveName)
 	if archiveAsset == nil {
 		return serr.New(serr.NotFound, "no release archive for current platform").
 			WithDetail(fmt.Sprintf("looking for %s in tag %s", archiveName, rel.TagName))
 	}
-	sigAsset := rel.FindAsset(sigName)
-	if sigAsset == nil {
-		return serr.New(serr.NotFound, "no archive signature for current platform").
-			WithDetail("looking for " + sigName)
+	bundleAsset := rel.FindAsset(bundleName)
+	if bundleAsset == nil {
+		return serr.New(serr.NotFound, "no archive signature bundle for current platform").
+			WithDetail("looking for " + bundleName)
 	}
 	checksumsAsset := rel.FindAsset("checksums.txt")
-	checksumsSigAsset := rel.FindAsset("checksums.txt.minisig")
+	checksumsSigAsset := rel.FindAsset("checksums.txt.sigstore.json")
 
 	// Asymmetric checksum-pair guard (REVIEW.md CR-03). The cross-check
 	// between checksums.txt and the archive sha256 is defense-in-depth
@@ -207,16 +201,16 @@ func Upgrade(ctx context.Context, opts Options) error {
 	// release page. If a release ships ONE file but not the other, that
 	// is a positive signal that the release-signing pipeline failed (or
 	// that an attacker who can replace checksums.txt also deleted the
-	// .minisig sidecar to disable the cross-check). Either case fails
+	// .sigstore.json sidecar to disable the cross-check). Either case fails
 	// closed: refuse to upgrade rather than silently falling back to
 	// archive-signature-only verification, which is exactly the surface
 	// the cross-check was added to defend.
 	if (checksumsAsset != nil) != (checksumsSigAsset != nil) {
 		var present, missing string
 		if checksumsAsset != nil {
-			present, missing = "checksums.txt", "checksums.txt.minisig"
+			present, missing = "checksums.txt", "checksums.txt.sigstore.json"
 		} else {
-			present, missing = "checksums.txt.minisig", "checksums.txt"
+			present, missing = "checksums.txt.sigstore.json", "checksums.txt"
 		}
 		fmt.Fprintf(out, "warning: release asset %s present but %s missing — refusing to upgrade (release artifact is incomplete)\n", present, missing)
 		return serr.New(serr.NotFound, "release artifacts incomplete: "+present+" present without "+missing).
@@ -224,21 +218,22 @@ func Upgrade(ctx context.Context, opts Options) error {
 	}
 
 	stageArchive := filepath.Join(stage, archiveName)
-	stageSig := filepath.Join(stage, sigName)
+	stageBundle := filepath.Join(stage, bundleName)
 	if err := downloadFile(ctx, archiveAsset.BrowserDownloadURL, stageArchive); err != nil {
 		return err
 	}
-	if err := downloadFile(ctx, sigAsset.BrowserDownloadURL, stageSig); err != nil {
+	if err := downloadFile(ctx, bundleAsset.BrowserDownloadURL, stageBundle); err != nil {
 		return err
 	}
 
-	// Defense-in-depth: if checksums.txt + sig are present, verify them
-	// and cross-check the archive sha256. Phase 51 51-05 signs both
-	// files; this triple-check matches the INSTALL.md ceremony. The
-	// asymmetric-pair case is rejected above before we reach this branch.
+	// Defense-in-depth: if checksums.txt + bundle are present, verify
+	// them and cross-check the archive sha256. Phase 51 51-05 signs
+	// both files; this triple-check matches the INSTALL.md ceremony.
+	// The asymmetric-pair case is rejected above before we reach this
+	// branch.
 	if checksumsAsset != nil && checksumsSigAsset != nil {
 		stageChecksums := filepath.Join(stage, "checksums.txt")
-		stageChecksumsSig := filepath.Join(stage, "checksums.txt.minisig")
+		stageChecksumsSig := filepath.Join(stage, "checksums.txt.sigstore.json")
 		if err := downloadFile(ctx, checksumsAsset.BrowserDownloadURL, stageChecksums); err != nil {
 			return err
 		}
@@ -255,8 +250,8 @@ func Upgrade(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// Step 6: minisign verify the archive itself.
-	if err := VerifyArchive(stageArchive, stageSig); err != nil {
+	// Step 6: cosign verify the archive bundle.
+	if err := VerifyArchive(stageArchive, stageBundle); err != nil {
 		verifyKept = true
 		return err
 	}

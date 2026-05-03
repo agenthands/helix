@@ -13,7 +13,15 @@ package semantic
 // at runtime when P03 is absent — safe degradation.
 //
 // Style note: this file mirrors the ObservabilityConfig nested-struct style
-// in internal/config/config.go (one koanf tag per leaf).
+// in internal/config/config.go (one koanf tag per leaf). Every field name
+// and its koanf tag mirrors a SPEC-DRAFT.md §25 key verbatim — when SPEC §25
+// changes a key name, this file MUST change in lockstep, otherwise the
+// koanf binding silently drops the value.
+//
+// History note: P03 broadened the nested type set so every SPEC §25 key has
+// a typed home (P02 shipped a smaller speculative subset that drifted from
+// SPEC §25; aligning the field names here is part of P03's RED-gate
+// preparation since the coverage tests reference the SPEC §25 keys verbatim).
 type Config struct {
 	// Enabled gates the entire semantic-graph subsystem. When false, the
 	// daemon's bootstrap step 6b skips Open and downstream consumers MUST
@@ -74,79 +82,117 @@ type StoreConfig struct {
 }
 
 // IndexingConfig holds per-snapshot indexing-pipeline settings (P59).
+// Field set mirrors SPEC §25.indexing.* verbatim.
 type IndexingConfig struct {
-	BatchSize       int      `koanf:"batch_size"`
-	IncludeGlobs    []string `koanf:"include_globs"`
-	ExcludeGlobs    []string `koanf:"exclude_globs"`
-	MaxFileSizeKB   int      `koanf:"max_file_size_kb"`
-	ParallelWorkers int      `koanf:"parallel_workers"`
+	Mode                   string  `koanf:"mode"`                      // "lazy" | "eager" | "on_demand"
+	AutoIndexOnActivate    bool    `koanf:"auto_index_on_activate"`    // default false
+	MaxFileSize            string  `koanf:"max_file_size"`             // human-readable size, e.g., "2MiB"
+	MaxFiles               int     `koanf:"max_files"`                 // ceiling for indexed file count
+	FullReindexChangeRatio float64 `koanf:"full_reindex_change_ratio"` // default 0.25
+	SnapshotRetention      int     `koanf:"snapshot_retention"`        // default 5
+	IncludeGenerated       bool    `koanf:"include_generated"`         // default false
+	RequiredForReadyz      bool    `koanf:"required_for_readyz"`       // default false
 }
 
 // LiveUpdatesConfig holds fsnotify overlay-watcher settings (P60).
+// Field set mirrors SPEC §25.live_updates.* verbatim.
 type LiveUpdatesConfig struct {
-	DebounceMS  int `koanf:"debounce_ms"`
-	MaxOverlay  int `koanf:"max_overlay"`
-	IdleFlushMS int `koanf:"idle_flush_ms"`
+	Enabled                  bool   `koanf:"enabled"`                       // default true
+	DebounceMS               int    `koanf:"debounce_ms"`                   // default 250
+	MaxBatchDelayMS          int    `koanf:"max_batch_delay_ms"`            // default 1500
+	BulkChangeThreshold      int    `koanf:"bulk_change_threshold"`         // default 200
+	CompactAfterIdleMS       int    `koanf:"compact_after_idle_ms"`         // default 5000
+	LSPRevalidateAfterIdleMS int    `koanf:"lsp_revalidate_after_idle_ms"`  // default 750
+	LSPCompactionMaxWaitMS   int    `koanf:"lsp_compaction_max_wait_ms"`    // default 3000
+	MaxOverlayFiles          int    `koanf:"max_overlay_files"`             // default 1000
+	MaxOverlayAge            string `koanf:"max_overlay_age"`               // default "30m"
 }
 
 // LSPEnrichmentConfig holds LSP enrichment-worker settings (P61).
+// Field set mirrors SPEC §25.lsp_enrichment.* verbatim.
 type LSPEnrichmentConfig struct {
-	Enabled        bool `koanf:"enabled"`
-	TimeoutMS      int  `koanf:"timeout_ms"`
-	MaxConcurrency int  `koanf:"max_concurrency"`
+	Enabled                bool   `koanf:"enabled"`
+	TimeoutPerFile         string `koanf:"timeout_per_file"`           // default "5s"
+	TimeoutTotal           string `koanf:"timeout_total"`              // default "120s"
+	MaxSymbolsPerFile      int    `koanf:"max_symbols_per_file"`       // default 200
+	MaxReferencesPerSymbol int    `koanf:"max_references_per_symbol"`  // default 1000
+	MaxReferencesPerFile   int    `koanf:"max_references_per_file"`    // default 5000
+	MaxCallHierarchyDepth  int    `koanf:"max_call_hierarchy_depth"`   // default 2
+	MaxTypeHierarchyDepth  int    `koanf:"max_type_hierarchy_depth"`   // default 2
 }
 
 // GraphConfig holds graph-engine projection settings (P62).
+// Field set mirrors SPEC §25.graph.* verbatim.
 type GraphConfig struct {
-	Projections []string `koanf:"projections"`
+	MinEdgeConfidence                float64 `koanf:"min_edge_confidence"`                  // default 0.50
+	MaxLoadedNodes                   int     `koanf:"max_loaded_nodes"`                     // default 1_000_000
+	MaxLoadedEdges                   int     `koanf:"max_loaded_edges"`                     // default 5_000_000
+	MaxLocalPagerankNodes            int     `koanf:"max_local_pagerank_nodes"`             // default 5000
+	MaxIncrementalClusterRepairNodes int     `koanf:"max_incremental_cluster_repair_nodes"` // default 10_000
 }
 
 // PageRankConfig holds cross-file ranking parameters (P62).
+// Field set mirrors SPEC §25.pagerank.* verbatim.
 type PageRankConfig struct {
-	Damping     float64 `koanf:"damping"`
-	Iterations  int     `koanf:"iterations"`
-	Tolerance   float64 `koanf:"tolerance"`
-	Personalized bool   `koanf:"personalized"`
+	Damping       float64 `koanf:"damping"`        // default 0.85
+	Epsilon       float64 `koanf:"epsilon"`        // default 1e-6
+	MaxIterations int     `koanf:"max_iterations"` // default 100
 }
 
 // ClusteringConfig holds symbol-cluster parameters (P62).
+// Field set mirrors SPEC §25.clustering.* verbatim.
 type ClusteringConfig struct {
-	Algorithm  string  `koanf:"algorithm"`
-	MinSize    int     `koanf:"min_size"`
-	MaxSize    int     `koanf:"max_size"`
-	Resolution float64 `koanf:"resolution"`
+	Enabled                     bool `koanf:"enabled"`                         // default true
+	MaxComponentSizeBeforeSplit int  `koanf:"max_component_size_before_split"` // default 5000
+	LabelPropagationIterations  int  `koanf:"label_propagation_iterations"`    // default 20
 }
 
 // RetrievalConfig holds retrieval-tool defaults (P64).
+// Field set mirrors SPEC §25.retrieval.* verbatim.
 type RetrievalConfig struct {
-	DefaultLimit int     `koanf:"default_limit"`
-	MaxLimit     int     `koanf:"max_limit"`
-	MinScore     float64 `koanf:"min_score"`
+	DefaultMaxTokens         int  `koanf:"default_max_tokens"`          // default 8000
+	IncludeEvidenceByDefault bool `koanf:"include_evidence_by_default"` // default true
 }
 
 // GuardrailsConfig holds GuardrailMiddleware settings (P66).
+// Field set mirrors SPEC §25.guardrails.* verbatim.
 type GuardrailsConfig struct {
-	Enabled        bool     `koanf:"enabled"`
-	BlockedTools   []string `koanf:"blocked_tools"`
-	WarnThreshold  int      `koanf:"warn_threshold"`
+	Enabled                       bool   `koanf:"enabled"`                            // default true
+	Enforcement                   string `koanf:"enforcement"`                        // "warn" | "block"
+	RequireImpactForPublicAPIEdit bool   `koanf:"require_impact_for_public_api_edit"` // default true
+	RequireReferencesBeforeRename bool   `koanf:"require_references_before_rename"`   // default true
+	RequireReferencesBeforeDelete bool   `koanf:"require_references_before_delete"`   // default true
+	RequireVerifyAfterEdit        bool   `koanf:"require_verify_after_edit"`          // default true
+	StaleGraphPolicy              string `koanf:"stale_graph_policy"`                 // "warn" | "block"
 }
 
 // EvalConfig holds eval-harness settings (P67).
+// Field set mirrors SPEC §25.eval.* verbatim.
 type EvalConfig struct {
-	Enabled    bool   `koanf:"enabled"`
-	OutputDir  string `koanf:"output_dir"`
-	Iterations int    `koanf:"iterations"`
+	Enabled               bool     `koanf:"enabled"`                  // default true
+	DefaultModes          []string `koanf:"default_modes"`            // default [baseline, native, semantic, semantic_guarded]
+	OutputDir             string   `koanf:"output_dir"`               // default ".helix/eval"
+	TrackCosts            bool     `koanf:"track_costs"`              // default true
+	TrackToolBehavior     bool     `koanf:"track_tool_behavior"`      // default true
+	RedactSourceInReports bool     `koanf:"redact_source_in_reports"` // default false
 }
 
 // TypeResolutionConfig holds type-resolution pipeline parameters (P62).
+// Field set mirrors SPEC §25.type_resolution.* verbatim.
 type TypeResolutionConfig struct {
-	Enabled        bool `koanf:"enabled"`
-	MaxDepth       int  `koanf:"max_depth"`
-	CommentFallback bool `koanf:"comment_fallback"`
+	Enabled               bool    `koanf:"enabled"`                  // default true
+	MaxChainDepth         int     `koanf:"max_chain_depth"`          // default 8
+	MaxFixpointIterations int     `koanf:"max_fixpoint_iterations"`  // default 8
+	MinConfidenceForEdge  float64 `koanf:"min_confidence_for_edge"`  // default 0.45
+	CommentFallbacks      bool    `koanf:"comment_fallbacks"`        // default true
+	EmitUnresolvedEdges   bool    `koanf:"emit_unresolved_edges"`    // default true
 }
 
 // PhaseGraphConfig holds bootstrap phase-graph-runner settings (v1.11+).
+// Field set mirrors SPEC §25.phase_graph.* verbatim.
 type PhaseGraphConfig struct {
-	Enabled bool   `koanf:"enabled"`
-	DotPath string `koanf:"dot_path"`
+	Enabled           bool `koanf:"enabled"`             // default true
+	ValidateOnStartup bool `koanf:"validate_on_startup"` // default true
+	FailOnCycle       bool `koanf:"fail_on_cycle"`       // default true
+	DumpDotOnError    bool `koanf:"dump_dot_on_error"`   // default true
 }

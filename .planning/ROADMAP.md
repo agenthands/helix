@@ -131,7 +131,7 @@
 ### v1.10 Live Semantic Index (Planning) -- Phases 57-67
 
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (0/4 plans) (completed 2026-05-03)
-- [ ] Phase 58: v1.9 Carryover -- Release & Distribution (0/4 plans)
+- [x] Phase 58: v1.9 Carryover -- Release & Distribution (0/4 plans) (completed 2026-05-03)
 - [ ] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans)
 - [ ] Phase 60: Live Update Pipeline (0/0 plans)
 - [ ] Phase 61: LSP Enrichment Worker (0/0 plans)

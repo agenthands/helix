@@ -30,9 +30,9 @@ Phase 57 lays four orthogonal foundations for v1.10 in a single phase, with **no
 
 - **D-04: Four parallel-ready plans.** The phase decomposes into four orthogonal tracks landing as four plans:
   - **P01 — `internal/phasegraph/` library.** Stdlib only. `phase.go`, `dag.go`, `validate.go`, `run.go`, `shutdown.go`, `dot.go`, plus `pipelines/{semantic,live,eval}.go` declaring the typed phase ID constants and `Requires`/`Provides` for DAG-02. Test coverage for cycle / missing-dep / duplicate-id (DAG-03). **Independent of P02–P04.**
-  - **P02 — `internal/semantic/{config,store,types}` skeleton.** Adds `github.com/duckdb/duckdb-go/v2@v2.10502.0` to `go.mod`. Lays down `internal/semantic/config.go` (typed mirror of koanf `semantic_index.*`), `internal/semantic/types.go` (SnapshotID, FileID, SymbolID, Freshness), and the full `store/` package: `duckdb.go` (CGO=1 open/close/quarantine/rebuild), `duckdb_nocgo.go` (CGO=0 stub returning `serr.ErrUnsupported`), `migrations.go`, `snapshot.go`, `overlay.go` skeleton, `effective.go` (snapshot ⊕ overlay − tombstones), `store_test.go`. Wires `OpenSemanticStore` into daemon bootstrap at **step 6b** (between the existing CGO=0 refusal at step 6a and the diagnostic store at step 6).
-  - **P03 — `semantic_index.*` config keys.** Adds every key from SPEC §25 to `internal/config/defaults.go`, mirrors them onto `SerenaConfig` struct fields, adds `TestLoad_SemanticIndexDefaults` and `TestLoad_SemanticIndexPrecedence` in `internal/config/loader_test.go`. **Depends on P02** for the typed `semantic.Config` mirror that consumes the resolved values.
-  - **P04 — `cmd/vet-noduckdb/` analyzer.** `cmd/vet-noduckdb/main.go` invoking `singlechecker.Main(noduckdb.Analyzer)`; analyzer body in `internal/lint/noduckdb/{analyzer.go,analyzer_test.go}` using `analysistest` with a fixture that has a non-store file importing `duckdb-go`. `Makefile` adds `make vet` building the analyzer first then passing it via `-vettool=`. **Depends on P02** so the legitimate `internal/semantic/store/` import path exists for the analyzer to allowlist.
+  - **P02 — `internal/semantic/{config,store,types}` skeleton.** Adds `github.com/duckdb/duckdb-go/v2@v2.10502.0` to `go.mod` (per D-12). Lays down `internal/semantic/config.go` (typed mirror of koanf `semantic_index.*`), `internal/semantic/types.go` (SnapshotID, FileID, SymbolID, Freshness), and the full `store/` package: `duckdb.go` (CGO=1 open/close/quarantine/rebuild), `duckdb_nocgo.go` (CGO=0 stub returning `serr.ErrUnsupported`), `migrations.go`, `snapshot.go`, `overlay.go` skeleton, `effective.go` (snapshot ⊕ overlay − tombstones), `store_test.go`. Wires `OpenSemanticStore` into daemon bootstrap at **step 6b** (between the existing CGO=0 refusal at step 6a and the diagnostic store at step 6). **Also lands a stub `SemanticIndex semantic.Config` field on `SerenaConfig`** so the daemon step 6b reference (`cfg.SemanticIndex.Enabled`) compiles at end of wave 1; P03 then populates that field's defaults and koanf bindings.
+  - **P03 — `semantic_index.*` config keys.** Adds every key from SPEC §25 to `internal/config/defaults.go`, attaches the koanf binding to the existing-but-empty `SerenaConfig.SemanticIndex` field landed by P02, adds `TestLoad_SemanticIndexDefaults` and `TestLoad_SemanticIndexPrecedence` in `internal/config/loader_test.go`. **Depends on P02** for the typed `semantic.Config` mirror and the `SerenaConfig.SemanticIndex` field that consumes the resolved values.
+  - **P04 — `cmd/vet-noduckdb/` analyzer.** `cmd/vet-noduckdb/main.go` invoking `singlechecker.Main(noduckdb.Analyzer)`; analyzer body in `internal/lint/noduckdb/{analyzer.go,analyzer_test.go}` using `analysistest` with a fixture that has a non-store file importing `duckdb-go`. `Makefile` adds `make vet` building the analyzer first then passing it via `-vettool=`. **Depends on P02** so the legitimate `internal/semantic/store/` import path exists for the analyzer to allowlist. Analyzer's `forbiddenImport` constant MUST match the exact module path locked in D-12.
 - **D-05: Plan dependency graph.** `P01 → independent`. `P03 → P02`. `P04 → P02`. Executor can run P01 in wave 1 alongside P02; P03 and P04 run after P02 lands.
 
 ### Quarantine Observability (STORE-01, must-not-regress)
@@ -57,6 +57,16 @@ Phase 57 lays four orthogonal foundations for v1.10 in a single phase, with **no
 - **D-09: Per-feature defaults test.** Add `TestLoad_SemanticIndexDefaults` to `internal/config/loader_test.go` mirroring the `TestLoad_ObservabilityDefaults` style — assert every `semantic_index.*` default is present and matches SPEC §25 verbatim.
 - **D-10: Per-feature precedence test.** Add `TestLoad_SemanticIndexPrecedence` covering 3–4 representative keys (one per layer per key) confirming CLI > project > user > profile resolution. **No generic key-coverage matrix in v1.10** — that is its own future phase if we want it; do not slip it into P57.
 - **D-11: Both tests live in P03.** P03 is the natural home — it is the plan that adds the keys.
+
+### DuckDB Module Path Lock (STORE-04, STORE-06)
+
+- **D-12: Pin the duckdb-go module path verbatim.** The `go.mod` import path is `github.com/duckdb/duckdb-go/v2` at version `v2.10502.0` (DuckDB 1.5.2, released 2026-04-14). This is the canonical DuckDB Foundation Go binding repo per RESEARCH.md (the historical `marcboeker/go-duckdb` repository was archived 2025-10-20 and MUST NOT be used). The exact string `github.com/duckdb/duckdb-go/v2` MUST appear verbatim in:
+  - **P02 Task 1** `<action>` — `go get github.com/duckdb/duckdb-go/v2@v2.10502.0` and the resulting `go.mod` require directive.
+  - **P02 Task 2b** `internal/semantic/store/duckdb.go` — the `import "github.com/duckdb/duckdb-go/v2"` driver registration.
+  - **P04 Task 2** `internal/lint/noduckdb/analyzer.go` — the `forbiddenImport = "github.com/duckdb/duckdb-go"` constant (prefix-match form, omits the `/v2` suffix so any future version bump still matches).
+  - **P04 Task 1** `internal/lint/noduckdb/testdata/src/badpkg/imports.go` and the `goodpkg` fixture — `import _ "github.com/duckdb/duckdb-go/v2"` verbatim.
+
+  Locking this here removes the analyzer-string-mismatch risk for STORE-06: P02 and P04 can be authored independently because both reference D-12 rather than a stringly-typed handoff via SUMMARY.md. Any future bump (e.g., to v3) requires explicit revision of D-12.
 
 ### Claude's Discretion (research-locked, no user input needed)
 
@@ -141,7 +151,7 @@ Phase 57 lays four orthogonal foundations for v1.10 in a single phase, with **no
 ### Integration Points
 
 - **Daemon bootstrap step 6b** is the one new bootstrap line. It receives the resolved `semantic.Config`, calls `store.Open(ctx, cfg)`, and stores the resulting `*semantic.Store` (or nil when disabled) on the daemon struct. Fail-fast on Tier-3 errors; structured-log on Tier-2 quarantines.
-- **`SerenaConfig` struct fields** in `internal/config/` get a new `SemanticIndex semantic.Config` block (or equivalent — the typed mirror lives in `internal/semantic/config.go` and is referenced from the central config struct). The koanf binding decorates with `koanf:"semantic_index"`.
+- **`SerenaConfig` struct fields** in `internal/config/` get a new `SemanticIndex semantic.Config` block (or equivalent — the typed mirror lives in `internal/semantic/config.go` and is referenced from the central config struct). The koanf binding decorates with `koanf:"semantic_index"`. **Per the revised plan structure (D-04 update):** the typed field is added in P02 (as a stub with zero values, so daemon step 6b compiles); P03 wires the koanf binding tag and populates defaults so the field actually carries SPEC §25 values at runtime.
 - **`Makefile`** gains a `vet` target that builds `cmd/vet-noduckdb` to a temp path, then runs `go vet -vettool=<path> ./...`. CI vet job runs the same target.
 - **Phase 60/67 consumers of `internal/phasegraph/`** declare typed phase ID constants (e.g., `phasegraph.PhaseStore`, `phasegraph.PhaseEnrich`) and pass `PhaseSpec`s with `Requires`/`Provides`/`Run`/`Validate`/`Shutdown`. Phase 57 ships the **shapes** (typed ID constants + Requires/Provides decls) for `pipelines/semantic.go`, `pipelines/live.go`, `pipelines/eval.go`; the `Run` bodies are empty/`return nil, nil` placeholders P60/P67 will fill.
 
@@ -174,3 +184,4 @@ Phase 57 lays four orthogonal foundations for v1.10 in a single phase, with **no
 
 *Phase: 57-semantic-store-foundation-pipeline-dag-library*
 *Context gathered: 2026-05-03*
+*Revised: 2026-05-03 — added D-12 (duckdb-go module path lock) per checker B-03; updated D-04 to reflect P02 lands stub `SerenaConfig.SemanticIndex` field for wave-1 build green*

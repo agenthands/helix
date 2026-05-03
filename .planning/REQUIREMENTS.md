@@ -6,6 +6,14 @@
 
 ---
 
+## Status legend
+
+- `- [ ]` pending
+- `- [x]` complete
+- `- [~]` won't-do (rejected with rationale appended after em-dash)
+
+---
+
 ## v1.10 Requirements
 
 Each requirement is testable from an agent/user perspective and maps to one roadmap phase.
@@ -119,9 +127,9 @@ Each requirement is testable from an agent/user perspective and maps to one road
 ### REL — v1.9 Carryover (Release & Distribution)
 
 - [ ] **REL-01** (was PKG-01 SC-3): The first signed Helix release (v1.10.0) is published end-to-end via `goreleaser` with a real maintainer minisign keypair; CI pre-flight rejects PLACEHOLDER pubkey; `helix upgrade` verifies signature and atomically swaps the binary on a real download.
-- [ ] **REL-02** (was PKG-DEFER-03): A Homebrew tap publishes `helix` via the existing release artifacts; `brew install agenthands/helix/helix` works on darwin/amd64 and darwin/arm64.
-- [ ] **REL-03** (was PKG-DEFER-04): A Scoop bucket publishes `helix` via the existing release artifacts; `scoop install helix` works on windows/amd64.
-- [ ] **REL-04** (was PKG-DEFER-05): A native Linux package (`.deb` and/or `.rpm`) is produced by goreleaser and validated to install + register the daemon on a clean Ubuntu/Fedora image. May be downscoped to one format if upstream signing limitations make both formats blocking.
+- [~] **REL-02** (was PKG-DEFER-03): A Homebrew tap publishes `helix` via the existing release artifacts; `brew install agenthands/helix/helix` works on darwin/amd64 and darwin/arm64. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
+- [~] **REL-03** (was PKG-DEFER-04): A Scoop bucket publishes `helix` via the existing release artifacts; `scoop install helix` works on windows/amd64. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
+- [~] **REL-04** (was PKG-DEFER-05): A native Linux package (`.deb` and/or `.rpm`) is produced by goreleaser and validated to install + register the daemon on a clean Ubuntu/Fedora image. May be downscoped to one format if upstream signing limitations make both formats blocking. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
 - [ ] **REL-05** (Phase 51 architectural fix): The reproducibility gate compares against a real release artifact (or, alternatively, `CONTRIBUTING.md` is updated to reflect the documented Pass-3 limitation), closing v1.9's deployment-gated SC-3 caveat.
 - [ ] **REL-06** (Phase 55 follow-up): `forwarder.tools.call` span is unified with the gRPC server span so a single trace covers stdio → forwarder → daemon → kernel; verified by an end-to-end trace assertion.
 

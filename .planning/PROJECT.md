@@ -128,6 +128,8 @@ Carry-over follow-ups:
 
 **Shipped:** v1.9 Polish & Infra (2026-05-03) — 12 phases (46–56, including emergent 51.1), 51 plans, 14/14 in-scope REQs satisfied (PKG-01 SC-3 deployment-gated), +2 emergent (Phase 51.1 CGO gate, Phase 56 LS dispatch), 3 deferred (PKG-DEFER-03/04/05). 25/25 cross-phase integration wires verified. Audit status: `tech_debt`.
 
+**v1.10 progress (2026-05-03):** Phase 57 complete — Semantic Store Foundation + Pipeline DAG Library. Stdlib `internal/phasegraph/` library validates pipeline DAGs (cycle/dup/missing-dep) and ships three pipeline shape declarations (semantic 12 / live 9 / eval 10) ready for Phase 60/67 to fill. `internal/semantic/{config,store,types}` skeleton lands as the sole owner of `duckdb-go` (D-12), with three-tier open (existing+clean → quarantine+rebuild → hard-fail), Schema 1 empty-but-correct, CGO=0 stub mirror, and two new bounded-label metrics. `cmd/vet-noduckdb` standalone analyzer enforces the STORE-06 boundary mechanically; `make test` chains through `make vet`. `semantic_index.*` config keys (65 defaults) flow through the existing 4-layer koanf precedence. SC-1 `get_health` clause deferred to Phase 65 (which explicitly owns the strangler-fig integration). 2 critical code-review findings (CR-01 path-traversal mitigation no-op, CR-02 missing schema-probe timeout) triaged for follow-up hardening pass.
+
 Helix now ships as a single self-contained signed binary with reproducible multi-arch goreleaser releases (6 archives × darwin/linux/windows × amd64/arm64), in-binary self-upgrade with minisign verification + atomic swap + daemon-aware re-launch, full Prometheus + OpenTelemetry observability (5 new metric families, 2 packaged Grafana dashboards, 4 runbooks, full trace coverage), and CGO=0 build path preserved via tree-sitter stubs. All 4 known LSP/tooling bugs (BUG-01..BUG-04) closed. Product rename `serena → helix` executed as a hard-cut breaking change at v1.9 (binary, module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`, MCP server identity).
 
 v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push — engineering work is complete.
@@ -241,4 +243,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 — v1.10 Live Semantic Index milestone started*
+*Last updated: 2026-05-03 — v1.10 Phase 57 complete (Semantic Store Foundation + Pipeline DAG Library)*

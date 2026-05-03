@@ -213,6 +213,32 @@ Key details:
 - The local dry-run skips signing (`--skip=sign`) because contributors do not have access to the project's minisign secret key -- signing is exercised in CI only. The dry-run still validates the build matrix, archive packaging, and checksums.txt generation.
 - A typo'd tag publishes a release immediately; there is no draft step. The reproducibility gate is the safety net against non-deterministic artifacts, not against typo'd tags. If a release is published in error, delete it via the GitHub Releases UI and re-tag with a corrected version.
 
+## Tracing
+
+Helix emits OpenTelemetry spans across the stdio→forwarder→daemon→kernel call
+chain. By default both the forwarder and the daemon use a no-op TracerProvider
+(no spans exported, no overhead).
+
+To enable real trace export, set `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP/gRPC
+collector URL (for example `http://localhost:4317`):
+
+```sh
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+helix daemon
+```
+
+Trace propagation between the forwarder client and the daemon gRPC server
+uses W3C TraceContext via `otelgrpc`'s `WithPropagators(propagation.TraceContext{})`
+option, wired per-handler in `internal/obs/grpc.go`. There is no global
+`otel.SetTextMapPropagator` call anywhere in the codebase — the no-global
+OTel rule (see `internal/obs/tracing.go` D-01) keeps tracing setup explicit.
+
+The end-to-end trace-continuity contract is enforced by
+`test/integration/trace_continuity_test.go`: a single TraceID must cover
+the `forwarder.tools.call` client span and the
+`serena.v1.ForwarderService/StreamMCP` server span. If you change handler
+wiring, make sure that test still passes.
+
 ## Adding a New MCP Tool
 
 1. **Choose the right layer:**

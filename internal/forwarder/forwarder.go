@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -19,16 +20,29 @@ import (
 // RunForwarder starts the stdio-to-gRPC forwarder (DMN-03).
 // It reads JSON-RPC from stdin, sends via gRPC to daemon, and writes responses to stdout.
 func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) error {
-	// Phase 12: forwarder provider -- noop-only for v1.2.
-	// The daemon's SDK TracerProvider catches spans via otelgrpc traceparent
-	// propagation; the forwarder does NOT need its own OTLP endpoint.
-	fwdProvider := obs.Noop(logger.Handler())
+	// Phase 58 D-06: real TracerProvider when OTEL_EXPORTER_OTLP_ENDPOINT
+	// is set; falls back to Noop otherwise (degraded-optional per
+	// internal/obs/tracing.go:1-13 D-09). Construction never panics —
+	// WithTracing logs a warning and returns Noop on exporter init failure.
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	fwdProvider := obs.WithTracing(logger.Handler(), obs.TracingConfig{
+		Endpoint:    endpoint,
+		ServiceName: "helix-forwarder",
+		SampleRatio: 1.0,
+	}, logger)
 
 	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer conn.Close()
+	// Phase 58 D-06: SDK TracerProvider needs ShutdownTracing to flush the
+	// batch span processor. No-op on the Noop path (degraded-optional).
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		_ = fwdProvider.ShutdownTracing(shutdownCtx)
+	}()
 
 	stream, err := client.StreamMCP(ctx)
 	if err != nil {

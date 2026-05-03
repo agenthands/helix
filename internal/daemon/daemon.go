@@ -18,7 +18,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 	"github.com/agenthands/helix/internal/config"
@@ -566,13 +565,12 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	d.socketListener = ln
 	d.logger.Info("unix socket listener started", "path", d.config.Daemon.SocketPath)
 
-	// Create and register gRPC server with OTel tracing propagation (D-12).
-	// WithTracerProvider is MANDATORY — omitting it falls back to the OTel
-	// global which D-01 forbids.
+	// Create and register gRPC server with OTel tracing propagation (D-12 /
+	// Phase 58 D-06). obs.ServerStatsHandler centralises the TracerProvider
+	// + WithPropagators(TraceContext{}) option set so the client and server
+	// sites cannot drift — see internal/obs/grpc.go.
 	d.grpcServer = grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler(
-			otelgrpc.WithTracerProvider(d.obs.TracerProvider()),
-		)),
+		grpc.StatsHandler(obs.ServerStatsHandler(d.obs.TracerProvider())),
 	)
 	serenav1.RegisterForwarderServiceServer(d.grpcServer, &forwarderServiceHandler{
 		mcpServer: d.mcpServer,

@@ -122,6 +122,16 @@ None. This plan is doc-only; T-58-doc-01..03 mitigations are satisfied by the li
 - `515829e7` — docs(58-04): mark REL-02/03/04 won't-do with D-01 rationale
 - `bf86b8e1` — docs(58-04): shrink Phase 58 entry in v1.10-ROADMAP (drop REL-02/03/04, SC-2/SC-3)
 
-## Self-Check
+## Self-Check: PASSED
 
-Verification of created/modified files and commit hashes performed in the next step.
+Files (all FOUND):
+- CONTRIBUTING.md
+- .planning/REQUIREMENTS.md
+- .planning/milestones/v1.10-ROADMAP.md
+- .planning/phases/58-v1-9-carryover-release-distribution/58-04-SUMMARY.md
+
+Commits (all FOUND in `git log --oneline --all`):
+- 5621cb36 — Task 1 (CONTRIBUTING.md Pass-3 paragraph)
+- 515829e7 — Task 2 (REQUIREMENTS.md REL-02/03/04 + Status legend)
+- bf86b8e1 — Task 3 (v1.10-ROADMAP.md Phase 58 shrink + line-13 summary)
+- 7f11e6af — SUMMARY.md (this file)

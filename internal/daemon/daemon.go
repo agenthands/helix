@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/propagation"
 
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 	"github.com/agenthands/helix/internal/config"
@@ -566,12 +567,18 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	d.socketListener = ln
 	d.logger.Info("unix socket listener started", "path", d.config.Daemon.SocketPath)
 
-	// Create and register gRPC server with OTel tracing propagation (D-12).
-	// WithTracerProvider is MANDATORY — omitting it falls back to the OTel
-	// global which D-01 forbids.
+	// Create and register gRPC server with OTel tracing propagation (D-12 /
+	// Phase 58 D-06). WithTracerProvider is MANDATORY — omitting it falls
+	// back to the OTel global which D-01 forbids. WithPropagators is the
+	// per-handler companion of the no-global rule: without it otelgrpc
+	// pulls otel.GetTextMapPropagator() (NoOp default) and the server
+	// cannot extract the forwarder's traceparent from gRPC metadata, which
+	// breaks the trace-continuity contract enforced by
+	// test/integration/trace_continuity_test.go.
 	d.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler(
 			otelgrpc.WithTracerProvider(d.obs.TracerProvider()),
+			otelgrpc.WithPropagators(propagation.TraceContext{}),
 		)),
 	)
 	serenav1.RegisterForwarderServiceServer(d.grpcServer, &forwarderServiceHandler{

@@ -159,12 +159,7 @@ func VerifyArchive(archivePath, bundlePath string) error {
 		return errors.New("signature verification FAILED")
 	}
 
-	identity, err := verify.NewShortCertificateIdentity(
-		pinnedOIDCIssuer,
-		"",
-		"",
-		pinnedSANRegexLiteral,
-	)
+	identity, err := pinnedCertificateIdentity()
 	if err != nil {
 		// canonical: signature verification FAILED — see Pitfall 4.
 		return errors.New("signature verification FAILED")
@@ -183,6 +178,22 @@ func VerifyArchive(archivePath, bundlePath string) error {
 		return errors.New("signature verification FAILED")
 	}
 	return nil
+}
+
+// pinnedCertificateIdentity constructs the sigstore-go CertificateIdentity
+// pinned to the GitHub Actions OIDC issuer + agenthands/helix release.yml
+// SAN regex. Centralized so VerifyArchive's policy and unit tests share
+// the same source of truth — drift between them would silently widen the
+// trusted set (e.g., identity-pinning regression). See
+// matchesPinnedIdentity for the testable mirror that operates on a
+// raw *x509.Certificate.
+func pinnedCertificateIdentity() (verify.CertificateIdentity, error) {
+	return verify.NewShortCertificateIdentity(
+		pinnedOIDCIssuer,
+		"",
+		"",
+		pinnedSANRegexLiteral,
+	)
 }
 
 // matchesPinnedIdentity reports whether cert's Subject Alternative Name

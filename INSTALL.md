@@ -2,37 +2,49 @@
 
 Helix is a single Go binary. Install it, point your coding agent at it, and you are ready to go.
 
-> **Note (pre-release):** No signed releases have been cut yet. The `minisign.pub`
-> committed to `main` is a `PLACEHOLDER` and the verification recipe below will
-> not succeed until the maintainer rotates in the real public key and pushes the
-> first `v*` tag (release CI fails closed on the placeholder). Track this in
-> `.planning/phases/51-packaging-goreleaser/deferred-items.md` (DEF-51-03).
-> Until then, prefer **Build from source** below.
+> **Note (pre-release):** No signed releases have been cut yet. The
+> verification recipe below will not succeed until the maintainer pushes the
+> first `v*` tag from the cosign-keyless release workflow. Until then, prefer
+> **Build from source** below.
 
 ## Install (pre-built binary)
 
-Pre-built binaries for darwin/linux/windows on amd64/arm64 are published on the [Releases page](https://github.com/agenthands/helix/releases) for every tagged version. Archives follow the naming convention `helix_v<version>_<os>_<arch>.tar.gz` (for example `helix_v1.9.0_linux_amd64.tar.gz`); each archive ships with a SHA-256 checksum and a minisign signature.
+Pre-built binaries for darwin/linux/windows on amd64/arm64 are published on the [Releases page](https://github.com/agenthands/helix/releases) for every tagged version. Archives follow the naming convention `helix_v<version>_<os>_<arch>.tar.gz` (for example `helix_v1.9.0_linux_amd64.tar.gz`); each archive ships with a SHA-256 checksum and a sigstore cosign-keyless signature bundle.
 
-The verification recipe below downloads an archive, verifies the checksum, verifies the cryptographic signature, and extracts the binary -- a single block you can copy and paste end-to-end. Fill in `VERSION`, `OS`, and `ARCH` for your platform.
+### Verifying release artifacts
 
-```bash
+Helix releases are signed via [sigstore cosign keyless](https://docs.sigstore.dev/cosign/verifying/verify/) — the GitHub Actions release workflow exchanges its OIDC token for a short-lived Fulcio certificate, signs the archive with that cert, and submits the signature to Rekor for transparency-log inclusion. There is no long-lived signing key. Verification requires only the [cosign CLI](https://github.com/sigstore/cosign/releases) (v2.4+) on your `$PATH`.
+
+The recipe below downloads an archive plus its `.sigstore.json` bundle, verifies the cosign signature against the pinned identity policy (GitHub Actions OIDC issuer + agenthands/helix release.yml SAN), verifies the SHA-256 checksum, and extracts the binary. Fill in `VERSION`, `OS`, and `ARCH` for your platform.
+
+```sh
 VERSION=v1.9.0
 OS=linux
 ARCH=amd64
 
-# Download archive, signatures, checksums, and (one-time) the project public key
+# Download archive, sigstore bundle, and checksums
 curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/helix_${VERSION}_${OS}_${ARCH}.tar.gz
-curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/helix_${VERSION}_${OS}_${ARCH}.tar.gz.minisig
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/helix_${VERSION}_${OS}_${ARCH}.tar.gz.sigstore.json
 curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt
-curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt.minisig
-curl -LO https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub  # one-time
+curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksums.txt.sigstore.json
 
-# Verify the checksums file is signed by the project (catches a substituted checksums.txt)
-minisign -V -p minisign.pub -m checksums.txt
+# Verify the archive's sigstore bundle. The identity-pinning regex must
+# match the verifier's pinned policy byte-for-byte (security invariant).
+cosign verify-blob \
+  --bundle helix_${VERSION}_${OS}_${ARCH}.tar.gz.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v[\d.]+(-rc\d+|-beta\d+|-alpha\d+)?$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  helix_${VERSION}_${OS}_${ARCH}.tar.gz
 
-# Verify the archive's sha256 matches the (now-trusted) checksums.txt entry --
-# fails loud on typos (and avoids the macOS sha256sum/shasum split since we
-# operate on a single file).
+# Defense-in-depth: verify checksums.txt is also signed (catches a
+# substituted checksums.txt) and that the archive's SHA matches the
+# (now-trusted) checksums.txt entry.
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v[\d.]+(-rc\d+|-beta\d+|-alpha\d+)?$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
 EXPECTED_HASH=$(grep "helix_${VERSION}_${OS}_${ARCH}.tar.gz" checksums.txt | awk '{print $1}')
 ACTUAL_HASH=$(sha256sum "helix_${VERSION}_${OS}_${ARCH}.tar.gz" 2>/dev/null | awk '{print $1}')
 [ -z "$ACTUAL_HASH" ] && ACTUAL_HASH=$(shasum -a 256 "helix_${VERSION}_${OS}_${ARCH}.tar.gz" | awk '{print $1}')
@@ -41,15 +53,12 @@ if [ -z "$EXPECTED_HASH" ] || [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
 fi
 echo "checksum OK: $ACTUAL_HASH"
 
-# Verify the archive's minisign signature (independent of checksums.txt)
-minisign -V -p minisign.pub -m helix_${VERSION}_${OS}_${ARCH}.tar.gz
-
 # Extract and run
 tar -xzf helix_${VERSION}_${OS}_${ARCH}.tar.gz
 ./helix --help
 ```
 
-**macOS users:** install minisign with `brew install minisign`. The checksum block above already falls back to `shasum -a 256` when `sha256sum` is unavailable, so the recipe runs as-is. Everything else is identical.
+**macOS users:** install cosign with `brew install cosign`. The checksum block above already falls back to `shasum -a 256` when `sha256sum` is unavailable, so the recipe runs as-is. Everything else is identical.
 
 Supported `OS` values: `darwin`, `linux`, `windows`. Supported `ARCH` values: `amd64`, `arm64`. Modern Windows (10 1803+) ships `tar` in System32, so the same `.tar.gz` archive extracts on Windows without third-party tools.
 
@@ -288,7 +297,7 @@ Prints current and latest versions plus the release notes from GitHub. No filesy
 helix upgrade
 ```
 
-Performs in order: daemon-detect → permission probe → API fetch → semver compare → archive download → minisign verification → extract → atomic swap → re-launch. Exits cleanly with a clear message in any of these cases:
+Performs in order: daemon-detect → permission probe → API fetch → semver compare → archive download → cosign bundle verification → extract → atomic swap → re-launch. Exits cleanly with a clear message in any of these cases:
 
 - **Install path not writable:** prints the exact `sudo helix upgrade` re-invocation. (No internal sudo prompt.)
 - **Already up to date** (or remote latest is older than your installed version): exits 0 with "already up to date". There is no `--force-downgrade` flag — go to GitHub Releases manually and use the verification recipe above for an older version.
@@ -315,7 +324,7 @@ helix update
 
 ### Manual upgrade (alternative)
 
-If you prefer not to use the in-binary upgrade, the Phase 51 verification recipe at the top of this file still works — fetch the archive + signature + checksums from the GitHub Releases page, verify with minisign, and replace your binary by hand.
+If you prefer not to use the in-binary upgrade, the verification recipe at the top of this file still works — fetch the archive + sigstore bundle + checksums from the GitHub Releases page, verify with cosign, and replace your binary by hand.
 
 ## Verify Installation
 

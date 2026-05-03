@@ -181,38 +181,25 @@ Pre-release tags (`v1.9.0-rc1`, `v1.9.0-beta1`, `v1.9.0-alpha1`) are auto-detect
 
 ### Repository secrets
 
-The release workflow signs archives with the project's minisign keypair. Two GitHub Actions secrets must exist on the repo BEFORE the first `v*` tag is pushed:
+The release workflow signs archives with sigstore cosign keyless via the GitHub Actions OIDC token (Phase 58 D-02). No long-lived secrets are required — the workflow declares `id-token: write` permission, exchanges the OIDC token with Fulcio for a short-lived signing certificate, and submits the signature to Rekor for transparency-log inclusion. There is no signing key to generate, no password to manage, and no secret rotation.
 
-- `MINISIGN_PRIVATE_KEY` -- contents of the locally generated `minisign.key` file (NOT the file path; the actual file contents pasted into the secret)
-- `MINISIGN_PASSWORD` -- the password chosen during keypair generation
+### Trust root refresh
 
-These are uploaded under repo Settings > Secrets and variables > Actions.
-
-### One-time keypair setup
-
-The maintainer generates the keypair once on a trusted local machine, commits the public half to the repo, and uploads the private half plus password as repo secrets:
+The verifier embeds `internal/upgrade/trusted_root.json` — a snapshot of the upstream public-good Sigstore TUF trust root. Sigstore rotates the public-good Fulcio CA infrequently (multi-year cadence), but a stale embedded root could in principle reject post-rotation signatures. Refresh the snapshot before each minor release:
 
 ```sh
-minisign -G -p minisign.pub -s minisign.key
-# minisign prompts for a password; choose a strong one and store it securely
-gh secret set MINISIGN_PRIVATE_KEY < minisign.key
-gh secret set MINISIGN_PASSWORD   # paste the password when prompted
-git add minisign.pub
-git commit -m "feat(release): commit minisign public key"
-git push
+make update-trust-root
+git add internal/upgrade/trusted_root.json
+git commit -m "chore(release): refresh sigstore trust root"
 ```
 
-After this is done, delete the local `minisign.key` (the secret is now in GitHub's secret store; the local copy is no longer needed and should not linger on disk). The password should be stored in a password manager.
-
-### Key rotation
-
-To rotate the minisign keypair, repeat the one-time setup with a new pair, commit the new `minisign.pub`, and update both repo secrets. Users who have already downloaded the old `minisign.pub` will need to re-fetch it from `https://raw.githubusercontent.com/agenthands/helix/main/minisign.pub` -- INSTALL.md tells them to re-fetch the key as part of the verification recipe, so users on the latest INSTALL.md instructions pick up the rotated key automatically.
+The Make target downloads the file from `raw.githubusercontent.com/sigstore/sigstore-go/main/examples/trusted-root-public-good.json` and overwrites the in-tree copy. There is no separate verify-the-embed gate — the bytes that ship in the binary are the bytes you committed.
 
 Key details:
 
 - The release workflow does NOT re-run `go test` or `go vet` -- tags are assumed to be cut from a commit that has already passed `go-test.yml` on `main`. If you tag a commit that has not been through CI, the release may publish a binary built from broken code (the reproducibility gate cannot catch logic bugs, only build determinism).
 - Release notes are auto-generated from the git log between tags using conventional-commit prefix grouping (`feat:`, `fix:`, `docs:`, `refactor:`). `CHANGELOG.md` stays hand-curated separately for human-readable narrative.
-- The local dry-run skips signing (`--skip=sign`) because contributors do not have access to the project's minisign secret key -- signing is exercised in CI only. The dry-run still validates the build matrix, archive packaging, and checksums.txt generation.
+- The local dry-run skips signing (`--skip=sign`) because cosign keyless signing requires a GitHub Actions OIDC token that is only available to the release runner -- signing is exercised in CI only. The dry-run still validates the build matrix, archive packaging, and checksums.txt generation.
 - A typo'd tag publishes a release immediately; there is no draft step. The reproducibility gate is the safety net against non-deterministic artifacts, not against typo'd tags. If a release is published in error, delete it via the GitHub Releases UI and re-tag with a corrected version.
 
 ## Tracing

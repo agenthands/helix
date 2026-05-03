@@ -1,9 +1,9 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot embed-pubkey verify-embed-pubkey
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot update-trust-root
 
 BINARY=helix
 GO=go
 
-build: embed-pubkey
+build:
 	$(GO) build -o $(BINARY) ./cmd/helix
 
 clean:
@@ -58,9 +58,6 @@ release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (o
 	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign
 
-embed-pubkey: ## Sync repo-root minisign.pub into internal/upgrade/minisign.pub before build
-	@cp minisign.pub internal/upgrade/minisign.pub
-
-verify-embed-pubkey: ## CI gate: assert internal/upgrade/minisign.pub matches repo-root copy byte-for-byte
-	@cmp -s minisign.pub internal/upgrade/minisign.pub || { \
-	  echo "internal/upgrade/minisign.pub drift; run: make embed-pubkey"; exit 1; }
+update-trust-root: ## Refresh internal/upgrade/trusted_root.json from sigstore upstream
+	@curl -sSL https://raw.githubusercontent.com/sigstore/sigstore-go/main/examples/trusted-root-public-good.json -o internal/upgrade/trusted_root.json
+	@echo "trusted_root.json refreshed; commit and bump per CONTRIBUTING.md"

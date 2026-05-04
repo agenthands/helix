@@ -145,3 +145,165 @@ jobs:
           path: dist/
           retention-days: 1
           if-no-files-found: error
+
+  release-darwin:
+    name: build darwin archives (Apple clang native, macos-14)
+    # D-18: pin to macos-14 (Apple Silicon, Xcode 15.x). Do NOT use the floating
+    # `macos-${LATEST}` alias — image-internal Xcode/clang version drift breaks the
+    # per-runner Pass-1≡Pass-2 gate. Roll forward to a newer macos-N is an
+    # intentional follow-up phase, not auto-update.
+    runs-on: macos-14
+    # D-16: cost gating. macos-14 runner is billed at ~10× the linux rate; PR
+    # validation stays linux-only. This job fires ONLY on tag-push (real release)
+    # or workflow_dispatch (Wave 5 snapshot rehearsal / first-CI-repro).
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'workflow_dispatch'
+    permissions:
+      # WR-01: no id-token / contents needed on this job — cosign signing and
+      # release publishing happen in release-merge.
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0   # required: goreleaser changelog needs full git history
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Select Xcode 15.x (D-18)
+        # D-18: pin Xcode-internal version explicitly. macos-14 image ships multiple
+        # Xcodes; xcode-select chooses one. If a specific 15.x point version is
+        # required for reproducibility under Apple-toolchain timestamp behavior
+        # (D-10 amended), Wave 5 first-CI-repro will surface that and Wave 5 hot-fix
+        # narrows this selector. The fallback warning lets the workflow surface a
+        # readable failure if the path doesn't exist on a future image refresh.
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_15.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app
+          elif [ -d /Applications/Xcode_15.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_15.3.app
+          elif [ -d /Applications/Xcode_15.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_15.2.app
+          else
+            echo "::warning::No Xcode 15.x found at expected paths; falling back to default xcode-select"
+            ls -la /Applications/ | grep -i xcode || true
+          fi
+
+      - name: Record Apple toolchain provenance (D-18)
+        # D-18: per-runner forensic provenance — captures Xcode + clang versions
+        # for the build provenance trail. Used by Wave 5 FIRST-CI-REPRO log
+        # and by future reproducibility regression triage.
+        run: |
+          set -euo pipefail
+          echo "=== xcodebuild -version ==="
+          xcodebuild -version
+          echo
+          echo "=== clang --version ==="
+          clang --version
+          echo
+          echo "=== xcode-select -p ==="
+          xcode-select -p
+          echo
+          echo "=== sw_vers ==="
+          sw_vers
+
+      - name: Reproducibility gate -- snapshot Pass-1 (helix-darwin)
+        # D-20 / FALLBACK-B-MULTI-BUILD-ID: --id helix-darwin filters to the 2
+        # darwin/{amd64,arm64} entries declared in .goreleaser.yaml. NO CC override
+        # — Apple clang on macos-14 is the host default per D-15.
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
+        with:
+          distribution: goreleaser
+          version: 'v2.15.4'   # WR-07: pin to exact version, matches release-linux
+          args: build --snapshot --clean --id helix-darwin --output dist-pass-1/
+
+      - name: Capture Pass-1 sha256s (helix-darwin)
+        run: |
+          set -euo pipefail
+          # D-17: per-target within-runner Pass-1≡Pass-2 reproducibility for the
+          # 2 helix-darwin binaries. Cross-runner equality with the linux runner
+          # is NOT asserted (D-17 invariant — different machines, different SDKs,
+          # different clang versions; that comparison is not meaningful).
+          (cd dist-pass-1 && find . -type f -name 'helix*' -print0 | sort -z | xargs -0 shasum -a 256) > /tmp/pass1-darwin.sha256
+          echo "Pass-1 (helix-darwin) artifacts:"
+          cat /tmp/pass1-darwin.sha256
+
+      - name: Reproducibility gate -- snapshot Pass-2 (helix-darwin)
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
+        with:
+          distribution: goreleaser
+          version: 'v2.15.4'   # WR-07: must match Pass-1 pin exactly
+          args: build --snapshot --clean --id helix-darwin --output dist-pass-2/
+
+      - name: Diff Pass-1 vs Pass-2 sha256s (helix-darwin) -- fail if non-reproducible
+        run: |
+          set -euo pipefail
+          # D-17: per-target byte-equality on the 2 helix-darwin binaries.
+          # If divergence is from Apple-toolchain timestamps (codesign, LC_UUID),
+          # remediation is strip/freeze the offending field per D-10 amended,
+          # NOT softening the gate.
+          (cd dist-pass-2 && find . -type f -name 'helix*' -print0 | sort -z | xargs -0 shasum -a 256) \
+            | sed 's| dist-pass-2/| dist-pass-1/|' > /tmp/pass2-darwin.sha256
+          if diff -u /tmp/pass1-darwin.sha256 /tmp/pass2-darwin.sha256; then
+            echo "Reproducibility gate PASS (helix-darwin) -- proceeding to artifact upload"
+            exit 0
+          fi
+
+          # WR-07 forensic dump (per-runner; runner=darwin scope=helix-darwin).
+          echo "::error::helix-darwin binaries are not byte-identical between Pass-1 and Pass-2 -- refusing to upload"
+          echo
+          echo "=== Forensic dump (WR-07, runner=darwin, scope=helix-darwin) ==="
+          echo
+          echo "=== Apple toolchain provenance (re-captured for forensic trail) ==="
+          xcodebuild -version || true
+          clang --version || true
+          echo
+          DIVERGENT=$(diff /tmp/pass1-darwin.sha256 /tmp/pass2-darwin.sha256 | grep '^[<>]' | head -1 | awk '{print $NF}' | sed 's|^./||;s|^dist-pass-1/||')
+          if [ -n "$DIVERGENT" ]; then
+            echo "Divergent binary: $DIVERGENT"
+            BIN1="dist-pass-1/$DIVERGENT"
+            BIN2="dist-pass-2/$DIVERGENT"
+            echo
+            echo "=== Per-file sha256 ==="
+            shasum -a 256 "$BIN1" "$BIN2" || true
+            echo
+            echo "=== Binary sizes (bytes) ==="
+            ls -l "$BIN1" "$BIN2" || true
+            echo
+            echo "=== Mach-O LC_UUID + codesign timestamp diff (Apple-toolchain hazard per D-10 amended) ==="
+            otool -l "$BIN1" 2>/dev/null | grep -A2 LC_UUID || true
+            otool -l "$BIN2" 2>/dev/null | grep -A2 LC_UUID || true
+            codesign -dv "$BIN1" 2>&1 | head -20 || true
+            codesign -dv "$BIN2" 2>&1 | head -20 || true
+            echo
+            echo "=== Go buildinfo diff (go version -m) ==="
+            go version -m "$BIN1" > /tmp/bi1 || true
+            go version -m "$BIN2" > /tmp/bi2 || true
+            diff -u /tmp/bi1 /tmp/bi2 || true
+            echo
+            echo "=== First 512 bytes (hex) of each binary ==="
+            xxd "$BIN1" | head -32
+            echo "---"
+            xxd "$BIN2" | head -32
+          fi
+          exit 1
+
+      - name: Promote Pass-2 to dist/ for artifact upload
+        run: |
+          set -euo pipefail
+          rm -rf dist-pass-1
+          rm -rf dist
+          mv dist-pass-2 dist
+
+      - name: Upload helix-darwin partial dist
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
+        with:
+          name: dist-partial-darwin
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error

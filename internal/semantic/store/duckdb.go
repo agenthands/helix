@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build !(windows && arm64)
 
 package store
 

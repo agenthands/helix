@@ -1,5 +1,3 @@
-//go:build cgo
-
 package store
 
 import (
@@ -24,6 +22,7 @@ import (
 //  7. semantic_edges (§9.7) + 3 indexes
 //  8. semantic_diagnostics (§9.8)
 //  9. semantic_graph_scores (§9.9) + idx_semantic_scores_snapshot
+//
 // 10. semantic_clusters (§9.10a)
 // 11. semantic_cluster_members (§9.10b)
 // 12. semantic_live_overlay_meta (§9.11a)

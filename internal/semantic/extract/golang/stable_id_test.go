@@ -1,5 +1,3 @@
-//go:build cgo
-
 package goextract
 
 import (
@@ -41,10 +39,10 @@ const (
 //   - generic_type_param_rename_preserves_id
 func TestStableID(t *testing.T) {
 	type tcase struct {
-		scenario  string
+		scenario   string
 		beforeName string
 		afterName  string
-		expect    stableIDExpectation
+		expect     stableIDExpectation
 		// alternate file paths for before/after — used by
 		// same_content_file_rename_preserves_id to prove BuildProviderKey's
 		// EXTRACT-02 invariant.

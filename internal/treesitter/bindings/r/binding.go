@@ -1,5 +1,3 @@
-//go:build cgo
-
 package tree_sitter_r
 
 // #cgo CFLAGS: -std=c11 -fPIC -Isrc

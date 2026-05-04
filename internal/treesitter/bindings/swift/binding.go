@@ -1,5 +1,3 @@
-//go:build cgo
-
 package tree_sitter_swift
 
 // #cgo CFLAGS: -std=c11 -fPIC -Isrc

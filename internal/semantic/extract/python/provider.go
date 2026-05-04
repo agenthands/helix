@@ -1,13 +1,11 @@
-//go:build cgo
-
 // Package pyextract is the per-language tree-sitter extraction provider
 // for Python. Mirrors goextract / tsextract: constructor-injected
 // GrammarRegistry, embedded queries.scm, no init() registration.
 package pyextract
 
 import (
-	_ "embed"
 	"context"
+	_ "embed"
 	"fmt"
 	"path/filepath"
 	"strings"

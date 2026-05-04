@@ -1,5 +1,3 @@
-//go:build cgo
-
 package goextract
 
 import (
@@ -16,9 +14,10 @@ const testdataDir = "testdata"
 
 // TestProvider_Golden table-drives golden comparison over every scenario
 // directory under testdata/. For each scenario:
-//   1. Read before.go.
-//   2. Run provider Extract.
-//   3. Compare normalized output against expected.json.
+//  1. Read before.go.
+//  2. Run provider Extract.
+//  3. Compare normalized output against expected.json.
+//
 // If `-update` is passed, expected.json is regenerated from the actual emit.
 func TestProvider_Golden(t *testing.T) {
 	registry := testutil.NewTestRegistry(t)

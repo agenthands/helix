@@ -1,14 +1,10 @@
 package treesitter
 
-// Compile-time signature assertions: these interface satisfaction checks
-// run in BOTH cgo and !cgo builds and catch silent drift between
-// registry_cgo.go and registry_nocgo.go. If a cgo signature changes,
-// update the assertion AND the !cgo stub together — `go build` will fail
-// loudly in either build mode rather than only in CI's nocgo job.
-//
-// GetLanguage is intentionally omitted: its return type
-// *tree_sitter.Language lives in the cgo-only upstream module, and all
-// callers of GetLanguage are themselves gated //go:build cgo.
+// Compile-time signature assertion: catches silent drift in the
+// GrammarRegistry public API. Phase 59.1 retired the //go:build cgo
+// gating; the registry is now CGO=1-only at the build-tag level (the
+// binary cannot be built without CGO), so this assertion is the sole
+// surviving compile-time signature check on the package.
 var _ interface {
 	SupportsLanguage(string) bool
 	SupportedLanguages() []string

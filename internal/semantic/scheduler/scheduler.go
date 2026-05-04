@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -26,8 +27,9 @@ type ExtractionScheduler interface {
 	ScheduleIncremental(workspaceID semantic.WorkspaceID, changes []FileChange) JobID
 	Status(workspaceID semantic.WorkspaceID) SemanticStatus
 	Subscribe(workspaceID semantic.WorkspaceID) <-chan SemanticStatus
-	// RequireReady is the SOLE semantic readiness API. Method declaration is
-	// extended onto this interface when ready.go lands in Task 2.
+	// RequireReady is the SOLE semantic readiness API. Implementation lives in
+	// ready.go; consumers MUST use this method instead of polling Status().
+	RequireReady(ctx context.Context, ws semantic.WorkspaceID, policy ReadyPolicy) (ReadyResult, error)
 }
 
 // Scheduler is the concrete in-memory implementation of ExtractionScheduler.

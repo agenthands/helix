@@ -282,11 +282,11 @@ func Upgrade(ctx context.Context, opts Options) error {
 	}
 
 	// Step 9: atomic swap.
-	if err := os.Chmod(newBin, 0o755); err != nil {
-		// Non-fatal: extraction may have set mode 0o755 already; some
-		// filesystems disallow chmod. Continue.
-		_ = err
-	}
+	// IN-01: ignore Chmod failure intentionally — extraction may have set
+	// mode 0o755 already, and some filesystems disallow chmod. The
+	// previous `_ = err` no-op was dead (err falls out of scope at the
+	// closing brace anyway); a comment-only ignore is sufficient.
+	_ = os.Chmod(newBin, 0o755)
 	if err := swapFn(exec, newBin); err != nil {
 		// REVIEW.md WR-01: the install-dir permission probe at step 2
 		// runs BEFORE network I/O and can race a sysadmin chmod or a

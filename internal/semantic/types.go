@@ -45,6 +45,13 @@ type TypeFactID uint64
 // Phase 59 introduces it.
 type HeritageID uint64
 
+// WorkspaceID is the opaque identifier for a workspace registered with the
+// daemon's kernel. It is the key under which the extraction scheduler tracks
+// per-workspace state, in-flight jobs, and subscribers (Phase 59 P03, D-04).
+// Stable for the lifetime of a daemon process; not portable across daemon
+// restarts.
+type WorkspaceID string
+
 // Freshness classifies the staleness of a fact returned by the effective-read
 // API (SPEC-DRAFT.md §10). Values are written into log fields and (later)
 // surfaced as a metric label, so the enum is closed.

@@ -1,0 +1,102 @@
+{
+  "file": {
+    "path": "container_qualified_name/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Server",
+      "qualified_name": "Server",
+      "file": "container_qualified_name/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "Server",
+      "signature_hash": "Server",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "start",
+      "qualified_name": "Server.start",
+      "file": "container_qualified_name/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 13
+      },
+      "signature": "start",
+      "signature_hash": "start",
+      "receiver": {
+        "type": "Server",
+        "name": ""
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "container_qualified_name/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 14,
+        "end_line": 1,
+        "end_col": 18
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "stop",
+      "qualified_name": "Server.stop",
+      "file": "container_qualified_name/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 12
+      },
+      "signature": "stop",
+      "signature_hash": "stop",
+      "receiver": {
+        "type": "Server",
+        "name": ""
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "container_qualified_name/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 13,
+        "end_line": 4,
+        "end_col": 17
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

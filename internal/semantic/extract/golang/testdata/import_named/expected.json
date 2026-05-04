@@ -1,0 +1,161 @@
+{
+  "file": {
+    "path": "import_named/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Up",
+      "qualified_name": "Up",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 7,
+        "start_col": 0,
+        "end_line": 10,
+        "end_col": 1
+      },
+      "signature": "func Up(s string) string { fmt.Println(s) return strings.ToUpper(s) }",
+      "signature_hash": "func Up(s string) string",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "s",
+      "qualified_name": "s",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 7,
+        "start_col": 8,
+        "end_line": 7,
+        "end_col": 9
+      },
+      "signature": "s",
+      "signature_hash": "s",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 7,
+        "start_col": 10,
+        "end_line": 7,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 7,
+        "start_col": 18,
+        "end_line": 7,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "Println",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 8,
+        "start_col": 8,
+        "end_line": 8,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "Println",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 8,
+        "start_col": 8,
+        "end_line": 8,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "ToUpper",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 9,
+        "start_col": 19,
+        "end_line": 9,
+        "end_col": 26
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "ToUpper",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 9,
+        "start_col": 19,
+        "end_line": 9,
+        "end_col": 26
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "fmt",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 9
+      }
+    },
+    {
+      "source": "strings",
+      "file": "import_named/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 13
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 7,
+        "start_col": 10,
+        "end_line": 7,
+        "end_col": 16
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 7,
+        "start_col": 18,
+        "end_line": 7,
+        "end_col": 24
+      }
+    }
+  ]
+}

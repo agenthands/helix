@@ -1,0 +1,130 @@
+{
+  "file": {
+    "path": "parameters/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Format",
+      "qualified_name": "Format",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 56
+      },
+      "signature": "func Format(name string, age int) string { return name }",
+      "signature_hash": "func Format(name string, age int) string",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 12,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 25,
+        "end_line": 2,
+        "end_col": 28
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 29,
+        "end_line": 2,
+        "end_col": 32
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "parameters/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 34,
+        "end_line": 2,
+        "end_col": 40
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 29,
+        "end_line": 2,
+        "end_col": 32
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 23
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 2,
+        "start_col": 34,
+        "end_line": 2,
+        "end_col": 40
+      }
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "file": {
+    "path": "receiver_pointer_to_value_churns_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "receiver_pointer_to_value_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "signature": "T struct{}",
+      "signature_hash": "T struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "M",
+      "qualified_name": "T.M",
+      "file": "receiver_pointer_to_value_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 17
+      },
+      "signature": "func (t T) M() {}",
+      "signature_hash": "func (t T) M()",
+      "receiver": {
+        "type": "T",
+        "name": "t"
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "receiver_pointer_to_value_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 6,
+        "end_line": 4,
+        "end_col": 7
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "receiver_pointer_to_value_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 6
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "receiver_pointer_to_value_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 9
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "T",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 9
+      }
+    }
+  ]
+}

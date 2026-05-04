@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "return_type/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "numbers",
+      "qualified_name": "numbers",
+      "file": "return_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "numbers",
+      "signature_hash": "numbers",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": [number, number]",
+      "range": {
+        "start_line": 0,
+        "start_col": 18,
+        "end_line": 0,
+        "end_col": 36
+      }
+    }
+  ]
+}

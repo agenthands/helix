@@ -1,0 +1,69 @@
+{
+  "file": {
+    "path": "method_basic/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Counter",
+      "qualified_name": "Counter",
+      "file": "method_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "Counter",
+      "signature_hash": "Counter",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "increment",
+      "qualified_name": "increment",
+      "file": "method_basic/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 13
+      },
+      "signature": "increment",
+      "signature_hash": "increment",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Counter",
+      "file": "method_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 15,
+        "end_line": 1,
+        "end_col": 21
+      }
+    }
+  ]
+}

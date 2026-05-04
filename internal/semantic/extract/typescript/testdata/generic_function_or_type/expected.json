@@ -1,0 +1,217 @@
+{
+  "file": {
+    "path": "generic_function_or_type/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "mapList",
+      "qualified_name": "mapList",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "mapList",
+      "signature_hash": "mapList",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "xs",
+      "qualified_name": "xs",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "signature": "xs",
+      "signature_hash": "xs",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 32,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 36,
+        "end_line": 0,
+        "end_col": 37
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 27,
+        "end_line": 0,
+        "end_col": 28
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 39,
+        "end_line": 0,
+        "end_col": 40
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 45,
+        "end_line": 0,
+        "end_col": 46
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 49,
+        "end_line": 0,
+        "end_col": 50
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "map",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 14,
+        "end_line": 1,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "map",
+      "file": "generic_function_or_type/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 14,
+        "end_line": 1,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": (t: T) =\u003e U",
+      "range": {
+        "start_line": 0,
+        "start_col": 33,
+        "end_line": 0,
+        "end_col": 46
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": T",
+      "range": {
+        "start_line": 0,
+        "start_col": 37,
+        "end_line": 0,
+        "end_col": 40
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": T[]",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 30
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": U[]",
+      "range": {
+        "start_line": 0,
+        "start_col": 47,
+        "end_line": 0,
+        "end_col": 52
+      }
+    }
+  ]
+}

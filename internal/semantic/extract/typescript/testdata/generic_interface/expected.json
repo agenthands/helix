@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "generic_interface/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Box",
+      "qualified_name": "Box",
+      "file": "generic_interface/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "Box",
+      "signature_hash": "Box",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Box",
+      "file": "generic_interface/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_interface/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_interface/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 11,
+        "end_line": 1,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ]
+}

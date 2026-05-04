@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "import_alias/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "zeros",
+      "qualified_name": "zeros",
+      "file": "import_alias/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 9
+      },
+      "signature": "zeros",
+      "signature_hash": "zeros",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "zeros",
+      "file": "import_alias/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 14,
+        "end_line": 3,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "zeros",
+      "file": "import_alias/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 14,
+        "end_line": 3,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "numpy",
+      "alias": "np",
+      "file": "import_alias/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 12
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+const DefaultName: string = "anon";

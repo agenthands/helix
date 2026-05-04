@@ -1,0 +1,123 @@
+{
+  "file": {
+    "path": "implements_clause/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Reader",
+      "qualified_name": "Reader",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "Reader",
+      "signature_hash": "Reader",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "class",
+      "name": "FileReader",
+      "qualified_name": "FileReader",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "signature": "FileReader",
+      "signature_hash": "FileReader",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "read",
+      "qualified_name": "read",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 8
+      },
+      "signature": "read",
+      "signature_hash": "read",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "FileReader",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "implements_clause/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 28,
+        "end_line": 3,
+        "end_col": 34
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 4,
+        "start_col": 10,
+        "end_line": 4,
+        "end_col": 18
+      }
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "implements",
+      "target": "Reader",
+      "range": {
+        "start_line": 3,
+        "start_col": 28,
+        "end_line": 3,
+        "end_col": 34
+      }
+    }
+  ]
+}

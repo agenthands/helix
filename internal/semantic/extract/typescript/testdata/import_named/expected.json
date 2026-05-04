@@ -1,0 +1,76 @@
+{
+  "file": {
+    "path": "import_named/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "ops",
+      "qualified_name": "ops",
+      "file": "import_named/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 12
+      },
+      "signature": "ops",
+      "signature_hash": "ops",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "",
+      "symbols": [
+        "readFile"
+      ],
+      "file": "import_named/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 0
+      }
+    },
+    {
+      "source": "",
+      "symbols": [
+        "writeFile"
+      ],
+      "file": "import_named/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 0
+      }
+    },
+    {
+      "source": "fs",
+      "file": "import_named/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 36,
+        "end_line": 0,
+        "end_col": 40
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 14,
+        "end_line": 1,
+        "end_col": 20
+      }
+    }
+  ]
+}

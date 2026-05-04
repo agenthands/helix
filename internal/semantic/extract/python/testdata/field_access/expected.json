@@ -1,0 +1,124 @@
+{
+  "file": {
+    "path": "field_access/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "signature": "T",
+      "signature_hash": "T",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "__init__",
+      "qualified_name": "T.__init__",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 16
+      },
+      "signature": "__init__",
+      "signature_hash": "__init__",
+      "receiver": {
+        "type": "T",
+        "name": ""
+      },
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 17,
+        "end_line": 1,
+        "end_col": 21
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "get_x",
+      "qualified_name": "get_x",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 9
+      },
+      "signature": "get_x",
+      "signature_hash": "get_x",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 10,
+        "end_line": 4,
+        "end_col": 11
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "field",
+      "name": "x",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "file": "field_access/before.py",
+      "range": {
+        "start_line": 5,
+        "start_col": 13,
+        "end_line": 5,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    }
+  ]
+}

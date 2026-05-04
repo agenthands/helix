@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "nested_function/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "outer",
+      "qualified_name": "outer",
+      "file": "nested_function/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 9
+      },
+      "signature": "outer",
+      "signature_hash": "outer",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "inner",
+      "qualified_name": "inner",
+      "file": "nested_function/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 13
+      },
+      "signature": "inner",
+      "signature_hash": "inner",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "inner",
+      "file": "nested_function/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 11,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    }
+  ]
+}

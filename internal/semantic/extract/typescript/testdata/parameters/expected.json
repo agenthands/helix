@@ -1,0 +1,92 @@
+{
+  "file": {
+    "path": "parameters/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "format",
+      "qualified_name": "format",
+      "file": "parameters/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "signature": "format",
+      "signature_hash": "format",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "parameters/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "parameters/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 30,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 33,
+        "end_line": 0,
+        "end_col": 41
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": string",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 28
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": string",
+      "range": {
+        "start_line": 0,
+        "start_col": 42,
+        "end_line": 0,
+        "end_col": 50
+      }
+    }
+  ]
+}

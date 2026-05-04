@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "add_overload_first_preserved_second_newly_defined/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "pick",
+      "qualified_name": "pick",
+      "file": "add_overload_first_preserved_second_newly_defined/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "pick",
+      "signature_hash": "pick",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "add_overload_first_preserved_second_newly_defined/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 23
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 32
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "export_default_rename_preserves_id/after.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "named",
+      "qualified_name": "named",
+      "file": "export_default_rename_preserves_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 29
+      },
+      "signature": "named",
+      "signature_hash": "named",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 31,
+        "end_line": 0,
+        "end_col": 39
+      }
+    }
+  ]
+}

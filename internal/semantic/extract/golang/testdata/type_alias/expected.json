@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "type_alias/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "type",
+      "name": "ID",
+      "qualified_name": "ID",
+      "file": "type_alias/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 7
+      },
+      "signature": "ID",
+      "signature_hash": "ID",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "ID",
+      "file": "type_alias/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 7
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int64",
+      "file": "type_alias/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ]
+}

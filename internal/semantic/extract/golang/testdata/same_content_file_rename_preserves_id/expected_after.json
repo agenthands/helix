@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "same_content_file_rename_preserves_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Public",
+      "qualified_name": "Public",
+      "file": "same_content_file_rename_preserves_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 30
+      },
+      "signature": "func Public() int { return 1 }",
+      "signature_hash": "func Public() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "same_content_file_rename_preserves_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 17
+      }
+    }
+  ]
+}

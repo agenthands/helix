@@ -1,0 +1,169 @@
+{
+  "file": {
+    "path": "generic_function_or_type/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "T",
+      "signature_hash": "T",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "variable",
+      "name": "U",
+      "qualified_name": "U",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "U",
+      "signature_hash": "U",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "map_list",
+      "qualified_name": "map_list",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 5,
+        "start_col": 4,
+        "end_line": 5,
+        "end_col": 12
+      },
+      "signature": "map_list",
+      "signature_hash": "map_list",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "xs",
+      "qualified_name": "xs",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 5,
+        "start_col": 13,
+        "end_line": 5,
+        "end_col": 15
+      },
+      "signature": "xs",
+      "signature_hash": "xs",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 5,
+        "start_col": 26,
+        "end_line": 5,
+        "end_col": 27
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "TypeVar",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "TypeVar",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "f",
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 6,
+        "start_col": 12,
+        "end_line": 6,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "typing",
+      "symbols": [
+        "TypeVar"
+      ],
+      "file": "generic_function_or_type/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 11
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "list[T]",
+      "range": {
+        "start_line": 5,
+        "start_col": 17,
+        "end_line": 5,
+        "end_col": 24
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "list[U]",
+      "range": {
+        "start_line": 5,
+        "start_col": 32,
+        "end_line": 5,
+        "end_col": 39
+      }
+    }
+  ]
+}

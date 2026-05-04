@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "type_annotation/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "wrap",
+      "qualified_name": "wrap",
+      "file": "type_annotation/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "wrap",
+      "signature_hash": "wrap",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "type_annotation/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 18
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": string",
+      "range": {
+        "start_line": 0,
+        "start_col": 18,
+        "end_line": 0,
+        "end_col": 26
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": string",
+      "range": {
+        "start_line": 0,
+        "start_col": 27,
+        "end_line": 0,
+        "end_col": 35
+      }
+    }
+  ]
+}

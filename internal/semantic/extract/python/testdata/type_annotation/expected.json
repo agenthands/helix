@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "type_annotation/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "wrap",
+      "qualified_name": "wrap",
+      "file": "type_annotation/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 8
+      },
+      "signature": "wrap",
+      "signature_hash": "wrap",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "type_annotation/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "str",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 18
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "str",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 26
+      }
+    }
+  ]
+}

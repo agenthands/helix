@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "comments_and_doc_noise/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "comments_and_doc_noise/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 9,
+        "end_line": 3,
+        "end_col": 14
+      },
+      "signature": "greet",
+      "signature_hash": "greet",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 3,
+        "start_col": 16,
+        "end_line": 3,
+        "end_col": 22
+      }
+    }
+  ]
+}

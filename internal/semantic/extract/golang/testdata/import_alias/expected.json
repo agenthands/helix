@@ -1,0 +1,75 @@
+{
+  "file": {
+    "path": "import_alias/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Greet",
+      "qualified_name": "Greet",
+      "file": "import_alias/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 32
+      },
+      "signature": "func Greet() { f.Println(\"hi\") }",
+      "signature_hash": "func Greet()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "Println",
+      "file": "import_alias/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 17,
+        "end_line": 4,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "Println",
+      "file": "import_alias/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 17,
+        "end_line": 4,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "fmt",
+      "file": "import_alias/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 14
+      }
+    },
+    {
+      "source": "fmt",
+      "alias": "f",
+      "file": "import_alias/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 14
+      }
+    }
+  ]
+}

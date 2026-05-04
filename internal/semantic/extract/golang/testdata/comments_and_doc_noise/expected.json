@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "comments_and_doc_noise/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Greet",
+      "qualified_name": "Greet",
+      "file": "comments_and_doc_noise/before.go",
+      "range": {
+        "start_line": 5,
+        "start_col": 0,
+        "end_line": 8,
+        "end_col": 1
+      },
+      "signature": "func Greet() { // an inner comment return }",
+      "signature_hash": "func Greet()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

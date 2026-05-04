@@ -1,0 +1,60 @@
+{
+  "file": {
+    "path": "parameters/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "format_name",
+      "qualified_name": "format_name",
+      "file": "parameters/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "signature": "format_name",
+      "signature_hash": "format_name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "parameters/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "parameters/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

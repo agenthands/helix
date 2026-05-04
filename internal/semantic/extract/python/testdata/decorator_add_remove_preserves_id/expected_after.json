@@ -1,0 +1,74 @@
+{
+  "file": {
+    "path": "decorator_add_remove_preserves_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "deco",
+      "qualified_name": "deco",
+      "file": "decorator_add_remove_preserves_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 8
+      },
+      "signature": "deco",
+      "signature_hash": "deco",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "fn",
+      "qualified_name": "fn",
+      "file": "decorator_add_remove_preserves_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "fn",
+      "signature_hash": "fn",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "decorator_add_remove_preserves_id/after.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 5
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "decorator",
+      "name": "deco",
+      "file": "decorator_add_remove_preserves_id/after.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 1,
+        "end_line": 3,
+        "end_col": 5
+      },
+      "confidence": 0.7
+    }
+  ]
+}

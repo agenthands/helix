@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "visibility_exported_private/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Public",
+      "qualified_name": "Public",
+      "file": "visibility_exported_private/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "signature": "func Public() {}",
+      "signature_hash": "func Public()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "private",
+      "qualified_name": "private",
+      "file": "visibility_exported_private/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 17
+      },
+      "signature": "func private() {}",
+      "signature_hash": "func private()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

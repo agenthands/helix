@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "mjs_esm/before.mjs",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "mjs_esm/before.mjs",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 21
+      },
+      "signature": "greet",
+      "signature_hash": "greet",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

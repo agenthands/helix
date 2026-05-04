@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "comments_and_doc_noise/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "comments_and_doc_noise/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 9
+      },
+      "signature": "greet",
+      "signature_hash": "greet",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

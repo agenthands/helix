@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "rename_churns_id/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "OldName",
+      "qualified_name": "OldName",
+      "file": "rename_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 31
+      },
+      "signature": "func OldName() int { return 1 }",
+      "signature_hash": "func OldName() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "rename_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 18
+      }
+    }
+  ]
+}

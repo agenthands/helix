@@ -1,0 +1,91 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "signature_change_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 30
+      },
+      "signature": "func F(x int) int { return x }",
+      "signature_hash": "func F(x int) int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "signature_change_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 7,
+        "end_line": 2,
+        "end_col": 8
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "signature_change_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "signature_change_churns_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 12
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 17
+      }
+    }
+  ]
+}

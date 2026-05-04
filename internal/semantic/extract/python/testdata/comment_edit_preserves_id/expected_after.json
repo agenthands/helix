@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "comment_edit_preserves_id/after.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 5
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

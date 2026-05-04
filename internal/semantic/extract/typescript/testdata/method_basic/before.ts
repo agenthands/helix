@@ -1,0 +1,3 @@
+class Counter {
+    increment(): void {}
+}

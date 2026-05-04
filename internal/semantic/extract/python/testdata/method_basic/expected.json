@@ -1,0 +1,78 @@
+{
+  "file": {
+    "path": "method_basic/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Counter",
+      "qualified_name": "Counter",
+      "file": "method_basic/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "Counter",
+      "signature_hash": "Counter",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "increment",
+      "qualified_name": "Counter.increment",
+      "file": "method_basic/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 17
+      },
+      "signature": "increment",
+      "signature_hash": "increment",
+      "receiver": {
+        "type": "Counter",
+        "name": ""
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "method_basic/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 18,
+        "end_line": 1,
+        "end_col": 22
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "field",
+      "name": "n",
+      "file": "method_basic/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    }
+  ]
+}

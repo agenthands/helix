@@ -1,0 +1,78 @@
+{
+  "file": {
+    "path": "property/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Box",
+      "qualified_name": "Box",
+      "file": "property/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 9
+      },
+      "signature": "Box",
+      "signature_hash": "Box",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "value",
+      "qualified_name": "Box.value",
+      "file": "property/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 8,
+        "end_line": 2,
+        "end_col": 13
+      },
+      "signature": "value",
+      "signature_hash": "value",
+      "receiver": {
+        "type": "Box",
+        "name": ""
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "property/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 18
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "decorator",
+      "name": "property",
+      "file": "property/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 5,
+        "end_line": 1,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ]
+}

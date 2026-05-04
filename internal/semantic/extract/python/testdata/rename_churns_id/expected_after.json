@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "rename_churns_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "new_name",
+      "qualified_name": "new_name",
+      "file": "rename_churns_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "new_name",
+      "signature_hash": "new_name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

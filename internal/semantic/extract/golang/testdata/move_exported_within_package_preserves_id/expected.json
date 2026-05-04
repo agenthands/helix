@@ -1,0 +1,91 @@
+{
+  "file": {
+    "path": "move_exported_within_package_preserves_id/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "New",
+      "qualified_name": "New",
+      "file": "move_exported_within_package_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 27
+      },
+      "signature": "func New() int { return 1 }",
+      "signature_hash": "func New() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "Helper",
+      "qualified_name": "Helper",
+      "file": "move_exported_within_package_preserves_id/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 30
+      },
+      "signature": "func Helper() int { return 2 }",
+      "signature_hash": "func Helper() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "move_exported_within_package_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 11,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "move_exported_within_package_preserves_id/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 14,
+        "end_line": 4,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 11,
+        "end_line": 2,
+        "end_col": 14
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 4,
+        "start_col": 14,
+        "end_line": 4,
+        "end_col": 17
+      }
+    }
+  ]
+}

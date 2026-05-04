@@ -1,0 +1,81 @@
+{
+  "file": {
+    "path": "interface_basic/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Reader",
+      "qualified_name": "Reader",
+      "file": "interface_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "Reader",
+      "signature_hash": "Reader",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "buf",
+      "qualified_name": "buf",
+      "file": "interface_basic/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 12
+      },
+      "signature": "buf",
+      "signature_hash": "buf",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "interface_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Uint8Array",
+      "file": "interface_basic/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 14,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": Uint8Array",
+      "range": {
+        "start_line": 1,
+        "start_col": 12,
+        "end_line": 1,
+        "end_col": 24
+      }
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "file": {
+    "path": "dunder_method/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Vec",
+      "qualified_name": "Vec",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 9
+      },
+      "signature": "Vec",
+      "signature_hash": "Vec",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "__init__",
+      "qualified_name": "Vec.__init__",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 16
+      },
+      "signature": "__init__",
+      "signature_hash": "__init__",
+      "receiver": {
+        "type": "Vec",
+        "name": ""
+      },
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 17,
+        "end_line": 1,
+        "end_col": 21
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 23,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "__repr__",
+      "qualified_name": "Vec.__repr__",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 16
+      },
+      "signature": "__repr__",
+      "signature_hash": "__repr__",
+      "receiver": {
+        "type": "Vec",
+        "name": ""
+      },
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 4,
+        "start_col": 17,
+        "end_line": 4,
+        "end_col": 21
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "field",
+      "name": "x",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "file": "dunder_method/before.py",
+      "range": {
+        "start_line": 5,
+        "start_col": 27,
+        "end_line": 5,
+        "end_col": 28
+      },
+      "confidence": 0.7
+    }
+  ]
+}

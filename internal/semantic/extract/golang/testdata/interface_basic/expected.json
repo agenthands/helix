@@ -1,0 +1,105 @@
+{
+  "file": {
+    "path": "interface_basic/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Reader",
+      "qualified_name": "Reader",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "Reader interface { Read(p []byte) (int, error) }",
+      "signature_hash": "Reader interface",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "p",
+      "qualified_name": "p",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 9,
+        "end_line": 3,
+        "end_col": 10
+      },
+      "signature": "p",
+      "signature_hash": "p",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "byte",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 13,
+        "end_line": 3,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 20,
+        "end_line": 3,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "error",
+      "file": "interface_basic/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 25,
+        "end_line": 3,
+        "end_col": 30
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "[]byte",
+      "range": {
+        "start_line": 3,
+        "start_col": 11,
+        "end_line": 3,
+        "end_col": 17
+      }
+    }
+  ]
+}

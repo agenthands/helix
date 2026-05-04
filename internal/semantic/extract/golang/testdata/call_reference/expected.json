@@ -1,0 +1,103 @@
+{
+  "file": {
+    "path": "call_reference/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Inner",
+      "qualified_name": "Inner",
+      "file": "call_reference/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 29
+      },
+      "signature": "func Inner() int { return 1 }",
+      "signature_hash": "func Inner() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "Outer",
+      "qualified_name": "Outer",
+      "file": "call_reference/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 35
+      },
+      "signature": "func Outer() int { return Inner() }",
+      "signature_hash": "func Outer() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "call_reference/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "call_reference/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 13,
+        "end_line": 4,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "Inner",
+      "file": "call_reference/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 26,
+        "end_line": 4,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 16
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 4,
+        "start_col": 13,
+        "end_line": 4,
+        "end_col": 16
+      }
+    }
+  ]
+}

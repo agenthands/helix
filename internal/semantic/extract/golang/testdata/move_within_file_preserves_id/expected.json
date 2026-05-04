@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "move_within_file_preserves_id/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "A",
+      "qualified_name": "A",
+      "file": "move_within_file_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "signature": "func A() {}",
+      "signature_hash": "func A()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "B",
+      "qualified_name": "B",
+      "file": "move_within_file_preserves_id/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 11
+      },
+      "signature": "func B() {}",
+      "signature_hash": "func B()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "namespace_or_module/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "area",
+      "qualified_name": "area",
+      "file": "namespace_or_module/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 20,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "signature": "area",
+      "signature_hash": "area",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "r",
+      "qualified_name": "r",
+      "file": "namespace_or_module/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 25,
+        "end_line": 1,
+        "end_col": 26
+      },
+      "signature": "r",
+      "signature_hash": "r",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 1,
+        "start_col": 26,
+        "end_line": 1,
+        "end_col": 34
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 1,
+        "start_col": 35,
+        "end_line": 1,
+        "end_col": 43
+      }
+    }
+  ]
+}

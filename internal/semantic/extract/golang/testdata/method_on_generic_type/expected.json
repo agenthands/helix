@@ -1,0 +1,209 @@
+{
+  "file": {
+    "path": "method_on_generic_type/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Stack",
+      "qualified_name": "Stack",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 37
+      },
+      "signature": "Stack[T any] struct{ items []T }",
+      "signature_hash": "Stack[T0 any] struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "qualified_name": "items",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 26,
+        "end_line": 2,
+        "end_col": 31
+      },
+      "signature": "items",
+      "signature_hash": "items",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "s",
+      "qualified_name": "s",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 6,
+        "end_line": 4,
+        "end_col": 7
+      },
+      "signature": "s",
+      "signature_hash": "s",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "v",
+      "qualified_name": "v",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 24,
+        "end_line": 4,
+        "end_col": 25
+      },
+      "signature": "v",
+      "signature_hash": "v",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Stack",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "any",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 34,
+        "end_line": 2,
+        "end_col": 35
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Stack",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 9,
+        "end_line": 4,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 15,
+        "end_line": 4,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 26,
+        "end_line": 4,
+        "end_col": 27
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 33,
+        "end_line": 4,
+        "end_col": 38
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "append",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 41,
+        "end_line": 4,
+        "end_col": 47
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "file": "method_on_generic_type/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 50,
+        "end_line": 4,
+        "end_col": 55
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "*Stack[T]",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 17
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "T",
+      "range": {
+        "start_line": 4,
+        "start_col": 26,
+        "end_line": 4,
+        "end_col": 27
+      }
+    }
+  ]
+}

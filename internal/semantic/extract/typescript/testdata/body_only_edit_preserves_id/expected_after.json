@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/after.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "body_only_edit_preserves_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 12,
+        "end_line": 0,
+        "end_col": 20
+      }
+    }
+  ]
+}

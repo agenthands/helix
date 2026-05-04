@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "class_or_struct_basic/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Point",
+      "qualified_name": "Point",
+      "file": "class_or_struct_basic/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "Point",
+      "signature_hash": "Point",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

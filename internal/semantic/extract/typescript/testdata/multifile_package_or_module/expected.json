@@ -1,0 +1,81 @@
+{
+  "file": {
+    "path": "multifile_package_or_module/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Widget",
+      "qualified_name": "Widget",
+      "file": "multifile_package_or_module/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "signature": "Widget",
+      "signature_hash": "Widget",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "newWidget",
+      "qualified_name": "newWidget",
+      "file": "multifile_package_or_module/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 16,
+        "end_line": 1,
+        "end_col": 25
+      },
+      "signature": "newWidget",
+      "signature_hash": "newWidget",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Widget",
+      "file": "multifile_package_or_module/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Widget",
+      "file": "multifile_package_or_module/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 29,
+        "end_line": 1,
+        "end_col": 35
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": Widget",
+      "range": {
+        "start_line": 1,
+        "start_col": 27,
+        "end_line": 1,
+        "end_col": 35
+      }
+    }
+  ]
+}

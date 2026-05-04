@@ -1,0 +1,61 @@
+{
+  "file": {
+    "path": "import_default_or_basic/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "readIt",
+      "qualified_name": "readIt",
+      "file": "import_default_or_basic/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 15
+      },
+      "signature": "readIt",
+      "signature_hash": "readIt",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "fs",
+      "file": "import_default_or_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 19
+      }
+    },
+    {
+      "source": "fs",
+      "alias": "fs",
+      "file": "import_default_or_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 19
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 17,
+        "end_line": 1,
+        "end_col": 23
+      }
+    }
+  ]
+}

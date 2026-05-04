@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "type_alias_union/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "type",
+      "name": "ID",
+      "qualified_name": "ID",
+      "file": "type_alias_union/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "signature": "ID",
+      "signature_hash": "ID",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "ID",
+      "file": "type_alias_union/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "confidence": 0.7
+    }
+  ]
+}

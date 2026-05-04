@@ -1,0 +1,80 @@
+{
+  "file": {
+    "path": "type_annotation_python/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "find",
+      "qualified_name": "find",
+      "file": "type_annotation_python/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 8
+      },
+      "signature": "find",
+      "signature_hash": "find",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "type_annotation_python/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 13
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "typing",
+      "symbols": [
+        "Optional"
+      ],
+      "file": "type_annotation_python/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 11
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "Optional[int]",
+      "range": {
+        "start_line": 2,
+        "start_col": 23,
+        "end_line": 2,
+        "end_col": 36
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "str",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 18
+      }
+    }
+  ]
+}

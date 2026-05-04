@@ -1,0 +1,102 @@
+{
+  "file": {
+    "path": "method_on_receiver_rename_churns_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "method_on_receiver_rename_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "signature": "T struct{}",
+      "signature_hash": "T struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "New",
+      "qualified_name": "T.New",
+      "file": "method_on_receiver_rename_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 20
+      },
+      "signature": "func (t *T) New() {}",
+      "signature_hash": "func (t *T) New()",
+      "receiver": {
+        "type": "T",
+        "name": "t"
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "method_on_receiver_rename_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 6,
+        "end_line": 4,
+        "end_col": 7
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "method_on_receiver_rename_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 6
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "method_on_receiver_rename_churns_id/after.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 9,
+        "end_line": 4,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "*T",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 10
+      }
+    }
+  ]
+}

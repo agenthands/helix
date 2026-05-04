@@ -1,0 +1,74 @@
+{
+  "file": {
+    "path": "class_or_struct_basic/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Point",
+      "qualified_name": "Point",
+      "file": "class_or_struct_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "Point",
+      "signature_hash": "Point",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "class_or_struct_basic/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 5
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "class_or_struct_basic/before.ts",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 5
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Point",
+      "file": "class_or_struct_basic/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    }
+  ]
+}

@@ -5,9 +5,11 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write   # required: create release, upload assets
-  id-token: write   # Phase 58 D-02: cosign keyless OIDC token (Fulcio short-lived cert)
+# WR-01: deny all workflow-level permissions by default; grant the minimum
+# required permissions per-job. Future jobs added to this workflow do NOT
+# inherit id-token: write (which would let them mint Fulcio certs as the
+# release identity).
+permissions: {}
 
 jobs:
   release:
@@ -16,6 +18,9 @@ jobs:
     # `uname -m` checks below remain as defense-in-depth backstops for future
     # runner image changes.
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write   # required: create release, upload assets
+      id-token: write   # Phase 58 D-02: cosign keyless OIDC token (Fulcio short-lived cert)
     timeout-minutes: 30
     steps:
       - name: Checkout

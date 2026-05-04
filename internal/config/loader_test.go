@@ -455,6 +455,96 @@ func TestLoad_SemanticIndexDefaults(t *testing.T) {
 	}
 }
 
+// TestLoad_SemanticExtractionDefaults asserts the four genuinely-new
+// Phase 59 P02 keys under semantic_index.extraction.* surface via the
+// 4-layer koanf precedence. Mirrors TestLoad_SemanticIndexDefaults style.
+//
+// Per user decision (CONTEXT.md): max_file_size and
+// initial_extraction_on_activation REMAIN under indexing.* — this test
+// also reasserts the existing Phase 57 defaults so a future plan that
+// "tidies" the keys into extraction.* will be caught.
+func TestLoad_SemanticExtractionDefaults(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// extraction.* — the four genuinely-new keys.
+	if cfg.SemanticIndex.Extraction.ExtractionReadyTimeout != "30s" {
+		t.Errorf("expected extraction.extraction_ready_timeout=30s, got %q",
+			cfg.SemanticIndex.Extraction.ExtractionReadyTimeout)
+	}
+	if cfg.SemanticIndex.Extraction.ExtractionFileTimeout != "3s" {
+		t.Errorf("expected extraction.extraction_file_timeout=3s, got %q",
+			cfg.SemanticIndex.Extraction.ExtractionFileTimeout)
+	}
+	if cfg.SemanticIndex.Extraction.MaxParallelFiles != 4 {
+		t.Errorf("expected extraction.max_parallel_files=4, got %d",
+			cfg.SemanticIndex.Extraction.MaxParallelFiles)
+	}
+	if !cfg.SemanticIndex.Extraction.AllowPartialResults {
+		t.Errorf("expected extraction.allow_partial_results=true, got false")
+	}
+
+	// Per user decision: relocated keys still live under indexing.*.
+	if cfg.SemanticIndex.Indexing.MaxFileSize != "2MiB" {
+		t.Errorf("expected indexing.max_file_size=2MiB (NOT moved to extraction.*), got %q",
+			cfg.SemanticIndex.Indexing.MaxFileSize)
+	}
+	if cfg.SemanticIndex.Indexing.AutoIndexOnActivate {
+		t.Errorf("expected indexing.auto_index_on_activate=false, got true")
+	}
+}
+
+// TestLoad_SemanticExtractionPrecedence asserts CLI > project > user >
+// profile precedence flows for the new extraction.* keys.
+func TestLoad_SemanticExtractionPrecedence(t *testing.T) {
+	dir := t.TempDir()
+
+	// User layer: set max_parallel_files=8.
+	userPath := filepath.Join(dir, "user.yml")
+	userYAML := "" +
+		"semantic_index:\n" +
+		"  extraction:\n" +
+		"    max_parallel_files: 8\n"
+	if err := os.WriteFile(userPath, []byte(userYAML), 0600); err != nil {
+		t.Fatalf("write user yml: %v", err)
+	}
+
+	// Project layer: also set max_parallel_files=12 (should win over user).
+	projectPath := filepath.Join(dir, "project.yml")
+	projectYAML := "" +
+		"semantic_index:\n" +
+		"  extraction:\n" +
+		"    max_parallel_files: 12\n"
+	if err := os.WriteFile(projectPath, []byte(projectYAML), 0600); err != nil {
+		t.Fatalf("write project yml: %v", err)
+	}
+
+	// CLI layer (highest precedence): max_parallel_files=2.
+	cliOverrides := map[string]interface{}{
+		"semantic_index.extraction.max_parallel_files": 2,
+	}
+
+	cfg, err := Load(userPath, projectPath, cliOverrides)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.SemanticIndex.Extraction.MaxParallelFiles != 2 {
+		t.Errorf("CLI-layer override lost: expected extraction.max_parallel_files=2 "+
+			"(CLI beat project=12, user=8), got %d", cfg.SemanticIndex.Extraction.MaxParallelFiles)
+	}
+
+	// Profile-layer defaults should survive untouched keys.
+	if cfg.SemanticIndex.Extraction.ExtractionReadyTimeout != "30s" {
+		t.Errorf("profile-layer default lost: expected extraction_ready_timeout=30s, got %q",
+			cfg.SemanticIndex.Extraction.ExtractionReadyTimeout)
+	}
+	if !cfg.SemanticIndex.Extraction.AllowPartialResults {
+		t.Errorf("profile-layer default lost: expected allow_partial_results=true")
+	}
+}
+
 // TestLoad_SemanticIndexPrecedence covers 4 representative SPEC §25 keys,
 // one per layer, confirming CLI > project > user > profile resolution
 // flows correctly through the existing 4-layer koanf machinery once P03's

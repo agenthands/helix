@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "return_type/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "numbers",
+      "qualified_name": "numbers",
+      "file": "return_type/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "numbers",
+      "signature_hash": "numbers",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "tuple[int, int]",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 32
+      }
+    }
+  ]
+}

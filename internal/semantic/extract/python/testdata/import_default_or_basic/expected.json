@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "import_default_or_basic/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "cwd",
+      "qualified_name": "cwd",
+      "file": "import_default_or_basic/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 7
+      },
+      "signature": "cwd",
+      "signature_hash": "cwd",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "getcwd",
+      "file": "import_default_or_basic/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 14,
+        "end_line": 3,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "getcwd",
+      "file": "import_default_or_basic/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 14,
+        "end_line": 3,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "os",
+      "file": "import_default_or_basic/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 9
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "builtin_or_keyword_edge/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "make_dict",
+      "qualified_name": "make_dict",
+      "file": "builtin_or_keyword_edge/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "make_dict",
+      "signature_hash": "make_dict",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "dict",
+      "file": "builtin_or_keyword_edge/before.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 11,
+        "end_line": 1,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ]
+}

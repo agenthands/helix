@@ -1,0 +1,85 @@
+{
+  "file": {
+    "path": "import_from/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "check",
+      "qualified_name": "check",
+      "file": "import_from/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 9
+      },
+      "signature": "check",
+      "signature_hash": "check",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "p",
+      "qualified_name": "p",
+      "file": "import_from/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "signature": "p",
+      "signature_hash": "p",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "exists",
+      "file": "import_from/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 11,
+        "end_line": 3,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "os.path",
+      "symbols": [
+        "join"
+      ],
+      "file": "import_from/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 12
+      }
+    },
+    {
+      "source": "os.path",
+      "symbols": [
+        "exists"
+      ],
+      "file": "import_from/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 12
+      }
+    }
+  ]
+}

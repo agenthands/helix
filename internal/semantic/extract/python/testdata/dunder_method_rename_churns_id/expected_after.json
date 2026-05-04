@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "dunder_method_rename_churns_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "C",
+      "qualified_name": "C",
+      "file": "dunder_method_rename_churns_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "signature": "C",
+      "signature_hash": "C",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "__new__",
+      "qualified_name": "C.__new__",
+      "file": "dunder_method_rename_churns_id/after.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 15
+      },
+      "signature": "__new__",
+      "signature_hash": "__new__",
+      "receiver": {
+        "type": "C",
+        "name": ""
+      },
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "cls",
+      "qualified_name": "cls",
+      "file": "dunder_method_rename_churns_id/after.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 16,
+        "end_line": 1,
+        "end_col": 19
+      },
+      "signature": "cls",
+      "signature_hash": "cls",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

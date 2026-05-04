@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "method_on_class_rename_churns_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "method_on_class_rename_churns_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "signature": "T",
+      "signature_hash": "T",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "new_name",
+      "qualified_name": "T.new_name",
+      "file": "method_on_class_rename_churns_id/after.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 16
+      },
+      "signature": "new_name",
+      "signature_hash": "new_name",
+      "receiver": {
+        "type": "T",
+        "name": ""
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "self",
+      "qualified_name": "self",
+      "file": "method_on_class_rename_churns_id/after.py",
+      "range": {
+        "start_line": 1,
+        "start_col": 17,
+        "end_line": 1,
+        "end_col": 21
+      },
+      "signature": "self",
+      "signature_hash": "self",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

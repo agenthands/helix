@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "visibility_exported_private/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "public",
+      "qualified_name": "public",
+      "file": "visibility_exported_private/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "public",
+      "signature_hash": "public",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "_private",
+      "qualified_name": "_private",
+      "file": "visibility_exported_private/before.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 12
+      },
+      "signature": "_private",
+      "signature_hash": "_private",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

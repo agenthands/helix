@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "move_exported_within_module_preserves_id/after.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "helper",
+      "qualified_name": "helper",
+      "file": "move_exported_within_module_preserves_id/after.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "helper",
+      "signature_hash": "helper",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "new_widget",
+      "qualified_name": "new_widget",
+      "file": "move_exported_within_module_preserves_id/after.py",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 14
+      },
+      "signature": "new_widget",
+      "signature_hash": "new_widget",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

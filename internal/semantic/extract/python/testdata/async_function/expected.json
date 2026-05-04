@@ -1,0 +1,55 @@
+{
+  "file": {
+    "path": "async_function/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "fetch",
+      "qualified_name": "fetch",
+      "file": "async_function/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "signature": "fetch",
+      "signature_hash": "fetch",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "url",
+      "qualified_name": "url",
+      "file": "async_function/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 19
+      },
+      "signature": "url",
+      "signature_hash": "url",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "asyncio",
+      "file": "async_function/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 14
+      }
+    }
+  ]
+}

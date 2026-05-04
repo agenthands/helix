@@ -1,0 +1,54 @@
+{
+  "file": {
+    "path": "enum_or_literal_type/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Color",
+      "qualified_name": "Color",
+      "file": "enum_or_literal_type/before.py",
+      "range": {
+        "start_line": 2,
+        "start_col": 6,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "signature": "Color",
+      "signature_hash": "Color",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "enum",
+      "symbols": [
+        "Enum"
+      ],
+      "file": "enum_or_literal_type/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 9
+      }
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Enum",
+      "range": {
+        "start_line": 2,
+        "start_col": 12,
+        "end_line": 2,
+        "end_col": 16
+      }
+    }
+  ]
+}

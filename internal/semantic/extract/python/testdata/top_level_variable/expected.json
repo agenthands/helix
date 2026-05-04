@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "top_level_variable/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "DefaultName",
+      "qualified_name": "DefaultName",
+      "file": "top_level_variable/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "DefaultName",
+      "signature_hash": "DefaultName",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

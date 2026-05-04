@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "invalid_partial_syntax/before.py",
+    "language": "python",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "broken",
+      "qualified_name": "broken",
+      "file": "invalid_partial_syntax/before.py",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "broken",
+      "signature_hash": "broken",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

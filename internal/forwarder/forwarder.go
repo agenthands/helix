@@ -111,9 +111,14 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 				errCh <- fmt.Errorf("receiving from daemon: %w", err)
 				return
 			}
-			// Write response to stdout followed by newline
-			os.Stdout.Write(msg.Payload)
-			os.Stdout.Write([]byte("\n"))
+			// WR-06(a): coalesce payload + trailing newline into one
+			// syscall so the message and its terminator can never be
+			// split across log lines if anything else in the process
+			// also writes to stdout. The single allocation per response
+			// is on the hot path but is the simplest correct fix; a
+			// sync.Mutex around os.Stdout.Write would also work but
+			// adds contention with no caller-visible benefit today.
+			os.Stdout.Write(append(msg.Payload, '\n'))
 		}
 	}()
 
@@ -126,9 +131,18 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 }
 
 // generateSessionID creates a unique session identifier using crypto/rand.
+//
+// WR-06(b): a crypto/rand failure is unrecoverable here — the session ID
+// is the daemon's session-isolation key, and silently returning an
+// all-zero ID would collapse every concurrent forwarder into the same
+// session and merge their state. On a healthy POSIX system this never
+// fails, but a chroot without /dev/urandom or a tightly-jailed
+// container can hit it. Panic instead of returning a useless ID.
 func generateSessionID() string {
 	b := make([]byte, 16)
-	_, _ = io.ReadFull(cryptoRand.Reader, b)
+	if _, err := io.ReadFull(cryptoRand.Reader, b); err != nil {
+		panic(fmt.Sprintf("crypto/rand failed: %v", err))
+	}
 	return fmt.Sprintf("%x", b)
 }
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
-status: discussing
-last_updated: "2026-05-04T13:05:00.000Z"
-last_activity: 2026-05-04 — phase 59 context gathered (5 decisions locked); ready for /gsd-plan-phase 59
+status: executing
+last_updated: "2026-05-04T13:55:32.950Z"
+last_activity: 2026-05-04 -- Phase 59 execution started
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 8
+  total_plans: 13
   completed_plans: 8
-  percent: 67
+  percent: 62
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 59 context gathered (5 decisions locked) — ready for `/gsd-plan-phase 59`.
+**Current focus:** Phase 59 — tree-sitter-extraction-stable-symbol-ids
 
 ## Current Position
 
-Phase: 59 (discussing)
-Plan: 0/0 (CONTEXT.md complete; planning next)
-Status: Phase 59 CONTEXT.md captures D-01..D-05 (net-new queries hard split, constructor-injected provider registry, hybrid golden+table-driven test matrix, background-on-activation extraction with centralized RequireReady gate, two-tier partial:true model). v1.10 milestone: 8/8 plans shipped across phases 57+58.
-Last activity: 2026-05-04 — phase 59 context gathered; ready for /gsd-plan-phase 59
+Phase: 59 (tree-sitter-extraction-stable-symbol-ids) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 59
+Last activity: 2026-05-04 -- Phase 59 execution started
 
 ## Performance Metrics
 

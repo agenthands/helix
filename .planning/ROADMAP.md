@@ -133,14 +133,14 @@
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (0/4 plans) (completed 2026-05-03)
 - [x] Phase 58: v1.9 Carryover -- Release & Distribution (4/4 plans) (completed 2026-05-04)
 - [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
-- [ ] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (0/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release
+- [x] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (0/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release (completed 2026-05-04)
   Plans:
   - [x] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
   - [x] 59.1-01-PLAN.md — Wave 1 stub deletion + tag strip + Path-3 platform stub + daemon step-6a removal
-  - [ ] 59.1-02-PLAN.md — Wave 2 goreleaser v2 split/merge probe + .goreleaser.yaml CGO=1 flip (linux+windows zig cc; darwin Apple clang) + partial:by_target stanza + Makefile zig guard
-  - [ ] 59.1-03-PLAN.md — Wave 3 release.yml split-runner rewrite: release-linux (4 archives, ubuntu-22.04, zig cc) + release-darwin (2 archives, macos-14, Apple clang, tag-gated per D-16) + release-merge (cosign uniformly per D-19, gh release create)
-  - [ ] 59.1-04-PLAN.md — Wave 4 doc sweep with split-runner amendments (CLAUDE/README/CONTRIBUTING/CHANGELOG/PROJECT/REQUIREMENTS/deferred-items/51.1-SUMMARY/v1.10-ROADMAP) + Gatekeeper workaround in INSTALL.md (D-19) + 3 NEW deferred items (DEF-59-NOTARIZE/DARWIN-SMOKE/DARWIN-CANARY)
-  - [ ] 59.1-05-PLAN.md — Wave 5 release-smoke finalization + per-runner Pass-1≡Pass-2 reproducibility verification on BOTH runners (HARD GATE; D-09/D-10 amended; cross-runner byte-equality NOT a gate per Pitfall 8)
+  - [x] 59.1-02-PLAN.md — Wave 2 goreleaser v2 split/merge probe + .goreleaser.yaml CGO=1 flip (linux+windows zig cc; darwin Apple clang) + partial:by_target stanza + Makefile zig guard
+  - [x] 59.1-03-PLAN.md — Wave 3 release.yml split-runner rewrite: release-linux (4 archives, ubuntu-22.04, zig cc) + release-darwin (2 archives, macos-14, Apple clang, tag-gated per D-16) + release-merge (cosign uniformly per D-19, gh release create)
+  - [x] 59.1-04-PLAN.md — Wave 4 doc sweep with split-runner amendments (CLAUDE/README/CONTRIBUTING/CHANGELOG/PROJECT/REQUIREMENTS/deferred-items/51.1-SUMMARY/v1.10-ROADMAP) + Gatekeeper workaround in INSTALL.md (D-19) + 3 NEW deferred items (DEF-59-NOTARIZE/DARWIN-SMOKE/DARWIN-CANARY)
+  - [x] 59.1-05-PLAN.md — Wave 5 release-smoke finalization + per-runner Pass-1≡Pass-2 reproducibility verification on BOTH runners (HARD GATE; D-09/D-10 amended; cross-runner byte-equality NOT a gate per Pitfall 8)
 - [ ] Phase 60: Live Update Pipeline (0/0 plans)
 - [ ] Phase 61: LSP Enrichment Worker (0/0 plans)
 - [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)

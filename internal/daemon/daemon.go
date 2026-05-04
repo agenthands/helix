@@ -35,6 +35,7 @@ import (
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/profile"
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/semantic/extract"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
@@ -119,6 +120,20 @@ type Daemon struct {
 	// (step 6a refuses to start before this field is read). Downstream
 	// consumers (P64+) MUST nil-check.
 	semanticStore *semanticstore.Store
+	// semanticExtractRegistry is the daemon-owned catalogue of per-language
+	// extraction providers (Phase 59 P02). nil when cfg.SemanticIndex.Enabled
+	// is false. Holds the daemon-singleton *treesitter.GrammarRegistry
+	// (BUG-04 / EXTRACT-05 invariant); per-language providers (Phase 59 P04)
+	// are registered into this registry at daemon bootstrap step 6c, never
+	// via init() (D-02). Downstream consumers (scheduler, future MCP tools)
+	// MUST nil-check.
+	semanticExtractRegistry *extract.Registry
+	// grammarRegistry is the daemon-singleton *treesitter.GrammarRegistry
+	// (BUG-04 / EXTRACT-05 invariant). Exposed via the (test-only) accessor
+	// in daemon_test_export_test.go so the EXTRACT-05 regression test can
+	// assert pointer-equality across all consumers (extract registry, body
+	// extractor, repomap skill).
+	grammarRegistry *treesitter.GrammarRegistry
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -232,6 +247,48 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	diagStore := diag.NewDiagnosticStore()
 	grammarRegistry := treesitter.NewGrammarRegistry()
 	bodyExtractor := edit.NewBodyExtractor(grammarRegistry)
+
+	// 6c. Construct semantic extractor registry (Phase 59 P05).
+	//
+	// Per CONTEXT.md D-02 hard invariant: NO init() registration, NO blank
+	// imports for per-language providers. The Registry is constructed here
+	// with the daemon-singleton *treesitter.GrammarRegistry — every provider
+	// MUST resolve its tree-sitter language pointer through this registry
+	// (BUG-04 / EXTRACT-05 invariant; see internal/semantic/extract/registry_grep_test.go
+	// for the static enforcement).
+	//
+	// Per-language providers (goextract.NewProvider, tsextract.NewProvider,
+	// pyextract.NewProvider) ship in Phase 59 P04 (separate worktree). At
+	// merge time the variadic providers list is filled in here, e.g.:
+	//
+	//   semanticExtractRegistry = extract.NewExtractorRegistry(
+	//       grammarRegistry,
+	//       goextract.NewProvider(grammarRegistry),
+	//       tsextract.NewProvider(grammarRegistry),
+	//       pyextract.NewProvider(grammarRegistry),
+	//   )
+	//
+	// In this Wave-2 worktree the registry is constructed with zero providers;
+	// the call shape proves the GrammarRegistry singleton is propagated and
+	// satisfies EXTRACT-05's runtime contract for the consumers that DO
+	// already exist in HEAD (extract registry, body extractor, repomap skill).
+	//
+	// 6d (DEFERRED to merge): scheduler construction. The scheduler package
+	// (internal/semantic/scheduler) lands in Phase 59 P03 (separate worktree).
+	// At merge time, insert:
+	//
+	//   semanticScheduler = scheduler.NewScheduler(semanticExtractRegistry, …)
+	//
+	// followed by a SetActivateCallback hook that fires
+	// scheduler.ScheduleInitialExtraction without blocking (D-04).
+	var semanticExtractRegistry *extract.Registry
+	if cfg.SemanticIndex.Enabled {
+		semanticExtractRegistry = extract.NewExtractorRegistry(grammarRegistry)
+		logger.Info("semantic extract registry constructed",
+			"providers", len(semanticExtractRegistry.Languages()),
+			"note", "Phase 59 P04 providers wired at merge",
+		)
+	}
 
 	// 7. Create MCP server.
 	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger, observability.Tracer())
@@ -431,18 +488,20 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	})
 
 	return &Daemon{
-		config:        cfg,
-		logger:        logger,
-		obs:           observability,
-		workspaces:    workspaces,
-		mcpServer:     mcpServer,
-		kernel:        k,
-		langRegistry:  langReg,
-		profileStore:  profileStore,
-		activeProfile: activeProfile,
-		diagStore:     diagStore,
-		bodyExtractor: bodyExtractor,
-		semanticStore: semanticStore,
+		config:                  cfg,
+		logger:                  logger,
+		obs:                     observability,
+		workspaces:              workspaces,
+		mcpServer:               mcpServer,
+		kernel:                  k,
+		langRegistry:            langReg,
+		profileStore:            profileStore,
+		activeProfile:           activeProfile,
+		diagStore:               diagStore,
+		bodyExtractor:           bodyExtractor,
+		semanticStore:           semanticStore,
+		semanticExtractRegistry: semanticExtractRegistry,
+		grammarRegistry:         grammarRegistry,
 	}, nil
 }
 

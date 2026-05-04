@@ -22,6 +22,12 @@ builds:
       - arm64
     flags:
       - -trimpath
+      # WR-07: -buildvcs=false strips runtime/debug VCS metadata
+      # (vcs.revision/time/modified) that can drift between two snapshot
+      # builds in the same CI run when the working tree gains untracked
+      # files (e.g. dist-pass-1/) between Pass-1 and Pass-2. Identity is
+      # already pinned via -X main.commit; VCS embedding is redundant.
+      - -buildvcs=false
     ldflags:
       - -s -w
       - -X main.version={{.Version}}

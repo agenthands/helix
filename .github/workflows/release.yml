@@ -43,7 +43,11 @@ jobs:
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
           distribution: goreleaser
-          version: '~> v2'
+          # WR-07: pin to an exact goreleaser version (not `~> v2`) so
+          # reproducibility-gate behavior cannot drift mid-flight when a
+          # new minor is published. Bump deliberately, in lockstep with
+          # local toolchain validation.
+          version: 'v2.15.4'
           args: release --snapshot --clean --skip=sign
 
       - name: Capture pass 1 sha256s
@@ -61,7 +65,7 @@ jobs:
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
           distribution: goreleaser
-          version: '~> v2'
+          version: 'v2.15.4'   # WR-07: must match Pass-1 pin exactly.
           args: release --snapshot --clean --skip=sign
 
       - name: Diff sha256s -- fail if non-reproducible
@@ -71,11 +75,50 @@ jobs:
           # lockstep or the diff gate becomes asymmetric (false-pass).
           (cd dist && find . \( -name '*.tar.gz' -o -name 'checksums.txt' \) -print0 | sort -z | xargs -0 sha256sum) \
             | sed 's| dist/| dist-pass-1/|' > /tmp/pass2.sha256
-          if ! diff -u /tmp/pass1.sha256 /tmp/pass2.sha256; then
-            echo "::error::artifacts are not byte-identical between two snapshot runs -- refusing to publish"
-            exit 1
+          if diff -u /tmp/pass1.sha256 /tmp/pass2.sha256; then
+            echo "Reproducibility gate PASS -- proceeding to real release"
+            exit 0
           fi
-          echo "Reproducibility gate PASS -- proceeding to real release"
+
+          # WR-07: gate failed -- emit forensic dump so the failure is
+          # self-diagnosing. Pick the first divergent .tar.gz, extract
+          # both passes side-by-side, diff per-file hashes + tar entry
+          # metadata. Without this dump every failure requires another
+          # round-trip to add logging.
+          echo "::error::artifacts are not byte-identical between two snapshot runs -- refusing to publish"
+          echo
+          echo "=== Forensic dump (WR-07) ==="
+          DIVERGENT=$(diff /tmp/pass1.sha256 /tmp/pass2.sha256 | grep '^[<>]' | head -1 | awk '{print $NF}' | sed 's|^./||;s|^dist-pass-1/||')
+          if [ -n "$DIVERGENT" ] && [ "${DIVERGENT##*.}" = "gz" ]; then
+            echo "Divergent archive: $DIVERGENT"
+            mkdir -p /tmp/extract-1 /tmp/extract-2
+            tar -xzf "dist-pass-1/$DIVERGENT" -C /tmp/extract-1
+            tar -xzf "dist/$DIVERGENT"        -C /tmp/extract-2
+            echo
+            echo "=== Per-file sha256 (Pass-1 vs Pass-2) ==="
+            (cd /tmp/extract-1 && find . -type f -print0 | sort -z | xargs -0 sha256sum) > /tmp/c1
+            (cd /tmp/extract-2 && find . -type f -print0 | sort -z | xargs -0 sha256sum) > /tmp/c2
+            diff -u /tmp/c1 /tmp/c2 || true
+            echo
+            echo "=== Tar entry metadata diff (mtime/uid/gid/mode/order) ==="
+            tar -tvf "dist-pass-1/$DIVERGENT" | sort > /tmp/t1
+            tar -tvf "dist/$DIVERGENT"        | sort > /tmp/t2
+            diff -u /tmp/t1 /tmp/t2 || true
+            echo
+            echo "=== Gzip header bytes (mtime is offset 4..7; OS is offset 9) ==="
+            xxd "dist-pass-1/$DIVERGENT" | head -1
+            xxd "dist/$DIVERGENT"        | head -1
+            echo
+            echo "=== Go buildinfo (binary inside archive) ==="
+            BIN=$(find /tmp/extract-1 -type f -name 'helix*' ! -name '*.exe' | head -1)
+            BIN2=$(find /tmp/extract-2 -type f -name 'helix*' ! -name '*.exe' | head -1)
+            if [ -n "$BIN" ] && [ -n "$BIN2" ]; then
+              go version -m "$BIN"  > /tmp/bi1 || true
+              go version -m "$BIN2" > /tmp/bi2 || true
+              diff -u /tmp/bi1 /tmp/bi2 || true
+            fi
+          fi
+          exit 1
 
       - name: Clean dist-pass-1 after diff gate
         run: |

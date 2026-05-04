@@ -1,5 +1,3 @@
-//go:build cgo
-
 package tsextract
 
 import (
@@ -26,10 +24,10 @@ const (
 // export-default rename, and overload addition).
 func TestStableID(t *testing.T) {
 	type tcase struct {
-		scenario  string
+		scenario   string
 		beforeName string
 		afterName  string
-		expect    stableIDExpectation
+		expect     stableIDExpectation
 	}
 
 	cases := []tcase{

@@ -1,5 +1,3 @@
-//go:build cgo
-
 // Package testutil exposes test-only helpers for the per-language extract
 // providers (internal/semantic/extract/golang, .../typescript, .../python).
 //

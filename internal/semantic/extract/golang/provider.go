@@ -1,5 +1,3 @@
-//go:build cgo
-
 // Package goextract is the per-language tree-sitter extraction provider
 // for Go source files. It is constructed via NewProvider with the
 // daemon-injected *treesitter.GrammarRegistry (BUG-04 invariant) and
@@ -11,8 +9,8 @@
 package goextract
 
 import (
-	_ "embed"
 	"context"
+	_ "embed"
 	"fmt"
 	"path/filepath"
 	"strings"

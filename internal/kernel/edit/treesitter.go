@@ -1,5 +1,3 @@
-//go:build cgo
-
 // Package edit implements symbol editing tools: replace body, insert before/after,
 // rename, safe delete, and post-edit diagnostic verification.
 package edit

@@ -35,7 +35,12 @@ import (
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/profile"
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
+	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
+	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
+	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
+	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
@@ -134,6 +139,11 @@ type Daemon struct {
 	// assert pointer-equality across all consumers (extract registry, body
 	// extractor, repomap skill).
 	grammarRegistry *treesitter.GrammarRegistry
+	// semanticScheduler orchestrates initial-walk and incremental extraction
+	// (Phase 59 P03). nil when cfg.SemanticIndex.Enabled is false. The
+	// activate callback fires ScheduleInitialExtraction(workspace_activation)
+	// non-blockingly per D-04.
+	semanticScheduler *scheduler.Scheduler
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -248,46 +258,31 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	grammarRegistry := treesitter.NewGrammarRegistry()
 	bodyExtractor := edit.NewBodyExtractor(grammarRegistry)
 
-	// 6c. Construct semantic extractor registry (Phase 59 P05).
-	//
-	// Per CONTEXT.md D-02 hard invariant: NO init() registration, NO blank
-	// imports for per-language providers. The Registry is constructed here
-	// with the daemon-singleton *treesitter.GrammarRegistry — every provider
-	// MUST resolve its tree-sitter language pointer through this registry
-	// (BUG-04 / EXTRACT-05 invariant; see internal/semantic/extract/registry_grep_test.go
-	// for the static enforcement).
-	//
-	// Per-language providers (goextract.NewProvider, tsextract.NewProvider,
-	// pyextract.NewProvider) ship in Phase 59 P04 (separate worktree). At
-	// merge time the variadic providers list is filled in here, e.g.:
-	//
-	//   semanticExtractRegistry = extract.NewExtractorRegistry(
-	//       grammarRegistry,
-	//       goextract.NewProvider(grammarRegistry),
-	//       tsextract.NewProvider(grammarRegistry),
-	//       pyextract.NewProvider(grammarRegistry),
-	//   )
-	//
-	// In this Wave-2 worktree the registry is constructed with zero providers;
-	// the call shape proves the GrammarRegistry singleton is propagated and
-	// satisfies EXTRACT-05's runtime contract for the consumers that DO
-	// already exist in HEAD (extract registry, body extractor, repomap skill).
-	//
-	// 6d (DEFERRED to merge): scheduler construction. The scheduler package
-	// (internal/semantic/scheduler) lands in Phase 59 P03 (separate worktree).
-	// At merge time, insert:
-	//
-	//   semanticScheduler = scheduler.NewScheduler(semanticExtractRegistry, …)
-	//
-	// followed by a SetActivateCallback hook that fires
-	// scheduler.ScheduleInitialExtraction without blocking (D-04).
+	// 6c. Construct semantic extractor registry (Phase 59 P05) with the three
+	// per-language providers (Phase 59 P04). Per CONTEXT.md D-02 hard
+	// invariant: NO init() registration, NO blank imports — the providers
+	// are constructed here so each one receives the daemon-singleton
+	// *treesitter.GrammarRegistry (BUG-04 / EXTRACT-05; static enforcement
+	// in internal/semantic/extract/registry_grep_test.go).
 	var semanticExtractRegistry *extract.Registry
+	var semanticScheduler *scheduler.Scheduler
 	if cfg.SemanticIndex.Enabled {
-		semanticExtractRegistry = extract.NewExtractorRegistry(grammarRegistry)
+		semanticExtractRegistry = extract.NewExtractorRegistry(
+			grammarRegistry,
+			goextract.NewProvider(grammarRegistry),
+			tsextract.NewProvider(grammarRegistry),
+			pyextract.NewProvider(grammarRegistry),
+		)
 		logger.Info("semantic extract registry constructed",
 			"providers", len(semanticExtractRegistry.Languages()),
-			"note", "Phase 59 P04 providers wired at merge",
 		)
+
+		// 6d. Construct the extraction scheduler (Phase 59 P03). The scheduler
+		// owns workspace-keyed state, idempotent admission of initial-walk
+		// jobs, and the RequireReady gate. Activation (step 15) fires
+		// ScheduleInitialExtraction non-blockingly per D-04.
+		semanticScheduler = scheduler.NewScheduler(semanticExtractRegistry)
+		logger.Info("semantic extraction scheduler constructed")
 	}
 
 	// 7. Create MCP server.
@@ -480,6 +475,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		if sess := sessionProvider.CurrentSession(); sess != nil {
 			sess.SetLanguage(activeWSLang)
 		}
+		// Phase 59 P03: kick the initial-walk extraction non-blockingly
+		// (D-04). Idempotent — repeat activations of the same workspace
+		// return the already-in-flight JobID.
+		if semanticScheduler != nil {
+			semanticScheduler.ScheduleInitialExtraction(
+				semantic.WorkspaceID(repoPath),
+				scheduler.InitialExtraction{
+					Reason: "workspace_activation",
+					Mode:   scheduler.ModeAuto,
+				},
+			)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
@@ -502,6 +509,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		semanticStore:           semanticStore,
 		semanticExtractRegistry: semanticExtractRegistry,
 		grammarRegistry:         grammarRegistry,
+		semanticScheduler:       semanticScheduler,
 	}, nil
 }
 

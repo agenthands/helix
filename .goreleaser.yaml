@@ -6,20 +6,39 @@ version: 2
 
 project_name: helix
 
+# Phase 59.1 D-15 split-runner pipeline implemented via the goreleaser OSS
+# multi-build-entry pattern (Fallback B per
+# .planning/phases/.../59.1-02-SPLIT-PROBE-NOTES.md — split/merge is
+# GoReleaser Pro only at v2.15.4 and Helix is on OSS). Each runner invokes
+# `goreleaser build --id <runner-id> --snapshot --clean`; the merge job runs
+# `goreleaser release --skip=build` to assemble archives + checksums +
+# signatures from the pre-built binaries uploaded by both runners.
 builds:
-  - id: helix
+  - id: helix-non-darwin
     main: ./cmd/helix
     binary: helix
-    env:
-      - CGO_ENABLED=0
-      - GOFLAGS=-mod=readonly
     goos:
-      - darwin
       - linux
       - windows
     goarch:
       - amd64
       - arm64
+    env:
+      - CGO_ENABLED=1
+      - GOFLAGS=-mod=readonly
+      # D-01 amended: zig cc covers linux+windows ONLY (4 archives on the
+      # ubuntu-22.04 runner). Templated per-target CC via Go-template
+      # conditionals on .Os and .Arch (Pattern A4). darwin entries live in
+      # the helix-darwin build entry below and get NO CC override — Apple
+      # clang on macos-14 is the host default per D-15.
+      - >-
+        {{- if eq .Os "linux" }}
+          {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-musl{{- end }}
+          {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-linux-musl{{- end }}
+        {{- else if eq .Os "windows" }}
+          {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-windows-gnu{{- end }}
+          {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-windows-gnu{{- end }}
+        {{- end }}
     flags:
       - -trimpath
       # WR-07: -buildvcs=false strips runtime/debug VCS metadata
@@ -35,9 +54,35 @@ builds:
       - -X main.date={{.CommitDate}}
     mod_timestamp: '{{ .CommitTimestamp }}'
 
+  - id: helix-darwin
+    main: ./cmd/helix
+    binary: helix
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - GOFLAGS=-mod=readonly
+      # D-15: NO CC override — Apple clang on macos-14 is the host default.
+      # Per Wave 0 darwin probe failure (zig cc cannot reach Apple `mach/mach_vm.h`
+      # and rewrites duckdb-go-bindings absolute -L paths), darwin moves to a
+      # native macos-14 runner. Reproducibility is per-target within-runner
+      # Pass-1≡Pass-2 (D-17) — across-runner byte-equality is NOT a gate.
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
 archives:
   - id: helix
-    ids: [helix]
+    ids: [helix-non-darwin, helix-darwin]
     formats: ["tar.gz"]
     # Note: goreleaser strips the leading 'v' from `{{ .Version }}`, so the literal
     # 'v' below restores the prefix to match the GitHub release tag (v1.9.0). This

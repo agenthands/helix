@@ -21,7 +21,7 @@ Each requirement is testable from an agent/user perspective and maps to one road
 ### STORE — Semantic Fact Store (DuckDB)
 
 - [ ] **STORE-01**: A semantic fact store opens at daemon start when `semantic_index.enabled=true` and persists at `<workspace>/.helix/semantic.duckdb`; daemon refuses to start if the file is corrupt only after auto-quarantining the bad file (`.corrupt.<ts>` rename) and rebuilding fresh.
-- [ ] **STORE-02**: When `semantic_index.enabled=false` (or implied false because CGO=0 build has no tree-sitter), every semantic-dependent tool returns `Kind: Unsupported` with remediation text and the rest of Helix continues to work — verified by an integration test running with `semantic_index.enabled=false`.
+- [ ] **STORE-02**: When `semantic_index.enabled=false`, every semantic-dependent tool returns `Kind: Unsupported` with remediation text and the rest of Helix continues to work — verified by an integration test running with `semantic_index.enabled=false`. (Note: the historical "implied false because CGO=0 build has no tree-sitter" alternate path was removed in Phase 59.1; the source tree builds with `CGO_ENABLED=1` unconditionally and tree-sitter is always available. The `semantic_index.enabled=false` knob remains the only documented gate to disable the semantic store.)
 - [ ] **STORE-03**: Schema versioning is enforced: a forward-incompatible schema version triggers a full reindex with a clear log message; a backward-compatible bump migrates in place. Schema version is stamped in every snapshot row.
 - [ ] **STORE-04**: Effective-read API returns `committed snapshot ⊕ live overlay − tombstones` for files, symbols, references, and edges; verified by a per-entity unit test where overlay and snapshot disagree.
 - [ ] **STORE-05**: Configuration is layered through the existing 4-layer precedence (CLI > project `.helix/project.yml` > user `~/.helix/helix_config.yml` > profile defaults) for every `semantic_index.*` key in SPEC §25.
@@ -145,6 +145,14 @@ Each requirement is testable from an agent/user perspective and maps to one road
 - First-class extraction for Java and Rust (today best-effort via tree-sitter generic mode)
 - Cross-repo / multi-workspace semantic graphs
 - Bootstrap migration to `phasegraph.RunPhaseGraph` (planned v1.11)
+
+### Deferred (Phase 59.1)
+
+- **Apple Developer ID signing + notarization** (D-19) — see `.planning/deferred-items.md` → DEF-59-NOTARIZE. Tracked separately because it requires an Apple Developer Program membership ($99/yr) and Apple-credential management infrastructure. Until then, macOS users follow the Gatekeeper "right-click → Open" workaround documented in `INSTALL.md`.
+- **Nightly darwin canary workflow** (D-16) — see `.planning/deferred-items.md` → DEF-59-DARWIN-CANARY. Tracked separately to bound macos-14 runner cost; reconsidered if Xcode-image drift causes silent breakage between tag-cut runs.
+- **windows-arm64 native duckdb-go-bindings restoration** (D-14 Path-3) — see `.planning/deferred-items.md` → DEF-59-WIN-ARM64-RESTORE. The semantic-store path is currently `serr.Unsupported` on `windows && arm64` via a platform-conditional stub; restoration awaits upstream `duckdb-go-bindings/lib/windows-arm64`.
+
+> Build-pipeline invariant: source tree builds with `CGO_ENABLED=1` unconditionally as of Phase 59.1; the prior CGO=0 stub policy from Phase 51.1 D-02 was removed. See `.planning/PROJECT.md` Key Decisions for the supersede trail.
 
 ## Out of Scope (explicit refusals)
 

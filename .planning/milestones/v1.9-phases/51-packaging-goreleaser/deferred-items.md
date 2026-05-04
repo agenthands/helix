@@ -125,3 +125,27 @@ This is the same structural problem that DEF-51-01 documented for R and Swift --
 **Severity:** HIGH -- blocks Phase 51 success criterion 1 (the goreleaser pipeline produces 6 platform/arch archives). Plan 51-01's release matrix cannot run end-to-end on a real v* tag push until this is resolved. Plans 51-04 (signing), 51-05 (reproducibility doc), and 51-06 (release.yml hardening) build on archive existence -- their UATs are also blocked until DEF-51-02 closes.
 
 **Status:** RESOLVED via Phase 51.1 (Path 2). See `.planning/phases/51.1-cgo-treesitter-gate-gate-internal-treesitter-behind-go-build/` for PLAN, RESEARCH, and SUMMARY. The `internal/treesitter` package is now gated behind `//go:build cgo`; the daemon refuses to start under `CGO_ENABLED=0` with a clear remediation message. CGO=0 archives build but are placeholders -- DEF-51-03 (re-enable CGO in goreleaser, Path 3) tracks the follow-up to make them functional.
+
+---
+
+## DEF-51-03: re-enable CGO in goreleaser (Path 3 closure tracking)
+
+**Originally referenced in:** Phase 51.1 SUMMARY discussion of "DEF-51-03 candidate" (Path 3 from DEF-51-02 resolution paths).
+
+**Status:** RESOLVED via Phase 59.1 (FALLBACK-B-MULTI-BUILD-ID).
+
+**Resolution:**
+
+Phase 59.1 closes DEF-51-03 by inverting Phase 51.1 D-02 (the daemon's `treesitter.Available` refusal under CGO=0) into single-mode CGO=1. See:
+
+- `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-CONTEXT.md` — locked decisions D-01..D-20 (D-15..D-19 are the split-runner contingency; D-20 is the GoReleaser Pro lock-in / FALLBACK-B canonicalization)
+- `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-01-SUMMARY.md` — Wave 1: source-tree CGO=1 flatten (12 `_nocgo.go` deletions; 24 `//go:build cgo` strips; daemon step-6a deletion; D-14 Path-3 windows-arm64 platform stub)
+- `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-02-SUMMARY.md` — Wave 2: `.goreleaser.yaml` flipped to CGO=1 with two `builds:` entries (`helix-non-darwin` zig cc + `helix-darwin` Apple clang); Makefile zig-presence guard
+- `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-02-SPLIT-PROBE-NOTES.md` — Wave 2 prerequisite probe: GoReleaser Pro lock-in evidence (the `partial.by_target` / split-release / merge-continue mechanic is Pro-exclusive at every v2.x patch level; see linked probe notes for the verbatim directive names)
+- `.github/workflows/release.yml` (Wave 3) — split-runner pipeline: `release-linux` (ubuntu-22.04, zig cc) + `release-darwin` (macos-14, Apple clang, tag-gated) + `release-merge` (uniform cosign across 6 archives)
+
+**Mechanism note (FALLBACK-B-MULTI-BUILD-ID):**
+
+The original DEF-51-02 Path 3 sketch assumed cross-compile complexity would be solved by GoReleaser's native split-by-target mechanic. Wave 2 prerequisite probe (linked above) discovered that mechanic is **GoReleaser Pro exclusive** (verified directly against https://goreleaser.com/customization/partial/). Helix runs on the OSS distribution and FALLBACK-A (bumping the goreleaser pin) does not unlock the feature because GoReleaser Pro is a paid commercial license, not a different OSS tag. The OSS-supported equivalent is FALLBACK-B-MULTI-BUILD-ID: each runner invokes `goreleaser build --id <runner-id>` with `--snapshot --clean`; the merge job runs `goreleaser release --skip=build` to assemble archives + checksums + signatures from the pre-built binaries. Architectural intent (split topology, per-runner reproducibility, uniform cosign attestation across 6 archives) is preserved entirely; only the syntactic mechanism differs from the original sketch.
+
+**`helix upgrade` artifact-name and `.sigstore.json` bundle layout preserved.** Phase 58 REL-01 contract holds.

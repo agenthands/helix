@@ -1,0 +1,55 @@
+{
+  "file": {
+    "path": "arrow_to_function_decl_preserves_id/after.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "fn",
+      "qualified_name": "fn",
+      "file": "arrow_to_function_decl_preserves_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 8
+      },
+      "signature": "fn",
+      "signature_hash": "fn",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "arrow_to_function_decl_preserves_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 12,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 21
+      }
+    }
+  ]
+}

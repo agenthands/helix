@@ -1,0 +1,94 @@
+{
+  "file": {
+    "path": "interface_extends/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Reader",
+      "qualified_name": "Reader",
+      "file": "interface_extends/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "Reader",
+      "signature_hash": "Reader",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "interface",
+      "name": "Closer",
+      "qualified_name": "Closer",
+      "file": "interface_extends/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 10,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "signature": "Closer",
+      "signature_hash": "Closer",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "interface_extends/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Closer",
+      "file": "interface_extends/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 10,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Reader",
+      "file": "interface_extends/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 25,
+        "end_line": 3,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Reader",
+      "range": {
+        "start_line": 3,
+        "start_col": 25,
+        "end_line": 3,
+        "end_col": 31
+      }
+    }
+  ]
+}

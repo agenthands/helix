@@ -1,0 +1,82 @@
+{
+  "file": {
+    "path": "class_extends/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Animal",
+      "qualified_name": "Animal",
+      "file": "class_extends/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "Animal",
+      "signature_hash": "Animal",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "class",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "class_extends/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 6,
+        "end_line": 1,
+        "end_col": 9
+      },
+      "signature": "Dog",
+      "signature_hash": "Dog",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "class_extends/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Dog",
+      "file": "class_extends/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 6,
+        "end_line": 1,
+        "end_col": 9
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Animal",
+      "range": {
+        "start_line": 1,
+        "start_col": 18,
+        "end_line": 1,
+        "end_col": 24
+      }
+    }
+  ]
+}

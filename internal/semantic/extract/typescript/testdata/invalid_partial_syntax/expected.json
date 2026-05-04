@@ -1,0 +1,7 @@
+{
+  "file": {
+    "path": "invalid_partial_syntax/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  }
+}

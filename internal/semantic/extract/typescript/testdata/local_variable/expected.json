@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "local_variable/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "compute",
+      "qualified_name": "compute",
+      "file": "local_variable/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "compute",
+      "signature_hash": "compute",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 18,
+        "end_line": 0,
+        "end_col": 26
+      }
+    }
+  ]
+}

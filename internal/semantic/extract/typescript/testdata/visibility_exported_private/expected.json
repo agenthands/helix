@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "visibility_exported_private/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Public",
+      "qualified_name": "Public",
+      "file": "visibility_exported_private/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 22
+      },
+      "signature": "Public",
+      "signature_hash": "Public",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "privateFn",
+      "qualified_name": "privateFn",
+      "file": "visibility_exported_private/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 18
+      },
+      "signature": "privateFn",
+      "signature_hash": "privateFn",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 30
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 20,
+        "end_line": 1,
+        "end_col": 26
+      }
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "file": {
+    "path": "call_reference/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "inner",
+      "qualified_name": "inner",
+      "file": "call_reference/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "signature": "inner",
+      "signature_hash": "inner",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "outer",
+      "qualified_name": "outer",
+      "file": "call_reference/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 14
+      },
+      "signature": "outer",
+      "signature_hash": "outer",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "inner",
+      "file": "call_reference/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 34,
+        "end_line": 1,
+        "end_col": 39
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 24
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 1,
+        "start_col": 16,
+        "end_line": 1,
+        "end_col": 24
+      }
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "file": {
+    "path": "field_access/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "signature": "T",
+      "signature_hash": "T",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 5
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "getX",
+      "qualified_name": "getX",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 9,
+        "end_line": 3,
+        "end_col": 13
+      },
+      "signature": "getX",
+      "signature_hash": "getX",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 14,
+        "end_line": 3,
+        "end_col": 15
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 7
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 17,
+        "end_line": 3,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "file": "field_access/before.ts",
+      "range": {
+        "start_line": 4,
+        "start_col": 13,
+        "end_line": 4,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": T",
+      "range": {
+        "start_line": 3,
+        "start_col": 15,
+        "end_line": 3,
+        "end_col": 18
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 3,
+        "start_col": 19,
+        "end_line": 3,
+        "end_col": 27
+      }
+    }
+  ]
+}

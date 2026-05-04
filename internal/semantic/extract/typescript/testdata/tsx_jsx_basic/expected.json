@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "tsx_jsx_basic/before.tsx",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "App",
+      "qualified_name": "App",
+      "file": "tsx_jsx_basic/before.tsx",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "App",
+      "signature_hash": "App",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Element",
+      "file": "tsx_jsx_basic/before.tsx",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 27
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": JSX.Element",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 27
+      }
+    }
+  ]
+}

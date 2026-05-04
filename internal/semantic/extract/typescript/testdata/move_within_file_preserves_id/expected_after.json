@@ -1,0 +1,65 @@
+{
+  "file": {
+    "path": "move_within_file_preserves_id/after.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "move_within_file_preserves_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "move_within_file_preserves_id/after.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 9,
+        "end_line": 1,
+        "end_col": 10
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 0,
+        "start_col": 12,
+        "end_line": 0,
+        "end_col": 18
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 12,
+        "end_line": 1,
+        "end_col": 18
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "nested_symbol/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "outer",
+      "qualified_name": "outer",
+      "file": "nested_symbol/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "signature": "outer",
+      "signature_hash": "outer",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": () =\u003e number",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 30
+      }
+    }
+  ]
+}

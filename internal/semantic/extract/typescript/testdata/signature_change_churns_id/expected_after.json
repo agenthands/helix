@@ -1,0 +1,92 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/after.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "signature_change_churns_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "signature_change_churns_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 11,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "signature_change_churns_id/after.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 23
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 12,
+        "end_line": 0,
+        "end_col": 20
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 31
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 32,
+        "end_line": 0,
+        "end_col": 40
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "file": {
+    "path": "arrow_function/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "inc",
+      "qualified_name": "inc",
+      "file": "arrow_function/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 9
+      },
+      "signature": "inc",
+      "signature_hash": "inc",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "arrow_function/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 22
+      }
+    }
+  ]
+}

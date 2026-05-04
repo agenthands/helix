@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "builtin_or_keyword_edge/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "makeMap",
+      "qualified_name": "makeMap",
+      "file": "builtin_or_keyword_edge/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "signature": "makeMap",
+      "signature_hash": "makeMap",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Map",
+      "file": "builtin_or_keyword_edge/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": Map\u003cstring, number\u003e",
+      "range": {
+        "start_line": 0,
+        "start_col": 18,
+        "end_line": 0,
+        "end_col": 39
+      }
+    }
+  ]
+}

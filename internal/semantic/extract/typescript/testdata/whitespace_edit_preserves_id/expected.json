@@ -1,0 +1,92 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "whitespace_edit_preserves_id/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "add",
+      "signature_hash": "add",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "whitespace_edit_preserves_id/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "whitespace_edit_preserves_id/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 22
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 33
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": number",
+      "range": {
+        "start_line": 0,
+        "start_col": 34,
+        "end_line": 0,
+        "end_col": 42
+      }
+    }
+  ]
+}

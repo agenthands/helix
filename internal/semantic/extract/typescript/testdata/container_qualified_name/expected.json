@@ -1,0 +1,96 @@
+{
+  "file": {
+    "path": "container_qualified_name/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Server",
+      "qualified_name": "Server",
+      "file": "container_qualified_name/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "Server",
+      "signature_hash": "Server",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "start",
+      "qualified_name": "start",
+      "file": "container_qualified_name/before.ts",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 9
+      },
+      "signature": "start",
+      "signature_hash": "start",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "stop",
+      "qualified_name": "stop",
+      "file": "container_qualified_name/before.ts",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 8
+      },
+      "signature": "stop",
+      "signature_hash": "stop",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Server",
+      "file": "container_qualified_name/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 1,
+        "start_col": 11,
+        "end_line": 1,
+        "end_col": 17
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": ": void",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 16
+      }
+    }
+  ]
+}

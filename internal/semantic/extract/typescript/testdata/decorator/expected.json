@@ -1,0 +1,98 @@
+{
+  "file": {
+    "path": "decorator/before.ts",
+    "language": "typescript",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "logged",
+      "qualified_name": "logged",
+      "file": "decorator/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "signature": "logged",
+      "signature_hash": "logged",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "target",
+      "qualified_name": "target",
+      "file": "decorator/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 22
+      },
+      "signature": "target",
+      "signature_hash": "target",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "class",
+      "name": "Service",
+      "qualified_name": "Service",
+      "file": "decorator/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 13
+      },
+      "signature": "Service",
+      "signature_hash": "Service",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "decorator",
+      "name": "logged",
+      "file": "decorator/before.ts",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 0
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Service",
+      "file": "decorator/before.ts",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": ": any",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 27
+      }
+    }
+  ]
+}

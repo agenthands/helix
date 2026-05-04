@@ -35,6 +35,12 @@ type Config struct {
 	// Indexing configures the per-snapshot indexing pipeline (P59).
 	Indexing IndexingConfig `koanf:"indexing"`
 
+	// Extraction configures the tree-sitter extraction layer (P59 P02).
+	// Per Phase 59 user decision (CONTEXT.md): max_file_size and
+	// auto_index_on_activate REMAIN under Indexing (already present from
+	// Phase 57). Only the four genuinely-new keys live here.
+	Extraction ExtractionConfig `koanf:"extraction"`
+
 	// LiveUpdates configures the fsnotify-driven overlay watcher (P60).
 	LiveUpdates LiveUpdatesConfig `koanf:"live_updates"`
 
@@ -79,6 +85,32 @@ type StoreConfig struct {
 	MemoryLimit string `koanf:"memory_limit"`
 	// Threads is the DuckDB worker-thread count.
 	Threads int `koanf:"threads"`
+}
+
+// ExtractionConfig holds tree-sitter extraction settings (P59 P02).
+// Per Phase 59 user decision (CONTEXT.md): max_file_size and
+// initial_extraction_on_activation REMAIN under IndexingConfig (already
+// present as Indexing.MaxFileSize and Indexing.AutoIndexOnActivate from
+// Phase 57). Only the four genuinely-new keys live here.
+//
+// Field set mirrors SPEC §25.extraction.* verbatim.
+type ExtractionConfig struct {
+	// ExtractionReadyTimeout bounds RequireReady's wait for an initial
+	// extraction to surface ready|partial|failed. Human-readable duration
+	// (e.g., "30s").
+	ExtractionReadyTimeout string `koanf:"extraction_ready_timeout"`
+
+	// ExtractionFileTimeout bounds per-file extraction. Beyond this the
+	// file is dropped to PartialReasonTimeout.
+	ExtractionFileTimeout string `koanf:"extraction_file_timeout"`
+
+	// MaxParallelFiles caps the per-workspace extraction worker pool.
+	MaxParallelFiles int `koanf:"max_parallel_files"`
+
+	// AllowPartialResults gates whether RequireReady accepts a "partial"
+	// outcome as ready. When false, a partial-only extraction blocks
+	// consumer queries until ready or failed.
+	AllowPartialResults bool `koanf:"allow_partial_results"`
 }
 
 // IndexingConfig holds per-snapshot indexing-pipeline settings (P59).

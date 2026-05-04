@@ -925,32 +925,37 @@ func (s *Scheduler) RequireReady(ctx context.Context, ws WorkspaceID, policy Rea
 | A7 | `xxhash.Sum64String` is stable across Go versions and architectures. | Pattern 4 (Stable-ID Canonicalization) | If `xxhash.Sum64String` differs by platform, IDs are non-portable across machines and `EXTRACT-02` determinism fails on cross-OS test runs. Very low risk — xxhash is endianness-explicit by spec; the upstream Go package has shipped stable since v2.0. [ASSUMED, but standard library practice] |
 | A8 | Repomap PageRank exposes a per-file rank value through a public method on `internal/repomap/`. | Architecture Diagram (initial-walk priority order); Architectural Responsibility Map | If PageRank scores are not externally accessible from `internal/semantic/scheduler/`, the priority-order implementation needs a wrapper or a new accessor on repomap. Low-medium risk — repomap is fairly enclosed; verify in P03. [ASSUMED] |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **7-rung vs. 5-rung confidence ladder (CRITICAL).**
    - What we know: SPEC §11.2 is 5 rungs; SPEC §38.2 is 7 rungs; ROADMAP Phase 59 SC#3 says "7-rung"; REQUIREMENTS EXTRACT-04 says 5 rungs.
    - What's unclear: whether ROADMAP's "7-rung" is a typo (referencing the type-resolution ladder by mistake) or whether the user intends to extend §11.2.
    - Recommendation: surface to user at plan-discuss-phase or as the very first item in 59-VERIFICATION.md. Do not silently pick one.
+   - **RESOLVED:** Per user CONTEXT.md decision and Phase 59 P02's ROADMAP fix — Phase 59 emits 5 rungs (SPEC §11.2). The §38.2 7-rung ladder is type-resolution scope and belongs to Phase 62. ROADMAP success criterion #3 corrected in P02.
 
 2. **`semantic_index.extraction.*` config sub-tree placement.**
    - What we know: SPEC §25 has no such sub-tree; CONTEXT.md introduces 6 keys; 2 of those keys (`max_file_size`, `initial_extraction_on_activation`) overlap with existing `semantic_index.indexing.*` keys.
    - What's unclear: whether to extend `IndexingConfig` or add a new `ExtractionConfig` sub-struct.
    - Recommendation: extend `IndexingConfig` for the overlapping pair; add `ExtractionConfig` for the four genuinely-new keys; update SPEC §25 in the same plan.
+   - **RESOLVED:** Per user CONTEXT.md decision — `max_file_size` and `initial_extraction_on_activation` (as `auto_index_on_activate`) STAY under `indexing.*`; the four genuinely-new keys live under `extraction.*`. Implemented in Phase 59 P02.
 
 3. **`LSPIdentity` field behavior across Phase 59 → Phase 61.**
    - What we know: Phase 59 emits `LSPIdentity=""`; Phase 61 produces LSP identity.
    - What's unclear: whether LSP identity becomes part of canonicalization (changing the ID) or only a side-channel field on the row (preserving the ID).
    - Recommendation: side-channel; surface to user; document in PATTERNS.md when written.
+   - **RESOLVED:** Side-channel. P02's `BuildProviderKey` sets `LSPIdentity=""` in Phase 59; Phase 61 may populate but the canonicalization input keeps the field, so the ID changes if and only if Phase 61 chooses to include it. Default plan: keep `LSPIdentity=""` in canonicalization input until a deliberate phase migrates it.
 
 4. **Per-symbol vs. per-file `partial=true` distinction.**
    - What we know: D-05 says "mark file (and boundary symbols/refs where applicable) as partial."
    - What's unclear: which symbols/refs are "boundary" — the ones tree-sitter recovered from? The ones inside the parser's error region? All symbols in a file with any error?
    - Recommendation: implementation choice; document in PATTERNS.md the chosen heuristic. Default suggestion: symbols that lie within or adjacent to a tree-sitter ERROR node get `partial=true`; everything else does not.
+   - **RESOLVED:** P04 will use `PartialExtract` + per-symbol `Partial bool` field — file-level partial via `FileFact.ExtractionStatus="partial"` + `ExtractionPartial=true`; symbol-level partial only when a symbol overlaps a tree-sitter ERROR node. Documented in P04 SUMMARY.md when it lands.
 
 5. **EXTRACT-05 source-grep test scope.**
    - What we know: "regression test attempts to construct a second `GrammarRegistry`."
    - What's unclear: whether "attempts to construct" means (a) runtime check (try to call NewGrammarRegistry from extractor code, expect refusal — but there's no refusal mechanism, the constructor just works) or (b) static check (grep source).
    - Recommendation: static source-grep test scoped to `internal/semantic/extract/` non-test files + non-`testutil/`; runtime test asserting `provider.grammar == daemon.grammarRegistry.GetLanguage("go").value` for at least one provider after bootstrap.
+   - **RESOLVED:** Dual test in P05 — runtime pointer-equality across all consumers + static source-grep over `internal/semantic/extract/*` non-test, non-`testutil/` files.
 
 ## Sources
 
@@ -982,7 +987,7 @@ func (s *Scheduler) RequireReady(ctx context.Context, ws WorkspaceID, policy Rea
 
 **Confidence breakdown:**
 - Standard stack: HIGH — every dependency is already in `go.mod` and either used by repomap (tree-sitter, xxhash) or already wired into the daemon (treesitter.GrammarRegistry, semantic.store).
-- Architecture: HIGH for the parts CONTEXT.md locks (registry shape, scheduler shape, partial model, fact structs); MEDIUM for the two planner-decision items flagged in Open Questions (config sub-tree placement, LSPIdentity behavior).
+- Architecture: HIGH for the parts CONTEXT.md locks (registry shape, scheduler shape, partial model, fact structs); MEDIUM for two planner-decision items, both RESOLVED in P02-P05 (see Open Questions section).
 - Pitfalls: HIGH — six pitfalls drawn from concrete Phase 57 + repomap patterns + tree-sitter upstream guidance, not generic.
 - Stable-ID design: HIGH on canonicalization rules (SPEC-locked); MEDIUM on per-language `OwnerPath` recipes (these are implementation choices the planner should review).
 - Test matrix: HIGH on scenario taxonomy (CONTEXT.md locks the 25 + 8-9 + ≥10 split); MEDIUM on per-scenario file structure (judgement call on testdata layout).

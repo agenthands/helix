@@ -53,8 +53,14 @@ signs:
     cmd: cosign
     artifacts: all
     signature: "${artifact}.sigstore.json"
+    # WR-02: pin --oidc-issuer explicitly so a misconfigured runner that
+    # exposes a different OIDC issuer environment variable cannot mint a
+    # cert under the wrong issuer (which the verifier would later reject
+    # at every user's `helix upgrade` call). Failing at sign-time with
+    # "issuer mismatch" is preferable to silent verification breakage.
     args:
       - "sign-blob"
+      - "--oidc-issuer=https://token.actions.githubusercontent.com"
       - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"

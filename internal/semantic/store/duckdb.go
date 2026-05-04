@@ -118,7 +118,16 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 		// Tier-1 reopen.
 		s, err := openExisting(ctx, path, label, logger, metrics)
 		if err != nil {
-			// Reopen failed unexpectedly — treat as corrupt and quarantine.
+			// Forward-incompat is a hard fail: an operator running an older
+			// binary against a newer DB MUST see an explicit error and
+			// rebuild manually via the documented quarantine path. We do
+			// NOT silently quarantine because that would discard the newer
+			// binary's data on rollback — see plan 59-01 STORE-03 invariant.
+			if errors.Is(err, ErrForwardIncompatible) {
+				return nil, err
+			}
+			// Other reopen failures (connection error after migrations,
+			// pool exhaustion, etc.) → treat as corrupt and quarantine.
 			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 		}
 		return s, nil

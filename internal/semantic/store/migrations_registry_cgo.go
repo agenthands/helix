@@ -5,8 +5,18 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
+
+// ErrForwardIncompatible is the sentinel returned by runMigrations (and
+// surfaced by Open) when the on-disk schema_version exceeds the binary's
+// CurrentSchemaVersion. Open propagates this error rather than falling
+// through to the quarantine-and-rebuild path so an operator running a
+// downgraded binary against a newer DB sees an explicit failure they can
+// fix (rebuild via the documented quarantine path) instead of silent data
+// loss from automatic quarantine.
+var ErrForwardIncompatible = errors.New("semantic store: schema_version is forward-incompatible with binary CurrentSchemaVersion; rebuild required")
 
 // migrations is the registry of in-place schema transitions, applied in From
 // ascending order at Open time. Phase 59 lights up the mechanism for the
@@ -43,7 +53,7 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("runMigrations: read current schema_version: %w", err)
 	}
 	if currentVersion > CurrentSchemaVersion {
-		return fmt.Errorf("semantic store: schema_version=%d is forward-incompatible with binary CurrentSchemaVersion=%d; rebuild required", currentVersion, CurrentSchemaVersion)
+		return fmt.Errorf("%w: stored=%d binary=%d", ErrForwardIncompatible, currentVersion, CurrentSchemaVersion)
 	}
 
 	for _, m := range migrations {

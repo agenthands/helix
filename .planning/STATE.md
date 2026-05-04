@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
-status: executing
-last_updated: "2026-05-04T14:57:37.814Z"
+status: Inserted (urgent) — awaiting `/gsd-plan-phase 59.1`
+last_updated: "2026-05-04T16:30:12.304Z"
 last_activity: 2026-05-04
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
   total_plans: 13
   completed_plans: 13
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 59 — tree-sitter-extraction-stable-symbol-ids
+**Current focus:** Phase 59.1 — drop-cgo-0-single-mode-cgo-1-build-release (urgent insertion before Phase 60)
 
 ## Current Position
 
-Phase: 59
+Phase: 59.1
 Plan: Not started
-Status: Executing Phase 59
+Status: Inserted (urgent) — awaiting `/gsd-plan-phase 59.1`
 Last activity: 2026-05-04
 
 ## Performance Metrics
@@ -66,6 +66,10 @@ All decisions are logged in PROJECT.md Key Decisions table. v1.9 milestone-level
 decisions (12 phases, 51 plans, including emergent Phase 51.1 and Phase 56) are
 captured in `.planning/milestones/v1.9-MILESTONE-AUDIT.md` and the per-phase
 SUMMARY.md files under `.planning/milestones/v1.9-phases/`.
+
+### Roadmap Evolution
+
+- Phase 59.1 inserted after Phase 59 — Drop CGO=0 — single-mode CGO=1 build & release (URGENT) — flips Phase 51.1 D-02 (CGO=0 stub policy); fixes INT-BLOCKER-01 from v1.10-MILESTONE-AUDIT.md; lands before Phase 60 to avoid more `_nocgo.go` accumulation
 
 ### Pending Todos
 

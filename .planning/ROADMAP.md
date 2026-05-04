@@ -132,7 +132,7 @@
 
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (0/4 plans) (completed 2026-05-03)
 - [x] Phase 58: v1.9 Carryover -- Release & Distribution (4/4 plans) (completed 2026-05-04)
-- [ ] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans)
+- [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
 - [ ] Phase 60: Live Update Pipeline (0/0 plans)
 - [ ] Phase 61: LSP Enrichment Worker (0/0 plans)
 - [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)

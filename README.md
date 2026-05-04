@@ -72,6 +72,12 @@ cd helix
 go build ./cmd/helix
 ```
 
+#### macOS users: Gatekeeper workaround
+
+Helix's darwin binaries are signed with [Sigstore](https://www.sigstore.dev/) cosign keyless attestation but are **not signed with an Apple Developer ID** and **not notarized** through Apple's notary service. On first launch, macOS Gatekeeper will block the binary. Use the right-click → Open workaround (one-time per binary) documented in [INSTALL.md](./INSTALL.md#macos-gatekeeper-workaround).
+
+Apple Developer ID signing + notarization is tracked as `DEF-59-NOTARIZE` in `.planning/deferred-items.md` and may land in a future release.
+
 ### Configure Your Client
 
 ```bash

@@ -158,26 +158,82 @@ Key details:
 
 ## Releasing
 
-Releases ship as multi-arch signed binaries via a goreleaser pipeline (see `.goreleaser.yaml` and `.github/workflows/release.yml`). A `v*` git tag triggers the release workflow automatically -- there is no manual draft step. The CI-enforced reproducibility gate runs two consecutive snapshot builds with identical inputs and refuses to publish if their archive sha256s differ, catching most build-environment non-determinism (toolchain drift, mod_timestamp, trimpath, GOFLAGS) before publication. The gate does not, however, compare against the real-release artifacts that ship to users -- a non-determinism source that lives only behind the real-release code path (e.g. tag-only build constants, changelog generation) would not be caught. If you suspect a real-release-only non-determinism, do a local build of the same tag with `goreleaser release --snapshot --clean --skip=sign` after your tag and diff against the published `dist/` from CI.
+Releases ship as multi-arch signed binaries via a [GoReleaser](https://goreleaser.com/) (OSS v2.15.4) pipeline (see `.goreleaser.yaml` and `.github/workflows/release.yml`). A `v*` git tag triggers the release workflow automatically — there is no manual draft step.
 
-This is the documented gate limitation: the gate compares Pass-1 and Pass-2 snapshot hashes within the same source revision and does NOT compare those hashes against the real-release artifacts that ship to users. The trade-off is intentional — adding a real-artifact comparison job would require regenerating expected hashes per release, which the v1.9 milestone audit explicitly judged not worth the ongoing maintainer toil. If release-artifact divergence becomes a concern in the future (e.g., users report binary mismatches), a comparison job can be added; the current decision deliberately keeps the gate scope narrow so divergence detection lives at the published-artifact layer (cosign signature verification) rather than at the build layer.
+Phase 59.1 introduced a **split-runner architecture** because GoReleaser's native partial-by-target / split-release / merge-continue mechanic is **GoReleaser Pro exclusive** (verified directly against https://goreleaser.com/customization/partial/). Helix runs the OSS distribution. The OSS-supported equivalent is the **FALLBACK-B-MULTI-BUILD-ID** pattern: `.goreleaser.yaml` declares two `builds:` entries (`helix-non-darwin`, `helix-darwin`), each runner invokes `goreleaser build --id <runner-id>`, and a merge job runs `goreleaser release --skip=build` to assemble archives + checksums + signatures from the pre-built binaries. (See `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-02-SPLIT-PROBE-NOTES.md` for the GoReleaser Pro lock-in evidence and the Pro-exclusive directive names.)
 
-To dry-run the build matrix locally (signs are skipped because the secret key lives only in CI):
+### Local snapshot builds (per-host partial matrix)
+
+The full 6-archive matrix only assembles in CI. Locally, you can build the subset your host can natively compile.
+
+**darwin host** (e.g. an Apple Silicon Mac) — Apple clang produces darwin/{amd64,arm64} (2 binaries):
 
 ```sh
-make release-snapshot
+goreleaser build --snapshot --clean --id helix-darwin
 ```
 
-Output goes to `dist/` (gitignored, overwrites). On a clean checkout you should see 6 archives (`helix_v<version>_<os>_<arch>.tar.gz`) and a `checksums.txt` file. The local dry-run requires `goreleaser` on `$PATH`; install with `brew install goreleaser` on macOS, or download a release tarball from `github.com/goreleaser/goreleaser/releases` on Linux.
+Output: `dist/helix-darwin_darwin_amd64_v1/helix` and `dist/helix-darwin_darwin_arm64_v8.0/helix`.
+
+**linux host** (with `zig` on PATH, version 0.14.1+) — zig cc cross-compiles linux/{amd64,arm64} + windows/{amd64,arm64} (4 binaries):
+
+```sh
+goreleaser build --snapshot --clean --id helix-non-darwin
+```
+
+Output: `dist/helix-non-darwin_linux_amd64_v1/helix`, `dist/helix-non-darwin_linux_arm64_v8.0/helix`, `dist/helix-non-darwin_windows_amd64_v1/helix.exe`, `dist/helix-non-darwin_windows_arm64_v8.0/helix.exe`.
+
+### `make release-snapshot` (convenience target)
+
+`make release-snapshot` invokes `goreleaser release --snapshot --clean --skip=sign`, which attempts to build BOTH `helix-non-darwin` AND `helix-darwin` entries in a single invocation. Behavior depends on host:
+
+- **On a linux host (with zig 0.14.1+):** builds 4 linux+windows binaries successfully; darwin entries fail (a linux host cannot natively produce darwin binaries because zig cc cannot reach the Apple SDK headers `mach/mach_vm.h` — the Wave 0 probe blocker).
+- **On a darwin host:** builds 2 darwin binaries successfully; the `helix-non-darwin/windows_amd64_v1` zig cc link step then fails with C++ stdlib undefined symbols (`std::ostream`, `std::basic_streambuf`, `std::rethrow_exception`, …) because `libduckdb_static.a` was built against **libstdc++** but zig defaults to **libc++** — lld-link cannot resolve cross-stdlib symbols. **This is a darwin-host-local limitation, NOT a config defect** — the CI ubuntu runner does not hit it because it invokes `goreleaser build --id helix-non-darwin` (constrained to the non-darwin entry) and never collides both stdlibs in a single link step.
+
+The recommended local workflow is to use the per-`--id` invocations above instead of `make release-snapshot` if you only need to validate the subset your host can build. CI is the authoritative full-matrix path.
+
+### CI release flow
+
+A real release is cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow runs three jobs:
+
+1. **`release-linux`** (`ubuntu-22.04`): SHA-pinned `mlugg/setup-zig` action installs zig 0.14.1; runs Pass-1 then Pass-2 of `goreleaser build --id helix-non-darwin`; asserts per-target byte-identical sha256 (D-17); uploads partial dist as `dist-partial-linux`.
+2. **`release-darwin`** (`macos-14`, tag-gated per D-16): selects Xcode 15.x; records `xcodebuild -version` + `clang --version` provenance; runs Pass-1 then Pass-2 of `goreleaser build --id helix-darwin`; asserts per-target byte-identical sha256; uploads partial dist as `dist-partial-darwin`.
+3. **`release-merge`** (`ubuntu-22.04`, `needs:` both): downloads both partial dists into a unified `dist/` tree; runs `goreleaser release --clean --skip=build`; cosign keyless attestation runs uniformly across all 6 archives; publishes the GitHub Release.
+
+The user-facing artifact-name shape (`helix_v<version>_<os>_<arch>.tar.gz`) and the `.sigstore.json` bundle layout are preserved verbatim; the Phase 58 REL-01 contract holds. Existing `helix upgrade` consumers see no change.
 
 To cut a release, push a version tag from a green-CI commit on `main`:
 
 ```sh
-git tag v1.9.0
-git push origin v1.9.0
+git tag v1.10.0
+git push origin v1.10.0
 ```
 
-Pre-release tags (`v1.9.0-rc1`, `v1.9.0-beta1`, `v1.9.0-alpha1`) are auto-detected by goreleaser and marked as Pre-release on the GitHub Releases page. Production tags (`v1.9.0`) publish as a regular release.
+Pre-release tags (`v1.10.0-rc1`, `v1.10.0-beta1`, `v1.10.0-alpha1`) are auto-detected by goreleaser and marked as Pre-release on the GitHub Releases page. Production tags (`v1.10.0`) publish as a regular release.
+
+### Reproducibility gate
+
+The reproducibility gate is **per-target within-runner Pass-1 ≡ Pass-2**. Each runner rebuilds its own targets twice in the same workflow job and fails-loud if the sha256s diverge. **Cross-runner byte-equality is NOT asserted** (different machines, different SDKs, different clang versions — that comparison was never meaningful). On Pass-1 ≢ Pass-2 divergence, a per-runner WR-07 forensic dump (per-file sha256, tar entry metadata, gzip header bytes, Mach-O LC_UUID + codesign timestamp on darwin, `go version -m` diff) drops into the workflow logs.
+
+The gate does not compare against the real-release artifacts that ship to users — a non-determinism source that lives only behind the real-release code path (e.g. tag-only build constants, changelog generation) would not be caught. If you suspect a real-release-only non-determinism, do a local build of the same tag with `goreleaser build --snapshot --clean --id <runner-id>` after the tag and diff against the published `dist/` from CI. The trade-off is intentional — adding a real-artifact comparison job would require regenerating expected hashes per release, which the v1.9 milestone audit explicitly judged not worth the ongoing maintainer toil.
+
+### Snapshot dispatch (rehearsal)
+
+To exercise the full pipeline against a draft branch without cutting a real tag (e.g. for first-CI-repro evidence per Wave 5), use the `workflow_dispatch` trigger:
+
+```sh
+gh workflow run release.yml --ref <draft-branch>
+```
+
+The dispatch path runs `goreleaser release --snapshot --clean --skip=build,sign` in the merge job: archives + checksums are produced, but cosign signing and GitHub release publishing are skipped.
+
+### Toolchain prerequisites (local)
+
+| Tool | Required for | Install hint |
+|------|--------------|--------------|
+| Go 1.25.x | `make build`, `go test ./...` | https://go.dev/dl/ |
+| goreleaser v2.15.4 | `make release-snapshot`, local `goreleaser build --id <id>` | `brew install goreleaser` (macOS) or [release page](https://github.com/goreleaser/goreleaser/releases/tag/v2.15.4) |
+| zig 0.14.1+ | `make release-snapshot` (linux+windows portion); local `--id helix-non-darwin` invocation | `brew install zig` (macOS, picks up latest), `apt install zig` (Ubuntu 22.04+), or https://ziglang.org/download/ |
+| cosign 2.4.1+ | local sign verification only (CI uses keyless OIDC, no local cosign needed for the build itself) | `brew install cosign` |
 
 ### Repository secrets
 

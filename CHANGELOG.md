@@ -2,6 +2,19 @@
 
 All notable changes to Helix (Go) are documented here. Releases prior to v1.9 shipped under the project's previous name, Serena; the binary, env vars, config dirs, and MCP server registration all renamed to `helix` at v1.9 (see Breaking Changes below).
 
+## [Unreleased] — v1.10.x
+
+### Build & Release Pipeline (Phase 59.1)
+
+This release flips the build pipeline to single-mode CGO=1 and introduces a split-runner CI architecture.
+
+- **Single-mode CGO=1 build & release.** Helix now builds with `CGO_ENABLED=1` unconditionally; the previous CGO=0 stub apparatus (Phase 51.1 D-02) is removed. This closes `INT-BLOCKER-01` (the goreleaser CGO=0 build that broke when `internal/semantic/extract/provider.go` unconditionally imported `tree_sitter.Language`) by removing the CGO=0 build path entirely instead of patching the missing stub.
+- **Split-runner CI.** Linux + Windows archives (4 of 6) build on `ubuntu-22.04` with `zig cc` as a hermetic cross-compiler. Darwin archives (2 of 6) build natively on `macos-14` (Apple Silicon, Xcode 15.x) with Apple clang. A merge job stitches both runners' artifacts and runs the existing Sigstore cosign keyless attestation uniformly across all 6 archives.
+- **FALLBACK-B-MULTI-BUILD-ID.** The `.goreleaser.yaml` file declares two `builds:` entries (`helix-non-darwin`, `helix-darwin`); each runner invokes `goreleaser build --id <runner-id>`; the merge job runs `goreleaser release --skip=build` to assemble archives, checksums, and signatures from the pre-built binaries. Wave 2 prerequisite probe found that GoReleaser's partial-by-target + split-release + merge-continue mechanic is GoReleaser Pro exclusive (not available in the OSS distribution); FALLBACK-B is the OSS-supported equivalent. See `59.1-02-SPLIT-PROBE-NOTES.md` for the Pro-exclusive directive names and the lock-in evidence.
+- **`helix upgrade` artifact-name and `.sigstore.json` bundle layout preserved.** Phase 58 REL-01 contract holds. Existing `helix upgrade` consumers see no change.
+- **Reproducibility gate (per-runner).** Each runner asserts byte-identical Pass-1 ≡ Pass-2 over its own target subset. Cross-runner byte-equality is not asserted (different machines, different SDKs, different clang versions — that comparison was never meaningful and is explicitly not a gate).
+- **Darwin binaries unsigned on Apple side.** Apple Developer ID signing and notarization are deferred (see `.planning/deferred-items.md` → `DEF-59-NOTARIZE`). On first launch, macOS Gatekeeper will block the unsigned binary; users must right-click → Open once to bypass. See [INSTALL.md](INSTALL.md#macos-gatekeeper-workaround) for the workaround.
+
 ## v1.9 — Polish & Infra (2026-04-30)
 
 ### Breaking Changes (v1.8 → v1.9)

@@ -80,6 +80,39 @@ helix --help
 
 If `helix` is not found, ensure `$(go env GOPATH)/bin` is in your PATH.
 
+## macOS Gatekeeper workaround
+
+Helix's darwin binaries are signed with [Sigstore](https://www.sigstore.dev/) cosign keyless attestation but are **not signed with an Apple Developer ID** and **not notarized** through Apple's notary service. On first launch, macOS Gatekeeper will block the binary with an error like:
+
+> "helix" can't be opened because Apple cannot check it for malicious software.
+
+Or:
+
+> "helix" is damaged and can't be opened. You should move it to the Trash.
+
+**Workaround (one-time per binary):** use the right-click → Open Gatekeeper-bypass.
+
+1. Open Finder and navigate to the extracted `helix` binary.
+2. **Right-click** (or Control-click) on the `helix` binary.
+3. Select **Open** from the context menu.
+4. macOS will prompt: "Are you sure you want to open it?" — click **Open**.
+
+After this one-time approval, the binary runs without further Gatekeeper prompts.
+
+**Alternative (terminal):**
+
+Clear the Gatekeeper quarantine flag from a terminal:
+
+```bash
+xattr -d com.apple.quarantine /path/to/helix
+```
+
+**Why this is required:**
+
+Apple Developer ID signing requires an Apple Developer Program membership ($99/year) and Apple-credential management infrastructure. Phase 59.1 is scoped to the CGO=1 build pipeline; signing/notarization is out-of-scope. The Sigstore cosign keyless attestation that Helix DOES apply works on all platforms uniformly (linux, windows, darwin) and is verified by `helix upgrade` against the public-good Sigstore TUF root.
+
+Apple Developer ID signing + notarization is tracked as `DEF-59-NOTARIZE` in `.planning/deferred-items.md`. It may land in a future v1.10.x or v1.11+ release.
+
 ## Quick Start
 
 The fastest way to configure Helix for your coding agent is the setup CLI:

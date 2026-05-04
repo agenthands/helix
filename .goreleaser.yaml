@@ -81,26 +81,24 @@ signs:
       - "sign-blob"
       - "--new-bundle-format"
       - "--oidc-issuer=https://token.actions.githubusercontent.com"
-      # WR-09 (Phase 58 post-rc1.2): include an RFC3161 signed timestamp
-      # from GitHub's TSA. internal/upgrade/verify.go pins
-      # `verify.WithSignedTimestamps(1)` (require >=1 TSA-signed
-      # timestamp) for defense-in-depth alongside Rekor's integrated
-      # SET. cosign keyless DOES NOT request a TSA timestamp by default
-      # -- only the Rekor entry's SET (which the verifier already
-      # accepts via WithIntegratedTimestamps(1)). Without this flag,
-      # every CI-produced bundle fails the verifier with
-      # "threshold not met for verified signed timestamps: 0 < 1".
-      # The TSA URL must match a TSA whose cert chain is in
-      # internal/upgrade/trusted_root.json -- the public-good trust
-      # root only ships GitHub's `Internal Services Root` TSA, hence
-      # this URL specifically. The unit-test fixtures
-      # (testdata/generate_fixtures.go) include TSA timestamps via
-      # sigstore-go's VirtualSigstore CA, which is why the failure
-      # only surfaces on real CI bundles -- the same false-pass class
-      # as WR-08 and a hard reminder to add a CI self-test step that
-      # runs the just-built helix verifier against the just-produced
-      # bundle BEFORE the release upload.
-      - "--timestamp-server-url=https://timestamp.githubapp.com/api/v1/timestamp"
+      # WR-10 (Phase 58 post-rc1.3): use the sigstore PUBLIC-GOOD TSA,
+      # not GitHub's internal TSA. internal/upgrade/verify.go pins
+      # `verify.WithSignedTimestamps(1)` (>=1 RFC3161 TSA timestamp).
+      # The TSA's cert chain MUST appear in
+      # internal/upgrade/trusted_root.json. The LIVE sigstore TUF
+      # trust root contains exactly one TSA -- `sigstore.dev /
+      # sigstore-tsa-selfsigned` -- accessible at
+      # https://timestamp.sigstore.dev/api/v1/timestamp. GitHub's
+      # https://timestamp.githubapp.com TSA chains to GitHub's
+      # internal `Internal Services Root` which is NOT in the
+      # public-good TUF (it appeared only in sigstore-go's static
+      # `examples/trusted-root-public-good.json`, which had drifted
+      # from the live TUF state -- root cause of the rc1.2 verify
+      # failure: certificate signed by unknown authority on TSA
+      # intermediate). Trust root file refreshed from TUF in lockstep
+      # with this change; Makefile target `update-trust-root` now
+      # sources from cosign's TUF cache, not the static example file.
+      - "--timestamp-server-url=https://timestamp.sigstore.dev/api/v1/timestamp"
       - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"

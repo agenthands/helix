@@ -307,3 +307,131 @@ jobs:
           path: dist/
           retention-days: 1
           if-no-files-found: error
+
+  release-merge:
+    name: merge partial dists, sign, publish
+    # D-15: merge step runs on the cheaper linux runner. Phase 58 cosign keyless
+    # signing (D-19) runs here uniformly across all 6 archives. The
+    # `helix upgrade` artifact-name shape and `.sigstore.json` bundle layout
+    # are preserved from .goreleaser.yaml's `archives:` and `signs:` blocks.
+    runs-on: ubuntu-22.04
+    # D-15 + D-16: needs both runners. release-darwin is gated on tag-push or
+    # workflow_dispatch; if it's skipped (e.g. PR), release-merge is also
+    # skipped via dependency wiring + this job's matching `if:` guard.
+    needs: [release-linux, release-darwin]
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write   # required: create release, upload assets (real tag-push only)
+      id-token: write   # Phase 58 D-02: cosign keyless OIDC (Fulcio short-lived cert)
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        # Required for goreleaser changelog generation (--skip=build still needs git history).
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        # Required because goreleaser embeds Go runtime info during the archive
+        # pipe even when --skip=build is set (changelog templating + sign).
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Install cosign
+        # Phase 58 D-02: keyless signing via Fulcio + Rekor. WR-08 / WR-10 already
+        # captured in .goreleaser.yaml `signs:` block (--new-bundle-format,
+        # public-good TSA at timestamp.sigstore.dev). D-19: this attestation runs
+        # uniformly across ALL 6 archives (linux + windows + darwin); no Apple
+        # Developer ID notarization (Apple notarization deferred per Wave 4).
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5  # v3.10.1
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Download helix-non-darwin partial dist
+        # WR-04: SHA-pinned actions/download-artifact (verified via git ls-remote
+        # 2026-05-04: refs/tags/v4.1.8 → fa0a91b85d4f404e444e00e005971372dc801d16).
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        with:
+          name: dist-partial-linux
+          path: dist-partial-linux/
+
+      - name: Download helix-darwin partial dist
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        with:
+          name: dist-partial-darwin
+          path: dist-partial-darwin/
+
+      - name: Merge partial dists into single dist/ tree
+        run: |
+          set -euo pipefail
+          # FALLBACK-B-MULTI-BUILD-ID merge layout (per 59.1-02-SPLIT-PROBE-NOTES.md
+          # line 200): goreleaser writes dist/helix-<id>_<os>_<arch>/helix[.exe] during
+          # `goreleaser build`. `goreleaser release --skip=build` reads from `dist/`
+          # and runs the archive + checksum + sign + publish pipes. Both partial
+          # bundles are merged into a single dist/ for the release pipe.
+          rm -rf dist
+          mkdir -p dist
+          # Partial bundles: copy the per-build subdirectories into dist/ preserving
+          # goreleaser's expected layout. Use cp -r (NOT mv) to keep download artifacts
+          # available for forensic inspection if the merge step fails.
+          if [ -d dist-partial-linux ]; then
+            cp -r dist-partial-linux/* dist/ 2>/dev/null || true
+          fi
+          if [ -d dist-partial-darwin ]; then
+            cp -r dist-partial-darwin/* dist/ 2>/dev/null || true
+          fi
+          echo "=== Merged dist/ layout (input to goreleaser release --skip=build) ==="
+          find dist -maxdepth 3 -type f -name 'helix*' | sort
+          echo
+          echo "=== Per-build-id subdirs ==="
+          ls -la dist/ | grep -E '^d' || true
+          # Sanity: expect 6 binaries total (4 from linux runner + 2 from darwin runner).
+          BINARY_COUNT=$(find dist -type f -name 'helix*' | wc -l | tr -d ' ')
+          echo "Total binaries in merged dist/: ${BINARY_COUNT}"
+          if [ "${BINARY_COUNT}" -lt 6 ]; then
+            echo "::warning::Expected 6 binaries in merged dist/, found ${BINARY_COUNT}. release --skip=build may fail."
+          fi
+
+      - name: Real release (tag-push) -- archive + checksum + sign + publish
+        # Real (non-snapshot) tag-push merge: --skip=build because both runners
+        # already produced binaries. archive + checksum + cosign sign + GitHub
+        # release publishing all run here uniformly across 6 archives (D-19).
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
+        with:
+          distribution: goreleaser
+          version: 'v2.15.4'   # WR-07: matches release-linux + release-darwin pin
+          args: release --clean --skip=build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Snapshot rehearsal (workflow_dispatch) -- archive + checksum only (no sign, no publish)
+        # workflow_dispatch path is the snapshot rehearsal Wave 5 uses to capture
+        # FIRST-CI-REPRO-LOG without consuming a real tag. --skip=build,sign means
+        # archive + checksum run; cosign sign + GitHub release publish are skipped.
+        # Wave 5 verifies the 6 archives appear with correct names and the cosign
+        # bundle layout would have been emitted (from .goreleaser.yaml signs: block
+        # being unchanged from the verified Phase 58 shape).
+        if: github.event_name == 'workflow_dispatch'
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
+        with:
+          distribution: goreleaser
+          version: 'v2.15.4'
+          args: release --snapshot --clean --skip=build,sign
+
+      - name: Upload merged dist as workflow artifact (snapshot rehearsal forensic trail)
+        # Both real and snapshot paths upload the final dist/ for Wave 5 to inspect.
+        # On real tag-push, dist/ contains signed archives + .sigstore.json bundles
+        # + checksums.txt (these are also published on the GitHub Release; the
+        # workflow artifact is a short-retention duplicate for triage).
+        # On workflow_dispatch, dist/ contains unsigned archives + checksums.txt
+        # (no .sigstore.json — sign was skipped). Wave 5 downloads this artifact
+        # and verifies layout + per-runner Pass-1≡Pass-2 evidence end-to-end.
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
+        with:
+          name: dist-merged-${{ github.run_id }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error

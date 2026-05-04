@@ -359,6 +359,92 @@ func schema1Statements() []string {
 	}
 }
 
+// applyMigration002 adds the partial-extraction columns prescribed by
+// 59-CONTEXT.md D-05 to the three Phase 57 fact tables, then stamps
+// schema_version=2.
+//
+// 10 columns total:
+//
+//	semantic_files: 6 columns
+//	  extraction_status   TEXT DEFAULT ''
+//	  extraction_partial  BOOLEAN DEFAULT false
+//	  partial_reason      TEXT  (nullable; closed enum from D-05)
+//	  extractor_name      TEXT
+//	  extractor_version   TEXT
+//	  error_message       TEXT
+//	semantic_symbols: 2 columns
+//	  partial             BOOLEAN DEFAULT false
+//	  partial_reason      TEXT
+//	semantic_references: 2 columns
+//	  partial             BOOLEAN DEFAULT false
+//	  partial_reason      TEXT
+//
+// Plus one row INSERT into semantic_schema_version stamping version=2.
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no reindex,
+// no data backfill (existing rows take the column DEFAULTs).
+//
+// DuckDB ALTER TABLE constraint limitation: DuckDB rejects `ALTER TABLE ...
+// ADD COLUMN ... NOT NULL DEFAULT <expr>` ("Adding columns with constraints
+// not yet supported"). For ADD COLUMN we use DEFAULT alone — the DEFAULT
+// supplies a value for both existing rows (backfill) and future INSERTs
+// that omit the column, so the practical outcome is the same as NOT NULL
+// DEFAULT: writers cannot leave the column unset. The application layer
+// (Phase 59 P02 fact emitter) explicitly sets every column on every write.
+// CREATE TABLE in schema 1 is unaffected — NOT NULL DEFAULT inside CREATE
+// works fine; the constraint limitation only applies to ALTER TABLE ADD
+// COLUMN. Research §A1 in 59-RESEARCH.md called this out as a planning-
+// time risk.
+//
+// Rollback: DuckDB does not support `ALTER TABLE ... DROP COLUMN` for all
+// column types reliably; rollback from v2 → v1 requires a full reindex via
+// the existing quarantine-and-rebuild path (Phase 57 D-04). Operators on a
+// downgrade path: stop daemon, `mv .helix/semantic.duckdb
+// .helix/semantic.duckdb.v2.bak`, restart with the older binary which will
+// rebuild from sources at schema_version=1.
+func applyMigration002(ctx context.Context, db *sql.DB) error {
+	stmts := schema2Statements()
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration002: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema2Statements returns the v1→v2 DDL in deterministic order: 6 ALTER
+// TABLE statements on semantic_files, 2 each on semantic_symbols and
+// semantic_references, then one INSERT into semantic_schema_version.
+//
+// Acceptance grep gates in 59-01-PLAN.md scan THIS function — keep the
+// `ALTER TABLE semantic_<name> ADD COLUMN` strings on their own logical
+// lines so the per-table count regex matches.
+func schema2Statements() []string {
+	return []string{
+		// semantic_files: 6 partial-extraction columns (D-05).
+		// DuckDB rejects NOT NULL on ADD COLUMN even with DEFAULT (Parser
+		// Error: "Adding columns with constraints not yet supported"); use
+		// DEFAULT alone — see applyMigration002 doc comment.
+		`ALTER TABLE semantic_files ADD COLUMN extraction_status TEXT DEFAULT ''`,
+		`ALTER TABLE semantic_files ADD COLUMN extraction_partial BOOLEAN DEFAULT false`,
+		`ALTER TABLE semantic_files ADD COLUMN partial_reason TEXT`,
+		`ALTER TABLE semantic_files ADD COLUMN extractor_name TEXT`,
+		`ALTER TABLE semantic_files ADD COLUMN extractor_version TEXT`,
+		`ALTER TABLE semantic_files ADD COLUMN error_message TEXT`,
+
+		// semantic_symbols: 2 partial columns.
+		`ALTER TABLE semantic_symbols ADD COLUMN partial BOOLEAN DEFAULT false`,
+		`ALTER TABLE semantic_symbols ADD COLUMN partial_reason TEXT`,
+
+		// semantic_references: 2 partial columns.
+		`ALTER TABLE semantic_references ADD COLUMN partial BOOLEAN DEFAULT false`,
+		`ALTER TABLE semantic_references ADD COLUMN partial_reason TEXT`,
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (2, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

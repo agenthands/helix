@@ -118,7 +118,16 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 		// Tier-1 reopen.
 		s, err := openExisting(ctx, path, label, logger, metrics)
 		if err != nil {
-			// Reopen failed unexpectedly — treat as corrupt and quarantine.
+			// Forward-incompat is a hard fail: an operator running an older
+			// binary against a newer DB MUST see an explicit error and
+			// rebuild manually via the documented quarantine path. We do
+			// NOT silently quarantine because that would discard the newer
+			// binary's data on rollback — see plan 59-01 STORE-03 invariant.
+			if errors.Is(err, ErrForwardIncompatible) {
+				return nil, err
+			}
+			// Other reopen failures (connection error after migrations,
+			// pool exhaustion, etc.) → treat as corrupt and quarantine.
 			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 		}
 		return s, nil
@@ -171,8 +180,9 @@ func classifyExisting(ctx context.Context, path string) (string, error) {
 	return "", nil
 }
 
-// openFresh creates a new DuckDB file at path, runs the bootstrap migration,
-// and increments open_total{outcome="created"}.
+// openFresh creates a new DuckDB file at path, runs every registered
+// migration progressively (0 → … → CurrentSchemaVersion), and increments
+// open_total{outcome="created"}.
 func openFresh(ctx context.Context, path, label string, logger *slog.Logger, metrics *obs.Metrics) (*Store, error) {
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
@@ -182,12 +192,12 @@ func openFresh(ctx context.Context, path, label string, logger *slog.Logger, met
 		_ = db.Close()
 		return nil, fmt.Errorf("semantic.store.Open: ping(fresh): %w", err)
 	}
-	if err := applyMigration001(ctx, db); err != nil {
+	if err := runMigrations(ctx, db); err != nil {
 		_ = db.Close()
-		// If we cannot apply the bootstrap migration on a brand-new file,
-		// the environment is broken (disk full, permissions, DuckDB build
-		// mismatch). Surface as Tier-3 hard fail.
-		return nil, fmt.Errorf("semantic.store.Open: bootstrap migration on fresh DB: %w", err)
+		// If we cannot apply migrations on a brand-new file, the environment
+		// is broken (disk full, permissions, DuckDB build mismatch). Surface
+		// as Tier-3 hard fail.
+		return nil, fmt.Errorf("semantic.store.Open: bootstrap migrations on fresh DB: %w", err)
 	}
 	if metrics != nil {
 		metrics.SemanticStoreOpenInc(label, outcomeCreated)
@@ -196,7 +206,14 @@ func openFresh(ctx context.Context, path, label string, logger *slog.Logger, met
 	return &Store{db: db, path: path, logger: logger, metrics: metrics, label: label}, nil
 }
 
-// openExisting opens an existing+clean DB and increments open_total{outcome="opened"}.
+// openExisting opens an existing DB. Phase 59 lights up the migration
+// registry, so an existing+clean DB at schema_version < CurrentSchemaVersion
+// is upgraded in-place via runMigrations. A DB whose stored schema_version
+// is > CurrentSchemaVersion (uncommon — classifyExisting normally catches
+// this and quarantines) is rejected by runMigrations with an explicit
+// forward-incompatible error.
+//
+// Increments open_total{outcome="opened"} on success.
 func openExisting(ctx context.Context, path, label string, logger *slog.Logger, metrics *obs.Metrics) (*Store, error) {
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
@@ -205,6 +222,10 @@ func openExisting(ctx context.Context, path, label string, logger *slog.Logger, 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping(existing): %w", err)
+	}
+	if err := runMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("semantic.store.Open: upgrade migrations on existing DB: %w", err)
 	}
 	if metrics != nil {
 		metrics.SemanticStoreOpenInc(label, outcomeOpened)

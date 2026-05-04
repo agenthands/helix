@@ -1,0 +1,202 @@
+{
+  "file": {
+    "path": "generic_function_or_type/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Map",
+      "qualified_name": "Map",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 8,
+        "end_col": 1
+      },
+      "signature": "func Map[T, U any](xs []T, f func(T) U) []U { out := make([]U, len(xs)) for i, x := range xs { out[i] = f(x) } return out }",
+      "signature_hash": "func Map[T0, T1 any](xs []T0, f func(T0) T1) []T1",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "xs",
+      "qualified_name": "xs",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 19,
+        "end_line": 2,
+        "end_col": 21
+      },
+      "signature": "xs",
+      "signature_hash": "xs",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 27,
+        "end_line": 2,
+        "end_col": 28
+      },
+      "signature": "f",
+      "signature_hash": "f",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "any",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 24,
+        "end_line": 2,
+        "end_col": 25
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 34,
+        "end_line": 2,
+        "end_col": 35
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 37,
+        "end_line": 2,
+        "end_col": 38
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 42,
+        "end_line": 2,
+        "end_col": 43
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "make",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 11,
+        "end_line": 3,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "U",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 18,
+        "end_line": 3,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "len",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 21,
+        "end_line": 3,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "f",
+      "file": "generic_function_or_type/before.go",
+      "range": {
+        "start_line": 5,
+        "start_col": 17,
+        "end_line": 5,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "[]T",
+      "range": {
+        "start_line": 2,
+        "start_col": 22,
+        "end_line": 2,
+        "end_col": 25
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "[]U",
+      "range": {
+        "start_line": 2,
+        "start_col": 40,
+        "end_line": 2,
+        "end_col": 43
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "func(T) U",
+      "range": {
+        "start_line": 2,
+        "start_col": 29,
+        "end_line": 2,
+        "end_col": 38
+      }
+    }
+  ]
+}

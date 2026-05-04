@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "local_variable/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Compute",
+      "qualified_name": "Compute",
+      "file": "local_variable/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 6,
+        "end_col": 1
+      },
+      "signature": "func Compute() int { x := 1 y := 2 return x + y }",
+      "signature_hash": "func Compute() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "local_variable/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 18
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "file": {
+    "path": "generic_type_param/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Box",
+      "qualified_name": "Box",
+      "file": "generic_type_param/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 33
+      },
+      "signature": "Box[T any] struct{ Value T }",
+      "signature_hash": "Box[T0 any] struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "Value",
+      "qualified_name": "Value",
+      "file": "generic_type_param/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 24,
+        "end_line": 2,
+        "end_col": 29
+      },
+      "signature": "Value",
+      "signature_hash": "Value",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Box",
+      "file": "generic_type_param/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 8
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "any",
+      "file": "generic_type_param/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 11,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_type_param/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 30,
+        "end_line": 2,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    }
+  ]
+}

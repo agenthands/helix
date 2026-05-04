@@ -1,0 +1,118 @@
+{
+  "file": {
+    "path": "type_annotation/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Wrap",
+      "qualified_name": "Wrap",
+      "file": "type_annotation/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 5,
+        "end_col": 1
+      },
+      "signature": "func Wrap(name string) (out string) { out = name return }",
+      "signature_hash": "func Wrap(name string) (out string)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "type_annotation/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 14
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "out",
+      "qualified_name": "out",
+      "file": "type_annotation/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 24,
+        "end_line": 2,
+        "end_col": 27
+      },
+      "signature": "out",
+      "signature_hash": "out",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "type_annotation/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "type_annotation/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 28,
+        "end_line": 2,
+        "end_col": 34
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "(out string)",
+      "range": {
+        "start_line": 2,
+        "start_col": 23,
+        "end_line": 2,
+        "end_col": 35
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 21
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "string",
+      "range": {
+        "start_line": 2,
+        "start_col": 28,
+        "end_line": 2,
+        "end_col": 34
+      }
+    }
+  ]
+}

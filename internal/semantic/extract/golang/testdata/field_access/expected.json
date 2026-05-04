@@ -1,0 +1,161 @@
+{
+  "file": {
+    "path": "field_access/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "T",
+      "qualified_name": "T",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 22
+      },
+      "signature": "T struct{ X int }",
+      "signature_hash": "T struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "X",
+      "qualified_name": "X",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "signature": "X",
+      "signature_hash": "X",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "GetX",
+      "qualified_name": "GetX",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 33
+      },
+      "signature": "func GetX(t T) int { return t.X }",
+      "signature_hash": "func GetX(t T) int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "t",
+      "qualified_name": "t",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 10,
+        "end_line": 4,
+        "end_col": 11
+      },
+      "signature": "t",
+      "signature_hash": "t",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 6
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 12,
+        "end_line": 4,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 15,
+        "end_line": 4,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "X",
+      "file": "field_access/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 30,
+        "end_line": 4,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "T",
+      "range": {
+        "start_line": 4,
+        "start_col": 12,
+        "end_line": 4,
+        "end_col": 13
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 4,
+        "start_col": 15,
+        "end_line": 4,
+        "end_col": 18
+      }
+    }
+  ]
+}

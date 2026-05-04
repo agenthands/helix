@@ -1,0 +1,162 @@
+{
+  "file": {
+    "path": "container_qualified_name/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Server",
+      "qualified_name": "Server",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 20
+      },
+      "signature": "Server struct{}",
+      "signature_hash": "Server struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Start",
+      "qualified_name": "Server.Start",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 27
+      },
+      "signature": "func (s *Server) Start() {}",
+      "signature_hash": "func (s *Server) Start()",
+      "receiver": {
+        "type": "Server",
+        "name": "s"
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "s",
+      "qualified_name": "s",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 6,
+        "end_line": 4,
+        "end_col": 7
+      },
+      "signature": "s",
+      "signature_hash": "s",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Stop",
+      "qualified_name": "Server.Stop",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 6,
+        "start_col": 0,
+        "end_line": 6,
+        "end_col": 26
+      },
+      "signature": "func (s *Server) Stop() {}",
+      "signature_hash": "func (s *Server) Stop()",
+      "receiver": {
+        "type": "Server",
+        "name": "s"
+      },
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "s",
+      "qualified_name": "s",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 6,
+        "start_col": 6,
+        "end_line": 6,
+        "end_col": 7
+      },
+      "signature": "s",
+      "signature_hash": "s",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Server",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Server",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 9,
+        "end_line": 4,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Server",
+      "file": "container_qualified_name/before.go",
+      "range": {
+        "start_line": 6,
+        "start_col": 9,
+        "end_line": 6,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "*Server",
+      "range": {
+        "start_line": 4,
+        "start_col": 8,
+        "end_line": 4,
+        "end_col": 15
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "*Server",
+      "range": {
+        "start_line": 6,
+        "start_col": 8,
+        "end_line": 6,
+        "end_col": 15
+      }
+    }
+  ]
+}

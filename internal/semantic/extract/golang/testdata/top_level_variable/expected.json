@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "top_level_variable/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "DefaultName",
+      "qualified_name": "DefaultName",
+      "file": "top_level_variable/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "signature": "DefaultName",
+      "signature_hash": "DefaultName",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

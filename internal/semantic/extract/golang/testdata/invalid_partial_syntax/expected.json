@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "invalid_partial_syntax/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Broken",
+      "qualified_name": "Broken",
+      "file": "invalid_partial_syntax/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 0
+      },
+      "signature": "func Broken() { return",
+      "signature_hash": "func Broken()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

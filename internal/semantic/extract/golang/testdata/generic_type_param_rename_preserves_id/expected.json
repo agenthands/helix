@@ -1,0 +1,103 @@
+{
+  "file": {
+    "path": "generic_type_param_rename_preserves_id/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "generic_type_param_rename_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 33
+      },
+      "signature": "func F[T any](x T) T { return x }",
+      "signature_hash": "func F[T0 any](x T0) T0",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "generic_type_param_rename_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 14,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "any",
+      "file": "generic_type_param_rename_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_type_param_rename_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "T",
+      "file": "generic_type_param_rename_preserves_id/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 19,
+        "end_line": 2,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "T",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 17
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "T",
+      "range": {
+        "start_line": 2,
+        "start_col": 19,
+        "end_line": 2,
+        "end_col": 20
+      }
+    }
+  ]
+}

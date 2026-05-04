@@ -1,0 +1,152 @@
+{
+  "file": {
+    "path": "struct_embedded_field/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Base",
+      "qualified_name": "Base",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 25
+      },
+      "signature": "Base struct{ N int }",
+      "signature_hash": "Base struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "N",
+      "qualified_name": "N",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 18,
+        "end_line": 2,
+        "end_col": 19
+      },
+      "signature": "N",
+      "signature_hash": "N",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "struct",
+      "name": "Derived",
+      "qualified_name": "Derived",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 5,
+        "end_line": 7,
+        "end_col": 1
+      },
+      "signature": "Derived struct { Base Extra string }",
+      "signature_hash": "Derived struct",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "Extra",
+      "qualified_name": "Extra",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 6,
+        "start_col": 4,
+        "end_line": 6,
+        "end_col": 9
+      },
+      "signature": "Extra",
+      "signature_hash": "Extra",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Base",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 5,
+        "end_line": 2,
+        "end_col": 9
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 20,
+        "end_line": 2,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Derived",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 4,
+        "start_col": 5,
+        "end_line": 4,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Base",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 5,
+        "start_col": 4,
+        "end_line": 5,
+        "end_col": 8
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "struct_embedded_field/before.go",
+      "range": {
+        "start_line": 6,
+        "start_col": 10,
+        "end_line": 6,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "embeds",
+      "target": "Base",
+      "range": {
+        "start_line": 5,
+        "start_col": 4,
+        "end_line": 5,
+        "end_col": 8
+      }
+    }
+  ]
+}

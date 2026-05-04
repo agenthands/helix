@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "nested_symbol/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Outer",
+      "qualified_name": "Outer",
+      "file": "nested_symbol/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "func Outer() func() int { return func() int { return 42 } }",
+      "signature_hash": "func Outer() func() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "nested_symbol/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 20,
+        "end_line": 2,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "nested_symbol/before.go",
+      "range": {
+        "start_line": 3,
+        "start_col": 18,
+        "end_line": 3,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "func() int",
+      "range": {
+        "start_line": 2,
+        "start_col": 13,
+        "end_line": 2,
+        "end_col": 23
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "body_only_edit_preserves_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 5,
+        "end_col": 1
+      },
+      "signature": "func F() int { x := 1 + 2 return x - 2 }",
+      "signature_hash": "func F() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "body_only_edit_preserves_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 9,
+        "end_line": 2,
+        "end_col": 12
+      }
+    }
+  ]
+}

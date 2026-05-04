@@ -1,0 +1,64 @@
+{
+  "file": {
+    "path": "return_type/before.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Numbers",
+      "qualified_name": "Numbers",
+      "file": "return_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 41
+      },
+      "signature": "func Numbers() (int, int) { return 1, 2 }",
+      "signature_hash": "func Numbers() (int, int)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "return_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "return_type/before.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 21,
+        "end_line": 2,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "(int, int)",
+      "range": {
+        "start_line": 2,
+        "start_col": 15,
+        "end_line": 2,
+        "end_col": 25
+      }
+    }
+  ]
+}

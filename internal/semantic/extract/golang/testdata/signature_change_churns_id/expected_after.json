@@ -1,0 +1,118 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "signature_change_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 37
+      },
+      "signature": "func F(x, y int) int { return x + y }",
+      "signature_hash": "func F(x, y int) int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "signature_change_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 7,
+        "end_line": 2,
+        "end_col": 8
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "signature_change_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 10,
+        "end_line": 2,
+        "end_col": 11
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "signature_change_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 12,
+        "end_line": 2,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "signature_change_churns_id/after.go",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 12,
+        "end_line": 2,
+        "end_col": 15
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 12,
+        "end_line": 2,
+        "end_col": 15
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 20
+      }
+    }
+  ]
+}

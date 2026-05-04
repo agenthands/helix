@@ -1,0 +1,52 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/after.go",
+    "language": "go",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "comment_edit_preserves_id/after.go",
+      "range": {
+        "start_line": 5,
+        "start_col": 0,
+        "end_line": 5,
+        "end_col": 25
+      },
+      "signature": "func F() int { return 1 }",
+      "signature_hash": "func F() int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "comment_edit_preserves_id/after.go",
+      "range": {
+        "start_line": 5,
+        "start_col": 9,
+        "end_line": 5,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 5,
+        "start_col": 9,
+        "end_line": 5,
+        "end_col": 12
+      }
+    }
+  ]
+}

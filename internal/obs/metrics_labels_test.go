@@ -50,6 +50,12 @@ var carveOuts = map[string]map[string]bool{
 	// Phase 57: closed-enum "outcome" ∈ {opened, quarantined, created} on
 	// semantic store open counter. workspace_label is bounded.
 	"helix_semantic_store_open_total": {"workspace_label": true, "outcome": true},
+	// Phase 59 P02: bounded-label allowlist for tree-sitter extraction
+	// outcome counter. "language" ∈ {go, typescript, python, other};
+	// "outcome" ∈ {ready, partial, unsupported, failed}. Both labels are
+	// already in AllowedLabels (D-04) so this entry exists only for
+	// documentation parity with the helper-method drop-on-unknown discipline.
+	"helix_semantic_extraction_total": {},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -136,6 +142,8 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	// dropped by Gather()).
 	m.SemanticStoreQuarantine.WithLabelValues("ws-aaa", "corrupt_file").Inc()
 	m.SemanticStoreOpen.WithLabelValues("ws-aaa", "opened").Inc()
+	// Phase 59 P02: prime the tree-sitter extraction vector.
+	m.SemanticExtraction.WithLabelValues("go", "ready").Inc()
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {
@@ -278,6 +286,45 @@ func TestMetrics_CardinalityBounds_SessionLifecycle(t *testing.T) {
 	}
 	if got, max := len(mf.GetMetric()), 6; got > max {
 		t.Errorf("helix_session_lifecycle_total cardinality = %d, want ≤ %d (3 phases × 2 transports)", got, max)
+	}
+}
+
+// TestSemanticExtractionTotal_BoundedLabels asserts the helper drops emissions
+// with language ∉ {go,typescript,python,other} and outcome ∉ {ready,partial,
+// unsupported,failed}. Phase 59 P02 introduces helix_semantic_extraction_total
+// with bounded-label allowlist enforced at emission (T-59-02-02 mitigation).
+func TestSemanticExtractionTotal_BoundedLabels(t *testing.T) {
+	m := newMetrics()
+
+	// Valid emissions land.
+	m.SemanticExtractionTotal("go", "ready")
+	m.SemanticExtractionTotal("typescript", "partial")
+	m.SemanticExtractionTotal("python", "unsupported")
+	m.SemanticExtractionTotal("other", "failed")
+
+	// Unknown outcome is dropped (no row added).
+	m.SemanticExtractionTotal("go", "exploded")
+
+	// Unknown language is coerced to "other" — still records.
+	m.SemanticExtractionTotal("elixir", "ready")
+
+	mf := gatherFamily(t, m.Registry(), "helix_semantic_extraction_total")
+	if mf == nil {
+		t.Fatal("helix_semantic_extraction_total not registered")
+	}
+	// 4 valid + 1 coerced ("elixir" → "other"/"ready" is duplicate of "other"/"failed"
+	// only by language; with outcome=ready the combo is (other,ready) which is new).
+	// Distinct combos so far:
+	//   (go,ready), (typescript,partial), (python,unsupported), (other,failed),
+	//   (other,ready) ← coerced "elixir"
+	got := len(mf.GetMetric())
+	if got != 5 {
+		t.Errorf("helix_semantic_extraction_total combo count = %d, want 5", got)
+	}
+
+	// Bound: 4 langs × 4 outcomes = 16 max combos.
+	if got > 16 {
+		t.Errorf("helix_semantic_extraction_total cardinality = %d, want ≤ 16 (4 langs × 4 outcomes)", got)
 	}
 }
 

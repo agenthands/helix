@@ -81,6 +81,26 @@ signs:
       - "sign-blob"
       - "--new-bundle-format"
       - "--oidc-issuer=https://token.actions.githubusercontent.com"
+      # WR-09 (Phase 58 post-rc1.2): include an RFC3161 signed timestamp
+      # from GitHub's TSA. internal/upgrade/verify.go pins
+      # `verify.WithSignedTimestamps(1)` (require >=1 TSA-signed
+      # timestamp) for defense-in-depth alongside Rekor's integrated
+      # SET. cosign keyless DOES NOT request a TSA timestamp by default
+      # -- only the Rekor entry's SET (which the verifier already
+      # accepts via WithIntegratedTimestamps(1)). Without this flag,
+      # every CI-produced bundle fails the verifier with
+      # "threshold not met for verified signed timestamps: 0 < 1".
+      # The TSA URL must match a TSA whose cert chain is in
+      # internal/upgrade/trusted_root.json -- the public-good trust
+      # root only ships GitHub's `Internal Services Root` TSA, hence
+      # this URL specifically. The unit-test fixtures
+      # (testdata/generate_fixtures.go) include TSA timestamps via
+      # sigstore-go's VirtualSigstore CA, which is why the failure
+      # only surfaces on real CI bundles -- the same false-pass class
+      # as WR-08 and a hard reminder to add a CI self-test step that
+      # runs the just-built helix verifier against the just-produced
+      # bundle BEFORE the release upload.
+      - "--timestamp-server-url=https://timestamp.githubapp.com/api/v1/timestamp"
       - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"

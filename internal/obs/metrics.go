@@ -84,6 +84,13 @@ type Metrics struct {
 	// Phase 57: semantic store open-attempt counter.
 	// Closed-enum "outcome" ∈ {"opened","quarantined","created"}.
 	SemanticStoreOpen *prometheus.CounterVec
+
+	// Phase 59 P02: tree-sitter extraction outcome counter.
+	// Closed-enum "language" ∈ {"go","typescript","python","other"};
+	// "outcome" ∈ {"ready","partial","unsupported","failed"}. Both labels
+	// are members of AllowedLabels; bounded-cardinality is enforced at
+	// emission via SemanticExtractionTotal (T-59-02-02 mitigation).
+	SemanticExtraction *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -202,6 +209,15 @@ func newMetrics() *Metrics {
 			// Phase 57: closed-enum "outcome" + per-workspace hashed label.
 			[]string{"workspace_label", "outcome"},
 		),
+		SemanticExtraction: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_extraction_total",
+				Help: "Tree-sitter extraction outcomes by language and result (ready/partial/unsupported/failed). Phase 59 P02.",
+			},
+			// Phase 59 P02: closed-enum "language" + closed-enum "outcome".
+			// Both already in AllowedLabels; helper drops unknowns.
+			[]string{"language", "outcome"},
+		),
 	}
 
 	reg.MustRegister(
@@ -219,6 +235,7 @@ func newMetrics() *Metrics {
 		m.EditOutcome,
 		m.SemanticStoreQuarantine,
 		m.SemanticStoreOpen,
+		m.SemanticExtraction,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -356,4 +373,41 @@ func (m *Metrics) SemanticStoreOpenInc(workspaceLabel, outcome string) {
 		return
 	}
 	m.SemanticStoreOpen.WithLabelValues(workspaceLabel, outcome).Inc()
+}
+
+// --- Phase 59 P02 helper (T-59-02-02 mitigation: bounded-label allowlist) ---
+
+// allowedExtractionLanguages bounds the "language" label of
+// helix_semantic_extraction_total. Unknown values are coerced to "other"
+// so per-language cardinality stays at 4.
+var allowedExtractionLanguages = map[string]struct{}{
+	"go":         {},
+	"typescript": {},
+	"python":     {},
+	"other":      {},
+}
+
+// allowedExtractionOutcomes bounds the "outcome" label. Unknown values
+// drop the emission (closed-enum discipline).
+var allowedExtractionOutcomes = map[string]struct{}{
+	"ready":       {},
+	"partial":     {},
+	"unsupported": {},
+	"failed":      {},
+}
+
+// SemanticExtractionTotal increments helix_semantic_extraction_total.
+// Phase 59 P02 / T-59-02-02 mitigation:
+//   - language ∉ {go,typescript,python,other} is COERCED to "other".
+//   - outcome ∉ {ready,partial,unsupported,failed} DROPS the emission.
+//
+// Cardinality bound: 4 languages × 4 outcomes = 16 combos.
+func (m *Metrics) SemanticExtractionTotal(language, outcome string) {
+	if _, ok := allowedExtractionLanguages[language]; !ok {
+		language = "other"
+	}
+	if _, ok := allowedExtractionOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticExtraction.WithLabelValues(language, outcome).Inc()
 }

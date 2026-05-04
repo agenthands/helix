@@ -56,13 +56,24 @@ jobs:
       - name: Reproducibility gate -- snapshot Pass-1 (helix-non-darwin)
         # D-20 / FALLBACK-B-MULTI-BUILD-ID: --id helix-non-darwin filters the build to
         # the linux/{amd64,arm64} + windows/{amd64,arm64} entries declared in
-        # .goreleaser.yaml. --output dist-pass-1/ writes binaries under
-        # dist-pass-1/helix-non-darwin_<os>_<arch>/helix[.exe] for sha256 capture.
+        # .goreleaser.yaml. goreleaser writes binaries to ./dist/<id>_<os>_<arch>/helix
+        # (the `dist:` root is the goreleaser default; --output is a per-binary path
+        # template, not a directory selector — we move the dist tree post-build to
+        # isolate Pass-1 from Pass-2 outputs; Wave 5 hot-fix).
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
           distribution: goreleaser
           version: 'v2.15.4'   # WR-07: pin to exact version, not `~> v2`
-          args: build --snapshot --clean --id helix-non-darwin --output dist-pass-1/
+          args: build --snapshot --clean --id helix-non-darwin
+
+      - name: Stash Pass-1 dist as dist-pass-1 (helix-non-darwin)
+        run: |
+          set -euo pipefail
+          # Wave 5 hot-fix: goreleaser build --output is a per-binary path template,
+          # NOT a dist-root override. Move the freshly-built dist/ aside so Pass-2's
+          # `goreleaser build --clean` (which wipes dist/) doesn't blow it away.
+          rm -rf dist-pass-1
+          mv dist dist-pass-1
 
       - name: Capture Pass-1 sha256s (helix-non-darwin)
         run: |
@@ -82,7 +93,13 @@ jobs:
         with:
           distribution: goreleaser
           version: 'v2.15.4'   # WR-07: must match Pass-1 pin exactly
-          args: build --snapshot --clean --id helix-non-darwin --output dist-pass-2/
+          args: build --snapshot --clean --id helix-non-darwin
+
+      - name: Stash Pass-2 dist as dist-pass-2 (helix-non-darwin)
+        run: |
+          set -euo pipefail
+          rm -rf dist-pass-2
+          mv dist dist-pass-2
 
       - name: Diff Pass-1 vs Pass-2 sha256s (helix-non-darwin) -- fail if non-reproducible
         run: |
@@ -216,11 +233,20 @@ jobs:
         # D-20 / FALLBACK-B-MULTI-BUILD-ID: --id helix-darwin filters to the 2
         # darwin/{amd64,arm64} entries declared in .goreleaser.yaml. NO CC override
         # — Apple clang on macos-14 is the host default per D-15.
+        # Note: goreleaser build --output is a per-binary path template, not a
+        # dist-root override; we mv dist aside post-build to isolate Pass-1 from
+        # Pass-2 (Wave 5 hot-fix; mirrors release-linux job).
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
         with:
           distribution: goreleaser
           version: 'v2.15.4'   # WR-07: pin to exact version, matches release-linux
-          args: build --snapshot --clean --id helix-darwin --output dist-pass-1/
+          args: build --snapshot --clean --id helix-darwin
+
+      - name: Stash Pass-1 dist as dist-pass-1 (helix-darwin)
+        run: |
+          set -euo pipefail
+          rm -rf dist-pass-1
+          mv dist dist-pass-1
 
       - name: Capture Pass-1 sha256s (helix-darwin)
         run: |
@@ -238,7 +264,13 @@ jobs:
         with:
           distribution: goreleaser
           version: 'v2.15.4'   # WR-07: must match Pass-1 pin exactly
-          args: build --snapshot --clean --id helix-darwin --output dist-pass-2/
+          args: build --snapshot --clean --id helix-darwin
+
+      - name: Stash Pass-2 dist as dist-pass-2 (helix-darwin)
+        run: |
+          set -euo pipefail
+          rm -rf dist-pass-2
+          mv dist dist-pass-2
 
       - name: Diff Pass-1 vs Pass-2 sha256s (helix-darwin) -- fail if non-reproducible
         run: |

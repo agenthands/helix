@@ -107,6 +107,35 @@ Four real middlewares, defined in `internal/mcp/`:
 - **Protocol:** MCP (Model Context Protocol) -- primary interface for all clients
 - **LSP:** LSP 3.17 (generated types from official metamodel)
 
+**Build pipeline (CGO=1, split-runner per Phase 59.1):**
+
+- **Source tree:** single-mode `CGO_ENABLED=1`. The previous CGO=0 stub
+  apparatus (Phase 51.1 D-02) was removed in Phase 59.1; the source tree
+  no longer carries `//go:build cgo` constraints (except the platform-
+  conditional `internal/semantic/store/duckdb.go` `!(windows && arm64)`
+  from D-14, which is platform-conditional, not CGO-conditional).
+- **Local builds:** `make build` uses your host CC. zig is NOT required for
+  local development.
+- **Local releases (partial):** `make release-snapshot` requires `zig` on
+  PATH; produces a host-platform partial matrix only (a darwin contributor
+  gets 2 darwin archives via Apple clang; a linux contributor with zig
+  gets 4 linux+windows archives via zig cc). Full 6-archive matrix is
+  CI-only.
+- **CI builds (split-runner per D-15):**
+  - **`ubuntu-22.04`:** builds linux/{amd64,arm64} + windows/{amd64,arm64}
+    (4 archives) via `CC="zig cc -target <triple>"`. zig pinned to
+    0.14.1 via SHA-pinned `mlugg/setup-zig` action.
+  - **`macos-14`:** builds darwin/{amd64,arm64} (2 archives) natively via
+    Apple clang against the Xcode 15.x SDK. NOT signed with Apple
+    Developer ID; cosign Sigstore keyless attestation is the only
+    signature.
+  - **Merge job (`ubuntu-22.04`):** stitches both runners' partial
+    artifacts; runs cosign keyless attestation uniformly across all 6
+    archives; publishes the GitHub Release.
+- **Reproducibility (per-target within-runner Pass-1 ≡ Pass-2):** each
+  runner rebuilds its own targets twice in the same job and asserts
+  byte-identical sha256s. Cross-runner byte-equality is not asserted.
+
 ## Key Patterns
 
 ### Tool Registration

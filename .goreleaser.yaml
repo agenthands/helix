@@ -64,8 +64,22 @@ signs:
     # cert under the wrong issuer (which the verifier would later reject
     # at every user's `helix upgrade` call). Failing at sign-time with
     # "issuer mismatch" is preferable to silent verification breakage.
+    #
+    # WR-08 (Phase 58 post-rc1): --new-bundle-format is REQUIRED. Without
+    # it, cosign sign-blob writes the legacy v1 bundle schema (top-level
+    # `base64Signature`/`cert`/`rekorBundle`). cosign verify-blob accepts
+    # both schemas, but sigstore-go's strict bundle.Bundle.UnmarshalJSON
+    # accepts only the new protobuf bundle format
+    # (`mediaType`/`verificationMaterial`/`messageSignature`). Producing
+    # legacy bundles breaks every `helix upgrade` call at the verifier
+    # boundary (exit: "signature verification FAILED") while still
+    # passing the cosign-CLI sanity check -- a class of false-pass that
+    # cannot be caught by the existing fixture tests because
+    # internal/upgrade/testdata/generate_fixtures.go uses sigstore-go
+    # itself, which always emits proto bundles.
     args:
       - "sign-blob"
+      - "--new-bundle-format"
       - "--oidc-issuer=https://token.actions.githubusercontent.com"
       - "--bundle=${signature}"
       - "${artifact}"

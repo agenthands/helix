@@ -50,8 +50,11 @@ jobs:
         run: |
           set -euo pipefail
           mv dist dist-pass-1
-          (cd dist-pass-1 && find . -name '*.tar.gz' -print0 | sort -z | xargs -0 sha256sum) > /tmp/pass1.sha256
-          echo "Pass 1 archives:"
+          # WR-03: include checksums.txt alongside *.tar.gz so non-determinism
+          # in the order of entries (parallel build matrix → race in append
+          # order) is also caught by the repro gate.
+          (cd dist-pass-1 && find . \( -name '*.tar.gz' -o -name 'checksums.txt' \) -print0 | sort -z | xargs -0 sha256sum) > /tmp/pass1.sha256
+          echo "Pass 1 artifacts:"
           cat /tmp/pass1.sha256
 
       - name: Reproducibility gate -- snapshot pass 2
@@ -64,10 +67,12 @@ jobs:
       - name: Diff sha256s -- fail if non-reproducible
         run: |
           set -euo pipefail
-          (cd dist && find . -name '*.tar.gz' -print0 | sort -z | xargs -0 sha256sum) \
+          # WR-03: same find-glob as the pass-1 capture; keep these two in
+          # lockstep or the diff gate becomes asymmetric (false-pass).
+          (cd dist && find . \( -name '*.tar.gz' -o -name 'checksums.txt' \) -print0 | sort -z | xargs -0 sha256sum) \
             | sed 's| dist/| dist-pass-1/|' > /tmp/pass2.sha256
           if ! diff -u /tmp/pass1.sha256 /tmp/pass2.sha256; then
-            echo "::error::archives are not byte-identical between two snapshot runs -- refusing to publish"
+            echo "::error::artifacts are not byte-identical between two snapshot runs -- refusing to publish"
             exit 1
           fi
           echo "Reproducibility gate PASS -- proceeding to real release"

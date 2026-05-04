@@ -185,7 +185,15 @@ func Upgrade(ctx context.Context, opts Options) error {
 		// path on stderr so the user knows where to look (and where the
 		// next `helix upgrade` invocation will silently wipe artifacts
 		// from); without this, the retained dir is invisible.
-		fmt.Fprintf(os.Stderr, "verify failed; staged artifacts retained for postmortem at %s (a subsequent `helix upgrade` run will overwrite this directory)\n", stage)
+		//
+		// IN-03: also mirror the message through opts.Stdout (default
+		// os.Stdout) so tests that capture upgrade output via
+		// Options.Stdout can assert on the wording. Production callers
+		// see the line on both streams which is benign — interactive
+		// users see one message, log-scrapers see it too.
+		msg := fmt.Sprintf("verify failed; staged artifacts retained for postmortem at %s (a subsequent `helix upgrade` run will overwrite this directory)\n", stage)
+		fmt.Fprint(os.Stderr, msg)
+		fmt.Fprint(out, msg)
 	}()
 
 	archiveName := archiveAssetName(rel.TagName, runtime.GOOS, runtime.GOARCH)

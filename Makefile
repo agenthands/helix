@@ -56,6 +56,8 @@ bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \
 	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
+	@command -v zig >/dev/null 2>&1 || { \
+	  echo "zig not installed (required for CGO=1 cross-compile of linux/windows targets); see CONTRIBUTING.md (Releasing). brew install zig (macOS) or apt install zig (Ubuntu 22.04+). Note: under split-runner architecture (D-15), the full 6-archive matrix only assembles in CI."; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign
 
 release-smoke: ## Smoke-test the linux-amd64 release archive: extract, run daemon, hit MCP tools/list (D-04)

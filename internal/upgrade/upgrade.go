@@ -165,8 +165,17 @@ func Upgrade(ctx context.Context, opts Options) error {
 	// Cleanup runs on success and on most failure paths. Verification
 	// failure deliberately skips cleanup (postmortem inspection per
 	// VALIDATION.md State row) — see the verifyKept flag below.
+	//
+	// WR-05: stageCleaned is set true after the explicit pre-relaunch
+	// cleanup() call (the success path can't rely on the deferred path
+	// because relaunchFn replaces the process image). Once the explicit
+	// cleanup has run, the deferred path becomes a no-op.
 	verifyKept := false
+	stageCleaned := false
 	defer func() {
+		if stageCleaned {
+			return
+		}
 		if !verifyKept {
 			cleanup()
 			return
@@ -290,6 +299,17 @@ func Upgrade(ctx context.Context, opts Options) error {
 		return serr.Wrap(serr.Internal, "atomic swap", err)
 	}
 	fmt.Fprintf(out, "upgraded helix to %s\n", rel.TagName)
+
+	// WR-05: clean up the stage dir BEFORE relaunchFn replaces the process
+	// image. swap() renamed newBin into exec, so the stage dir's only
+	// useful artifact is already at the install location; the leftover
+	// downloaded archive + bundle + checksums files are all disposable.
+	// The deferred cleanup at line ~169 cannot run because syscall.Exec
+	// (Unix) and os.Exit(0) (Windows) never return — without an explicit
+	// pre-relaunch cleanup, every successful upgrade would persist a
+	// stage dir under (typically) ~/.helix/upgrade-stage-* indefinitely.
+	cleanup()
+	stageCleaned = true // belt-and-suspenders: the deferred path is now a no-op.
 
 	// Step 10: relaunch with same args minus the "upgrade" verb. On
 	// Unix syscall.Exec never returns on success; on Windows

@@ -18,10 +18,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
-
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 	"github.com/agenthands/helix/internal/config"
 	"github.com/agenthands/helix/internal/degrade"
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/diag"
 	"github.com/agenthands/helix/internal/kernel/edit"
@@ -121,9 +121,10 @@ type Daemon struct {
 	diagStore      *diag.DiagnosticStore
 	bodyExtractor  *edit.BodyExtractor
 	// semanticStore is the DuckDB-backed semantic fact store (Phase 57+).
-	// nil when cfg.SemanticIndex.Enabled is false; nil also under CGO=0
-	// (step 6a refuses to start before this field is read). Downstream
-	// consumers (P64+) MUST nil-check.
+	// nil when cfg.SemanticIndex.Enabled is false; also nil on the
+	// windows/arm64 target where Open returns serr.ErrUnsupported and
+	// step 6b soft-degrades (D-14 / DEF-51-04). Downstream consumers
+	// (P64+) MUST nil-check.
 	semanticStore *semanticstore.Store
 	// semanticExtractRegistry is the daemon-owned catalogue of per-language
 	// extraction providers (Phase 59 P02). nil when cfg.SemanticIndex.Enabled
@@ -223,33 +224,33 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// the compile-time check lives in internal/daemon/wiring_test.go.
 	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
 
-	// 6a. Refuse to start under CGO_ENABLED=0 (DEF-51-02 / Phase 51.1 / D-02).
-	//     The CGO=0 binary is a goreleaser archive-count placeholder; tree-sitter
-	//     parsing, RepoMap tag extraction, and replace_symbol_body all depend on
-	//     CGO bindings. Surface the unavailability loudly rather than starting in
-	//     a permanently degraded state. Under CGO=1, treesitter.Available is a
-	//     compile-time const true and the Go compiler eliminates this branch.
-	if !treesitter.Available {
-		return nil, fmt.Errorf("tree-sitter is unavailable in this build " +
-			"(CGO_ENABLED=0): rebuild with CGO_ENABLED=1 or download the " +
-			"CGO=1 release binary (see CONTRIBUTING.md > Releasing)")
-	}
-
 	// 6b. Open semantic fact store when enabled (Phase 57, STORE-01..06).
 	//     Fail-fast core subsystem; on Tier-2 corruption auto-quarantines to
 	//     `<path>.corrupt.<ts>` and rebuilds fresh (SPEC §29.1, STORE-01).
 	//     Tier-3 (rebuild failed) returns an error so the daemon refuses to
 	//     start. When semantic_index.enabled=false, semanticStore is nil and
-	//     downstream consumers (P64+ tools) MUST guard. Under CGO=0, step 6a
-	//     already returned, so this code is unreachable in production stubs.
+	//     downstream consumers (P64+ tools) MUST guard.
+	//
+	//     D-14: on the windows/arm64 target the semantic store is platform-
+	//     stubbed (duckdb-go-bindings has no lib/windows-arm64 — DEF-51-04);
+	//     Open returns serr.ErrUnsupported. Soft-degrade by leaving
+	//     semanticStore nil so the daemon proceeds rather than refusing to
+	//     start; downstream consumers already guard on nil per STORE-01.
 	var semanticStore *semanticstore.Store
 	if cfg.SemanticIndex.Enabled {
 		s, err := semanticstore.Open(context.Background(), cfg.SemanticIndex,
 			logger, observability.Metrics())
 		if err != nil {
-			return nil, fmt.Errorf("opening semantic store: %w", err)
+			if errors.Is(err, serr.ErrUnsupported) {
+				logger.Warn("semantic store unavailable on this target; semantic_index disabled",
+					"err", err)
+				semanticStore = nil
+			} else {
+				return nil, fmt.Errorf("opening semantic store: %w", err)
+			}
+		} else {
+			semanticStore = s
 		}
-		semanticStore = s
 	}
 
 	// 6. Create diagnostic store and body extractor.

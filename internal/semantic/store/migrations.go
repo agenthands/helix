@@ -359,6 +359,16 @@ func schema1Statements() []string {
 	}
 }
 
+// applyMigration002 is a placeholder body installed in Task 1 of plan
+// 59-01 so the registry compiles. The real ALTER TABLE bodies + the
+// schema_version row stamp land in Task 2 of the same plan.
+//
+// Once Task 2 fills this in, the body executes the partial-extraction
+// column delta from 59-CONTEXT.md D-05.
+func applyMigration002(ctx context.Context, db *sql.DB) error {
+	return fmt.Errorf("applyMigration002: not yet implemented (Task 2 of plan 59-01)")
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

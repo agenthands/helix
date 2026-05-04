@@ -185,6 +185,69 @@ is the upstream wait.
 
 ---
 
+## DEF-59.1-LINUX-ZIG-LIBSTDCXX: zig cc + linux-musl target cannot link duckdb-go-bindings prebuilt static lib (libstdc++ missing)
+
+**Deferred by:** Phase 59.1 Wave 5 first-CI-repro (run 25342130151,
+sha 644d8f04, captured 2026-05-04 in
+`.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-05-FIRST-CI-REPRO-LOG.md`).
+
+**Source artifacts:**
+- `.planning/phases/59.1-drop-cgo-0-single-mode-cgo-1-build-release/59.1-05-FIRST-CI-REPRO-LOG.md`
+  (root cause analysis + full link-error trace)
+- `.goreleaser.yaml` lines 35–37 (`CC=zig cc -target *-linux-musl`)
+- Phase 59.1 Wave 2 SNAPSHOT-BASELINE.md (now-disproven assertion that
+  CI ubuntu does not hit this).
+
+**What was deferred:**
+
+End-to-end CI build of the 4 helix-non-darwin targets (linux/{amd64,arm64}
++ windows/{amd64,arm64}). Phase 59.1 Wave 5's first CI exercise of the
+split-runner pipeline surfaced that `zig cc -target x86_64-linux-musl`
+cannot link `libduckdb_static.a` because the prebuilt duckdb-go-bindings
+linux-amd64 static lib was compiled against libstdc++ on glibc, while
+zig's musl target ships libc++ only. ld.lld emitted ~25 undefined-symbol
+errors (`std::cout`, `std::__cxx11::basic_string`, `typeinfo for
+std::ostream`, `backtrace`, `malloc_trim`, etc.) on the linux_amd64
+target.
+
+The darwin path (Apple clang on macos-14) is unaffected and is
+end-to-end PASS.
+
+**Decision:** the FALLBACK-B-MULTI-BUILD-ID architecture itself is
+sound; this is a target-selection issue inside the helix-non-darwin
+build entry. Resolution paths considered (full set in the FIRST-CI-REPRO
+log signoff section):
+
+1. Switch zig target musl → gnu (4-line edit; needs verification on
+   whether zig+gnu provides libstdc++ or still libc++).
+2. Switch linux build to host gcc + apt-installed cross toolchains
+   (defeats D-02 hermetic toolchain partially).
+3. Reduce shipped targets to linux/amd64 + darwin/{amd64,arm64} (3
+   archives) for v1.10.0; defer linux/arm64 + windows.
+4. Compile duckdb from source against libc++ during CI (scope creep).
+
+Phase 59.1 closes as APPROVED-WITH-DEFERRAL with this item registered;
+selection among options 1–4 happens in the dedicated follow-up phase.
+
+**Trigger to revisit:**
+
+Either:
+- A maintainer wants to ship the full 6-archive matrix on a real
+  `vX.Y.Z` tag-cut (linux+windows currently absent), OR
+- A user reports `helix` is unavailable on linux/arm64 or windows in
+  their distribution channel.
+
+**Recommended next phase:** Phase 59.2 (zig-vs-libstdc++ resolution +
+6-archive matrix close-out + first real `vX.Y.Z` cosign self-test
+verification per project memory rule).
+
+**Cost:** ~1–3 days of work depending on which option (1–4) wins. The
+project memory rule "verify against actual CI bundle before declaring
+done" applies — the resolution must be validated against a real CI run,
+NOT a local snapshot.
+
+---
+
 ## Index of milestone-level deferred-items files
 
 | Milestone | Phase | File |

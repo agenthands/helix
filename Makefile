@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot update-trust-root
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root
 
 BINARY=helix
 GO=go
@@ -57,6 +57,14 @@ release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (o
 	@command -v goreleaser >/dev/null 2>&1 || { \
 	  echo "goreleaser not installed; see CONTRIBUTING.md (Releasing). brew install goreleaser"; exit 1; }
 	goreleaser release --snapshot --clean --skip=sign
+
+release-smoke: ## Smoke-test the linux-amd64 release archive: extract, run daemon, hit MCP tools/list (D-04)
+	@test -f dist/helix_v*_linux_amd64.tar.gz || { \
+	  echo "dist/helix_v*_linux_amd64.tar.gz not found; run \`make release-snapshot\` first"; exit 1; }
+	@# Body: extract archive, boot daemon against testdata/fixtures/go/, hit tools/list,
+	@# assert >= 41 tools and tree-sitter grammar count == 23. Wave 5 finalizes the harness.
+	@echo "release-smoke: TODO — Wave 5 finalizes fixture path + assertions per D-04"
+	@false  # placeholder so the target fails-loud until wired
 
 update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE sigstore TUF repository
 	@# WR-10: source from sigstore's TUF service via cosign's local TUF

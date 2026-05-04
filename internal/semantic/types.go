@@ -31,6 +31,20 @@ type ReferenceID uint64
 // (SPEC-DRAFT.md §9.7).
 type EdgeID uint64
 
+// ImportID is the monotone identifier for an import row in
+// semantic_imports (SPEC-DRAFT.md §9.x). Phase 59 introduces it alongside
+// the tree-sitter extraction layer.
+type ImportID uint64
+
+// TypeFactID is the monotone identifier for a type-annotation fact row
+// in semantic_type_facts (SPEC-DRAFT.md §9.x). Phase 59 introduces it.
+type TypeFactID uint64
+
+// HeritageID is the monotone identifier for a heritage-edge row
+// (extends / implements / embeds) in semantic_heritage (SPEC-DRAFT.md §9.x).
+// Phase 59 introduces it.
+type HeritageID uint64
+
 // Freshness classifies the staleness of a fact returned by the effective-read
 // API (SPEC-DRAFT.md §10). Values are written into log fields and (later)
 // surfaced as a metric label, so the enum is closed.

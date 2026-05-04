@@ -30,19 +30,23 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 		ServiceName: "helix-forwarder",
 		SampleRatio: 1.0,
 	}, logger)
+	// Phase 58 D-06 / CR-02: SDK TracerProvider needs ShutdownTracing to
+	// flush the batch span processor and tear down the OTLP gRPC
+	// connection. The defer is registered IMMEDIATELY after construction
+	// (before the daemon dial) so a ConnectOrStartDaemon failure does not
+	// leak the SDK goroutines + gRPC conn for the lifetime of the
+	// forwarder process. No-op on the Noop path (degraded-optional).
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		_ = fwdProvider.ShutdownTracing(shutdownCtx)
+	}()
 
 	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer conn.Close()
-	// Phase 58 D-06: SDK TracerProvider needs ShutdownTracing to flush the
-	// batch span processor. No-op on the Noop path (degraded-optional).
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		_ = fwdProvider.ShutdownTracing(shutdownCtx)
-	}()
 
 	stream, err := client.StreamMCP(ctx)
 	if err != nil {

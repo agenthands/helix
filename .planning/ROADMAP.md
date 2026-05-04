@@ -135,8 +135,8 @@
 - [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
 - [ ] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (0/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release
   Plans:
-  - [ ] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
-  - [ ] 59.1-01-PLAN.md — Wave 1 stub deletion + tag strip + Path-3 platform stub + daemon step-6a removal
+  - [x] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
+  - [x] 59.1-01-PLAN.md — Wave 1 stub deletion + tag strip + Path-3 platform stub + daemon step-6a removal
   - [ ] 59.1-02-PLAN.md — Wave 2 .goreleaser.yaml CGO=1 flip + Makefile zig guard
   - [ ] 59.1-03-PLAN.md — Wave 3 release.yml setup-zig step (mlugg/setup-zig@v2.2.1)
   - [ ] 59.1-04-PLAN.md — Wave 4 doc sweep (CLAUDE/README/CONTRIBUTING/CHANGELOG/PROJECT/REQUIREMENTS/deferred-items/v1.10-ROADMAP)

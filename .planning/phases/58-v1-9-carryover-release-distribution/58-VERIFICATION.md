@@ -1,9 +1,23 @@
 ---
 phase: 58-v1-9-carryover-release-distribution
 verified: 2026-05-03T19:13:11Z
-status: human_needed
-score: 3/4 must-haves verified (1 requires maintainer release-cut to complete)
+re_verified: 2026-05-04T11:59:00Z
+status: passed
+score: 4/4 must-haves verified
 overrides_applied: 0
+re_verification_note: |
+  SC-1 closed by maintainer human verification on 2026-05-04 against
+  release run 25310013651 (commit df02da5e, tag v1.10.0-rc1). Three
+  independent verify paths agreed (cosign verify-blob CLI, sigstore-go
+  strict in-process verifier, and helix upgrade against the real
+  release). Took four post-verification fixes (WR-07/WR-08/WR-09/WR-10)
+  to land a CI bundle that satisfies the in-process verifier; see
+  58-REVIEW-FIX.md and the four `fix(58): WR-XX ...` commits.
+
+  SC-4 partial gap closed by post-phase update_project_md step
+  (separate commit). PROJECT.md tech-debt entries for minisign and
+  PKG-DEFER-03/04/05 moved from "accepted at v1.9 close" to "Resolved
+  at v1.10".
 gaps:
   - truth: "REL-02, REL-03, REL-04 are explicitly recorded as won't-do under Phase 58 D-01 across PROJECT.md / REQUIREMENTS.md / v1.10-ROADMAP.md / CONTRIBUTING.md"
     status: partial

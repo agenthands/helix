@@ -97,8 +97,8 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 - ✓ Reproducible multi-arch signed release pipeline via goreleaser — 6 archives × darwin/linux/windows × amd64/arm64 with minisign signing + reproducibility gate — v1.9 Phase 51 (PKG-01, 3/4 SC verified; SC-3 deployment-gated)
 - ✓ CGO=0 build path preserved via `//go:build cgo` stubs across treesitter/repomap/edit; daemon refuses CGO=0 with remediation — v1.9 Phase 51.1 (DEF-51-01, emergent)
 - ✓ Product rename `serena → helix`: binary, module path `github.com/agenthands/helix`, env vars `SERENA_* → HELIX_*`, config dir `~/.serena → ~/.helix`, MCP server identity — hard-cut breaking change at v1.9 — v1.9 Phase 52 (PKG-05)
-- ✓ In-binary self-upgrade: `helix update` (read-only check) + `helix upgrade` (minisign verify + atomic swap + downgrade refusal + daemon-aware re-launch) — v1.9 Phase 52 (PKG-06)
-- ✓ EMBED-AUDIT.md manifest classifying every runtime asset; build-time-synced `minisign.pub` embed with CI gate — v1.9 Phase 52 (PKG-07)
+- ✓ In-binary self-upgrade: `helix update` (read-only check) + `helix upgrade` (sigstore cosign-keyless bundle verify + atomic swap + downgrade refusal + daemon-aware re-launch) — v1.9 Phase 52 (PKG-06), cosign rewrite v1.10 Phase 58 (REL-01)
+- ✓ EMBED-AUDIT.md manifest classifying every runtime asset; embedded sigstore TUF trust root with CI gate — v1.9 Phase 52 (PKG-07), trust-root refresh v1.10 Phase 58 (REL-01)
 - ✓ 5 new Prometheus metric families (lspool/repomap cache hit-rate, repomap extract latency histogram, session lifecycle, edit outcomes — all bounded labels with cardinality test) — v1.9 Phase 53 (OBS-03)
 - ✓ 2 Grafana dashboards (`helix-overview.json`, `helix-engine.json`) + 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction); registry-driven PromQL validator — v1.9 Phase 54 (OBS-01, OBS-02)
 - ✓ Full per-MCP-tool + per-outbound-LS-call trace coverage; TRACE-AUDIT.md hygiene review (no PII, bounded cardinality); real Jaeger smoke capture — v1.9 Phase 55 (OBS-04, application chain fully verified; forwarder span deferred to v1.10)
@@ -108,11 +108,11 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 _v1.10 requirements to be defined via `/gsd-new-milestone`._
 
-Carry-over follow-ups:
-- [ ] **PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag (cuts the deployment-gated asterisk on v1.9)
-- [ ] **Phase 51 reproducibility gate** (architectural): extend gate scope to real-release-vs-Pass-3 OR soften CONTRIBUTING.md:161 wording
-- [ ] **Phase 55 forwarder.tools.call span** (architectural): unify with `serena.v1.ForwarderService/StreamMCP` gRPC server span (pre-v1.2 limitation)
-- [ ] **PKG-DEFER-03/04/05**: Homebrew tap, Scoop bucket, native Linux package — re-evaluate priority once v1.9 is in user hands
+Carry-over follow-ups (resolved at v1.10 Phase 58):
+- [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
+- [x] ~~**Phase 51 reproducibility gate** (architectural): extend gate scope to real-release-vs-Pass-3~~ — Phase 58 REL-05 documents Pass-3 limitation in CONTRIBUTING.md (won't-do per D-04); reopen path captured if/when needed.
+- [x] ~~**Phase 55 forwarder.tools.call span** (architectural): unify with gRPC server span~~ — Phase 58 REL-06 wired real TracerProvider + per-handler `propagation.TraceContext{}`; `TestE2ETraceContinuity` proves trace continuity.
+- [x] ~~**PKG-DEFER-03/04/05**: Homebrew tap, Scoop bucket, native Linux package~~ — won't-do per Phase 58 D-01 (single-binary distribution intent; cosign-verifiable goreleaser archives are the canonical channel).
 
 ### Out of Scope
 
@@ -132,7 +132,7 @@ Carry-over follow-ups:
 
 Helix now ships as a single self-contained signed binary with reproducible multi-arch goreleaser releases (6 archives × darwin/linux/windows × amd64/arm64), in-binary self-upgrade with minisign verification + atomic swap + daemon-aware re-launch, full Prometheus + OpenTelemetry observability (5 new metric families, 2 packaged Grafana dashboards, 4 runbooks, full trace coverage), and CGO=0 build path preserved via tree-sitter stubs. All 4 known LSP/tooling bugs (BUG-01..BUG-04) closed. Product rename `serena → helix` executed as a hard-cut breaking change at v1.9 (binary, module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`, MCP server identity).
 
-v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub` away from PLACEHOLDER and (b) `release.yml` workflow running clean on tag push — engineering work is complete.
+**v1.10 progress (2026-05-04):** Phase 58 complete — v1.9 carryover & release distribution. Sigstore cosign keyless replaces minisign at v1.10.0 (hard cut, no coexistence per D-02). First signed release `v1.10.0-rc1` cut 2026-05-04: 14 release assets, all `.sigstore.json` bundles in proto schema with RFC3161 timestamps from sigstore public-good TSA, three independent verify paths agreed (cosign verify-blob CLI, sigstore-go strict in-process verifier, real `helix upgrade` against the rc1 release). Required four post-rc1 hardening fixes (WR-07 Linux repro-gate drift, WR-08 cosign `--new-bundle-format`, WR-09 RFC3161 TSA timestamp required, WR-10 use sigstore public-good TSA + refresh trust root from live TUF). Forwarder→daemon OTel trace continuity now wired via real TracerProvider + per-handler `propagation.TraceContext{}` (REL-06). Phase 51 Pass-3 reproducibility limitation documented as won't-do (REL-05). REL-02/03/04 (Homebrew/Scoop/native Linux) explicitly recorded won't-do per D-01.
 
 ## Current Milestone: v1.10 Live Semantic Index
 
@@ -151,7 +151,7 @@ v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub`
 - **Agent guardrails (G-001..G-010)** — policy engine, safety receipts, GUARDRAILS.md + DoD.md, profile/mode-gated enforcement
 - **Evaluation harness** — baseline / native / semantic / semantic_guarded modes with success/cost/latency/tool-behavior/safety reports
 - **Typed pipeline DAG** — phase validation for daemon bootstrap, semantic indexing, live updates, eval; cycle + missing-dep detection
-- **v1.9 carryover** — close PKG-01 SC-3 (cut first signed release with real minisign keypair); re-scope or land PKG-DEFER-03/04/05 (Homebrew/Scoop/Linux pkg); Phase 51 reproducibility-gate architectural fix; Phase 55 `forwarder.tools.call` span unification with gRPC server span
+- **v1.9 carryover** — _resolved at Phase 58 (2026-05-04):_ first signed release cut via sigstore cosign keyless (REL-01 replaces minisign); Phase 51 Pass-3 limitation documented as won't-do (REL-05); Phase 55 `forwarder.tools.call` span unified with gRPC server span (REL-06); REL-02/03/04 (Homebrew/Scoop/Linux pkg) explicitly recorded won't-do per Phase 58 D-01
 
 **Source of truth:** `SPEC-DRAFT.md` (40 sections, 12 SPEC-internal phases, full schema/algorithms/tool contracts).
 
@@ -159,15 +159,15 @@ v1.9.0 release tag is deployment-gated on (a) maintainer rotating `minisign.pub`
 
 Shipped v1.0 through v1.9. Single binary (`helix`, renamed from `serena` at v1.9), 4-layer architecture, persistent daemon. 41+ MCP tools, 52-language support, 23 tree-sitter grammars. Multi-oracle test harness (protocol, contract, scenario, LLM behavioral, judge scoring) plus per-MCP-tool + per-LS-call trace coverage with TRACE-AUDIT.md hygiene review. Reproducible signed multi-arch releases via goreleaser (6 archives × darwin/linux/windows × amd64/arm64 with minisign). In-binary self-upgrade. Full observability: 5 new Prometheus metric families landed at v1.9 (cache hit-rate, repomap latency, session lifecycle, edit outcomes — all bounded labels), 2 packaged Grafana dashboards (`helix-overview.json`, `helix-engine.json`), 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction).
 
-Tech stack: Go 1.25 (gopls compatibility resolved at v1.9), official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars; CGO=0 stub path preserved via Phase 51.1), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace), goreleaser, minisign.
+Tech stack: Go 1.25 (gopls compatibility resolved at v1.9), official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars; CGO=0 stub path preserved via Phase 51.1), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace), goreleaser, sigstore cosign keyless (replaces minisign at v1.10 per Phase 58 D-02; release-side via cosign-installer in CI, verifier-side via embedded sigstore-go + live-TUF-sourced trust root).
 
 Architecture: 4-layer (MCP runtime → Code intelligence kernel → Skills → Agent profiles). Persistent daemon with stdio/HTTP edge adapters. Worker pool with share-until-dirty, adaptive TTL, platform-aware pressure eviction, and **production-wired LS notification dispatch** (`jsonrpc.Conn.OnNotification` set in `Worker.Start`, regression-asserted; was silently dropped pre-v1.9). Single canonical `GrammarRegistry` injected from daemon bootstrap. RepoMap skill with PageRank using ambiguity-weighted edges (Phase 46 fix) + token-budgeted tree rendering. Fuzzy edit engine (4-strategy cascade) integrated into 3 MCP tools. Worker pool consumes structured LS readiness signals (rust-analyzer `experimental/serverStatus`, jdtls `language/status: ServiceReady`).
 
-**Tech debt accepted at v1.9 close (carried to v1.10):**
-- PKG-01 SC-3 deployment-gated on maintainer minisign keypair + first v* tag
-- Phase 51 reproducibility gate is snapshot-vs-snapshot, not real-release-vs-Pass-3
-- Phase 55 forwarder.tools.call span emits via Noop tracer (pre-v1.2 architectural limitation; root span is `serena.v1.ForwarderService/StreamMCP` gRPC server span)
-- PKG-DEFER-03/04/05: Homebrew tap, Scoop bucket, native Linux package (deferred from v1.9 Phase 52 rescope)
+**Resolved at v1.10 (Phase 58, 2026-05-04):**
+- ~~PKG-01 SC-3 deployment-gated on maintainer minisign keypair~~ → sigstore cosign keyless (D-02 hard cut), first signed release `v1.10.0-rc1` cut 2026-05-04
+- ~~Phase 51 reproducibility gate snapshot-vs-snapshot, not real-release-vs-Pass-3~~ → documented as won't-do in CONTRIBUTING.md (REL-05)
+- ~~Phase 55 forwarder.tools.call span emits via Noop tracer~~ → REL-06: real TracerProvider + per-handler `propagation.TraceContext{}` wired; `TestE2ETraceContinuity` proves trace continuity
+- ~~PKG-DEFER-03/04/05: Homebrew tap, Scoop bucket, native Linux package~~ → won't-do per Phase 58 D-01 (single-binary distribution; cosign-verifiable goreleaser archives are canonical)
 
 **Resolved at v1.9:** rust-analyzer rename quirk (Phase 47), jdtls cold-start in `go test ./...` (Phases 48 + 56), Go 1.25 / gopls linux/amd64 (Phase 50), GrammarRegistry duplication (Phase 49), repomap polyglot ranking (Phase 46).
 
@@ -243,4 +243,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 — v1.10 Phase 57 complete (Semantic Store Foundation + Pipeline DAG Library)*
+*Last updated: 2026-05-04 — v1.10 Phase 58 complete (v1.9 Carryover & Release Distribution; sigstore cosign keyless replaces minisign; first signed release v1.10.0-rc1 cut)*

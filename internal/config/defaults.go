@@ -67,6 +67,14 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.indexing.include_generated":         false,         // SPEC §25
 		"semantic_index.indexing.required_for_readyz":       false,         // SPEC §25
 
+		// extraction.* — Phase 59 P02 (the four genuinely-new keys).
+		// Per user decision: max_file_size and auto_index_on_activate STAY
+		// under indexing.* (above) — they are NOT duplicated here.
+		"semantic_index.extraction.extraction_ready_timeout": "30s", // SPEC §25
+		"semantic_index.extraction.extraction_file_timeout":  "3s",  // SPEC §25
+		"semantic_index.extraction.max_parallel_files":       4,     // SPEC §25
+		"semantic_index.extraction.allow_partial_results":    true,  // SPEC §25
+
 		// live_updates.*
 		"semantic_index.live_updates.enabled":                      true,  // SPEC §25
 		"semantic_index.live_updates.debounce_ms":                  250,   // SPEC §25

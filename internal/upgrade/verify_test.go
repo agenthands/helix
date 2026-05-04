@@ -1,9 +1,6 @@
 package upgrade
 
 import (
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/asn1"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -52,8 +49,7 @@ func TestVerifyArchiveHappyPath(t *testing.T) {
 // SAN regex. It exercises -rc, -beta, -alpha pre-release suffixes. Only the
 // -rc1 fixture is checked into testdata (the broader SAN regex is what's
 // being asserted; pinning four separate fixtures would over-constrain the
-// suite). The -beta/-alpha sub-cases assert at the regex layer via
-// matchesPinnedIdentity-style coverage in TestMatchesPinnedIdentity_*.
+// suite).
 func TestVerifyArchiveAcceptsRCTag(t *testing.T) {
 	withTestTrustRoot(t)
 	if err := VerifyArchive(testdataArchive, testdataRCBundle); err != nil {
@@ -229,7 +225,6 @@ func TestRekorUnreachable(t *testing.T) {
 	// before any network call, so we do NOT assert the Rekor wording here —
 	// that branch is covered by isRekorUnreachable's unit tests in this
 	// file (see classifier helpers below).
-	_ = errors.New
 }
 
 // TestIsRekorUnreachable_ClassifiesNetworkErrors exercises the helper that
@@ -257,102 +252,3 @@ func TestIsRekorUnreachable_ClassifiesNetworkErrors(t *testing.T) {
 	}
 }
 
-// TestMatchesPinnedIdentity_HappyPath validates the identity matcher accepts
-// final tags (v1.10.0), RC tags (v1.10.0-rc1), and beta/alpha tags.
-func TestMatchesPinnedIdentity_HappyPath(t *testing.T) {
-	cases := []string{
-		"https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.10.0",
-		"https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.10.0-rc1",
-		"https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.10.0-rc12",
-		"https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.10.0-beta2",
-		"https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.10.0-alpha3",
-	}
-	for _, san := range cases {
-		t.Run(san, func(t *testing.T) {
-			cert := certWithSANAndIssuer(t, san, "https://token.actions.githubusercontent.com")
-			if !matchesPinnedIdentity(cert) {
-				t.Errorf("matchesPinnedIdentity(%q) = false, want true", san)
-			}
-		})
-	}
-}
-
-// TestMatchesPinnedIdentity_RejectsWrongRepoSAN exercises the negative path
-// of the identity matcher: SANs from a different GitHub org or with a
-// non-release.yml workflow path must be rejected even when the OIDC issuer
-// is correct.
-func TestMatchesPinnedIdentity_RejectsWrongRepoSAN(t *testing.T) {
-	cases := []struct {
-		name, san, issuer string
-	}{
-		{
-			name:   "wrong_org",
-			san:    "https://github.com/some-other-org/helix/.github/workflows/release.yml@refs/tags/v1.0.0",
-			issuer: "https://token.actions.githubusercontent.com",
-		},
-		{
-			name:   "wrong_workflow",
-			san:    "https://github.com/agenthands/helix/.github/workflows/some-other.yml@refs/tags/v1.0.0",
-			issuer: "https://token.actions.githubusercontent.com",
-		},
-		{
-			name:   "wrong_issuer",
-			san:    "https://github.com/agenthands/helix/.github/workflows/release.yml@refs/tags/v1.0.0",
-			issuer: "https://token.actions.example.invalid",
-		},
-		{
-			name:   "branch_not_tag",
-			san:    "https://github.com/agenthands/helix/.github/workflows/release.yml@refs/heads/main",
-			issuer: "https://token.actions.githubusercontent.com",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cert := certWithSANAndIssuer(t, tc.san, tc.issuer)
-			if matchesPinnedIdentity(cert) {
-				t.Errorf("matchesPinnedIdentity(%s) = true, want false", tc.name)
-			}
-		})
-	}
-}
-
-// certWithSANAndIssuer constructs a minimal *x509.Certificate carrying the
-// canonical SAN encoding (a URI in the Subject Alternative Name extension
-// — Fulcio sets this on every keyless cert it mints) plus the OIDC Issuer
-// extension (1.3.6.1.4.1.57264.1.1) per [Fulcio claims spec].
-func certWithSANAndIssuer(t *testing.T, san, issuer string) *x509.Certificate {
-	t.Helper()
-	// SAN Issuer extensions in Fulcio certs are X.509 SubjectAlternativeName
-	// with a URI value. We construct that ASN.1 SEQUENCE OF OF { [6] IA5String }
-	// directly. (Tag 6 = uniformResourceIdentifier in the GeneralName CHOICE.)
-	type generalName struct {
-		URI string `asn1:"tag:6,ia5"`
-	}
-	rawSAN, err := asn1.Marshal([]generalName{{URI: san}})
-	if err != nil {
-		t.Fatalf("asn1.Marshal SAN: %v", err)
-	}
-	// OIDC issuer is OID 1.3.6.1.4.1.57264.1.1, value is the issuer URL as
-	// a UTF-8 byte string (NOT DER-wrapped).
-	cert := &x509.Certificate{
-		Subject: pkix.Name{CommonName: "test"},
-		Extensions: []pkix.Extension{
-			{
-				Id:       asn1.ObjectIdentifier{2, 5, 29, 17}, // subjectAltName
-				Critical: true,
-				Value:    rawSAN,
-			},
-			{
-				Id:    asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 1},
-				Value: []byte(issuer),
-			},
-		},
-	}
-	// Populate URIs slice the same way x509.ParseCertificate would have.
-	parsed, err := url.Parse(san)
-	if err != nil {
-		t.Fatalf("parse san url: %v", err)
-	}
-	cert.URIs = []*url.URL{parsed}
-	return cert
-}

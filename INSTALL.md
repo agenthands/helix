@@ -32,7 +32,7 @@ curl -LO https://github.com/agenthands/helix/releases/download/$VERSION/checksum
 # match the verifier's pinned policy byte-for-byte (security invariant).
 cosign verify-blob \
   --bundle helix_${VERSION}_${OS}_${ARCH}.tar.gz.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v[\d.]+(-rc\d+|-beta\d+|-alpha\d+)?$' \
+  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v\d+\.\d+\.\d+(-rc\d+|-beta\d+|-alpha\d+)?$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   helix_${VERSION}_${OS}_${ARCH}.tar.gz
 
@@ -41,7 +41,7 @@ cosign verify-blob \
 # (now-trusted) checksums.txt entry.
 cosign verify-blob \
   --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v[\d.]+(-rc\d+|-beta\d+|-alpha\d+)?$' \
+  --certificate-identity-regexp '^https://github\.com/agenthands/helix/\.github/workflows/release\.yml@refs/tags/v\d+\.\d+\.\d+(-rc\d+|-beta\d+|-alpha\d+)?$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   checksums.txt
 

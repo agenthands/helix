@@ -25,7 +25,7 @@ import "github.com/prometheus/client_golang/prometheus/collectors"
 // AllowedLabels is the bounded-label allowlist enforced at CI time by
 // TestMetricsLabelsAllowlist (D-03..D-05). Changing this list requires a
 // matching change to metrics_labels_test.go and a plan-level decision.
-var AllowedLabels = [5]string{"tool_name", "profile", "mode", "language", "outcome"}
+var AllowedLabels = [6]string{"tool_name", "profile", "mode", "language", "outcome", "lane"}
 
 // Metrics holds all Prometheus vectors owned by this package plus the
 // private registry they are registered against. Access via *obs.Provider.Metrics().
@@ -101,6 +101,39 @@ type Metrics struct {
 	// carved out in metrics_labels_test.go and enforced at emission via
 	// SemanticLiveUpdatesInc (drop-on-unknown).
 	SemanticLiveUpdates *prometheus.CounterVec
+
+	// Phase 61 P03: LSP enrichment-worker outcome counter (vector).
+	// Closed-enum "language" ∈ AllowedLabels (already a member);
+	// "outcome" ∈ {"applied","partial_budget","partial_preempted",
+	// "partial_lsp_unavailable","dropped"} — the lspenrich.Outcome enum
+	// from internal/semantic/lspenrich/types.go verbatim.
+	// Helper method LSPEnrichmentTotal drops unknowns (T-61-03-01).
+	// Field is named *Vec to avoid Go name collision with the helper.
+	LSPEnrichmentTotalVec *prometheus.CounterVec
+
+	// Phase 61 P03: LSP enrichment-worker per-file duration histogram.
+	// Single label "language"; buckets target 50ms→30s to give fast-path
+	// resolution for cached jdtls/gopls hover and tail visibility for cold
+	// cascades.
+	LSPEnrichmentDurationVec *prometheus.HistogramVec
+
+	// Phase 61 P03: LSP enrichment-worker error counter (vector).
+	// Closed-enum "outcome" ∈ {"timeout","ls_crash","circuit_open",
+	// "readiness_timeout","other"}. Helper LSPEnrichmentErrors drops
+	// unknowns (T-61-03-01).
+	LSPEnrichmentErrorsVec *prometheus.CounterVec
+
+	// Phase 61 P03: LSP enrichment-worker per-lane queue depth gauge (vec).
+	// Closed-enum "lane" ∈ {"high","background"} — the lspenrich.Lane enum
+	// from internal/semantic/lspenrich/queue.go verbatim. Helper
+	// LSPEnrichmentLaneDepth drops unknowns (T-61-03-01).
+	LSPEnrichmentLaneDepthVec *prometheus.GaugeVec
+
+	// Phase 61 P03: LSP enrichment-worker bulk-update suppression counter.
+	// No labels (event count is what matters; per-file counts inflate the
+	// counter without adding signal). Bumped per ChangeBulkUpdate dispatch
+	// from handler.markBulkPending — see Phase 61 P01 D-05.
+	LSPEnrichmentBulkSuppressedCtr prometheus.Counter
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -238,6 +271,52 @@ func newMetrics() *Metrics {
 			// helper SemanticLiveUpdatesInc drops unknowns.
 			[]string{"kind", "outcome"},
 		),
+		LSPEnrichmentTotalVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_lsp_enrichment_total",
+				Help: "LSP enrichment-worker outcomes by language and result (applied/partial_budget/partial_preempted/partial_lsp_unavailable/dropped). Phase 61 P03.",
+			},
+			// Phase 61 P03: both labels closed-enum; helper LSPEnrichmentTotal
+			// drops unknowns. "language" is in AllowedLabels; "outcome" is in
+			// AllowedLabels. Carve-out entry in metrics_labels_test.go is
+			// documentation parity (no NEW label name to carve).
+			[]string{"language", "outcome"},
+		),
+		LSPEnrichmentDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name: "helix_semantic_lsp_enrichment_duration_seconds",
+				Help: "LSP enrichment-worker per-file cascade duration in seconds. Phase 61 P03.",
+				// Buckets target 50ms→30s — fast path is cached jdtls hover
+				// (~50-200ms) and tail is cold-jdtls projectStatus wait.
+				Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0},
+			},
+			[]string{"language"},
+		),
+		LSPEnrichmentErrorsVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_lsp_enrichment_errors_total",
+				Help: "LSP enrichment-worker errors by language and category (timeout/ls_crash/circuit_open/readiness_timeout/other). Phase 61 P03.",
+			},
+			// Phase 61 P03: closed-enum "outcome" (5 values, distinct from
+			// the success-side outcomes). Helper LSPEnrichmentErrors drops
+			// unknowns.
+			[]string{"language", "outcome"},
+		),
+		LSPEnrichmentLaneDepthVec: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "helix_semantic_lsp_enrichment_lane_depth",
+				Help: "LSP enrichment-worker queue depth per lane (high|background). Phase 61 P03.",
+			},
+			// Phase 61 P03: closed-enum "lane" — new label name, carved out
+			// in metrics_labels_test.go.
+			[]string{"lane"},
+		),
+		LSPEnrichmentBulkSuppressedCtr: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_lsp_enrichment_bulk_suppressed_total",
+				Help: "LSP enrichment-worker bulk-update suppression counter (per ChangeBulkUpdate dispatch). Phase 61 P03 D-05.",
+			},
+		),
 	}
 
 	reg.MustRegister(
@@ -257,6 +336,11 @@ func newMetrics() *Metrics {
 		m.SemanticStoreOpen,
 		m.SemanticExtraction,
 		m.SemanticLiveUpdates,
+		m.LSPEnrichmentTotalVec,
+		m.LSPEnrichmentDurationVec,
+		m.LSPEnrichmentErrorsVec,
+		m.LSPEnrichmentLaneDepthVec,
+		m.LSPEnrichmentBulkSuppressedCtr,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -463,4 +547,66 @@ func (m *Metrics) SemanticLiveUpdatesInc(kind, outcome string) {
 		return
 	}
 	m.SemanticLiveUpdates.WithLabelValues(kind, outcome).Inc()
+}
+
+// --- Phase 61 P03 helpers (drop-on-unknown closed-enum discipline) ---
+//
+// Mirrors the LSPoolLookup / EditOutcomeInc / SemanticLiveUpdatesInc
+// pattern: closed enums enforced at the emission boundary, unknowns dropped
+// to keep cardinality bounded (T-61-03-01 mitigation).
+
+// LSPEnrichmentTotal increments helix_semantic_lsp_enrichment_total.
+// outcome ∈ {"applied","partial_budget","partial_preempted",
+// "partial_lsp_unavailable","dropped"} — the lspenrich.Outcome enum from
+// internal/semantic/lspenrich/types.go verbatim. Unknown outcomes drop the
+// emission. language is bounded in practice by the LS-installed surface.
+func (m *Metrics) LSPEnrichmentTotal(language, outcome string) {
+	switch outcome {
+	case "applied", "partial_budget", "partial_preempted", "partial_lsp_unavailable", "dropped":
+	default:
+		return
+	}
+	m.LSPEnrichmentTotalVec.WithLabelValues(language, outcome).Inc()
+}
+
+// LSPEnrichmentDuration observes a per-file cascade duration in seconds.
+// Single label "language"; no enum guard (the histogram is per-call, not
+// per-result). Negative durations are dropped.
+func (m *Metrics) LSPEnrichmentDuration(language string, secs float64) {
+	if secs < 0 {
+		return
+	}
+	m.LSPEnrichmentDurationVec.WithLabelValues(language).Observe(secs)
+}
+
+// LSPEnrichmentErrors increments helix_semantic_lsp_enrichment_errors_total.
+// outcome ∈ {"timeout","ls_crash","circuit_open","readiness_timeout",
+// "other"}. Unknown outcomes drop the emission.
+func (m *Metrics) LSPEnrichmentErrors(language, outcome string) {
+	switch outcome {
+	case "timeout", "ls_crash", "circuit_open", "readiness_timeout", "other":
+	default:
+		return
+	}
+	m.LSPEnrichmentErrorsVec.WithLabelValues(language, outcome).Inc()
+}
+
+// LSPEnrichmentLaneDepth sets the per-lane queue depth gauge.
+// lane ∈ {"high","background"}. Unknown lanes drop the emission.
+func (m *Metrics) LSPEnrichmentLaneDepth(lane string, depth int) {
+	switch lane {
+	case "high", "background":
+	default:
+		return
+	}
+	m.LSPEnrichmentLaneDepthVec.WithLabelValues(lane).Set(float64(depth))
+}
+
+// LSPEnrichmentBulkSuppressed increments the bulk-suppressed counter by n.
+// Negative or zero values are no-ops.
+func (m *Metrics) LSPEnrichmentBulkSuppressed(n int) {
+	if n <= 0 {
+		return
+	}
+	m.LSPEnrichmentBulkSuppressedCtr.Add(float64(n))
 }

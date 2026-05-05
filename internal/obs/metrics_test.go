@@ -134,10 +134,11 @@ func TestMetrics_MultipleConstructionNoPanic(t *testing.T) {
 	_ = newMetrics()
 }
 
-// TestMetrics_AllowedLabelsShape locks the D-04 allowlist to exactly five
-// entries. Any future edit to the allowlist must explicitly update this test.
+// TestMetrics_AllowedLabelsShape locks the D-04 allowlist. Phase 61 P03
+// added "lane" for the helix_semantic_lsp_enrichment_lane_depth gauge.
+// Any future edit to the allowlist must explicitly update this test.
 func TestMetrics_AllowedLabelsShape(t *testing.T) {
-	want := [5]string{"tool_name", "profile", "mode", "language", "outcome"}
+	want := [6]string{"tool_name", "profile", "mode", "language", "outcome", "lane"}
 	if AllowedLabels != want {
 		t.Fatalf("AllowedLabels = %v, want %v", AllowedLabels, want)
 	}

@@ -63,6 +63,18 @@ var carveOuts = map[string]map[string]bool{
 	// Helper SemanticLiveUpdatesInc is the single emission site and
 	// drops unknowns.
 	"helix_semantic_live_updates_total": {"kind": true},
+	// Phase 61 P03: bounded-label families for the LSP enrichment-worker
+	// outcome counter, error counter, and lane-depth gauge. "language"
+	// and "outcome" are already in AllowedLabels (D-04). "lane" is the
+	// only new label name and is also in AllowedLabels per Phase 61 P03
+	// (added alongside the gauge), so the entries below exist for
+	// documentation parity with the helper-method drop-on-unknown
+	// discipline (mirrors helix_semantic_extraction_total above).
+	"helix_semantic_lsp_enrichment_total":             {},
+	"helix_semantic_lsp_enrichment_errors_total":      {},
+	"helix_semantic_lsp_enrichment_lane_depth":        {},
+	"helix_semantic_lsp_enrichment_duration_seconds":  {},
+	"helix_semantic_lsp_enrichment_bulk_suppressed_total": {},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -155,6 +167,13 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	// TestMetricsLabelsAllowlist scans its labels (Pitfall #3 from
 	// Phase 53 D-13 — empty families are dropped by Gather()).
 	m.SemanticLiveUpdates.WithLabelValues("file_modified", "applied").Inc()
+	// Phase 61 P03: prime the LSP enrichment vectors so the lint scans
+	// their labels (Pitfall #3 — empty families are dropped by Gather()).
+	m.LSPEnrichmentTotal("go", "applied")
+	m.LSPEnrichmentDuration("go", 0.05)
+	m.LSPEnrichmentErrors("go", "timeout")
+	m.LSPEnrichmentLaneDepth("high", 1)
+	m.LSPEnrichmentBulkSuppressed(1)
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

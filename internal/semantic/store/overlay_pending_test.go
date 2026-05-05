@@ -4,17 +4,27 @@ import (
 	"testing"
 )
 
+// seedSemanticFilesNextID supplies a monotone (snapshot_id, file_id) pair so
+// each test seeds with a unique primary key. The semantic_files table's PK
+// is (snapshot_id, file_id) — using 1/1 for every seed row collides on the
+// second insert.
+var seedSemanticFilesNextID uint64
+
 // seedSemanticFileRow inserts a minimal semantic_files row so the
 // MarkFileSemanticPending UPDATE has a target row. The row mirrors the
 // Phase 59 fact-emitter contract (NOT NULL columns get sensible test values).
+// Each call advances seedSemanticFilesNextID so multiple seeds in one test
+// don't collide on the (snapshot_id, file_id) primary key.
 func seedSemanticFileRow(t *testing.T, s *Store, repoID, path string) {
 	t.Helper()
+	seedSemanticFilesNextID++
+	id := seedSemanticFilesNextID
 	_, err := s.db.Exec(`
 		INSERT INTO semantic_files (
 			snapshot_id, file_id, repo_id, path, language,
 			content_hash, size_bytes, line_count, indexed_at
-		) VALUES (1, 1, ?, ?, 'go', 'hash', 0, 0, now())
-	`, repoID, path)
+		) VALUES (?, ?, ?, ?, 'go', 'hash', 0, 0, now())
+	`, id, id, repoID, path)
 	if err != nil {
 		t.Fatalf("seed semantic_files row: %v", err)
 	}

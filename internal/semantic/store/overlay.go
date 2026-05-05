@@ -305,6 +305,68 @@ func (t *OverlayTx) MarkReferencesDeleted(ctx context.Context, fileIDs []uint64)
 	return nil
 }
 
+// partialReasonClosedEnum is the set of valid partial_reason values that
+// MarkFileSemanticPending accepts. Phase 61 D-05/D-06; mirrored in the
+// closed-enum doc comment in migrations.go schema2Statements.
+//
+// "budget exhausted" is carried over from Phase 59 D-05 (per-file timeout /
+// max-symbols cap); the other three are introduced by Phase 61. The string
+// "budget exhausted" intentionally contains a space (matches the existing
+// Phase 59 fact-emitter literal) — callers who pass "budget_exhausted"
+// (underscore form) will get the closed-enum reject.
+var partialReasonClosedEnum = map[string]struct{}{
+	"preempted":           {},
+	"bulk_update_pending": {},
+	"lsp_unavailable":     {},
+	"budget exhausted":    {},
+}
+
+// MarkFileSemanticPending stamps semantic_files for (t.repoID, path) with
+// extraction_partial=true and partial_reason=reason. Reason MUST be one of
+// the closed-enum values (see partialReasonClosedEnum); unknown reasons
+// return an error without writing.
+//
+// Schema unchanged — partial_reason TEXT and extraction_partial BOOLEAN
+// columns were added in Phase 59 migration 002. The column on semantic_files
+// is named extraction_partial (NOT bare `partial`); the bare `partial`
+// column lives on semantic_symbols and semantic_references. See
+// migrations.go schema2Statements for the column inventory.
+//
+// Update semantics: WHERE repo_id=? AND path=? — this matches every
+// snapshot row for the path. Semantically: when a file is marked pending
+// for LSP enrichment we are stating "the structural facts emitted for this
+// path (across all snapshots) are partial pending re-enrichment" — that is
+// the correct cross-snapshot semantics for the freshness-tracker.
+//
+// When no row exists for (repo_id, path) the UPDATE affects zero rows and
+// MarkFileSemanticPending returns nil. This is a deliberate no-op rather
+// than an error: enrichment may be triggered for paths the Phase 59
+// extractor has not yet processed (e.g., a new file in a workspace that
+// hasn't been re-scanned), and the next extraction cycle will surface the
+// row with the correct extraction state.
+//
+// Phase 61 D-05.
+func (t *OverlayTx) MarkFileSemanticPending(ctx context.Context, path, reason string) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("MarkFileSemanticPending: nil tx")
+	}
+	if _, ok := partialReasonClosedEnum[reason]; !ok {
+		return fmt.Errorf(
+			"MarkFileSemanticPending: unknown reason %q (allowed: preempted, bulk_update_pending, lsp_unavailable, %q)",
+			reason, "budget exhausted")
+	}
+	_, err := t.tx.ExecContext(ctx, `
+		UPDATE semantic_files
+		   SET extraction_partial = TRUE,
+		       partial_reason     = ?
+		 WHERE repo_id = ? AND path = ?
+	`, reason, t.repoID, path)
+	if err != nil {
+		return fmt.Errorf("MarkFileSemanticPending(%q, %q, %q): %w", t.repoID, path, reason, err)
+	}
+	return nil
+}
+
 // MarkEdgesDeleted tombstones every overlay-edge row whose src_node_id OR
 // dst_node_id matches one of the supplied node IDs. Empty list is a no-op.
 //

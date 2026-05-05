@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +15,18 @@ import (
 	"github.com/agenthands/helix/internal/langregistry"
 	"github.com/agenthands/helix/internal/workspace"
 )
+
+// defaultYieldCheckWindow is the default ForegroundBusy observation window.
+// Daemon (P03) overrides via SetYieldCheckWindow from cfg.YieldCheckWindowMs.
+// Phase 61 D-04 / 61-CONTEXT.md.
+const defaultYieldCheckWindow = 200 * time.Millisecond
+
+// enrichmentSessionPrefix identifies enrichment-side AcquireLease callers.
+// Foreground tool sessions MUST NOT carry this prefix; enrichment session
+// IDs MUST. The prefix is what gates the lastForegroundLease stamp inside
+// AcquireLease (the worker calling ForegroundBusy between cascade steps
+// would otherwise self-trigger). Phase 61 D-04.
+const enrichmentSessionPrefix = "lsp-enrichment:"
 
 // PoolConfig holds configuration for the LS worker pool.
 type PoolConfig struct {
@@ -58,6 +71,19 @@ type Pool struct {
 	// → jsonrpc.Conn) so every outbound LS frame produces a child span.
 	// Phase 55 D-01: injected via constructor; nil → noop fallback.
 	tracer trace.Tracer
+
+	// lastForegroundLease tracks the timestamp of the most recent
+	// non-enrichment AcquireLease per workspace key. Used by ForegroundBusy
+	// to gate the Phase 61 enrichment-worker yield. Stamped inside
+	// AcquireLease iff sessionID lacks the "lsp-enrichment:" prefix.
+	// Phase 61 D-04. Lazily allocated on first stamp.
+	lastForegroundLease map[workspace.WorkspaceKey]time.Time
+
+	// yieldCheckWindow is the look-back duration ForegroundBusy uses to
+	// decide whether wsKey is "currently busy". A zero value falls back to
+	// defaultYieldCheckWindow (200ms). Daemon writes this once at bootstrap
+	// via SetYieldCheckWindow from cfg.YieldCheckWindowMs. Phase 61 D-04.
+	yieldCheckWindow time.Duration
 }
 
 // NewPool creates a new LS worker pool.
@@ -73,17 +99,19 @@ func NewPool(cfg PoolConfig, registry *langregistry.Registry, installer *langreg
 		tracer = tracenoop.NewTracerProvider().Tracer("lspool-noop")
 	}
 	return &Pool{
-		workers:   make(map[string]*Worker),
-		leases:    make(map[string]*WorkerLease),
-		circuits:  make(map[string]*CircuitBreaker),
-		registry:  registry,
-		installer: installer,
-		pressure:  pressure,
-		config:    cfg,
-		logger:    logger.With("component", "lspool"),
-		metrics:   metrics,
-		done:      make(chan struct{}),
-		tracer:    tracer,
+		workers:             make(map[string]*Worker),
+		leases:              make(map[string]*WorkerLease),
+		circuits:            make(map[string]*CircuitBreaker),
+		registry:            registry,
+		installer:           installer,
+		pressure:            pressure,
+		config:              cfg,
+		logger:              logger.With("component", "lspool"),
+		metrics:             metrics,
+		done:                make(chan struct{}),
+		tracer:              tracer,
+		lastForegroundLease: make(map[workspace.WorkspaceKey]time.Time),
+		yieldCheckWindow:    defaultYieldCheckWindow,
 	}
 }
 
@@ -121,6 +149,22 @@ func (p *Pool) Run(ctx context.Context) error {
 func (p *Pool) AcquireLease(ctx context.Context, sessionID string, wsKey workspace.WorkspaceKey, dirty bool) (*WorkerLease, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// Phase 61 D-04: stamp foreground-lease timestamp for ForegroundBusy.
+	// Enrichment-side callers carry the "lsp-enrichment:" prefix and are
+	// EXCLUDED from the stamp — otherwise the worker calling
+	// ForegroundBusy between cascade steps would self-trigger preemption.
+	// The stamp happens unconditionally at the top of AcquireLease so that
+	// even leases that subsequently fail (circuit open, max workers) still
+	// register foreground activity (the user-visible failure is itself a
+	// foreground event and the operator wants the busy signal so the
+	// enrichment worker yields).
+	if !strings.HasPrefix(sessionID, enrichmentSessionPrefix) {
+		if p.lastForegroundLease == nil {
+			p.lastForegroundLease = make(map[workspace.WorkspaceKey]time.Time)
+		}
+		p.lastForegroundLease[wsKey] = time.Now()
+	}
 
 	// If not dirty, look for existing warm worker for this language+workDir.
 	if !dirty {
@@ -257,6 +301,49 @@ func (p *Pool) LeaseCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.leases)
+}
+
+// ForegroundBusy reports whether a non-enrichment lease was acquired for
+// wsKey within the configured yield_check_window. Read-lock only — safe to
+// call from the Phase 61 enrichment worker between every cascade step. A
+// write-lock here would itself be a foreground-busy event (the worker call
+// would block AcquireLease from completing). Phase 61 D-04.
+//
+// Returns false when:
+//   - No foreground lease has ever been recorded for wsKey.
+//   - The most recent foreground lease was recorded more than
+//     yieldCheckWindow ago.
+//
+// "Foreground" is defined by the AcquireLease session-ID prefix gate: any
+// sessionID NOT starting with "lsp-enrichment:" stamps the timestamp.
+//
+// The window is read under RLock; SetYieldCheckWindow takes the write-lock
+// so reads always see a consistent value.
+func (p *Pool) ForegroundBusy(wsKey workspace.WorkspaceKey) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	last, ok := p.lastForegroundLease[wsKey]
+	if !ok {
+		return false
+	}
+	window := p.yieldCheckWindow
+	if window <= 0 {
+		window = defaultYieldCheckWindow
+	}
+	return time.Since(last) < window
+}
+
+// SetYieldCheckWindow updates the foreground-lease observation window used
+// by ForegroundBusy. Daemon-bootstrap-time setter — P03 calls this once
+// from cfg.YieldCheckWindowMs. Defaults to 200ms when never set (or when
+// passed a non-positive value).
+//
+// Write-locked because ForegroundBusy reads yieldCheckWindow under RLock.
+// Phase 61 D-04 / B4.
+func (p *Pool) SetYieldCheckWindow(d time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.yieldCheckWindow = d
 }
 
 // workerForKeyLocked finds a warm Ready worker matching the workspace key.

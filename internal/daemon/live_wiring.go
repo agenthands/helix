@@ -14,6 +14,8 @@ import (
 
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/obs"
+	"github.com/agenthands/helix/internal/phasegraph"
+	"github.com/agenthands/helix/internal/phasegraph/pipelines"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/live/coalescer"
@@ -105,7 +107,7 @@ func (s *scannerStoreLookup) KnownFiles(_ context.Context, _ semantic.RepoID) (m
 	return map[string]string{}, nil
 }
 
-// noopMetricsLogger is the slog logger handed to coalescer.New / handler.New
+// noopLogAdapter is the slog logger handed to coalescer.New / handler.New
 // when the caller hasn't supplied a richer one.
 type noopLogAdapter struct{ inner *slog.Logger }
 
@@ -146,6 +148,13 @@ func buildLiveBundle(
 		sched,
 		noopLogAdapter{inner: logger},
 	)
+	// Producer side of the lspqueue (Phase 60 P04 promise + CR-04 fix):
+	// after every successful overlay commit the handler enqueues a
+	// RevalidateFileJob for Phase 61's worker to drain. The queue itself
+	// is constructed below and assigned to bundle.lspQueue; we set the
+	// handler field here so the handler keeps the same lifecycle.
+	lspQ := lspqueue.New(1024)
+	h.LSPQueue = lspQ
 	// Wire scheduler's IncrementalHandler back-edge (60-04).
 	sched.SetIncrementalHandler(h)
 
@@ -161,13 +170,18 @@ func buildLiveBundle(
 		return semantic.RepoID(ws.RepoRoot)
 	}
 
-	// 4. Construct the live service (60-04 spine).
+	// 4. Construct the live service (60-04 spine). Metrics is plumbed
+	// into the coalescer Config so the {dropped, applied, error}
+	// outcomes land in helix_semantic_live_updates_total{kind, outcome}
+	// per invariant #4 (CR-01 fix). Nil-safe in the coalescer; in
+	// production *obs.Metrics is always non-nil.
 	liveService := liveservice.New(
 		coalescer.Config{
 			Debounce:            time.Duration(cfg.DebounceMS) * time.Millisecond,
 			MaxBatchDelay:       time.Duration(cfg.MaxBatchDelayMS) * time.Millisecond,
 			BulkChangeThreshold: cfg.BulkChangeThreshold,
 			QueueSize:           1024,
+			Metrics:             metrics,
 		},
 		h,
 		classifierFn,
@@ -179,8 +193,12 @@ func buildLiveBundle(
 	// import semantic; the interface lives in internal/kernel/notifier.go).
 	k.SetEditNotifier(liveService)
 
-	// 6. Construct managers gated on the per-feature config keys.
-	bundle := &liveBundle{service: liveService, lspQueue: lspqueue.New(1024)}
+	// 6. Construct managers gated on the per-feature config keys. The
+	// lspqueue was created above and assigned to the handler so the
+	// producer side is wired (CR-04 fix); here we hold onto it via the
+	// bundle so Phase 61's worker (and admin/status callers) can reach
+	// it through the bundle accessor.
+	bundle := &liveBundle{service: liveService, lspQueue: lspQ}
 
 	if cfg.ManifestScanEnabled {
 		interval, err := time.ParseDuration(cfg.ManifestScanInterval)
@@ -206,7 +224,30 @@ func buildLiveBundle(
 		)
 	}
 
-	_ = metrics // metrics is reserved for future per-bundle wiring (counters live on *obs.Metrics)
+	// 7. Phase 60 D-06 wiring validator (CR-03 fix). The phasegraph
+	// constructor returns a 9-phase DAG whose Run closures fail when
+	// any required component is nil — invoking the runner here
+	// converts a misconfiguration into a bootstrap-time error rather
+	// than a silent no-op at runtime. Failure logs but does not fail
+	// the daemon: in production the only paths to nil are programmer
+	// bugs that the kernel/scheduler tests would already have caught,
+	// and aborting the daemon for a stale wiring would block other
+	// subsystems unnecessarily. The log line is the operator-visible
+	// signal.
+	pg, perr := phasegraph.ValidatePhaseGraph(pipelines.BuildLiveUpdatePhases(pipelines.LiveUpdateComponents{
+		EditNotifier:         liveService,
+		OverlayStore:         store,
+		IncrementalScheduler: h,
+		LSPRevalidationQueue: bundle.lspQueue,
+	}))
+	if perr != nil {
+		logger.Warn("live: phase-graph validate failed", "err", perr)
+	} else if _, rerr := phasegraph.RunPhaseGraph(context.Background(), pg); rerr != nil {
+		logger.Warn("live: phase-graph wiring validator failed", "err", rerr)
+	} else {
+		logger.Info("live: phase-graph wiring validator passed", "phases", 9)
+	}
+
 	return bundle
 }
 

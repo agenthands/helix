@@ -23,6 +23,7 @@ import (
 
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/live"
+	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 )
 
@@ -66,13 +67,22 @@ type Logger interface {
 	Info(msg string, args ...any)
 }
 
+// LSPRevalidationEnqueuer is the producer side of the lspqueue.Queue
+// (Phase 60 P04). The handler enqueues a RevalidateFileJob after every
+// successful overlay write so Phase 61's worker has a queue to drain.
+// Nil is a no-op (test paths and unwired daemons skip the enqueue).
+type LSPRevalidationEnqueuer interface {
+	Enqueue(job lspqueue.RevalidateFileJob) bool
+}
+
 // Handler is the dispatcher.  Construct via New (or zero-value with
 // fields set directly in tests).
 type Handler struct {
-	Store  OverlayWriter
-	Hasher Hasher
-	Sched  IncrementalScheduler
-	Logger Logger
+	Store    OverlayWriter
+	Hasher   Hasher
+	Sched    IncrementalScheduler
+	Logger   Logger
+	LSPQueue LSPRevalidationEnqueuer // nil-safe (Phase 60 producer side; Phase 61 consumes)
 }
 
 // New constructs a Handler with the given dependencies.  Logger is
@@ -111,7 +121,10 @@ func (h *Handler) Dispatch(ctx context.Context, ev live.SourceChangeEvent) error
 }
 
 // UpdateChangedFile hashes path, opens an OverlayTx, upserts the file row
-// stamped with the tx's overlay_epoch, and commits.
+// stamped with the tx's overlay_epoch, commits, and enqueues a Phase 61
+// LSP revalidation job (best-effort — drops are tolerated since the
+// watcher / scanner provide the correctness story; LSP re-enrichment is
+// a freshness optimization).
 func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID, path string) error {
 	hash, err := h.Hasher(path)
 	if err != nil {
@@ -125,7 +138,13 @@ func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID,
 		_ = tx.Rollback()
 		return fmt.Errorf("UpdateChangedFile: upsert: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if h.LSPQueue != nil {
+		_ = h.LSPQueue.Enqueue(lspqueue.RevalidateFileJob{RepoID: repoID, Path: path})
+	}
+	return nil
 }
 
 // HandleFileDeleted writes a tombstone row via OverlayTx.MarkFileDeleted

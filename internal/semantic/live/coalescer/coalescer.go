@@ -22,6 +22,17 @@ type Logger interface {
 	Warn(msg string, args ...any)
 }
 
+// MetricsSink is the minimal counter surface the Coalescer reports
+// pipeline outcomes to. Production wiring is *obs.Metrics
+// (helix_semantic_live_updates_total{kind, outcome}); tests pass a noop
+// or a recording stub.  Per the brief's invariant #4 the {dropped,
+// applied, error, no_op} outcomes MUST be emitted at the coalescer
+// boundary so operators can observe pipeline health from a single
+// counter family.
+type MetricsSink interface {
+	SemanticLiveUpdatesInc(kind, outcome string)
+}
+
 // Config controls the per-workspace Coalescer behavior.  Zero values are
 // replaced by sensible defaults in New (see code for specifics).
 type Config struct {
@@ -40,6 +51,11 @@ type Config struct {
 	// drop (with the dropped counter incrementing) when the buffer is
 	// full (D-02 non-blocking enqueue invariant).
 	QueueSize int
+	// Metrics is the counter sink for outcome emission. Nil-safe — a
+	// nil Metrics defaults to a no-op (production daemon wires
+	// *obs.Metrics; unit tests typically leave it nil unless they want
+	// to assert label cardinality).
+	Metrics MetricsSink
 }
 
 // DefaultConfig returns a Config suitable for production wiring.  60-05B
@@ -66,6 +82,7 @@ type Coalescer struct {
 	cfg         Config
 	handler     EventHandler
 	logger      Logger
+	metrics     MetricsSink
 	in          chan live.SourceChangeEvent
 	drops       atomic.Uint64
 
@@ -94,11 +111,16 @@ func New(ws workspace.WorkspaceKey, cfg Config, handler EventHandler, logger Log
 	if logger == nil {
 		logger = noopLogger{}
 	}
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics = noopMetrics{}
+	}
 	return &Coalescer{
 		workspaceID: ws,
 		cfg:         cfg,
 		handler:     handler,
 		logger:      logger,
+		metrics:     metrics,
 		in:          make(chan live.SourceChangeEvent, cfg.QueueSize),
 		pending:     make(map[string]live.SourceChangeEvent),
 	}
@@ -106,12 +128,14 @@ func New(ws workspace.WorkspaceKey, cfg Config, handler EventHandler, logger Log
 
 // Enqueue is non-blocking.  Drops with the dropped counter incrementing
 // when the input channel is full (D-02 invariant: producers MUST NOT
-// block).
+// block). Drops emit helix_semantic_live_updates_total{kind, outcome="dropped"}
+// (invariant #4) so operators can alert on pipeline saturation.
 func (c *Coalescer) Enqueue(ev live.SourceChangeEvent) {
 	select {
 	case c.in <- ev:
 	default:
 		c.drops.Add(1)
+		c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "dropped")
 		c.logger.Warn("coalescer queue full; dropped event",
 			"workspace", c.workspaceID, "path", ev.Path)
 	}
@@ -204,9 +228,12 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 		}
 		for _, ev := range merged {
 			if err := c.handler.Dispatch(ctx, ev); err != nil {
+				c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "error")
 				c.logger.Warn("coalescer: dispatch error",
 					"workspace", c.workspaceID, "path", ev.Path, "err", err)
 				// continue — D-02 invariant: per-event errors do not abort batch
+			} else {
+				c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "applied")
 			}
 		}
 	}
@@ -215,3 +242,9 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 type noopLogger struct{}
 
 func (noopLogger) Warn(string, ...any) {}
+
+// noopMetrics is the default MetricsSink when Config.Metrics is nil
+// (test paths and unwired daemons).
+type noopMetrics struct{}
+
+func (noopMetrics) SemanticLiveUpdatesInc(string, string) {}

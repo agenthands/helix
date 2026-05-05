@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -109,6 +110,15 @@ func (w *workspaceWatcher) addRecursive(root string) error {
 			// permissive "skip and continue" policy. A workspace under
 			// a partially-readable mount should still produce events
 			// for the readable subset.
+			return nil
+		}
+		// Reject symlinks (T-60-04-03 / T-60-05b-01 invariant #6: both
+		// watcher and scanner skip symlinks). A symlinked directory
+		// reported by WalkDir carries fs.ModeSymlink even though
+		// d.IsDir() returns true for the resolved target — without
+		// this check fw.Add would register watches on out-of-workspace
+		// targets via the linked path.
+		if d.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
 		if !d.IsDir() {
@@ -222,9 +232,13 @@ func (w *workspaceWatcher) handleEvent(ev fsnotify.Event, flush func()) {
 	// Re-Add directory if a Create on a subdir was observed. The
 	// fsnotify backend does NOT recurse into newly-created subdirs by
 	// default; without this hook a `mkdir -p sub/dir` followed by a
-	// write inside sub/dir would be silently missed.
+	// write inside sub/dir would be silently missed. Use Lstat (not
+	// Stat) and reject symlinks so a Create on a symlinked directory
+	// does NOT add an out-of-workspace watch (invariant #6 mirror of
+	// addRecursive's symlink check).
 	if ev.Has(fsnotify.Create) {
-		if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
+		if info, err := os.Lstat(ev.Name); err == nil &&
+			info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
 			_ = w.fw.Add(ev.Name)
 		}
 	}

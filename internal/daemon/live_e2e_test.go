@@ -164,6 +164,18 @@ func TestLiveUpdate_E2E_OverlayEpochAdvancesOnEdit(t *testing.T) {
 	if weEpoch == 0 || weEpoch > postEpoch {
 		t.Fatalf("LIVE-07 violation: overlay file row has write_epoch=%d, current_epoch=%d (want 1 ≤ write_epoch ≤ current_epoch)", weEpoch, postEpoch)
 	}
+
+	// 11. CR-04 regression: the lspqueue producer side. After a
+	//     successful overlay commit the handler must have enqueued a
+	//     RevalidateFileJob so Phase 61's worker has something to
+	//     consume. Pre-fix the queue was constructed but never read
+	//     from or enqueued into.
+	if bundle.lspQueue == nil {
+		t.Fatal("CR-04 regression: bundle.lspQueue is nil — handler producer side cannot be wired")
+	}
+	if got := bundle.lspQueue.Len(); got != 1 {
+		t.Fatalf("CR-04 regression: lspqueue.Len() = %d after one successful EditNotifier.OnEdit, want 1", got)
+	}
 }
 
 // readOverlayEpoch reads semantic_live_overlay_meta.current_epoch via the

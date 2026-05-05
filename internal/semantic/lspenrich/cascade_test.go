@@ -310,7 +310,11 @@ func mustBudget(t *testing.T, now time.Time) lspenrich.Budget {
 	return b
 }
 
-var cascadeNow = time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+// cascadeNow is recomputed at test-call time so per-file/total deadlines
+// (derived from cfg.TimeoutPerFile=5s + cfg.TimeoutTotal=120s) extend INTO
+// the future relative to time.Now() the cascade observes — without this the
+// boundary check trips immediately and every test sees OutcomePartialBudget.
+var cascadeNow = time.Now()
 
 // =============================================================================
 // Tests

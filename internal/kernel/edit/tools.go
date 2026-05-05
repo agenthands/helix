@@ -375,6 +375,14 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 			// (non-IsError) textResult so callers see the diagnostic detail.
 			outcome = "validation_failed"
 		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// The on-disk file IS modified at this point even when the
+		// post-edit verifier flagged regressions, so semantic still needs
+		// the re-extraction signal. Errors are swallowed; correctness is
+		// guaranteed by the watcher + manifest scanner (P02 + P05).
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKey, []string{args.Path})
+		}
 		return textResult(text), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_symbol_body", Description: "Replace a symbol's body with new content using tree-sitter for precise extraction", BriefDescription: "Replace the entire body of a function, method, or class", HelpText: replaceSymbolBodyHelp})
@@ -438,6 +446,11 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		text, verifyFailed = appendVerifyInfoWithStatus(ctx, diagStore, uri, text)
 		if verifyFailed {
 			outcome = "validation_failed"
+		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// Errors are swallowed; correctness via watcher + manifest scanner.
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKey, []string{args.Path})
 		}
 		return textResult(text), nil, nil
 	}))
@@ -503,6 +516,11 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 		if verifyFailed {
 			outcome = "validation_failed"
 		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// Errors are swallowed; correctness via watcher + manifest scanner.
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKey, []string{args.Path})
+		}
 		return textResult(text), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "insert_after_symbol", Description: "Insert content immediately after a symbol", BriefDescription: "Insert code after a symbol definition", HelpText: insertAfterSymbolHelp})
@@ -561,6 +579,15 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		text, verifyFailed = appendVerifyInfoWithStatus(ctx, diagStore, uri, text)
 		if verifyFailed {
 			outcome = "validation_failed"
+		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// Rename can mutate many files via WorkspaceEdit; pass the full
+		// per-file path slice collected by RenameSymbol. Errors are
+		// swallowed; correctness via watcher + manifest scanner.
+		if len(result.Files) > 0 {
+			if n := k.EditNotifier(); n != nil {
+				_ = n.OnEdit(ctx, wsKey, result.Files)
+			}
 		}
 		return textResult(text), nil, nil
 	}))
@@ -635,6 +662,13 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 		text, verifyFailed = appendVerifyInfoWithStatus(ctx, diagStore, uri, text)
 		if verifyFailed {
 			outcome = "validation_failed"
+		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// Only fires on the actual-deletion branch (refused-with-references
+		// returns earlier without modifying the file). Errors swallowed;
+		// correctness via watcher + manifest scanner.
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKey, []string{args.Path})
 		}
 		return textResult(text), nil, nil
 	}))

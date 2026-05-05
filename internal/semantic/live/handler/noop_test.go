@@ -32,8 +32,14 @@ func (t *fakeTx) MarkFileDeleted(_ context.Context, _ string) error {
 	t.deleteCalls++
 	return t.deleteErr
 }
-func (t *fakeTx) Commit() error   { t.commitCalls++; return nil }
-func (t *fakeTx) Rollback() error { t.rollbackCalls++; return nil }
+
+// MarkFileSemanticPending added in Phase 61 P01 Task 3 — fakeTx satisfies
+// the extended handler.OverlayTx interface. Pre-existing tests don't
+// exercise this path; the dedicated bulk-update tests use
+// handler_lane_test.go's pendingMarkTx.
+func (t *fakeTx) MarkFileSemanticPending(_ context.Context, _, _ string) error { return nil }
+func (t *fakeTx) Commit() error                                                { t.commitCalls++; return nil }
+func (t *fakeTx) Rollback() error                                              { t.rollbackCalls++; return nil }
 
 // fakeStore is a stand-in OverlayWriter that hands out fakeTx values and
 // counts BeginOverlayTx calls so tests can pin the no-op-no-epoch

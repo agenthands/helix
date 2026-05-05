@@ -24,6 +24,7 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 )
 
@@ -39,14 +40,18 @@ type OverlayWriter interface {
 }
 
 // OverlayTx is the subset of store.OverlayTx the handler invokes today.
-// 60-02 ships the full Mark*Deleted surface; the handler consumes
-// MarkFileDeleted to write a real tombstone row, and surfaces the
-// symbol/reference/edge variants when the classifier (Phase 60+ revision)
-// resolves file_id / node_id sets at classify time.
+// 60-02 ships the Mark*Deleted surface; 61-01 extends with
+// MarkFileSemanticPending for the producer-side bulk-update suppression
+// path (D-05).
 type OverlayTx interface {
 	Epoch() uint64
 	UpsertOverlayFile(ctx context.Context, path, contentHash string) error
 	MarkFileDeleted(ctx context.Context, path string) error
+	// MarkFileSemanticPending stamps the existing partial_reason column on
+	// semantic_files for (repoID, path) with reason. Reason MUST be one of
+	// the closed-enum values validated by the underlying store. Phase 61
+	// D-05; consumed by handler.markBulkPending under ChangeBulkUpdate.
+	MarkFileSemanticPending(ctx context.Context, path, reason string) error
 	Commit() error
 	Rollback() error
 }
@@ -67,12 +72,19 @@ type Logger interface {
 	Info(msg string, args ...any)
 }
 
-// LSPRevalidationEnqueuer is the producer side of the lspqueue.Queue
-// (Phase 60 P04). The handler enqueues a RevalidateFileJob after every
-// successful overlay write so Phase 61's worker has a queue to drain.
+// LSPLaneEnqueuer is the producer side of the Phase 61 2-lane queue. It
+// supersedes the Phase 60 single-method enqueue interface that this
+// package previously declared (B5 resolution: rename + extend in-place,
+// single source of truth, no parallel interfaces in the tree).
+// Implemented by *lspenrich.LaneQueue. The legacy Enqueue alias is
+// preserved as a method on the interface so any non-handler caller still
+// holding the old shape continues to compile (the alias maps every job
+// to LaneHigh; new callers MUST use EnqueueLane).
+//
 // Nil is a no-op (test paths and unwired daemons skip the enqueue).
-type LSPRevalidationEnqueuer interface {
-	Enqueue(job lspqueue.RevalidateFileJob) bool
+type LSPLaneEnqueuer interface {
+	EnqueueLane(lane lspenrich.Lane, job lspqueue.RevalidateFileJob) bool
+	Enqueue(job lspqueue.RevalidateFileJob) bool // legacy; defaults to LaneHigh
 }
 
 // Handler is the dispatcher.  Construct via New (or zero-value with
@@ -82,7 +94,12 @@ type Handler struct {
 	Hasher   Hasher
 	Sched    IncrementalScheduler
 	Logger   Logger
-	LSPQueue LSPRevalidationEnqueuer // nil-safe (Phase 60 producer side; Phase 61 consumes)
+	LSPQueue LSPLaneEnqueuer // nil-safe (Phase 60 producer side; Phase 61 lane-aware)
+	// Metrics is the lspenrich-side metrics surface for bulk-suppressed
+	// counter emissions (Phase 61 D-05). Nil-safe: nil metrics short-
+	// circuits the bump. Production wiring (P03) supplies a
+	// ProdMetricsSink wrapping *obs.Metrics.
+	Metrics lspenrich.MetricsSink
 }
 
 // New constructs a Handler with the given dependencies.  Logger is
@@ -108,12 +125,27 @@ func New(store OverlayWriter, hasher Hasher, sched IncrementalScheduler, logger 
 func (h *Handler) Dispatch(ctx context.Context, ev live.SourceChangeEvent) error {
 	switch ev.Kind {
 	case live.ChangeFileCreated, live.ChangeFileModified, live.ChangeHelixEdit:
-		return h.UpdateChangedFile(ctx, ev.RepoID, ev.Path)
+		return h.updateChangedFileWithKind(ctx, ev.RepoID, ev.Path, ev.Kind)
 	case live.ChangeFileDeleted:
 		return h.HandleFileDeleted(ctx, ev.RepoID, ev.Path)
 	case live.ChangeFileRenamed:
-		return h.HandleFileRenamed(ctx, ev.RepoID, ev.OldPath, ev.Path)
+		return h.handleFileRenamedWithKind(ctx, ev.RepoID, ev.OldPath, ev.Path, ev.Kind)
 	case live.ChangeBulkUpdate:
+		// Phase 61 D-05: producer-side suppression. Do NOT enqueue any
+		// per-file LSP revalidation — at the bulk threshold the queue
+		// would be flooded (PITFALLS C8 prescription). Instead, mark
+		// every affected file partial_reason="bulk_update_pending" so
+		// it is observable, and bump the bulk-suppressed counter for
+		// ops dashboards.
+		if err := h.markBulkPending(ctx, ev.RepoID, ev.Paths); err != nil {
+			h.Logger.Warn("handler: markBulkPending failed",
+				"repo", ev.RepoID, "n", len(ev.Paths), "err", err)
+			// Fall through — we still want HandleBulkUpdate to run
+			// (scheduler rebuild is the structural-recovery path).
+		}
+		if h.Metrics != nil {
+			h.Metrics.LSPEnrichmentBulkSuppressed(len(ev.Paths))
+		}
 		return h.HandleBulkUpdate(ctx, ev.RepoID)
 	default:
 		return fmt.Errorf("handler.Dispatch: unknown kind %q", ev.Kind)
@@ -125,7 +157,24 @@ func (h *Handler) Dispatch(ctx context.Context, ev live.SourceChangeEvent) error
 // LSP revalidation job (best-effort — drops are tolerated since the
 // watcher / scanner provide the correctness story; LSP re-enrichment is
 // a freshness optimization).
+//
+// This is the scheduler.IncrementalHandler entrypoint (3-arg signature).
+// Callers reaching here from the scheduler's incremental path do NOT carry
+// SourceChangeEvent.Kind context, so the lane defaults to LaneBackground —
+// scheduler-driven revalidation is recovery work, not foreground edit
+// traffic. Phase 61 D-01.
+//
+// Producer-side callers (the Dispatch switch) use the internal
+// updateChangedFileWithKind variant which threads ev.Kind through to
+// selectLane.
 func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID, path string) error {
+	return h.updateChangedFileWithKind(ctx, repoID, path, live.ChangeFileModified)
+}
+
+// updateChangedFileWithKind is the lane-aware variant of UpdateChangedFile.
+// kind is consulted by selectLane to choose between LaneHigh (helix_edit)
+// and LaneBackground (everything else). Phase 61 D-01.
+func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic.RepoID, path string, kind live.SourceChangeKind) error {
 	hash, err := h.Hasher(path)
 	if err != nil {
 		return fmt.Errorf("UpdateChangedFile: hash %s: %w", path, err)
@@ -142,9 +191,60 @@ func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID,
 		return err
 	}
 	if h.LSPQueue != nil {
-		_ = h.LSPQueue.Enqueue(lspqueue.RevalidateFileJob{RepoID: repoID, Path: path})
+		_ = h.LSPQueue.EnqueueLane(selectLane(kind), lspqueue.RevalidateFileJob{
+			RepoID: repoID,
+			Path:   path,
+		})
 	}
 	return nil
+}
+
+// selectLane maps a SourceChangeEvent.Kind to the queue lane per Phase 61
+// D-01: ChangeHelixEdit → high; all watcher / manifest-scan kinds (Created,
+// Modified, Deleted, Renamed) → background. ChangeBulkUpdate is handled
+// separately (markBulkPending) and never reaches selectLane — the producer
+// bypasses the queue entirely on bulk events.
+//
+// The lane is owned by the producer (this handler), not derived inside the
+// worker (D-01 invariant).
+func selectLane(kind live.SourceChangeKind) lspenrich.Lane {
+	switch kind {
+	case live.ChangeHelixEdit:
+		return lspenrich.LaneHigh
+	default:
+		return lspenrich.LaneBackground
+	}
+}
+
+// markBulkPending opens an OverlayTx and stamps every supplied path with
+// partial_reason="bulk_update_pending" via tx.MarkFileSemanticPending. The
+// path loop is best-effort — per-path errors are logged via the handler
+// logger but DO NOT abort the loop and DO NOT propagate to the caller
+// (PITFALLS C8: bulk-update is the death-spiral-prevention path; failing
+// it loudly defeats the suppression).
+//
+// Empty paths is a no-op (returns nil without opening a tx).
+//
+// Phase 61 D-05.
+func (h *Handler) markBulkPending(ctx context.Context, repoID semantic.RepoID, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	if h.Store == nil {
+		return nil
+	}
+	tx, err := h.Store.BeginOverlayTx(ctx, string(repoID))
+	if err != nil {
+		return fmt.Errorf("markBulkPending: begin tx: %w", err)
+	}
+	for _, p := range paths {
+		if err := tx.MarkFileSemanticPending(ctx, p, "bulk_update_pending"); err != nil {
+			h.Logger.Warn("markBulkPending: per-file mark failed",
+				"repo", repoID, "path", p, "err", err)
+			// Continue — best-effort.
+		}
+	}
+	return tx.Commit()
 }
 
 // HandleFileDeleted writes a tombstone row via OverlayTx.MarkFileDeleted
@@ -167,11 +267,20 @@ func (h *Handler) HandleFileDeleted(ctx context.Context, repoID semantic.RepoID,
 // HandleFileRenamed ships the SPEC §16.5 fallback form: tombstone the old
 // path, upsert the new path.  The content-hash lineage check (rename-vs-
 // modify-and-create disambiguation) is reserved for a future revision.
+//
+// Public 4-arg signature preserved for any external callers; the Dispatch
+// switch uses handleFileRenamedWithKind which threads ev.Kind through to
+// selectLane.
 func (h *Handler) HandleFileRenamed(ctx context.Context, repoID semantic.RepoID, oldPath, newPath string) error {
+	return h.handleFileRenamedWithKind(ctx, repoID, oldPath, newPath, live.ChangeFileRenamed)
+}
+
+// handleFileRenamedWithKind is the lane-aware variant.
+func (h *Handler) handleFileRenamedWithKind(ctx context.Context, repoID semantic.RepoID, oldPath, newPath string, kind live.SourceChangeKind) error {
 	if err := h.HandleFileDeleted(ctx, repoID, oldPath); err != nil {
 		return err
 	}
-	return h.UpdateChangedFile(ctx, repoID, newPath)
+	return h.updateChangedFileWithKind(ctx, repoID, newPath, kind)
 }
 
 // HandleBulkUpdate defers to the scheduler for an incremental rewalk.

@@ -62,9 +62,24 @@ func CoalesceEvents(events []live.SourceChangeEvent, threshold int) []live.Sourc
 		return nil
 	}
 	if threshold > 0 && len(byKey) > threshold {
+		// Phase 61 D-05: the synthetic ChangeBulkUpdate event carries the
+		// merged path set so the handler can mark every affected file
+		// partial_reason="bulk_update_pending" via OverlayTx.MarkFileSemanticPending.
+		// Without Paths, the producer would lose all per-file granularity at
+		// the collapse boundary. We collect deterministic-order paths
+		// (alphabetic) so dispatch is reproducible across runs.
+		paths := make([]string, 0, len(byKey))
+		for _, ev := range byKey {
+			// Use Path for non-rename kinds; for renames, take the new
+			// path (Path field) — that's the path the file lives at after
+			// the bulk operation lands.
+			paths = append(paths, ev.Path)
+		}
+		sort.Strings(paths)
 		return []live.SourceChangeEvent{{
 			RepoID: firstRepoID(events),
 			Kind:   live.ChangeBulkUpdate,
+			Paths:  paths,
 			Source: changeSourceCoalescerInternal(),
 		}}
 	}

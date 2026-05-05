@@ -295,16 +295,15 @@ func TestHandler_BulkUpdate_PerPathErrorIsLoggedNotPropagated(t *testing.T) {
 // pin the rename.
 func TestHandler_LSPLaneEnqueuer_IsTheOnlyProducerInterface(t *testing.T) {
 	// Compile-time assertion: *lspenrich.LaneQueue satisfies
-	// handler.LSPLaneEnqueuer (the renamed interface). If a parallel
-	// LSPRevalidationEnqueuer interface still existed, the producer
-	// surface would have two seams; this assertion only constrains one
-	// of them.
+	// handler.LSPLaneEnqueuer (the only producer-side interface in this
+	// package after the B5 rename). Parallel producer interfaces are
+	// forbidden by Phase 61 P01 acceptance.
 	var _ handler.LSPLaneEnqueuer = (*lspenrich.LaneQueue)(nil)
 
 	// Negative: assigning a single-method (legacy) anonymous shape to
 	// LSPLaneEnqueuer must NOT compile. We can't write that as a runtime
 	// test; the rename verification lives in the verify gauntlet
-	// `grep -rn LSPRevalidationEnqueuer internal/`.
+	// (a tree-wide grep for the old type name in the plan).
 }
 
 // helper paths.

@@ -20,8 +20,8 @@ import (
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/live/coalescer"
 	"github.com/agenthands/helix/internal/semantic/live/handler"
-	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/live/scanner"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	liveservice "github.com/agenthands/helix/internal/semantic/live/service"
 	"github.com/agenthands/helix/internal/semantic/live/watcher"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
@@ -47,7 +47,11 @@ type liveBundle struct {
 	service    *liveservice.Service
 	scannerMgr *scanner.Manager
 	watcherMgr liveWatcherManager // nil when watcher is disabled OR P05A not yet merged
-	lspQueue   *lspqueue.Queue
+	// lspQueue holds the Phase 61 lane-aware queue. The handler enqueues
+	// via the LSPLaneEnqueuer interface; Phase 61's worker (P02) reads via
+	// LaneQueue.Drain. Phase 60 used the single-channel *lspqueue.Queue;
+	// Phase 61 P01 swaps in the 2-lane variant.
+	lspQueue *lspenrich.LaneQueue
 }
 
 // startWorkspace fires the per-workspace lifecycle hooks. Called from
@@ -148,12 +152,14 @@ func buildLiveBundle(
 		sched,
 		noopLogAdapter{inner: logger},
 	)
-	// Producer side of the lspqueue (Phase 60 P04 promise + CR-04 fix):
-	// after every successful overlay commit the handler enqueues a
-	// RevalidateFileJob for Phase 61's worker to drain. The queue itself
-	// is constructed below and assigned to bundle.lspQueue; we set the
-	// handler field here so the handler keeps the same lifecycle.
-	lspQ := lspqueue.New(1024)
+	// Producer side of the Phase 61 lane-aware queue (Phase 60 P04
+	// promise + CR-04 fix; Phase 61 P01 lane-aware): after every
+	// successful overlay commit the handler enqueues a RevalidateFileJob
+	// into the lane chosen by selectLane (helix_edit → high; everything
+	// else → background). The queue itself is constructed below and
+	// assigned to bundle.lspQueue; we set the handler field here so the
+	// handler keeps the same lifecycle.
+	lspQ := lspenrich.NewLaneQueue(1024, 1024)
 	h.LSPQueue = lspQ
 	// Wire scheduler's IncrementalHandler back-edge (60-04).
 	sched.SetIncrementalHandler(h)
@@ -278,6 +284,13 @@ func (a *storeOverlayTxAdapter) UpsertOverlayFile(ctx context.Context, path, has
 }
 func (a *storeOverlayTxAdapter) MarkFileDeleted(ctx context.Context, path string) error {
 	return a.tx.MarkFileDeleted(ctx, path)
+}
+
+// MarkFileSemanticPending forwards to the underlying *store.OverlayTx.
+// Phase 61 P01 D-05: handler.markBulkPending stamps every affected file
+// partial_reason="bulk_update_pending" via this seam.
+func (a *storeOverlayTxAdapter) MarkFileSemanticPending(ctx context.Context, path, reason string) error {
+	return a.tx.MarkFileSemanticPending(ctx, path, reason)
 }
 func (a *storeOverlayTxAdapter) Commit() error   { return a.tx.Commit() }
 func (a *storeOverlayTxAdapter) Rollback() error { return a.tx.Rollback() }

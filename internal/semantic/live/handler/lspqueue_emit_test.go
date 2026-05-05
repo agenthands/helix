@@ -6,22 +6,27 @@ import (
 
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/live/handler"
-	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 )
 
 // CR-04 regression: invariant — every successful UpdateChangedFile
 // commit MUST enqueue a Phase 61 LSP revalidation job. Pre-fix, the
 // handler had no LSPQueue field; the queue was constructed in the
 // daemon and never read. Post-fix, handler.LSPQueue is wired by the
-// daemon and Enqueue fires after Commit().
+// daemon and EnqueueLane fires after Commit().
 //
-// We exercise the real lspqueue.Queue (not a mock) to also pin the
-// non-blocking-send semantics from queue.go:42-49.
+// Phase 61 P01 Task 3: the queue interface is now lane-aware
+// (LSPLaneEnqueuer). The CR-04 entrypoint UpdateChangedFile (3-arg
+// scheduler-facing variant) defaults to LaneBackground — this test
+// asserts the legacy enqueue path produces a background-lane job.
+//
+// We exercise the real *lspenrich.LaneQueue (not a mock) to also pin
+// the non-blocking-send semantics carried over from lspqueue.Queue.
 func TestHandler_UpdateChangedFile_EnqueuesLSPRevalidation(t *testing.T) {
 	ctx := context.Background()
 
 	store := &fakeStore{tx: &fakeTx{epoch: 7}}
-	q := lspqueue.New(8)
+	q := lspenrich.NewLaneQueue(8, 8)
 	h := handler.New(store, goodHasher, nil, nil)
 	h.LSPQueue = q
 
@@ -29,11 +34,25 @@ func TestHandler_UpdateChangedFile_EnqueuesLSPRevalidation(t *testing.T) {
 		t.Fatalf("UpdateChangedFile: %v", err)
 	}
 
-	if got, want := q.Len(), 1; got != want {
-		t.Fatalf("CR-04 regression: lspqueue.Len() = %d, want %d after one successful commit", got, want)
+	// Total depth across both lanes should be 1.
+	if got := q.Depth(lspenrich.LaneBackground) + q.Depth(lspenrich.LaneHigh); got != 1 {
+		t.Fatalf("CR-04 regression: total depth = %d, want 1 after one successful commit", got)
+	}
+	// 3-arg UpdateChangedFile defaults to LaneBackground (Phase 61 D-01:
+	// scheduler-driven incremental work is not foreground edit traffic).
+	if got, want := q.Depth(lspenrich.LaneBackground), 1; got != want {
+		t.Fatalf("background-lane depth = %d, want %d (3-arg UpdateChangedFile must default to LaneBackground)", got, want)
 	}
 
-	job := <-q.Channel()
+	drainCtx, cancel := context.WithTimeout(ctx, 1e9)
+	defer cancel()
+	job, lane, err := q.Drain(drainCtx)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if lane != lspenrich.LaneBackground {
+		t.Errorf("lane: got %q, want %q", lane, lspenrich.LaneBackground)
+	}
 	if job.RepoID != semantic.RepoID("/ws") {
 		t.Errorf("RepoID = %q, want %q", job.RepoID, "/ws")
 	}

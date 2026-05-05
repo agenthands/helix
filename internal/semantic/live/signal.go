@@ -89,6 +89,7 @@ type SourceChangeEvent struct {
 	Kind       SourceChangeKind
 	Path       string // primary path for the change
 	OldPath    string // populated for ChangeFileRenamed
+	Paths      []string // populated only for ChangeBulkUpdate (Phase 61 D-05): the per-file path set the bulk-collapse aggregated, so the handler can mark every affected file partial_reason="bulk_update_pending" without losing per-file granularity. Other Kinds leave this nil.
 	Source     ChangeSource
 	ObservedAt time.Time
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/workspace"
 )
 
@@ -173,8 +174,17 @@ func TestLiveUpdate_E2E_OverlayEpochAdvancesOnEdit(t *testing.T) {
 	if bundle.lspQueue == nil {
 		t.Fatal("CR-04 regression: bundle.lspQueue is nil — handler producer side cannot be wired")
 	}
-	if got := bundle.lspQueue.Len(); got != 1 {
-		t.Fatalf("CR-04 regression: lspqueue.Len() = %d after one successful EditNotifier.OnEdit, want 1", got)
+	// Phase 61 P01: queue is now lane-aware (*lspenrich.LaneQueue). Sum
+	// the per-lane depths to assert the same producer-side invariant that
+	// CR-04 enforced on the legacy single-channel queue.
+	totalDepth := bundle.lspQueue.Depth(lspenrich.LaneHigh) + bundle.lspQueue.Depth(lspenrich.LaneBackground)
+	if totalDepth != 1 {
+		t.Fatalf("CR-04 regression: total lane depth = %d after one successful EditNotifier.OnEdit, want 1", totalDepth)
+	}
+	// Phase 61 D-01 sanity: ChangeHelixEdit (the kind the test injects via
+	// EditNotifier.OnEdit) maps to LaneHigh.
+	if got := bundle.lspQueue.Depth(lspenrich.LaneHigh); got != 1 {
+		t.Fatalf("Phase 61 D-01 regression: high-lane depth = %d after a helix_edit, want 1", got)
 	}
 }
 

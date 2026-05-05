@@ -870,22 +870,25 @@ Cross-checked CONTEXT.md `Out of scope (deferred)` against Phase 61, 62, 63, 64,
 
 **Result:** No double-implementation risks. Phase 60's "data accessor / typed stub / typed queue" pattern is the cleanest possible deferral surface — every downstream phase has exactly one wiring point.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **The `write_file` vs `create_file` discrepancy in CONTEXT.md D-03.** [O-1]
    - What we know: CONTEXT.md D-03 enumerates 8 hook entry points: 5 in `internal/kernel/edit/` + `replace_in_file` + `fuzzy_edit` + **`write_file`**. The kernel registry, verified at `internal/kernel/fileops/skill.go:32` and `tools.go:233`, ships `create_file`, NOT `write_file`. Acceptance #12 also says "8 kernel edit/fileops tools each emit `EditNotifier.OnEdit`".
    - What's unclear: Is "write_file" a typo for "create_file", or did CONTEXT.md anticipate a future tool that doesn't exist yet?
    - Recommendation: The planner should clarify with the user — either (a) treat the 8th hook as `create_file` (the closest existing tool that writes a brand-new file), or (b) add the OnEdit call inside the shared `OverwriteFile` helper at `internal/kernel/fileops/write.go:38-72` so every tool writing a file (create_file, replace_in_file, fuzzy_edit) gets the hook for free — that's actually 7 tools instead of 8 because `OverwriteFile` already covers replace_in_file and fuzzy_edit. Option (b) is simpler and structurally cleaner; option (a) preserves the literal CONTEXT count.
+   - **RESOLVED:** Adopt per-tool wiring (option a-style); 8 hook insertion points = 5 in `internal/kernel/edit/` + `replace_in_file` + `fuzzy_edit` + `create_file`. `OverwriteFile` is a free function with no `*kernel.Kernel` handle, so the hook lives in each tool's registered handler closure. (See 60-03-PLAN.md `<objective>` and Tasks 2–3.)
 
 2. **Configuration of editor-fixture skip on absent binaries.** [O-2]
    - What we know: Vim binary is not always available in CI.
    - What's unclear: Should the test skip with `t.Skip()` (silent) or fail with a clear "INSTALL VIM" message?
    - Recommendation: `t.Skip("vim not on PATH; the JetBrains and VS Code fixtures cover atomic-rename")` — preserves CI green while still surfacing in test output. The JetBrains and VS Code fixtures are pure Go programs, so they have no environment dependency.
+   - **RESOLVED:** Vim test skips on Windows runners (and any host without `bash` on PATH) via `t.Skip` predicate; JetBrains and VS Code fixtures are Go programs that run on all platforms. (See 60-05-PLAN.md Task 2.)
 
 3. **`live_updates.bulk_change_threshold = 200` empirical validation.** [O-3]
    - What we know: SPEC §25 declares the default 200; CONTEXT.md acceptance #5 tests `> 200 → bulk_update`.
    - What's unclear: Is 200 the right threshold? On a small repo a single `go fmt` could trigger 200+ files; on a large repo 200 is barely noticeable.
    - Recommendation: Phase 60 ships 200 as the default per SPEC. If real-world telemetry shows it's wrong, Phase 61+ adjusts via config — the threshold is bounded-config, not bounded-code.
+   - **RESOLVED:** `bulk_change_threshold` default 200 ships unchanged; benchmarks deferred to Phase 61+ if dispatcher becomes the bottleneck. (See 60-04-PLAN.md `CoalesceEvents` test plan and CONTEXT.md "Deferred Ideas → Per-file fan-out".)
 
 ## Metadata
 

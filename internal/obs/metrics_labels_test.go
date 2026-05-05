@@ -56,6 +56,13 @@ var carveOuts = map[string]map[string]bool{
 	// already in AllowedLabels (D-04) so this entry exists only for
 	// documentation parity with the helper-method drop-on-unknown discipline.
 	"helix_semantic_extraction_total": {},
+	// Phase 60 D-07 (60-05B): closed-enum "kind" (6 values from
+	// live.SourceChangeKind) + closed-enum "outcome" ∈ {applied, no_op,
+	// error, dropped} on live-update outcome counter. "outcome" is
+	// already in AllowedLabels (D-04); only "kind" is carved out here.
+	// Helper SemanticLiveUpdatesInc is the single emission site and
+	// drops unknowns.
+	"helix_semantic_live_updates_total": {"kind": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -144,6 +151,10 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.SemanticStoreOpen.WithLabelValues("ws-aaa", "opened").Inc()
 	// Phase 59 P02: prime the tree-sitter extraction vector.
 	m.SemanticExtraction.WithLabelValues("go", "ready").Inc()
+	// Phase 60 D-07 (60-05B): prime the live-update outcome vector so
+	// TestMetricsLabelsAllowlist scans its labels (Pitfall #3 from
+	// Phase 53 D-13 — empty families are dropped by Gather()).
+	m.SemanticLiveUpdates.WithLabelValues("file_modified", "applied").Inc()
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

@@ -301,6 +301,17 @@ func TestLoad_SemanticIndexDefaults(t *testing.T) {
 	if cfg.SemanticIndex.LiveUpdates.MaxOverlayAge != "30m" {
 		t.Errorf("expected live_updates.max_overlay_age=30m, got %q", cfg.SemanticIndex.LiveUpdates.MaxOverlayAge)
 	}
+	// Phase 60 D-05 (60-05B): three new live-update toggles flow through
+	// the same 4-layer koanf precedence as the rest of live_updates.*.
+	if !cfg.SemanticIndex.LiveUpdates.WatcherEnabled {
+		t.Errorf("expected live_updates.watcher_enabled=true, got false")
+	}
+	if !cfg.SemanticIndex.LiveUpdates.ManifestScanEnabled {
+		t.Errorf("expected live_updates.manifest_scan_enabled=true, got false")
+	}
+	if cfg.SemanticIndex.LiveUpdates.ManifestScanInterval != "10s" {
+		t.Errorf("expected live_updates.manifest_scan_interval=10s, got %q", cfg.SemanticIndex.LiveUpdates.ManifestScanInterval)
+	}
 
 	// lsp_enrichment.* — SPEC §25.lsp_enrichment.
 	if !cfg.SemanticIndex.LSPEnrichment.Enabled {
@@ -614,5 +625,26 @@ func TestLoad_SemanticIndexPrecedence(t *testing.T) {
 	if cfg.SemanticIndex.Indexing.Mode != "lazy" {
 		t.Errorf("CLI-layer override lost: expected indexing.mode=lazy (CLI beat project=on_demand), got %q",
 			cfg.SemanticIndex.Indexing.Mode)
+	}
+}
+
+// TestLoad_LiveUpdatesDefaults pins the three Phase 60 D-05 toggles
+// (watcher_enabled, manifest_scan_enabled, manifest_scan_interval) at
+// their published defaults. Mirrors TestLoad_SemanticIndexDefaults shape;
+// this focused test exists so a future refactor that drops the keys from
+// defaults.go fails loudly here without dragging the whole §25 sweep.
+func TestLoad_LiveUpdatesDefaults(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.SemanticIndex.LiveUpdates.WatcherEnabled {
+		t.Errorf("default WatcherEnabled = false, want true")
+	}
+	if !cfg.SemanticIndex.LiveUpdates.ManifestScanEnabled {
+		t.Errorf("default ManifestScanEnabled = false, want true")
+	}
+	if got := cfg.SemanticIndex.LiveUpdates.ManifestScanInterval; got != "10s" {
+		t.Errorf("default ManifestScanInterval = %q, want %q", got, "10s")
 	}
 }

@@ -142,3 +142,76 @@ func TestMetrics_AllowedLabelsShape(t *testing.T) {
 		t.Fatalf("AllowedLabels = %v, want %v", AllowedLabels, want)
 	}
 }
+
+// --- Phase 60 D-07 (60-05B) tests for SemanticLiveUpdatesInc ---
+//
+// Pattern mirrors the EditOutcomeInc tests above: the helper drops on
+// unknown kind OR unknown outcome and only emits when both labels are
+// inside the closed enum.
+
+// TestSemanticLiveUpdatesInc_DropsUnknownKind confirms an unknown kind
+// label DROPS the emission. Cardinality bound (T-60-05b-04 mitigation
+// echo).
+func TestSemanticLiveUpdatesInc_DropsUnknownKind(t *testing.T) {
+	m := newMetrics()
+	m.SemanticLiveUpdatesInc("garbage", "applied")
+	mfs, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == "helix_semantic_live_updates_total" {
+			if len(mf.GetMetric()) != 0 {
+				t.Fatalf("unknown kind leaked into metric family: %v", mf.GetMetric())
+			}
+		}
+	}
+}
+
+// TestSemanticLiveUpdatesInc_DropsUnknownOutcome mirrors the kind drop
+// test on the second label.
+func TestSemanticLiveUpdatesInc_DropsUnknownOutcome(t *testing.T) {
+	m := newMetrics()
+	m.SemanticLiveUpdatesInc("file_modified", "exploded")
+	mfs, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == "helix_semantic_live_updates_total" {
+			if len(mf.GetMetric()) != 0 {
+				t.Fatalf("unknown outcome leaked into metric family: %v", mf.GetMetric())
+			}
+		}
+	}
+}
+
+// TestSemanticLiveUpdatesInc_AcceptsAllValid exercises the full 6 × 4 =
+// 24 cardinality matrix and confirms each combination produces exactly
+// one metric line.
+func TestSemanticLiveUpdatesInc_AcceptsAllValid(t *testing.T) {
+	m := newMetrics()
+	kinds := []string{
+		"file_created", "file_modified", "file_deleted",
+		"file_renamed", "helix_edit", "bulk_update",
+	}
+	outcomes := []string{"applied", "no_op", "error", "dropped"}
+	for _, k := range kinds {
+		for _, o := range outcomes {
+			m.SemanticLiveUpdatesInc(k, o)
+		}
+	}
+	mfs, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == "helix_semantic_live_updates_total" {
+			if got := len(mf.GetMetric()); got != len(kinds)*len(outcomes) {
+				t.Fatalf("expected %d metric lines, got %d", len(kinds)*len(outcomes), got)
+			}
+			return
+		}
+	}
+	t.Fatal("helix_semantic_live_updates_total family not found in Gather() output")
+}

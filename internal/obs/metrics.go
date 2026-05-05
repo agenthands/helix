@@ -91,6 +91,16 @@ type Metrics struct {
 	// are members of AllowedLabels; bounded-cardinality is enforced at
 	// emission via SemanticExtractionTotal (T-59-02-02 mitigation).
 	SemanticExtraction *prometheus.CounterVec
+
+	// Phase 60 D-07: live-update pipeline outcome counter (60-05B).
+	// Closed-enum "kind" ∈ {"file_created","file_modified","file_deleted",
+	// "file_renamed","helix_edit","bulk_update"} — the SourceChangeKind
+	// enum from internal/semantic/live/signal.go verbatim.
+	// Closed-enum "outcome" ∈ {"applied","no_op","error","dropped"}.
+	// Cardinality bound: 6 × 4 = 24 combos per workspace. Both labels are
+	// carved out in metrics_labels_test.go and enforced at emission via
+	// SemanticLiveUpdatesInc (drop-on-unknown).
+	SemanticLiveUpdates *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -218,6 +228,16 @@ func newMetrics() *Metrics {
 			// Both already in AllowedLabels; helper drops unknowns.
 			[]string{"language", "outcome"},
 		),
+		SemanticLiveUpdates: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_live_updates_total",
+				Help: "Live-update pipeline outcomes by SourceChangeKind and result (applied/no_op/error/dropped). Phase 60 D-07.",
+			},
+			// Phase 60 D-07: closed-enum "kind" (6 values) + closed-enum
+			// "outcome" (4 values). Carved out in metrics_labels_test.go;
+			// helper SemanticLiveUpdatesInc drops unknowns.
+			[]string{"kind", "outcome"},
+		),
 	}
 
 	reg.MustRegister(
@@ -236,6 +256,7 @@ func newMetrics() *Metrics {
 		m.SemanticStoreQuarantine,
 		m.SemanticStoreOpen,
 		m.SemanticExtraction,
+		m.SemanticLiveUpdates,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -410,4 +431,36 @@ func (m *Metrics) SemanticExtractionTotal(language, outcome string) {
 		return
 	}
 	m.SemanticExtraction.WithLabelValues(language, outcome).Inc()
+}
+
+// --- Phase 60 D-07 helper (60-05B, drop-on-unknown closed-enum discipline) ---
+
+// SemanticLiveUpdatesInc increments helix_semantic_live_updates_total.
+// Phase 60 D-07 closed-enum bound:
+//   - kind ∈ {file_created, file_modified, file_deleted, file_renamed,
+//     helix_edit, bulk_update} — mirrors live.SourceChangeKind verbatim.
+//   - outcome ∈ {applied, no_op, error, dropped}.
+//
+// Unknown values DROP the emission (matches the EditOutcomeInc pattern at
+// lines 339-351). Cardinality bound: 6 × 4 = 24 combos.
+//
+// Wiring: the live handler (`internal/semantic/live/handler`) calls this
+// after each Dispatch — outcome=applied for a successful Commit,
+// outcome=no_op when Coalescer.flush short-circuits an empty batch,
+// outcome=error when Dispatch returns a non-nil error, outcome=dropped
+// when a non-blocking enqueue is refused (Coalescer.Enqueue
+// select-default-drop branch).
+func (m *Metrics) SemanticLiveUpdatesInc(kind, outcome string) {
+	switch kind {
+	case "file_created", "file_modified", "file_deleted", "file_renamed",
+		"helix_edit", "bulk_update":
+	default:
+		return
+	}
+	switch outcome {
+	case "applied", "no_op", "error", "dropped":
+	default:
+		return
+	}
+	m.SemanticLiveUpdates.WithLabelValues(kind, outcome).Inc()
 }

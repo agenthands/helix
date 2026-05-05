@@ -86,6 +86,15 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.live_updates.max_overlay_files":            1000,  // SPEC §25
 		"semantic_index.live_updates.max_overlay_age":              "30m", // SPEC §25
 
+		// Phase 60 D-05: live-updates watcher + manifest scanner toggles
+		// (SPEC §25 extension; not a new section). watcher_enabled gates
+		// fsnotify start in 60-05A; manifest_scan_enabled + interval gate
+		// the 60-05B scanner. All three flow through the standard 4-layer
+		// koanf precedence chain (CLI > project > user > profile defaults).
+		"semantic_index.live_updates.watcher_enabled":        true,
+		"semantic_index.live_updates.manifest_scan_enabled":  true,
+		"semantic_index.live_updates.manifest_scan_interval": "10s",
+
 		// lsp_enrichment.*
 		"semantic_index.lsp_enrichment.enabled":                   true,   // SPEC §25
 		"semantic_index.lsp_enrichment.timeout_per_file":          "5s",   // SPEC §25

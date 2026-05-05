@@ -181,3 +181,10 @@ type noopLogger struct{}
 
 func (noopLogger) Warn(string, ...any) {}
 func (noopLogger) Info(string, ...any) {}
+
+// Compile-time assertion: *Handler satisfies
+// scheduler.IncrementalHandler.  This is the seam scheduler.Scheduler
+// reaches via SetIncrementalHandler — if the method set drifts
+// (e.g., a parameter rename), the build breaks here rather than at
+// the daemon-wiring callsite in 60-05B.
+var _ scheduler.IncrementalHandler = (*Handler)(nil)

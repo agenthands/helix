@@ -105,6 +105,13 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.lsp_enrichment.max_call_hierarchy_depth":  2,      // SPEC §25
 		"semantic_index.lsp_enrichment.max_type_hierarchy_depth":  2,      // SPEC §25
 
+		// Phase 61 P03 D-02 + D-04: enrichment-worker concurrency cap and
+		// foreground-yield observation window. Both keys flow through the
+		// standard 4-layer koanf precedence chain (CLI > project > user >
+		// profile defaults).
+		"semantic_index.lsp_enrichment.max_concurrent_workers": 1,   // P61 D-02
+		"semantic_index.lsp_enrichment.yield_check_window_ms":  200, // P61 D-04 (ms)
+
 		// graph.*
 		"semantic_index.graph.min_edge_confidence":                  float64(0.50), // SPEC §25 (koanf float gotcha)
 		"semantic_index.graph.max_loaded_nodes":                     1000000,       // SPEC §25

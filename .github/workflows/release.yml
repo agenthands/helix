@@ -43,37 +43,39 @@ jobs:
           go-version: '1.25.x'
           cache: true
 
-      - name: Install linux/arm64 cross toolchain (DEF-59.1-LINUX-ZIG-LIBSTDCXX option 2)
-        # D-20 amended: linux targets cannot use zig cc because zig bundles libc++
-        # exclusively at every -linux-* triple, and `libduckdb_static.a` (from
-        # duckdb-go-bindings) is built against libstdc++ on glibc. Empirically
-        # disproven attempts: v1.10.1 (zig+musl, run 25365003032) and v1.10.2
-        # (zig+gnu, run 25365967264) both produced ~25–80 ld.lld undefined-symbol
-        # errors. Resolution: linux/amd64 uses ubuntu-22.04 host gcc (default
-        # libstdc++/glibc); linux/arm64 uses gcc-aarch64-linux-gnu cross-toolchain
-        # installed here. Windows targets keep zig cc — zig's mingw-w64 bundle
-        # ships libstdc++ for windows-gnu, no mismatch on the windows side.
+      - name: Install cross toolchains for linux/arm64 + windows/amd64 (DEF-59.1-LINUX-ZIG-LIBSTDCXX option 2 — final)
+        # D-20 amended: zig cc is removed entirely from this job because zig
+        # bundles libc++ exclusively, and `libduckdb_static.a` (from
+        # duckdb-go-bindings) is built against libstdc++ on every shipped
+        # platform (linux + windows). Empirically disproven attempts:
+        #   - v1.10.1 (zig+musl, run 25365003032) — ld.lld libstdc++ symbol fail
+        #   - v1.10.2 (zig+gnu, run 25365967264) — ld.lld libstdc++ symbol fail
+        #   - v1.10.3 (host gcc linux + zig windows, run 25366745208) — linux
+        #     PASSED, windows lld-link libstdc++ symbol fail
+        # Resolution: every helix-non-darwin target uses a real gcc/g++ toolchain
+        # that ships libstdc++:
+        #   - linux/amd64   → ubuntu-22.04 host gcc / g++ (no install needed)
+        #   - linux/arm64   → gcc-aarch64-linux-gnu / g++-aarch64-linux-gnu (apt)
+        #   - windows/amd64 → gcc-mingw-w64-x86-64 (apt; provides
+        #                     x86_64-w64-mingw32-gcc + …-g++ with libstdc++)
+        #   - windows/arm64 → EXCLUDED via .goreleaser.yaml `ignore` list
+        #                     (duckdb-go-bindings does not ship a windows-arm64
+        #                     prebuilt static lib — see DEF-59-WIN-ARM64-RESTORE)
+        # Windows static linking required: -static-libgcc / -static-libstdc++
+        # / -lpthread to produce a self-contained .exe (no MSYS2 DLL deps on
+        # end-user machines).
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu
-          aarch64-linux-gnu-gcc --version | head -1
+            g++-aarch64-linux-gnu \
+            gcc-mingw-w64-x86-64 \
+            g++-mingw-w64-x86-64
           gcc --version | head -1
-
-      - name: Set up Zig (D-02 — windows targets only post-D-20)
-        # WR-04: SHA-pinned mlugg/setup-zig + explicit zig 0.14.1 version. zig 0.14.1
-        # was released 2025-05-21 (~12 months of bake time). zig 0.16.0 (released
-        # 2026-04-13) is too fresh for a reproducibility-gated release pipeline.
-        # Pin verified via: git ls-remote https://github.com/mlugg/setup-zig refs/tags/v2.2.1
-        # → d1434d08867e3ee9daa34448df10607b98908d29 (recorded 59.1-RESEARCH.md line 167).
-        # Post-D-20 amendment: zig is retained ONLY for the 2 windows targets
-        # (windows/{amd64,arm64}) because zig's mingw bundle ships libstdc++ for
-        # windows-gnu. Linux targets use host gcc + apt cross-toolchain (above).
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29  # v2.2.1
-        with:
-          version: 0.14.1
+          aarch64-linux-gnu-gcc --version | head -1
+          x86_64-w64-mingw32-gcc --version | head -1
+          x86_64-w64-mingw32-g++ --version | head -1
 
       - name: Reproducibility gate -- snapshot Pass-1 (helix-non-darwin)
         # D-20 / FALLBACK-B-MULTI-BUILD-ID: --id helix-non-darwin filters the build to

@@ -23,6 +23,19 @@ builds:
     goarch:
       - amd64
       - arm64
+    # DEF-59-WIN-ARM64-RESTORE: duckdb-go-bindings does not ship a
+    # windows-arm64 prebuilt static lib (only darwin-{amd64,arm64},
+    # linux-{amd64,arm64}, windows-amd64). Under CGO=1, windows/arm64
+    # is physically unbuildable — there is no `libduckdb_static.a` for
+    # that triple. Empirically confirmed by Phase 59.1 v1.10.3 run
+    # 25366745208 (windows/amd64 link failed; windows/arm64 would have
+    # failed earlier or with a different missing-deps error). Excluded
+    # via `ignore` until upstream duckdb-go-bindings ships windows-arm64
+    # OR Helix maintains its own windows-arm64 build. Pre-59.1 (CGO=0)
+    # the target was buildable because no native lib was linked.
+    ignore:
+      - goos: windows
+        goarch: arm64
     env:
       - CGO_ENABLED=1
       - GOFLAGS=-mod=readonly
@@ -41,8 +54,13 @@ builds:
       #   windows side.
       #   darwin entries live in the helix-darwin build entry below and get
       #   NO CC override (Apple clang on macos-14 is the host default per D-15).
-      - 'CC={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}gcc{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-gcc{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}zig cc -target x86_64-windows-gnu{{- else if and (eq .Os "windows") (eq .Arch "arm64") -}}zig cc -target aarch64-windows-gnu{{- end -}}'
-      - 'CXX={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}g++{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-g++{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}zig c++ -target x86_64-windows-gnu{{- else if and (eq .Os "windows") (eq .Arch "arm64") -}}zig c++ -target aarch64-windows-gnu{{- end -}}'
+      - 'CC={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}gcc{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-gcc{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}x86_64-w64-mingw32-gcc{{- end -}}'
+      - 'CXX={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}g++{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-g++{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}x86_64-w64-mingw32-g++{{- end -}}'
+      # Windows mingw-w64 static link: avoid runtime DLL deps on end-user
+      # machines (libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll).
+      # Empty for non-windows targets — ldflags carry only `-s -w` and
+      # `-X main.*` build-info on those triples (see ldflags block below).
+      - 'CGO_LDFLAGS={{- if and (eq .Os "windows") (eq .Arch "amd64") -}}-static-libgcc -static-libstdc++ -lpthread{{- end -}}'
     flags:
       - -trimpath
       # WR-07: -buildvcs=false strips runtime/debug VCS metadata

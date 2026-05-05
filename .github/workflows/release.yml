@@ -454,51 +454,115 @@ jobs:
           echo
           echo "=== Per-build-id subdirs ==="
           ls -la dist/ | grep -E '^d' || true
-          # Sanity: expect 6 binaries total (4 from linux runner + 2 from darwin runner).
+          # Sanity: expect 4 binaries total (2 from linux runner: linux/{amd64,arm64} +
+          # 2 from darwin runner: darwin/{amd64,arm64}). Windows excluded per
+          # DEF-59.1-WINDOWS-CGO-MINGW + DEF-59-WIN-ARM64-RESTORE.
           BINARY_COUNT=$(find dist -type f -name 'helix*' | wc -l | tr -d ' ')
           echo "Total binaries in merged dist/: ${BINARY_COUNT}"
-          if [ "${BINARY_COUNT}" -lt 6 ]; then
-            echo "::warning::Expected 6 binaries in merged dist/, found ${BINARY_COUNT}. release --skip=build may fail."
+          if [ "${BINARY_COUNT}" -lt 4 ]; then
+            echo "::error::Expected 4 binaries in merged dist/ (linux/{amd64,arm64} + darwin/{amd64,arm64}), found ${BINARY_COUNT}."
+            exit 1
           fi
 
-      - name: Real release (tag-push) -- archive + checksum + sign + publish
-        # Real (non-snapshot) tag-push merge: --skip=build because both runners
-        # already produced binaries. archive + checksum + cosign sign + GitHub
-        # release publishing all run here uniformly across 6 archives (D-19).
+      - name: Archive + checksum (manual; OSS goreleaser does not support --skip=build)
+        # Empirical finding from v1.10.6 run 25368793613: OSS goreleaser v2.15.4
+        # rejects `--skip=build` (valid options exclude `build`). The split-runner
+        # release pattern is GoReleaser-Pro-only at the CLI level, mirroring the
+        # config-level lock-in (D-20 / partial.by_target). Resolution: bypass
+        # `goreleaser release` in the merge job and assemble archives + checksum
+        # + sign + publish manually using tar + sha256sum + cosign + gh CLI.
+        #
+        # Archive shape preserved from .goreleaser.yaml `archives:` block (Phase 58
+        # REL-01 contract): helix_v{Version}_{Os}_{Arch}.tar.gz with the binary
+        # nested under a directory of the same prefix so end-users get
+        # `tar -xf helix_v1.10.X_Linux_amd64.tar.gz` → `helix_v1.10.X_Linux_amd64/helix`.
+        # Reproducible flags (--sort=name, --owner=0, --group=0, --numeric-owner,
+        # --mtime from .CommitTimestamp) match goreleaser's archive pipe so
+        # the per-runner Pass-1≡Pass-2 reproducibility gate (D-17) carries
+        # through to the post-merge archive shape.
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="0.0.0-snapshot"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"  # v1.10.7 → 1.10.7
+          fi
+          MTIME=$(git log -1 --format=%cI)  # commit timestamp ISO-8601
+          mkdir -p staged
+          # Goreleaser writes per-target subdirs: dist/<id>_<os>_<arch>[_v1|_v8.0|...]/helix
+          for binary_dir in dist/helix-*; do
+            [ -d "$binary_dir" ] || continue
+            base=$(basename "$binary_dir")
+            # base = helix-non-darwin_linux_amd64_v1 OR helix-darwin_darwin_arm64_v8.0
+            # Strip the build-id prefix; pull os + arch fields by position.
+            os=$(echo "$base" | awk -F_ '{print $2}')
+            arch=$(echo "$base" | awk -F_ '{print $3}')
+            cap_os=$(echo "$os" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+            bin="${binary_dir}/helix"
+            [ -f "${binary_dir}/helix.exe" ] && bin="${binary_dir}/helix.exe"
+            if [ ! -f "$bin" ]; then
+              echo "::warning::No binary in ${binary_dir}; skipping"
+              continue
+            fi
+            archive_base="helix_v${VERSION}_${cap_os}_${arch}"
+            archive_name="${archive_base}.tar.gz"
+            staging_dir="$(mktemp -d)"
+            cp "$bin" "${staging_dir}/$(basename "$bin")"
+            tar --sort=name --owner=0 --group=0 --numeric-owner \
+                --mtime="$MTIME" \
+                --transform "s|^\\./|${archive_base}/|" \
+                -czf "staged/${archive_name}" \
+                -C "${staging_dir}" .
+            rm -rf "${staging_dir}"
+            echo "Created: staged/${archive_name}"
+          done
+          (cd staged && sha256sum *.tar.gz > checksums.txt)
+          echo "=== Archives + checksums ==="
+          ls -la staged/
+          cat staged/checksums.txt
+
+      - name: Cosign keyless sign archives (real tag-push only)
+        # Phase 58 REL-01 contract preserved: cosign keyless OIDC via Fulcio +
+        # Rekor + public-good TSA. --new-bundle-format produces .sigstore.json
+        # bundles co-located with each archive. D-19: signed uniformly across all
+        # archives (currently 4 — windows excluded per DEF-59.1-WINDOWS-CGO-MINGW
+        # and DEF-59-WIN-ARM64-RESTORE).
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
-        with:
-          distribution: goreleaser
-          version: 'v2.15.4'   # WR-07: matches release-linux + release-darwin pin
-          args: release --clean --skip=build
+        run: |
+          set -euo pipefail
+          cd staged
+          for archive in *.tar.gz; do
+            cosign sign-blob \
+              --new-bundle-format \
+              --bundle "${archive}.sigstore.json" \
+              --yes \
+              "${archive}"
+            echo "Signed: ${archive} → ${archive}.sigstore.json"
+          done
+          ls -la
+
+      - name: Publish GitHub Release (real tag-push only)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd staged
+          gh release create "${GITHUB_REF_NAME}" \
+            --target main \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            *.tar.gz checksums.txt *.sigstore.json
 
-      - name: Snapshot rehearsal (workflow_dispatch) -- archive + checksum only (no sign, no publish)
-        # workflow_dispatch path is the snapshot rehearsal Wave 5 uses to capture
-        # FIRST-CI-REPRO-LOG without consuming a real tag. --skip=build,sign means
-        # archive + checksum run; cosign sign + GitHub release publish are skipped.
-        # Wave 5 verifies the 6 archives appear with correct names and the cosign
-        # bundle layout would have been emitted (from .goreleaser.yaml signs: block
-        # being unchanged from the verified Phase 58 shape).
-        if: github.event_name == 'workflow_dispatch'
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29  # v7.0.0
-        with:
-          distribution: goreleaser
-          version: 'v2.15.4'
-          args: release --snapshot --clean --skip=build,sign
-
-      - name: Upload merged dist as workflow artifact (snapshot rehearsal forensic trail)
-        # Both real and snapshot paths upload the final dist/ for Wave 5 to inspect.
-        # On real tag-push, dist/ contains signed archives + .sigstore.json bundles
-        # + checksums.txt (these are also published on the GitHub Release; the
+      - name: Upload staged archives as workflow artifact (forensic trail)
+        # On real tag-push, staged/ contains signed archives + .sigstore.json bundles
+        # + checksums.txt (these are also published on the GitHub Release; this
         # workflow artifact is a short-retention duplicate for triage).
-        # On workflow_dispatch, dist/ contains unsigned archives + checksums.txt
-        # (no .sigstore.json — sign was skipped). Wave 5 downloads this artifact
-        # and verifies layout + per-runner Pass-1≡Pass-2 evidence end-to-end.
+        # On workflow_dispatch, staged/ contains unsigned archives + checksums.txt
+        # (no .sigstore.json — sign was skipped).
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
         with:
           name: dist-merged-${{ github.run_id }}
-          path: dist/
+          path: staged/
           retention-days: 7
           if-no-files-found: error

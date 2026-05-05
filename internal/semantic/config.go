@@ -128,16 +128,34 @@ type IndexingConfig struct {
 
 // LiveUpdatesConfig holds fsnotify overlay-watcher settings (P60).
 // Field set mirrors SPEC §25.live_updates.* verbatim.
+//
+// Phase 60 D-05 added the trailing three keys (WatcherEnabled,
+// ManifestScanEnabled, ManifestScanInterval) — these gate the 60-05A
+// watcher and 60-05B scanner separately so an operator can disable one
+// without losing the other (e.g., disable the watcher on a noisy
+// containerized FS while keeping the periodic scan).
 type LiveUpdatesConfig struct {
-	Enabled                  bool   `koanf:"enabled"`                       // default true
-	DebounceMS               int    `koanf:"debounce_ms"`                   // default 250
-	MaxBatchDelayMS          int    `koanf:"max_batch_delay_ms"`            // default 1500
-	BulkChangeThreshold      int    `koanf:"bulk_change_threshold"`         // default 200
-	CompactAfterIdleMS       int    `koanf:"compact_after_idle_ms"`         // default 5000
-	LSPRevalidateAfterIdleMS int    `koanf:"lsp_revalidate_after_idle_ms"`  // default 750
-	LSPCompactionMaxWaitMS   int    `koanf:"lsp_compaction_max_wait_ms"`    // default 3000
-	MaxOverlayFiles          int    `koanf:"max_overlay_files"`             // default 1000
-	MaxOverlayAge            string `koanf:"max_overlay_age"`               // default "30m"
+	Enabled                  bool   `koanf:"enabled"`                      // default true
+	DebounceMS               int    `koanf:"debounce_ms"`                  // default 250
+	MaxBatchDelayMS          int    `koanf:"max_batch_delay_ms"`           // default 1500
+	BulkChangeThreshold      int    `koanf:"bulk_change_threshold"`        // default 200
+	CompactAfterIdleMS       int    `koanf:"compact_after_idle_ms"`        // default 5000
+	LSPRevalidateAfterIdleMS int    `koanf:"lsp_revalidate_after_idle_ms"` // default 750
+	LSPCompactionMaxWaitMS   int    `koanf:"lsp_compaction_max_wait_ms"`   // default 3000
+	MaxOverlayFiles          int    `koanf:"max_overlay_files"`            // default 1000
+	MaxOverlayAge            string `koanf:"max_overlay_age"`              // default "30m"
+
+	// Phase 60 D-05 (60-05B):
+	// WatcherEnabled gates fsnotify start in 60-05A's watcher.Manager.
+	// Default true.
+	WatcherEnabled bool `koanf:"watcher_enabled"`
+	// ManifestScanEnabled gates the 60-05B periodic scanner.
+	// Default true.
+	ManifestScanEnabled bool `koanf:"manifest_scan_enabled"`
+	// ManifestScanInterval is the human-readable duration (e.g. "10s")
+	// between scanner cycles. Parsed via time.ParseDuration in the daemon
+	// wiring; values <= 0 fall back to the scanner's 10s default.
+	ManifestScanInterval string `koanf:"manifest_scan_interval"`
 }
 
 // LSPEnrichmentConfig holds LSP enrichment-worker settings (P61).

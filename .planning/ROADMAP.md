@@ -143,9 +143,9 @@
   - [x] 59.1-05-PLAN.md — Wave 5 release-smoke finalization + per-runner Pass-1≡Pass-2 reproducibility verification on BOTH runners (HARD GATE; D-09/D-10 amended; cross-runner byte-equality NOT a gate per Pitfall 8)
 - [ ] Phase 60: Live Update Pipeline (0/6 plans)
   Plans:
-  - [ ] 60-01-PLAN.md — Wave 0 vet-nokernel2semantic analyzer enforcing LIVE-07 invariant #1 (kernel→semantic boundary)
-  - [ ] 60-02-PLAN.md — Wave 1 schema migration v2→v3 (current_epoch + 4× write_epoch + 4 indexes) + overlay writer (BeginOverlayTx + MarkFileDeleted/MarkSymbolsDeleted/MarkReferencesDeleted/MarkEdgesDeleted) + per-tx epoch contract under -race stress
-  - [ ] 60-03-PLAN.md — Wave 1 EditNotifier interface in internal/kernel + 8-tool wiring (5 edit + 3 fileops) + non-blocking integration tests
+  - [x] 60-01-PLAN.md — Wave 0 vet-nokernel2semantic analyzer enforcing LIVE-07 invariant #1 (kernel→semantic boundary)
+  - [x] 60-02-PLAN.md — Wave 1 schema migration v2→v3 (current_epoch + 4× write_epoch + 4 indexes) + overlay writer (BeginOverlayTx + MarkFileDeleted/MarkSymbolsDeleted/MarkReferencesDeleted/MarkEdgesDeleted) + per-tx epoch contract under -race stress
+  - [x] 60-03-PLAN.md — Wave 1 EditNotifier interface in internal/kernel + 8-tool wiring (5 edit + 3 fileops) + non-blocking integration tests
   - [ ] 60-04-PLAN.md — Wave 2 live spine: signal/classifier/coalescer/handler/service + ScheduleIncremental fill + lspqueue handoff (TDD: CoalesceEvents + MergeChange + ClassifyPathChange)
   - [ ] 60-05a-PLAN.md — Wave 3 (parallel with 60-05b) per-workspace fsnotify watcher + ENOSPC fallback + LIVE-02 editor-fixture suite (Vim/JetBrains/VS Code)
   - [ ] 60-05b-PLAN.md — Wave 3 (parallel with 60-05a) manifest scanner + 3 new config keys + bounded-label metric + pipelines/live.go fill + daemon bootstrap + Phase 60 close-out checkpoint

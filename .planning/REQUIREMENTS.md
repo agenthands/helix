@@ -37,13 +37,13 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### LIVE — Live Update Pipeline
 
-- [ ] **LIVE-01**: A directory-level fsnotify watcher observes the workspace, debounces 250ms, coalesces per SPEC §16.2 (modified+modified→modified, created+deleted→no-op, etc.), and writes structured upserts/tombstones into the live overlay.
-- [ ] **LIVE-02**: Atomic-rename save patterns from Vim, JetBrains, and VS Code do not silently kill watching — verified by an editor-fixture test that performs each editor's save dance and asserts the overlay caught the change.
-- [ ] **LIVE-03**: A required (not best-effort) periodic content-hash scrub catches missed events; status is exposed via `get_semantic_graph_status`.
-- [ ] **LIVE-04**: Linux `inotify` `ENOSPC` falls back gracefully to a manifest-poll mode per workspace with a user-visible warning; semantic queries still answer with stale-allowed reads.
-- [ ] **LIVE-05**: Bulk-change events above `live_updates.bulk_change_threshold` (default 200) collapse to a single `bulk_update` event that schedules an incremental snapshot rebuild rather than thrashing the overlay.
-- [ ] **LIVE-06**: An overlay write transaction carries a monotonic `overlay_epoch` that compaction (COMPACT-01) reads under CAS — no overlay rows committed after compaction's snapshot read are dropped by `ClearOverlay`.
-- [ ] **LIVE-07**: After every successful `replace_symbol_body`, `insert_before/after_symbol`, `rename_symbol`, `safe_delete_symbol`, `replace_in_file`, and `fuzzy_edit`, the edited files emit a `ChangeHelixEdit` event into the live queue via a `postEditHook` callback (kernel does not import semantic).
+- [x] **LIVE-01**: A directory-level fsnotify watcher observes the workspace, debounces 250ms, coalesces per SPEC §16.2 (modified+modified→modified, created+deleted→no-op, etc.), and writes structured upserts/tombstones into the live overlay.
+- [x] **LIVE-02**: Atomic-rename save patterns from Vim, JetBrains, and VS Code do not silently kill watching — verified by an editor-fixture test that performs each editor's save dance and asserts the overlay caught the change.
+- [x] **LIVE-03**: A required (not best-effort) periodic content-hash scrub catches missed events; status is exposed via `get_semantic_graph_status`.
+- [x] **LIVE-04**: Linux `inotify` `ENOSPC` falls back gracefully to a manifest-poll mode per workspace with a user-visible warning; semantic queries still answer with stale-allowed reads.
+- [x] **LIVE-05**: Bulk-change events above `live_updates.bulk_change_threshold` (default 200) collapse to a single `bulk_update` event that schedules an incremental snapshot rebuild rather than thrashing the overlay.
+- [x] **LIVE-06**: An overlay write transaction carries a monotonic `overlay_epoch` that compaction (COMPACT-01) reads under CAS — no overlay rows committed after compaction's snapshot read are dropped by `ClearOverlay`.
+- [x] **LIVE-07**: After every successful `replace_symbol_body`, `insert_before/after_symbol`, `rename_symbol`, `safe_delete_symbol`, `replace_in_file`, and `fuzzy_edit`, the edited files emit a `ChangeHelixEdit` event into the live queue via a `postEditHook` callback (kernel does not import semantic).
 
 ### ENRICH — LSP Enrichment
 
@@ -192,13 +192,13 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | EXTRACT-03 | Phase 59 | Pending |
 | EXTRACT-04 | Phase 59 | Pending |
 | EXTRACT-05 | Phase 59 | Pending |
-| LIVE-01 | Phase 60 | Pending |
-| LIVE-02 | Phase 60 | Pending |
-| LIVE-03 | Phase 60 | Pending |
-| LIVE-04 | Phase 60 | Pending |
-| LIVE-05 | Phase 60 | Pending |
-| LIVE-06 | Phase 60 | Pending |
-| LIVE-07 | Phase 60 | Pending |
+| LIVE-01 | Phase 60 | Complete |
+| LIVE-02 | Phase 60 | Complete |
+| LIVE-03 | Phase 60 | Complete |
+| LIVE-04 | Phase 60 | Complete |
+| LIVE-05 | Phase 60 | Complete |
+| LIVE-06 | Phase 60 | Complete |
+| LIVE-07 | Phase 60 | Complete |
 | ENRICH-01 | Phase 61 | Pending |
 | ENRICH-02 | Phase 61 | Pending |
 | ENRICH-03 | Phase 61 | Pending |

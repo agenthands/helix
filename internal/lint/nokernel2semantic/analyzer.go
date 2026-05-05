@@ -12,6 +12,13 @@
 //	Acceptance #1 (LIVE-07 invariant #1)  →  this analyzer  →  cmd/vet-nokernel2semantic
 //	                                       (`make vet` runs the singlechecker)
 //
+// CI note: .github/workflows/go-test.yml currently runs plain `go vet ./...`
+// (without `-vettool=`), so the singlechecker only fires on local
+// `make vet` / `make test` invocations today. A follow-up wiring step (out
+// of scope per 60-01-PLAN.md "do NOT add a new workflow file in this plan")
+// can swap the CI step from `go vet ./...` to `make vet` to make the
+// LIVE-07 #1 gate apply on every PR.
+//
 // The forbiddenImportPrefix string is intentionally a prefix (no trailing
 // slash) so it matches any sub-package of internal/semantic/ without per-
 // package allowlisting.

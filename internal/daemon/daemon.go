@@ -286,6 +286,29 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		logger.Info("semantic extraction scheduler constructed")
 	}
 
+	// 6e. Wire Phase 60 live-update pipeline. Returns nil when
+	// SemanticIndex.LiveUpdates.Enabled is false OR a required dep is
+	// missing — SetActivateCallback handles nil cleanly.
+	//
+	// On non-nil return: kernel.SetEditNotifier is installed and
+	// scheduler.SetIncrementalHandler is wired. Per-workspace lifecycle
+	// hooks (Start/Stop) fire from SetActivateCallback below.
+	live := buildLiveBundle(
+		cfg.SemanticIndex.LiveUpdates,
+		semanticStore,
+		semanticScheduler,
+		k,
+		observability.Metrics(),
+		logger,
+	)
+	if live != nil {
+		logger.Info("live-update pipeline wired",
+			"watcher_enabled", cfg.SemanticIndex.LiveUpdates.WatcherEnabled,
+			"manifest_scan_enabled", cfg.SemanticIndex.LiveUpdates.ManifestScanEnabled,
+			"manifest_scan_interval", cfg.SemanticIndex.LiveUpdates.ManifestScanInterval,
+		)
+	}
+
 	// 7. Create MCP server.
 	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger, observability.Tracer())
 
@@ -491,6 +514,10 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 				},
 			)
 		}
+		// Phase 60 D-05/D-06: per-workspace live-update lifecycle. nil
+		// bundle means LiveUpdates is disabled — startWorkspace is a
+		// no-op in that case.
+		live.startWorkspace(ctx, activeWSKey, logger)
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),

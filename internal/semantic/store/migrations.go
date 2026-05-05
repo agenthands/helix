@@ -444,6 +444,71 @@ func schema2Statements() []string {
 	}
 }
 
+// applyMigration003 lights up the live-overlay epoch contract (Phase 60 D-04).
+//
+// Adds current_epoch to semantic_live_overlay_meta and write_epoch to each
+// of the four overlay fact tables, plus per-table (repo_id, write_epoch)
+// indexes for Phase 63's CAS scan path. Stamps schema_version=3.
+//
+// 9 columns + 4 indexes + 1 schema_version row = 10 ALTER + 4 CREATE INDEX +
+// 1 INSERT = 10 statements (ALTER count is 5: meta + 4 fact tables; the
+// remaining count comes from indexes and the version stamp).
+//
+// DuckDB ALTER TABLE constraint limitation (carried over from Phase 59
+// applyMigration002): DuckDB rejects `ALTER TABLE ... ADD COLUMN ... NOT NULL
+// DEFAULT <expr>` ("Adding columns with constraints not yet supported"). We
+// use DEFAULT 0 alone — the application layer (Phase 60 OverlayTx) explicitly
+// stamps write_epoch on every write, so the runtime invariant (no NULL or
+// zero epochs on writer-touched rows) is enforced in code rather than schema.
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no reindex,
+// no data backfill (existing rows take the column DEFAULT 0).
+//
+// Rollback: same as v1→v2 (Phase 59 applyMigration002 doc). DuckDB's
+// ALTER TABLE DROP COLUMN support is incomplete; downgrade requires the
+// quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration003(ctx context.Context, db *sql.DB) error {
+	stmts := schema3Statements()
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration003: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema3Statements returns the v2→v3 DDL in deterministic order: 5 ALTER
+// TABLE statements (one for the meta table, one for each of the four fact
+// tables), 4 CREATE INDEX statements, then one INSERT into
+// semantic_schema_version.
+//
+// Acceptance grep gates in 60-02-PLAN.md scan THIS function — keep the
+// `ALTER TABLE semantic_<name> ADD COLUMN write_epoch` strings on their
+// own logical lines so per-table presence regexes match.
+func schema3Statements() []string {
+	return []string{
+		// Per-workspace monotone epoch counter.
+		`ALTER TABLE semantic_live_overlay_meta ADD COLUMN current_epoch UBIGINT DEFAULT 0`,
+
+		// Per-row write_epoch stamps on the four overlay fact tables.
+		`ALTER TABLE semantic_live_overlay_files ADD COLUMN write_epoch UBIGINT DEFAULT 0`,
+		`ALTER TABLE semantic_live_overlay_symbols ADD COLUMN write_epoch UBIGINT DEFAULT 0`,
+		`ALTER TABLE semantic_live_overlay_references ADD COLUMN write_epoch UBIGINT DEFAULT 0`,
+		`ALTER TABLE semantic_live_overlay_edges ADD COLUMN write_epoch UBIGINT DEFAULT 0`,
+
+		// Phase-63 CAS scan path indexes — (repo_id, write_epoch) per fact
+		// table. The 'idx_overlay_*_write_epoch' naming convention is the
+		// grep-gate target documented in 60-02-PLAN.md verification.
+		`CREATE INDEX idx_overlay_files_write_epoch ON semantic_live_overlay_files(repo_id, write_epoch)`,
+		`CREATE INDEX idx_overlay_symbols_write_epoch ON semantic_live_overlay_symbols(repo_id, write_epoch)`,
+		`CREATE INDEX idx_overlay_references_write_epoch ON semantic_live_overlay_references(repo_id, write_epoch)`,
+		`CREATE INDEX idx_overlay_edges_write_epoch ON semantic_live_overlay_edges(repo_id, write_epoch)`,
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (3, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

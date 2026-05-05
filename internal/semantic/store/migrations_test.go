@@ -28,14 +28,15 @@ func TestMigration_Fresh_v2(t *testing.T) {
 		t.Fatal("Open(fresh) produced a Store with nil db")
 	}
 
-	// schema_version row exists with version=2 (max across rows handles the
-	// case where 001 stamped 1 and 002 stamped 2).
+	// schema_version row max() must equal CurrentSchemaVersion. Phase 60
+	// bumped it to 3 (was 2 in Phase 59); the test asserts on the constant
+	// rather than the literal so future migrations don't tug this assertion.
 	var version int
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("fresh schema_version: got %d, want 2", version)
+	if version != CurrentSchemaVersion {
+		t.Errorf("fresh schema_version: got %d, want %d (CurrentSchemaVersion)", version, CurrentSchemaVersion)
 	}
 
 	// Sample 4 of the 16 Phase 57 tables to confirm v1 tables still exist
@@ -142,13 +143,13 @@ func TestMigration_Existing_v2(t *testing.T) {
 
 	db := storeUnderlyingDB(s)
 
-	// schema_version is now 2.
+	// schema_version is now CurrentSchemaVersion (Phase 60 bumped to 3).
 	var version int
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version after upgrade: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("upgraded schema_version: got %d, want 2", version)
+	if version != CurrentSchemaVersion {
+		t.Errorf("upgraded schema_version: got %d, want %d (CurrentSchemaVersion)", version, CurrentSchemaVersion)
 	}
 
 	// Existing rows preserved (data preservation invariant).
@@ -282,6 +283,181 @@ func TestMigration002_AllColumnsPresent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMigration003_FreshLandsAtV3 asserts that opening a fresh DB (with no
+// pre-existing file) lands at schema_version=3 and that all v3 columns +
+// indexes exist. Phase 60 D-04: live-overlay epoch columns + write_epoch
+// stamps + CAS scan indexes.
+func TestMigration003_FreshLandsAtV3(t *testing.T) {
+	wsDir := t.TempDir()
+	cfg := configFor(wsDir)
+	m := newTestObsMetrics(t)
+
+	s, err := Open(context.Background(), cfg, silentLogger(), m)
+	if err != nil {
+		t.Fatalf("Open(fresh): %v", err)
+	}
+	defer s.Close()
+
+	db := storeUnderlyingDB(s)
+	if db == nil {
+		t.Fatal("Open(fresh) produced a Store with nil db")
+	}
+
+	// schema_version row max() must be 3 after fresh open (001 stamped 1,
+	// 002 stamped 2, 003 stamped 3).
+	var version int
+	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
+		t.Fatalf("read schema_version: %v", err)
+	}
+	if version != 3 {
+		t.Errorf("fresh schema_version: got %d, want 3", version)
+	}
+
+	// v3 columns must be visible.
+	wantCols := []struct{ table, column string }{
+		{"semantic_live_overlay_meta", "current_epoch"},
+		{"semantic_live_overlay_files", "write_epoch"},
+		{"semantic_live_overlay_symbols", "write_epoch"},
+		{"semantic_live_overlay_references", "write_epoch"},
+		{"semantic_live_overlay_edges", "write_epoch"},
+	}
+	for _, wc := range wantCols {
+		if !columnExists(t, db, wc.table, wc.column) {
+			t.Errorf("missing v3 column: %s.%s", wc.table, wc.column)
+		}
+	}
+
+	// All four (repo_id, write_epoch) indexes must exist.
+	wantIndexes := []string{
+		"idx_overlay_files_write_epoch",
+		"idx_overlay_symbols_write_epoch",
+		"idx_overlay_references_write_epoch",
+		"idx_overlay_edges_write_epoch",
+	}
+	for _, idx := range wantIndexes {
+		if !indexExists(t, db, idx) {
+			t.Errorf("missing v3 index: %s", idx)
+		}
+	}
+}
+
+// TestMigration003_UpgradeFromV1 builds a v1-shaped DB directly (running only
+// applyMigration001 against a raw *sql.DB, bypassing Open), then reopens via
+// the public Open API. The registry must run 1→2 and 2→3 in order. Phase-57-
+// populated DB starting state.
+func TestMigration003_UpgradeFromV1(t *testing.T) {
+	wsDir := t.TempDir()
+	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	if err := mkdirAllForTest(t, filepath.Dir(dbPath)); err != nil {
+		t.Fatal(err)
+	}
+
+	rawDB, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(v1 seed): %v", err)
+	}
+	if err := applyMigration001(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration001 (seed): %v", err)
+	}
+	if err := rawDB.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	cfg := configFor(wsDir)
+	m := newTestObsMetrics(t)
+	s, err := Open(context.Background(), cfg, silentLogger(), m)
+	if err != nil {
+		t.Fatalf("Open(existing v1): %v", err)
+	}
+	defer s.Close()
+
+	db := storeUnderlyingDB(s)
+	var version int
+	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
+		t.Fatalf("read schema_version after upgrade: %v", err)
+	}
+	if version != 3 {
+		t.Errorf("upgraded schema_version: got %d, want 3", version)
+	}
+	if !columnExists(t, db, "semantic_live_overlay_meta", "current_epoch") {
+		t.Error("missing current_epoch on semantic_live_overlay_meta after v1→v3 upgrade")
+	}
+}
+
+// TestMigration003_UpgradeFromV2 builds a v2-shaped DB directly (running
+// applyMigration001 + applyMigration002 against a raw *sql.DB), then reopens
+// via Open. The registry must run only 2→3. Phase-59-populated DB starting
+// state.
+func TestMigration003_UpgradeFromV2(t *testing.T) {
+	wsDir := t.TempDir()
+	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	if err := mkdirAllForTest(t, filepath.Dir(dbPath)); err != nil {
+		t.Fatal(err)
+	}
+
+	rawDB, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(v2 seed): %v", err)
+	}
+	if err := applyMigration001(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration001 (seed): %v", err)
+	}
+	if err := applyMigration002(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration002 (seed): %v", err)
+	}
+	// Insert a representative pre-existing overlay-meta row so we can verify
+	// the DEFAULT 0 backfill on current_epoch.
+	if _, err := rawDB.Exec(`INSERT INTO semantic_live_overlay_meta (
+		repo_id, base_snapshot_id, graph_version, freshness,
+		overlay_file_count, pending_lsp_count, updated_at
+	) VALUES ('seeded-ws', 0, 0, 'fresh', 0, 0, now())`); err != nil {
+		t.Fatalf("seed semantic_live_overlay_meta: %v", err)
+	}
+	if err := rawDB.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	cfg := configFor(wsDir)
+	m := newTestObsMetrics(t)
+	s, err := Open(context.Background(), cfg, silentLogger(), m)
+	if err != nil {
+		t.Fatalf("Open(existing v2): %v", err)
+	}
+	defer s.Close()
+
+	db := storeUnderlyingDB(s)
+	var version int
+	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
+		t.Fatalf("read schema_version after upgrade: %v", err)
+	}
+	if version != 3 {
+		t.Errorf("upgraded schema_version: got %d, want 3", version)
+	}
+
+	// Pre-existing meta row's current_epoch column took the DEFAULT 0.
+	var epoch uint64
+	if err := db.QueryRow(`SELECT current_epoch FROM semantic_live_overlay_meta
+		WHERE repo_id = 'seeded-ws'`).Scan(&epoch); err != nil {
+		t.Fatalf("read current_epoch on seeded row: %v", err)
+	}
+	if epoch != 0 {
+		t.Errorf("pre-existing meta row current_epoch: got %d, want 0 (DEFAULT)", epoch)
+	}
+}
+
+// indexExists returns true iff the named index is present in
+// duckdb_indexes(). DuckDB's index inventory is per-schema.
+func indexExists(t *testing.T, db *sql.DB, indexName string) bool {
+	t.Helper()
+	var n int
+	err := db.QueryRow(`SELECT count(*) FROM duckdb_indexes()
+		WHERE index_name = ?`, indexName).Scan(&n)
+	if err != nil {
+		t.Fatalf("duckdb_indexes() lookup for %s: %v", indexName, err)
+	}
+	return n > 0
 }
 
 // --- Local helpers (use a unique suffix to avoid colliding with helpers in

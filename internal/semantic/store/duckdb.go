@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	// D-12: SOLE owner of the duckdb-go import (canonical DuckDB Foundation
@@ -55,6 +56,14 @@ type Store struct {
 	// as the "workspace_label" metric value (T-57-02-06 mitigation — no
 	// raw paths leak to Prometheus).
 	label string
+
+	// Phase 60 D-04: per-workspace overlay tx lock registry. The outer
+	// mutex guards the map; the inner per-repoID mutex serializes
+	// BeginOverlayTx calls for the SAME workspace so each tx receives a
+	// unique monotone write_epoch. Cross-workspace BeginOverlayTx calls
+	// do NOT serialize. See overlay.go for the full lock protocol.
+	overlayLocksMu sync.Mutex
+	overlayLocks   map[string]*sync.Mutex
 }
 
 // Open opens (or quarantines+rebuilds, or hard-fails) the DuckDB file at
@@ -203,7 +212,14 @@ func openFresh(ctx context.Context, path, label string, logger *slog.Logger, met
 		metrics.SemanticStoreOpenInc(label, outcomeCreated)
 	}
 	logger.Info("semantic store created fresh", "workspace_label", label, "path", path, "schema_version", CurrentSchemaVersion)
-	return &Store{db: db, path: path, logger: logger, metrics: metrics, label: label}, nil
+	return &Store{
+		db:           db,
+		path:         path,
+		logger:       logger,
+		metrics:      metrics,
+		label:        label,
+		overlayLocks: map[string]*sync.Mutex{},
+	}, nil
 }
 
 // openExisting opens an existing DB. Phase 59 lights up the migration
@@ -231,7 +247,14 @@ func openExisting(ctx context.Context, path, label string, logger *slog.Logger, 
 		metrics.SemanticStoreOpenInc(label, outcomeOpened)
 	}
 	logger.Info("semantic store reopened", "workspace_label", label, "path", path)
-	return &Store{db: db, path: path, logger: logger, metrics: metrics, label: label}, nil
+	return &Store{
+		db:           db,
+		path:         path,
+		logger:       logger,
+		metrics:      metrics,
+		label:        label,
+		overlayLocks: map[string]*sync.Mutex{},
+	}, nil
 }
 
 // quarantineAndRebuild renames the existing file to <path>.corrupt.<unix-ts>,

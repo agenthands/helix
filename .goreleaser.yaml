@@ -24,18 +24,36 @@ builds:
       - amd64
       - arm64
     # DEF-59-WIN-ARM64-RESTORE: duckdb-go-bindings does not ship a
-    # windows-arm64 prebuilt static lib (only darwin-{amd64,arm64},
-    # linux-{amd64,arm64}, windows-amd64). Under CGO=1, windows/arm64
-    # is physically unbuildable — there is no `libduckdb_static.a` for
-    # that triple. Empirically confirmed by Phase 59.1 v1.10.3 run
-    # 25366745208 (windows/amd64 link failed; windows/arm64 would have
-    # failed earlier or with a different missing-deps error). Excluded
-    # via `ignore` until upstream duckdb-go-bindings ships windows-arm64
-    # OR Helix maintains its own windows-arm64 build. Pre-59.1 (CGO=0)
-    # the target was buildable because no native lib was linked.
+    # windows-arm64 prebuilt static lib (only linux-{amd64,arm64},
+    # windows-amd64, darwin-{amd64,arm64}). Excluded permanently until
+    # upstream ships it.
+    #
+    # DEF-59.1-WINDOWS-CGO-MINGW (NEW, 2026-05-05): windows/amd64 is
+    # also excluded for Phase 59.1. Empirical evidence (5 CI runs:
+    # v1.10.1..v1.10.5):
+    #   - zig+musl  → libstdc++ ABI mismatch (zig ships libc++)
+    #   - zig+gnu   → same (gnu vs musl is libc, not libcxx)
+    #   - mingw32+win32 threads → pthread_mutex_* missing
+    #   - mingw32+posix threads → libstdc++ version drift
+    #     (`std::__throw_bad_array_new_length`, `__cxa_call_terminate`,
+    #     `_M_addref`/`_M_release`, `__cxx11::basic_string::reserve`,
+    #     `basic_streambuf::seekpos` undefined; UCRT-vs-msvcrt also
+    #     in scope: `__imp___timezone`, `__imp___tzname`,
+    #     `__stdio_common_v(s)nprintf_s`)
+    # The duckdb-go-bindings windows-amd64 prebuilt static lib appears
+    # to be MSVC- or newer-libstdc++-built and is not link-compatible
+    # with Ubuntu apt's `gcc-mingw-w64-x86-64-posix` (gcc 10 era
+    # libstdc++). Resolution paths for a future phase:
+    #   - llvm-mingw (newer libstdc++/libc++ + UCRT)
+    #   - clang-cl on a windows runner (real MSVC ABI)
+    #   - build duckdb from source under matching toolchain
+    # Phase 59.1 ships the 4-archive linux+darwin matrix; windows is
+    # tracked under a follow-up phase, NOT inline in 59.1.
     ignore:
       - goos: windows
         goarch: arm64
+      - goos: windows
+        goarch: amd64
     env:
       - CGO_ENABLED=1
       - GOFLAGS=-mod=readonly

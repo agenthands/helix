@@ -52,6 +52,18 @@ type HeritageID uint64
 // restarts.
 type WorkspaceID string
 
+// RepoID is the opaque identifier under which the semantic store's overlay
+// and snapshot tables key their per-workspace rows (DDL column `repo_id`).
+// Phase 60 P04 introduces it as a typed alias so cross-package signatures
+// (live.SourceChangeEvent, scheduler.IncrementalHandler, store helpers)
+// can carry it explicitly instead of stringly-typed `string` parameters.
+//
+// Currently a 1:1 alias with WorkspaceID at the daemon-wiring layer (the
+// daemon converts WorkspaceKey → repoID via a single function) but kept
+// distinct so future repo-vs-workspace fan-out (e.g., multi-workspace per
+// monorepo) can refine the relation without churning every signature.
+type RepoID string
+
 // Freshness classifies the staleness of a fact returned by the effective-read
 // API (SPEC-DRAFT.md §10). Values are written into log fields and (later)
 // surfaced as a metric label, so the enum is closed.

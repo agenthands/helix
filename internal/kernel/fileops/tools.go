@@ -13,6 +13,7 @@ import (
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/edit"
 	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // ReadFileArgs is the input schema for the read_file tool.
@@ -166,14 +167,21 @@ Use ellipsis to skip middle content:
 // The workspaceRoot function provides the active workspace root path.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
 // sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
-func RegisterTools(server *mcp.SerenaMCPServer, workspaceRoot func() string, tracer trace.Tracer) {
+//
+// Phase 60 D-03: the *kernel.Kernel and wsKeyFn parameters thread the
+// EditNotifier accessor + active workspace key into the create_file,
+// replace_in_file, and fuzzy_edit register* closures so they can fire
+// the fire-and-forget OnEdit hook on the success path. Read-only and
+// non-mutating tools (read_file, list_directory, find_files,
+// search_in_files) ignore both new parameters.
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, workspaceRoot func() string, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	registerReadFile(server, workspaceRoot, tracer)
-	registerCreateFile(server, workspaceRoot, tracer)
+	registerCreateFile(server, k, workspaceRoot, wsKeyFn, tracer)
 	registerListDirectory(server, workspaceRoot, tracer)
 	registerFindFiles(server, workspaceRoot, tracer)
 	registerSearchInFiles(server, workspaceRoot, tracer)
-	registerReplaceInFile(server, workspaceRoot, tracer)
-	registerFuzzyEdit(server, workspaceRoot, tracer)
+	registerReplaceInFile(server, k, workspaceRoot, wsKeyFn, tracer)
+	registerFuzzyEdit(server, k, workspaceRoot, wsKeyFn, tracer)
 }
 
 func textResult(text string) *mcpsdk.CallToolResult {
@@ -228,7 +236,7 @@ func registerReadFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer 
 	server.Registry().Register(&mcp.ToolDef{Name: "read_file", Description: "Read a file's content, optionally a specific line range", BriefDescription: "Read the contents of a file", HelpText: readFileHelp})
 }
 
-func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerCreateFile(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn func() string, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "create_file",
 		Description: "Create a new file with content (errors if file already exists)",
@@ -244,6 +252,11 @@ func registerCreateFile(server *mcp.SerenaMCPServer, rootFn func() string, trace
 
 		if err := CreateFile(root, args.Path, args.Content); err != nil {
 			return errorResult(err.Error()), nil, nil
+		}
+		// Phase 60 D-03: fire-and-forget signal to semantic live service.
+		// Errors are swallowed; correctness via watcher + manifest scanner.
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKeyFn(), []string{args.Path})
 		}
 		return textResult("created: " + args.Path), nil, nil
 	}))
@@ -357,7 +370,7 @@ func registerSearchInFiles(server *mcp.SerenaMCPServer, rootFn func() string, tr
 	server.Registry().Register(&mcp.ToolDef{Name: "search_in_files", Description: "Search for a regex pattern across the codebase, with optional context lines", BriefDescription: "Search file contents using regex patterns", HelpText: searchInFilesHelp})
 }
 
-func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerReplaceInFile(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn func() string, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "replace_in_file",
 		Description: "Replace all occurrences of a pattern in a file (literal or regex)",
@@ -422,6 +435,11 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 			// indentation_flexible} on the success branch. StrategyFailed
 			// returns ErrNoMatch above before reaching here.
 			strategy = string(fResult.Strategy)
+			// Phase 60 D-03: fuzzy-fallback success path overwrote the file.
+			// Fire-and-forget; errors swallowed; correctness via watcher.
+			if n := k.EditNotifier(); n != nil {
+				_ = n.OnEdit(ctx, wsKeyFn(), []string{args.Path})
+			}
 			text := fmt.Sprintf("1 replacement made in %s (fuzzy)\nmatch_strategy: %s\nsimilarity_score: %.2f",
 				args.Path, fResult.Strategy, fResult.Score)
 			return textResult(text), nil, nil
@@ -431,13 +449,20 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, rootFn func() string, tr
 		// strategy is "exact" (Phase 53 D-11 semantics — exact byte match).
 		if count > 0 {
 			strategy = "exact"
+			// Phase 60 D-03: literal-match success path mutated the file
+			// (ReplaceInFile already wrote on disk). Fire-and-forget;
+			// errors swallowed; correctness via watcher + manifest scan.
+			// count == 0 (regex with no matches) does NOT emit — no write.
+			if n := k.EditNotifier(); n != nil {
+				_ = n.OnEdit(ctx, wsKeyFn(), []string{args.Path})
+			}
 		}
 		return textResult(fmt.Sprintf("%d replacement(s) made in %s", count, args.Path)), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "replace_in_file", Description: "Replace all occurrences of a pattern in a file (literal or regex)", BriefDescription: "Replace text in a file using exact string matching", HelpText: replaceInFileHelp})
 }
 
-func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer trace.Tracer) {
+func registerFuzzyEdit(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn func() string, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "fuzzy_edit",
 		Description: "Fuzzy-match and replace text in a file using 4-strategy cascade (exact, whitespace-normalized, indentation-flexible)",
@@ -479,6 +504,12 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, rootFn func() string, tracer
 
 		// Success path: strategy is the matched cascade tier.
 		strategy = string(result.Strategy)
+		// Phase 60 D-03: FuzzyEdit() already overwrote the file on disk.
+		// Fire-and-forget signal to semantic live service; errors swallowed;
+		// correctness via watcher + manifest scanner.
+		if n := k.EditNotifier(); n != nil {
+			_ = n.OnEdit(ctx, wsKeyFn(), []string{args.Path})
+		}
 
 		text := fmt.Sprintf("Fuzzy edit applied to %s\nmatch_strategy: %s\nsimilarity_score: %.2f",
 			args.Path, result.Strategy, result.Score)

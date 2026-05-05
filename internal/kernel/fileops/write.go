@@ -1,3 +1,15 @@
+// Package fileops write.go contains the CreateFile and OverwriteFile
+// helpers used by the create_file, replace_in_file, and fuzzy_edit
+// tools.
+//
+// Phase 60 D-03: per-tool MCP handlers in tools.go fire
+// EditNotifier.OnEdit after every successful CreateFile / OverwriteFile
+// call. The free functions here remain notifier-unaware on purpose —
+// the *kernel.Kernel handle is held by the registered handler closure,
+// not the helper. RESEARCH.md Open Question O-1 was resolved in favor
+// of per-tool wiring (3 register* closures) over centralized
+// OverwriteFile wiring; the latter would require ripple changes to
+// every OverwriteFile caller without a corresponding correctness gain.
 package fileops
 
 import (

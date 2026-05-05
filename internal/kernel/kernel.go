@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
@@ -30,6 +31,11 @@ type Kernel struct {
 	logger     *slog.Logger
 	tracer     trace.Tracer // Phase 12: plumbed via constructor, noop-safe
 	mu         sync.RWMutex
+
+	// Phase 60 D-03: optional fire-and-forget callback into the semantic
+	// live service. Set by daemon bootstrap via SetEditNotifier; nil
+	// until then. See notifier.go.
+	editNotifier atomic.Value // editNotifierHolder
 }
 
 // NewKernel creates a new kernel with the given workspace registry, language registry, and configuration.

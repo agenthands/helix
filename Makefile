@@ -18,13 +18,18 @@ test: vet
 	$(GO) test ./...
 
 VETTOOL=$(shell go env GOPATH)/bin/vet-noduckdb
+VETTOOL_NOKERNEL2SEMANTIC=$(shell go env GOPATH)/bin/vet-nokernel2semantic
 
-vet: $(VETTOOL)
+vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
+	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
+
+$(VETTOOL_NOKERNEL2SEMANTIC): cmd/vet-nokernel2semantic/main.go internal/lint/nokernel2semantic/*.go
+	$(GO) install ./cmd/vet-nokernel2semantic
 
 fmt:
 	gofmt -w .

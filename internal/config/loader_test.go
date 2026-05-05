@@ -648,3 +648,28 @@ func TestLoad_LiveUpdatesDefaults(t *testing.T) {
 		t.Errorf("default ManifestScanInterval = %q, want %q", got, "10s")
 	}
 }
+
+// TestLoad_LSPEnrichmentDefaults pins the two Phase 61 P03 D-02 + D-04
+// keys (max_concurrent_workers, yield_check_window_ms) at their published
+// defaults. Mirrors TestLoad_LiveUpdatesDefaults shape; this focused test
+// exists so a future refactor that drops the keys from defaults.go fails
+// loudly here without dragging the whole §25 sweep.
+func TestLoad_LSPEnrichmentDefaults(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.SemanticIndex.LSPEnrichment.MaxConcurrentWorkers; got != 1 {
+		t.Errorf("default MaxConcurrentWorkers = %d, want 1", got)
+	}
+	if got := cfg.SemanticIndex.LSPEnrichment.YieldCheckWindowMs; got != 200 {
+		t.Errorf("default YieldCheckWindowMs = %d, want 200", got)
+	}
+	// Sanity: the existing pre-P61 fields are untouched.
+	if !cfg.SemanticIndex.LSPEnrichment.Enabled {
+		t.Errorf("default LSPEnrichment.Enabled lost: got false, want true")
+	}
+	if got := cfg.SemanticIndex.LSPEnrichment.TimeoutPerFile; got != "5s" {
+		t.Errorf("default TimeoutPerFile = %q, want %q", got, "5s")
+	}
+}

@@ -160,15 +160,31 @@ type LiveUpdatesConfig struct {
 
 // LSPEnrichmentConfig holds LSP enrichment-worker settings (P61).
 // Field set mirrors SPEC §25.lsp_enrichment.* verbatim.
+//
+// Phase 61 P03 D-02 + D-04 added the trailing two fields:
+//   - MaxConcurrentWorkers caps the number of enrichment-worker goroutines
+//     draining the 2-lane queue (D-02; default 1, global across languages).
+//   - YieldCheckWindowMs bounds how recent a foreground lease has to be to
+//     count as "busy" by Pool.ForegroundBusy between cascade steps (D-04;
+//     default 200ms).
 type LSPEnrichmentConfig struct {
 	Enabled                bool   `koanf:"enabled"`
-	TimeoutPerFile         string `koanf:"timeout_per_file"`           // default "5s"
-	TimeoutTotal           string `koanf:"timeout_total"`              // default "120s"
-	MaxSymbolsPerFile      int    `koanf:"max_symbols_per_file"`       // default 200
-	MaxReferencesPerSymbol int    `koanf:"max_references_per_symbol"`  // default 1000
-	MaxReferencesPerFile   int    `koanf:"max_references_per_file"`    // default 5000
-	MaxCallHierarchyDepth  int    `koanf:"max_call_hierarchy_depth"`   // default 2
-	MaxTypeHierarchyDepth  int    `koanf:"max_type_hierarchy_depth"`   // default 2
+	TimeoutPerFile         string `koanf:"timeout_per_file"`          // default "5s"
+	TimeoutTotal           string `koanf:"timeout_total"`             // default "120s"
+	MaxSymbolsPerFile      int    `koanf:"max_symbols_per_file"`      // default 200
+	MaxReferencesPerSymbol int    `koanf:"max_references_per_symbol"` // default 1000
+	MaxReferencesPerFile   int    `koanf:"max_references_per_file"`   // default 5000
+	MaxCallHierarchyDepth  int    `koanf:"max_call_hierarchy_depth"`  // default 2
+	MaxTypeHierarchyDepth  int    `koanf:"max_type_hierarchy_depth"`  // default 2
+
+	// Phase 61 P03 D-02: enrichment-worker concurrency cap (default 1,
+	// global across languages). Cap is read once at daemon startup; runtime
+	// reload not in scope.
+	MaxConcurrentWorkers int `koanf:"max_concurrent_workers"`
+	// Phase 61 P03 D-04: foreground-lease look-back window for
+	// Pool.ForegroundBusy (default 200ms). Daemon writes via
+	// *lspool.Pool.SetYieldCheckWindow at bootstrap.
+	YieldCheckWindowMs int `koanf:"yield_check_window_ms"`
 }
 
 // GraphConfig holds graph-engine projection settings (P62).

@@ -26,19 +26,23 @@ builds:
     env:
       - CGO_ENABLED=1
       - GOFLAGS=-mod=readonly
-      # D-01 amended: zig cc covers linux+windows ONLY (4 archives on the
-      # ubuntu-22.04 runner). Templated per-target CC via Go-template
-      # conditionals on .Os and .Arch (Pattern A4). darwin entries live in
-      # the helix-darwin build entry below and get NO CC override — Apple
-      # clang on macos-14 is the host default per D-15.
-      - >-
-        {{- if eq .Os "linux" }}
-          {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-gnu{{- end }}
-          {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-linux-gnu{{- end }}
-        {{- else if eq .Os "windows" }}
-          {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-windows-gnu{{- end }}
-          {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-windows-gnu{{- end }}
-        {{- end }}
+      # D-20 amended (DEF-59.1-LINUX-ZIG-LIBSTDCXX option 2):
+      #   linux targets use HOST gcc + apt-installed cross toolchain because
+      #   `libduckdb_static.a` (duckdb-go-bindings) is built against
+      #   libstdc++ on glibc, and zig cc bundles libc++ exclusively at every
+      #   `-linux-*` triple (musl AND gnu both fail — empirically verified
+      #   in v1.10.1 run 25365003032 + v1.10.2 run 25365967264).
+      #     - linux/amd64: host gcc (no CC override; ubuntu-22.04 default
+      #       gcc is libstdc++/glibc — matches duckdb static lib ABI).
+      #     - linux/arm64: gcc-aarch64-linux-gnu cross-toolchain (apt;
+      #       installed in release-linux job before goreleaser invocation).
+      #   windows targets keep zig cc — zig's mingw bundle ships libstdc++
+      #   for windows-gnu, so the libcxx mismatch does not apply on the
+      #   windows side.
+      #   darwin entries live in the helix-darwin build entry below and get
+      #   NO CC override (Apple clang on macos-14 is the host default per D-15).
+      - 'CC={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}gcc{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-gcc{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}zig cc -target x86_64-windows-gnu{{- else if and (eq .Os "windows") (eq .Arch "arm64") -}}zig cc -target aarch64-windows-gnu{{- end -}}'
+      - 'CXX={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}g++{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-g++{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}zig c++ -target x86_64-windows-gnu{{- else if and (eq .Os "windows") (eq .Arch "arm64") -}}zig c++ -target aarch64-windows-gnu{{- end -}}'
     flags:
       - -trimpath
       # WR-07: -buildvcs=false strips runtime/debug VCS metadata

@@ -43,12 +43,34 @@ jobs:
           go-version: '1.25.x'
           cache: true
 
-      - name: Set up Zig (D-02)
+      - name: Install linux/arm64 cross toolchain (DEF-59.1-LINUX-ZIG-LIBSTDCXX option 2)
+        # D-20 amended: linux targets cannot use zig cc because zig bundles libc++
+        # exclusively at every -linux-* triple, and `libduckdb_static.a` (from
+        # duckdb-go-bindings) is built against libstdc++ on glibc. Empirically
+        # disproven attempts: v1.10.1 (zig+musl, run 25365003032) and v1.10.2
+        # (zig+gnu, run 25365967264) both produced ~25–80 ld.lld undefined-symbol
+        # errors. Resolution: linux/amd64 uses ubuntu-22.04 host gcc (default
+        # libstdc++/glibc); linux/arm64 uses gcc-aarch64-linux-gnu cross-toolchain
+        # installed here. Windows targets keep zig cc — zig's mingw-w64 bundle
+        # ships libstdc++ for windows-gnu, no mismatch on the windows side.
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu
+          aarch64-linux-gnu-gcc --version | head -1
+          gcc --version | head -1
+
+      - name: Set up Zig (D-02 — windows targets only post-D-20)
         # WR-04: SHA-pinned mlugg/setup-zig + explicit zig 0.14.1 version. zig 0.14.1
         # was released 2025-05-21 (~12 months of bake time). zig 0.16.0 (released
         # 2026-04-13) is too fresh for a reproducibility-gated release pipeline.
         # Pin verified via: git ls-remote https://github.com/mlugg/setup-zig refs/tags/v2.2.1
         # → d1434d08867e3ee9daa34448df10607b98908d29 (recorded 59.1-RESEARCH.md line 167).
+        # Post-D-20 amendment: zig is retained ONLY for the 2 windows targets
+        # (windows/{amd64,arm64}) because zig's mingw bundle ships libstdc++ for
+        # windows-gnu. Linux targets use host gcc + apt cross-toolchain (above).
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29  # v2.2.1
         with:
           version: 0.14.1

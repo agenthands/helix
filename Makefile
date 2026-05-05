@@ -19,17 +19,26 @@ test: vet
 
 VETTOOL=$(shell go env GOPATH)/bin/vet-noduckdb
 VETTOOL_NOKERNEL2SEMANTIC=$(shell go env GOPATH)/bin/vet-nokernel2semantic
+VETTOOL_NOSEMANTIC2KERNEL=$(shell go env GOPATH)/bin/vet-nosemantic2kernel
 
-vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC)
+# Phase 61 ENRICH-01: enforce semantic does not import kernel (carve-out:
+# internal/kernel/lspool). The vet-nosemantic2kernel singlechecker is the
+# symmetric sibling of vet-nokernel2semantic; together the pair pin the
+# kernel↔semantic boundary in BOTH directions on every `make vet` run.
+vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
+	$(GO) vet -vettool=$(VETTOOL_NOSEMANTIC2KERNEL) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
 
 $(VETTOOL_NOKERNEL2SEMANTIC): cmd/vet-nokernel2semantic/main.go internal/lint/nokernel2semantic/*.go
 	$(GO) install ./cmd/vet-nokernel2semantic
+
+$(VETTOOL_NOSEMANTIC2KERNEL): cmd/vet-nosemantic2kernel/main.go internal/lint/nosemantic2kernel/*.go
+	$(GO) install ./cmd/vet-nosemantic2kernel
 
 fmt:
 	gofmt -w .

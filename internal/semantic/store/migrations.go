@@ -418,6 +418,17 @@ func applyMigration002(ctx context.Context, db *sql.DB) error {
 // Acceptance grep gates in 59-01-PLAN.md scan THIS function — keep the
 // `ALTER TABLE semantic_<name> ADD COLUMN` strings on their own logical
 // lines so the per-table count regex matches.
+//
+// Closed enum for partial_reason TEXT (extended in Phase 61):
+//   - "budget exhausted"      (P59 D-05; per-file timeout / max-symbols)
+//   - "preempted"             (P61 D-03; cascade yielded between calls)
+//   - "bulk_update_pending"   (P61 D-05; producer suppressed enqueue)
+//   - "lsp_unavailable"       (P61 D-08; readiness timeout / circuit open)
+//
+// The column itself remains permissive TEXT — callers MUST validate against
+// this enum (overlay.go partialReasonClosedEnum is the authoritative
+// runtime validator; *OverlayTx.MarkFileSemanticPending consumes it).
+// No schema change accompanies the Phase 61 extension.
 func schema2Statements() []string {
 	return []string{
 		// semantic_files: 6 partial-extraction columns (D-05).

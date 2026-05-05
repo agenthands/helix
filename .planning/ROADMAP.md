@@ -141,7 +141,13 @@
   - [x] 59.1-03-PLAN.md — Wave 3 release.yml split-runner rewrite: release-linux (4 archives, ubuntu-22.04, zig cc) + release-darwin (2 archives, macos-14, Apple clang, tag-gated per D-16) + release-merge (cosign uniformly per D-19, gh release create)
   - [x] 59.1-04-PLAN.md — Wave 4 doc sweep with split-runner amendments (CLAUDE/README/CONTRIBUTING/CHANGELOG/PROJECT/REQUIREMENTS/deferred-items/51.1-SUMMARY/v1.10-ROADMAP) + Gatekeeper workaround in INSTALL.md (D-19) + 3 NEW deferred items (DEF-59-NOTARIZE/DARWIN-SMOKE/DARWIN-CANARY)
   - [x] 59.1-05-PLAN.md — Wave 5 release-smoke finalization + per-runner Pass-1≡Pass-2 reproducibility verification on BOTH runners (HARD GATE; D-09/D-10 amended; cross-runner byte-equality NOT a gate per Pitfall 8)
-- [ ] Phase 60: Live Update Pipeline (0/0 plans)
+- [ ] Phase 60: Live Update Pipeline (0/5 plans)
+  Plans:
+  - [ ] 60-01-PLAN.md — Wave 0 vet-nokernel2semantic analyzer enforcing LIVE-07 invariant #1 (kernel→semantic boundary)
+  - [ ] 60-02-PLAN.md — Wave 1 schema migration v2→v3 (current_epoch + 4× write_epoch + 4 indexes) + overlay writer (BeginOverlayTx) + per-tx epoch contract under -race stress
+  - [ ] 60-03-PLAN.md — Wave 1 EditNotifier interface in internal/kernel + 8-tool wiring (5 edit + 3 fileops) + non-blocking integration tests
+  - [ ] 60-04-PLAN.md — Wave 2 live spine: signal/classifier/coalescer/handler/service + ScheduleIncremental fill + lspqueue handoff (TDD: CoalesceEvents + MergeChange + ClassifyPathChange)
+  - [ ] 60-05-PLAN.md — Wave 3 watcher + manifest scanner + editor-fixture suite (Vim/JetBrains/VS Code) + 3 new config keys + bounded-label metric + pipelines/live.go fill + daemon bootstrap
 - [ ] Phase 61: LSP Enrichment Worker (0/0 plans)
 - [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)
 - [ ] Phase 63: Compaction & Retention (0/0 plans)
@@ -166,7 +172,7 @@
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46-56 | v1.9 | 51/51 | Complete | 2026-05-03 |
-| 57-67 | v1.10 | 0/0 | Planning | -- |
+| 57-67 | v1.10 | 19/24 | Planning | -- |
 
 ## Backlog
 

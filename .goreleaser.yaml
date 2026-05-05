@@ -56,11 +56,17 @@ builds:
       #   NO CC override (Apple clang on macos-14 is the host default per D-15).
       - 'CC={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}gcc{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-gcc{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}x86_64-w64-mingw32-gcc{{- end -}}'
       - 'CXX={{- if and (eq .Os "linux") (eq .Arch "amd64") -}}g++{{- else if and (eq .Os "linux") (eq .Arch "arm64") -}}aarch64-linux-gnu-g++{{- else if and (eq .Os "windows") (eq .Arch "amd64") -}}x86_64-w64-mingw32-g++{{- end -}}'
-      # Windows mingw-w64 static link: avoid runtime DLL deps on end-user
-      # machines (libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll).
-      # Empty for non-windows targets — ldflags carry only `-s -w` and
-      # `-X main.*` build-info on those triples (see ldflags block below).
-      - 'CGO_LDFLAGS={{- if and (eq .Os "windows") (eq .Arch "amd64") -}}-static-libgcc -static-libstdc++ -lpthread{{- end -}}'
+      # Windows mingw-w64-posix static link: avoid runtime DLL deps on
+      # end-user machines (libgcc_s_seh-1.dll, libstdc++-6.dll,
+      # libwinpthread-1.dll). `-lwinpthread` (NOT `-lpthread`) is the
+      # mingw-w64 native pthread library — winpthread.a is statically
+      # linked when combined with `-Wl,-Bstatic`. Order matters: the
+      # winpthread reference must come AFTER the duckdb static libs so
+      # the linker can resolve `pthread_mutex_*` references inside
+      # libparquet_extension.a / libduckdb_static.a. cgo appends
+      # CGO_LDFLAGS at the END of the link command, so this works.
+      # Empty for non-windows targets.
+      - 'CGO_LDFLAGS={{- if and (eq .Os "windows") (eq .Arch "amd64") -}}-static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic{{- end -}}'
     flags:
       - -trimpath
       # WR-07: -buildvcs=false strips runtime/debug VCS metadata

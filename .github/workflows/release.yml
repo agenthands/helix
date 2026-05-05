@@ -67,11 +67,22 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
+          # mingw-w64-x86-64-posix uses winpthread (POSIX threads) instead of
+          # win32 threads — required because duckdb-go-bindings'
+          # libparquet_extension.a calls pthread_mutex_lock/unlock/init/destroy.
+          # The default `gcc-mingw-w64-x86-64` (win32 thread model) does NOT
+          # expose those symbols. Empirically: v1.10.4 (run 25367440847) failed
+          # with `undefined reference to pthread_mutex_*`; this fixes that.
           sudo apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
-            gcc-mingw-w64-x86-64 \
-            g++-mingw-w64-x86-64
+            gcc-mingw-w64-x86-64-posix \
+            g++-mingw-w64-x86-64-posix
+          # Switch the system mingw-w64 alternatives to the posix-threads variant
+          # so `x86_64-w64-mingw32-gcc` and `x86_64-w64-mingw32-g++` resolve to
+          # the posix binaries (CGO invokes the unsuffixed name via $CC).
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           gcc --version | head -1
           aarch64-linux-gnu-gcc --version | head -1
           x86_64-w64-mingw32-gcc --version | head -1

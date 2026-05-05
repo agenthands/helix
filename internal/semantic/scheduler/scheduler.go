@@ -44,6 +44,21 @@ type Scheduler struct {
 	jobs        map[semantic.WorkspaceID]JobID // in-flight job per workspace
 	states      map[semantic.WorkspaceID]SemanticStatus
 	subscribers map[semantic.WorkspaceID][]chan SemanticStatus
+	incHandler  IncrementalHandler // 60-04 D-07: nil-safe; daemon wires post-construction
+}
+
+// IncrementalHandler is the consumer side of ScheduleIncremental
+// dispatch. The semantic/live/handler.Handler implements it (the handler
+// receiver methods UpdateChangedFile + HandleFileDeleted match this
+// signature pair).
+//
+// Declaring the interface in the SCHEDULER package — rather than the
+// live package — keeps the import direction one-way (scheduler ←
+// live/handler) and avoids a cycle: live/handler imports scheduler
+// (for FileChange + JobID), scheduler must NOT import live/handler.
+type IncrementalHandler interface {
+	UpdateChangedFile(ctx context.Context, repoID semantic.RepoID, path string) error
+	HandleFileDeleted(ctx context.Context, repoID semantic.RepoID, path string) error
 }
 
 // NewScheduler constructs a Scheduler with the given extract.Registry. The
@@ -78,10 +93,61 @@ func (s *Scheduler) ScheduleInitialExtraction(ws semantic.WorkspaceID, req Initi
 	return job
 }
 
-// ScheduleIncremental is a Phase 60 stub — returns a sentinel JobID and does
-// not mutate state. Wave 2 ships the interface so consumers compile today.
+// SetIncrementalHandler installs h as the consumer for
+// ScheduleIncremental dispatch. Mirrors the post-init setter pattern
+// used by RepoMapSkill.SetEnrichFn (daemon bootstrap calls this in
+// the wiring step after both scheduler and live handler are
+// constructed). Safe for concurrent readers via the same mutex that
+// guards in-flight job state.
+func (s *Scheduler) SetIncrementalHandler(h IncrementalHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.incHandler = h
+}
+
+// ScheduleIncremental dispatches per-FileChange to the registered
+// IncrementalHandler. Returns a deterministic non-sentinel JobID and
+// transitions the workspace state to SemanticIndexing.
+//
+// Per-change dispatch:
+//
+//	Kind="modified"|"created" → handler.UpdateChangedFile
+//	Kind="deleted"            → handler.HandleFileDeleted
+//	other                     → silently skipped (forward-compat)
+//
+// Nil-safe: if no handler is registered (scheduler constructed before
+// live wiring), the JobID is still allocated and the state transition
+// still fires — the dispatch loop is a no-op.
+//
+// 60-04 D-07: this is the in-process API the live dispatcher (D-02)
+// and Phase 64's refresh_semantic_graph MCP tool both reach.
 func (s *Scheduler) ScheduleIncremental(ws semantic.WorkspaceID, changes []FileChange) JobID {
-	return JobID("phase60-incremental-stub")
+	s.mu.Lock()
+	h := s.incHandler
+	job := JobID(generateJobID(ws, "incremental"))
+	s.transitionUnlocked(ws, SemanticIndexing)
+	s.mu.Unlock()
+
+	if h == nil {
+		// Pre-wiring: state transition + JobID still fire so the
+		// caller can subscribe and observe progression once the
+		// handler is installed (in production the handler is wired
+		// at daemon bootstrap, before any tool can call Schedule*).
+		return job
+	}
+
+	go func() {
+		ctx := context.Background()
+		for _, ch := range changes {
+			switch ch.Kind {
+			case "modified", "created":
+				_ = h.UpdateChangedFile(ctx, semantic.RepoID(ws), ch.Path)
+			case "deleted":
+				_ = h.HandleFileDeleted(ctx, semantic.RepoID(ws), ch.Path)
+			}
+		}
+	}()
+	return job
 }
 
 // Status returns the latest published SemanticStatus for ws. Workspaces that

@@ -882,7 +882,7 @@ Cross-checked CONTEXT.md `Out of scope (deferred)` against Phase 61, 62, 63, 64,
    - What we know: Vim binary is not always available in CI.
    - What's unclear: Should the test skip with `t.Skip()` (silent) or fail with a clear "INSTALL VIM" message?
    - Recommendation: `t.Skip("vim not on PATH; the JetBrains and VS Code fixtures cover atomic-rename")` — preserves CI green while still surfacing in test output. The JetBrains and VS Code fixtures are pure Go programs, so they have no environment dependency.
-   - **RESOLVED:** Vim test skips on Windows runners (and any host without `bash` on PATH) via `t.Skip` predicate; JetBrains and VS Code fixtures are Go programs that run on all platforms. (See 60-05-PLAN.md Task 2.)
+   - **RESOLVED:** Vim test skips on Windows runners (and any host without `bash` on PATH) via `t.Skip` predicate; JetBrains and VS Code fixtures are Go programs that run on all platforms. (See 60-05a-PLAN.md Task 2.)
 
 3. **`live_updates.bulk_change_threshold = 200` empirical validation.** [O-3]
    - What we know: SPEC §25 declares the default 200; CONTEXT.md acceptance #5 tests `> 200 → bulk_update`.

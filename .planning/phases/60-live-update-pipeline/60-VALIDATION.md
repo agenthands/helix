@@ -1,10 +1,11 @@
 ---
 phase: 60
 slug: live-update-pipeline
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-05
+approved: 2026-05-05
 ---
 
 # Phase 60 — Validation Strategy
@@ -92,11 +93,11 @@ created: 2026-05-05
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies recorded above
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (10 items above)
-- [ ] No watch-mode flags in test invocations
-- [ ] Feedback latency < 5s (subset) / < 90s (full)
-- [ ] `nyquist_compliant: true` set in frontmatter once planner fills the per-task table
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies recorded above
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (10 items above)
+- [x] No watch-mode flags in test invocations
+- [x] Feedback latency < 5s (subset) / < 90s (full)
+- [x] `nyquist_compliant: true` set in frontmatter once planner fills the per-task table
 
-**Approval:** pending
+**Approval:** approved 2026-05-05 (plan-checker iter 2 — 0 blockers, 2 cosmetic warnings resolved inline)

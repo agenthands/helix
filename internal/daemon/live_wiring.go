@@ -21,6 +21,7 @@ import (
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/live/scanner"
 	liveservice "github.com/agenthands/helix/internal/semantic/live/service"
+	"github.com/agenthands/helix/internal/semantic/live/watcher"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/workspace"
@@ -195,9 +196,16 @@ func buildLiveBundle(
 		)
 	}
 
-	// Watcher manager wiring is deferred to setLiveWatcherManager() —
-	// P05A's *watcher.Manager satisfies liveWatcherManager and the
-	// daemon's bootstrap will install it once the watcher package lands.
+	if cfg.WatcherEnabled {
+		bundle.watcherMgr = watcher.NewManager(
+			liveService,
+			watcher.Config{
+				DebounceMs: time.Duration(cfg.DebounceMS) * time.Millisecond,
+			},
+			logger,
+		)
+	}
+
 	_ = metrics // metrics is reserved for future per-bundle wiring (counters live on *obs.Metrics)
 	return bundle
 }

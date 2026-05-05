@@ -324,6 +324,20 @@ func (s *Store) Close() error {
 // false (see duckdb_nocgo.go).
 func (s *Store) Available() bool { return s != nil && s.db != nil }
 
+// DB returns the underlying *sql.DB handle. Returns nil when the store is
+// not open. Intended for read-only admin/status queries (e.g., get_health
+// surfacing overlay epoch) and integration tests that need to inspect
+// internal state without going through BeginOverlayTx (which would bump
+// the epoch as a side effect). Callers MUST NOT issue schema-altering
+// statements through this handle — migrations.go is the single owner of
+// schema evolution.
+func (s *Store) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
+
 // QueryEffectiveFiles returns the effective file fact (snapshot ⊕ overlay −
 // tombstones) for the given repo+path key. Phase 57 Schema 1 contract:
 // returns nil, nil because no data write paths exist yet.

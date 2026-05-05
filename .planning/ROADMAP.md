@@ -151,7 +151,7 @@
   - [x] 60-05b-PLAN.md — Wave 3 (parallel with 60-05a) manifest scanner + 3 new config keys + bounded-label metric + pipelines/live.go fill + daemon bootstrap + Phase 60 close-out checkpoint
 - [ ] Phase 61: LSP Enrichment Worker (0/4 plans)
   Plans:
-  - [ ] 61-01-PLAN.md — LeaseAcquirer + ForegroundBusy + 2-lane queue + handler producer rewiring + bulk-suppression API + nosemantic2kernel analyzer [ENRICH-01, ENRICH-02]
+  - [x] 61-01-PLAN.md — LeaseAcquirer + ForegroundBusy + 2-lane queue + handler producer rewiring + bulk-suppression API + nosemantic2kernel analyzer [ENRICH-01, ENRICH-02]
   - [ ] 61-02-PLAN.md — Worker goroutine + §14.4 cascade engine + Budget enforcement + readiness-gate honoring + per-file overlay commit [ENRICH-02, ENRICH-03, ENRICH-04]
   - [ ] 61-03-PLAN.md — Metrics + trace spans + Status() accessor + Manager + Daemon bootstrap + 2 new config keys [ENRICH-01..ENRICH-04]
   - [ ] 61-04-PLAN.md — ENRICH-05 stress test + acceptance closeout + REQUIREMENTS.md check-off [ENRICH-05, ENRICH-01..ENRICH-04]

@@ -318,7 +318,10 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 
 	symbols.RegisterTools(mcpServer, k, wsKeyFn)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
-	fileops.RegisterTools(mcpServer, workspaceRootFn, observability.Tracer())
+	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
+	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
+	// closures can fire the EditNotifier.OnEdit hook on the success path.
+	fileops.RegisterTools(mcpServer, k, workspaceRootFn, wsKeyFn, observability.Tracer())
 
 	// Diag lease provider.
 	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {

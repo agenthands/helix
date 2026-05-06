@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	// D-12: SOLE owner of the duckdb-go import (canonical DuckDB Foundation
@@ -39,11 +40,32 @@ const (
 	reopenCorruption
 )
 
-// classifyReopenError is a RED-stage stub that always returns reopenUnknown
-// so the WR-03 classifier tests compile and FAIL on the assertion (every
-// transient/corruption case mis-classifies). Replaced by the GREEN commit.
+// classifyReopenError categorises an error returned from openExisting so
+// Open's Tier-1 reopen path can distinguish transient filesystem
+// contention (worth one bounded retry) from corruption (immediate
+// quarantine). WR-03.
 func classifyReopenError(err error) reopenErrClass {
-	_ = err
+	if err == nil {
+		return reopenUnknown
+	}
+	// Transient: file-locking / interrupted-syscall / busy-text-segment.
+	// ETXTBSY is POSIX-only but syscall.ETXTBSY is defined on linux and
+	// darwin (the only platforms where CGO=1 ships in v1.10; the file's
+	// build tag already excludes windows/arm64).
+	if errors.Is(err, syscall.EBUSY) ||
+		errors.Is(err, syscall.EINTR) ||
+		errors.Is(err, syscall.EAGAIN) ||
+		errors.Is(err, syscall.ETXTBSY) {
+		return reopenTransient
+	}
+	// Corruption-class: substring match against a closed list of sentinel
+	// signatures DuckDB surfaces in Open / Ping error messages.
+	msg := err.Error()
+	for _, sig := range []string{"checksum", "corrupt", "header", "malformed"} {
+		if strings.Contains(msg, sig) {
+			return reopenCorruption
+		}
+	}
 	return reopenUnknown
 }
 
@@ -146,20 +168,39 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 	if classifyErr == nil && reason == "" {
 		// Tier-1 reopen.
 		s, err := openExisting(ctx, path, label, logger, metrics)
-		if err != nil {
-			// Forward-incompat is a hard fail: an operator running an older
-			// binary against a newer DB MUST see an explicit error and
-			// rebuild manually via the documented quarantine path. We do
-			// NOT silently quarantine because that would discard the newer
-			// binary's data on rollback — see plan 59-01 STORE-03 invariant.
-			if errors.Is(err, ErrForwardIncompatible) {
-				return nil, err
+		if err == nil {
+			return s, nil
+		}
+		// Forward-incompat is a hard fail: an operator running an older
+		// binary against a newer DB MUST see an explicit error and
+		// rebuild manually via the documented quarantine path. We do
+		// NOT silently quarantine because that would discard the newer
+		// binary's data on rollback — see plan 59-01 STORE-03 invariant.
+		if errors.Is(err, ErrForwardIncompatible) {
+			return nil, err
+		}
+		// WR-03: classify and (for transient errors only) retry once with
+		// a small backoff before quarantining. A clean DB hit by EBUSY /
+		// EINTR / EAGAIN / ETXTBSY does not deserve to be quarantined.
+		switch classifyReopenError(err) {
+		case reopenTransient:
+			logger.Warn("semantic store reopen hit transient error; retrying once",
+				"workspace_label", label, "path", path, "err", err)
+			select {
+			case <-time.After(250 * time.Millisecond):
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
-			// Other reopen failures (connection error after migrations,
-			// pool exhaustion, etc.) → treat as corrupt and quarantine.
+			s, err2 := openExisting(ctx, path, label, logger, metrics)
+			if err2 == nil {
+				return s, nil
+			}
+			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
+		case reopenCorruption, reopenUnknown:
 			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 		}
-		return s, nil
+		// Unreachable — every reopenErrClass value is handled above.
+		return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 	}
 	if reason == "" {
 		reason = reasonUnknown

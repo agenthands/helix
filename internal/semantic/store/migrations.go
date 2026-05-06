@@ -6,17 +6,24 @@ import (
 	"fmt"
 )
 
-// applyStatementsTx is the WR-01 transactional helper. RED-stage stub:
-// reproduces the pre-fix bug — bare ExecContext loop without a transaction,
-// so partial schema lands on disk before the bad statement aborts. The
-// GREEN commit replaces this body with a real BEGIN/COMMIT loop.
+// applyStatementsTx executes stmts inside a single BEGIN/COMMIT. On any
+// error the transaction is rolled back and the database file is left in
+// its pre-migration state — preventing the partial-schema scenario
+// described in REVIEW WR-01. DuckDB supports DDL inside transactions
+// (verified in 57-02 SUMMARY's classifyExisting design), so a failed
+// CREATE never gets committed.
 func applyStatementsTx(ctx context.Context, db *sql.DB, stmts []string) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("applyStatementsTx: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
 	for i, stmt := range stmts {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("applyStatementsTx: stmt %d (%s): %w", i+1, firstLine(stmt), err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // applyMigration001 is the bootstrap migration (version 0 → 1). It executes
@@ -48,13 +55,7 @@ func applyStatementsTx(ctx context.Context, db *sql.DB, stmts []string) error {
 // paths. P59 (snapshot writes) and P60 (overlay writes) populate the
 // content downstream readers serve.
 func applyMigration001(ctx context.Context, db *sql.DB) error {
-	stmts := schema1Statements()
-	for i, stmt := range stmts {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("applyMigration001: stmt %d (%s): %w", i+1, firstLine(stmt), err)
-		}
-	}
-	return nil
+	return applyStatementsTx(ctx, db, schema1Statements())
 }
 
 // schema1Statements returns the SPEC §9 DDL in deterministic order. Each

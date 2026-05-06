@@ -470,16 +470,17 @@ func (c *Cascade) Run(
 		}
 	}
 
-	// Phase 62 P02: invalidations are now consumed via the post-commit
-	// GraphRepair handoff in internal/semantic/live/handler/handler.go.
-	// The recommended path (RESEARCH Open Question 3) derives the typed
-	// graphpkg.GraphRepair from the OverlayTx diff rather than a separate
-	// invalidations table — handler.updateChangedFileWithKind owns the
-	// derivation and calls h.rankApplier.ApplyRepair. The WriteInvalidations
-	// seam is retained as a typed no-op for forward compatibility; P03 may
-	// swap to a real implementation if a row-based plumbing becomes
-	// preferable. See cascade.CascadeTx interface (line 84) for the seam
-	// contract.
+	// Phase 62 P03: invalidations are consumed via the post-commit
+	// GraphRepair handoff in internal/semantic/live/handler/handler.go
+	// (push path) PLUS the InvalidationsConsumer.ConsumePending replay
+	// path in internal/semantic/graph/invalidations_consumer.go (pull path
+	// for daemon-restart catch-up). RESEARCH OQ3 picked the derived
+	// (overlay-diff-based) shape; no separate semantic_invalidations
+	// table ships in v1. The cascade-side WriteInvalidations seam is
+	// retained as a typed no-op for forward compatibility; future
+	// row-based plumbing can swap in without breaking the cascade.CascadeTx
+	// interface (line 100). See `internal/semantic/graph/
+	// invalidations_consumer.go` for the consumer contract.
 	_ = tx.WriteInvalidations(ctx)
 
 	if err := tx.Commit(); err != nil {

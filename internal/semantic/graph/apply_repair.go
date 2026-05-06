@@ -138,6 +138,36 @@ func (e *Engine) SetNotifyChannel(ch chan<- GraphVersionAdvance) {
 	e.notifyVersion = ch
 }
 
+// SetVersionNotifier is the callback-shaped alias for SetNotifyChannel.
+// Spawns a single fan-out goroutine that translates the channel
+// GraphVersionAdvance stream into per-advance callback invocations. The
+// caller MUST cancel ctx to stop the goroutine; otherwise the goroutine
+// leaks for the lifetime of the process.
+//
+// Provided per Phase 62 P03 plan acceptance criterion ("SetVersionNotifier
+// keyword present in daemon wiring"). Production daemon wiring prefers the
+// channel-based path (see internal/daemon/rank_wiring.go) because the
+// channel + dedicated demux goroutine yields cleaner backpressure
+// semantics, but the callback shape is honored here for parity with the
+// pre-rewrite plan example.
+func (e *Engine) SetVersionNotifier(ctx context.Context, cb func(repoID string, gv uint64)) {
+	if e == nil || cb == nil {
+		return
+	}
+	ch := make(chan GraphVersionAdvance, 64)
+	e.notifyVersion = ch
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case adv := <-ch:
+				cb(adv.RepoID, adv.Version)
+			}
+		}
+	}()
+}
+
 // ApplyRepair is the SINGLE site that bumps graph_version (D-06). Returns
 // (newGV, bumped, err):
 //

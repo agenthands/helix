@@ -27,6 +27,26 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 )
 
+// reopenErrClass classifies an error returned from openExisting on the
+// Tier-1 reopen path so Open can distinguish transient filesystem
+// contention (worth one bounded retry) from corruption-class signals
+// (immediate quarantine). WR-03.
+type reopenErrClass int
+
+const (
+	reopenUnknown reopenErrClass = iota
+	reopenTransient
+	reopenCorruption
+)
+
+// classifyReopenError is a RED-stage stub that always returns reopenUnknown
+// so the WR-03 classifier tests compile and FAIL on the assertion (every
+// transient/corruption case mis-classifies). Replaced by the GREEN commit.
+func classifyReopenError(err error) reopenErrClass {
+	_ = err
+	return reopenUnknown
+}
+
 // Closed-enum quarantine reasons (D-07). The labels match the carve-out
 // registered in internal/obs/metrics_labels_test.go and the helper-method
 // validator in internal/obs/metrics.go (SemanticStoreQuarantineInc).

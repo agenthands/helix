@@ -1,0 +1,22 @@
+{
+  "name": "unknown",
+  "symbols": {
+    "7": {"NodeID": 7, "Language": "typescript", "Kind": "variable", "StableKey": "z", "FilePath": "/repo/src/a.ts"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 7,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["z"]
+  },
+  "expected": {
+    "resolved": false,
+    "confidence": 0.2,
+    "evidence_kind": "unknown",
+    "validation_state": "unresolved",
+    "source_prefix": "unknown"
+  }
+}

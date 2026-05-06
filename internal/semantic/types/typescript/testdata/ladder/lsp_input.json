@@ -1,0 +1,26 @@
+{
+  "name": "lsp",
+  "symbols": {
+    "1": {"NodeID": 1, "Language": "typescript", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/src/a.ts"}
+  },
+  "edges": {
+    "1": [
+      {"SrcNodeID": 1, "DstNodeID": 50, "EdgeKind": "RESOLVES_TO", "Source": "lsp.typescript.text_document_definition", "Confidence": 1.0, "ValidationState": "validated"}
+    ]
+  },
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 1,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 1.0,
+    "evidence_kind": "lsp",
+    "validation_state": "validated",
+    "source_prefix": "lsp."
+  }
+}

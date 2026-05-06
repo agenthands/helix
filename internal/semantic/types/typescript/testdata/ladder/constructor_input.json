@@ -1,0 +1,22 @@
+{
+  "name": "constructor",
+  "symbols": {
+    "3": {"NodeID": 3, "Language": "typescript", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/src/a.ts", "Signature": "const x = new Foo()"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 3,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.8,
+    "evidence_kind": "constructor",
+    "validation_state": "validated",
+    "source_prefix": "constructor"
+  }
+}

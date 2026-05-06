@@ -1,0 +1,22 @@
+{
+  "name": "heuristic",
+  "symbols": {
+    "6": {"NodeID": 6, "Language": "python", "Kind": "variable", "StableKey": "user_repo", "FilePath": "/repo/pkg/a.py"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "python",
+    "FilePath": "/repo/pkg/a.py",
+    "RefNodeID": 6,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["user_repo"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.45,
+    "evidence_kind": "heuristic",
+    "validation_state": "validated",
+    "source_prefix": "heuristic"
+  }
+}

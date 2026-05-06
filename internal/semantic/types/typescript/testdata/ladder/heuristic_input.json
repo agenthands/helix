@@ -1,0 +1,22 @@
+{
+  "name": "heuristic",
+  "symbols": {
+    "6": {"NodeID": 6, "Language": "typescript", "Kind": "variable", "StableKey": "userRepo", "FilePath": "/repo/src/a.ts"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 6,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["userRepo"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.45,
+    "evidence_kind": "heuristic",
+    "validation_state": "validated",
+    "source_prefix": "heuristic"
+  }
+}

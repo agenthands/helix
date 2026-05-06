@@ -1,0 +1,22 @@
+{
+  "name": "assignment",
+  "symbols": {
+    "4": {"NodeID": 4, "Language": "python", "Kind": "variable", "StableKey": "y", "FilePath": "/repo/pkg/a.py", "Signature": "y = x"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "python",
+    "FilePath": "/repo/pkg/a.py",
+    "RefNodeID": 4,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["y"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.7,
+    "evidence_kind": "assignment",
+    "validation_state": "validated",
+    "source_prefix": "assignment"
+  }
+}

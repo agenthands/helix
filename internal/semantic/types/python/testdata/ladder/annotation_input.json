@@ -1,0 +1,22 @@
+{
+  "name": "annotation",
+  "symbols": {
+    "2": {"NodeID": 2, "Language": "python", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.py", "Signature": "x: Foo"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "python",
+    "FilePath": "/repo/pkg/a.py",
+    "RefNodeID": 2,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.9,
+    "evidence_kind": "annotation",
+    "validation_state": "validated",
+    "source_prefix": "annotation"
+  }
+}

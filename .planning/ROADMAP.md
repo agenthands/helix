@@ -156,7 +156,13 @@
   - [x] 61-03-PLAN.md — Metrics + trace spans + Status() accessor + Manager + Daemon bootstrap + 2 new config keys [ENRICH-01..ENRICH-04]
   - [x] 61-04-PLAN.md — ENRICH-05 stress test + acceptance closeout + REQUIREMENTS.md check-off [ENRICH-05, ENRICH-01..ENRICH-04]
   - [x] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
-- [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)
+- [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/5 plans)
+  Plans:
+  - [ ] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
+  - [ ] 62-02-PLAN.md — Wave 2 — graph_version + ApplyRepair single-bump + score_status read API + UpsertGraphScores/UpsertEdgesWithMerge + handler post-commit hook + 4 config keys + 5 bounded-label metrics [GRAPH-03, GRAPH-05]
+  - [ ] 62-03-PLAN.md — Wave 3 — RankScheduler (debounce + long-idle + drop-on-full) + 1-hop frontier + full recompute preemption + WriteInvalidations consumer + daemon errgroup wiring [GRAPH-04, GRAPH-05]
+  - [ ] 62-04-PLAN.md — Wave 4 — Weak-component clustering algorithm + persistence (UpsertClusters/UpsertClusterMembers/DeleteClustersForGraphVersion) [GRAPH-06]
+  - [ ] 62-05-PLAN.md — Wave 5 — Type resolver shared core + Go/TS/Python full ladders + Java LSP-conditional stub + PHP/Ruby always-0.20 stubs + two-phase comment merge + dispatcher daemon wiring [TYPES-01, TYPES-02, TYPES-03, TYPES-04]
 - [ ] Phase 63: Compaction & Retention (0/0 plans)
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)

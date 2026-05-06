@@ -57,6 +57,13 @@ type Manager struct {
 	logger    *slog.Logger
 	tracker   *statusTracker
 
+	// newCascadeLSP is the factory used by Manager.Run to construct
+	// Worker.NewCascadeLSP.  nil-safe: when nil, Worker.processOne emits
+	// OutcomeDropped (the pre-61-05 behavior).  Production wiring in
+	// internal/daemon/live_wiring.go MUST set this via
+	// SetCascadeLSPFactory before Run is invoked.
+	newCascadeLSP CascadeLSPFactory
+
 	// cancel is set inside Run so Stop can cancel the worker goroutines.
 	cancelMu sync.Mutex
 	cancel   context.CancelFunc
@@ -79,6 +86,13 @@ type Manager struct {
 // at first use).  store + readiness MAY be nil for tests that exercise the
 // lease-cache surface only — the Run path requires non-nil dependencies for
 // the Worker pipeline.
+//
+// Phase 61-05 production-wiring seam: NewManager does NOT take a
+// CascadeLSPFactory directly — call SetCascadeLSPFactory after
+// construction (typically from internal/daemon/live_wiring.go).  When
+// no factory is set, Worker.processOne lands every job on
+// OutcomeDropped + an Error log (the pre-61-05 behaviour, kept as the
+// safe default for tests that exercise only the lease-cache surface).
 func NewManager(
 	queue *LaneQueue,
 	acquirer LeaseAcquirer,
@@ -105,6 +119,23 @@ func NewManager(
 		tracker:   newStatusTracker(),
 		leases:    make(map[wsLangKey]*lspool.WorkerLease),
 	}
+}
+
+// SetCascadeLSPFactory injects the production CascadeLSP factory.  MUST
+// be called BEFORE Run is invoked; calling after Run has started is a
+// no-op (the Worker has already been constructed with whatever factory
+// value was set at the moment Run() reached the Worker struct literal).
+//
+// nil is permitted (preserves the pre-61-05 dropped-job behaviour for
+// tests that exercise only the readiness/dropped paths via direct
+// Worker construction without going through Manager.Run).
+//
+// Production wiring (internal/daemon/live_wiring.go) supplies a closure
+// that calls NewCascadeLSPShim(lease) to bind the worker's per-job
+// *lspool.WorkerLease to a CascadeLSP shim that dispatches LSP method
+// calls to lease.Request.
+func (m *Manager) SetCascadeLSPFactory(f CascadeLSPFactory) {
+	m.newCascadeLSP = f
 }
 
 // AcquireFor returns the cached *WorkerLease for (wsKey, lang) or lazily
@@ -195,15 +226,22 @@ func (m *Manager) Run(ctx context.Context) error {
 	m.cancelMu.Unlock()
 
 	wrappedMetrics := &trackedMetrics{inner: m.metrics, tracker: m.tracker}
+	if m.newCascadeLSP == nil {
+		// 61-05: surface the deferred-wiring failure mode loudly at
+		// startup instead of silently at first-job time (when every
+		// dispatched job lands on OutcomeDropped + an Error log).
+		m.logger.Warn("lsp-enrichment manager: no CascadeLSPFactory set; all dispatched jobs will land on OutcomeDropped")
+	}
 	w := &Worker{
-		Queue:     m.queue,
-		Leases:    m,          // B2 — Manager IS the LeaseProvider.
-		Acquirer:  m.acquirer, // For ForegroundBusy only.
-		Store:     m.store,
-		Readiness: m.readiness,
-		BudgetCfg: m.cfg,
-		Metrics:   wrappedMetrics,
-		Logger:    m.logger,
+		Queue:         m.queue,
+		Leases:        m,          // B2 — Manager IS the LeaseProvider.
+		Acquirer:      m.acquirer, // For ForegroundBusy only.
+		Store:         m.store,
+		Readiness:     m.readiness,
+		BudgetCfg:     m.cfg,
+		Metrics:       wrappedMetrics,
+		Logger:        m.logger,
+		NewCascadeLSP: m.newCascadeLSP, // 61-05 production-dispatch wiring
 	}
 	n := m.cfg.MaxConcurrentWorkers
 	if n <= 0 {
@@ -213,6 +251,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		"max_concurrent_workers", n,
 		"yield_check_window_ms", m.cfg.YieldCheckWindowMs,
 		"timeout_per_file", m.cfg.TimeoutPerFile,
+		"cascade_lsp_factory", cascadeFactoryStateLabel(m.newCascadeLSP),
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return w.RunN(gctx, n) })
@@ -293,6 +332,17 @@ func (m *Manager) releaseLease(lease *lspool.WorkerLease) {
 	if r, ok := m.acquirer.(LeaseReleaser); ok {
 		r.ReleaseLease(lease.SessionID)
 	}
+}
+
+// cascadeFactoryStateLabel returns "production" when f is non-nil and
+// "<unset>" otherwise.  Used in the startup INFO log so operators can
+// see at a glance whether the production dispatch path is wired or the
+// no-op (pre-61-05) default is in effect.
+func cascadeFactoryStateLabel(f CascadeLSPFactory) string {
+	if f == nil {
+		return "<unset>"
+	}
+	return "production"
 }
 
 // sessionIDFor returns the canonical lsp-enrichment session ID for (ws,

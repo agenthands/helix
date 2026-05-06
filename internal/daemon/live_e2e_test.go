@@ -105,7 +105,7 @@ func TestLiveUpdate_E2E_OverlayEpochAdvancesOnEdit(t *testing.T) {
 		MaxBatchDelayMS:      150,
 		BulkChangeThreshold:  200,
 	}
-	bundle := buildLiveBundle(cfg, store, sched, k, metrics, logger)
+	bundle := buildLiveBundle(cfg, semantic.LSPEnrichmentConfig{}, store, sched, k, metrics, logger)
 	if bundle == nil {
 		t.Fatal("buildLiveBundle returned nil — expected non-nil with Enabled=true and required deps wired")
 	}

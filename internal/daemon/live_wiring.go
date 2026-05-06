@@ -9,6 +9,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -52,6 +53,56 @@ type liveBundle struct {
 	// LaneQueue.Drain. Phase 60 used the single-channel *lspqueue.Queue;
 	// Phase 61 P01 swaps in the 2-lane variant.
 	lspQueue *lspenrich.LaneQueue
+
+	// enrichMgr is the Phase 61 P03 enrichment manager. nil when
+	// LSPEnrichment is disabled or MaxConcurrentWorkers <= 0. Owns the
+	// per-(wsKey, lang) lease cache (B2 fix-path-A) and the worker
+	// goroutines draining the lane queue.
+	//
+	// The daemon's Run goroutine pulls Run(ctx) into the top-level
+	// errgroup; OnWorkspaceDeactivate is invoked from the gRPC
+	// DeactivateWorkspace handler so cached leases for the deactivated
+	// workspace are released promptly.
+	enrichMgr *lspenrich.Manager
+}
+
+// Run starts the long-lived enrichment worker goroutines. Returns nil
+// immediately when the bundle has no enrichment manager (LSPEnrichment
+// disabled). The daemon's top-level errgroup owns the resulting goroutine.
+func (b *liveBundle) Run(ctx context.Context) error {
+	if b == nil || b.enrichMgr == nil {
+		// Block until ctx done so the errgroup goroutine doesn't return
+		// immediately and tear down its sibling goroutines.
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	err := b.enrichMgr.Run(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return nil
+}
+
+// OnWorkspaceDeactivate releases all enrichment leases cached for ws (B2
+// fix-path-A — CONTEXT lines 492-494). No-op when the bundle has no
+// enrichment manager. Wired into the gRPC DeactivateWorkspace handler in
+// daemon.go.
+func (b *liveBundle) OnWorkspaceDeactivate(ws workspace.WorkspaceKey) {
+	if b == nil || b.enrichMgr == nil {
+		return
+	}
+	b.enrichMgr.OnWorkspaceDeactivate(ws)
+}
+
+// Stop releases all cached leases across all workspaces. Called from
+// daemon shutdown as the safety-net fallback when individual workspace
+// deactivation events were not delivered. No-op when the bundle has no
+// enrichment manager.
+func (b *liveBundle) Stop() {
+	if b == nil || b.enrichMgr == nil {
+		return
+	}
+	b.enrichMgr.Stop()
 }
 
 // startWorkspace fires the per-workspace lifecycle hooks. Called from
@@ -126,8 +177,15 @@ func (n noopLogAdapter) Info(msg string, args ...any) { n.inner.Info(msg, args..
 // IncrementalHandler is wired. The watcher manager field stays nil (P05A
 // will populate it via a daemon-package setter when the watcher package
 // lands and the bootstrap is updated).
+//
+// Phase 61 P03 wiring: enrichCfg drives optional construction of the LSP
+// enrichment manager. When enrichCfg.Enabled && MaxConcurrentWorkers > 0
+// the bundle's enrichMgr is non-nil; the daemon's top-level errgroup pulls
+// bundle.Run(ctx) and the gRPC DeactivateWorkspace handler invokes
+// bundle.OnWorkspaceDeactivate(wsKey).
 func buildLiveBundle(
 	cfg semantic.LiveUpdatesConfig,
+	enrichCfg semantic.LSPEnrichmentConfig,
 	store *semanticstore.Store,
 	sched *scheduler.Scheduler,
 	k *kernel.Kernel,
@@ -205,6 +263,41 @@ func buildLiveBundle(
 	// bundle so Phase 61's worker (and admin/status callers) can reach
 	// it through the bundle accessor.
 	bundle := &liveBundle{service: liveService, lspQueue: lspQ}
+
+	// 6a. Phase 61 P03: construct LSP enrichment manager when enabled.
+	//
+	// **B4 (P01-T2 setter)**: populate Pool's yieldCheckWindow from cfg
+	// unconditionally — even when the manager is disabled, the foreground-
+	// busy machinery is harmless.
+	if k.Pool() != nil && enrichCfg.YieldCheckWindowMs > 0 {
+		k.Pool().SetYieldCheckWindow(time.Duration(enrichCfg.YieldCheckWindowMs) * time.Millisecond)
+	}
+	if enrichCfg.Enabled && enrichCfg.MaxConcurrentWorkers > 0 {
+		acquirer := lspenrich.NewPoolAcquirer(k.Pool())
+		readiness := lspenrich.NewPoolReadinessProbe(k.Pool())
+		cascadeStore := &storeCascadeStoreAdapter{store: store}
+		enrichMetrics := lspenrich.NewProdMetricsSink(metrics)
+		enrichMgr := lspenrich.NewManager(
+			lspQ,
+			acquirer,
+			cascadeStore,
+			readiness,
+			enrichCfg,
+			enrichMetrics,
+			logger,
+		)
+		bundle.enrichMgr = enrichMgr
+		logger.Info("lsp-enrichment manager constructed",
+			"max_concurrent_workers", enrichCfg.MaxConcurrentWorkers,
+			"yield_check_window_ms", enrichCfg.YieldCheckWindowMs,
+			"timeout_per_file", enrichCfg.TimeoutPerFile,
+		)
+	} else {
+		logger.Info("lsp-enrichment disabled by config",
+			"enabled", enrichCfg.Enabled,
+			"max_concurrent_workers", enrichCfg.MaxConcurrentWorkers,
+		)
+	}
 
 	if cfg.ManifestScanEnabled {
 		interval, err := time.ParseDuration(cfg.ManifestScanInterval)
@@ -294,3 +387,68 @@ func (a *storeOverlayTxAdapter) MarkFileSemanticPending(ctx context.Context, pat
 }
 func (a *storeOverlayTxAdapter) Commit() error   { return a.tx.Commit() }
 func (a *storeOverlayTxAdapter) Rollback() error { return a.tx.Rollback() }
+
+// storeCascadeStoreAdapter adapts *semanticstore.Store to lspenrich.CascadeStore.
+// The lspenrich.CascadeStore seam is the per-file overlay-tx surface the
+// enrichment cascade uses; the adapter opens *store.OverlayTx and wraps it
+// in storeCascadeTxAdapter (below) which implements the broader cascade
+// surface (Upsert*, MarkFileSemanticPending, Commit, Rollback, Epoch).
+//
+// Phase 61 P03: live_wiring constructs the adapter when LSP enrichment is
+// enabled and passes it to the lspenrich.Manager. The adapter forwards
+// MarkFileSemanticPending + Commit + Rollback + Epoch to the underlying
+// *store.OverlayTx; the Upsert* methods that do not yet exist on the real
+// store (Phase 60 left them as no-op stubs — Phase 62 wires the real
+// upsert path) accept the call and return nil.
+type storeCascadeStoreAdapter struct {
+	store *semanticstore.Store
+}
+
+func (a *storeCascadeStoreAdapter) BeginCascadeTx(ctx context.Context, repoID string) (lspenrich.CascadeTx, error) {
+	tx, err := a.store.BeginOverlayTx(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	return &storeCascadeTxAdapter{tx: tx}, nil
+}
+
+// storeCascadeTxAdapter wraps *semanticstore.OverlayTx with the broader
+// lspenrich.CascadeTx surface. Phase 61 P03: the cascade exercises the
+// MarkFileSemanticPending + Commit + Rollback + Epoch methods against
+// the real tx; the upsert methods are no-ops (Phase 62 wires the real
+// upsert path). The adapter also implements WriteInvalidations as a
+// no-op (Phase 60 D-04 already documents this as a typed stub).
+type storeCascadeTxAdapter struct {
+	tx *semanticstore.OverlayTx
+}
+
+func (a *storeCascadeTxAdapter) UpsertSymbols(ctx context.Context, path string, syms []lspenrich.Symbol) error {
+	// Phase 62 wires the real upsert path; Phase 61 commits the partial
+	// outcome via MarkFileSemanticPending only.
+	return nil
+}
+
+func (a *storeCascadeTxAdapter) UpsertReferences(ctx context.Context, path string, refs []lspenrich.Reference) error {
+	return nil
+}
+
+func (a *storeCascadeTxAdapter) UpsertEdges(ctx context.Context, edges []lspenrich.Edge) error {
+	return nil
+}
+
+func (a *storeCascadeTxAdapter) UpsertDiagnostics(ctx context.Context, path string, diags []lspenrich.Diagnostic) error {
+	return nil
+}
+
+func (a *storeCascadeTxAdapter) WriteInvalidations(ctx context.Context) error {
+	// Phase 60 D-04 stub; Phase 62 wires the consumer.
+	return nil
+}
+
+func (a *storeCascadeTxAdapter) MarkFileSemanticPending(ctx context.Context, path, reason string) error {
+	return a.tx.MarkFileSemanticPending(ctx, path, reason)
+}
+
+func (a *storeCascadeTxAdapter) Commit() error   { return a.tx.Commit() }
+func (a *storeCascadeTxAdapter) Rollback() error { return a.tx.Rollback() }
+func (a *storeCascadeTxAdapter) Epoch() uint64   { return a.tx.Epoch() }

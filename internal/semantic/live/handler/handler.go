@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/agenthands/helix/internal/semantic"
+	graphpkg "github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
@@ -87,6 +88,20 @@ type LSPLaneEnqueuer interface {
 	Enqueue(job lspqueue.RevalidateFileJob) bool // legacy; defaults to LaneHigh
 }
 
+// RankApplier is the Phase 62 P02 post-commit hook surface. The handler
+// fires this after a successful overlay tx commit when the diff carries
+// graph-changing edits. Production = *graph.Engine; tests can stub it.
+//
+// Nil is a no-op (Phase 60 nil-safe pattern, CR-04 invariant): when the
+// rank applier is not wired, the handler's update path runs unchanged.
+//
+// W2 LOCKED: the handler accumulates the FileFactDiff LOCALLY during the
+// tx span; it is NOT a method on OverlayTx. The handler is the single
+// owner of the diff state, so the OverlayTx surface stays unchanged.
+type RankApplier interface {
+	ApplyRepair(ctx context.Context, repoID string, repair graphpkg.GraphRepair) (uint64, bool, error)
+}
+
 // Handler is the dispatcher.  Construct via New (or zero-value with
 // fields set directly in tests).
 type Handler struct {
@@ -100,6 +115,21 @@ type Handler struct {
 	// circuits the bump. Production wiring (P03) supplies a
 	// ProdMetricsSink wrapping *obs.Metrics.
 	Metrics lspenrich.MetricsSink
+	// rankApplier is the Phase 62 P02 post-commit hook target. Nil-safe;
+	// wired via SetRankApplier from the daemon bootstrap when the rank
+	// engine is constructed (CR-04 nil-safety invariant).
+	rankApplier RankApplier
+}
+
+// SetRankApplier installs (or replaces) the Phase 62 RankApplier hook.
+// Safe to call before or after the handler is in service. Passing nil is
+// the documented "unwire" path — subsequent dispatches do not fire
+// ApplyRepair.
+func (h *Handler) SetRankApplier(r RankApplier) {
+	if h == nil {
+		return
+	}
+	h.rankApplier = r
 }
 
 // New constructs a Handler with the given dependencies.  Logger is
@@ -174,6 +204,13 @@ func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID,
 // updateChangedFileWithKind is the lane-aware variant of UpdateChangedFile.
 // kind is consulted by selectLane to choose between LaneHigh (helix_edit)
 // and LaneBackground (everything else). Phase 61 D-01.
+//
+// W2 LOCKED — handler-tracked diff (no OverlayTx.Diff method): the handler
+// accumulates a graphpkg.FileFactDiff LOCALLY during the tx span. Phase 60
+// P02's UpsertOverlayFile is the only fact write today (no symbol/edge
+// mutation), so the diff is empty for now and the Phase 62 hook short-
+// circuits via repair.IsEmpty(). Phase 60 P04 / Phase 62 P05 will populate
+// the diff as the symbol-level upsert paths land.
 func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic.RepoID, path string, kind live.SourceChangeKind) error {
 	hash, err := h.Hasher(path)
 	if err != nil {
@@ -187,8 +224,31 @@ func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic
 		_ = tx.Rollback()
 		return fmt.Errorf("UpdateChangedFile: upsert: %w", err)
 	}
+	// Phase 60 P02 surface writes only the file-row contentHash. No
+	// symbol-level diff information flows here yet, so the local diff is
+	// empty and the Phase 62 hook will short-circuit via repair.IsEmpty().
+	// Phase 60 P04 (full FileFact upsert) and Phase 62 P05 (type resolver
+	// edge emission) will fill this struct from their own tx-scoped
+	// recorders when they land.
+	var diff graphpkg.FileFactDiff
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	// === Phase 62 P02 post-commit hook ===
+	// Fires AFTER tx.Commit() succeeds and BEFORE EnqueueLane. Body-only
+	// edits are short-circuited via repair.IsEmpty() inside ApplyRepair,
+	// so a nil-rich (no-flag) diff costs only a CurrentGraphVersion read.
+	if h.rankApplier != nil {
+		repair := graphpkg.ComputeGraphRepair(diff)
+		if !repair.IsEmpty() {
+			if _, _, err := h.rankApplier.ApplyRepair(ctx, string(repoID), repair); err != nil {
+				// Non-fatal: a missed advance is degraded but safe — the
+				// next tx that DOES advance graph_version will surface
+				// fresh score rows. Log and continue to the LSP enqueue.
+				h.Logger.Warn("apply_repair failed",
+					"err", err, "repo_id", repoID, "path", path)
+			}
+		}
 	}
 	if h.LSPQueue != nil {
 		_ = h.LSPQueue.EnqueueLane(selectLane(kind), lspqueue.RevalidateFileJob{

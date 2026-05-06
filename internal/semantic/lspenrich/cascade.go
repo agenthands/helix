@@ -437,7 +437,16 @@ func (c *Cascade) Run(
 		}
 	}
 
-	// Phase 60 D-04 invalidations stub — Phase 62 wires the consumer.
+	// Phase 62 P02: invalidations are now consumed via the post-commit
+	// GraphRepair handoff in internal/semantic/live/handler/handler.go.
+	// The recommended path (RESEARCH Open Question 3) derives the typed
+	// graphpkg.GraphRepair from the OverlayTx diff rather than a separate
+	// invalidations table — handler.updateChangedFileWithKind owns the
+	// derivation and calls h.rankApplier.ApplyRepair. The WriteInvalidations
+	// seam is retained as a typed no-op for forward compatibility; P03 may
+	// swap to a real implementation if a row-based plumbing becomes
+	// preferable. See cascade.CascadeTx interface (line 84) for the seam
+	// contract.
 	_ = tx.WriteInvalidations(ctx)
 
 	if err := tx.Commit(); err != nil {

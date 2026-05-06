@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,17 +88,16 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 	if path == "" {
 		return nil, fmt.Errorf("semantic.store.Open: cfg.Store.Path is empty")
 	}
-	// T-57-02-01: reject path traversal. cfg.Store.Path SHOULD be a
-	// workspace-relative path joined with the workspace root by the caller
-	// (Phase 57 keeps that contract loose because the daemon does the join).
-	// We still call filepath.Clean to normalize away `..` segments that
-	// would escape any directory, and reject if the cleaned path differs
-	// in a way that signals traversal.
-	if cleaned := filepath.Clean(path); cleaned != path {
-		// Allow case where caller passed an absolute path that simply has
-		// no `.` or `..` (Clean is idempotent then). Only reject if the
-		// cleaned form differs structurally.
-		path = cleaned
+	// T-57-02-01: reject path traversal explicitly. Splitting on the
+	// forward-slash form (filepath.ToSlash converts Windows backslashes)
+	// catches every "/../" anywhere in the path, including the bare ".."
+	// case. We refuse rather than silently rewrite via filepath.Clean —
+	// the caller is responsible for handing us a path that already lives
+	// inside the workspace.
+	for _, seg := range strings.Split(filepath.ToSlash(path), "/") {
+		if seg == ".." {
+			return nil, fmt.Errorf("semantic.store.Open: path %q contains parent-reference segment (T-57-02-01): %w", path, serr.ErrInvalidArgs)
+		}
 	}
 
 	label := workspaceLabel(path)

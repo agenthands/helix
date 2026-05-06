@@ -6,6 +6,19 @@ import (
 	"fmt"
 )
 
+// applyStatementsTx is the WR-01 transactional helper. RED-stage stub:
+// reproduces the pre-fix bug — bare ExecContext loop without a transaction,
+// so partial schema lands on disk before the bad statement aborts. The
+// GREEN commit replaces this body with a real BEGIN/COMMIT loop.
+func applyStatementsTx(ctx context.Context, db *sql.DB, stmts []string) error {
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyStatementsTx: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
 // applyMigration001 is the bootstrap migration (version 0 → 1). It executes
 // every CREATE TABLE statement from SPEC-DRAFT.md §9.1-§9.11 verbatim and
 // then INSERTs the schema-version row.

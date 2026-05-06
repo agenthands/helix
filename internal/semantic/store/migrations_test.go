@@ -490,3 +490,43 @@ func mkdirAllForTest(t *testing.T, dir string) error {
 	t.Helper()
 	return os.MkdirAll(dir, 0o755)
 }
+
+// TestApplyMigration001_RollsBackOnFailure proves the bootstrap migration
+// is atomic: a mid-migration failure leaves no partial schema. WR-01.
+//
+// The test injects a deliberately broken DDL between two valid statements
+// and calls applyStatementsTx directly. After the rollback, none of the
+// three target tables must exist.
+func TestApplyMigration001_RollsBackOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.duckdb")
+
+	db, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(context.Background()); err != nil {
+		t.Fatalf("ping: %v", err)
+	}
+
+	bad := []string{
+		`CREATE TABLE t1 (a INTEGER)`,
+		`CREATE TABLE t2 (BROKEN SYNTAX HERE)`,
+		`CREATE TABLE t3 (a INTEGER)`,
+	}
+	if err := applyStatementsTx(context.Background(), db, bad); err == nil {
+		t.Fatal("applyStatementsTx: want error from bad DDL, got nil")
+	}
+
+	var count int
+	if err := db.QueryRowContext(context.Background(),
+		"SELECT count(*) FROM information_schema.tables WHERE table_name IN ('t1','t2','t3')",
+	).Scan(&count); err != nil {
+		t.Fatalf("count tables: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("after rollback want 0 tables matching {t1,t2,t3}, got %d", count)
+	}
+}

@@ -444,7 +444,32 @@ func (a *storeCascadeTxAdapter) UpsertReferences(ctx context.Context, path strin
 }
 
 func (a *storeCascadeTxAdapter) UpsertEdges(ctx context.Context, edges []lspenrich.Edge) error {
-	return nil
+	// B3 (62-02 Task 4.5): forward to the merge entrypoint so out-of-tree
+	// callers still using the legacy alias get the D-14 boundary too.
+	return a.UpsertEdgesWithMerge(ctx, edges)
+}
+
+// UpsertEdgesWithMerge translates lspenrich.Edge → semanticstore.EdgeRow
+// and routes through OverlayTx.UpsertEdgesWithMerge so cascade-emitted
+// LSP rows enter the (src, dst, edge_kind) merge boundary uniformly
+// (Phase 62 P02 D-14, B3).
+func (a *storeCascadeTxAdapter) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	if len(edges) == 0 {
+		return nil
+	}
+	rows := make([]semanticstore.EdgeRow, 0, len(edges))
+	for _, e := range edges {
+		rows = append(rows, semanticstore.EdgeRow{
+			SrcNodeID:       e.SrcNodeID,
+			DstNodeID:       e.DstNodeID,
+			EdgeKind:        e.Kind,
+			Source:          e.Source,
+			Confidence:      e.Confidence,
+			Weight:          e.Weight,
+			ValidationState: e.ValidationState,
+		})
+	}
+	return a.tx.UpsertEdgesWithMerge(ctx, rows)
 }
 
 func (a *storeCascadeTxAdapter) UpsertDiagnostics(ctx context.Context, path string, diags []lspenrich.Diagnostic) error {

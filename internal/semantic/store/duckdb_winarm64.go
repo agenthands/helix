@@ -14,6 +14,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 
 	serr "github.com/agenthands/helix/internal/errors"
@@ -32,6 +33,10 @@ func Open(_ context.Context, _ semantic.Config, _ *slog.Logger, _ *obs.Metrics) 
 }
 func (*Store) Close() error    { return serr.ErrUnsupported }
 func (*Store) Available() bool { return false }
+
+// DB returns nil on windows/arm64. SC-1: the daemon's semanticStoreProbe
+// adapter calls DB() inside its Probe; the nil return guards the SELECT 1.
+func (*Store) DB() *sql.DB { return nil }
 func (*Store) QueryEffectiveFiles(_ context.Context, _, _ any) (any, error) {
 	return nil, serr.ErrUnsupported
 }

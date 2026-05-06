@@ -3,7 +3,9 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -33,12 +35,26 @@ type SemanticStoreStatus struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// ComputeSemanticStoreStatus is a RED-stage stub. Replaced by the GREEN
-// commit with the real probe-and-classify logic.
+// ComputeSemanticStoreStatus runs a bounded probe against the semantic
+// store and returns the {disabled, ready, unhealthy} status block. SC-1.
+//
+// The probe budget is 1s — short enough to never dominate get_health
+// latency, long enough to absorb a one-off DuckDB stutter. A timed-out
+// probe returns "unhealthy" with reason "probe_timeout".
 func ComputeSemanticStoreStatus(ctx context.Context, p SemanticStoreProbe) SemanticStoreStatus {
-	_ = ctx
-	_ = p
-	return SemanticStoreStatus{}
+	if p == nil || !p.Available() {
+		return SemanticStoreStatus{State: "disabled"}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	if err := p.Probe(probeCtx); err != nil {
+		reason := err.Error()
+		if errors.Is(err, context.DeadlineExceeded) {
+			reason = "probe_timeout"
+		}
+		return SemanticStoreStatus{State: "unhealthy", Reason: reason}
+	}
+	return SemanticStoreStatus{State: "ready"}
 }
 
 // GetHealthArgs is the input schema for the get_health tool.
@@ -61,8 +77,11 @@ Show all language servers including healthy ones:
 - Use verbose=true to see all language servers and their states
 - Call after activation to verify language servers started successfully`
 
-// RegisterTools registers the get_health MCP tool with the server.
-func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
+// RegisterTools registers the get_health MCP tool with the server. The
+// semProbe argument is the daemon-supplied semantic store seam (SC-1);
+// pass nil to disable the semantic_store block (CGO=0 / no daemon
+// wiring scenario — the block then renders as state="disabled").
+func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, semProbe SemanticStoreProbe) {
 	tracer := k.Tracer()
 
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
@@ -77,7 +96,20 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 
 		FilterReport(report, args.Verbose)
 
-		jsonBytes, err := json.MarshalIndent(report, "", "  ")
+		// SC-1: surface semantic store readiness alongside LS health. Use
+		// an envelope so the existing report shape is preserved verbatim
+		// and `semantic_store` is additive — downstream consumers parsing
+		// only `workspaces` are unaffected; new consumers see the field.
+		semStatus := ComputeSemanticStoreStatus(ctx, semProbe)
+		envelope := struct {
+			*lspool.HealthReport
+			SemanticStore SemanticStoreStatus `json:"semantic_store"`
+		}{
+			HealthReport:  report,
+			SemanticStore: semStatus,
+		}
+
+		jsonBytes, err := json.MarshalIndent(envelope, "", "  ")
 		if err != nil {
 			return errorResult(fmt.Sprintf("marshaling health report: %v", err)), nil, nil
 		}

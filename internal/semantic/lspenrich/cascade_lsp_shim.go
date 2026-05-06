@@ -397,15 +397,28 @@ func symbolsFromDocumentSymbols(docs []gen.DocumentSymbol, uri string) []Symbol 
 // wraps these errors but the wrapping is internal to that package; the
 // shim does string-matching to avoid importing internal/kernel/jsonrpc
 // (the nosemantic2kernel vet analyzer forbids semantic→kernel/* imports
-// other than internal/kernel/lspool).
+// other than internal/kernel/lspool — verified against
+// internal/lint/nosemantic2kernel/analyzer.go's lspoolPkgPath carve-out).
+//
+// The matcher is case-insensitive and folds out whitespace variants so
+// "Method Not Found", "MethodNotFound", and "method not found" all
+// match.  In practice, kernel/jsonrpc.ResponseError.Error() returns
+// only e.Message (no Code prefix), so the "-32601" branch never fires
+// against errors produced by that path; it's retained because some
+// LSP wrappers (and tests) embed the numeric code in the message text.
+//
+// TODO(phase-62+): when the kernel exposes a typed
+// IsMethodNotFound(error) helper through *lspool.WorkerLease (or a
+// third package outside kernel/), switch this matcher to the typed
+// path so we match on Code == -32601 directly.
 func isJSONRPCMethodNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	s := err.Error()
+	s := strings.ToLower(err.Error())
 	return strings.Contains(s, "-32601") ||
-		strings.Contains(s, "MethodNotFound") ||
-		strings.Contains(s, "method not found")
+		strings.Contains(s, "method not found") ||
+		strings.Contains(s, "methodnotfound")
 }
 
 // isNonFatalLSPError reports whether err looks like a soft "this

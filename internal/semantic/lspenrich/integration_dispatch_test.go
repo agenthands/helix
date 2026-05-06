@@ -113,7 +113,12 @@ func TestManagerProductionDispatch_Go(t *testing.T) {
 	warmLease, err := pool.AcquireLease(bootCtx, "test-prewarm:go", wsKey, false)
 	bootCancel()
 	if err != nil {
-		t.Skipf("could not acquire warmup lease (gopls install issue?): %v", err)
+		// skipIfMissing(t, "gopls") above already established that gopls
+		// is on PATH, so an AcquireLease failure here is a real bug in
+		// *lspool.Pool / langregistry — exactly the failure mode the
+		// gap-closure test was designed to catch. Demoting to t.Skipf
+		// would silently mask future regressions.
+		t.Fatalf("warmup lease acquire failed (gopls is on PATH per skipIfMissing): %v", err)
 	}
 
 	mainPath := filepath.Join(root, "main.go")

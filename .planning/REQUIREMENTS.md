@@ -47,11 +47,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### ENRICH — LSP Enrichment
 
-- [ ] **ENRICH-01**: An async LSP enrichment worker reuses the existing `kernel.Pool().AcquireLease(...)` API via a small `LeaseAcquirer` interface; semantic does not import `internal/kernel` (only `internal/kernel/lspool` types and `internal/workspace`).
-- [ ] **ENRICH-02**: Enrichment uses a priority queue: foreground tool calls preempt; high-priority `ChangeHelixEdit` revalidation runs head-of-line; background indexing runs at concurrency cap = 1 by default.
-- [ ] **ENRICH-03**: Enrichment honors v1.9 LS readiness gates — rust-analyzer `experimental/serverStatus` and jdtls `JdtlsAdapter.WaitUntilJavaReady` — before issuing enrichment requests; never bypasses readiness for "best-effort" reasons.
-- [ ] **ENRICH-04**: Per-file enrichment respects the SPEC §14.2 budget (`timeout_per_file=5s`, `timeout_total=120s`, `max_symbols_per_file=200`, etc.); on budget exhaustion the file is marked `partial:true, partial_reason:"budget exhausted"` and remains queryable.
-- [ ] **ENRICH-05**: A `git checkout` storm or 100-file edit burst does not bury foreground tool calls — verified by a stress test asserting interactive p95 stays under the foreground-tool budget while enrichment runs.
+- [x] **ENRICH-01**: An async LSP enrichment worker reuses the existing `kernel.Pool().AcquireLease(...)` API via a small `LeaseAcquirer` interface; semantic does not import `internal/kernel` (only `internal/kernel/lspool` types and `internal/workspace`).
+- [x] **ENRICH-02**: Enrichment uses a priority queue: foreground tool calls preempt; high-priority `ChangeHelixEdit` revalidation runs head-of-line; background indexing runs at concurrency cap = 1 by default.
+- [x] **ENRICH-03**: Enrichment honors v1.9 LS readiness gates — rust-analyzer `experimental/serverStatus` and jdtls `JdtlsAdapter.WaitUntilJavaReady` — before issuing enrichment requests; never bypasses readiness for "best-effort" reasons.
+- [x] **ENRICH-04**: Per-file enrichment respects the SPEC §14.2 budget (`timeout_per_file=5s`, `timeout_total=120s`, `max_symbols_per_file=200`, etc.); on budget exhaustion the file is marked `partial:true, partial_reason:"budget exhausted"` and remains queryable.
+- [x] **ENRICH-05**: A `git checkout` storm or 100-file edit burst does not bury foreground tool calls — verified by a stress test asserting interactive p95 stays under the foreground-tool budget while enrichment runs.
 
 ### GRAPH — Graph Engine & Ranking
 

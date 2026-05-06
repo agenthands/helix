@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
 status: executing
-last_updated: "2026-05-06T06:18:14.863Z"
-last_activity: 2026-05-06 -- Phase 61 execution started
+last_updated: "2026-05-06T07:00:00.000Z"
+last_activity: 2026-05-06 -- Phase 61 verifier blocked phase: Manager NewCascadeLSP factory unwired (architect decision)
 progress:
   total_phases: 6
   completed_phases: 5
@@ -24,13 +24,24 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 61 (lsp-enrichment-worker) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 61
+Phase: 61 (lsp-enrichment-worker) — GAPS_FOUND (verifier blocked closeout)
+Plan: 4 of 4 plans landed; phase NOT closed
+Status: Awaiting gap-closure plan (run /gsd-plan-phase 61 --gaps)
 
-- 61-01: COMPLETE (4/4 tasks)
-- 61-02: 3/5 tasks done (Tasks 4-5 remaining: Worker drain loop, cascade integration test)
-- 61-03: 2/5 tasks done (Tasks 3-5 remaining: Manager+trace, Pool adapters, daemon bootstrap)
-- 61-04: NOT STARTED (Wave 3)
+- 61-01: COMPLETE (4/4 tasks, merged)
+- 61-02: COMPLETE (5/5 tasks, merged) — Worker drain + §14.4 cascade integration test against real gopls + jdtls
+- 61-03: COMPLETE (5/5 tasks, merged) — Manager (B2 lease cache via singleflight) + Pool adapters + daemon bootstrap
+- 61-04: COMPLETE (4/4 tasks, merged) — stress + acceptance tests; REQUIREMENTS.md ENRICH-01..05 checked off
+
+Verifier finding (BLOCKER — architect decision: block phase as real bug):
+  Manager.Run constructs Worker WITHOUT the NewCascadeLSP factory
+  (manager.go:198-207). Worker.processOne (worker.go:225-229) drops
+  every job to OutcomeDropped when factory is nil. Production daemon
+  today does not yet have a producer dispatching jobs through Manager
+  (the dispatcher ships in Phase 64 — refresh_semantic_graph MCP tool),
+  but the gap is a real landmine that must be closed before Phase 64.
+
+Resolution: gap-closure plan to wire NewCascadeLSP factory into
+Manager via daemon live_wiring.go.
 
 Last activity: 2026-05-06 -- Phase 61 execution started

@@ -570,14 +570,19 @@ func (p semanticStoreProbe) Available() bool {
 
 // Probe runs a SELECT 1 against the underlying *sql.DB. The store's
 // DB() accessor is nil-safe.
+//
+// IN-NEW-02: ComputeSemanticStoreStatus gates Probe behind Available(),
+// and Available() returns true only when p.s != nil AND p.s.DB() != nil
+// (see duckdb.go Store.DB contract). The nil-DB branch is therefore
+// unreachable and has been removed; the surviving p.s == nil branch is
+// wrapped with serr.ErrUnsupported so callers (and the closed-enum
+// classifier in kernel/health) can distinguish a "feature disabled"
+// state from a transient DB failure.
 func (p semanticStoreProbe) Probe(ctx context.Context) error {
 	if p.s == nil {
-		return fmt.Errorf("semantic store unavailable")
+		return fmt.Errorf("semantic store unavailable: %w", serr.ErrUnsupported)
 	}
 	db := p.s.DB()
-	if db == nil {
-		return fmt.Errorf("semantic store DB handle nil")
-	}
 	var one int
 	return db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
 }

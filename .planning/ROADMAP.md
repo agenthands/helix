@@ -158,7 +158,7 @@
   - [x] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
 - [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/5 plans)
   Plans:
-  - [ ] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
+  - [x] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
   - [ ] 62-02-PLAN.md — Wave 2 — graph_version + ApplyRepair single-bump + score_status read API + UpsertGraphScores/UpsertEdgesWithMerge + handler post-commit hook + 4 config keys + 5 bounded-label metrics [GRAPH-03, GRAPH-05]
   - [ ] 62-03-PLAN.md — Wave 3 — RankScheduler (debounce + long-idle + drop-on-full) + 1-hop frontier + full recompute preemption + WriteInvalidations consumer + daemon errgroup wiring [GRAPH-04, GRAPH-05]
   - [ ] 62-04-PLAN.md — Wave 4 — Weak-component clustering algorithm + persistence (UpsertClusters/UpsertClusterMembers/DeleteClustersForGraphVersion) [GRAPH-06]

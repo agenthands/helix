@@ -456,16 +456,16 @@ func uriToPath(uri string) string {
 }
 
 // kindLabel maps an LSP SymbolKind to a short human-readable label.
-// The values 5/12/6 are the LSP wire numbers for Class/Function/Method
-// (LSP 3.17 §SymbolKind enum); other kinds fall through to a numeric
-// label.
+// The case constants are pulled from protocol/gen so the switch tracks
+// any future metaModel regen automatically; the LSP 3.17 wire values are
+// SymbolKindClass=5, SymbolKindMethod=6, SymbolKindFunction=12.
 func kindLabel(k gen.SymbolKind) string {
 	switch k {
-	case 5:
+	case gen.SymbolKindClass:
 		return "Class"
-	case 12:
+	case gen.SymbolKindFunction:
 		return "Function"
-	case 6:
+	case gen.SymbolKindMethod:
 		return "Method"
 	default:
 		return fmt.Sprintf("Kind(%d)", k)

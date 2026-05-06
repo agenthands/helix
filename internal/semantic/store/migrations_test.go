@@ -495,6 +495,33 @@ func mkdirAllForTest(t *testing.T, dir string) error {
 	return os.MkdirAll(dir, 0o755)
 }
 
+// TestApplyMigration001_UsesTransactionalHelper anchors the WR-01
+// rollback contract to the REAL bootstrap migration (IN-NEW-03). The
+// sibling TestApplyMigration001_RollsBackOnFailure feeds synthetic DDL
+// into applyStatementsTx, which proves the helper is correct but does
+// NOT prove applyMigration001 itself routes through that helper. A
+// regression that wires applyMigration001 back to a bare db.ExecContext
+// loop (skipping the BEGIN/COMMIT envelope) would slip past the synthetic
+// test because the schema-1 happy path exercises no failure case.
+//
+// Build-time grep gate: read migrations.go at test time and assert
+// applyStatementsTx appears at least twice (once in the helper definition,
+// once in applyMigration001). This is a coarse sentinel — the test exists
+// so a future refactor that decouples the two prompts an explicit decision
+// rather than a silent regression.
+func TestApplyMigration001_UsesTransactionalHelper(t *testing.T) {
+	src, err := os.ReadFile("migrations.go")
+	if err != nil {
+		t.Fatalf("read migrations.go: %v", err)
+	}
+	got := strings.Count(string(src), "applyStatementsTx")
+	if got < 2 {
+		t.Fatalf("migrations.go references applyStatementsTx %d times; want >= 2 "+
+			"(definition + applyMigration001 call). A regression that bypasses the "+
+			"transactional helper would slip past TestApplyMigration001_RollsBackOnFailure.", got)
+	}
+}
+
 // TestApplyMigration001_RollsBackOnFailure proves the bootstrap migration
 // is atomic: a mid-migration failure leaves no partial schema. WR-01.
 //

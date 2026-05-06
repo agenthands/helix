@@ -2,9 +2,10 @@
 // the duckdb-go module is imported from any package outside the allowlisted
 // internal/semantic/store/ subtree.
 //
-// The forbiddenImport string uses the prefix form (omits the "/v2" major-
-// version suffix) so future major-version bumps still match without changing
-// this constant. The exact module path is locked by CONTEXT.md D-12.
+// Match form is exact-package OR slash-suffix subpath. Sibling repos like
+// duckdb-go-bindings or duckdb-go-sibling are NOT flagged. A future major
+// bump (v3) is matched via the `/v3` subpath; the constant does not need to
+// change. The exact module path is locked by CONTEXT.md D-12.
 package noduckdb
 
 import (
@@ -28,7 +29,7 @@ var Analyzer = &analysis.Analyzer{
 		for _, file := range pass.Files {
 			for _, imp := range file.Imports {
 				path := strings.Trim(imp.Path.Value, `"`)
-				if strings.HasPrefix(path, forbiddenImport) {
+				if path == forbiddenImport || strings.HasPrefix(path, forbiddenImport+"/") {
 					pass.Reportf(imp.Pos(),
 						"duckdb-go may only be imported from %s (got %s)",
 						allowedPkgPrefix, pass.Pkg.Path())

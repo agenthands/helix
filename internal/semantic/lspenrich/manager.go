@@ -62,7 +62,13 @@ type Manager struct {
 	// OutcomeDropped (the pre-61-05 behavior).  Production wiring in
 	// internal/daemon/live_wiring.go MUST set this via
 	// SetCascadeLSPFactory before Run is invoked.
-	newCascadeLSP CascadeLSPFactory
+	//
+	// newCascadeLSPMu guards both the writer (SetCascadeLSPFactory) and
+	// the reader (Run, which snapshots the field into the Worker struct
+	// literal).  Without this lock a `go mgr.Run(ctx); mgr.SetCascadeLSPFactory(f)`
+	// caller pattern would be a data race the race detector flags.
+	newCascadeLSPMu sync.Mutex
+	newCascadeLSP   CascadeLSPFactory
 
 	// cancel is set inside Run so Stop can cancel the worker goroutines.
 	cancelMu sync.Mutex
@@ -122,9 +128,18 @@ func NewManager(
 }
 
 // SetCascadeLSPFactory injects the production CascadeLSP factory.  MUST
-// be called BEFORE Run is invoked; calling after Run has started is a
-// no-op (the Worker has already been constructed with whatever factory
-// value was set at the moment Run() reached the Worker struct literal).
+// be called before Run; the factory is snapshotted into the Worker
+// struct literal at the moment Run() runs.  Calls AFTER Run() has reached
+// the Worker construction step are observable only by a subsequent Run()
+// invocation (after Stop) — the currently-running Worker has already
+// captured its factory value and will not see the new one.
+//
+// Concurrency: SetCascadeLSPFactory and Run race on the same field, so
+// both sides take newCascadeLSPMu.  The lock funnels Set→Run happens-
+// before so a `go mgr.Run(ctx); mgr.SetCascadeLSPFactory(f)` caller
+// pattern is data-race-free under -race; the lock does NOT make the
+// post-Run-Set visible to the in-flight Worker (intentional — see
+// previous paragraph).
 //
 // nil is permitted (preserves the pre-61-05 dropped-job behaviour for
 // tests that exercise only the readiness/dropped paths via direct
@@ -135,7 +150,9 @@ func NewManager(
 // *lspool.WorkerLease to a CascadeLSP shim that dispatches LSP method
 // calls to lease.Request.
 func (m *Manager) SetCascadeLSPFactory(f CascadeLSPFactory) {
+	m.newCascadeLSPMu.Lock()
 	m.newCascadeLSP = f
+	m.newCascadeLSPMu.Unlock()
 }
 
 // AcquireFor returns the cached *WorkerLease for (wsKey, lang) or lazily
@@ -226,7 +243,14 @@ func (m *Manager) Run(ctx context.Context) error {
 	m.cancelMu.Unlock()
 
 	wrappedMetrics := &trackedMetrics{inner: m.metrics, tracker: m.tracker}
-	if m.newCascadeLSP == nil {
+	// Snapshot newCascadeLSP under the lock — pairs with SetCascadeLSPFactory
+	// so the race detector sees the happens-before. The Worker captures the
+	// snapshotted value; subsequent SetCascadeLSPFactory calls are observable
+	// only by a later Run().
+	m.newCascadeLSPMu.Lock()
+	factory := m.newCascadeLSP
+	m.newCascadeLSPMu.Unlock()
+	if factory == nil {
 		// 61-05: surface the deferred-wiring failure mode loudly at
 		// startup instead of silently at first-job time (when every
 		// dispatched job lands on OutcomeDropped + an Error log).
@@ -241,7 +265,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		BudgetCfg:     m.cfg,
 		Metrics:       wrappedMetrics,
 		Logger:        m.logger,
-		NewCascadeLSP: m.newCascadeLSP, // 61-05 production-dispatch wiring
+		NewCascadeLSP: factory, // 61-05 production-dispatch wiring
 	}
 	n := m.cfg.MaxConcurrentWorkers
 	if n <= 0 {
@@ -251,7 +275,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		"max_concurrent_workers", n,
 		"yield_check_window_ms", m.cfg.YieldCheckWindowMs,
 		"timeout_per_file", m.cfg.TimeoutPerFile,
-		"cascade_lsp_factory", cascadeFactoryStateLabel(m.newCascadeLSP),
+		"cascade_lsp_factory", cascadeFactoryStateLabel(factory),
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return w.RunN(gctx, n) })

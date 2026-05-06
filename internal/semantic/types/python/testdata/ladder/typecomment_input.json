@@ -1,0 +1,22 @@
+{
+  "name": "typecomment",
+  "symbols": {
+    "5": {"NodeID": 5, "Language": "python", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.py", "DocComment": "# type: UserRepository"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "python",
+    "FilePath": "/repo/pkg/a.py",
+    "RefNodeID": 5,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.6,
+    "evidence_kind": "comment",
+    "validation_state": "validated",
+    "source_prefix": "comment.python_type_comment"
+  }
+}

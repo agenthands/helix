@@ -1,0 +1,22 @@
+{
+  "name": "constructor",
+  "symbols": {
+    "3": {"NodeID": 3, "Language": "python", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.py", "Signature": "x = Foo()"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "python",
+    "FilePath": "/repo/pkg/a.py",
+    "RefNodeID": 3,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.8,
+    "evidence_kind": "constructor",
+    "validation_state": "validated",
+    "source_prefix": "constructor"
+  }
+}

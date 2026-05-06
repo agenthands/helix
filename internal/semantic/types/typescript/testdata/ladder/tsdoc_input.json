@@ -1,0 +1,22 @@
+{
+  "name": "tsdoc",
+  "symbols": {
+    "5": {"NodeID": 5, "Language": "typescript", "Kind": "function", "StableKey": "doThing", "FilePath": "/repo/src/a.ts", "DocComment": "/** @returns {UserRepository} */"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 5,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["doThing"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.6,
+    "evidence_kind": "comment",
+    "validation_state": "validated",
+    "source_prefix": "comment.tsdoc"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "annotation",
+  "symbols": {
+    "2": {"NodeID": 2, "Language": "typescript", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/src/a.ts", "Signature": "let x: Foo"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "typescript",
+    "FilePath": "/repo/src/a.ts",
+    "RefNodeID": 2,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.9,
+    "evidence_kind": "annotation",
+    "validation_state": "validated",
+    "source_prefix": "annotation"
+  }
+}

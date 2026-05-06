@@ -55,12 +55,12 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### GRAPH — Graph Engine & Ranking
 
-- [ ] **GRAPH-01**: A weighted PageRank single projection (CALL_GRAPH) computes deterministically over the effective graph; same input across runs produces byte-identical scores.
-- [ ] **GRAPH-02**: Personalized PageRank with seed weighting from a request payload (files + symbol names) returns a ranked node list under a configurable epsilon (`pagerank.epsilon`, default `1e-6`).
-- [ ] **GRAPH-03**: Each ranked tool response carries `graph_version` and `enrichment_level` so callers can detect drift between successive calls; tiebreaks use stable-key NodeID ordering.
-- [ ] **GRAPH-04**: Incremental local PageRank repair runs only inside a bounded `max_local_pagerank_nodes` frontier (default 5000); above the threshold scores are marked `stale` and a full recompute is scheduled after idle.
-- [ ] **GRAPH-05**: Score persistence carries `status` (`exact | approximate | stale | missing`); MCP responses surface this in `score_status`.
-- [ ] **GRAPH-06**: A weak-component pass over the effective graph supports cluster identification (the algorithm is shipped; cluster MCP tools — `get_cluster_map`, `explain_cluster` — are deferred to v1.10.x). The pass is deterministic.
+- [x] **GRAPH-01**: A weighted PageRank single projection (CALL_GRAPH) computes deterministically over the effective graph; same input across runs produces byte-identical scores.
+- [x] **GRAPH-02**: Personalized PageRank with seed weighting from a request payload (files + symbol names) returns a ranked node list under a configurable epsilon (`pagerank.epsilon`, default `1e-6`).
+- [x] **GRAPH-03**: Each ranked tool response carries `graph_version` and `enrichment_level` so callers can detect drift between successive calls; tiebreaks use stable-key NodeID ordering.
+- [x] **GRAPH-04**: Incremental local PageRank repair runs only inside a bounded `max_local_pagerank_nodes` frontier (default 5000); above the threshold scores are marked `stale` and a full recompute is scheduled after idle.
+- [x] **GRAPH-05**: Score persistence carries `status` (`exact | approximate | stale | missing`); MCP responses surface this in `score_status`.
+- [x] **GRAPH-06**: A weak-component pass over the effective graph supports cluster identification (the algorithm is shipped; cluster MCP tools — `get_cluster_map`, `explain_cluster` — are deferred to v1.10.x). The pass is deterministic.
 
 ### TOOLS — New MCP Tools (P0 set: 4 of 10)
 
@@ -90,10 +90,10 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### TYPES — Type Resolution & Access Chains
 
-- [ ] **TYPES-01**: Tiered type-resolution emits `RESOLVES_TO`, `CALLS`, and `USES_TYPE` edges with confidence per the SPEC §38.2 ladder (1.00 LSP / 0.90 annotation / 0.80 constructor / 0.70 assignment / 0.60 doc-comment / 0.45 heuristic / 0.20 unknown).
-- [ ] **TYPES-02**: Access-chain resolver supports `a.b.c.d()` patterns up to `max_chain_depth` (default 8); a fixpoint loop runs up to `max_fixpoint_iterations` (default 8) and exits early on no progress.
-- [ ] **TYPES-03**: Comment-based fallbacks parse JSDoc / TSDoc / PHPDoc / YARD / Python type comments where enabled; comment-derived edges never exceed confidence 0.60 unless independently confirmed by LSP.
-- [ ] **TYPES-04**: Non-converged chains are emitted with low confidence + `unresolved` markers; they are NEVER emitted as `validated`.
+- [x] **TYPES-01**: Tiered type-resolution emits `RESOLVES_TO`, `CALLS`, and `USES_TYPE` edges with confidence per the SPEC §38.2 ladder (1.00 LSP / 0.90 annotation / 0.80 constructor / 0.70 assignment / 0.60 doc-comment / 0.45 heuristic / 0.20 unknown).
+- [x] **TYPES-02**: Access-chain resolver supports `a.b.c.d()` patterns up to `max_chain_depth` (default 8); a fixpoint loop runs up to `max_fixpoint_iterations` (default 8) and exits early on no progress.
+- [x] **TYPES-03**: Comment-based fallbacks parse JSDoc / TSDoc / PHPDoc / YARD / Python type comments where enabled; comment-derived edges never exceed confidence 0.60 unless independently confirmed by LSP.
+- [x] **TYPES-04**: Non-converged chains are emitted with low confidence + `unresolved` markers; they are NEVER emitted as `validated`.
 
 ### GUARD — Agent Guardrails (G-001..G-005, warn-default)
 

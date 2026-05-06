@@ -1,0 +1,22 @@
+{
+  "name": "unknown",
+  "symbols": {
+    "7": {"NodeID": 7, "Language": "go", "Kind": "variable", "StableKey": "z", "FilePath": "/repo/pkg/a.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 7,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["z"]
+  },
+  "expected": {
+    "resolved": false,
+    "confidence": 0.2,
+    "evidence_kind": "unknown",
+    "validation_state": "unresolved",
+    "source_prefix": "unknown"
+  }
+}

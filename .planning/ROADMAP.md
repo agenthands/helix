@@ -149,13 +149,13 @@
   - [x] 60-04-PLAN.md — Wave 2 live spine: signal/classifier/coalescer/handler/service + ScheduleIncremental fill + lspqueue handoff (TDD: CoalesceEvents + MergeChange + ClassifyPathChange)
   - [x] 60-05a-PLAN.md — Wave 3 (parallel with 60-05b) per-workspace fsnotify watcher + ENOSPC fallback + LIVE-02 editor-fixture suite (Vim/JetBrains/VS Code)
   - [x] 60-05b-PLAN.md — Wave 3 (parallel with 60-05a) manifest scanner + 3 new config keys + bounded-label metric + pipelines/live.go fill + daemon bootstrap + Phase 60 close-out checkpoint
-- [ ] Phase 61: LSP Enrichment Worker (5/5 plans, 4/5 complete; gap-closure 61-05 pending — closes 61-VERIFICATION.md gap #1: Manager NewCascadeLSP production wiring)
+- [x] Phase 61: LSP Enrichment Worker (5/5 plans, 4/5 complete; gap-closure 61-05 pending — closes 61-VERIFICATION.md gap #1: Manager NewCascadeLSP production wiring) (completed 2026-05-06)
   Plans:
   - [x] 61-01-PLAN.md — LeaseAcquirer + ForegroundBusy + 2-lane queue + handler producer rewiring + bulk-suppression API + nosemantic2kernel analyzer [ENRICH-01, ENRICH-02]
   - [x] 61-02-PLAN.md — Worker goroutine + §14.4 cascade engine + Budget enforcement + readiness-gate honoring + per-file overlay commit [ENRICH-02, ENRICH-03, ENRICH-04]
   - [x] 61-03-PLAN.md — Metrics + trace spans + Status() accessor + Manager + Daemon bootstrap + 2 new config keys [ENRICH-01..ENRICH-04]
   - [x] 61-04-PLAN.md — ENRICH-05 stress test + acceptance closeout + REQUIREMENTS.md check-off [ENRICH-05, ENRICH-01..ENRICH-04]
-  - [ ] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
+  - [x] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
 - [ ] Phase 62: Graph Engine, Ranking & Type Resolution (0/0 plans)
 - [ ] Phase 63: Compaction & Retention (0/0 plans)
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)

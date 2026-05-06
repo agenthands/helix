@@ -681,6 +681,229 @@ func TestUpsertEdgesWithMerge_LSPRefutesCommentAtDifferentDst(t *testing.T) {
 	}
 }
 
+// --- Phase 62 P04 cluster persistence tests ---
+
+// TestUpsertClusters_RoundTrip writes 3 cluster rows, commits, and asserts
+// the row count + algorithm value via direct SQL.
+func TestUpsertClusters_RoundTrip(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws-cluster-rt")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	clusters := []ClusterSummary{
+		{ID: 1, MemberCount: 3},
+		{ID: 10, MemberCount: 2},
+		{ID: 20, MemberCount: 1},
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 5, clusters); err != nil {
+		t.Fatalf("UpsertClusters: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_clusters
+		WHERE repo_id='ws-cluster-rt' AND graph_version=5`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("cluster row count: got %d, want 3", n)
+	}
+	var algo string
+	if err := s.db.QueryRow(`SELECT algorithm FROM semantic_clusters
+		WHERE repo_id='ws-cluster-rt' AND graph_version=5 AND cluster_id=10`).Scan(&algo); err != nil {
+		t.Fatalf("read algorithm: %v", err)
+	}
+	if algo != "weak_components" {
+		t.Errorf("algorithm[cluster=10]: got %q, want weak_components", algo)
+	}
+}
+
+// TestUpsertClusters_EmptyNoOp asserts the empty-list shortcut and that the
+// nil-tx / empty-projection guards reject malformed calls.
+func TestUpsertClusters_EmptyNoOp(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws-cluster-empty")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 1, nil); err != nil {
+		t.Errorf("nil rows: %v", err)
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 1, []ClusterSummary{}); err != nil {
+		t.Errorf("empty rows: %v", err)
+	}
+	if err := tx.UpsertClusters(ctx, "", 1, []ClusterSummary{{ID: 1, MemberCount: 1}}); err == nil {
+		t.Errorf("empty projection: expected error")
+	}
+	_ = tx.Commit()
+}
+
+// TestUpsertClusterMembers_RoundTrip writes member rows for 3 clusters of
+// sizes [2, 3, 1] and asserts 6 total rows land.
+func TestUpsertClusterMembers_RoundTrip(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws-cluster-members")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	clusters := []ClusterSummary{
+		{ID: 1, MemberCount: 2},
+		{ID: 10, MemberCount: 3},
+		{ID: 20, MemberCount: 1},
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 5, clusters); err != nil {
+		t.Fatalf("UpsertClusters: %v", err)
+	}
+	members := []ClusterMemberRow{
+		{ClusterID: 1, NodeID: 1}, {ClusterID: 1, NodeID: 2},
+		{ClusterID: 10, NodeID: 10}, {ClusterID: 10, NodeID: 11}, {ClusterID: 10, NodeID: 12},
+		{ClusterID: 20, NodeID: 20},
+	}
+	if err := tx.UpsertClusterMembers(ctx, "weak_components", 5, members); err != nil {
+		t.Fatalf("UpsertClusterMembers: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_cluster_members
+		WHERE repo_id='ws-cluster-members' AND graph_version=5`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 6 {
+		t.Errorf("member row count: got %d, want 6", n)
+	}
+
+	// Empty list short-circuits without error.
+	tx2, err := s.BeginOverlayTx(ctx, "ws-cluster-members")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx #2: %v", err)
+	}
+	if err := tx2.UpsertClusterMembers(ctx, "weak_components", 5, nil); err != nil {
+		t.Errorf("nil rows: %v", err)
+	}
+	_ = tx2.Commit()
+}
+
+// TestDeleteClustersForGraphVersion seeds clusters + members at gv=5,
+// deletes them, and asserts both tables are empty for that gv.
+func TestDeleteClustersForGraphVersion(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+
+	// Seed.
+	tx, err := s.BeginOverlayTx(ctx, "ws-cluster-delete")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	clusters := []ClusterSummary{{ID: 1, MemberCount: 2}, {ID: 10, MemberCount: 1}}
+	members := []ClusterMemberRow{
+		{ClusterID: 1, NodeID: 1}, {ClusterID: 1, NodeID: 2},
+		{ClusterID: 10, NodeID: 10},
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 5, clusters); err != nil {
+		t.Fatalf("UpsertClusters: %v", err)
+	}
+	if err := tx.UpsertClusterMembers(ctx, "weak_components", 5, members); err != nil {
+		t.Fatalf("UpsertClusterMembers: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit seed: %v", err)
+	}
+
+	// Delete.
+	tx2, err := s.BeginOverlayTx(ctx, "ws-cluster-delete")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx #2: %v", err)
+	}
+	if err := tx2.DeleteClustersForGraphVersion(ctx, "weak_components", 5); err != nil {
+		t.Fatalf("DeleteClustersForGraphVersion: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit delete: %v", err)
+	}
+
+	var nClusters, nMembers int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_clusters
+		WHERE repo_id='ws-cluster-delete' AND graph_version=5`).Scan(&nClusters); err != nil {
+		t.Fatalf("count clusters: %v", err)
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_cluster_members
+		WHERE repo_id='ws-cluster-delete' AND graph_version=5`).Scan(&nMembers); err != nil {
+		t.Fatalf("count members: %v", err)
+	}
+	if nClusters != 0 || nMembers != 0 {
+		t.Errorf("after delete: clusters=%d members=%d, want 0/0", nClusters, nMembers)
+	}
+}
+
+// TestUpsertClusters_PrimaryKeyComposite asserts that two clusters at the
+// same graph_version with distinct cluster_ids both persist, and that a
+// repeat write of the same (repo, gv, cluster_id) updates rather than
+// duplicates.
+func TestUpsertClusters_PrimaryKeyComposite(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+
+	// First write: two distinct cluster_ids → two rows.
+	tx, err := s.BeginOverlayTx(ctx, "ws-cluster-pk")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	clusters := []ClusterSummary{
+		{ID: 1, MemberCount: 5},
+		{ID: 2, MemberCount: 7},
+	}
+	if err := tx.UpsertClusters(ctx, "weak_components", 9, clusters); err != nil {
+		t.Fatalf("UpsertClusters: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit #1: %v", err)
+	}
+
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_clusters
+		WHERE repo_id='ws-cluster-pk' AND graph_version=9`).Scan(&n); err != nil {
+		t.Fatalf("count #1: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("after first write: got %d rows, want 2", n)
+	}
+
+	// Second write: same (repo, gv, cluster_id=1) with new score → should
+	// UPDATE not INSERT, leaving total row count at 2.
+	tx2, err := s.BeginOverlayTx(ctx, "ws-cluster-pk")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx #2: %v", err)
+	}
+	if err := tx2.UpsertClusters(ctx, "weak_components", 9,
+		[]ClusterSummary{{ID: 1, MemberCount: 99}}); err != nil {
+		t.Fatalf("UpsertClusters #2: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit #2: %v", err)
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_clusters
+		WHERE repo_id='ws-cluster-pk' AND graph_version=9`).Scan(&n); err != nil {
+		t.Fatalf("count #2: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("after re-upsert: got %d rows, want 2 (update, not duplicate)", n)
+	}
+
+	// Score column reflects the updated MemberCount.
+	var score float64
+	if err := s.db.QueryRow(`SELECT score FROM semantic_clusters
+		WHERE repo_id='ws-cluster-pk' AND graph_version=9 AND cluster_id=1`).Scan(&score); err != nil {
+		t.Fatalf("read score: %v", err)
+	}
+	if score != 99.0 {
+		t.Errorf("score[cluster=1] after update: got %g, want 99", score)
+	}
+}
+
 // --- Helpers ---
 
 // openStoreForOverlayTest opens a fresh store (lands at v3 via the migration

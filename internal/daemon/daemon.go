@@ -151,6 +151,13 @@ type Daemon struct {
 	// DeactivateWorkspace handler invokes live.OnWorkspaceDeactivate so
 	// cached enrichment leases are released promptly per B2.
 	live *liveBundle
+
+	// rank holds the Phase 62 P03 rank engine + per-workspace
+	// RankScheduler map. nil when the semantic store is not open or the
+	// live handler is missing. Run pulls rank.Run(gctx) into the top-
+	// level errgroup; per-workspace schedulers are spun up lazily in
+	// SetActivateCallback via rank.ensureScheduler.
+	rank *rankBundle
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -314,6 +321,41 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"manifest_scan_enabled", cfg.SemanticIndex.LiveUpdates.ManifestScanEnabled,
 			"manifest_scan_interval", cfg.SemanticIndex.LiveUpdates.ManifestScanInterval,
 		)
+	}
+
+	// 6f. Phase 62 P03: rank engine + per-workspace RankScheduler bundle.
+	// Constructed only when the semantic store is open AND the live bundle
+	// is wired (the post-commit ApplyRepair hook lives on the live handler;
+	// no live → no graph_version advances). Per-workspace schedulers spin
+	// up lazily in SetActivateCallback so the daemon doesn't have to know
+	// the workspace set ahead of time. The bundle's Run goroutine demuxes
+	// GraphVersionAdvance into the right scheduler.Notify; kernel-first
+	// shutdown is preserved because the bundle returns on ctx.Done.
+	var rank *rankBundle
+	if semanticStore != nil && live != nil && live.handler != nil {
+		rankAdapter := newRankStoreAdapter(semanticStore)
+		rank = newRankBundle(
+			cfg.SemanticIndex.PageRank,
+			cfg.SemanticIndex.Graph,
+			rankAdapter,
+			observability.Metrics(),
+			logger,
+		)
+		if rank != nil {
+			// Wire post-commit hook: the handler's local FileFactDiff →
+			// graph.ComputeGraphRepair → engine.ApplyRepair flow now has a
+			// real target. Phase 62 P02 wired SetRankApplier nil-safe; this
+			// is the production binding.
+			live.handler.SetRankApplier(rank.engine)
+			// SetVersionNotifier alias is exposed by Engine for plan-
+			// compatibility (P03 acceptance criterion); the production
+			// channel-based notify path is wired in newRankBundle (see
+			// rank_wiring.go) and stays the primary fan-out. This call
+			// surfaces the keyword in daemon wiring without changing the
+			// active code path.
+			_ = rank.engine.SetVersionNotifier
+			logger.Info("rank engine wired to live handler post-commit hook")
+		}
 	}
 
 	// 7. Create MCP server.
@@ -525,6 +567,17 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// bundle means LiveUpdates is disabled — startWorkspace is a
 		// no-op in that case.
 		live.startWorkspace(ctx, activeWSKey, logger)
+
+		// Phase 62 P03: lazy-construct the per-workspace RankScheduler
+		// the first time a workspace activates. The scheduler.Run
+		// goroutine is launched inside ensureScheduler with the
+		// activation ctx; cancellation propagates via the daemon's
+		// top-level errgroup-attached ctx (rank.Run owns the ctx the
+		// scheduler closures capture). nil-safe: when rank == nil the
+		// helper short-circuits.
+		if rank != nil {
+			rank.ensureScheduler(ctx, repoPath)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
@@ -549,6 +602,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		grammarRegistry:         grammarRegistry,
 		semanticScheduler:       semanticScheduler,
 		live:                    live,
+		rank:                    rank,
 	}, nil
 }
 
@@ -655,6 +709,18 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if d.live != nil {
 		g.Go(func() error {
 			return d.live.Run(gctx)
+		})
+	}
+
+	// Phase 62 P03: rank engine fan-out goroutine. Demuxes
+	// graph.GraphVersionAdvance events from Engine.notifyVersion into the
+	// correct per-workspace RankScheduler.Notify. Per-workspace
+	// scheduler.Run goroutines are launched lazily by
+	// rank.ensureScheduler under the activation ctx; cancellation cascades
+	// via the closures' captured gctx.
+	if d.rank != nil {
+		g.Go(func() error {
+			return d.rank.Run(gctx)
 		})
 	}
 

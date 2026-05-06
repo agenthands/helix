@@ -1,0 +1,22 @@
+{
+  "comment": "Phase 62 P03 RED-gate fixture — small FileFactDiff yielding a sub-5000 frontier. Used by future end-to-end tests; the unit suite encodes the same shape inline.",
+  "added_symbols": [
+    {"node_id": 1, "kind": "function"},
+    {"node_id": 2, "kind": "function"},
+    {"node_id": 3, "kind": "function"}
+  ],
+  "removed_symbols": [
+    {"node_id": 10},
+    {"node_id": 11}
+  ],
+  "changed_symbols": [
+    {"node_id": 20, "signature_changed": true}
+  ],
+  "added_edges": [
+    {"src_node_id": 1, "dst_node_id": 2, "edge_kind": "CALLS"},
+    {"src_node_id": 2, "dst_node_id": 3, "edge_kind": "CALLS"}
+  ],
+  "removed_edges": [
+    {"src_node_id": 10, "dst_node_id": 11, "edge_kind": "CALLS"}
+  ]
+}

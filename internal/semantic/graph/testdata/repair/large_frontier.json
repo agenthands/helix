@@ -1,0 +1,7 @@
+{
+  "comment": "Phase 62 P03 RED-gate fixture — describes a 6000-node hub-and-spoke graph that overflows the default 5000-node frontier limit. Used by the frontier-overflow integration test (future); the unit-level frontier_test.go builds the same shape programmatically for portability.",
+  "hub_node_id": 1,
+  "leaf_count": 6000,
+  "expected_overflow": true,
+  "max_local_pagerank_nodes": 5000
+}

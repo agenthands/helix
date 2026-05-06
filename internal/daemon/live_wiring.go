@@ -65,6 +65,12 @@ type liveBundle struct {
 	// DeactivateWorkspace handler so cached leases for the deactivated
 	// workspace are released promptly.
 	enrichMgr *lspenrich.Manager
+
+	// handler is the live-update consumer that drives overlay tx writes
+	// + the Phase 62 P02 post-commit RankApplier hook. Phase 62 P03 wires
+	// SetRankApplier(graph.NewEngine(...)) here so each successful
+	// graph-changing tx fans out to the per-workspace RankScheduler.
+	handler *handler.Handler
 }
 
 // Run starts the long-lived enrichment worker goroutines. Returns nil
@@ -263,7 +269,7 @@ func buildLiveBundle(
 	// producer side is wired (CR-04 fix); here we hold onto it via the
 	// bundle so Phase 61's worker (and admin/status callers) can reach
 	// it through the bundle accessor.
-	bundle := &liveBundle{service: liveService, lspQueue: lspQ}
+	bundle := &liveBundle{service: liveService, lspQueue: lspQ, handler: h}
 
 	// 6a. Phase 61 P03: construct LSP enrichment manager when enabled.
 	//

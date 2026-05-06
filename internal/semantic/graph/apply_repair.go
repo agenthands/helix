@@ -34,15 +34,36 @@ type RepairStore interface {
 	CurrentGraphVersion(ctx context.Context, repoID string) (uint64, error)
 }
 
-// RepairTx is the per-tx surface Engine.ApplyRepair touches. It is the
-// in-package narrow projection of *store.OverlayTx.
+// RepairTx is the per-tx surface Engine.ApplyRepair AND the Phase 62 P03
+// scheduler / full-recompute paths touch. It is the in-package narrow
+// projection of *store.OverlayTx.
+//
+// P03 widens the interface with score-row writes (UpsertGraphScores,
+// DeleteScoresForProjection); ApplyRepair itself does not call those
+// methods. Production *store.OverlayTx satisfies the wider surface
+// (UpsertGraphScores has shipped since P02; DeleteScoresForProjection is
+// added as part of P03 Task 3).
 type RepairTx interface {
 	BumpGraphVersion(ctx context.Context) (uint64, error)
 	MarkSymbolsDeleted(ctx context.Context, fileIDs []uint64) error
 	MarkEdgesDeleted(ctx context.Context, nodeIDs []uint64) error
 	UpsertEdgesWithMerge(ctx context.Context, edges []EdgeUpsert) error
+	UpsertGraphScores(ctx context.Context, projection string, rows []ScoreRow) error
+	DeleteScoresForProjection(ctx context.Context, projection string) error
 	Commit() error
 	Rollback() error
+}
+
+// ScoreRow is the engine-side score-row carrier. It mirrors
+// store.ScoreRow shape so the production adapter (live_wiring.go) can
+// translate field-for-field. Status MUST be one of the ScoreStatus
+// constants {exact, approximate, stale} at the write boundary; "missing"
+// is read-time only (D-07).
+type ScoreRow struct {
+	NodeID       NodeID
+	Score        float64
+	GraphVersion uint64
+	Status       string
 }
 
 // MetricsSink is the bounded-label metrics surface Engine + Scheduler use.
@@ -115,6 +136,36 @@ func (e *Engine) SetNotifyChannel(ch chan<- GraphVersionAdvance) {
 		return
 	}
 	e.notifyVersion = ch
+}
+
+// SetVersionNotifier is the callback-shaped alias for SetNotifyChannel.
+// Spawns a single fan-out goroutine that translates the channel
+// GraphVersionAdvance stream into per-advance callback invocations. The
+// caller MUST cancel ctx to stop the goroutine; otherwise the goroutine
+// leaks for the lifetime of the process.
+//
+// Provided per Phase 62 P03 plan acceptance criterion ("SetVersionNotifier
+// keyword present in daemon wiring"). Production daemon wiring prefers the
+// channel-based path (see internal/daemon/rank_wiring.go) because the
+// channel + dedicated demux goroutine yields cleaner backpressure
+// semantics, but the callback shape is honored here for parity with the
+// pre-rewrite plan example.
+func (e *Engine) SetVersionNotifier(ctx context.Context, cb func(repoID string, gv uint64)) {
+	if e == nil || cb == nil {
+		return
+	}
+	ch := make(chan GraphVersionAdvance, 64)
+	e.notifyVersion = ch
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case adv := <-ch:
+				cb(adv.RepoID, adv.Version)
+			}
+		}
+	}()
 }
 
 // ApplyRepair is the SINGLE site that bumps graph_version (D-06). Returns

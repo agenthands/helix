@@ -570,6 +570,27 @@ func (t *OverlayTx) UpsertEdgesWithMerge(ctx context.Context, edges []EdgeRow) e
 	return nil
 }
 
+// DeleteScoresForProjection removes every semantic_graph_scores row for
+// (repo_id, score_name=projection) under the active overlay tx. Used by the
+// Phase 62 P03 full-recompute path (D-10) which writes a fresh generation
+// of rows under the current graph_version and discards every prior
+// generation in the same tx so readers never see a half-merged set.
+func (t *OverlayTx) DeleteScoresForProjection(ctx context.Context, projection string) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("DeleteScoresForProjection: nil tx")
+	}
+	if projection == "" {
+		return fmt.Errorf("DeleteScoresForProjection: empty projection")
+	}
+	if _, err := t.tx.ExecContext(ctx, `
+		DELETE FROM semantic_graph_scores
+		 WHERE repo_id = ? AND score_name = ?
+	`, t.repoID, projection); err != nil {
+		return fmt.Errorf("DeleteScoresForProjection(%q, %q): %w", t.repoID, projection, err)
+	}
+	return nil
+}
+
 // edgeIDForTriple is a deterministic 64-bit hash over (repo_id, src, dst,
 // kind) used to synthesize the schema's edge_id PK from the natural merge
 // key. FNV-1a is intentionally used to avoid the xxhash dep at the storage

@@ -11,8 +11,17 @@ import (
 // fakeFullRecomputeStore is a recording fake that satisfies SchedulerStore
 // for the full-recompute path. It tracks score writes + projection deletes
 // and lets the test inject a "graph_version advanced mid-run" preemption.
+//
+// Two mutexes:
+//   - lockMu is the per-workspace lock the SUT acquires via LockWorkspace
+//   - dataMu protects the data fields the recording accesses
+//
+// Conflating them deadlocks: RunFullRecompute holds the workspace lock
+// across DeleteScoresForProjection / UpsertGraphScores, both of which
+// touch the data fields.
 type fakeFullRecomputeStore struct {
-	mu        sync.Mutex
+	lockMu    sync.Mutex
+	dataMu    sync.Mutex
 	repoID    string
 	startGV   uint64
 	endGV     uint64
@@ -41,8 +50,8 @@ func newFakeFullRecomputeStore() *fakeFullRecomputeStore {
 }
 
 func (s *fakeFullRecomputeStore) LockWorkspace(string) func() {
-	s.mu.Lock()
-	return s.mu.Unlock
+	s.lockMu.Lock()
+	return s.lockMu.Unlock
 }
 func (s *fakeFullRecomputeStore) BeginRepairTx(ctx context.Context, repoID string) (RepairTx, error) {
 	return &fakeFullRecomputeTx{store: s, repoID: repoID}, nil
@@ -90,26 +99,43 @@ func (t *fakeFullRecomputeTx) UpsertEdgesWithMerge(context.Context, []EdgeUpsert
 	return nil
 }
 func (t *fakeFullRecomputeTx) UpsertGraphScores(_ context.Context, projection string, rows []ScoreRow) error {
-	t.store.mu.Lock()
-	defer t.store.mu.Unlock()
+	t.store.dataMu.Lock()
+	defer t.store.dataMu.Unlock()
 	if t.preemptOnUpsert {
 		t.store.endGV++
 		t.preemptOnUpsert = false
 	}
+	// Mirror the SQL ON CONFLICT contract — same (projection, NodeID, GV)
+	// row gets overwritten in place, not duplicated. The store-side
+	// UpsertGraphScores carries this semantics; we replicate it so the
+	// fake matches production's last-write-wins behavior under preemption
+	// rewrites.
 	for _, r := range rows {
-		t.store.rowsByGV[r.GraphVersion] = append(t.store.rowsByGV[r.GraphVersion], ScoreRowSnapshot{
-			Projection: projection,
-			NodeID:     r.NodeID,
-			Score:      r.Score,
-			Status:     r.Status,
-			GV:         r.GraphVersion,
-		})
+		bucket := t.store.rowsByGV[r.GraphVersion]
+		replaced := false
+		for i, existing := range bucket {
+			if existing.Projection == projection && existing.NodeID == r.NodeID {
+				bucket[i] = ScoreRowSnapshot{
+					Projection: projection, NodeID: r.NodeID, Score: r.Score,
+					Status: r.Status, GV: r.GraphVersion,
+				}
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			bucket = append(bucket, ScoreRowSnapshot{
+				Projection: projection, NodeID: r.NodeID, Score: r.Score,
+				Status: r.Status, GV: r.GraphVersion,
+			})
+		}
+		t.store.rowsByGV[r.GraphVersion] = bucket
 	}
 	return nil
 }
 func (t *fakeFullRecomputeTx) DeleteScoresForProjection(_ context.Context, projection string) error {
-	t.store.mu.Lock()
-	defer t.store.mu.Unlock()
+	t.store.dataMu.Lock()
+	defer t.store.dataMu.Unlock()
 	for gv, rows := range t.store.rowsByGV {
 		kept := rows[:0]
 		for _, r := range rows {

@@ -34,15 +34,36 @@ type RepairStore interface {
 	CurrentGraphVersion(ctx context.Context, repoID string) (uint64, error)
 }
 
-// RepairTx is the per-tx surface Engine.ApplyRepair touches. It is the
-// in-package narrow projection of *store.OverlayTx.
+// RepairTx is the per-tx surface Engine.ApplyRepair AND the Phase 62 P03
+// scheduler / full-recompute paths touch. It is the in-package narrow
+// projection of *store.OverlayTx.
+//
+// P03 widens the interface with score-row writes (UpsertGraphScores,
+// DeleteScoresForProjection); ApplyRepair itself does not call those
+// methods. Production *store.OverlayTx satisfies the wider surface
+// (UpsertGraphScores has shipped since P02; DeleteScoresForProjection is
+// added as part of P03 Task 3).
 type RepairTx interface {
 	BumpGraphVersion(ctx context.Context) (uint64, error)
 	MarkSymbolsDeleted(ctx context.Context, fileIDs []uint64) error
 	MarkEdgesDeleted(ctx context.Context, nodeIDs []uint64) error
 	UpsertEdgesWithMerge(ctx context.Context, edges []EdgeUpsert) error
+	UpsertGraphScores(ctx context.Context, projection string, rows []ScoreRow) error
+	DeleteScoresForProjection(ctx context.Context, projection string) error
 	Commit() error
 	Rollback() error
+}
+
+// ScoreRow is the engine-side score-row carrier. It mirrors
+// store.ScoreRow shape so the production adapter (live_wiring.go) can
+// translate field-for-field. Status MUST be one of the ScoreStatus
+// constants {exact, approximate, stale} at the write boundary; "missing"
+// is read-time only (D-07).
+type ScoreRow struct {
+	NodeID       NodeID
+	Score        float64
+	GraphVersion uint64
+	Status       string
 }
 
 // MetricsSink is the bounded-label metrics surface Engine + Scheduler use.

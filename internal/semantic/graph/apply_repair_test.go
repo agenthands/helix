@@ -76,6 +76,14 @@ func (t *recordingRepairTx) UpsertEdgesWithMerge(ctx context.Context, edges []Ed
 	return nil
 }
 
+func (t *recordingRepairTx) UpsertGraphScores(context.Context, string, []ScoreRow) error {
+	return nil
+}
+
+func (t *recordingRepairTx) DeleteScoresForProjection(context.Context, string) error {
+	return nil
+}
+
 func (t *recordingRepairTx) Commit() error {
 	t.commited = true
 	t.store.commitCalls++
@@ -220,6 +228,12 @@ func (t *productionMutexTx) BumpGraphVersion(ctx context.Context) (uint64, error
 func (t *productionMutexTx) MarkSymbolsDeleted(ctx context.Context, ids []uint64) error { return nil }
 func (t *productionMutexTx) MarkEdgesDeleted(ctx context.Context, ids []uint64) error   { return nil }
 func (t *productionMutexTx) UpsertEdgesWithMerge(ctx context.Context, e []EdgeUpsert) error {
+	return nil
+}
+func (t *productionMutexTx) UpsertGraphScores(context.Context, string, []ScoreRow) error {
+	return nil
+}
+func (t *productionMutexTx) DeleteScoresForProjection(context.Context, string) error {
 	return nil
 }
 func (t *productionMutexTx) Commit() error {

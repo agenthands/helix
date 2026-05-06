@@ -378,6 +378,309 @@ func TestBeginOverlayTx_RejectsEmptyRepoID(t *testing.T) {
 	}
 }
 
+// --- Phase 62 P02 store extension tests (Task 2) ---
+
+// TestUpsertGraphScores_RoundTrip writes 3 score rows, commits, and asserts
+// they land via direct SQL count + status check.
+func TestUpsertGraphScores_RoundTrip(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	rows := []ScoreRow{
+		{NodeID: 1, Score: 0.5, GraphVersion: 1, Status: "exact"},
+		{NodeID: 2, Score: 0.3, GraphVersion: 1, Status: "stale"},
+		{NodeID: 3, Score: 0.2, GraphVersion: 1, Status: "approximate"},
+	}
+	if err := tx.UpsertGraphScores(ctx, "call_graph", rows); err != nil {
+		t.Fatalf("UpsertGraphScores: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_graph_scores
+		WHERE repo_id='ws1' AND score_name='call_graph'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("score row count: got %d, want 3", n)
+	}
+	var st string
+	if err := s.db.QueryRow(`SELECT status FROM semantic_graph_scores
+		WHERE repo_id='ws1' AND node_id=2 AND score_name='call_graph'`).Scan(&st); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if st != "stale" {
+		t.Errorf("status[node=2]: got %q, want stale", st)
+	}
+}
+
+// TestUpsertGraphScores_EmptyNoOp asserts the empty-list shortcut.
+func TestUpsertGraphScores_EmptyNoOp(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertGraphScores(ctx, "call_graph", nil); err != nil {
+		t.Errorf("nil rows: %v", err)
+	}
+	if err := tx.UpsertGraphScores(ctx, "call_graph", []ScoreRow{}); err != nil {
+		t.Errorf("empty rows: %v", err)
+	}
+	_ = tx.Commit()
+}
+
+// TestUpsertGraphScores_DoesNotBumpGraphVersion enforces D-06 — score-only
+// commits must NOT advance graph_version.
+func TestUpsertGraphScores_DoesNotBumpGraphVersion(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+
+	// First open ensures meta row exists; capture pre-state.
+	tx0, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx #1: %v", err)
+	}
+	if err := tx0.Commit(); err != nil {
+		t.Fatalf("Commit #1: %v", err)
+	}
+	gvBefore, err := s.CurrentGraphVersion(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("CurrentGraphVersion before: %v", err)
+	}
+
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertGraphScores(ctx, "call_graph",
+		[]ScoreRow{{NodeID: 1, Score: 0.5, GraphVersion: 0, Status: "exact"}}); err != nil {
+		t.Fatalf("UpsertGraphScores: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	gvAfter, err := s.CurrentGraphVersion(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("CurrentGraphVersion after: %v", err)
+	}
+	if gvAfter != gvBefore {
+		t.Errorf("graph_version moved: before=%d after=%d (D-06: only ApplyRepair bumps)", gvBefore, gvAfter)
+	}
+}
+
+// TestUpsertGraphScores_RejectsInvalidStatus asserts the closed-enum guard.
+func TestUpsertGraphScores_RejectsInvalidStatus(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	defer tx.Rollback()
+	cases := []string{"missing", "exploded", ""}
+	for _, status := range cases {
+		err := tx.UpsertGraphScores(ctx, "call_graph",
+			[]ScoreRow{{NodeID: 1, Score: 0.5, GraphVersion: 1, Status: status}})
+		if err == nil {
+			t.Errorf("status=%q: expected invalid status error", status)
+		}
+	}
+}
+
+// TestBumpGraphVersion_ReturnsNewValue exercises the single-bump helper.
+func TestBumpGraphVersion_ReturnsNewValue(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	for i := 1; i <= 3; i++ {
+		tx, err := s.BeginOverlayTx(ctx, "ws1")
+		if err != nil {
+			t.Fatalf("BeginOverlayTx #%d: %v", i, err)
+		}
+		gv, err := tx.BumpGraphVersion(ctx)
+		if err != nil {
+			t.Fatalf("BumpGraphVersion #%d: %v", i, err)
+		}
+		if gv != uint64(i) {
+			t.Errorf("BumpGraphVersion #%d: got %d, want %d", i, gv, i)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit #%d: %v", i, err)
+		}
+	}
+	gv, err := s.CurrentGraphVersion(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("CurrentGraphVersion: %v", err)
+	}
+	if gv != 3 {
+		t.Errorf("final graph_version: got %d, want 3", gv)
+	}
+}
+
+// TestCurrentGraphVersion_ZeroForUnknownRepo asserts the pre-init read path.
+func TestCurrentGraphVersion_ZeroForUnknownRepo(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	gv, err := s.CurrentGraphVersion(ctx, "ws-never-opened")
+	if err != nil {
+		t.Fatalf("CurrentGraphVersion: %v", err)
+	}
+	if gv != 0 {
+		t.Errorf("unknown repo: got gv=%d, want 0", gv)
+	}
+}
+
+// TestUpsertEdgesWithMerge_LSPSkipsCommentInsert seeds a validated LSP edge
+// then writes a comment edge for the same triple — the comment row MUST be
+// silently dropped.
+func TestUpsertEdgesWithMerge_LSPSkipsCommentInsert(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	// Seed: validated lsp.references at conf=1.0.
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 2, EdgeKind: "RESOLVES_TO",
+		Source: "lsp.references", Confidence: 1.0, Weight: 1.0,
+		ValidationState: "validated",
+	}}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// Now write comment row for the same triple.
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 2, EdgeKind: "RESOLVES_TO",
+		Source: "comment.tsdoc", Confidence: 0.60, Weight: 1.0,
+		ValidationState: "unresolved",
+	}}); err != nil {
+		t.Fatalf("comment: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var src, n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_live_overlay_edges
+		WHERE repo_id='ws1' AND src_node_id=1 AND dst_node_id=2 AND edge_kind='RESOLVES_TO'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("row count for triple: got %d, want 1", n)
+	}
+	var source string
+	if err := s.db.QueryRow(`SELECT source FROM semantic_live_overlay_edges
+		WHERE repo_id='ws1' AND src_node_id=1 AND dst_node_id=2 AND edge_kind='RESOLVES_TO'`).Scan(&source); err != nil {
+		t.Fatalf("read source: %v", err)
+	}
+	if source != "lsp.references" {
+		t.Errorf("source: got %q, want lsp.references (LSP wins)", source)
+	}
+	_ = src
+}
+
+// TestUpsertEdgesWithMerge_LSPDeletesCommentBeforeInsert seeds a comment
+// edge then writes a validated LSP edge for the same triple — only the LSP
+// row remains.
+func TestUpsertEdgesWithMerge_LSPDeletesCommentBeforeInsert(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 2, EdgeKind: "RESOLVES_TO",
+		Source: "comment.tsdoc", Confidence: 0.60, Weight: 1.0,
+		ValidationState: "unresolved",
+	}}); err != nil {
+		t.Fatalf("seed comment: %v", err)
+	}
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 2, EdgeKind: "RESOLVES_TO",
+		Source: "lsp.references", Confidence: 1.0, Weight: 1.0,
+		ValidationState: "validated",
+	}}); err != nil {
+		t.Fatalf("lsp insert: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var n int
+	var source string
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM semantic_live_overlay_edges
+		WHERE repo_id='ws1' AND src_node_id=1 AND dst_node_id=2 AND edge_kind='RESOLVES_TO'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("row count: got %d, want 1", n)
+	}
+	if err := s.db.QueryRow(`SELECT source FROM semantic_live_overlay_edges
+		WHERE repo_id='ws1' AND src_node_id=1 AND dst_node_id=2 AND edge_kind='RESOLVES_TO'`).Scan(&source); err != nil {
+		t.Fatalf("read source: %v", err)
+	}
+	if source != "lsp.references" {
+		t.Errorf("source: got %q, want lsp.references", source)
+	}
+}
+
+// TestUpsertEdgesWithMerge_LSPRefutesCommentAtDifferentDst is the D-14
+// refutation invariant: an LSP edge at (src=1, dst=B) must DELETE a comment
+// edge at (src=1, dst=A) for the same edge_kind — comment edges that are
+// refuted must NOT survive at lower confidence.
+func TestUpsertEdgesWithMerge_LSPRefutesCommentAtDifferentDst(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	tx, err := s.BeginOverlayTx(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	// Comment edge points at dst=10.
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 10, EdgeKind: "RESOLVES_TO",
+		Source: "comment.tsdoc", Confidence: 0.60, Weight: 1.0,
+		ValidationState: "unresolved",
+	}}); err != nil {
+		t.Fatalf("seed comment dst=10: %v", err)
+	}
+	// LSP edge for same (src,kind) but DIFFERENT dst=20.
+	if err := tx.UpsertEdgesWithMerge(ctx, []EdgeRow{{
+		SrcNodeID: 1, DstNodeID: 20, EdgeKind: "RESOLVES_TO",
+		Source: "lsp.references", Confidence: 1.0, Weight: 1.0,
+		ValidationState: "validated",
+	}}); err != nil {
+		t.Fatalf("lsp insert dst=20: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rows, err := s.db.Query(`SELECT dst_node_id, source FROM semantic_live_overlay_edges
+		WHERE repo_id='ws1' AND src_node_id=1 AND edge_kind='RESOLVES_TO'
+		ORDER BY dst_node_id`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	type row struct {
+		dst    uint64
+		source string
+	}
+	var got []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.dst, &r.source); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, r)
+	}
+	if len(got) != 1 {
+		t.Fatalf("row count: got %d (%v), want 1 (D-14 refutation)", len(got), got)
+	}
+	if got[0].dst != 20 || got[0].source != "lsp.references" {
+		t.Errorf("surviving row: got (dst=%d, src=%q), want (dst=20, src=lsp.references)", got[0].dst, got[0].source)
+	}
+}
+
 // --- Helpers ---
 
 // openStoreForOverlayTest opens a fresh store (lands at v3 via the migration

@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -393,4 +394,287 @@ func (t *OverlayTx) MarkEdgesDeleted(ctx context.Context, nodeIDs []uint64) erro
 		}
 	}
 	return nil
+}
+
+// ScoreRow is the per-node ranked score row written by Phase 62 P02
+// UpsertGraphScores. The semantic_graph_scores schema (SPEC §9.9 / migration
+// 001 lines 248-263) keys on (repo_id, graph_version, node_id, score_name);
+// we map score_name from the Phase 62 "projection" identifier.
+//
+// Status is the closed-enum write-time value: "exact" | "approximate" |
+// "stale". "missing" is computed at READ time only (D-07) and is rejected
+// at the storage boundary.
+type ScoreRow struct {
+	NodeID       uint64
+	Score        float64
+	GraphVersion uint64
+	Status       string // "exact" | "approximate" | "stale"
+}
+
+// EdgeRow is the per-edge upsert row used by UpsertEdgesWithMerge. The merge
+// predicate is (src_node_id, dst_node_id, edge_kind). Source carries the
+// provenance prefix ("lsp.<call>" or "comment.<kind>") that drives the D-14
+// refutation logic.
+type EdgeRow struct {
+	SrcNodeID, DstNodeID uint64
+	EdgeKind             string  // e.g., "CALLS", "RESOLVES_TO"
+	Source               string  // "lsp.<call>" | "comment.<kind>"
+	Confidence           float64 // 1.0 for LSP, 0.60 for comment, etc.
+	Weight               float64
+	ValidationState      string  // "validated" | "unresolved"
+	FactJSON             []byte  // optional; nil writes JSON NULL
+}
+
+// scoreStatusWriteEnum is the closed-enum allowlist for ScoreRow.Status at
+// write time. "missing" is intentionally absent — D-07: it is computed at
+// read time when no row exists.
+var scoreStatusWriteEnum = map[string]struct{}{
+	"exact":       {},
+	"approximate": {},
+	"stale":       {},
+}
+
+// UpsertGraphScores writes ranked-score rows under (repo_id, projection,
+// node_id). Empty rows is a no-op. Each row's Status MUST be one of
+// {"exact","approximate","stale"} — D-07 closed enum at the write boundary.
+//
+// D-06 invariant: this method does NOT advance graph_version. Only
+// Engine.ApplyRepair (via OverlayTx.BumpGraphVersion) advances it.
+//
+// snapshot_id is set to 0 — Phase 62 score rows are overlay-side state
+// keyed on (repo_id, graph_version). The base-snapshot relationship is
+// re-established by Phase 63 compaction.
+func (t *OverlayTx) UpsertGraphScores(ctx context.Context, projection string, rows []ScoreRow) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("UpsertGraphScores: nil tx")
+	}
+	if projection == "" {
+		return fmt.Errorf("UpsertGraphScores: empty projection")
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	for _, r := range rows {
+		if _, ok := scoreStatusWriteEnum[r.Status]; !ok {
+			return fmt.Errorf(
+				"UpsertGraphScores: invalid status %q (allowed: exact, approximate, stale; missing is read-time only)",
+				r.Status)
+		}
+		if _, err := t.tx.ExecContext(ctx, `
+			INSERT INTO semantic_graph_scores (
+				repo_id, snapshot_id, graph_version, node_id, score_name,
+				score, rank, status, computed_at, algorithm_version
+			) VALUES (?, 0, ?, ?, ?, ?, NULL, ?, now(), 'phase62.p02')
+			ON CONFLICT (repo_id, graph_version, node_id, score_name) DO UPDATE SET
+				score             = excluded.score,
+				status            = excluded.status,
+				computed_at       = excluded.computed_at,
+				algorithm_version = excluded.algorithm_version
+		`, t.repoID, r.GraphVersion, r.NodeID, projection, r.Score, r.Status); err != nil {
+			return fmt.Errorf("UpsertGraphScores(%q, %q, node=%d): %w", t.repoID, projection, r.NodeID, err)
+		}
+	}
+	return nil
+}
+
+// UpsertEdgesWithMerge enforces the D-14 (src_node_id, dst_node_id,
+// edge_kind) merge predicate at the SQL boundary. LSP rows ALWAYS win:
+//
+//   - If the incoming row's source matches "lsp.%": DELETE every existing
+//     comment.* row for the same (src_node_id, edge_kind) pair regardless of
+//     dst_node_id (the D-14 refutation rule — comment edges must NOT survive
+//     at lower confidence when LSP refutes them by writing a different dst).
+//     Then INSERT/UPSERT the LSP row.
+//
+//   - If the incoming row's source matches "comment.%": skip the insert iff
+//     a validated lsp.* row already exists for the same triple at
+//     confidence ≥ 1.0; otherwise INSERT/UPSERT the comment row.
+//
+//   - Otherwise (neither prefix): straight UPSERT.
+//
+// Empty edges is a no-op.
+func (t *OverlayTx) UpsertEdgesWithMerge(ctx context.Context, edges []EdgeRow) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("UpsertEdgesWithMerge: nil tx")
+	}
+	if len(edges) == 0 {
+		return nil
+	}
+	for _, e := range edges {
+		isLSP := strings.HasPrefix(e.Source, "lsp.")
+		isComment := strings.HasPrefix(e.Source, "comment.")
+
+		if isComment {
+			// LSP-already-validated check: if any validated lsp.* row exists
+			// for this (src,dst,kind), skip the comment insert silently.
+			var dummy int
+			err := t.tx.QueryRowContext(ctx, `
+				SELECT 1 FROM semantic_live_overlay_edges
+				 WHERE repo_id = ? AND src_node_id = ? AND dst_node_id = ?
+				   AND edge_kind = ? AND source LIKE 'lsp.%'
+				   AND validation_state = 'validated' AND confidence >= 1.0
+				   AND status = 'live'
+				 LIMIT 1
+			`, t.repoID, e.SrcNodeID, e.DstNodeID, e.EdgeKind).Scan(&dummy)
+			if err == nil {
+				continue // LSP already covers — drop the comment row.
+			}
+			// sql.ErrNoRows or any other read failure: proceed to insert.
+		}
+
+		if isLSP {
+			// D-14 refutation: delete any comment row with the same
+			// (src_node_id, edge_kind), regardless of dst_node_id. This
+			// covers the case where the comment pointed at the wrong dst.
+			if _, err := t.tx.ExecContext(ctx, `
+				DELETE FROM semantic_live_overlay_edges
+				 WHERE repo_id = ? AND src_node_id = ? AND edge_kind = ?
+				   AND source LIKE 'comment.%' AND status = 'live'
+			`, t.repoID, e.SrcNodeID, e.EdgeKind); err != nil {
+				return fmt.Errorf("UpsertEdgesWithMerge(%q, refute comment %d→%d %s): %w",
+					t.repoID, e.SrcNodeID, e.DstNodeID, e.EdgeKind, err)
+			}
+		}
+
+		// UPSERT keyed on (repo_id, src_node_id, dst_node_id, edge_kind).
+		// The base schema PRIMARY KEY is (repo_id, edge_id); we synthesize a
+		// stable edge_id from the natural triple via xxhash to keep
+		// idempotency semantics. Use a deterministic hash so repeated writes
+		// for the same triple converge on a single row.
+		edgeID := edgeIDForTriple(t.repoID, e.SrcNodeID, e.DstNodeID, e.EdgeKind)
+		if _, err := t.tx.ExecContext(ctx, `
+			INSERT INTO semantic_live_overlay_edges (
+				repo_id, edge_id, src_node_id, dst_node_id, edge_kind,
+				status, validation_state, confidence, weight, source,
+				fact_json, updated_at, write_epoch
+			) VALUES (?, ?, ?, ?, ?, 'live', ?, ?, ?, ?, ?, now(), ?)
+			ON CONFLICT (repo_id, edge_id) DO UPDATE SET
+				src_node_id      = excluded.src_node_id,
+				dst_node_id      = excluded.dst_node_id,
+				edge_kind        = excluded.edge_kind,
+				status           = excluded.status,
+				validation_state = excluded.validation_state,
+				confidence       = excluded.confidence,
+				weight           = excluded.weight,
+				source           = excluded.source,
+				fact_json        = excluded.fact_json,
+				updated_at       = excluded.updated_at,
+				write_epoch      = excluded.write_epoch
+		`, t.repoID, edgeID, e.SrcNodeID, e.DstNodeID, e.EdgeKind,
+			e.ValidationState, e.Confidence, e.Weight, e.Source,
+			edgeFactJSONOrNil(e.FactJSON), t.epoch); err != nil {
+			return fmt.Errorf("UpsertEdgesWithMerge(%q, %d→%d %s): %w",
+				t.repoID, e.SrcNodeID, e.DstNodeID, e.EdgeKind, err)
+		}
+	}
+	return nil
+}
+
+// edgeIDForTriple is a deterministic 64-bit hash over (repo_id, src, dst,
+// kind) used to synthesize the schema's edge_id PK from the natural merge
+// key. FNV-1a is intentionally used to avoid the xxhash dep at the storage
+// boundary — collisions across distinct triples are vanishingly improbable
+// for the per-workspace cardinality (< 10M edges) and a same-triple write
+// always converges on the same edge_id.
+func edgeIDForTriple(repoID string, src, dst uint64, kind string) uint64 {
+	const (
+		offset64 uint64 = 14695981039346656037
+		prime64  uint64 = 1099511628211
+	)
+	h := offset64
+	for i := 0; i < len(repoID); i++ {
+		h ^= uint64(repoID[i])
+		h *= prime64
+	}
+	for _, v := range [...]uint64{src, dst} {
+		for i := 0; i < 8; i++ {
+			h ^= (v >> (i * 8)) & 0xFF
+			h *= prime64
+		}
+	}
+	for i := 0; i < len(kind); i++ {
+		h ^= uint64(kind[i])
+		h *= prime64
+	}
+	// duckdb-go's database/sql binding rejects uint64 values with the high
+	// bit set ("uint64 values with high bit set are not supported"). Mask to
+	// 63 bits — collision probability across the per-workspace edge surface
+	// (< 10M edges) remains vanishingly small.
+	return h & 0x7FFFFFFFFFFFFFFF
+}
+
+// edgeFactJSONOrNil returns the byte slice unchanged when non-empty, or a
+// nil interface so the duckdb-go driver writes a JSON NULL.
+func edgeFactJSONOrNil(b []byte) interface{} {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
+}
+
+// BumpGraphVersion advances semantic_live_overlay_meta.graph_version for
+// this tx's repo_id and returns the new value. Caller MUST hold the per-
+// workspace overlay mutex (via Store.LockOverlayWorkspace) before opening
+// the tx; the caller is also responsible for ensuring the meta row exists
+// (BeginOverlayTx ensures this on every open).
+//
+// D-06 invariant: ONLY Engine.ApplyRepair calls this. No other code path
+// in the codebase advances graph_version.
+func (t *OverlayTx) BumpGraphVersion(ctx context.Context) (uint64, error) {
+	if t == nil || t.tx == nil {
+		return 0, fmt.Errorf("BumpGraphVersion: nil tx")
+	}
+	var gv uint64
+	if err := t.tx.QueryRowContext(ctx, `
+		UPDATE semantic_live_overlay_meta
+		   SET graph_version = graph_version + 1,
+		       updated_at    = now()
+		 WHERE repo_id = ?
+		 RETURNING graph_version
+	`, t.repoID).Scan(&gv); err != nil {
+		return 0, fmt.Errorf("BumpGraphVersion(%q): %w", t.repoID, err)
+	}
+	return gv, nil
+}
+
+// CurrentGraphVersion reads the current graph_version for repoID from
+// semantic_live_overlay_meta. No mutex required — DuckDB MVCC reads do not
+// race the (single-writer-per-workspace) advance path. Returns (0, nil)
+// when the meta row does not exist (the meta row is upserted by
+// BeginOverlayTx, so this is the pre-init state).
+func (s *Store) CurrentGraphVersion(ctx context.Context, repoID string) (uint64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("CurrentGraphVersion: nil store")
+	}
+	if repoID == "" {
+		return 0, fmt.Errorf("CurrentGraphVersion: empty repoID")
+	}
+	var gv uint64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT graph_version FROM semantic_live_overlay_meta
+		 WHERE repo_id = ?
+	`, repoID).Scan(&gv)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("CurrentGraphVersion(%q): %w", repoID, err)
+	}
+	return gv, nil
+}
+
+// LockOverlayWorkspace acquires the per-workspace overlay mutex for repoID
+// and returns a release function. The mutex is the SAME one used by
+// BeginOverlayTx (D-04 / D-06 invariant: graph_version advance MUST run
+// under the same lock that protects current_epoch and the overlay-tx
+// pipeline). Callers (Phase 62 Engine.ApplyRepair) take this BEFORE opening
+// an OverlayTx so the bump and the score-row writes are serialized.
+//
+// The release function MUST be invoked exactly once after the corresponding
+// tx terminates (Commit or Rollback) — leaking it blocks all subsequent
+// same-workspace overlay writes forever.
+func (s *Store) LockOverlayWorkspace(repoID string) func() {
+	mu := s.overlayLockFor(repoID)
+	mu.Lock()
+	return mu.Unlock
 }

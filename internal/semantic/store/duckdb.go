@@ -13,7 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	// D-12: SOLE owner of the duckdb-go import (canonical DuckDB Foundation
@@ -25,6 +27,47 @@ import (
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/semantic"
 )
+
+// reopenErrClass classifies an error returned from openExisting on the
+// Tier-1 reopen path so Open can distinguish transient filesystem
+// contention (worth one bounded retry) from corruption-class signals
+// (immediate quarantine). WR-03.
+type reopenErrClass int
+
+const (
+	reopenUnknown reopenErrClass = iota
+	reopenTransient
+	reopenCorruption
+)
+
+// classifyReopenError categorises an error returned from openExisting so
+// Open's Tier-1 reopen path can distinguish transient filesystem
+// contention (worth one bounded retry) from corruption (immediate
+// quarantine). WR-03.
+func classifyReopenError(err error) reopenErrClass {
+	if err == nil {
+		return reopenUnknown
+	}
+	// Transient: file-locking / interrupted-syscall / busy-text-segment.
+	// ETXTBSY is POSIX-only but syscall.ETXTBSY is defined on linux and
+	// darwin (the only platforms where CGO=1 ships in v1.10; the file's
+	// build tag already excludes windows/arm64).
+	if errors.Is(err, syscall.EBUSY) ||
+		errors.Is(err, syscall.EINTR) ||
+		errors.Is(err, syscall.EAGAIN) ||
+		errors.Is(err, syscall.ETXTBSY) {
+		return reopenTransient
+	}
+	// Corruption-class: substring match against a closed list of sentinel
+	// signatures DuckDB surfaces in Open / Ping error messages.
+	msg := err.Error()
+	for _, sig := range []string{"checksum", "corrupt", "header", "malformed"} {
+		if strings.Contains(msg, sig) {
+			return reopenCorruption
+		}
+	}
+	return reopenUnknown
+}
 
 // Closed-enum quarantine reasons (D-07). The labels match the carve-out
 // registered in internal/obs/metrics_labels_test.go and the helper-method
@@ -87,17 +130,16 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 	if path == "" {
 		return nil, fmt.Errorf("semantic.store.Open: cfg.Store.Path is empty")
 	}
-	// T-57-02-01: reject path traversal. cfg.Store.Path SHOULD be a
-	// workspace-relative path joined with the workspace root by the caller
-	// (Phase 57 keeps that contract loose because the daemon does the join).
-	// We still call filepath.Clean to normalize away `..` segments that
-	// would escape any directory, and reject if the cleaned path differs
-	// in a way that signals traversal.
-	if cleaned := filepath.Clean(path); cleaned != path {
-		// Allow case where caller passed an absolute path that simply has
-		// no `.` or `..` (Clean is idempotent then). Only reject if the
-		// cleaned form differs structurally.
-		path = cleaned
+	// T-57-02-01: reject path traversal explicitly. Splitting on the
+	// forward-slash form (filepath.ToSlash converts Windows backslashes)
+	// catches every "/../" anywhere in the path, including the bare ".."
+	// case. We refuse rather than silently rewrite via filepath.Clean —
+	// the caller is responsible for handing us a path that already lives
+	// inside the workspace.
+	for _, seg := range strings.Split(filepath.ToSlash(path), "/") {
+		if seg == ".." {
+			return nil, fmt.Errorf("semantic.store.Open: path %q contains parent-reference segment (T-57-02-01): %w", path, serr.ErrInvalidArgs)
+		}
 	}
 
 	label := workspaceLabel(path)
@@ -126,20 +168,39 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 	if classifyErr == nil && reason == "" {
 		// Tier-1 reopen.
 		s, err := openExisting(ctx, path, label, logger, metrics)
-		if err != nil {
-			// Forward-incompat is a hard fail: an operator running an older
-			// binary against a newer DB MUST see an explicit error and
-			// rebuild manually via the documented quarantine path. We do
-			// NOT silently quarantine because that would discard the newer
-			// binary's data on rollback — see plan 59-01 STORE-03 invariant.
-			if errors.Is(err, ErrForwardIncompatible) {
-				return nil, err
+		if err == nil {
+			return s, nil
+		}
+		// Forward-incompat is a hard fail: an operator running an older
+		// binary against a newer DB MUST see an explicit error and
+		// rebuild manually via the documented quarantine path. We do
+		// NOT silently quarantine because that would discard the newer
+		// binary's data on rollback — see plan 59-01 STORE-03 invariant.
+		if errors.Is(err, ErrForwardIncompatible) {
+			return nil, err
+		}
+		// WR-03: classify and (for transient errors only) retry once with
+		// a small backoff before quarantining. A clean DB hit by EBUSY /
+		// EINTR / EAGAIN / ETXTBSY does not deserve to be quarantined.
+		switch classifyReopenError(err) {
+		case reopenTransient:
+			logger.Warn("semantic store reopen hit transient error; retrying once",
+				"workspace_label", label, "path", path, "err", err)
+			select {
+			case <-time.After(250 * time.Millisecond):
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
-			// Other reopen failures (connection error after migrations,
-			// pool exhaustion, etc.) → treat as corrupt and quarantine.
+			s, err2 := openExisting(ctx, path, label, logger, metrics)
+			if err2 == nil {
+				return s, nil
+			}
+			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
+		case reopenCorruption, reopenUnknown:
 			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 		}
-		return s, nil
+		// Unreachable — every reopenErrClass value is handled above.
+		return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 	}
 	if reason == "" {
 		reason = reasonUnknown
@@ -172,11 +233,19 @@ func classifyExisting(ctx context.Context, path string) (string, error) {
 		return reasonCorruptFile, err
 	}
 
-	// Schema-version table presence + readability.
+	// Schema-version table presence + readability. CR-02: the parent ctx
+	// is typically context.Background() at daemon bootstrap (daemon.go
+	// step 6b), so a wedged DuckDB read here would hang the daemon
+	// indefinitely. Match the 5s budget already used for PingContext above.
+	queryCtx, qcancel := context.WithTimeout(ctx, 5*time.Second)
+	defer qcancel()
+
 	var version int
-	row := db.QueryRowContext(ctx, "SELECT version FROM semantic_schema_version LIMIT 1")
+	row := db.QueryRowContext(queryCtx, "SELECT version FROM semantic_schema_version LIMIT 1")
 	if err := row.Scan(&version); err != nil {
-		// Table missing OR row missing → schema_unreadable per D-07.
+		// Table missing OR row missing OR query timed out → schema_unreadable
+		// per D-07. The closed enum already absorbs context.DeadlineExceeded
+		// under schema_unreadable; no new reason value is required.
 		return reasonSchemaUnreadable, err
 	}
 

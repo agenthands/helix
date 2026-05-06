@@ -16,3 +16,7 @@ func TestAnalyzer_AllowsImportFromGoodpkg(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), noduckdb.Analyzer,
 		"github.com/agenthands/helix/internal/semantic/store/goodpkg")
 }
+
+func TestAnalyzer_AllowsSiblingNamespacePackage(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), noduckdb.Analyzer, "siblingpkg")
+}

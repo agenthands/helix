@@ -362,7 +362,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
-	health.RegisterTools(mcpServer, k)
+	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore})
 	help.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
@@ -556,6 +556,31 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 // cfg.SemanticIndex.Enabled is false. Downstream consumers (Phase 64+
 // MCP tools) MUST nil-check.
 func (d *Daemon) SemanticStore() *semanticstore.Store { return d.semanticStore }
+
+// semanticStoreProbe adapts *semanticstore.Store to the
+// internal/kernel/health.SemanticStoreProbe interface (SC-1). Defined
+// here — not in health/ — so the kernel package stays free of
+// internal/semantic imports.
+type semanticStoreProbe struct{ s *semanticstore.Store }
+
+// Available reports whether the underlying store is functional. Nil-safe.
+func (p semanticStoreProbe) Available() bool {
+	return p.s != nil && p.s.Available()
+}
+
+// Probe runs a SELECT 1 against the underlying *sql.DB. The store's
+// DB() accessor is nil-safe.
+func (p semanticStoreProbe) Probe(ctx context.Context) error {
+	if p.s == nil {
+		return fmt.Errorf("semantic store unavailable")
+	}
+	db := p.s.DB()
+	if db == nil {
+		return fmt.Errorf("semantic store DB handle nil")
+	}
+	var one int
+	return db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+}
 
 // MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
 func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }

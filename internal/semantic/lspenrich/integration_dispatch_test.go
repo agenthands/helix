@@ -32,6 +32,7 @@ package lspenrich_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -218,7 +219,7 @@ func TestManagerProductionDispatch_Go(t *testing.T) {
 	runCancel()
 	select {
 	case err := <-runErr:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("mgr.Run returned non-nil non-Canceled err: %v", err)
 		}
 	case <-time.After(10 * time.Second):

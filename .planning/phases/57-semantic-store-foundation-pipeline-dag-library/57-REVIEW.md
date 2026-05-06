@@ -49,6 +49,11 @@ findings:
   info: 6
   total: 15
 status: issues_found
+follow_up:
+  review: 57-REVIEW-57-05.md
+  date: 2026-05-06
+  scope: "diff 8a1e04972f..HEAD (Plan 57-05 hardening pass)"
+  closure_summary: "CR-02, WR-01, WR-02, WR-03, SC-1 closed; CR-01 partial — `..` rejected, absolute paths still accepted (BL-01 in follow-up)"
 ---
 
 # Phase 57: Code Review Report

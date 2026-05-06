@@ -12,6 +12,35 @@ import (
 	"github.com/agenthands/helix/internal/mcp"
 )
 
+// SemanticStoreProbe is the kernel-side seam for the semantic store
+// health surface. The daemon implements this against
+// internal/semantic/store.Store so the kernel package does not import
+// internal/semantic. SC-1.
+//
+// Available reports whether the store is functional (false when
+// semantic_index.enabled=false or under CGO=0 / windows-arm64 stub).
+// Probe runs a cheap SELECT 1 against the underlying *sql.DB with a
+// bounded context; non-nil error → unhealthy.
+type SemanticStoreProbe interface {
+	Available() bool
+	Probe(ctx context.Context) error
+}
+
+// SemanticStoreStatus is the JSON-shaped block surfaced inside the
+// get_health report. State ∈ {"disabled", "ready", "unhealthy"}.
+type SemanticStoreStatus struct {
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// ComputeSemanticStoreStatus is a RED-stage stub. Replaced by the GREEN
+// commit with the real probe-and-classify logic.
+func ComputeSemanticStoreStatus(ctx context.Context, p SemanticStoreProbe) SemanticStoreStatus {
+	_ = ctx
+	_ = p
+	return SemanticStoreStatus{}
+}
+
 // GetHealthArgs is the input schema for the get_health tool.
 type GetHealthArgs struct {
 	Verbose bool `json:"verbose,omitempty" jsonschema:"Show all language servers including healthy ones. Default false returns only unhealthy LSes."`

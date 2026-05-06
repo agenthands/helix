@@ -36,6 +36,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,7 +260,7 @@ func TestManagerProductionDispatch_Go(t *testing.T) {
 		if e.ValidationState != "validated" {
 			t.Errorf("edge[%d].ValidationState: got %q, want validated", i, e.ValidationState)
 		}
-		if len(e.Source) < 4 || e.Source[:4] != "lsp." {
+		if !strings.HasPrefix(e.Source, "lsp.") {
 			t.Errorf("edge[%d].Source: got %q, want prefix lsp.", i, e.Source)
 		}
 	}

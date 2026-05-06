@@ -50,15 +50,45 @@ func TestOpen_RejectsParentTraversal(t *testing.T) {
 	}
 }
 
+// TestOpen_RejectsAbsolutePath proves BL-01 (follow-up to CR-01): the
+// StoreConfig.Path doc promises absolute paths are rejected at Open time;
+// this test asserts that contract. An absolute path — even one that lives
+// inside the workspace — must be refused with serr.ErrInvalidArgs so the
+// caller is forced to keep the path workspace-relative.
+func TestOpen_RejectsAbsolutePath(t *testing.T) {
+	cases := []string{
+		"/etc/passwd",
+		"/tmp/escape.duckdb",
+	}
+	if filepath.Separator == '\\' {
+		cases = append(cases, `C:\\Windows\\Temp\\escape.duckdb`)
+	}
+	for _, p := range cases {
+		t.Run(p, func(t *testing.T) {
+			err := openWithPath(t, p)
+			if err == nil {
+				t.Fatalf("Open(%q): want error, got nil", p)
+			}
+			if !errors.Is(err, serr.ErrInvalidArgs) {
+				t.Fatalf("Open(%q): want errors.Is(err, serr.ErrInvalidArgs), got %v", p, err)
+			}
+		})
+	}
+}
+
 // TestOpen_AcceptsCleanRelativePath proves the rejection is precise — a
-// path with no `..` segments is still accepted on the happy path.
+// workspace-relative path with no `..` segments and no leading `/` is still
+// accepted on the happy path. The test chdirs into a tempdir-rooted
+// workspace so the relative path resolves to a writable location.
 func TestOpen_AcceptsCleanRelativePath(t *testing.T) {
 	dir := t.TempDir()
-	p := filepath.Join(dir, "subdir", "test.duckdb") // absolute, no ..
-	if err := openWithPath(t, p); err != nil {
-		t.Fatalf("Open(%q): want nil, got %v", p, err)
+	t.Chdir(dir)
+	rel := filepath.Join("subdir", "test.duckdb") // relative, no ..
+	if err := openWithPath(t, rel); err != nil {
+		t.Fatalf("Open(%q): want nil, got %v", rel, err)
 	}
-	if _, err := os.Stat(p); err != nil {
-		t.Fatalf("Stat(%s): %v", p, err)
+	// The file must land at the chdir-rooted location.
+	if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
+		t.Fatalf("Stat(%s): %v", filepath.Join(dir, rel), err)
 	}
 }

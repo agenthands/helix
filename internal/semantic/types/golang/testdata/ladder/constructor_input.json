@@ -1,0 +1,23 @@
+{
+  "name": "constructor",
+  "symbols": {
+    "3": {"NodeID": 3, "Language": "go", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.go", "Signature": "x := NewFoo()"},
+    "30": {"NodeID": 30, "Language": "go", "Kind": "type", "StableKey": "Foo", "FilePath": "/repo/pkg/types.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 3,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.8,
+    "evidence_kind": "constructor",
+    "validation_state": "validated",
+    "source_prefix": "constructor"
+  }
+}

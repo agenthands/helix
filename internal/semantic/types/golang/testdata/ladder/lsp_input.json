@@ -1,0 +1,26 @@
+{
+  "name": "lsp",
+  "symbols": {
+    "1": {"NodeID": 1, "Language": "go", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.go"}
+  },
+  "edges": {
+    "1": [
+      {"SrcNodeID": 1, "DstNodeID": 50, "EdgeKind": "RESOLVES_TO", "Source": "lsp.go.text_document_definition", "Confidence": 1.0, "ValidationState": "validated"}
+    ]
+  },
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 1,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 1.0,
+    "evidence_kind": "lsp",
+    "validation_state": "validated",
+    "source_prefix": "lsp."
+  }
+}

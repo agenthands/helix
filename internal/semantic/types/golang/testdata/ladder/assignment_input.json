@@ -1,0 +1,23 @@
+{
+  "name": "assignment",
+  "symbols": {
+    "4": {"NodeID": 4, "Language": "go", "Kind": "variable", "StableKey": "y", "FilePath": "/repo/pkg/a.go", "Signature": "y = x"},
+    "40": {"NodeID": 40, "Language": "go", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 4,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["y"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.7,
+    "evidence_kind": "assignment",
+    "validation_state": "validated",
+    "source_prefix": "assignment"
+  }
+}

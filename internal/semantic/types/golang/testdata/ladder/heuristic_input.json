@@ -1,0 +1,23 @@
+{
+  "name": "heuristic",
+  "symbols": {
+    "6": {"NodeID": 6, "Language": "go", "Kind": "variable", "StableKey": "userRepo", "FilePath": "/repo/pkg/a.go"},
+    "60": {"NodeID": 60, "Language": "go", "Kind": "type", "StableKey": "UserRepository", "FilePath": "/repo/pkg/types.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 6,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["userRepo"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.45,
+    "evidence_kind": "heuristic",
+    "validation_state": "validated",
+    "source_prefix": "heuristic"
+  }
+}

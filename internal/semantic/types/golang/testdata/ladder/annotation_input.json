@@ -1,0 +1,23 @@
+{
+  "name": "annotation",
+  "symbols": {
+    "2": {"NodeID": 2, "Language": "go", "Kind": "variable", "StableKey": "x", "FilePath": "/repo/pkg/a.go", "Signature": "var x Foo"},
+    "20": {"NodeID": 20, "Language": "go", "Kind": "type", "StableKey": "Foo", "FilePath": "/repo/pkg/types.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 2,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["x"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.9,
+    "evidence_kind": "annotation",
+    "validation_state": "validated",
+    "source_prefix": "annotation"
+  }
+}

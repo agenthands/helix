@@ -1,0 +1,23 @@
+{
+  "name": "godoc",
+  "symbols": {
+    "5": {"NodeID": 5, "Language": "go", "Kind": "function", "StableKey": "Foo", "FilePath": "/repo/pkg/a.go", "DocComment": "// Foo returns a *UserRepository for the given user."},
+    "50": {"NodeID": 50, "Language": "go", "Kind": "type", "StableKey": "UserRepository", "FilePath": "/repo/pkg/types.go"}
+  },
+  "edges": {},
+  "request": {
+    "RepoID": "r",
+    "Language": "go",
+    "FilePath": "/repo/pkg/a.go",
+    "RefNodeID": 5,
+    "RefKind": "RESOLVES_TO",
+    "ChainTokens": ["Foo"]
+  },
+  "expected": {
+    "resolved": true,
+    "confidence": 0.6,
+    "evidence_kind": "comment",
+    "validation_state": "validated",
+    "source_prefix": "comment.godoc"
+  }
+}

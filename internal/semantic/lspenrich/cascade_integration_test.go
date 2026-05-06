@@ -94,6 +94,9 @@ func (t *integrationTx) UpsertEdges(_ context.Context, edges []lspenrich.Edge) e
 	t.edges = append(t.edges, edges...)
 	return nil
 }
+func (t *integrationTx) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	return t.UpsertEdges(ctx, edges)
+}
 func (t *integrationTx) UpsertDiagnostics(_ context.Context, _ string, _ []lspenrich.Diagnostic) error {
 	return nil
 }

@@ -168,7 +168,8 @@ func (t *stressTx) UpsertSymbols(_ context.Context, _ string, _ []lspenrich.Symb
 func (t *stressTx) UpsertReferences(_ context.Context, _ string, _ []lspenrich.Reference) error {
 	return nil
 }
-func (t *stressTx) UpsertEdges(_ context.Context, _ []lspenrich.Edge) error { return nil }
+func (t *stressTx) UpsertEdges(_ context.Context, _ []lspenrich.Edge) error          { return nil }
+func (t *stressTx) UpsertEdgesWithMerge(_ context.Context, _ []lspenrich.Edge) error { return nil }
 func (t *stressTx) UpsertDiagnostics(_ context.Context, _ string, _ []lspenrich.Diagnostic) error {
 	return nil
 }

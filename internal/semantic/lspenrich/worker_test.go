@@ -232,6 +232,9 @@ func (f *fakeCascadeTxWorker) UpsertReferences(ctx context.Context, path string,
 func (f *fakeCascadeTxWorker) UpsertEdges(ctx context.Context, edges []lspenrich.Edge) error {
 	return nil
 }
+func (f *fakeCascadeTxWorker) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	return nil
+}
 func (f *fakeCascadeTxWorker) UpsertDiagnostics(ctx context.Context, path string, diags []lspenrich.Diagnostic) error {
 	return nil
 }
@@ -282,7 +285,8 @@ func (p *workerMarkPendingProxy) UpsertSymbols(_ context.Context, _ string, _ []
 func (p *workerMarkPendingProxy) UpsertReferences(_ context.Context, _ string, _ []lspenrich.Reference) error {
 	return nil
 }
-func (p *workerMarkPendingProxy) UpsertEdges(_ context.Context, _ []lspenrich.Edge) error { return nil }
+func (p *workerMarkPendingProxy) UpsertEdges(_ context.Context, _ []lspenrich.Edge) error          { return nil }
+func (p *workerMarkPendingProxy) UpsertEdgesWithMerge(_ context.Context, _ []lspenrich.Edge) error { return nil }
 func (p *workerMarkPendingProxy) UpsertDiagnostics(_ context.Context, _ string, _ []lspenrich.Diagnostic) error {
 	return nil
 }

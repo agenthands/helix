@@ -79,6 +79,22 @@ type CascadeStore interface {
 type CascadeTx interface {
 	UpsertSymbols(ctx context.Context, path string, syms []Symbol) error
 	UpsertReferences(ctx context.Context, path string, refs []Reference) error
+	// UpsertEdgesWithMerge writes cascade-emitted edges through the D-14
+	// (src_node_id, dst_node_id, edge_kind) merge boundary. LSP-validated
+	// edges from the cascade DELETE refuted comment.* rows for the same
+	// (src, edge_kind) regardless of dst — the in-place upgrade path that
+	// closes Phase 62 AC10. Production adapter (`internal/semantic/store`)
+	// wraps OverlayTx.UpsertEdgesWithMerge; tests record into a fake.
+	//
+	// B3 (62-02 Task 4.5): every Phase 61 cascade edge write site flows
+	// through this method, NOT through the bare UpsertEdges seam, so the
+	// merge predicate fires uniformly across hover / callHierarchy /
+	// typeHierarchy / implementation / definition results.
+	UpsertEdgesWithMerge(ctx context.Context, edges []Edge) error
+	// UpsertEdges is retained as a typed no-op alias forwarding to
+	// UpsertEdgesWithMerge so out-of-tree callers compiled against the
+	// pre-Phase-62 interface continue to work. New callers MUST use
+	// UpsertEdgesWithMerge directly. Implementers may inline-forward.
 	UpsertEdges(ctx context.Context, edges []Edge) error
 	UpsertDiagnostics(ctx context.Context, path string, diags []Diagnostic) error
 	WriteInvalidations(ctx context.Context) error
@@ -127,10 +143,19 @@ type Reference struct {
 // Edge is the cascade-internal edge fact. All cascade-emitted edges land
 // with Confidence=1.0 + ValidationState="validated" + Source="lsp.<call>"
 // (Phase 61 D-07 acceptance #9).
+//
+// Phase 62 P02 Task 4.5 (B3): SrcNodeID/DstNodeID/Weight were added so
+// cascade edges can flow through the (src, dst, edge_kind) merge boundary
+// at the storage layer. Phase 61 cascade test fakes leave them as zero
+// values; production-side cascade extensions (Phase 62 P05+) populate
+// them from the resolved LSP locations.
 type Edge struct {
+	SrcNodeID       uint64  // resolved source node id (0 = not yet resolved)
+	DstNodeID       uint64  // resolved destination node id (0 = not yet resolved)
 	Kind            string  // CALLS / EXTENDS / IMPLEMENTS / TYPE_OF / RESOLVES_TO
 	Source          string  // "lsp.hover" | "lsp.callHierarchy" | …
 	Confidence      float64 // always 1.0 from cascade
+	Weight          float64 // edge weight; 1.0 default
 	ValidationState string  // always "validated" from cascade
 }
 
@@ -346,7 +371,10 @@ func (c *Cascade) Run(
 				return commitLSPUnavail("hover", err)
 			}
 		} else if edge != nil {
-			_ = tx.UpsertEdges(ctx, []Edge{*edge})
+			// B3 (62-02): route LSP edges through the D-14 merge boundary so
+			// any refuted comment.* rows for (src, edge_kind) get deleted
+			// before insert (closes Phase 62 AC10 in-place upgrade).
+			_ = tx.UpsertEdgesWithMerge(ctx, []Edge{*edge})
 		}
 
 		// callHierarchy
@@ -362,7 +390,8 @@ func (c *Cascade) Run(
 					return commitLSPUnavail("callHierarchy", err)
 				}
 			} else if len(edges) > 0 {
-				_ = tx.UpsertEdges(ctx, edges)
+				// B3 (62-02): flow callHierarchy edges through the merge.
+				_ = tx.UpsertEdgesWithMerge(ctx, edges)
 			}
 		}
 
@@ -379,7 +408,8 @@ func (c *Cascade) Run(
 					return commitLSPUnavail("typeHierarchy", err)
 				}
 			} else if len(edges) > 0 {
-				_ = tx.UpsertEdges(ctx, edges)
+				// B3 (62-02): flow typeHierarchy edges through the merge.
+				_ = tx.UpsertEdgesWithMerge(ctx, edges)
 			}
 		}
 
@@ -396,7 +426,8 @@ func (c *Cascade) Run(
 					return commitLSPUnavail("implementation", err)
 				}
 			} else if len(edges) > 0 {
-				_ = tx.UpsertEdges(ctx, edges)
+				// B3 (62-02): flow implementation edges through the merge.
+				_ = tx.UpsertEdgesWithMerge(ctx, edges)
 			}
 		}
 
@@ -429,7 +460,9 @@ func (c *Cascade) Run(
 						return commitLSPUnavail("definition", err)
 					}
 				} else if edge != nil {
-					_ = tx.UpsertEdges(ctx, []Edge{*edge})
+					// B3 (62-02): flow per-reference definition edges through
+					// the merge boundary.
+					_ = tx.UpsertEdgesWithMerge(ctx, []Edge{*edge})
 				}
 			}
 			// Persist the references list for the file.

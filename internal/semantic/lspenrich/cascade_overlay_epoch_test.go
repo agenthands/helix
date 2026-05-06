@@ -89,6 +89,9 @@ func (a *realCascadeTxAdapter) UpsertReferences(ctx context.Context, path string
 func (a *realCascadeTxAdapter) UpsertEdges(ctx context.Context, edges []lspenrich.Edge) error {
 	return nil
 }
+func (a *realCascadeTxAdapter) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	return nil
+}
 func (a *realCascadeTxAdapter) UpsertDiagnostics(ctx context.Context, path string, diags []lspenrich.Diagnostic) error {
 	return nil
 }

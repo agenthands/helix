@@ -66,6 +66,13 @@ func (f *fakeOverlayTx) UpsertEdges(ctx context.Context, edges []lspenrich.Edge)
 	return nil
 }
 
+// UpsertEdgesWithMerge mirrors UpsertEdges in the recording fake — both
+// counters track the same surface so existing assertions keep working
+// while the cascade flips to the merge entrypoint.
+func (f *fakeOverlayTx) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	return f.UpsertEdges(ctx, edges)
+}
+
 func (f *fakeOverlayTx) UpsertDiagnostics(ctx context.Context, path string, diags []lspenrich.Diagnostic) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

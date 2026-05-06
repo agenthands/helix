@@ -324,6 +324,9 @@ func (t *accTx) UpsertEdges(_ context.Context, _ []lspenrich.Edge) error {
 	t.upsertEdgesCalls++
 	return nil
 }
+func (t *accTx) UpsertEdgesWithMerge(ctx context.Context, edges []lspenrich.Edge) error {
+	return t.UpsertEdges(ctx, edges)
+}
 func (t *accTx) UpsertDiagnostics(_ context.Context, _ string, _ []lspenrich.Diagnostic) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

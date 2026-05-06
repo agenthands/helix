@@ -160,7 +160,7 @@
   Plans:
   - [x] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
   - [x] 62-02-PLAN.md — Wave 2 — graph_version + ApplyRepair single-bump + score_status read API + UpsertGraphScores/UpsertEdgesWithMerge + handler post-commit hook + 4 config keys + 5 bounded-label metrics [GRAPH-03, GRAPH-05]
-  - [ ] 62-03-PLAN.md — Wave 3 — RankScheduler (debounce + long-idle + drop-on-full) + 1-hop frontier + full recompute preemption + WriteInvalidations consumer + daemon errgroup wiring [GRAPH-04, GRAPH-05]
+  - [x] 62-03-PLAN.md — Wave 3 — RankScheduler (debounce + long-idle + drop-on-full) + 1-hop frontier + full recompute preemption + WriteInvalidations consumer + daemon errgroup wiring [GRAPH-04, GRAPH-05]
   - [ ] 62-04-PLAN.md — Wave 4 — Weak-component clustering algorithm + persistence (UpsertClusters/UpsertClusterMembers/DeleteClustersForGraphVersion) [GRAPH-06]
   - [ ] 62-05-PLAN.md — Wave 5 — Type resolver shared core + Go/TS/Python full ladders + Java LSP-conditional stub + PHP/Ruby always-0.20 stubs + two-phase comment merge + dispatcher daemon wiring [TYPES-01, TYPES-02, TYPES-03, TYPES-04]
 - [ ] Phase 63: Compaction & Retention (0/0 plans)

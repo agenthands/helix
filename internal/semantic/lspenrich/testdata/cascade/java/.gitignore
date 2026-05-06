@@ -1,0 +1,5 @@
+# jdtls writes its persistent workspace state here when the integration
+# test runs. The state is regenerated on every test run and must not be
+# committed (large binary files, machine-specific paths).
+.jdtls-data/
+target/

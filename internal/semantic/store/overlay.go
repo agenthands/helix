@@ -591,6 +591,140 @@ func (t *OverlayTx) DeleteScoresForProjection(ctx context.Context, projection st
 	return nil
 }
 
+// ClusterSummary is one row written by UpsertClusters. It is the boundary
+// type at the cluster ↔ store seam: `internal/semantic/cluster` cannot
+// import `internal/semantic/store` without a circular import (the store
+// would have to import cluster.Cluster), so the cluster package converts
+// its `[]Cluster` into `[]ClusterSummary` at the call site.
+//
+// MemberCount is the size of the cluster (cardinality of the Members slice
+// in cluster.Cluster); we copy it here so UpsertClusters can write it
+// without re-iterating the source.
+type ClusterSummary struct {
+	ID          uint64
+	MemberCount int
+}
+
+// ClusterMemberRow is one (cluster_id, node_id) tuple written by
+// UpsertClusterMembers. Same boundary-type rationale as ClusterSummary.
+type ClusterMemberRow struct {
+	ClusterID uint64
+	NodeID    uint64
+}
+
+// UpsertClusters writes one row per cluster to semantic_clusters under the
+// active overlay tx. Algorithm name is `projection` (Phase 62 P04 picks the
+// projection identifier as the algorithm carrier so re-runs at the same
+// projection idempotently overwrite). Empty clusters is a no-op.
+//
+// The schema (migration 001 §9.10a) has no write_epoch column on
+// semantic_clusters; the row is keyed on (repo_id, graph_version,
+// cluster_id) and rewritten in full on each detection run via
+// DeleteClustersForGraphVersion → UpsertClusters within the same tx.
+//
+// status is set to "exact" — clustering is computed from the effective
+// graph at this graph_version and is precise; D-07's "stale" / "missing"
+// closed-enum values do not apply to clusters.
+//
+// snapshot_id = 0 — clusters are overlay-side state keyed on
+// (repo_id, graph_version) (mirrors the Phase 62 P02 score row contract).
+func (t *OverlayTx) UpsertClusters(ctx context.Context, projection string, graphVersion uint64, clusters []ClusterSummary) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("UpsertClusters: nil tx")
+	}
+	if projection == "" {
+		return fmt.Errorf("UpsertClusters: empty projection")
+	}
+	if len(clusters) == 0 {
+		return nil
+	}
+	for _, c := range clusters {
+		if _, err := t.tx.ExecContext(ctx, `
+			INSERT INTO semantic_clusters (
+				repo_id, snapshot_id, graph_version, cluster_id,
+				algorithm, label, summary, score, status, computed_at
+			) VALUES (?, 0, ?, ?, ?, NULL, NULL, ?, 'exact', now())
+			ON CONFLICT (repo_id, graph_version, cluster_id) DO UPDATE SET
+				algorithm   = excluded.algorithm,
+				score       = excluded.score,
+				status      = excluded.status,
+				computed_at = excluded.computed_at
+		`, t.repoID, graphVersion, c.ID, projection, float64(c.MemberCount)); err != nil {
+			return fmt.Errorf("UpsertClusters(%q, %q, cluster=%d): %w",
+				t.repoID, projection, c.ID, err)
+		}
+	}
+	return nil
+}
+
+// UpsertClusterMembers writes (cluster_id, node_id) tuples to
+// semantic_cluster_members under the active overlay tx. Empty rows is a
+// no-op.
+//
+// The schema (migration 001 §9.10b) requires weight DOUBLE NOT NULL; we
+// write 1.0 since the weak-component algorithm has no per-member weight
+// (every member belongs unconditionally). role is left NULL.
+func (t *OverlayTx) UpsertClusterMembers(ctx context.Context, projection string, graphVersion uint64, rows []ClusterMemberRow) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("UpsertClusterMembers: nil tx")
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	// projection is reserved for symmetry with UpsertClusters and possible
+	// future schema extensions; semantic_cluster_members is keyed on
+	// (repo_id, graph_version, cluster_id, node_id) only.
+	_ = projection
+	for _, r := range rows {
+		if _, err := t.tx.ExecContext(ctx, `
+			INSERT INTO semantic_cluster_members (
+				repo_id, graph_version, cluster_id, node_id, weight, role
+			) VALUES (?, ?, ?, ?, 1.0, NULL)
+			ON CONFLICT (repo_id, graph_version, cluster_id, node_id) DO UPDATE SET
+				weight = excluded.weight,
+				role   = excluded.role
+		`, t.repoID, graphVersion, r.ClusterID, r.NodeID); err != nil {
+			return fmt.Errorf("UpsertClusterMembers(%q, cluster=%d, node=%d): %w",
+				t.repoID, r.ClusterID, r.NodeID, err)
+		}
+	}
+	return nil
+}
+
+// DeleteClustersForGraphVersion removes every cluster + member row for
+// (repo_id, graph_version) under the active overlay tx. Members are
+// deleted first to honor any future FK; the order is also safe for
+// the current FK-less schema.
+//
+// Used by Phase 62 P04 RunClusterDetection to discard prior cluster rows
+// before writing the fresh generation in the same tx — readers never see a
+// half-merged set.
+func (t *OverlayTx) DeleteClustersForGraphVersion(ctx context.Context, projection string, graphVersion uint64) error {
+	if t == nil || t.tx == nil {
+		return fmt.Errorf("DeleteClustersForGraphVersion: nil tx")
+	}
+	// projection is reserved for symmetry and future per-projection
+	// scoping; current schema scopes by (repo_id, graph_version) alone, so
+	// every algorithm's clusters at this graph_version are cleared together.
+	// This is intentional for the algorithm-only v1 surface.
+	_ = projection
+	if _, err := t.tx.ExecContext(ctx, `
+		DELETE FROM semantic_cluster_members
+		 WHERE repo_id = ? AND graph_version = ?
+	`, t.repoID, graphVersion); err != nil {
+		return fmt.Errorf("DeleteClustersForGraphVersion(%q, gv=%d): members: %w",
+			t.repoID, graphVersion, err)
+	}
+	if _, err := t.tx.ExecContext(ctx, `
+		DELETE FROM semantic_clusters
+		 WHERE repo_id = ? AND graph_version = ?
+	`, t.repoID, graphVersion); err != nil {
+		return fmt.Errorf("DeleteClustersForGraphVersion(%q, gv=%d): clusters: %w",
+			t.repoID, graphVersion, err)
+	}
+	return nil
+}
+
 // edgeIDForTriple is a deterministic 64-bit hash over (repo_id, src, dst,
 // kind) used to synthesize the schema's edge_id PK from the natural merge
 // key. FNV-1a is intentionally used to avoid the xxhash dep at the storage

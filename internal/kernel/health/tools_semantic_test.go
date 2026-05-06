@@ -53,16 +53,67 @@ func TestSemanticStoreStatus_NilProbe(t *testing.T) {
 }
 
 // TestSemanticStoreStatus_Unhealthy proves an Available()==true probe with
-// a non-nil Probe error renders as state=unhealthy with the error reason.
+// a non-nil Probe error renders as state=unhealthy. WR-NEW-01: the Reason
+// field is a closed enum, never the raw err.Error() text. A generic
+// connection error maps to the "db_error" bucket.
 func TestSemanticStoreStatus_Unhealthy(t *testing.T) {
 	st := health.ComputeSemanticStoreStatus(context.Background(), fakeProbeUnhealthy{})
 	if st.State != "unhealthy" {
 		t.Fatalf("State=%q, want unhealthy", st.State)
 	}
-	if st.Reason == "" {
-		t.Fatalf("Reason must be non-empty for unhealthy state")
+	if st.Reason != health.SemanticReasonDBError {
+		t.Fatalf("Reason=%q, want %q (closed enum)", st.Reason, health.SemanticReasonDBError)
+	}
+	// Belt-and-braces: assert the raw err.Error() text is NOT leaked.
+	if st.Reason == "connection refused" {
+		t.Fatalf("Reason leaked raw err text; closed enum violated")
 	}
 }
+
+// TestSemanticStoreStatus_Unhealthy_NilHandle proves the daemon-side
+// nil-handle sentinels ("DB handle nil", "store unavailable") map to the
+// "nil_handle" bucket. WR-NEW-01.
+func TestSemanticStoreStatus_Unhealthy_NilHandle(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"db_handle_nil", errors.New("semantic store DB handle nil")},
+		{"store_unavailable", errors.New("semantic store unavailable")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := fakeProbeWithErr{err: tc.err}
+			st := health.ComputeSemanticStoreStatus(context.Background(), p)
+			if st.State != "unhealthy" {
+				t.Fatalf("State=%q, want unhealthy", st.State)
+			}
+			if st.Reason != health.SemanticReasonNilHandle {
+				t.Fatalf("Reason=%q, want %q", st.Reason, health.SemanticReasonNilHandle)
+			}
+		})
+	}
+}
+
+// TestSemanticStoreStatus_Unhealthy_ProbeTimeout proves a context-deadline
+// error from the probe maps to the "probe_timeout" bucket. WR-NEW-01.
+func TestSemanticStoreStatus_Unhealthy_ProbeTimeout(t *testing.T) {
+	p := fakeProbeWithErr{err: context.DeadlineExceeded}
+	st := health.ComputeSemanticStoreStatus(context.Background(), p)
+	if st.State != "unhealthy" {
+		t.Fatalf("State=%q, want unhealthy", st.State)
+	}
+	if st.Reason != health.SemanticReasonProbeTimeout {
+		t.Fatalf("Reason=%q, want %q", st.Reason, health.SemanticReasonProbeTimeout)
+	}
+}
+
+// fakeProbeWithErr returns a configurable error from Probe. Used by the
+// closed-enum classifier tests above.
+type fakeProbeWithErr struct{ err error }
+
+func (fakeProbeWithErr) Available() bool                  { return true }
+func (p fakeProbeWithErr) Probe(_ context.Context) error  { return p.err }
 
 // TestSemanticStoreStatus_JSONShape proves the marshalled block uses
 // snake_case field names per the documented contract.

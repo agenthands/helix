@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,9 +32,52 @@ type SemanticStoreProbe interface {
 
 // SemanticStoreStatus is the JSON-shaped block surfaced inside the
 // get_health report. State ∈ {"disabled", "ready", "unhealthy"}.
+//
+// Reason is a closed enum (WR-NEW-01) — never the raw error text. The
+// daemon-side probe wraps its known failure modes; this helper maps them
+// onto the values defined by the SemanticReason* constants below before
+// the struct is JSON-marshalled into the MCP-exposed get_health envelope.
+// Operators get the full underlying error via slog at warn level.
 type SemanticStoreStatus struct {
 	State  string `json:"state"`
 	Reason string `json:"reason,omitempty"`
+}
+
+// Closed-enum reasons for SemanticStoreStatus.Reason. The set is locked
+// to keep the get_health JSON envelope predictable for MCP clients and
+// to eliminate any risk of leaking raw database/sql or DuckDB error text
+// (WR-NEW-01).
+const (
+	SemanticReasonProbeTimeout = "probe_timeout"
+	SemanticReasonNilHandle    = "nil_handle"
+	SemanticReasonDBError      = "db_error"
+	SemanticReasonUnknown      = "unknown"
+)
+
+// classifySemanticProbeError maps a probe error onto the closed Reason
+// enum (WR-NEW-01). Mapping rules:
+//   - errors.Is(err, context.DeadlineExceeded) → "probe_timeout"
+//   - the daemon-side adapter's nil-handle sentinels → "nil_handle"
+//   - any other non-nil error → "db_error"
+//
+// nil errors return "" so callers can short-circuit on the empty string.
+// The full error text is intentionally NOT returned — log it via slog
+// for operators; the MCP-exposed Reason carries only the enum.
+func classifySemanticProbeError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return SemanticReasonProbeTimeout
+	}
+	msg := err.Error()
+	// The daemon-side semanticStoreProbe.Probe surfaces these two
+	// fmt.Errorf strings when the store handle or its underlying *sql.DB
+	// is nil. Substring-match because they are wrapped by Probe's caller.
+	if strings.Contains(msg, "DB handle nil") || strings.Contains(msg, "store unavailable") {
+		return SemanticReasonNilHandle
+	}
+	return SemanticReasonDBError
 }
 
 // ComputeSemanticStoreStatus runs a bounded probe against the semantic
@@ -41,6 +86,10 @@ type SemanticStoreStatus struct {
 // The probe budget is 1s — short enough to never dominate get_health
 // latency, long enough to absorb a one-off DuckDB stutter. A timed-out
 // probe returns "unhealthy" with reason "probe_timeout".
+//
+// WR-NEW-01: the Reason field is a closed enum (see SemanticReason*
+// constants). The full underlying error is logged via slog at warn level
+// for operators; the MCP-exposed Reason never carries raw error text.
 func ComputeSemanticStoreStatus(ctx context.Context, p SemanticStoreProbe) SemanticStoreStatus {
 	if p == nil || !p.Available() {
 		return SemanticStoreStatus{State: "disabled"}
@@ -48,10 +97,16 @@ func ComputeSemanticStoreStatus(ctx context.Context, p SemanticStoreProbe) Seman
 	probeCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 	if err := p.Probe(probeCtx); err != nil {
-		reason := err.Error()
-		if errors.Is(err, context.DeadlineExceeded) {
-			reason = "probe_timeout"
+		reason := classifySemanticProbeError(err)
+		if reason == "" {
+			reason = SemanticReasonUnknown
 		}
+		// Surface the raw error to operators via slog; the MCP-exposed
+		// Reason field above is intentionally a closed enum.
+		slog.Warn("semantic store probe failed",
+			"reason", reason,
+			"err", err,
+		)
 		return SemanticStoreStatus{State: "unhealthy", Reason: reason}
 	}
 	return SemanticStoreStatus{State: "ready"}

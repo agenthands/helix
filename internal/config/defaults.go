@@ -124,6 +124,11 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.pagerank.epsilon":        float64(0.000001), // SPEC §25 (koanf float gotcha — 1e-6)
 		"semantic_index.pagerank.max_iterations": 100,               // SPEC §25
 
+		// Phase 62 P02: scheduler debounce + full-recompute thresholds (D-08).
+		"semantic_index.pagerank.repair_debounce_ms":       2000,          // P62 D-08
+		"semantic_index.pagerank.full_recompute_idle_ms":   60000,         // P62 D-08
+		"semantic_index.pagerank.full_recompute_threshold": float64(0.25), // P62 D-08 (koanf float gotcha)
+
 		// clustering.*
 		"semantic_index.clustering.enabled":                         true, // SPEC §25
 		"semantic_index.clustering.max_component_size_before_split": 5000, // SPEC §25
@@ -157,6 +162,13 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.type_resolution.min_confidence_for_edge": float64(0.45), // SPEC §25 (koanf float gotcha)
 		"semantic_index.type_resolution.comment_fallbacks":       true,          // SPEC §25
 		"semantic_index.type_resolution.emit_unresolved_edges":   true,          // SPEC §25
+
+		// Phase 62 P02: types.* — comment-parser allowlist (D-12).
+		// Slice declared as []string to bind cleanly through koanf
+		// mapstructure decoder (koanf slice gotcha).
+		"semantic_index.types.comment_parsers_enabled": []string{
+			"tsdoc", "jsdoc", "godoc", "python_type_comments", "phpdoc", "yard",
+		},
 
 		// phase_graph.*
 		"semantic_index.phase_graph.enabled":             true, // SPEC §25

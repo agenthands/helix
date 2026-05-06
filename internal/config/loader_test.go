@@ -367,6 +367,22 @@ func TestLoad_SemanticIndexDefaults(t *testing.T) {
 	if cfg.SemanticIndex.PageRank.MaxIterations != 100 {
 		t.Errorf("expected pagerank.max_iterations=100, got %d", cfg.SemanticIndex.PageRank.MaxIterations)
 	}
+	// Phase 62 P02 D-08: scheduler defaults.
+	if cfg.SemanticIndex.PageRank.RepairDebounceMs != 2000 {
+		t.Errorf("expected pagerank.repair_debounce_ms=2000, got %d", cfg.SemanticIndex.PageRank.RepairDebounceMs)
+	}
+	if cfg.SemanticIndex.PageRank.FullRecomputeIdleMs != 60000 {
+		t.Errorf("expected pagerank.full_recompute_idle_ms=60000, got %d", cfg.SemanticIndex.PageRank.FullRecomputeIdleMs)
+	}
+	if cfg.SemanticIndex.PageRank.FullRecomputeThreshold != 0.25 {
+		t.Errorf("expected pagerank.full_recompute_threshold=0.25, got %v", cfg.SemanticIndex.PageRank.FullRecomputeThreshold)
+	}
+	// Phase 62 P02 D-12: types.comment_parsers_enabled allowlist.
+	wantCommentParsers := []string{"tsdoc", "jsdoc", "godoc", "python_type_comments", "phpdoc", "yard"}
+	if !reflect.DeepEqual(cfg.SemanticIndex.Types.CommentParsersEnabled, wantCommentParsers) {
+		t.Errorf("expected types.comment_parsers_enabled=%v, got %v",
+			wantCommentParsers, cfg.SemanticIndex.Types.CommentParsersEnabled)
+	}
 
 	// clustering.* — SPEC §25.clustering.
 	if !cfg.SemanticIndex.Clustering.Enabled {

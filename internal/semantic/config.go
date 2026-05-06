@@ -68,6 +68,11 @@ type Config struct {
 	// TypeResolution configures the type-resolution pipeline (P62).
 	TypeResolution TypeResolutionConfig `koanf:"type_resolution"`
 
+	// Types configures the Phase 62 P05 type resolver's per-language
+	// comment parsers. Lives alongside TypeResolution rather than inside
+	// it to mirror SPEC-DRAFT.md §25's `types.*` block layout.
+	Types TypesConfig `koanf:"types"`
+
 	// PhaseGraph configures the bootstrap phase-graph runner (v1.11+).
 	PhaseGraph PhaseGraphConfig `koanf:"phase_graph"`
 }
@@ -199,10 +204,35 @@ type GraphConfig struct {
 
 // PageRankConfig holds cross-file ranking parameters (P62).
 // Field set mirrors SPEC §25.pagerank.* verbatim.
+//
+// Phase 62 P02 (D-08): the trailing three fields configure the
+// RankScheduler's debounce + full-recompute behaviour. The scheduler
+// itself lands in P03; the keys ship in P02 so the config layer is
+// stable across waves.
 type PageRankConfig struct {
 	Damping       float64 `koanf:"damping"`        // default 0.85
 	Epsilon       float64 `koanf:"epsilon"`        // default 1e-6
 	MaxIterations int     `koanf:"max_iterations"` // default 100
+
+	// Phase 62 P02 D-08: incremental-repair debounce window.
+	RepairDebounceMs int `koanf:"repair_debounce_ms"` // default 2000
+
+	// Phase 62 P02 D-08: longer idle window before a full recompute fires.
+	FullRecomputeIdleMs int `koanf:"full_recompute_idle_ms"` // default 60000
+
+	// Phase 62 P02 D-08: stale-row fraction that triggers a full recompute
+	// once the long idle elapses.
+	FullRecomputeThreshold float64 `koanf:"full_recompute_threshold"` // default 0.25
+}
+
+// TypesConfig holds Phase 62 P05 type-resolver settings that don't sit
+// under TypeResolution (the latter mirrors SPEC §25.type_resolution.*
+// verbatim and we keep that mapping stable).
+type TypesConfig struct {
+	// CommentParsersEnabled is the Phase 62 P05 D-12 comment-parser
+	// allowlist. Default ships the v1 lang scope: TSDoc, JSDoc, GoDoc,
+	// Python type comments, PHPDoc, YARD.
+	CommentParsersEnabled []string `koanf:"comment_parsers_enabled"`
 }
 
 // ClusteringConfig holds symbol-cluster parameters (P62).

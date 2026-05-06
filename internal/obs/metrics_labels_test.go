@@ -75,6 +75,16 @@ var carveOuts = map[string]map[string]bool{
 	"helix_semantic_lsp_enrichment_lane_depth":        {},
 	"helix_semantic_lsp_enrichment_duration_seconds":  {},
 	"helix_semantic_lsp_enrichment_bulk_suppressed_total": {},
+	// Phase 62 P02: graph + types metric carve-outs.
+	// "scope", "projection", "status", "confidence_tier" are NEW closed-
+	// enum label NAMES outside AllowedLabels. "outcome" + "language"
+	// already in AllowedLabels (no carve-out needed for those).
+	// "workspace_label" mirrors the helix_semantic_store_* family.
+	"helix_semantic_graph_pagerank_duration_seconds": {"scope": true, "projection": true},
+	"helix_semantic_graph_score_status_total":        {"projection": true, "status": true},
+	"helix_semantic_graph_repair_total":              {},
+	"helix_semantic_graph_version":                   {"workspace_label": true},
+	"helix_semantic_types_resolution_total":          {"confidence_tier": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -174,6 +184,12 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.LSPEnrichmentErrors("go", "timeout")
 	m.LSPEnrichmentLaneDepth("high", 1)
 	m.LSPEnrichmentBulkSuppressed(1)
+	// Phase 62 P02: prime the graph + types vectors.
+	m.SemanticGraphPagerankObserve("incremental", "call_graph", 0.005)
+	m.SemanticGraphScoreStatusInc("call_graph", "exact")
+	m.SemanticGraphRepairInc("applied")
+	m.SemanticGraphVersionSet("ws-aaa", 1)
+	m.SemanticTypesResolutionInc("go", "1.00")
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

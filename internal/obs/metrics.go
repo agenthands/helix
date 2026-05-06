@@ -134,6 +134,31 @@ type Metrics struct {
 	// counter without adding signal). Bumped per ChangeBulkUpdate dispatch
 	// from handler.markBulkPending — see Phase 61 P01 D-05.
 	LSPEnrichmentBulkSuppressedCtr prometheus.Counter
+
+	// Phase 62 P02: PageRank engine duration histogram.
+	// Closed-enum "scope" ∈ {"incremental","full"};
+	// "projection" ∈ {"call_graph"} (reserved for future projections).
+	// Helper SemanticGraphPagerankObserve drops unknown labels (T5).
+	SemanticGraphPagerankDurationVec *prometheus.HistogramVec
+
+	// Phase 62 P02: score-status counter (read-time emission).
+	// Closed-enum "projection" ∈ {"call_graph"};
+	// "status" ∈ {"exact","approximate","stale","missing"} (D-07).
+	SemanticGraphScoreStatusVec *prometheus.CounterVec
+
+	// Phase 62 P02: repair outcome counter.
+	// Closed-enum "outcome" ∈ {"applied","frontier_overflow","preempted","error"}.
+	SemanticGraphRepairVec *prometheus.CounterVec
+
+	// Phase 62 P02: graph_version gauge per workspace.
+	// "workspace_label" is the same bounded hashed/truncated identifier
+	// used by helix_semantic_store_*.
+	SemanticGraphVersionGauge *prometheus.GaugeVec
+
+	// Phase 62 P02: type-resolution outcome counter.
+	// "language" ∈ AllowedLabels;
+	// "confidence_tier" ∈ {"1.00","0.90","0.80","0.70","0.60","0.45","0.20"} (D-12).
+	SemanticTypesResolutionVec *prometheus.CounterVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -317,6 +342,48 @@ func newMetrics() *Metrics {
 				Help: "LSP enrichment-worker bulk-update suppression counter (per ChangeBulkUpdate dispatch). Phase 61 P03 D-05.",
 			},
 		),
+		// Phase 62 P02: graph engine + type-resolution metrics. All
+		// emission helpers (SemanticGraphPagerankObserve, *Inc, *Set)
+		// drop unknown closed-enum values to keep cardinality bounded
+		// (T5 mitigation).
+		SemanticGraphPagerankDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name: "helix_semantic_graph_pagerank_duration_seconds",
+				Help: "PageRank engine pass duration in seconds. Phase 62 P02.",
+				// 1ms → 60s — incremental local repair lives in the low end,
+				// full recompute on a large workspace lives in the tail.
+				Buckets: []float64{0.001, 0.005, 0.025, 0.1, 0.5, 1.0, 5.0, 15.0, 30.0, 60.0},
+			},
+			[]string{"scope", "projection"},
+		),
+		SemanticGraphScoreStatusVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_graph_score_status_total",
+				Help: "Score-row status emissions by projection and computed status (exact/approximate/stale/missing). Phase 62 P02 D-07.",
+			},
+			[]string{"projection", "status"},
+		),
+		SemanticGraphRepairVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_graph_repair_total",
+				Help: "ApplyRepair outcomes by category (applied/frontier_overflow/preempted/error). Phase 62 P02 D-06/D-09.",
+			},
+			[]string{"outcome"},
+		),
+		SemanticGraphVersionGauge: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "helix_semantic_graph_version",
+				Help: "Current graph_version per workspace (monotone non-decreasing). Phase 62 P02 D-05.",
+			},
+			[]string{"workspace_label"},
+		),
+		SemanticTypesResolutionVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_types_resolution_total",
+				Help: "Type-resolver edge-emission outcomes by language and confidence tier (1.00/0.90/.../0.20). Phase 62 P02 (D-12).",
+			},
+			[]string{"language", "confidence_tier"},
+		),
 	}
 
 	reg.MustRegister(
@@ -341,6 +408,12 @@ func newMetrics() *Metrics {
 		m.LSPEnrichmentErrorsVec,
 		m.LSPEnrichmentLaneDepthVec,
 		m.LSPEnrichmentBulkSuppressedCtr,
+		// Phase 62 P02: graph + types metrics.
+		m.SemanticGraphPagerankDurationVec,
+		m.SemanticGraphScoreStatusVec,
+		m.SemanticGraphRepairVec,
+		m.SemanticGraphVersionGauge,
+		m.SemanticTypesResolutionVec,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -609,4 +682,107 @@ func (m *Metrics) LSPEnrichmentBulkSuppressed(n int) {
 		return
 	}
 	m.LSPEnrichmentBulkSuppressedCtr.Add(float64(n))
+}
+
+// --- Phase 62 P02 helpers (drop-on-unknown closed-enum discipline, T5) ---
+//
+// All helpers validate label values against package-private allowlists
+// BEFORE calling WithLabelValues — unknown values drop the emission to
+// keep cardinality bounded (T-62-02-D2 mitigation).
+
+var pagerankScopes = map[string]struct{}{
+	"incremental": {},
+	"full":        {},
+}
+
+var pagerankProjections = map[string]struct{}{
+	"call_graph": {},
+}
+
+var graphScoreStatuses = map[string]struct{}{
+	"exact":       {},
+	"approximate": {},
+	"stale":       {},
+	"missing":     {},
+}
+
+var graphRepairOutcomes = map[string]struct{}{
+	"applied":            {},
+	"frontier_overflow":  {},
+	"preempted":          {},
+	"error":              {},
+}
+
+// typesConfidenceTiers is the SPEC §38.2 ladder rendered as bucketed
+// strings. Helper coerces unknowns to nothing (drop-on-unknown).
+var typesConfidenceTiers = map[string]struct{}{
+	"1.00": {},
+	"0.90": {},
+	"0.80": {},
+	"0.70": {},
+	"0.60": {},
+	"0.45": {},
+	"0.20": {},
+}
+
+// SemanticGraphPagerankObserve records a PageRank pass duration.
+// scope ∈ {incremental, full}; projection ∈ {call_graph}. Unknown values
+// drop the emission. Negative seconds drop.
+func (m *Metrics) SemanticGraphPagerankObserve(scope, projection string, seconds float64) {
+	if seconds < 0 {
+		return
+	}
+	if _, ok := pagerankScopes[scope]; !ok {
+		return
+	}
+	if _, ok := pagerankProjections[projection]; !ok {
+		return
+	}
+	m.SemanticGraphPagerankDurationVec.WithLabelValues(scope, projection).Observe(seconds)
+}
+
+// SemanticGraphScoreStatusInc increments the read-time score-status
+// counter. projection ∈ {call_graph};
+// status ∈ {exact, approximate, stale, missing} (D-07). Unknown values
+// drop the emission.
+func (m *Metrics) SemanticGraphScoreStatusInc(projection, status string) {
+	if _, ok := pagerankProjections[projection]; !ok {
+		return
+	}
+	if _, ok := graphScoreStatuses[status]; !ok {
+		return
+	}
+	m.SemanticGraphScoreStatusVec.WithLabelValues(projection, status).Inc()
+}
+
+// SemanticGraphRepairInc increments the ApplyRepair outcome counter.
+// outcome ∈ {applied, frontier_overflow, preempted, error}.
+func (m *Metrics) SemanticGraphRepairInc(outcome string) {
+	if _, ok := graphRepairOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticGraphRepairVec.WithLabelValues(outcome).Inc()
+}
+
+// SemanticGraphVersionSet publishes the current graph_version for a
+// workspace. workspace_label is the bounded hashed/truncated identifier
+// the helix_semantic_store_* family already uses; this helper does NOT
+// re-validate it (the bound is enforced at the call site, mirroring
+// SemanticStoreQuarantineInc).
+func (m *Metrics) SemanticGraphVersionSet(workspaceLabel string, gv uint64) {
+	m.SemanticGraphVersionGauge.WithLabelValues(workspaceLabel).Set(float64(gv))
+}
+
+// SemanticTypesResolutionInc increments the type-resolver outcome
+// counter. language is bounded by allowedExtractionLanguages (the
+// closed-enum used by the Phase 59 extraction metric); confidenceTier
+// must be one of the SPEC §38.2 ladder strings. Unknown values drop.
+func (m *Metrics) SemanticTypesResolutionInc(language, confidenceTier string) {
+	if _, ok := allowedExtractionLanguages[language]; !ok {
+		language = "other"
+	}
+	if _, ok := typesConfidenceTiers[confidenceTier]; !ok {
+		return
+	}
+	m.SemanticTypesResolutionVec.WithLabelValues(language, confidenceTier).Inc()
 }

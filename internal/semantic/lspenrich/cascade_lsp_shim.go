@@ -189,7 +189,8 @@ func (s *cascadeLSPShim) uriOrEmpty() string {
 }
 
 func (s *cascadeLSPShim) Hover(ctx context.Context, sym Symbol) (*Edge, error) {
-	if s.uriOrEmpty() == "" {
+	uri := s.uriOrEmpty()
+	if uri == "" {
 		return nil, nil
 	}
 	pos, ok := s.pickSymbolPosition(sym)
@@ -197,7 +198,7 @@ func (s *cascadeLSPShim) Hover(ctx context.Context, sym Symbol) (*Edge, error) {
 		return nil, nil
 	}
 	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uriOrEmpty()},
+		"textDocument": map[string]any{"uri": uri},
 		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
 	}
 	var raw json.RawMessage
@@ -224,7 +225,8 @@ func (s *cascadeLSPShim) Hover(ctx context.Context, sym Symbol) (*Edge, error) {
 }
 
 func (s *cascadeLSPShim) CallHierarchy(ctx context.Context, sym Symbol, _ int) ([]Edge, error) {
-	if s.uriOrEmpty() == "" {
+	uri := s.uriOrEmpty()
+	if uri == "" {
 		return nil, nil
 	}
 	pos, ok := s.pickSymbolPosition(sym)
@@ -232,7 +234,7 @@ func (s *cascadeLSPShim) CallHierarchy(ctx context.Context, sym Symbol, _ int) (
 		return nil, nil
 	}
 	prepareParams := map[string]any{
-		"textDocument": map[string]any{"uri": s.uriOrEmpty()},
+		"textDocument": map[string]any{"uri": uri},
 		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
 	}
 	var items []gen.CallHierarchyItem
@@ -274,7 +276,8 @@ func (s *cascadeLSPShim) CallHierarchy(ctx context.Context, sym Symbol, _ int) (
 }
 
 func (s *cascadeLSPShim) TypeHierarchy(ctx context.Context, sym Symbol, _ int) ([]Edge, error) {
-	if s.uriOrEmpty() == "" {
+	uri := s.uriOrEmpty()
+	if uri == "" {
 		return nil, nil
 	}
 	pos, ok := s.pickSymbolPosition(sym)
@@ -282,7 +285,7 @@ func (s *cascadeLSPShim) TypeHierarchy(ctx context.Context, sym Symbol, _ int) (
 		return nil, nil
 	}
 	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uriOrEmpty()},
+		"textDocument": map[string]any{"uri": uri},
 		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
 	}
 	var items []gen.TypeHierarchyItem
@@ -317,7 +320,8 @@ func (s *cascadeLSPShim) TypeHierarchy(ctx context.Context, sym Symbol, _ int) (
 }
 
 func (s *cascadeLSPShim) Implementation(ctx context.Context, sym Symbol) ([]Edge, error) {
-	if s.uriOrEmpty() == "" {
+	uri := s.uriOrEmpty()
+	if uri == "" {
 		return nil, nil
 	}
 	pos, ok := s.pickSymbolPosition(sym)
@@ -325,7 +329,7 @@ func (s *cascadeLSPShim) Implementation(ctx context.Context, sym Symbol) ([]Edge
 		return nil, nil
 	}
 	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uriOrEmpty()},
+		"textDocument": map[string]any{"uri": uri},
 		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
 	}
 	var raw json.RawMessage

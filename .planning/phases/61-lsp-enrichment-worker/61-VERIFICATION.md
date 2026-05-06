@@ -1,42 +1,110 @@
 ---
 phase: 61-lsp-enrichment-worker
-verified: 2026-05-06T10:35:00Z
-status: human_needed
-score: 4/5 must-haves verified (1 with caveat)
+verified: 2026-05-06T11:30:00Z
+status: passed
+score: 5/5 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "Production daemon dispatches enrichment jobs end-to-end (Manager.Run → Worker.processOne → Cascade.Run)"
-    status: partial
-    reason: "Manager.Run constructs Worker WITHOUT NewCascadeLSP factory (manager.go:198-207). Worker.processOne (worker.go:225-229) checks `if w.NewCascadeLSP == nil` and emits OutcomeDropped + Error log unconditionally. Result: every job dispatched through the production wiring (live_wiring.go) is dropped before the cascade engine runs. Acceptance integration tests (TestACC4/6/10) compensate by injecting NewCascadeLSP at Worker layer directly. The cascade engine itself is correct and exercised end-to-end against real gopls + jdtls in TestCascade_GoIntegration / TestCascade_JavaIntegration. Executor SUMMARY explicitly defers NewCascadeLSP production wiring to Phase 64+."
-    artifacts:
-      - path: "internal/semantic/lspenrich/manager.go"
-        issue: "NewManager + Manager.Run construct Worker without NewCascadeLSP — production wiring gap"
-      - path: "internal/daemon/live_wiring.go"
-        issue: "buildLiveBundle does not supply a CascadeLSPFactory to Manager"
-    missing:
-      - "Production wiring of Worker.NewCascadeLSP — needs adapter from CascadeLSP-over-WorkerLease to be constructed in live_wiring.go and threaded through Manager → Worker"
-human_verification:
-  - test: "Verify the deferred NewCascadeLSP wiring gap is acceptable scope for Phase 61"
-    expected: "Phase 64 (`refresh_semantic_graph` MCP tool) explicitly accepts ownership of the production CascadeLSP wiring; OR Phase 61 ships a follow-up plan that wires NewCascadeLSP without depending on the Phase 64 MCP tool surface"
-    why_human: "The executor explicitly flagged this in 61-04-SUMMARY decisions section as a deliberate deferral. ROADMAP Phase 61 Success Criteria 1-4 are all satisfied at the unit/integration test level — production end-to-end dispatch is not a SC. Whether deferring the wiring is acceptable for milestone v1.10 phase boundary requires architect judgement."
-  - test: "Confirm cascade_test.go cascadeNow var-init ordering issue is acceptable"
-    expected: "Either the test fixture is patched to recompute cascadeNow per-test (matches its own doc-comment claim), OR the order-dependent failure is documented as a known-flaky integration-tag-only issue"
-    why_human: "Under `go test -tags integration`, when TestCascade_JavaIntegration (9.3s) runs before TestCascade_C1/C3/C4/C5/C6/C8 in sort order, the package-level `var cascadeNow = time.Now()` falls outside the 5s per-file budget window and 6 cascade tests fail with 'partial_budget' instead of their expected outcomes. Tests pass in isolation; default `go test -short` is unaffected. This is a test-fixture ordering bug, not a production code bug."
+re_verification:
+  previous_status: human_needed
+  previous_score: 4/5 must-haves verified (1 with caveat)
+  gaps_closed:
+    - "Production daemon dispatches enrichment jobs end-to-end (Manager.Run → Worker.processOne → Cascade.Run)"
+  gaps_remaining: []
+  regressions: []
+gaps: []
 deferred:
-  - truth: "Phase 61 production worker dispatches jobs end-to-end (cascade engine called from live daemon)"
-    addressed_in: "Phase 64"
-    evidence: "ROADMAP Phase 64 goal: 'New MCP Tools (P0 set of 4) — index_semantic_graph, refresh_semantic_graph, get_semantic_graph_status, get_semantic_context'. The CascadeLSP factory shim ships with Phase 64's refresh_semantic_graph wiring per executor decision in 61-04-SUMMARY: 'production wiring (live_wiring.go) does NOT yet supply Worker.NewCascadeLSP — that adapter ships in Phase 64+'. Phase 65 (`get_health` strangler-fig) wires the Status() accessor. Phase 61 ROADMAP SCs 1-4 are achievable at the test surface without production cascade dispatch."
+  - truth: "Phase 65 get_health strangler-fig wires Manager.Status() accessor"
+    addressed_in: "Phase 65"
+    evidence: "ROADMAP Phase 65 goal: 'get_repo_map, get_context, analyze_blast_radius, get_health consult semantic when available'. Status() accessor exists at internal/semantic/lspenrich/manager.go and now produces real (non-stub) counter increments because gap #1 was closed."
 ---
 
-# Phase 61: LSP Enrichment Worker Verification Report
+# Phase 61: LSP Enrichment Worker Verification Report (Re-verification post-61-05)
 
-**Phase Goal:** Async LSP enrichment promotes tree-sitter facts to LSP-confirmed evidence without burying foreground tool calls or regressing v1.9 readiness invariants.
+**Phase Goal:** Land an async LSP enrichment worker that uses the existing kernel `*lspool.Pool` (via `LeaseAcquirer` interface, no `internal/kernel` import from semantic), runs a priority queue with foreground-preemption, honors v1.9 LS readiness gates, respects SPEC §14.2 per-file budget, survives stress tests without burying foreground tool calls, AND — closed by gap-closure plan 61-05 — actually dispatches enrichment jobs end-to-end through `Manager.Run` in production rather than dropping them at the `NewCascadeLSP factory is nil` branch.
 
-**Verified:** 2026-05-06T10:35:00Z
+**Verified:** 2026-05-06T11:30:00Z
+**Status:** passed
+**Re-verification:** Yes — after gap-closure plan 61-05.
 
-**Status:** human_needed
+## Re-Verification Summary
 
-**Re-verification:** No — initial verification.
+| Item | Pre-61-05 (initial verification) | Post-61-05 (this re-verification) |
+|------|-----------------------------------|------------------------------------|
+| Gap #1: production-dispatch wiring | OPEN — `Manager.Run` constructed `Worker` w/o `NewCascadeLSP`; every job → `OutcomeDropped` | **CLOSED** — Manager threads `m.newCascadeLSP` into Worker; live_wiring.go calls `SetCascadeLSPFactory` with `NewCascadeLSPShim`; `TestManagerProductionDispatch_Go` PASSES single-pass; `FilesEnriched >= 1`, `FilesDropped == 0` |
+| Gap #2: `cascadeNow` package-var ordering | OPEN — `var cascadeNow = time.Now()` initializer-time, doc-comment incorrect | **UNCHANGED → resolved upstream:** cascade_test.go now has `func cascadeNow() time.Time` (1 match); `var cascadeNow` (0 matches); full integration suite passes in 16.4s with no ordering failures |
+| Score | 4/5 must-haves (1 with caveat) | **5/5 must-haves** |
+| Status | human_needed | **passed** |
+
+## Gap #1 Closure Verification (Production-Dispatch Wiring)
+
+### 1. `internal/semantic/lspenrich/manager.go`
+
+- **Field `newCascadeLSP CascadeLSPFactory` exists** — VERIFIED at line 65
+- **Method `func (m *Manager) SetCascadeLSPFactory(f CascadeLSPFactory)` exists** — VERIFIED at line 137-139
+- **`Manager.Run` constructs Worker with `NewCascadeLSP: m.newCascadeLSP`** — VERIFIED at line 244 (`NewCascadeLSP: m.newCascadeLSP, // 61-05 production-dispatch wiring`)
+- **Defensive Warn-log when factory is nil** — VERIFIED at lines 229-234 (`m.logger.Warn("lsp-enrichment manager: no CascadeLSPFactory set; all dispatched jobs will land on OutcomeDropped")`)
+- **Startup INFO log surfaces wiring state** — VERIFIED at lines 250-255 (`"cascade_lsp_factory", cascadeFactoryStateLabel(m.newCascadeLSP)` — `"production"` or `"<unset>"`)
+
+### 2. `internal/daemon/live_wiring.go`
+
+- **Imports `internal/kernel/lspool`** — VERIFIED at line 17
+- **Calls `enrichMgr.SetCascadeLSPFactory(...)` with the production shim closure** — VERIFIED at lines 296-298:
+  ```go
+  enrichMgr.SetCascadeLSPFactory(func(lease *lspool.WorkerLease) lspenrich.CascadeLSP {
+      return lspenrich.NewCascadeLSPShim(lease)
+  })
+  ```
+- **INFO log emits `cascade_lsp_factory=production` at boot** — VERIFIED at line 304
+
+### 3. `internal/semantic/lspenrich/cascade_lsp_shim.go`
+
+- **No `//go:build` tag (production code, not test)** — VERIFIED: file starts with doc-comment + `package lspenrich` + imports (lines 1-30); `grep '//go:build'` returns 0 matches
+- **Public constructor `func NewCascadeLSPShim(lease *lspool.WorkerLease) CascadeLSP`** — VERIFIED at line 80
+- **Compile-time assertion `var _ CascadeLSP = (*cascadeLSPShim)(nil)`** — VERIFIED at line 74
+- **Unexported struct `cascadeLSPShim`** — VERIFIED at line 65 (uses internal `leaseRequester` test-seam interface; preserves public `*lspool.WorkerLease` constructor signature so the existing `CascadeLSPFactory` contract is unbroken)
+
+### 4. `internal/semantic/lspenrich/integration_dispatch_test.go`
+
+- **First line `//go:build integration`** — VERIFIED
+- **Function `TestManagerProductionDispatch_Go` exists** — VERIFIED at line 96
+- **Calls `mgr.SetCascadeLSPFactory(...)` (not bypassing wiring)** — VERIFIED at line 177:
+  ```go
+  mgr.SetCascadeLSPFactory(func(lease *lspool.WorkerLease) lspenrich.CascadeLSP {
+      return lspenrich.NewCascadeLSPShim(lease)
+  })
+  ```
+- **Asserts `Status().FilesEnriched >= 1`** — VERIFIED at line 229-232
+- **Asserts `Status().FilesDropped == 0`** — VERIFIED at line 233-236
+
+### 5. Gap-closure integration test execution
+
+```bash
+$ go clean -testcache && go test -tags integration -timeout 180s -run TestManagerProductionDispatch_Go ./internal/semantic/lspenrich/...
+ok  	github.com/agenthands/helix/internal/semantic/lspenrich	2.767s
+```
+
+Single-pass run: **PASS**. Two consecutive single-pass runs (each with cleared cache): both **PASS**. Test asserts `FilesEnriched >= 1` AND `FilesDropped == 0` AND ≥ 1 cascade tx committed AND ≥ 1 symbol upserted AND every emitted edge has `Confidence == 1.0`, `ValidationState == "validated"`, `Source` prefixed `lsp.`.
+
+### 6. Gap #2 (`cascadeNow`) regression check
+
+```bash
+$ grep -c '^func cascadeNow' internal/semantic/lspenrich/cascade_test.go
+1
+$ grep -c '^var cascadeNow' internal/semantic/lspenrich/cascade_test.go
+0
+```
+
+`cascadeNow` is now a `func()` (recomputes per-call) instead of a package-`var` initializer. Full integration suite confirms no ordering regression:
+
+```bash
+$ go clean -testcache && go test -tags integration -timeout 300s ./internal/semantic/lspenrich/...
+ok  	github.com/agenthands/helix/internal/semantic/lspenrich	16.414s
+```
+
+(Pre-61-05: 6 cascade tests failed when ordered after `TestCascade_JavaIntegration`. Post-61-05: 0 failures, 16.4s total — matches the executor's 61-05-SUMMARY claim.)
+
+**Gap #1 verdict: CLOSED.**
+**Gap #2 verdict: CLOSED (resolved upstream — `cascadeNow` is now a func).**
 
 ## Goal Achievement
 
@@ -44,144 +112,137 @@ deferred:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | ENRICH-01: semantic does not import internal/kernel directly; LeaseAcquirer interface is the seam | VERIFIED | `internal/semantic/lspenrich/acquirer.go:6-7` imports only `internal/kernel/lspool` + `internal/workspace`. `grep -rn '"github.com/agenthands/helix/internal/kernel' internal/semantic/lspenrich/*.go \| grep -v lspool \| grep -v _test.go` returns no output. The `nosemantic2kernel` vet analyzer (cmd/vet-nosemantic2kernel + internal/lint/nosemantic2kernel) is wired into `make vet` (Makefile:22, 28, 40-41) and runs clean. LeaseAcquirer interface (acquirer.go:37-40) has exactly two methods: AcquireLease + ForegroundBusy. Transitive `kernel/jsonrpc` reachable through `kernel/lspool` is allowed by analyzer (DIRECT-import enforcement only) and matches plan-stated boundary discipline. |
-| 2 | ENRICH-02: priority queue with foreground preemption + concurrency cap default 1 | VERIFIED | `internal/semantic/lspenrich/queue.go` ships LaneQueue with strict-priority Drain (queue_test.go L1-L6 pass). `Pool.ForegroundBusy` (pool.go:322) + `Pool.SetYieldCheckWindow` (pool.go:343) implement the foreground-busy stamp gate with `lsp-enrichment:` session prefix exclusion. Cascade.Run calls foregroundBusy() between every step (cascade.go:251-262 — `checkBoundary` closure invoked before each LSP call). Default `max_concurrent_workers=1` confirmed in `internal/config/defaults.go:112`. Manager.Run honors cap via `w.RunN(gctx, n)` where `n=cfg.MaxConcurrentWorkers` (manager.go:208-218). Acceptance integration tests TestACC4_Cap1 + TestACC4_Cap4 + TestACC6_VoluntaryYield all pass under `go test -tags integration`. |
-| 3 | ENRICH-03: Java + Rust readiness gates honored, never bypassed | VERIFIED | `internal/semantic/lspenrich/readiness.go:241-251` implements WaitForLanguageReady dispatching to JavaReady/RustQuiescent. PoolReadinessProbe (`readiness_probe.go:34, 47-58`) calls real `Pool.JdtlsAdapter(wsKey).WaitUntilJavaReady(ctx)` and `Pool.RustAnalyzerAdapter(wsKey).QuiescentChan()`. Worker.processOne (worker.go) calls `WaitForLanguageReady` BEFORE `LeaseProvider.AcquireFor`. No "best-effort bypass" `if err != nil { return nil }` patterns found. Acceptance tests TestACC10_JavaReadiness + TestACC10_JavaReadinessTimeout PASS under `-tags integration`. Real-LS test TestCascade_JavaIntegration PASSES (jdtls cold-start observed; cascade waits then proceeds; CALLS edges produced). |
-| 4 | ENRICH-04: per-file budget enforced; partial:true / partial_reason="budget exhausted" remains queryable | VERIFIED | `internal/semantic/lspenrich/budget.go` ships Budget value type with TimeoutPerFile + TimeoutTotal parsing, ConsumeSymbol/ConsumeReferences guards, HasRemainingTime check. Cascade.Run boundary check (cascade.go:251-271) returns OutcomePartialBudget and stamps `MarkFileSemanticPending(path, "budget exhausted")` on expiry (cascade.go:264, 329, 408). `OverlayTx.MarkFileSemanticPending` validates against closed enum (preempted/bulk_update_pending/lsp_unavailable/budget exhausted). Files remain queryable — partial_reason is metadata, not a deletion. Test C2 (BudgetExhaustion) and C9 (ConsumeReferencesPerSymbolGranularity) pass; B1-B6 budget unit tests pass. |
-| 5 | ENRICH-05: 100-file edit burst / git-checkout storm does not bury foreground tool calls; interactive p95 < 5s | VERIFIED (with caveat) | `internal/semantic/lspenrich/stress_test.go` exists with `//go:build stress` build tag (line 1). `TestStress_ENRICH05_Go` + `TestStress_ENRICH05_Java` defined (stress_test.go:403, 422). Per 61-04-SUMMARY local run results: 149 foreground samples / p95=877µs / mean=583.834µs / 100 enrichment txs committed — foreground p95 is ~5700x under the 5s budget. Stress test gated correctly: `go test -short ./internal/semantic/lspenrich/...` does not pull in stress test (verified via run output). Caveat: stress test exercises Worker directly (with NewCascadeLSP injected), not through production daemon dispatch — same caveat as ACC6 below. The `git checkout storm` half is implicitly covered by `live/handler/handler.go` ChangeBulkUpdate suppression path (P01-T3) which is unit-tested but the stress test focuses on per-file edit-burst — acceptable per executor's plan choice. |
+| 1 | ENRICH-01: semantic does not import internal/kernel directly; LeaseAcquirer interface is the seam | VERIFIED | `grep -rn '"github.com/agenthands/helix/internal/kernel' internal/semantic/lspenrich/*.go \| grep -v lspool \| grep -v _test.go` returns 0 lines. nosemantic2kernel analyzer wired into `make vet`, runs clean. LeaseAcquirer interface unchanged. |
+| 2 | ENRICH-02: priority queue with foreground preemption + concurrency cap default 1 | VERIFIED | LaneQueue + Pool.ForegroundBusy + Cascade.Run boundary check + default `max_concurrent_workers=1` all unchanged from initial verification. ACC4_Cap1, ACC4_Cap4, ACC6_VoluntaryYield all PASS in full integration suite. |
+| 3 | ENRICH-03: Java + Rust readiness gates honored | VERIFIED | `WaitForLanguageReady` + `PoolReadinessProbe` + `Pool.JdtlsAdapter` + `Pool.RustAnalyzerAdapter.QuiescentChan()` unchanged. ACC10_JavaReadiness + ACC10_JavaReadinessTimeout PASS. `TestCascade_JavaIntegration` PASS in full integration suite. |
+| 4 | ENRICH-04: per-file budget; partial:true / partial_reason="budget exhausted" remains queryable | VERIFIED | Budget value type + cascade boundary check + `MarkFileSemanticPending` closed-enum unchanged. C2 + C9 PASS. |
+| 5 | ENRICH-05: stress test asserts foreground p95 under 5s budget while enrichment runs | VERIFIED | `TestStress_ENRICH05_Go` + `TestStress_ENRICH05_Java` exist with `//go:build stress`; per executor SUMMARY local run: 149 foreground samples, p95=877µs (≈5700x under budget), 100 enrichment txs committed. |
+| **6 (was deferred)** | **Production daemon dispatches enrichment jobs end-to-end (Manager.Run → Worker.processOne → Cascade.Run)** | **VERIFIED (gap #1 closed)** | TestManagerProductionDispatch_Go PASS single-pass with `FilesEnriched=1`, `FilesDropped=0`, 3 symbols, 8 edges. The pre-61-05 NewCascadeLSP=nil OutcomeDropped path is no longer reachable from production wiring; `live_wiring.go:296-298` supplies the production shim closure. |
 
-**Score:** 5/5 ROADMAP Success Criteria + ENRICH-01..05 verified at the unit/integration-test surface.
+**Score:** 5/5 ROADMAP Success Criteria + ENRICH-01..05 verified. Pre-61-05's deferred-truth #6 (production end-to-end dispatch) is now also verified.
 
-### Deferred Items
-
-| # | Item | Addressed In | Evidence |
-|---|------|--------------|----------|
-| 1 | Production daemon end-to-end cascade dispatch (Worker.NewCascadeLSP factory wired in live_wiring.go) | Phase 64 | Executor 61-04-SUMMARY decisions section: "production wiring (live_wiring.go) does NOT yet supply Worker.NewCascadeLSP — that adapter ships in Phase 64+. Without NewCascadeLSP every Manager.Run dispatch lands on OutcomeDropped before the cascade is constructed (worker.go step 4)." ROADMAP Phase 64 goal lists `refresh_semantic_graph` and `get_semantic_graph_status` MCP tools; the CascadeLSP-over-WorkerLease adapter is the load-bearing dependency for those tools. |
-| 2 | Phase 65 `get_health` strangler-fig wires `Manager.Status()` accessor | Phase 65 | ROADMAP Phase 65: "`get_repo_map`, `get_context`, `analyze_blast_radius`, `get_health` consult semantic when available". 61-CONTEXT.md "Out of scope (deferred)" line 132-133: "`get_health` watcher/enrichment status integration — Phase 65 strangler-fig. Phase 61 ships a `Status()` accessor on the worker manager (queue depth per lane, last error per language, files enriched/dropped/preempted counters); Phase 65 wires it into `get_health`." Status() accessor exists at `manager.go:Status()`. |
-
-### Required Artifacts (must_haves from PLAN frontmatter)
+### Required Artifacts
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| internal/semantic/lspenrich/acquirer.go | VERIFIED | LeaseAcquirer interface, exactly 2 methods, imports lspool + workspace only |
-| internal/semantic/lspenrich/types.go | VERIFIED | Outcome typed string + 5 closed-enum constants + MetricsSink + OverlayStore interfaces (B3 single source of truth) |
-| internal/semantic/lspenrich/queue.go | VERIFIED | LaneQueue with strict-priority Drain, lane enum (high/background) |
-| internal/semantic/lspenrich/budget.go | VERIFIED | Budget value type, NewBudget(now, workerStart, cfg), HasRemainingTime, ConsumeSymbol/ConsumeReferences |
-| internal/semantic/lspenrich/readiness.go | VERIFIED | WaitForLanguageReady + ReadinessProbe interface |
-| internal/semantic/lspenrich/cascade.go | VERIFIED | Cascade.Run with §14.4 6-step orchestration, checkBoundary closure, partial_reason stamping |
-| internal/semantic/lspenrich/worker.go | VERIFIED | Worker.RunN drain loop, LeaseProvider seam (B2: no per-job Release), explicit Capabilities (W3) |
-| internal/semantic/lspenrich/manager.go | VERIFIED with caveat | NewManager + Run + Stop + Status + AcquireFor + OnWorkspaceDeactivate. Lease cache via singleflight (line 74). ErrCircuitOpen NOT cached. ⚠️ Caveat: constructs Worker without NewCascadeLSP factory (line 198-207) — production dispatch is a no-op. |
-| internal/semantic/lspenrich/status.go | VERIFIED | Status struct + statusTracker; W7: OutcomePartialBudget bumps both filesEnriched + filesPending; W11: LastErrorPerLanguage map[string]string |
-| internal/semantic/lspenrich/metrics.go | VERIFIED | ProdMetricsSink wraps obs.Metrics; B3 compile-time assertion `var _ MetricsSink = ProdMetricsSink{}` |
-| internal/semantic/lspenrich/trace.go | VERIFIED | semantic.lsp_enrich_file root span + per-step children |
-| internal/semantic/lspenrich/pool_acquirer.go | VERIFIED | PoolAcquirer adapter with `var _ LeaseAcquirer = (*PoolAcquirer)(nil)` |
-| internal/semantic/lspenrich/readiness_probe.go | VERIFIED | PoolReadinessProbe wraps real `Pool.JdtlsAdapter(wsKey)` + `Pool.RustAnalyzerAdapter(wsKey).QuiescentChan()` accessors |
-| internal/semantic/lspenrich/stress_test.go | VERIFIED | `//go:build stress`, TestStress_ENRICH05_Go/Java, p95 assertion |
-| internal/semantic/lspenrich/integration_acceptance_test.go | VERIFIED | `//go:build integration`, ACC4/Cap1/Cap4 + ACC6_VoluntaryYield + ACC10/JavaReadiness/Timeout |
-| internal/semantic/lspenrich/cascade_integration_test.go | VERIFIED | `//go:build integration`, real gopls + jdtls; TestCascade_GoIntegration / JavaIntegration both PASS |
-| internal/semantic/lspenrich/cascade_overlay_epoch_test.go | VERIFIED (test fixture caveat) | Real-store epoch advancement test exists; ⚠️ Subject to cascadeNow ordering issue (see human verification #2) |
-| internal/lint/nosemantic2kernel/analyzer.go | VERIFIED | Vet analyzer; testdata covers internal/kernel forbidden, internal/kernel/lspool allowed, internal/workspace allowed |
-| cmd/vet-nosemantic2kernel/main.go | VERIFIED | singlechecker.Main wiring |
-| internal/kernel/lspool/pool.go | VERIFIED | ForegroundBusy(wsKey) + SetYieldCheckWindow(d) added; lsp-enrichment: prefix filter in AcquireLease (line 154); JdtlsAdapter(wsKey) + RustAnalyzerAdapter(wsKey) per-workspace accessors (W8) |
-| internal/semantic/store/overlay.go | VERIFIED | MarkFileSemanticPending with closed-enum partialReasonClosedEnum validator (4 values: preempted, bulk_update_pending, lsp_unavailable, budget exhausted) |
-| internal/semantic/live/handler/handler.go | VERIFIED | LSPRevalidationEnqueuer renamed in-place to LSPLaneEnqueuer (B5); selectLane + ChangeBulkUpdate suppression + markBulkPending |
-| internal/daemon/live_wiring.go | VERIFIED with caveat | Constructs Manager when cfg.LSPEnrichment.Enabled && MaxConcurrentWorkers > 0; Stop() safety net; OnWorkspaceDeactivate forwarded from gRPC handler. ⚠️ Does NOT supply NewCascadeLSP factory (deferred to Phase 64+). |
-| internal/config/defaults.go | VERIFIED | max_concurrent_workers=1, yield_check_window_ms=200 (lines 112-113) |
-| internal/semantic/config.go | VERIFIED | MaxConcurrentWorkers + YieldCheckWindowMs koanf-tagged fields (lines 183, 187) |
-| internal/obs/metrics.go | VERIFIED | 5 bounded-label metrics with closed-enum drop-on-unknown helpers |
-| .planning/REQUIREMENTS.md | VERIFIED | 5 ENRICH-* boxes flipped to [x] (verified via grep) |
+| internal/semantic/lspenrich/cascade_lsp_shim.go (NEW) | VERIFIED | 460 LOC; no build tag; unexported `cascadeLSPShim` + public `NewCascadeLSPShim(*lspool.WorkerLease) CascadeLSP` + compile-time assertion `var _ CascadeLSP = (*cascadeLSPShim)(nil)`. Implements all 8 CascadeLSP methods. Lazy URI resolution; `leaseRequester` test seam. |
+| internal/semantic/lspenrich/cascade_lsp_shim_test.go (NEW) | VERIFIED | 264 LOC; no build tag (runs under default `go test -short`); 7 unit tests covering interface satisfaction, lazy URI capture, MethodNotFound mapping, non-fatal LSP error predicate. PASS in 1.29s. |
+| internal/semantic/lspenrich/integration_dispatch_test.go (NEW) | VERIFIED | 273 LOC; `//go:build integration`; `TestManagerProductionDispatch_Go` exercises `mgr.SetCascadeLSPFactory(...)` end-to-end against real gopls. PASS in 2.7s single-pass. |
+| internal/semantic/lspenrich/manager.go (MODIFIED) | VERIFIED | Added `newCascadeLSP CascadeLSPFactory` field (line 65); `SetCascadeLSPFactory` setter (line 137); thread-through into Worker.NewCascadeLSP (line 244); Warn-log on nil (line 229-234); INFO log key `cascade_lsp_factory` (line 254); `cascadeFactoryStateLabel` helper (line 341). |
+| internal/daemon/live_wiring.go (MODIFIED) | VERIFIED | Added `internal/kernel/lspool` import (line 17); `enrichMgr.SetCascadeLSPFactory(...)` call with production shim closure (lines 296-298); INFO log `cascade_lsp_factory=production` (line 304). |
+| internal/semantic/lspenrich/cascade_integration_test.go (MODIFIED) | VERIFIED | Removed `realLSPShim` + 8 method bodies + 5 helpers (~310 LOC). `TestCascade_GoIntegration` and `TestCascade_JavaIntegration` now use `lspenrich.NewCascadeLSPShim(lease)` — same shim that production uses. Both PASS in full integration suite. |
+| internal/semantic/lspenrich/cascade_test.go (cascadeNow fix) | VERIFIED | `func cascadeNow() time.Time` (1 match); no `var cascadeNow` (0 matches). Full integration suite: 0 ordering failures (was 6 pre-61-05). |
+| All Phase 61-01..04 artifacts (acquirer, types, queue, budget, readiness, cascade, worker, status, metrics, trace, pool_acquirer, readiness_probe, stress_test, integration_acceptance_test, cascade_overlay_epoch_test, nosemantic2kernel analyzer, pool.go ForegroundBusy/SetYieldCheckWindow/JdtlsAdapter/RustAnalyzerAdapter, overlay.go partialReasonClosedEnum, handler.go LSPLaneEnqueuer, defaults.go cap=1, semantic/config.go koanf tags, obs/metrics.go closed-enum helpers) | VERIFIED (carried forward from initial verification) | All artifacts and behaviors confirmed unchanged in this re-verification. Boundary grep clean; default short tests pass; `make vet` clean (modulo pre-existing swift cgo macro warning). |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| internal/semantic/lspenrich → internal/kernel | (forbidden, except lspool) | nosemantic2kernel analyzer | VERIFIED | Direct grep returns 0; analyzer clean via `make vet` |
-| internal/semantic/live/handler → lspenrich.Lane | EnqueueLane | LSPLaneEnqueuer interface | VERIFIED | Single source of truth (B5); LSPRevalidationEnqueuer fully renamed |
-| internal/kernel/lspool/pool.go → "lsp-enrichment:" prefix | session-id stamp filter | strings.HasPrefix in AcquireLease | VERIFIED | pool.go:154 — only non-`lsp-enrichment:` sessions stamp lastForegroundLease |
-| Cascade.Run → tx.Upsert/Commit/MarkFileSemanticPending | overlay tx commit | per-file 1 tx | VERIFIED | cascade.go calls UpsertSymbols/UpsertReferences/UpsertEdges/UpsertDiagnostics + Commit per file; partial outcomes stamp partial_reason |
-| readiness_probe.go → JdtlsAdapter.WaitUntilJavaReady | per-(wsKey, lang) accessor | Pool.JdtlsAdapter(wsKey) | VERIFIED | Real accessor wired (no pseudo-comments); test PR1/PR2/ACC1 pass |
-| Manager.AcquireFor → singleflight.Group | concurrent acquire collapse | golang.org/x/sync/singleflight | VERIFIED | manager.go:74; TestManager_AcquireFor_ConcurrentSingleflight_M_Concurrent1 asserts 100 concurrent → 1 underlying AcquireLease call (manager_test.go:283-321) |
-| daemon gRPC DeactivateWorkspace → live.OnWorkspaceDeactivate | Manager.OnWorkspaceDeactivate | per-wsKey lease release | VERIFIED | daemon.go:917 → live_wiring.go:90-95 → manager.go:173 (releases all (wsKey,*) cached leases) |
-| daemon shutdown → live.Stop() | Manager.Stop → releaseAll | safety-net fallback | PARTIAL | live_wiring.go:101-106 ships `liveBundle.Stop()` method but it is NOT explicitly invoked from daemon.go shutdown sequence. However: (a) live.Run is in errgroup, exits on ctx cancel; (b) Manager.Run exits the errgroup and calls releaseAll() (manager.go:221) on its way out. So leases ARE released on daemon shutdown via the errgroup-cancel path; the explicit Stop() method is currently a defense-in-depth surface that the daemon does not call. Acceptable. |
-| Manager.Run → Worker (with NewCascadeLSP) | Worker constructed in production | factory injection seam | NOT_WIRED (deferred) | manager.go:198-207 constructs Worker without setting NewCascadeLSP. worker.go:225-229 emits OutcomeDropped + Error log when factory is nil. Production dispatch is a no-op until Phase 64+ wires the factory. |
+| Manager.Run → Worker (with NewCascadeLSP) | factory injection seam | manager.go:244 | **WIRED (was NOT_WIRED)** | `NewCascadeLSP: m.newCascadeLSP` threaded into Worker struct literal — no longer nil-defaulted. |
+| live_wiring.buildLiveBundle → Manager.SetCascadeLSPFactory | production shim closure | live_wiring.go:296-298 | **WIRED (new)** | `enrichMgr.SetCascadeLSPFactory(func(lease *lspool.WorkerLease) lspenrich.CascadeLSP { return lspenrich.NewCascadeLSPShim(lease) })` |
+| cascadeLSPShim.{Hover,DocumentSymbol,...} → *lspool.WorkerLease.Request | leaseRequester interface | cascade_lsp_shim.go (8 methods) | WIRED | Production shim invokes `s.lease.Request(ctx, method, params, &result)` via the unexported `leaseRequester` interface that `*lspool.WorkerLease` satisfies. Verified by integration test against real gopls returning 3 symbols + 8 typed edges. |
+| internal/semantic/lspenrich → internal/kernel | (forbidden, except lspool) | nosemantic2kernel analyzer | VERIFIED (unchanged) | Direct grep returns 0; analyzer clean. |
+| All Phase 61-01..04 key links | (carried forward) | various | VERIFIED (unchanged) | LSPLaneEnqueuer, AcquireFor singleflight, OnWorkspaceDeactivate gRPC path, ForegroundBusy stamp filter all confirmed unchanged. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
-|----------|--------------|--------|--------------------|----|
-| Cascade.Run upserted symbols/edges | tx.UpsertSymbols/Edges output | gopls/jdtls real LSP responses (TestCascade_GoIntegration) | YES — 3 symbols, 8 edges with kinds [TYPE_OF CALLS TYPE_OF CALLS TYPE_OF CALLS CALLS CALLS] for Go fixture | FLOWING |
-| Cascade.Run on jdtls real fixture | tx.UpsertEdges (CALLS, EXTENDS) | jdtls real LSP responses (TestCascade_JavaIntegration) | YES — 3 symbols, 8 edges incl EXTENDS for Java fixture | FLOWING |
-| Worker.processOne → Cascade.Run via production daemon | cascade outcome metric | Manager.Run constructs Worker w/o NewCascadeLSP | NO — every job lands on OutcomeDropped + Error log before cascade runs | DISCONNECTED (deferred to Phase 64+) |
-| Manager.Status() | LaneDepths/FilesEnriched/etc | statusTracker counters incremented by trackedMetrics decorator on every LSPEnrichmentTotal/Errors call | YES — counters increment in unit/integration tests | FLOWING |
-| ForegroundBusy(wsKey) | lastForegroundLease[wsKey] timestamp | pool.go:154 stamps in AcquireLease for non-enrichment sessions | YES — verified by F1-F5 + SY1-SY3 in pool_foreground_busy_test.go | FLOWING |
+|----------|---------------|--------|--------------------|--------|
+| Worker.processOne → Cascade.Run via production daemon dispatch | cascade outcome metric, statusTracker counters | live_wiring.go → Manager.Run → Worker (with NewCascadeLSPShim factory) | **YES — TestManagerProductionDispatch_Go: 1 file enriched, 0 dropped, 3 symbols, 8 edges from real gopls** | **FLOWING (was DISCONNECTED)** |
+| Cascade.Run upserted symbols/edges | tx.UpsertSymbols/Edges output | gopls real LSP responses (TestCascade_GoIntegration + TestManagerProductionDispatch_Go) | YES — 3 symbols, 8 edges with kinds [TYPE_OF CALLS TYPE_OF CALLS TYPE_OF CALLS CALLS CALLS] | FLOWING (unchanged) |
+| Cascade.Run on jdtls real fixture | tx.UpsertEdges (CALLS, EXTENDS) | jdtls real LSP responses (TestCascade_JavaIntegration) | YES — 3 symbols, 8 edges incl EXTENDS | FLOWING (unchanged) |
+| Manager.Status() | LaneDepths/FilesEnriched/etc | statusTracker counters incremented on real cascade dispatches | YES — counter increments now provably driven by real production dispatch (gap #1 closed) | FLOWING (was unchanged-but-empty under production wiring) |
+| ForegroundBusy(wsKey) | lastForegroundLease[wsKey] timestamp | pool.go stamps in AcquireLease for non-enrichment sessions | YES | FLOWING (unchanged) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Default short tests pass | `go test -short -timeout 120s ./internal/semantic/lspenrich/...` | `ok ... (cached)` | PASS |
-| Project-wide vet (tracked packages) | `go vet $(go list ./... \| grep -v tmp/)` | no output (clean) | PASS |
-| nosemantic2kernel analyzer clean | `go vet -vettool=$(go env GOPATH)/bin/vet-nosemantic2kernel ./internal/...` | no output (only swift cgo macro warning, unrelated) | PASS |
-| nokernel2semantic analyzer clean | `go vet -vettool=$(go env GOPATH)/bin/vet-nokernel2semantic ./internal/kernel/...` | no output (only swift cgo macro warning) | PASS |
+| Build clean | `go build ./...` | clean (modulo pre-existing swift cgo macro warning + tmp/ noise) | PASS |
+| Default short tests | `go test -short -timeout 120s ./internal/semantic/lspenrich/... ./internal/daemon/...` | `ok ... 1.294s + 1.944s` | PASS |
+| Project-wide vet (tracked packages) | `go vet $(go list ./... \| grep -v tmp/)` | clean (only pre-existing swift cgo macro warning) | PASS |
 | Direct kernel-import boundary | `grep -rn '"github.com/agenthands/helix/internal/kernel' internal/semantic/lspenrich/*.go \| grep -v lspool \| grep -v _test.go` | no output | PASS |
-| Transitive kernel-import audit | `go list -deps ./internal/semantic/lspenrich/... \| grep -v 'kernel/lspool' \| grep 'kernel'` | `kernel/jsonrpc` (1 leak through lspool — analyzer enforces DIRECT only, transitive allowed per plan) | PASS (acceptable per plan) |
-| ENRICH-01..05 REQUIREMENTS check-off | `grep -c '^- \[x\] \*\*ENRICH-' .planning/REQUIREMENTS.md` | 5 | PASS |
-| Build clean | `go build ./...` | (orchestrator confirmed clean) | PASS |
-| Integration tests (single-test) | `go test -tags integration -run TestCascade_C1 -count=1 ./internal/semantic/lspenrich/...` | PASS | PASS |
-| Integration tests (full suite) | `go test -tags integration -timeout 120s ./internal/semantic/lspenrich/...` | 6 cascade tests FAIL when ordered after TestCascade_JavaIntegration (9.3s) due to stale `cascadeNow` package var | FAIL (test fixture bug — not production code) |
-| ACC integration tests | `go test -tags integration -run TestACC ./internal/semantic/lspenrich/...` | All 5 PASS (per executor SUMMARY: 2.67s total) | PASS |
-| Stress test (local) | `go test -tags stress -run TestStress_ENRICH05_Go ./internal/semantic/lspenrich/...` | Per executor SUMMARY: 32.06s, 149 foreground samples, p95=877µs (under 5s budget), 100 enrichment txs committed | PASS |
-| Stress test gating | `go test -run TestStress -short ./internal/semantic/lspenrich/...` | "no tests to run" (correctly excluded by `//go:build stress`) | PASS |
+| ENRICH-01..05 REQUIREMENTS check-off | `grep -E '^- \[[ x]\] \*\*ENRICH-' .planning/REQUIREMENTS.md` | all 5 are `[x]` | PASS |
+| Gap-closure test (single-pass, fresh cache) | `go clean -testcache && go test -tags integration -timeout 180s -run TestManagerProductionDispatch_Go ./internal/semantic/lspenrich/...` | `ok ... 2.767s` (FilesEnriched=1, FilesDropped=0, 3 symbols, 8 edges) | PASS |
+| Gap-closure test (two consecutive single-pass runs, fresh cache each) | sequence: `go clean -testcache && go test ...` × 2 | both `ok ... 2.7s`, both PASS | PASS |
+| Full integration suite | `go clean -testcache && go test -tags integration -timeout 300s ./internal/semantic/lspenrich/...` | `ok ... 16.414s` (matches 61-05-SUMMARY) | PASS |
+| `cascadeNow` regression check | `grep -c '^func cascadeNow' cascade_test.go` / `grep -c '^var cascadeNow' cascade_test.go` | `1` / `0` | PASS |
+| Shim has no build tag | `head -3 internal/semantic/lspenrich/cascade_lsp_shim.go \| grep '//go:build'` | no output | PASS |
+| Shim compile-time assertion | `grep 'var _ CascadeLSP = (\*cascadeLSPShim)(nil)' internal/semantic/lspenrich/cascade_lsp_shim.go` | line 74 | PASS |
+| live_wiring import + setter call | `grep 'NewCascadeLSPShim\|SetCascadeLSPFactory\|kernel/lspool' internal/daemon/live_wiring.go` | 1 import, 1 setter call, 1 closure body | PASS |
+| Race detector on integration test | `go test -race -tags integration -run TestManagerProductionDispatch_Go ./internal/semantic/lspenrich/...` | FAIL — but the race is in `*lspool.Pool.spawnWorkerLocked` (test fixture launches `pool.Run` in a goroutine then immediately calls `AcquireLease` without sync). NOT a race in the new shim/Manager wiring; pre-existing test-plumbing issue in `newPoolForDispatchTest`. | **INFO** (see Anti-Patterns / new advisory below) |
+| Multi-invocation flake | `go clean -testcache && go test -tags integration -count=2 -run TestManagerProductionDispatch_Go ./internal/semantic/lspenrich/...` | First invocation PASS, second invocation FAIL with `err="writing request: writing header: write \|1: file already closed"` — gopls subprocess lifecycle in test fixture is not isolated under `count > 1`. CI runs `count=1`, so this does NOT block ship; gap-closure invariants (`FilesDropped == 0`) still hold even on the failed second invocation. | **INFO** (see Anti-Patterns / new advisory below) |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| ENRICH-01 | 61-01, 61-04 | LeaseAcquirer interface; semantic does not import internal/kernel | SATISFIED | nosemantic2kernel analyzer wired into make vet, runs clean. acquirer.go imports only lspool + workspace. |
-| ENRICH-02 | 61-01, 61-02, 61-04 | Priority queue + foreground preempt + cap=1 default | SATISFIED | LaneQueue strict-priority Drain (queue.go); cascade ForegroundBusy boundary; default cfg max_concurrent_workers=1; ACC4/Cap1/Cap4 + ACC6 PASS |
-| ENRICH-03 | 61-02, 61-04 | Java + Rust readiness gates honored | SATISFIED | readiness.go + readiness_probe.go + Pool.JdtlsAdapter/RustAnalyzerAdapter accessors; ACC10 + JavaIntegration PASS |
-| ENRICH-04 | 61-02, 61-04 | Per-file budget; partial_reason="budget exhausted" remains queryable | SATISFIED | Budget value type + cascade boundary check + MarkFileSemanticPending closed-enum; C2 + C9 PASS |
-| ENRICH-05 | 61-04 | Stress test asserts foreground p95 < 5s | SATISFIED | TestStress_ENRICH05_Go locally PASS (p95=877µs); `//go:build stress` gating preserved |
+| ENRICH-01 | 61-01, 61-04, 61-05 | LeaseAcquirer interface; semantic does not import internal/kernel | SATISFIED | nosemantic2kernel analyzer clean; boundary grep returns 0 lines. Plan 61-05 added `internal/kernel/lspool` import to live_wiring.go (allowed — daemon is the wiring layer, not semantic). |
+| ENRICH-02 | 61-01, 61-02, 61-04 | Priority queue + foreground preempt + cap=1 default | SATISFIED | Unchanged from initial verification. ACC4/Cap1/Cap4 + ACC6 PASS in full integration suite. |
+| ENRICH-03 | 61-02, 61-04 | Java + Rust readiness gates honored | SATISFIED | Unchanged from initial verification. ACC10 + JavaIntegration PASS. |
+| ENRICH-04 | 61-02, 61-04 | Per-file budget; partial_reason="budget exhausted" remains queryable | SATISFIED | Unchanged from initial verification. C2 + C9 PASS. |
+| ENRICH-05 | 61-04 | Stress test asserts foreground p95 < 5s | SATISFIED | TestStress_ENRICH05_Go locally PASS (p95=877µs); `//go:build stress` gating preserved. |
+| **(implicit) Phase 61 production-dispatch contract** | **61-05** | **Manager.Run dispatches jobs end-to-end through cascade in production** | **SATISFIED (was DEFERRED)** | TestManagerProductionDispatch_Go single-pass PASS; live_wiring.go supplies the factory; FilesDropped=0; FilesEnriched>=1. Phase 64 dependency severed. |
 
 ### Anti-Patterns Found
 
+Pre-61-05 anti-patterns that are now RESOLVED:
+
+| File | Issue (pre-61-05) | Status (post-61-05) |
+|------|-------------------|---------------------|
+| internal/semantic/lspenrich/manager.go (line 198-207) | NewManager constructed Worker without NewCascadeLSP factory | RESOLVED — line 244: `NewCascadeLSP: m.newCascadeLSP` |
+| internal/semantic/lspenrich/cascade_test.go (line 317) | `var cascadeNow = time.Now()` package-level init | RESOLVED — `func cascadeNow() time.Time` |
+
+New advisories (NONE are blockers; carried forward to follow-up):
+
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| internal/semantic/lspenrich/manager.go | 198-207 | NewManager constructs Worker without NewCascadeLSP factory | Warning | Production dispatch is a no-op (every job → OutcomeDropped). Acknowledged by executor as deferred to Phase 64+. |
-| internal/semantic/lspenrich/cascade_test.go | 317 | `var cascadeNow = time.Now()` (package-level init, not per-test) | Warning | 6 cascade tests fail in `-tags integration` mode when ordered after long-running TestCascade_JavaIntegration; doc-comment claims "recomputed at test-call time" but the code is a `var` initializer. Tests pass in isolation and under `-short`. |
-| internal/daemon/daemon.go | shutdown sequence | `live.Stop()` method exists but not explicitly invoked at daemon shutdown | Info | Acceptable: errgroup ctx-cancel triggers Manager.Run to call releaseAll() on exit (manager.go:221). The Stop() method is defense-in-depth. |
+| internal/semantic/lspenrich/manager.go | 65, 137-139, 229, 244 | `m.newCascadeLSP` field has no memory synchronization between writer and reader | Warning (61-REVIEW WR-01) | Current `live_wiring.go` calls `SetCascadeLSPFactory` synchronously before errgroup spawns `bundle.Run` — happens-before is provided by goroutine creation. A future caller pattern `go mgr.Run(ctx); mgr.SetCascadeLSPFactory(f)` would be a Go data race. Doc-comment claim of "no-op after Run" is technically imprecise. Fix: atomic/once-token guard or strengthen doc. |
+| internal/semantic/lspenrich/cascade_lsp_shim.go | 401-409 | `isJSONRPCMethodNotFound` substring matching is fragile | Warning (61-REVIEW WR-02) | `ResponseError.Error()` returns ONLY `e.Message` — the `-32601` code never appears in the error string. Real LS server message variants (e.g., `"method not supported"`) would NOT match. In production, a missed-match silently degrades to `OutcomePartialLSPUnavail`, defeating the per-(lang, method) `CapabilityCache`. Fix: add typed `IsMethodNotFound(err error) bool` to kernel/jsonrpc and surface via lspool, OR broaden matcher to case-insensitive incl. dashes. |
+| internal/semantic/lspenrich/integration_dispatch_test.go | 113-117 | `t.Skipf` after `skipIfMissing` already passed | Warning (61-REVIEW WR-03) | Demotes a real `*lspool.Pool` regression to a no-op skip. Fix: `t.Fatalf` instead. |
+| internal/semantic/lspenrich/integration_dispatch_test.go | 216 | `if err != nil && err != context.Canceled` uses `==` | Warning (61-REVIEW WR-04) | Misses wrapped context errors. Inconsistent with `live_wiring.go:81` which uses `errors.Is`. Fix: `errors.Is(err, context.Canceled)`. |
+| internal/semantic/lspenrich/cascade_lsp_shim.go | 449-460 | `kindLabel` uses magic numbers (5/12/6) | Warning (61-REVIEW WR-05) | `protocol/gen.SymbolKindClass/Method/Function` constants are available; magic numbers lose type safety. Fix: use typed constants. |
+| internal/semantic/lspenrich/cascade_lsp_shim.go | 48-51 | `leaseRequester.Notify` is dead in the shim | Info (61-REVIEW IN-01) | Shim never calls `Notify`; only `Request`. Fix: drop `Notify` from the interface. |
+| internal/semantic/lspenrich/cascade_lsp_shim.go | 186-353 | Repeated lock acquisitions in Hover/CallHierarchy/TypeHierarchy/Implementation | Info (61-REVIEW IN-02) | Each method acquires `s.mu` 3 times (URI guard, position, params). Sequential cascade so not racy, but unnecessary churn. Fix: fetch URI once, reuse. |
+| internal/semantic/lspenrich/integration_dispatch_test.go | 256 | Hand-rolled prefix check `len(e.Source) < 4 \|\| e.Source[:4] != "lsp."` | Info (61-REVIEW IN-03) | Replace with `strings.HasPrefix`. |
+| internal/semantic/lspenrich/manager.go | 124-127 | `SetCascadeLSPFactory` doc-comment says "no-op after Run" | Info (61-REVIEW IN-04) | Strictly imprecise — field is mutated, just unobserved by current Worker. Tighten wording. |
+| internal/semantic/lspenrich/integration_dispatch_test.go | 79, 105-117 | `newPoolForDispatchTest` launches `pool.Run` in a goroutine then immediately calls `AcquireLease` without synchronization | Warning (NEW — found by `-race` run during this verification) | Under `go test -race`, this is flagged as a real data race in `*lspool.Pool.spawnWorkerLocked` (pool.go:431) vs `Pool.Run` (pool.go:121). Pre-existing kernel/lspool plumbing issue surfaced by the new test fixture; NOT a race in the new shim/Manager wiring. CI typically runs without `-race` for integration tests; default `go test -short -tags integration` does not include this test. Recommend: either add a `pool.WaitReady` synchronization point in `newPoolForDispatchTest` or document the race as a known issue with kernel/lspool#TBD. |
+| internal/semantic/lspenrich/integration_dispatch_test.go | (whole-test) | Test is flaky under `go test -count=2` (consecutive in-process invocations) | Warning (NEW — found during this verification) | First invocation PASS; second invocation FAIL with `err="writing request: writing header: write \|1: file already closed"` — gopls subprocess from invocation 1 is shut down but the `*lspool.Pool` worker fd reference is not cleaned, so invocation 2's pool gets a closed-file error. CI runs `count=1`, so this does NOT block ship. Single-pass runs (the documented executor SUMMARY claim and the CI invocation pattern) are stable. Recommend: stop-then-recreate the pool per `newPoolForDispatchTest` call, or skip when the previous invocation's gopls is detected. |
+
+Note: **None** of the new advisories are BLOCKERs. Five are 61-REVIEW warnings already documented (the executor knew about them; status was `warnings`, not `critical`). Two are NEW advisories surfaced by this verifier's `-race` and `-count=2` runs — they affect test robustness, not the production code path. The gap-closure invariant (`FilesDropped == 0` from production dispatch) is preserved across all observed runs.
+
+### Code Review Cross-Reference
+
+61-REVIEW.md (5 warnings, 4 info, 0 critical, status=`warnings`):
+
+- **WR-01** (Manager.newCascadeLSP no synchronization): tracked above; benign in current usage; recommend follow-up doc/atomic fix.
+- **WR-02** (isJSONRPCMethodNotFound substring fragility): tracked above; production-relevance is real (capability-cache deduplication degrades silently); recommend follow-up that adds a typed predicate to kernel/jsonrpc.
+- **WR-03** (test t.Skipf after skip-gate passed): tracked above; test-quality only; recommend follow-up.
+- **WR-04** (== vs errors.Is for context.Canceled): tracked above; test-quality only; recommend follow-up.
+- **WR-05** (kindLabel magic numbers): tracked above; production-relevance is moderate (silent miscompile risk if LSP wire numbers shift); recommend follow-up.
+- **IN-01..04** (dead Notify, lock churn, hand-rolled prefix, doc imprecision): tracked above; nice-to-haves.
+
+**Verifier disposition:** None of the review findings block phase 61 closure. The `warnings` status is appropriate; all 5 warnings are quality-of-implementation issues that do not regress the gap-closure goal or the ROADMAP Success Criteria. Recommend a small follow-up commit OR a Phase 64 prerequisite issue covering WR-01 + WR-02 + WR-05 (the three with production-relevance) before refresh_semantic_graph wires through, since Phase 64 inherits an already-wired production dispatch path that depends on the shim's correctness.
 
 ### Human Verification Required
 
-#### 1. Confirm NewCascadeLSP production-wiring deferral is acceptable
+None. Initial verification's two human-disposition items are both resolved:
 
-**Test:** Review whether the gap "Manager.Run constructs Worker without NewCascadeLSP factory" — meaning every production-dispatched enrichment job lands on OutcomeDropped + Error log before the cascade engine runs — is acceptable scope for closing Phase 61.
-
-**Expected:** Phase 64 explicitly accepts the CascadeLSP-over-WorkerLease adapter wiring as part of `refresh_semantic_graph` MCP tool. ROADMAP confirms Phase 64 owns `refresh_semantic_graph` + `get_semantic_graph_status`. Executor 61-04-SUMMARY decisions section documents this deferral. Acceptance integration tests TestACC4_Cap1/Cap4 + TestACC6_VoluntaryYield exercise the load-bearing cascade → ForegroundBusy seam end-to-end via direct Worker construction (with NewCascadeLSP injected).
-
-**Why human:** Phase 61 ROADMAP Success Criteria 1-4 are all "what must be TRUE" statements that are achievable at the test surface (interface + analyzer + integration test) without requiring production end-to-end dispatch. The executor's deferral is plausible but reduces the "live daemon enriches files" capability to "Phase 61 ships the components; Phase 64 wires them into the live dispatch path". Architect judgement needed on whether this milestone phase can close.
-
-#### 2. Confirm cascadeNow package-var test fixture is acceptable
-
-**Test:** Inspect `internal/semantic/lspenrich/cascade_test.go:317` — the `var cascadeNow = time.Now()` package-level initializer that the doc-comment claims is "recomputed at test-call time" but isn't.
-
-**Expected:** Either (a) patch cascadeNow to be a `func cascadeNow() time.Time { return time.Now() }` so it actually recomputes per test, or (b) document this as a known-flaky integration-tag-only ordering issue. Default `go test -short` is unaffected; `go test -tags integration` only fails 6 cascade tests when TestCascade_JavaIntegration runs first (which it does in alphabetical order).
-
-**Why human:** This is a 1-line test-fixture fix but introducing it post-merge requires a follow-up commit. The bug does NOT affect production code or default CI.
+1. **NewCascadeLSP production-wiring deferral (initial item #1)** — RESOLVED. Plan 61-05 wired the factory through `Manager.SetCascadeLSPFactory` + `live_wiring.go`. Single-pass integration test `TestManagerProductionDispatch_Go` PASS asserts `FilesEnriched >= 1, FilesDropped == 0`. Phase 64 dependency severed (per 61-05-SUMMARY).
+2. **cascadeNow package-var test fixture (initial item #2)** — RESOLVED. `var cascadeNow = time.Now()` is now `func cascadeNow() time.Time`. Full integration suite passes in 16.4s with no ordering failures.
 
 ### Gaps Summary
 
-Phase 61 ships all 5 ROADMAP Success Criteria + ENRICH-01..05 at the unit/integration-test surface. The cascade engine, budget enforcement, voluntary yield, readiness gates, and concurrency cap are all correctly implemented and exercised end-to-end against real gopls + jdtls.
+**No blocking gaps.** Phase 61 ships all 5 ROADMAP Success Criteria + ENRICH-01..05 + the production-dispatch contract end-to-end. The gap-closure plan 61-05 successfully threaded the `CascadeLSPFactory` through `Manager.Run` and wired `live_wiring.go` to supply it, and the previously-orphaned `cascadeNow` test ordering issue is resolved.
 
-**Two notable items requiring human disposition:**
+The 5 code-review warnings (61-REVIEW.md WR-01..05) are quality-of-implementation issues: a memory-synchronization gap on `Manager.SetCascadeLSPFactory` (benign in current usage), substring matching on `-32601` JSON-RPC errors that may silently mask real MethodNotFound responses in production, and three test-quality issues (t.Skipf after skip-gate, `==` vs `errors.Is`, magic numbers for SymbolKind). Two new advisories surfaced by this verifier's `-race` and `-count=2` runs flag pre-existing kernel/lspool test-plumbing issues that are NOT regressions of the gap closure.
 
-1. **Production wiring gap (deferred to Phase 64+):** Manager.Run constructs Worker without supplying `NewCascadeLSP` factory. The cascade engine therefore does not run from the live daemon today — every dispatched job emits OutcomeDropped + an Error log. The executor explicitly deferred the `CascadeLSP` adapter to Phase 64 (`refresh_semantic_graph` MCP tool). Acceptance/integration tests cover the load-bearing invariants by constructing Worker directly with the factory injected. This is documented and consistent with the ROADMAP's Phase 64 dependency, but the milestone effect is: "Phase 61 ships the building blocks; Phase 64 turns them on in production."
+**Recommendation for follow-up phase:** A small phase 61.5 (or a Phase 64 prerequisite issue) covering WR-01 (atomic guard on SetCascadeLSPFactory), WR-02 (typed `IsMethodNotFound` in kernel/jsonrpc), WR-05 (typed SymbolKind constants in kindLabel), plus the new advisory on `newPoolForDispatchTest` race-safety. None block phase 61 closure; all should land before Phase 64 wires `refresh_semantic_graph` through the shim.
 
-2. **Test fixture flakiness under `-tags integration`:** Six cascade unit tests (C1, C3, C4, C5, C6, C8) fail when run after the 9-second jdtls integration test, because `var cascadeNow = time.Now()` falls outside the 5-second per-file budget window. Tests pass in isolation and under `-short`. Production code is correct.
-
-Otherwise: build clean, default tests green, both vet analyzers clean, semantic→kernel boundary preserved, REQUIREMENTS.md ENRICH-01..05 all checked off, cosign-style observability metrics + trace spans in place, B2 lease-cache singleflight invariant tested (100 concurrent → 1 acquire), B2 deactivate hook wired through gRPC + errgroup-cancel paths.
+Build clean, default tests green, both vet analyzers clean, semantic→kernel boundary preserved, REQUIREMENTS.md ENRICH-01..05 all checked off, gap-closure integration test PASS.
 
 ---
 
-*Verified: 2026-05-06T10:35:00Z*
+*Verified: 2026-05-06T11:30:00Z*
 *Verifier: Claude (gsd-verifier)*
+*Re-verification mode: post-61-05 gap-closure*

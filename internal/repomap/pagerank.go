@@ -1,37 +1,23 @@
 package repomap
 
 import (
-	"math"
-	"sort"
+	"github.com/agenthands/helix/internal/graph"
 )
 
-// PageRank computes PageRank scores for all files in the graph using
-// power iteration. If personalization is non-nil and non-empty, it is
-// used as the teleportation vector (Personalized PageRank); otherwise
-// uniform teleportation is used.
-//
-// Parameters:
-//   - damping: probability of following a link (typically 0.85)
-//   - epsilon: convergence threshold (sum of abs rank differences)
-//   - maxIter: maximum number of iterations
-//   - personalization: optional map of file -> teleport weight
-//
-// Per T-28-02: maxIter caps computation to mitigate DoS on large graphs.
-func (g *FileGraph) PageRank(damping float64, epsilon float64, maxIter int, personalization map[string]float64) map[string]float64 {
+// snapshot copies the file/edge maps under g.mu.RLock so the engine can
+// run lock-free. Per D-04, the public FileGraph API is preserved.
+func (g *FileGraph) snapshot() (nodes []string, edges map[string]map[string]float64) {
 	g.mu.RLock()
+	defer g.mu.RUnlock()
 	n := len(g.Files)
 	if n == 0 {
-		g.mu.RUnlock()
-		return nil
+		return nil, nil
 	}
-
-	files := make([]string, 0, n)
+	nodes = make([]string, 0, n)
 	for f := range g.Files {
-		files = append(files, f)
+		nodes = append(nodes, f)
 	}
-
-	// Copy edges under lock.
-	edges := make(map[string]map[string]float64, len(g.Edges))
+	edges = make(map[string]map[string]float64, len(g.Edges))
 	for src, targets := range g.Edges {
 		dst := make(map[string]float64, len(targets))
 		for k, v := range targets {
@@ -39,114 +25,62 @@ func (g *FileGraph) PageRank(damping float64, epsilon float64, maxIter int, pers
 		}
 		edges[src] = dst
 	}
-	g.mu.RUnlock()
+	return nodes, edges
+}
 
-	// Initialize teleport vector.
-	teleport := make(map[string]float64, n)
-	if len(personalization) > 0 {
-		total := 0.0
-		for _, w := range personalization {
-			total += w
-		}
-		for f, w := range personalization {
-			teleport[f] = w / total
-		}
-		// Fill remaining nodes with small baseline.
-		for _, f := range files {
-			if _, ok := teleport[f]; !ok {
-				teleport[f] = (1.0 / float64(n)) * 0.01
-			}
-		}
-		// Re-normalize so sum = 1.0.
-		total = 0.0
-		for _, w := range teleport {
-			total += w
-		}
-		for f := range teleport {
-			teleport[f] /= total
-		}
-	} else {
-		for _, f := range files {
-			teleport[f] = 1.0 / float64(n)
-		}
+// toAnyMap converts a string-keyed personalization map to the engine's
+// `map[any]float64` shape. Returns nil for empty/nil input.
+func toAnyMap(p map[string]float64) map[any]float64 {
+	if len(p) == 0 {
+		return nil
 	}
-
-	// Initialize rank = teleport.
-	rank := make(map[string]float64, n)
-	for f, w := range teleport {
-		rank[f] = w
+	out := make(map[any]float64, len(p))
+	for k, v := range p {
+		out[k] = v
 	}
+	return out
+}
 
-	// Precompute which files have outgoing edges and their total weights.
-	outWeight := make(map[string]float64, len(edges))
-	for src, targets := range edges {
-		total := 0.0
-		for _, w := range targets {
-			total += w
-		}
-		outWeight[src] = total
+// PageRank computes PageRank scores for all files in the graph by
+// delegating to the deterministic engine in internal/graph.
+//
+// Per Phase 62 D-04, the FileGraph public API is preserved verbatim.
+// Per T-28-02: maxIter caps computation to mitigate DoS on large graphs.
+func (g *FileGraph) PageRank(damping float64, epsilon float64, maxIter int, personalization map[string]float64) map[string]float64 {
+	nodes, edges := g.snapshot()
+	if nodes == nil {
+		return nil
 	}
-
-	fn := float64(n)
-
-	for iter := 0; iter < maxIter; iter++ {
-		// Compute dangling rank: sum of rank for nodes with no outgoing edges.
-		danglingRank := 0.0
-		for _, f := range files {
-			if _, hasOut := outWeight[f]; !hasOut {
-				danglingRank += rank[f]
-			}
-		}
-
-		newRank := make(map[string]float64, n)
-
-		// Teleport + dangling redistribution component.
-		for _, f := range files {
-			newRank[f] = (1-damping)*teleport[f] + damping*danglingRank/fn
-		}
-
-		// Link component.
-		for src, targets := range edges {
-			tw := outWeight[src]
-			if tw == 0 {
-				continue
-			}
-			contribution := damping * rank[src] / tw
-			for dst, w := range targets {
-				newRank[dst] += contribution * w
-			}
-		}
-
-		// Check convergence.
-		diff := 0.0
-		for _, f := range files {
-			diff += math.Abs(newRank[f] - rank[f])
-		}
-		rank = newRank
-		if diff < epsilon {
-			break
-		}
-	}
-
-	return rank
+	return graph.PageRank(nodes, edges, graph.Options{
+		Damping:     damping,
+		Epsilon:     epsilon,
+		MaxIter:     maxIter,
+		Personalize: toAnyMap(personalization),
+	})
 }
 
 // RankFiles runs PageRank and returns files sorted descending by score.
 // Convenience wrapper with default epsilon=1e-6 and maxIter=100.
+//
+// Equal-score nodes are ordered by path ascending — the GRAPH-03
+// stable-key NodeID tiebreak that flows from graph.RankNodes.
 func (g *FileGraph) RankFiles(damping float64, personalization map[string]float64) []RankedFile {
-	scores := g.PageRank(damping, 1e-6, 100, personalization)
-	if scores == nil {
+	nodes, edges := g.snapshot()
+	if nodes == nil {
 		return nil
 	}
-
-	ranked := make([]RankedFile, 0, len(scores))
-	for path, score := range scores {
-		ranked = append(ranked, RankedFile{Path: path, Score: score})
-	}
-
-	sort.Slice(ranked, func(i, j int) bool {
-		return ranked[i].Score > ranked[j].Score
+	ranked := graph.RankNodes(nodes, edges, graph.Options{
+		Damping:     damping,
+		Epsilon:     1e-6,
+		MaxIter:     100,
+		Personalize: toAnyMap(personalization),
 	})
-
-	return ranked
+	if len(ranked) == 0 {
+		return nil
+	}
+	out := make([]RankedFile, 0, len(ranked))
+	for _, r := range ranked {
+		out = append(out, RankedFile{Path: r.Node, Score: r.Score})
+	}
+	return out
 }

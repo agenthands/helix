@@ -42,6 +42,7 @@ import (
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
+	"github.com/agenthands/helix/internal/semantic/types"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
 	"github.com/agenthands/helix/internal/treesitter"
@@ -158,6 +159,20 @@ type Daemon struct {
 	// level errgroup; per-workspace schedulers are spun up lazily in
 	// SetActivateCallback via rank.ensureScheduler.
 	rank *rankBundle
+
+	// typeResolver is the Phase 62 P05 type-resolver dispatcher — the
+	// 7-language registry (go / typescript / javascript / python / java /
+	// php / ruby) per D-11. nil when the semantic store is unavailable.
+	// Wired at bootstrap step 6g. Phase 64 will attach a consumer via
+	// SetSemanticGraph; until then the dispatcher is held on the daemon
+	// for later attachment.
+	typeResolver types.Resolver
+
+	// semanticGraphRanker is the optional ranker handle paired with the
+	// type-resolver dispatcher per RESEARCH Open Question 4. Typed `any`
+	// to avoid importing the rank engine's concrete type into this struct;
+	// Phase 64 will narrow it.
+	semanticGraphRanker any
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -356,6 +371,42 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			_ = rank.engine.SetVersionNotifier
 			logger.Info("rank engine wired to live handler post-commit hook")
 		}
+	}
+
+	// 6g. Phase 62 P05: type-resolver dispatcher.
+	//
+	// Constructed when the semantic store is open. The dispatcher carries
+	// 7 entries (go / typescript / javascript / python / java / php /
+	// ruby) per D-11; the JS alias is wired explicitly so it shows up in
+	// the bootstrap log alongside the others. Per RESEARCH Open Question
+	// 4 the dispatcher is paired with the rank engine via a single
+	// SetSemanticGraph setter; in Phase 62 the setter is optional —
+	// Phase 64 will attach the MCP-tool consumer.
+	//
+	// The per-language constructors and the EffectiveReader adapter live
+	// in type_resolver_wiring.go to keep this bootstrap step compact;
+	// the dispatcher constructor is invoked here directly so the
+	// daemon's registration site is one grep away.
+	var typeResolver types.Resolver
+	if semanticStore != nil {
+		reader := newTypeStoreAdapter(semanticStore)
+		tsResolver := tsTypeResolver(reader)
+		typeDispatcher := types.NewDispatcher(map[string]types.Resolver{
+			"go":         goTypeResolver(reader),
+			"typescript": tsResolver,
+			"javascript": tsResolver, // shared with TS (D-11)
+			"python":     pyTypeResolver(reader),
+			"java":       javaTypeStub(reader),
+			"php":        phpTypeStub(),
+			"ruby":       rubyTypeStub(),
+		})
+		typeResolver = typeDispatcher
+		logger.Info("type resolver registered",
+			"languages", []string{"go", "typescript", "javascript", "python", "java", "php", "ruby"},
+			"max_chain_depth", cfg.SemanticIndex.TypeResolution.MaxChainDepth,
+			"max_fixpoint_iterations", cfg.SemanticIndex.TypeResolution.MaxFixpointIterations,
+			"comment_parsers_enabled", cfg.SemanticIndex.Types.CommentParsersEnabled,
+		)
 	}
 
 	// 7. Create MCP server.
@@ -603,6 +654,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		semanticScheduler:       semanticScheduler,
 		live:                    live,
 		rank:                    rank,
+		typeResolver:            typeResolver,
 	}, nil
 }
 

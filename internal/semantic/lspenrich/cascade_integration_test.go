@@ -14,13 +14,19 @@
 // LS. Acceptance criterion #9 (61-CONTEXT.md): the Go fixture must produce
 // at least one CALLS edge; all produced edges must carry confidence=1.0,
 // validation_state="validated", and source prefix "lsp.".
+//
+// Phase 61 P05: the in-file CascadeLSP test fixture that previously
+// lived here was promoted to the production package as cascadeLSPShim
+// (internal/semantic/lspenrich/cascade_lsp_shim.go) and is constructed
+// via the public NewCascadeLSPShim(lease) constructor.  This integration
+// test exercises the SAME shim that internal/daemon/live_wiring.go wires
+// into Manager.SetCascadeLSPFactory in production — closing the
+// "production dispatch is a no-op" gap that 61-VERIFICATION.md flagged.
 
 package lspenrich_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -35,329 +41,8 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
-	gen "github.com/agenthands/helix/protocol/gen"
 	"github.com/agenthands/helix/internal/workspace"
 )
-
-// =============================================================================
-// Real-LSP shim — wraps a *lspool.WorkerLease and dispatches Cascade-LSP
-// calls to lease.Request with the canonical LSP method names.
-// =============================================================================
-
-// realLSPShim implements lspenrich.CascadeLSP against a live LSP via a
-// *lspool.WorkerLease. The shim translates the cascade-internal Symbol /
-// Reference / Edge types to/from LSP wire types using protocol/gen.
-//
-// Lease lifetime is the test caller's responsibility; the shim does NOT
-// release the lease (matches B2 invariant for the production cascade).
-type realLSPShim struct {
-	lease *lspool.WorkerLease
-	uri   string // "file://..." URI for the target file
-
-	mu sync.Mutex
-	// docSyms caches the documentSymbol result so callHierarchy / etc. can
-	// pick a position from it.
-	docSyms []gen.DocumentSymbol
-}
-
-func (s *realLSPShim) DocumentSymbol(ctx context.Context, _ string) ([]lspenrich.Symbol, error) {
-	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uri},
-	}
-	var raw json.RawMessage
-	if err := s.lease.Request(ctx, "textDocument/documentSymbol", params, &raw); err != nil {
-		return nil, err
-	}
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	// gopls returns []DocumentSymbol; some LSPs return []SymbolInformation —
-	// try DocumentSymbol first.
-	var docSyms []gen.DocumentSymbol
-	if err := json.Unmarshal(raw, &docSyms); err == nil && len(docSyms) > 0 {
-		s.mu.Lock()
-		s.docSyms = docSyms
-		s.mu.Unlock()
-		return symbolsFromDocumentSymbols(docSyms, s.uri), nil
-	}
-	// Fall back to SymbolInformation.
-	var syms []gen.SymbolInformation
-	if err := json.Unmarshal(raw, &syms); err == nil {
-		out := make([]lspenrich.Symbol, 0, len(syms))
-		for _, si := range syms {
-			out = append(out, lspenrich.Symbol{
-				Name: si.Name,
-				Path: uriToPath(si.Location.URI),
-				Kind: kindLabel(si.Kind),
-			})
-		}
-		return out, nil
-	}
-	return nil, nil
-}
-
-func symbolsFromDocumentSymbols(docs []gen.DocumentSymbol, uri string) []lspenrich.Symbol {
-	out := make([]lspenrich.Symbol, 0, len(docs))
-	var walk func(syms []gen.DocumentSymbol)
-	walk = func(syms []gen.DocumentSymbol) {
-		for _, s := range syms {
-			out = append(out, lspenrich.Symbol{
-				Name: s.Name,
-				Path: uriToPath(uri),
-				Kind: kindLabel(s.Kind),
-			})
-			if len(s.Children) > 0 {
-				walk(s.Children)
-			}
-		}
-	}
-	walk(docs)
-	return out
-}
-
-func (s *realLSPShim) DrainDiagnostics(_ string) []lspenrich.Diagnostic {
-	// Phase 61 v1 doesn't expose a diagnostics-buffer accessor on
-	// *lspool.WorkerLease. The real production wiring will hook the
-	// publishDiagnostics handler on the worker; for the integration test
-	// we return an empty slice (cascade handles len(diags)==0 gracefully).
-	return nil
-}
-
-// pickSymbolPosition returns the SelectionRange.Start of the first cached
-// documentSymbol — used as the (line, character) position for callHierarchy
-// and definition. Returns ok=false if no symbols are cached.
-func (s *realLSPShim) pickSymbolPosition(sym lspenrich.Symbol) (gen.Position, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, d := range s.docSyms {
-		if d.Name == sym.Name {
-			return d.SelectionRange.Start, true
-		}
-		// search children (gopls puts methods inside their type)
-		for _, c := range d.Children {
-			if c.Name == sym.Name {
-				return c.SelectionRange.Start, true
-			}
-		}
-	}
-	if len(s.docSyms) > 0 {
-		return s.docSyms[0].SelectionRange.Start, true
-	}
-	return gen.Position{}, false
-}
-
-func (s *realLSPShim) Hover(ctx context.Context, sym lspenrich.Symbol) (*lspenrich.Edge, error) {
-	pos, ok := s.pickSymbolPosition(sym)
-	if !ok {
-		return nil, nil
-	}
-	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uri},
-		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
-	}
-	var raw json.RawMessage
-	if err := s.lease.Request(ctx, "textDocument/hover", params, &raw); err != nil {
-		return nil, err
-	}
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	// Hover with a non-null body counts as a TYPE_OF edge with
-	// confidence=1.0 + source="lsp.hover".
-	return &lspenrich.Edge{
-		Kind:            "TYPE_OF",
-		Source:          "lsp.hover",
-		Confidence:      1.0,
-		ValidationState: "validated",
-	}, nil
-}
-
-func (s *realLSPShim) CallHierarchy(ctx context.Context, sym lspenrich.Symbol, _ int) ([]lspenrich.Edge, error) {
-	pos, ok := s.pickSymbolPosition(sym)
-	if !ok {
-		return nil, nil
-	}
-	prepareParams := map[string]any{
-		"textDocument": map[string]any{"uri": s.uri},
-		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
-	}
-	var items []gen.CallHierarchyItem
-	if err := s.lease.Request(ctx, "textDocument/prepareCallHierarchy", prepareParams, &items); err != nil {
-		return nil, err
-	}
-	if len(items) == 0 {
-		return nil, nil
-	}
-	// Outgoing calls from items[0] — these are the callees of the symbol,
-	// each producing one CALLS edge.
-	outParams := map[string]any{"item": items[0]}
-	var outgoing []map[string]any
-	if err := s.lease.Request(ctx, "callHierarchy/outgoingCalls", outParams, &outgoing); err != nil {
-		return nil, err
-	}
-	edges := make([]lspenrich.Edge, 0, len(outgoing))
-	for range outgoing {
-		edges = append(edges, lspenrich.Edge{
-			Kind:            "CALLS",
-			Source:          "lsp.callHierarchy",
-			Confidence:      1.0,
-			ValidationState: "validated",
-		})
-	}
-	return edges, nil
-}
-
-func (s *realLSPShim) TypeHierarchy(ctx context.Context, sym lspenrich.Symbol, _ int) ([]lspenrich.Edge, error) {
-	pos, ok := s.pickSymbolPosition(sym)
-	if !ok {
-		return nil, nil
-	}
-	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uri},
-		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
-	}
-	var items []gen.TypeHierarchyItem
-	if err := s.lease.Request(ctx, "textDocument/prepareTypeHierarchy", params, &items); err != nil {
-		// gopls returns MethodNotFound for prepareTypeHierarchy on
-		// non-type symbols; map to MethodNotFound so cascade continues.
-		if isJSONRPCMethodNotFound(err) {
-			return nil, lspenrich.ErrMethodNotFound
-		}
-		// gopls (and other LSes) often return non-fatal errors like
-		// "not a type name" / "no symbol at this position" when the
-		// position is on a non-type symbol (function, variable, etc.).
-		// These are not LS-unavailable conditions — they're "this
-		// capability doesn't apply to this symbol". Map them to a
-		// silent no-op so the cascade continues.
-		if isNonFatalLSPError(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	edges := make([]lspenrich.Edge, 0, len(items))
-	for range items {
-		edges = append(edges, lspenrich.Edge{
-			Kind:            "EXTENDS",
-			Source:          "lsp.typeHierarchy",
-			Confidence:      1.0,
-			ValidationState: "validated",
-		})
-	}
-	return edges, nil
-}
-
-func (s *realLSPShim) Implementation(ctx context.Context, sym lspenrich.Symbol) ([]lspenrich.Edge, error) {
-	pos, ok := s.pickSymbolPosition(sym)
-	if !ok {
-		return nil, nil
-	}
-	params := map[string]any{
-		"textDocument": map[string]any{"uri": s.uri},
-		"position":     map[string]any{"line": pos.Line, "character": pos.Character},
-	}
-	var raw json.RawMessage
-	if err := s.lease.Request(ctx, "textDocument/implementation", params, &raw); err != nil {
-		if isJSONRPCMethodNotFound(err) {
-			return nil, lspenrich.ErrMethodNotFound
-		}
-		if isNonFatalLSPError(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	var locs []gen.Location
-	if err := json.Unmarshal(raw, &locs); err != nil {
-		return nil, nil
-	}
-	edges := make([]lspenrich.Edge, 0, len(locs))
-	for range locs {
-		edges = append(edges, lspenrich.Edge{
-			Kind:            "IMPLEMENTS",
-			Source:          "lsp.implementation",
-			Confidence:      1.0,
-			ValidationState: "validated",
-		})
-	}
-	return edges, nil
-}
-
-func (s *realLSPShim) Definition(ctx context.Context, ref lspenrich.Reference) (*lspenrich.Edge, error) {
-	// Phase 61 v1 cascade ReferencesForSymbol returns synthetic refs only;
-	// for the integration test we return zero references so this method
-	// is never called. Stubbed for interface completeness.
-	return nil, nil
-}
-
-func (s *realLSPShim) ReferencesForSymbol(_ lspenrich.Symbol) []lspenrich.Reference {
-	// Empty — the integration test focuses on documentSymbol + hover +
-	// callHierarchy edges, which are sufficient to satisfy acceptance #9
-	// (≥ 1 CALLS edge for Go fixture).
-	return nil
-}
-
-// isJSONRPCMethodNotFound checks whether err's textual form contains the
-// canonical JSON-RPC -32601 marker. The kernel's jsonrpc layer wraps these
-// errors, but the wrapping is internal — for the integration test we use
-// a string-match (the cascade's own ErrMethodNotFound is the typed value
-// the cascade looks for).
-func isJSONRPCMethodNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "-32601") ||
-		strings.Contains(s, "MethodNotFound") ||
-		strings.Contains(s, "method not found")
-}
-
-// isNonFatalLSPError checks whether err looks like a soft "this capability
-// does not apply to this symbol" response from a real LSP — distinct from
-// a hard LS-unavailable failure. gopls returns errors like "not a type
-// name" / "no symbol at this position" for prepareTypeHierarchy /
-// prepareCallHierarchy when the cursor is on a non-type / non-callable
-// symbol; these are NOT MethodNotFound (the method exists, the input is
-// just inapplicable) but they're also not LS-unavailable. The cascade
-// should treat them as "no result, continue".
-func isNonFatalLSPError(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "not a type name") ||
-		strings.Contains(s, "no symbol at this position") ||
-		strings.Contains(s, "no identifier found") ||
-		strings.Contains(s, "no type info") ||
-		strings.Contains(s, "no object found") ||
-		strings.Contains(s, "is a function, not a method") ||
-		strings.Contains(s, "no implementation found") ||
-		strings.Contains(s, "not a method") ||
-		strings.Contains(s, "no implementations found") ||
-		strings.Contains(s, "is not a type") ||
-		strings.Contains(s, "no type hierarchy")
-}
-
-func uriToPath(uri string) string {
-	if strings.HasPrefix(uri, "file://") {
-		return strings.TrimPrefix(uri, "file://")
-	}
-	return uri
-}
-
-func kindLabel(k gen.SymbolKind) string {
-	switch k {
-	case 5:
-		return "Class"
-	case 12:
-		return "Function"
-	case 6:
-		return "Method"
-	default:
-		return fmt.Sprintf("Kind(%d)", k)
-	}
-}
 
 // =============================================================================
 // Real-store shim — minimal CascadeStore backed by recording fakes (avoids
@@ -487,8 +172,8 @@ func integrationTestPool(t *testing.T, wsKey workspace.WorkspaceKey) (*lspool.Wo
 // platform-specific pressure backend.
 type integrationPressure struct{}
 
-func (integrationPressure) Level() lspool.PressureLevel       { return lspool.PressureNone }
-func (integrationPressure) WorkerRSS(_ int) (uint64, error)   { return 0, nil }
+func (integrationPressure) Level() lspool.PressureLevel     { return lspool.PressureNone }
+func (integrationPressure) WorkerRSS(_ int) (uint64, error) { return 0, nil }
 
 // repoRoot returns the absolute path to the testdata fixture under
 // internal/semantic/lspenrich/testdata/cascade/<lang>.
@@ -546,7 +231,12 @@ func TestCascade_GoIntegration(t *testing.T) {
 	// Give gopls a moment to index — gopls is fast on a single-file fixture.
 	time.Sleep(2 * time.Second)
 
-	shim := &realLSPShim{lease: lease, uri: uri}
+	// Phase 61 P05: use the promoted production shim.  The shim lazily
+	// learns its URI from the first DocumentSymbol(ctx, path) call
+	// (cascade.go §14.4 step 1 fires DocumentSymbol with job.Path
+	// before any per-symbol calls) — which matches the file we just
+	// opened via didOpen.
+	shim := lspenrich.NewCascadeLSPShim(lease)
 	store := newIntegrationStore()
 	c := &lspenrich.Cascade{
 		LSP:          shim,
@@ -641,7 +331,8 @@ func TestCascade_JavaIntegration(t *testing.T) {
 	// jdtls is slow to index — give it some time.
 	time.Sleep(8 * time.Second)
 
-	shim := &realLSPShim{lease: lease, uri: uri}
+	// Phase 61 P05: promoted production shim — see TestCascade_GoIntegration.
+	shim := lspenrich.NewCascadeLSPShim(lease)
 	store := newIntegrationStore()
 	c := &lspenrich.Cascade{
 		LSP:          shim,

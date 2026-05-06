@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/phasegraph"
 	"github.com/agenthands/helix/internal/phasegraph/pipelines"
@@ -286,11 +287,21 @@ func buildLiveBundle(
 			enrichMetrics,
 			logger,
 		)
+		// Phase 61-05 — wire production CascadeLSPFactory so dispatched
+		// jobs run the cascade against real LSPs (gopls/jdtls/...) via
+		// *lspool.WorkerLease.Request.  Without this every dispatched
+		// job would land on worker.go's `NewCascadeLSP factory is nil`
+		// branch (OutcomeDropped + Error log) — the pre-61-05 gap that
+		// 61-VERIFICATION.md flagged.
+		enrichMgr.SetCascadeLSPFactory(func(lease *lspool.WorkerLease) lspenrich.CascadeLSP {
+			return lspenrich.NewCascadeLSPShim(lease)
+		})
 		bundle.enrichMgr = enrichMgr
 		logger.Info("lsp-enrichment manager constructed",
 			"max_concurrent_workers", enrichCfg.MaxConcurrentWorkers,
 			"yield_check_window_ms", enrichCfg.YieldCheckWindowMs,
 			"timeout_per_file", enrichCfg.TimeoutPerFile,
+			"cascade_lsp_factory", "production",
 		)
 	} else {
 		logger.Info("lsp-enrichment disabled by config",

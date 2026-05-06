@@ -20,6 +20,13 @@ func (d *Daemon) shutdown() {
 
 	d.logger.Info("graceful shutdown starting", "timeout", timeout)
 
+	// Phase 0: stop live-update + enrichment manager (Phase 61 P03 / B2
+	// safety-net) so cached enrichment leases are released BEFORE the
+	// kernel tears down its worker pool.
+	if d.live != nil {
+		d.live.Stop()
+	}
+
 	// Phase 1: Stop kernel (drain workers, close LS processes).
 	if d.kernel != nil {
 		if err := d.kernel.Shutdown(ctx); err != nil {

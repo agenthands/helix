@@ -145,6 +145,12 @@ type Daemon struct {
 	// activate callback fires ScheduleInitialExtraction(workspace_activation)
 	// non-blockingly per D-04.
 	semanticScheduler *scheduler.Scheduler
+	// live holds the Phase 60 live-update + Phase 61 enrichment-manager
+	// bundle. nil when SemanticIndex.LiveUpdates.Enabled is false. Run
+	// pulls live.Run(gctx) into the top-level errgroup; the gRPC
+	// DeactivateWorkspace handler invokes live.OnWorkspaceDeactivate so
+	// cached enrichment leases are released promptly per B2.
+	live *liveBundle
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -295,6 +301,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// hooks (Start/Stop) fire from SetActivateCallback below.
 	live := buildLiveBundle(
 		cfg.SemanticIndex.LiveUpdates,
+		cfg.SemanticIndex.LSPEnrichment,
 		semanticStore,
 		semanticScheduler,
 		k,
@@ -541,6 +548,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		semanticExtractRegistry: semanticExtractRegistry,
 		grammarRegistry:         grammarRegistry,
 		semanticScheduler:       semanticScheduler,
+		live:                    live,
 	}, nil
 }
 
@@ -611,6 +619,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return d.kernel.Run(gctx)
 	})
 
+	// Phase 61 P03: LSP enrichment manager runs in the errgroup. When
+	// LSPEnrichment is disabled, live.Run blocks until ctx done so the
+	// errgroup goroutine doesn't return early and tear down its siblings.
+	if d.live != nil {
+		g.Go(func() error {
+			return d.live.Run(gctx)
+		})
+	}
+
 	// Unix socket listener for forwarder connections via gRPC (DMN-03)
 	g.Go(func() error {
 		return d.listenSocket(gctx)
@@ -678,6 +695,10 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 		// lifecycle emission. observability.Metrics() is never nil per the
 		// Noop-default invariant — no nil guard needed inside the handler.
 		metrics: d.obs.Metrics(),
+		// Phase 61 P03 (B2): forward DeactivateWorkspace to the live
+		// bundle so cached enrichment leases for the workspace are
+		// released promptly per CONTEXT lines 492-494.
+		live: d.live,
 	})
 
 	// Serve in a goroutine so we can wait for context cancellation
@@ -754,6 +775,12 @@ type forwarderServiceHandler struct {
 	// daemon.go already imports internal/obs and the field is a
 	// production-time pointer that never mutates.
 	metrics *obs.Metrics
+
+	// live is the daemon's live-update + Phase 61 enrichment-manager
+	// bundle. nil when LiveUpdates is disabled. DeactivateWorkspace
+	// invokes live.OnWorkspaceDeactivate(wsKey) so cached enrichment
+	// leases for the workspace are released promptly (B2 fix-path-A).
+	live *liveBundle
 
 	// serveSession is the test seam for the MCP-runtime portion of
 	// StreamMCP. nil in production (defaultSessionRunner is used);
@@ -880,6 +907,15 @@ func (h *forwarderServiceHandler) DeactivateWorkspace(ctx context.Context, req *
 	// Note: We don't actually shut down the workspace in the kernel --
 	// other sessions may be using it. We just acknowledge the deactivation.
 	// Session-scoped cleanup (counter files) is handled client-side.
+	//
+	// Phase 61 P03 (B2): release the enrichment manager's cached per-
+	// (wsKey, lang) leases for this workspace so the next workspace cycle
+	// re-acquires fresh leases (CONTEXT lines 492-494). Daemon Stop
+	// remains the safety-net fallback that releases any leases left when
+	// individual deactivation events were not delivered.
+	if h.live != nil {
+		h.live.OnWorkspaceDeactivate(workspace.WorkspaceKey{RepoRoot: wsPath})
+	}
 	return &serenav1.DeactivateResponse{
 		Status: "deactivated",
 	}, nil

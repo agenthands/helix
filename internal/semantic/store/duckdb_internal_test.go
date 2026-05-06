@@ -44,3 +44,31 @@ func TestClassifyReopenError_ETXTBSY(t *testing.T) {
 		t.Fatalf("classifyReopenError(ETXTBSY) = %v, want reopenTransient", got)
 	}
 }
+
+// TestDecideReopenRetry_PersistentTransientHardFails locks WR-NEW-02: when
+// the SECOND open attempt is still transient (persistent EBUSY etc), the
+// retry decision must be HardFail — refusing to quarantine a (likely
+// clean) DB so the supervisor can restart and try again. Only an actual
+// corruption-class error on the second attempt should quarantine.
+func TestDecideReopenRetry_PersistentTransientHardFails(t *testing.T) {
+	tests := []struct {
+		name      string
+		secondErr error
+		want      reopenRetryDecision
+	}{
+		{"persistent_ebusy", syscall.EBUSY, reopenRetryHardFail},
+		{"persistent_eintr", syscall.EINTR, reopenRetryHardFail},
+		{"persistent_eagain", syscall.EAGAIN, reopenRetryHardFail},
+		{"persistent_etxtbsy", syscall.ETXTBSY, reopenRetryHardFail},
+		{"corruption_on_retry", errors.New("page checksum mismatch"), reopenRetryQuarantine},
+		{"unknown_on_retry", errors.New("some other error"), reopenRetryQuarantine},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decideReopenRetry(tc.secondErr)
+			if got != tc.want {
+				t.Fatalf("decideReopenRetry(%v) = %v, want %v", tc.secondErr, got, tc.want)
+			}
+		})
+	}
+}

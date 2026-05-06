@@ -40,6 +40,33 @@ const (
 	reopenCorruption
 )
 
+// reopenRetryDecision classifies the action Open should take after an
+// initial transient error followed by a retry that ALSO fails. WR-NEW-02:
+// the second-attempt classification governs whether we quarantine a
+// (likely clean) DB or refuse to quarantine and bubble up a hard fail.
+type reopenRetryDecision int
+
+const (
+	// reopenRetryHardFail means the second attempt was also transient.
+	// The DB is most likely clean — refuse to quarantine and surface
+	// the error so the supervisor can restart and try again.
+	reopenRetryHardFail reopenRetryDecision = iota
+	// reopenRetryQuarantine means the second attempt classified as
+	// corruption (or an unknown non-transient error). Quarantine the
+	// file and rebuild.
+	reopenRetryQuarantine
+)
+
+// decideReopenRetry encapsulates the WR-NEW-02 retry decision so it is
+// independently unit-testable. The pure-function shape — error → decision
+// — sidesteps the need to inject a fake openExisting into Open itself.
+func decideReopenRetry(secondErr error) reopenRetryDecision {
+	if classifyReopenError(secondErr) == reopenTransient {
+		return reopenRetryHardFail
+	}
+	return reopenRetryQuarantine
+}
+
 // classifyReopenError categorises an error returned from openExisting so
 // Open's Tier-1 reopen path can distinguish transient filesystem
 // contention (worth one bounded retry) from corruption (immediate
@@ -201,6 +228,20 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 			s, err2 := openExisting(ctx, path, label, logger, metrics)
 			if err2 == nil {
 				return s, nil
+			}
+			// WR-NEW-02: if the SECOND attempt is ALSO transient (e.g.,
+			// persistent EBUSY because a sibling daemon or backup process
+			// is holding the file) the original code labelled the workspace
+			// reasonCorruptFile and renamed the file — destroying a
+			// perfectly healthy DB. Refuse to quarantine on retry-still-
+			// transient and surface as a hard fail; the supervisor can
+			// restart and try again. Only ACTUAL corruption-class errors
+			// on retry quarantine.
+			switch decideReopenRetry(err2) {
+			case reopenRetryHardFail:
+				return nil, fmt.Errorf("semantic.store.Open: transient errors persist across retry; refusing to quarantine clean DB: %w", err2)
+			case reopenRetryQuarantine:
+				return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 			}
 			return quarantineAndRebuild(ctx, path, label, reasonCorruptFile, 0, logger, metrics)
 		case reopenCorruption, reopenUnknown:

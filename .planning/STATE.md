@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
 status: executing
-last_updated: "2026-05-06T09:26:21.714Z"
-last_activity: 2026-05-06 -- Phase 57 execution started
+last_updated: "2026-05-06T13:00:00.000Z"
+last_activity: 2026-05-06 -- Phase 57 verifier PASSED (re-verification) — SC-1 + 5 REVIEW findings closed
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 31
-  completed_plans: 30
-  percent: 97
+  completed_plans: 31
+  percent: 100
 ---
 
 # Project State
@@ -24,18 +24,15 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 57 (semantic-store-foundation-pipeline-dag-library) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 57
+Phase: 57 (semantic-store-foundation-pipeline-dag-library) — PASSED (re-verified)
+Plan: 5 of 5 complete
+Status: v1.10 milestone — all 6 phases passed
 
-- 61-01: COMPLETE (4/4 tasks, merged)
-- 61-02: COMPLETE (5/5 tasks, merged) — Worker drain + §14.4 cascade integration test against real gopls + jdtls
-- 61-03: COMPLETE (5/5 tasks, merged) — Manager (B2 lease cache via singleflight) + Pool adapters + daemon bootstrap
-- 61-04: COMPLETE (4/4 tasks, merged) — stress + acceptance tests; REQUIREMENTS.md ENRICH-01..05 checked off
-- 61-05: COMPLETE (3/3 tasks, merged) — gap closure: cascadeLSPShim promoted to production, Manager.SetCascadeLSPFactory wired from live_wiring.go, TestManagerProductionDispatch_Go asserts FilesEnriched=1/FilesDropped=0 via real gopls
+- Phase 57: PASSED — store + pipeline DAG library + 57-05 hardening pass (SC-1 get_health, CR-01 path traversal, CR-02 schema timeout, WR-01 migration tx, WR-02 analyzer prefix, WR-03 transient retry, BL-01 absolute-path follow-up — all CLOSED)
+- Phase 58: COMPLETE
+- Phase 59: COMPLETE
+- Phase 59.1: human_needed (verifier flagged — outstanding)
+- Phase 60: COMPLETE
+- Phase 61: PASSED — LSP enrichment worker + production CascadeLSP dispatch wiring (gap #1 CLOSED)
 
-Gap #1 (Manager NewCascadeLSP production wiring): CLOSED.
-Gap #2 (cascadeNow as func): UNCHANGED.
-Code review: 5 warnings, 0 critical (advisory only — see 61-REVIEW.md).
-
-Last activity: 2026-05-06 -- Phase 57 execution started
+Last activity: 2026-05-06 -- Phase 57 verifier PASSED (re-verification)

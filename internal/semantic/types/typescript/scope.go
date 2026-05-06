@@ -8,8 +8,9 @@
 // only allowed I/O is `os.Stat` on candidate `tsconfig.json` paths.
 //
 // Per D-12 the comment parser is hand-rolled (regex-only); no third-party
-// dependencies. Per CLAUDE.md no tree-sitter import lives here — facts are
-// already extracted by Phase 59.
+// dependencies. Per CLAUDE.md no AST-grammar import lives here — facts
+// are already extracted by Phase 59 (RESEARCH Anti-Pattern "AST access in
+// type resolver").
 package typescript
 
 import (

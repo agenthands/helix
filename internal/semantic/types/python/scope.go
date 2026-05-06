@@ -6,8 +6,9 @@
 // I/O is `os.Stat` on candidate `__init__.py` paths.
 //
 // Per D-12 the comment / annotation parser is hand-rolled (regex-only); no
-// third-party dependencies. Per CLAUDE.md no tree-sitter import lives here
-// — facts are already extracted by Phase 59.
+// third-party dependencies. Per CLAUDE.md no AST-grammar import lives here
+// — facts are already extracted by Phase 59 (RESEARCH Anti-Pattern "AST
+// access in type resolver").
 package python
 
 import (

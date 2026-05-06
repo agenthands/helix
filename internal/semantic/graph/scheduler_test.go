@@ -16,6 +16,10 @@ import (
 // the debounce-coalescing test can assert exactly one repair fires per
 // debounce window.
 type fakeSchedulerStore struct {
+	// lockMu emulates the per-workspace overlay mutex; SUT holds it across
+	// the tx body. dataMu is a separate mutex for fields the fake's tx
+	// methods touch — conflating them deadlocks RunFullRecompute paths.
+	lockMu      sync.Mutex
 	mu          sync.Mutex
 	beginByRepo map[string]int
 	gvByRepo    map[string]uint64
@@ -35,8 +39,8 @@ func newFakeSchedulerStore() *fakeSchedulerStore {
 }
 
 func (s *fakeSchedulerStore) LockWorkspace(string) func() {
-	s.mu.Lock()
-	return s.mu.Unlock
+	s.lockMu.Lock()
+	return s.lockMu.Unlock
 }
 func (s *fakeSchedulerStore) BeginRepairTx(_ context.Context, repoID string) (RepairTx, error) {
 	s.mu.Lock()

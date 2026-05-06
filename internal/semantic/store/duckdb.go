@@ -172,11 +172,19 @@ func classifyExisting(ctx context.Context, path string) (string, error) {
 		return reasonCorruptFile, err
 	}
 
-	// Schema-version table presence + readability.
+	// Schema-version table presence + readability. CR-02: the parent ctx
+	// is typically context.Background() at daemon bootstrap (daemon.go
+	// step 6b), so a wedged DuckDB read here would hang the daemon
+	// indefinitely. Match the 5s budget already used for PingContext above.
+	queryCtx, qcancel := context.WithTimeout(ctx, 5*time.Second)
+	defer qcancel()
+
 	var version int
-	row := db.QueryRowContext(ctx, "SELECT version FROM semantic_schema_version LIMIT 1")
+	row := db.QueryRowContext(queryCtx, "SELECT version FROM semantic_schema_version LIMIT 1")
 	if err := row.Scan(&version); err != nil {
-		// Table missing OR row missing → schema_unreadable per D-07.
+		// Table missing OR row missing OR query timed out → schema_unreadable
+		// per D-07. The closed enum already absorbs context.DeadlineExceeded
+		// under schema_unreadable; no new reason value is required.
 		return reasonSchemaUnreadable, err
 	}
 

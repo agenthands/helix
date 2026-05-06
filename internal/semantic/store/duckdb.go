@@ -441,13 +441,17 @@ func (s *Store) Close() error {
 // false (see duckdb_nocgo.go).
 func (s *Store) Available() bool { return s != nil && s.db != nil }
 
-// DB returns the underlying *sql.DB handle. Returns nil when the store is
-// not open. Intended for read-only admin/status queries (e.g., get_health
-// surfacing overlay epoch) and integration tests that need to inspect
-// internal state without going through BeginOverlayTx (which would bump
-// the epoch as a side effect). Callers MUST NOT issue schema-altering
-// statements through this handle — migrations.go is the single owner of
-// schema evolution.
+// DB returns the underlying *sql.DB handle. Returns nil iff the store is
+// not open. On windows/arm64 (the duckdb_winarm64.go stub) it always
+// returns nil because this platform has no DuckDB build (DEF-51-04);
+// Available() returns false long before a caller ever reaches this
+// method, but the nil return keeps the contract uniform across both
+// build paths. Intended for read-only admin/status queries (e.g.,
+// get_health surfacing overlay epoch) and integration tests that need
+// to inspect internal state without going through BeginOverlayTx (which
+// would bump the epoch as a side effect). Callers MUST NOT issue
+// schema-altering statements through this handle — migrations.go is the
+// single owner of schema evolution.
 func (s *Store) DB() *sql.DB {
 	if s == nil {
 		return nil

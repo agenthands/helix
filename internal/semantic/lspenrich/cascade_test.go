@@ -314,7 +314,7 @@ func mustBudget(t *testing.T, now time.Time) lspenrich.Budget {
 // (derived from cfg.TimeoutPerFile=5s + cfg.TimeoutTotal=120s) extend INTO
 // the future relative to time.Now() the cascade observes — without this the
 // boundary check trips immediately and every test sees OutcomePartialBudget.
-var cascadeNow = time.Now()
+func cascadeNow() time.Time { return time.Now() }
 
 // =============================================================================
 // Tests
@@ -336,7 +336,7 @@ func TestCascade_C1_YieldMidCascade(t *testing.T) {
 	}
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/x.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, busy)
 
 	if out != lspenrich.OutcomePartialPreempted {
@@ -395,7 +395,7 @@ func TestCascade_C3_CascadeOrder(t *testing.T) {
 	c := newTestCascade(store, lsp)
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/z.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, func() bool { return false })
 
 	if out != lspenrich.OutcomeApplied {
@@ -425,7 +425,7 @@ func TestCascade_C4_MethodNotFoundContinues(t *testing.T) {
 	c := newTestCascade(store, lsp)
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/m.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, func() bool { return false })
 
 	if out != lspenrich.OutcomeApplied {
@@ -461,7 +461,7 @@ func TestCascade_C5_LSCrashPartialLSPUnavail(t *testing.T) {
 	c := newTestCascade(store, lsp)
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/c.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, func() bool { return false })
 
 	if out != lspenrich.OutcomePartialLSPUnavail {
@@ -497,7 +497,7 @@ func TestCascade_C6_DefinitionNotCalledOnDefinitions(t *testing.T) {
 	}
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/d.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, func() bool { return false })
 
 	if out != lspenrich.OutcomeApplied {
@@ -547,10 +547,10 @@ func TestCascade_C7_EpochAdvancesPerTx(t *testing.T) {
 	c := newTestCascade(store, lsp)
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/e.go"}
-	budget1 := mustBudget(t, cascadeNow)
+	budget1 := mustBudget(t, cascadeNow())
 	_ = c.Run(context.Background(), job, "go", &budget1, func() bool { return false })
 
-	budget2 := mustBudget(t, cascadeNow)
+	budget2 := mustBudget(t, cascadeNow())
 	_ = c.Run(context.Background(), job, "go", &budget2, func() bool { return false })
 
 	if len(store.txs) != 2 {
@@ -570,7 +570,7 @@ func TestCascade_C8_EdgeConfidenceAndProvenance(t *testing.T) {
 	c := newTestCascade(store, lsp)
 
 	job := lspqueue.RevalidateFileJob{RepoID: semantic.RepoID("r"), Path: "/p.go"}
-	budget := mustBudget(t, cascadeNow)
+	budget := mustBudget(t, cascadeNow())
 	out := c.Run(context.Background(), job, "go", &budget, func() bool { return false })
 	if out != lspenrich.OutcomeApplied {
 		t.Fatalf("outcome: got %q, want OutcomeApplied", out)
@@ -606,7 +606,8 @@ func TestCascade_C9_ConsumeReferencesPerSymbolGranularity(t *testing.T) {
 
 	cfg := cascadeBudgetCfg()
 	cfg.MaxReferencesPerSymbol = 50
-	b, err := lspenrich.NewBudget(cascadeNow, cascadeNow, cfg)
+	t0 := cascadeNow()
+	b, err := lspenrich.NewBudget(t0, t0, cfg)
 	if err != nil {
 		t.Fatalf("NewBudget: %v", err)
 	}

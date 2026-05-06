@@ -33,13 +33,13 @@ func TestCascade_Epoch_RealStore_AdvancesByOnePerCommit(t *testing.T) {
 	ctx := context.Background()
 
 	job := lspenrich.JobForTest("ws-real-epoch", "/r1.go")
-	budget1 := mustBudget(t, cascadeNow)
+	budget1 := mustBudget(t, cascadeNow())
 	out1 := c.Run(ctx, job, "go", &budget1, func() bool { return false })
 	if out1 != lspenrich.OutcomeApplied {
 		t.Fatalf("Run #1: outcome=%q, want OutcomeApplied", out1)
 	}
 
-	budget2 := mustBudget(t, cascadeNow)
+	budget2 := mustBudget(t, cascadeNow())
 	out2 := c.Run(ctx, job, "go", &budget2, func() bool { return false })
 	if out2 != lspenrich.OutcomeApplied {
 		t.Fatalf("Run #2: outcome=%q, want OutcomeApplied", out2)

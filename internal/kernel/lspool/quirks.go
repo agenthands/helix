@@ -265,6 +265,29 @@ func (r *RustAnalyzerAdapter) WaitUntilRenameReady(ctx context.Context) bool {
 	}
 }
 
+// QuiescentChan returns a channel that is closed once rust-analyzer reports
+// quiescent=true via experimental/serverStatus.  If the adapter has already
+// observed quiescent=true the returned channel is already closed.  Phase 61
+// ENRICH-03 readiness gate — the enrichment worker selects on this channel
+// (plus ctx.Done) instead of polling.
+//
+// The channel is recreated when rust-analyzer transitions back to non-
+// quiescent (re-indexing); callers MUST re-call QuiescentChan to observe the
+// next quiescent transition.
+func (r *RustAnalyzerAdapter) QuiescentChan() <-chan struct{} {
+	if r == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	if r.quiescent.Load() {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	return r.ensureReadyCh()
+}
+
 func (r *RustAnalyzerAdapter) NormalizeSymbolName(name string) string {
 	return name
 }

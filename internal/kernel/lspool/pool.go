@@ -346,6 +346,48 @@ func (p *Pool) SetYieldCheckWindow(d time.Duration) {
 	p.yieldCheckWindow = d
 }
 
+// JdtlsAdapter returns the per-workspace jdtls adapter or nil if Java is not
+// active in this workspace (no Ready worker, or the worker's quirks adapter
+// is not *JdtlsAdapter).  Read-locked — safe to call from the Phase 61
+// enrichment worker on every per-file readiness probe.
+//
+// Phase 61 ENRICH-03 — enables the enrichment worker to honor
+// WaitUntilJavaReady before issuing the first per-file LSP call.
+func (p *Pool) JdtlsAdapter(wsKey workspace.WorkspaceKey) *JdtlsAdapter {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, w := range p.workers {
+		if w.Language() != "java" || w.WorkDir() != wsKey.RepoRoot {
+			continue
+		}
+		ja, _ := w.Quirks().(*JdtlsAdapter)
+		if ja != nil {
+			return ja
+		}
+	}
+	return nil
+}
+
+// RustAnalyzerAdapter returns the per-workspace rust-analyzer adapter or nil
+// if Rust is not active in this workspace.  Read-locked.  Phase 61 ENRICH-03
+// — enables the enrichment worker to await rust-analyzer's
+// experimental/serverStatus.quiescent=true before issuing per-file LSP
+// calls.
+func (p *Pool) RustAnalyzerAdapter(wsKey workspace.WorkspaceKey) *RustAnalyzerAdapter {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, w := range p.workers {
+		if w.Language() != "rust" || w.WorkDir() != wsKey.RepoRoot {
+			continue
+		}
+		ra, _ := w.Quirks().(*RustAnalyzerAdapter)
+		if ra != nil {
+			return ra
+		}
+	}
+	return nil
+}
+
 // workerForKeyLocked finds a warm Ready worker matching the workspace key.
 // Must be called with p.mu held.
 func (p *Pool) workerForKeyLocked(wsKey workspace.WorkspaceKey) *Worker {

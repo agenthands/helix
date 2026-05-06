@@ -55,6 +55,8 @@ echo "checksum OK: $ACTUAL_HASH"
 
 # Extract and run
 tar -xzf helix_${VERSION}_${OS}_${ARCH}.tar.gz
+# v1.10.7 and earlier: archive packed the binary at mode 0644; if `./helix`
+# returns "permission denied", run `chmod +x helix` first. Fixed from v1.10.8.
 ./helix --help
 ```
 

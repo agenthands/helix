@@ -135,6 +135,14 @@ archives:
     # keeps the INSTALL.md verification recipe (which sets VERSION=v1.9.0) working
     # end-to-end. See REVIEW CR-02.
     name_template: "helix_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Phase 59.1 re-audit (2026-05-06): without this, goreleaser packs the
+    # main binary at mode 0644 inside the tar.gz, so users hit
+    # `permission denied: ./helix` straight after `tar -xzf …`.
+    # The 0755 override forces the binary to ship executable. Verified
+    # against v1.10.7 archives (both darwin/arm64 and linux/amd64
+    # contained the binary at 0644).
+    builds_info:
+      mode: 0755
     files:
       - LICENSE*
       - README.md

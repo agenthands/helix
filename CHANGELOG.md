@@ -14,6 +14,7 @@ This release flips the build pipeline to single-mode CGO=1 and introduces a spli
 - **`helix upgrade` artifact-name and `.sigstore.json` bundle layout preserved.** Phase 58 REL-01 contract holds. Existing `helix upgrade` consumers see no change.
 - **Reproducibility gate (per-runner).** Each runner asserts byte-identical Pass-1 ≡ Pass-2 over its own target subset. Cross-runner byte-equality is not asserted (different machines, different SDKs, different clang versions — that comparison was never meaningful and is explicitly not a gate).
 - **Darwin binaries unsigned on Apple side.** Apple Developer ID signing and notarization are deferred (see `.planning/deferred-items.md` → `DEF-59-NOTARIZE`). On first launch, macOS Gatekeeper will block the unsigned binary; users must right-click → Open once to bypass. See [INSTALL.md](INSTALL.md#macos-gatekeeper-workaround) for the workaround.
+- **Archive binary executable bit (fixes v1.10.7 regression).** v1.10.x releases through v1.10.7 packed the `helix` binary inside `tar.gz` archives at mode `0644`, so users following INSTALL.md hit `permission denied` after `tar -xzf` and had to run `chmod +x helix` first. `.goreleaser.yaml` now sets `archives[0].builds_info.mode: 0755`; surfaced by Phase 59.1 re-audit on 2026-05-06 (verified locally against v1.10.7 archives — both darwin and linux affected).
 
 ## v1.9 — Polish & Infra (2026-04-30)
 

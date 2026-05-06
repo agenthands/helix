@@ -133,7 +133,7 @@
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (5/5 plans complete; verifier passed — gap-closure 57-05 closed SC-1 + CR-01/02 + WR-01/02/03; 57-REVIEW-57-05 follow-up pass closed BL-01 + 6 add'l findings) (completed 2026-05-06)
 - [x] Phase 58: v1.9 Carryover -- Release & Distribution (4/4 plans) (completed 2026-05-04)
 - [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
-- [x] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (0/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release (completed 2026-05-04)
+- [x] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (6/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release; re-verifier 2026-05-06 PASSED (cosign verify-blob against real v1.10.7 sigstore bundles + Gatekeeper xattr mechanism + linux gcc resolution all closed) (completed 2026-05-04, re-verified 2026-05-06)
   Plans:
   - [x] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
   - [x] 59.1-01-PLAN.md — Wave 1 stub deletion + tag strip + Path-3 platform stub + daemon step-6a removal

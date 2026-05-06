@@ -31,7 +31,7 @@ Status: v1.10 milestone — all 6 phases passed
 - Phase 57: PASSED — store + pipeline DAG library + 57-05 hardening pass (SC-1 get_health, CR-01 path traversal, CR-02 schema timeout, WR-01 migration tx, WR-02 analyzer prefix, WR-03 transient retry, BL-01 absolute-path follow-up — all CLOSED)
 - Phase 58: COMPLETE
 - Phase 59: COMPLETE
-- Phase 59.1: human_needed (verifier flagged — outstanding)
+- Phase 59.1: PASSED (re-verified 2026-05-06; all 3 outstanding items closed against real v1.10.7 release evidence)
 - Phase 60: COMPLETE
 - Phase 61: PASSED — LSP enrichment worker + production CascadeLSP dispatch wiring (gap #1 CLOSED)
 

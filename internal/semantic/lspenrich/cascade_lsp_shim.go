@@ -38,16 +38,21 @@ import (
 )
 
 // leaseRequester is the unexported test seam that *lspool.WorkerLease
-// satisfies via its Request and Notify methods. The cascade_lsp_shim_test.go
+// satisfies via its Request method. The cascade_lsp_shim_test.go
 // fakeLease satisfies it without spinning a real LS subprocess.
 //
 // Production constructor NewCascadeLSPShim takes the concrete
 // *lspool.WorkerLease (the public API surface) and the CascadeLSPFactory
 // signature (lspenrich/worker.go) is unchanged — internally the shim
 // just stores the concrete lease as a leaseRequester interface.
+//
+// Notify is intentionally NOT on this seam — the shim never sends LSP
+// notifications (didOpen/didChange/etc. are owned by the foreground
+// kernel sessions, not the enrichment shim).  Tests that need to drive
+// didOpen against a real lease (integration_dispatch_test.go) call
+// *lspool.WorkerLease.Notify directly on the concrete lease.
 type leaseRequester interface {
 	Request(ctx context.Context, method string, params, result any) error
-	Notify(ctx context.Context, method string, params any) error
 }
 
 // shimDocSym is the minimal cached projection of an LSP DocumentSymbol

@@ -58,8 +58,6 @@ func (f *fakeLease) Request(_ context.Context, method string, params, _ any) err
 	return err
 }
 
-func (f *fakeLease) Notify(_ context.Context, _ string, _ any) error { return nil }
-
 func (f *fakeLease) lastCall() (fakeLeaseCall, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

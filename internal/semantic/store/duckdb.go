@@ -130,12 +130,19 @@ func Open(ctx context.Context, cfg semantic.Config, logger *slog.Logger, metrics
 	if path == "" {
 		return nil, fmt.Errorf("semantic.store.Open: cfg.Store.Path is empty")
 	}
-	// T-57-02-01: reject path traversal explicitly. Splitting on the
+	// T-57-02-01: reject absolute paths AND path traversal explicitly. The
+	// StoreConfig.Path doc promises both halves; this guard implements them
+	// in one place. The absolute-path check runs first so an absolute path
+	// containing `..` surfaces the more specific "must be workspace-relative"
+	// error rather than the parent-reference error. Splitting on the
 	// forward-slash form (filepath.ToSlash converts Windows backslashes)
 	// catches every "/../" anywhere in the path, including the bare ".."
-	// case. We refuse rather than silently rewrite via filepath.Clean —
-	// the caller is responsible for handing us a path that already lives
-	// inside the workspace.
+	// case. We refuse rather than silently rewrite via filepath.Clean — the
+	// caller is responsible for handing us a path that already lives inside
+	// the workspace.
+	if filepath.IsAbs(path) {
+		return nil, fmt.Errorf("semantic.store.Open: path %q must be workspace-relative (T-57-02-01): %w", path, serr.ErrInvalidArgs)
+	}
 	for _, seg := range strings.Split(filepath.ToSlash(path), "/") {
 		if seg == ".." {
 			return nil, fmt.Errorf("semantic.store.Open: path %q contains parent-reference segment (T-57-02-01): %w", path, serr.ErrInvalidArgs)

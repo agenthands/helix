@@ -25,7 +25,11 @@ import (
 // not require P03. Run with: `go test -tags=integration ./internal/daemon`.
 func TestDaemon_SemanticStore_Open_FromConfig(t *testing.T) {
 	wsDir := t.TempDir()
-	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir so
+	// the relative path resolves to the temp dir.
+	t.Chdir(wsDir)
+	relPath := filepath.Join(".helix", "semantic.duckdb")
+	dbPath := filepath.Join(wsDir, relPath)
 
 	cfg := &config.SerenaConfig{
 		Profile: "full",
@@ -34,7 +38,7 @@ func TestDaemon_SemanticStore_Open_FromConfig(t *testing.T) {
 			Enabled: true,
 			Store: semantic.StoreConfig{
 				Kind:        "duckdb",
-				Path:        dbPath,
+				Path:        relPath,
 				MemoryLimit: "256MiB",
 				Threads:     2,
 			},
@@ -71,9 +75,15 @@ func TestDaemon_SemanticStore_Open_FromConfig(t *testing.T) {
 // SemanticIndex → daemon step 6b → semanticstore.Open).
 func TestDaemon_SemanticStore_FromYAML_Enabled(t *testing.T) {
 	wsDir := t.TempDir()
-	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir and
+	// embed the relative form into the YAML.
+	t.Chdir(wsDir)
+	relPath := filepath.Join(".helix", "semantic.duckdb")
+	dbPath := filepath.Join(wsDir, relPath)
 
-	// Project YAML enables semantic index and points at the temp DB path.
+	// Project YAML enables semantic index and points at the workspace-
+	// relative DB path. The daemon resolves that against the chdir-rooted
+	// wsDir, so the file lands at dbPath.
 	projectYAML := fmt.Sprintf(""+
 		"profile: full\n"+
 		"semantic_index:\n"+
@@ -82,7 +92,7 @@ func TestDaemon_SemanticStore_FromYAML_Enabled(t *testing.T) {
 		"    kind: duckdb\n"+
 		"    path: %q\n"+
 		"    memory_limit: \"256MiB\"\n"+
-		"    threads: 2\n", dbPath)
+		"    threads: 2\n", relPath)
 	projectPath := filepath.Join(wsDir, "project.yml")
 	if err := os.WriteFile(projectPath, []byte(projectYAML), 0o600); err != nil {
 		t.Fatalf("write project yml: %v", err)
@@ -96,8 +106,8 @@ func TestDaemon_SemanticStore_FromYAML_Enabled(t *testing.T) {
 	if !cfg.SemanticIndex.Enabled {
 		t.Fatalf("config.Load: SemanticIndex.Enabled=false after YAML load (koanf binding broken)")
 	}
-	if cfg.SemanticIndex.Store.Path != dbPath {
-		t.Fatalf("config.Load: store.path=%q, want %q", cfg.SemanticIndex.Store.Path, dbPath)
+	if cfg.SemanticIndex.Store.Path != relPath {
+		t.Fatalf("config.Load: store.path=%q, want %q", cfg.SemanticIndex.Store.Path, relPath)
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}))

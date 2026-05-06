@@ -31,7 +31,9 @@ import (
 // See daemon.go step 6c/6d comments for the merge-time wiring.
 func TestActivateWorkspace_TriggersScheduler(t *testing.T) {
 	wsDir := t.TempDir()
-	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir.
+	t.Chdir(wsDir)
+	dbPath := filepath.Join(".helix", "semantic.duckdb")
 
 	cfg := &config.SerenaConfig{
 		Profile: "full",

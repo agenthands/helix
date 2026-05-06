@@ -105,11 +105,13 @@ func (a *realCascadeTxAdapter) Epoch() uint64   { return a.tx.Epoch() }
 func openRealStoreForCascade(t *testing.T) *store.Store {
 	t.Helper()
 	wsDir := t.TempDir()
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir.
+	t.Chdir(wsDir)
 	cfg := semantic.Config{
 		Enabled: true,
 		Store: semantic.StoreConfig{
 			Kind:        "duckdb",
-			Path:        filepath.Join(wsDir, ".helix", "semantic.duckdb"),
+			Path:        filepath.Join(".helix", "semantic.duckdb"),
 			MemoryLimit: "256MiB",
 			Threads:     2,
 		},

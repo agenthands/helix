@@ -44,14 +44,19 @@ func newTestObsMetrics(t *testing.T) *obs.Metrics {
 	return m
 }
 
-// configFor builds a semantic.Config rooted at the given workspace dir with
-// a default store path. Used to share boilerplate across tests.
-func configFor(workspaceDir string) semantic.Config {
+// configFor builds a semantic.Config rooted at the given workspace dir
+// with the default workspace-relative store path. The helper chdirs into
+// `workspaceDir` so the relative path resolves to the temp dir; T-57-02-01
+// (BL-01) requires Path to be workspace-relative, so absolute paths from
+// t.TempDir() are no longer admissible.
+func configFor(t *testing.T, workspaceDir string) semantic.Config {
+	t.Helper()
+	t.Chdir(workspaceDir)
 	return semantic.Config{
 		Enabled: true,
 		Store: semantic.StoreConfig{
 			Kind:        "duckdb",
-			Path:        filepath.Join(workspaceDir, ".helix", "semantic.duckdb"),
+			Path:        filepath.Join(".helix", "semantic.duckdb"),
 			MemoryLimit: "256MiB",
 			Threads:     2,
 		},
@@ -115,7 +120,7 @@ func dbFileExists(t *testing.T, path string) bool {
 // row = 1, and increments the open counter with outcome="created".
 func TestOpen_FreshWorkspace_CreatesDB(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -143,7 +148,7 @@ func TestOpen_FreshWorkspace_CreatesDB(t *testing.T) {
 // outcome="opened".
 func TestOpen_ExistingClean_Reopens(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s1, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -182,7 +187,7 @@ func TestOpen_ExistingClean_Reopens(t *testing.T) {
 // outcome="quarantined".
 func TestOpen_CorruptHeader_QuarantinesAndRebuilds(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	// Seed a corrupt file.
@@ -236,7 +241,7 @@ func TestOpen_CorruptHeader_QuarantinesAndRebuilds(t *testing.T) {
 // + rebuild, reason="schema_forward_incompat".
 func TestOpen_SchemaForwardIncompat_Quarantines(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	// Seed a fresh, clean store first.
@@ -270,7 +275,7 @@ func TestOpen_SchemaForwardIncompat_Quarantines(t *testing.T) {
 // reason="schema_unreadable".
 func TestOpen_SchemaUnreadable_Quarantines(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s1, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -306,7 +311,7 @@ func TestOpen_QuarantineFails_HardFails(t *testing.T) {
 		t.Skip("running as root; chmod-based denial does not apply")
 	}
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	dir := filepath.Dir(cfg.Store.Path)
@@ -339,7 +344,7 @@ func TestOpen_QuarantineFails_HardFails(t *testing.T) {
 // tables exist. Queries duckdb_tables (DuckDB's information schema).
 func TestSchema1_AllTablesExist(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -380,7 +385,7 @@ func TestSchema1_AllTablesExist(t *testing.T) {
 // (because no data write paths exist in P57).
 func TestQueryEffective_EmptyStore_ReturnsEmpty(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)

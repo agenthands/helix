@@ -49,6 +49,8 @@ func TestLiveUpdate_E2E_OverlayEpochAdvancesOnEdit(t *testing.T) {
 	defer cancel()
 
 	wsDir := t.TempDir()
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir.
+	t.Chdir(wsDir)
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// 1. Open a real DuckDB-backed semantic store.
@@ -56,7 +58,7 @@ func TestLiveUpdate_E2E_OverlayEpochAdvancesOnEdit(t *testing.T) {
 		Enabled: true,
 		Store: semantic.StoreConfig{
 			Kind:        "duckdb",
-			Path:        filepath.Join(wsDir, ".helix", "semantic.duckdb"),
+			Path:        filepath.Join(".helix", "semantic.duckdb"),
 			MemoryLimit: "256MiB",
 			Threads:     2,
 		},

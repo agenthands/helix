@@ -52,7 +52,9 @@ func TestBootstrap_GrammarRegistrySingleton(t *testing.T) {
 	resetRepoMapSkillRegistry(t)
 
 	wsDir := t.TempDir()
-	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	// BL-01: store.Path must be workspace-relative; chdir into wsDir.
+	t.Chdir(wsDir)
+	dbPath := filepath.Join(".helix", "semantic.duckdb")
 
 	cfg := &config.SerenaConfig{
 		Profile: "full",

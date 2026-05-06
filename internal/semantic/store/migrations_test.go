@@ -14,7 +14,7 @@ import (
 // that v2 introduces.
 func TestMigration_Fresh_v2(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -130,9 +130,13 @@ func TestMigration_Existing_v2(t *testing.T) {
 	}
 
 	// Reopen via the public Open API. The registry should upgrade in place.
-	cfg := configFor(wsDir)
-	if cfg.Store.Path != dbPath {
-		t.Fatalf("test setup: expected configFor.Path=%s, got %s", dbPath, cfg.Store.Path)
+	cfg := configFor(t, wsDir)
+	// configFor chdirs into wsDir (BL-01) and returns a relative path; the
+	// physical file lives at the absolute dbPath we just seeded. Compare on
+	// the relative form to lock the test-helper contract.
+	wantRel := filepath.Join(".helix", "semantic.duckdb")
+	if cfg.Store.Path != wantRel {
+		t.Fatalf("test setup: expected configFor.Path=%s, got %s", wantRel, cfg.Store.Path)
 	}
 	m := newTestObsMetrics(t)
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -203,7 +207,7 @@ func TestMigration_Existing_v2(t *testing.T) {
 // loop's reader uses max(version) and trips the forward-incompat guard.
 func TestMigration_ForwardIncompatible(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	// Land a clean v=2 DB via Open.
@@ -247,7 +251,7 @@ func TestMigration_ForwardIncompatible(t *testing.T) {
 // the failure surfaces here on first run.
 func TestMigration002_AllColumnsPresent(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -291,7 +295,7 @@ func TestMigration002_AllColumnsPresent(t *testing.T) {
 // stamps + CAS scan indexes.
 func TestMigration003_FreshLandsAtV3(t *testing.T) {
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
@@ -365,7 +369,7 @@ func TestMigration003_UpgradeFromV1(t *testing.T) {
 		t.Fatalf("close seed db: %v", err)
 	}
 
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
 	if err != nil {
@@ -419,7 +423,7 @@ func TestMigration003_UpgradeFromV2(t *testing.T) {
 		t.Fatalf("close seed db: %v", err)
 	}
 
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
 	if err != nil {

@@ -386,7 +386,7 @@ func TestBeginOverlayTx_RejectsEmptyRepoID(t *testing.T) {
 func openStoreForOverlayTest(t *testing.T) (*Store, context.Context, context.CancelFunc) {
 	t.Helper()
 	wsDir := t.TempDir()
-	cfg := configFor(wsDir)
+	cfg := configFor(t, wsDir)
 	m := newTestObsMetrics(t)
 	s, err := Open(context.Background(), cfg, silentLogger(), m)
 	if err != nil {

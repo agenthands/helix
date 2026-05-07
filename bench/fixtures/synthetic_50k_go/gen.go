@@ -23,18 +23,18 @@ import (
 )
 
 const (
-	seed             = int64(42)
-	numPkgs          = 50
-	filesPerPkg      = 10
-	totalFiles       = numPkgs * filesPerPkg // 500
-	declsPerFile     = 100
-	totalDecls       = totalFiles * declsPerFile // 50_000
-	funcsPerFile     = 50
-	typesPerFile     = declsPerFile - funcsPerFile // 50
-	commentLines     = 3
-	wordsPerComment  = 3
-	wordsPerName     = 3
-	outputDir        = "out"
+	seed            = int64(42)
+	numPkgs         = 50
+	filesPerPkg     = 10
+	totalFiles      = numPkgs * filesPerPkg // 500
+	declsPerFile    = 100
+	totalDecls      = totalFiles * declsPerFile // 50_000
+	funcsPerFile    = 50
+	typesPerFile    = declsPerFile - funcsPerFile // 50
+	commentLines    = 3
+	wordsPerComment = 3
+	wordsPerName    = 3
+	outputDir       = "out"
 )
 
 // wordlist: 200 lowercase English nouns/verbs. Chosen for byte-determinism — the list
@@ -126,6 +126,10 @@ func emitFile(r *rand.Rand, pkgIdx, fileIdx int) (path string, content string, f
 	path = filepath.Join(dir, fmt.Sprintf("file%d.go", fileIdx))
 
 	var sb strings.Builder
+	// Build tag keeps fixture .go files out of the Go module compile graph
+	// (`go vet ./...`, `go build ./...`). Bench tests read these files as
+	// raw bytes via filepath.WalkDir, not via go/build.
+	sb.WriteString("//go:build neverbuild\n\n")
 	sb.WriteString(fmt.Sprintf("package %s\n\n", pkgName))
 
 	// Emit funcsPerFile exported funcs.

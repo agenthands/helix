@@ -20,8 +20,8 @@ type modeTier int
 
 const (
 	modeTierRead   modeTier = iota
-	modeTierReview // review+ — session must be in review or admin
-	modeTierAdmin  // admin only
+	modeTierReview          // review+ — session must be in review or admin
+	modeTierAdmin           // admin only
 )
 
 // checkMode returns nil when the session's current mode satisfies the required

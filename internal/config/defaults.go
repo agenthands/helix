@@ -95,6 +95,14 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.live_updates.manifest_scan_enabled":  true,
 		"semantic_index.live_updates.manifest_scan_interval": "10s",
 
+		// Phase 63 P63-02 Task 3: maintenance.* — config-gated VACUUM
+		// cadence (CONTEXT.md D-05). Default OFF per planner decision —
+		// VACUUM is shipped as documented no-op-by-DuckDB; the
+		// infrastructure ships so a future phase can swap COPY FROM
+		// DATABASE repack in without re-architecting the gate.
+		"semantic_index.maintenance.vacuum_enabled":  false,
+		"semantic_index.maintenance.vacuum_interval": "168h",
+
 		// lsp_enrichment.*
 		"semantic_index.lsp_enrichment.enabled":                   true,   // SPEC §25
 		"semantic_index.lsp_enrichment.timeout_per_file":          "5s",   // SPEC §25

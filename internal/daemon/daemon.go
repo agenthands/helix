@@ -37,6 +37,7 @@ import (
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
@@ -159,6 +160,13 @@ type Daemon struct {
 	// level errgroup; per-workspace schedulers are spun up lazily in
 	// SetActivateCallback via rank.ensureScheduler.
 	rank *rankBundle
+
+	// compact holds the Phase 63 P63-02 per-workspace compaction
+	// worker registry. nil when the semantic store is not open. Run
+	// pulls compact.Run(gctx) into the top-level errgroup; per-workspace
+	// compactors are spun up lazily in SetActivateCallback via
+	// compact.ensureCompactor.
+	compact *compactBundle
 
 	// typeResolver is the Phase 62 P05 type-resolver dispatcher — the
 	// 7-language registry (go / typescript / javascript / python / java /
@@ -370,6 +378,36 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			// active code path.
 			_ = rank.engine.SetVersionNotifier
 			logger.Info("rank engine wired to live handler post-commit hook")
+		}
+	}
+
+	// 6f.1 Phase 63 P63-02: compaction worker bundle. Constructed
+	// alongside rank — needs the live bundle (for the coalescer
+	// accessor + post-flush hook), the lspenrich queue (for
+	// BlockedLSPPending), the rank bundle (for BlockedRankRepairing),
+	// and the kernel (for BlockedEditTxActive).
+	var compactBndl *compactBundle
+	if semanticStore != nil {
+		var lspQ *lspenrich.LaneQueue
+		if live != nil {
+			lspQ = live.lspQueue
+		}
+		compactBndl = newCompactBundle(
+			cfg.SemanticIndex.Maintenance,
+			cfg.SemanticIndex.LiveUpdates,
+			semanticStore,
+			live,
+			lspQ,
+			rank,
+			k,
+			observability.Metrics(),
+			logger,
+		)
+		// Wire the post-flush hook on the live service so every
+		// per-workspace coalescer signals back into the compactor.
+		if compactBndl != nil && live != nil && live.service != nil {
+			live.service.SetOnFlushHook(compactBndl.OnCoalescerFlush)
+			logger.Info("compactor post-flush hook wired to live service")
 		}
 	}
 
@@ -629,6 +667,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		if rank != nil {
 			rank.ensureScheduler(ctx, repoPath)
 		}
+		// Phase 63 P63-02: lazy-construct the per-workspace compactor
+		// alongside the rank scheduler. nil-safe: the helper short-
+		// circuits when compactBndl is nil (semantic disabled).
+		if compactBndl != nil {
+			compactBndl.ensureCompactor(ctx, repoPath, activeWSKey)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
@@ -654,6 +698,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		semanticScheduler:       semanticScheduler,
 		live:                    live,
 		rank:                    rank,
+		compact:                 compactBndl,
 		typeResolver:            typeResolver,
 	}, nil
 }
@@ -773,6 +818,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if d.rank != nil {
 		g.Go(func() error {
 			return d.rank.Run(gctx)
+		})
+	}
+
+	// Phase 63 P63-02: compaction-bundle Run blocks on ctx.Done(); the
+	// per-workspace compactor goroutines spun up by ensureCompactor
+	// share the same gctx via the bundle's runCtx field.
+	if d.compact != nil {
+		g.Go(func() error {
+			return d.compact.Run(gctx)
 		})
 	}
 

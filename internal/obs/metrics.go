@@ -162,6 +162,14 @@ type Metrics struct {
 	// "language" ∈ AllowedLabels;
 	// "confidence_tier" ∈ {"1.00","0.90","0.80","0.70","0.60","0.45","0.20"} (D-12).
 	SemanticTypesResolutionVec *prometheus.CounterVec
+
+	// Phase 63 P63-02 Task 3: compaction + vacuum duration histograms.
+	// Closed-enum outcome labels keep cardinality bounded (T-63-02-06
+	// mitigation). Drop-on-unknown via SemanticCompactionObserve /
+	// SemanticVacuumObserve helpers.
+	SemanticCompactionDurationVec *prometheus.HistogramVec
+	SemanticCompactionBlockedVec  *prometheus.CounterVec
+	SemanticVacuumDurationVec     *prometheus.HistogramVec
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -387,6 +395,30 @@ func newMetrics() *Metrics {
 			},
 			[]string{"language", "confidence_tier"},
 		),
+		// Phase 63 P63-02 Task 3: compaction + vacuum metrics.
+		SemanticCompactionDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "helix_semantic_compaction_duration_seconds",
+				Help:    "Compaction cycle duration by outcome (success/partial/skipped_blocked/error). Phase 63 D-01.",
+				Buckets: []float64{0.001, 0.005, 0.025, 0.1, 0.5, 1.0, 5.0, 15.0, 30.0, 60.0},
+			},
+			[]string{"outcome"},
+		),
+		SemanticCompactionBlockedVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_compaction_blocked_total",
+				Help: "Compaction skipped_blocked outcomes by closed-enum BlockedReason. Phase 63 D-04.",
+			},
+			[]string{"reason"},
+		),
+		SemanticVacuumDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "helix_semantic_vacuum_duration_seconds",
+				Help:    "VACUUM cycle duration by outcome (success/skipped/error). Phase 63 D-05.",
+				Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 60.0, 300.0},
+			},
+			[]string{"outcome"},
+		),
 	}
 
 	reg.MustRegister(
@@ -417,6 +449,10 @@ func newMetrics() *Metrics {
 		m.SemanticGraphRepairVec,
 		m.SemanticGraphVersionGauge,
 		m.SemanticTypesResolutionVec,
+		// Phase 63 P63-02 Task 3: compaction + vacuum metrics.
+		m.SemanticCompactionDurationVec,
+		m.SemanticCompactionBlockedVec,
+		m.SemanticVacuumDurationVec,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -710,14 +746,14 @@ var graphScoreStatuses = map[string]struct{}{
 }
 
 var graphRepairOutcomes = map[string]struct{}{
-	"applied":            {},
-	"frontier_overflow":  {},
-	"preempted":          {},
-	"error":              {},
+	"applied":           {},
+	"frontier_overflow": {},
+	"preempted":         {},
+	"error":             {},
 	// 62-08: surfaces the four deferred Phase 64 read paths on
 	// rankStoreAdapter (62-VERIFICATION.md gap truth #21 / WR-05) so
 	// dashboards distinguish "no data yet" from clean repair.
-	"stub_no_data":       {},
+	"stub_no_data": {},
 }
 
 // typesConfidenceTiers is the SPEC §38.2 ladder rendered as bucketed
@@ -797,4 +833,79 @@ func (m *Metrics) SemanticTypesResolutionInc(language, confidenceTier string) {
 		return
 	}
 	m.SemanticTypesResolutionVec.WithLabelValues(language, confidenceTier).Inc()
+}
+
+// compactionOutcomes is the closed-enum allowlist for the compaction
+// duration histogram. Phase 63 D-04 / T-63-02-06 mitigation: cardinality
+// is bounded at construction time by this set.
+var compactionOutcomes = map[string]struct{}{
+	"success":         {},
+	"partial":         {},
+	"skipped_blocked": {},
+	"error":           {},
+}
+
+// vacuumOutcomes is the closed-enum allowlist for the VACUUM duration
+// histogram.
+var vacuumOutcomes = map[string]struct{}{
+	"success": {},
+	"skipped": {},
+	"error":   {},
+}
+
+// blockedReasons is the closed-enum allowlist for the
+// helix_semantic_compaction_blocked_total counter. Mirrors the gate's
+// BlockedReason enum (gate.go).
+var blockedReasons = map[string]struct{}{
+	"overlay_empty":     {},
+	"idle_too_short":    {},
+	"edit_tx_active":    {},
+	"overlay_tx_active": {},
+	"lsp_pending":       {},
+	"rank_repairing":    {},
+}
+
+// SemanticCompactionObserve records a compaction-cycle duration.
+// outcome ∈ {success, partial, skipped_blocked, error}; unknown values
+// drop the emission. Negative seconds drop. Phase 63 D-04.
+func (m *Metrics) SemanticCompactionObserve(outcome string, seconds float64) {
+	if m == nil || m.SemanticCompactionDurationVec == nil {
+		return
+	}
+	if seconds < 0 {
+		return
+	}
+	if _, ok := compactionOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticCompactionDurationVec.WithLabelValues(outcome).Observe(seconds)
+}
+
+// SemanticCompactionBlocked increments the closed-enum
+// "skipped_blocked" sub-counter keyed on BlockedReason. Unknown reasons
+// drop. Phase 63 D-04.
+func (m *Metrics) SemanticCompactionBlocked(reason string) {
+	if m == nil || m.SemanticCompactionBlockedVec == nil {
+		return
+	}
+	if _, ok := blockedReasons[reason]; !ok {
+		return
+	}
+	m.SemanticCompactionBlockedVec.WithLabelValues(reason).Inc()
+}
+
+// SemanticVacuumObserve records a VACUUM-cycle duration. outcome ∈
+// {success, skipped, error}; unknown values drop the emission. Negative
+// seconds drop. Phase 63 D-05.
+func (m *Metrics) SemanticVacuumObserve(outcome string, seconds float64) {
+	if m == nil || m.SemanticVacuumDurationVec == nil {
+		return
+	}
+	if seconds < 0 {
+		return
+	}
+	if _, ok := vacuumOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticVacuumDurationVec.WithLabelValues(outcome).Observe(seconds)
 }

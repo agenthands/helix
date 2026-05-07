@@ -75,6 +75,22 @@ type Config struct {
 
 	// PhaseGraph configures the bootstrap phase-graph runner (v1.11+).
 	PhaseGraph PhaseGraphConfig `koanf:"phase_graph"`
+
+	// Maintenance configures the Phase 63 P63-02 compaction-side
+	// VACUUM cadence (D-05). Currently a no-op-by-DuckDB; default off.
+	Maintenance MaintenanceConfig `koanf:"maintenance"`
+}
+
+// MaintenanceConfig holds the Phase 63 maintenance settings.
+// Field set mirrors SPEC §25.maintenance.* (Phase 63 extension).
+type MaintenanceConfig struct {
+	// VacuumEnabled gates the compactor's VACUUM piggyback. Default
+	// false (CONTEXT.md D-05 + planner decision).
+	VacuumEnabled bool `koanf:"vacuum_enabled"`
+	// VacuumInterval is the human-readable duration between successful
+	// VACUUM runs (e.g., "168h"). Parsed via time.ParseDuration in the
+	// daemon wiring; values <= 0 fall back to a 168h default.
+	VacuumInterval string `koanf:"vacuum_interval"`
 }
 
 // StoreConfig holds the DuckDB embedded fact-store settings. SPEC-DRAFT.md
@@ -276,12 +292,12 @@ type EvalConfig struct {
 // TypeResolutionConfig holds type-resolution pipeline parameters (P62).
 // Field set mirrors SPEC §25.type_resolution.* verbatim.
 type TypeResolutionConfig struct {
-	Enabled               bool    `koanf:"enabled"`                  // default true
-	MaxChainDepth         int     `koanf:"max_chain_depth"`          // default 8
-	MaxFixpointIterations int     `koanf:"max_fixpoint_iterations"`  // default 8
-	MinConfidenceForEdge  float64 `koanf:"min_confidence_for_edge"`  // default 0.45
-	CommentFallbacks      bool    `koanf:"comment_fallbacks"`        // default true
-	EmitUnresolvedEdges   bool    `koanf:"emit_unresolved_edges"`    // default true
+	Enabled               bool    `koanf:"enabled"`                 // default true
+	MaxChainDepth         int     `koanf:"max_chain_depth"`         // default 8
+	MaxFixpointIterations int     `koanf:"max_fixpoint_iterations"` // default 8
+	MinConfidenceForEdge  float64 `koanf:"min_confidence_for_edge"` // default 0.45
+	CommentFallbacks      bool    `koanf:"comment_fallbacks"`       // default true
+	EmitUnresolvedEdges   bool    `koanf:"emit_unresolved_edges"`   // default true
 }
 
 // PhaseGraphConfig holds bootstrap phase-graph-runner settings (v1.11+).

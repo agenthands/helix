@@ -27,6 +27,14 @@ type fakeSchedulerStore struct {
 	total       int
 	allStale    int
 	rowsByRepo  map[string][]ScoreRowSnapshot
+
+	// Optional method overrides used by 62-07 contract tests
+	// (TestRankScheduler_LockReleasedBeforeCountStale). When non-nil, these
+	// take precedence over the default fake bodies below. Kept as func
+	// fields so a single hostile test can swap LockWorkspace +
+	// CountStaleScoreRows without re-implementing the full surface.
+	lockWorkspaceFn func(repoID string) func()
+	countStaleFn    func(ctx context.Context, repoID, projection string) (int, int, error)
 }
 
 func newFakeSchedulerStore() *fakeSchedulerStore {
@@ -38,7 +46,10 @@ func newFakeSchedulerStore() *fakeSchedulerStore {
 	}
 }
 
-func (s *fakeSchedulerStore) LockWorkspace(string) func() {
+func (s *fakeSchedulerStore) LockWorkspace(repoID string) func() {
+	if s.lockWorkspaceFn != nil {
+		return s.lockWorkspaceFn(repoID)
+	}
 	s.lockMu.Lock()
 	return s.lockMu.Unlock
 }
@@ -67,7 +78,10 @@ func (s *fakeSchedulerStore) QueryEffectiveAdjacency(_ context.Context, _, _ str
 	}
 	return out, in, nil
 }
-func (s *fakeSchedulerStore) CountStaleScoreRows(context.Context, string, string) (int, int, error) {
+func (s *fakeSchedulerStore) CountStaleScoreRows(ctx context.Context, repoID, projection string) (int, int, error) {
+	if s.countStaleFn != nil {
+		return s.countStaleFn(ctx, repoID, projection)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stale, s.total, nil
@@ -313,4 +327,134 @@ func TestRankScheduler_FullRecomputeFiresOnLongIdle(t *testing.T) {
 		t.Errorf("error repair count=%d, want 0", got)
 	}
 	_ = atomic.LoadInt32 // tame unused import on stripped builds
+}
+
+// TestRankScheduler_LockReleasedBeforeCountStale exercises CR-01 (62-07): the
+// per-workspace overlay lock MUST be released BEFORE the post-commit
+// CountStaleScoreRows probe so a future implementation that re-acquires the
+// same lock cannot self-deadlock against the scheduler's own outstanding hold.
+//
+// The hostile stub wraps the production-shaped fake: LockWorkspace gates on a
+// real sync.Mutex per repoID; CountStaleScoreRows attempts to re-acquire that
+// same mutex. If the scheduler still holds the lock when it calls
+// CountStaleScoreRows, the test deadlocks until the parent ctx deadline
+// (500ms) fires; runIncrementalRepair never returns until ctx-cancelled
+// shutdown drains. Today (pre-fix) the bare `defer release()` pattern keeps
+// the lock held → deadlock → t.Fatal. After the fix the explicit release()
+// between tx.Commit() and CountStaleScoreRows lets the probe acquire the
+// mutex cleanly and the scheduler exits at ctx deadline as expected.
+func TestRankScheduler_LockReleasedBeforeCountStale(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeSchedulerStore()
+	// Hostile mutex shared between LockWorkspace and CountStaleScoreRows.
+	// Production rankStoreAdapter today uses ONE mutex per workspace; this
+	// fake forces the same shape so the contract test bites.
+	var hostileMu sync.Mutex
+	store.lockWorkspaceFn = func(string) func() {
+		hostileMu.Lock()
+		return func() { hostileMu.Unlock() }
+	}
+	store.countStaleFn = func(ctx context.Context, _, _ string) (int, int, error) {
+		// Deliberately re-acquire the same workspace mutex. If the
+		// scheduler still holds it, this deadlocks until ctx.Done.
+		lockCh := make(chan struct{})
+		go func() {
+			hostileMu.Lock()
+			close(lockCh)
+		}()
+		select {
+		case <-lockCh:
+			defer hostileMu.Unlock()
+			return 0, 1, nil
+		case <-ctx.Done():
+			// Scheduler still holds the mutex when ctx expired → deadlock.
+			return 0, 0, ctx.Err()
+		}
+	}
+
+	parentCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	cfg := SchedulerConfig{
+		Debounce:               1 * time.Millisecond,
+		FullRecomputeIdle:      1 * time.Hour, // does not fire in this test
+		FullRecomputeThreshold: 0.5,
+		MaxLocalNodes:          5000,
+		Damping:                0.85,
+		Epsilon:                1e-6,
+		MaxIter:                50,
+		Projection:             "call_graph",
+		QueueSize:              4,
+	}
+	s := NewRankScheduler("repo-A", cfg, store, slog.Default(), newRecordingMetrics())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = s.Run(parentCtx)
+	}()
+
+	// Force one advance so runIncrementalRepair fires.
+	s.Notify(GraphVersionAdvance{
+		RepoID:       "repo-A",
+		Version:      1,
+		ChangedNodes: []NodeID{1},
+	})
+
+	// We expect the scheduler goroutine to exit cleanly when ctx deadline
+	// fires (~500ms). If the scheduler is deadlocked holding the lock
+	// across CountStaleScoreRows, the AfterFunc-spawned repair goroutine
+	// is wedged on hostileMu until ctx.Done unblocks the countStaleFn — at
+	// which point the repair completes and Run exits on the next select.
+	//
+	// The structural assertion is the post-condition: countStaleFn MUST
+	// have been able to acquire hostileMu (i.e., it returned without ctx
+	// error) within the deadline. Pre-fix, the lock is held throughout, so
+	// countStaleFn always returns ctx.Err() and the post-condition flag
+	// stays false.
+	var (
+		countStaleSawLock = make(chan struct{}, 1)
+	)
+	store.countStaleFn = func(ctx context.Context, _, _ string) (int, int, error) {
+		lockCh := make(chan struct{})
+		go func() {
+			hostileMu.Lock()
+			close(lockCh)
+		}()
+		select {
+		case <-lockCh:
+			defer hostileMu.Unlock()
+			select {
+			case countStaleSawLock <- struct{}{}:
+			default:
+			}
+			return 0, 1, nil
+		case <-ctx.Done():
+			return 0, 0, ctx.Err()
+		}
+	}
+
+	// Drive a fresh advance now that countStaleFn is in place; the previous
+	// Notify may have been consumed before the override-swap above.
+	s.Notify(GraphVersionAdvance{
+		RepoID:       "repo-A",
+		Version:      2,
+		ChangedNodes: []NodeID{2},
+	})
+
+	select {
+	case <-countStaleSawLock:
+		// CR-01 closed: countStale was able to acquire the lock, so the
+		// scheduler released it before invoking the probe.
+	case <-time.After(400 * time.Millisecond):
+		t.Fatal("CR-01: CountStaleScoreRows could not acquire workspace lock — scheduler still holds it across the post-commit probe (latent self-deadlock)")
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(750 * time.Millisecond):
+		t.Fatal("RankScheduler did not exit within deadline after cancel")
+	}
 }

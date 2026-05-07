@@ -174,6 +174,14 @@
   - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
   - [x] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
+  **Goal:** Agents can index, refresh, inspect, and query the semantic graph through four new MCP tools (`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`) whose responses always carry `freshness` + `graph_version` fields, profile/mode gating respects the existing matrix, and selection is deterministic.
+  **Depends on:** Phase 62, Phase 63
+  **Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05
+  **Success Criteria:**
+  1. An agent calling `index_semantic_graph` (mode `review+`/`admin`) builds or refreshes a committed snapshot in `auto`/`full`/`incremental`/`refresh` modes and receives snapshot id, graph version, files indexed/reused, partial state, freshness, and duration.
+  2. An agent calling `refresh_semantic_graph` (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters.
+  3. An agent calling `get_semantic_context` receives `freshness=structurally_fresh_semantically_pending` after a single Helix edit and within the foreground-tool budget; the response includes `freshness_mode`, `graph_version`, `overlay_active`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
+  4. `tools/list` filters the four tools out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
 - [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
 - [ ] Phase 67: Evaluation Harness (0/0 plans)

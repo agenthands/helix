@@ -224,6 +224,4 @@ func GetSemanticSkill() *SemanticSkill {
 // Each deletion is a SINGLE LINE — zero overlap across plans, so wave-2
 // plans can land in parallel. The vars (rather than consts) accommodate
 // the const declaration that W1/W2 plans bring in their tool files.
-var (
-	contextHelp = "get_semantic_context: stub help (replaced by P64-07)"
-)
+var ()

@@ -213,6 +213,61 @@ func (r repairStoreShim) CurrentGraphVersion(ctx context.Context, repoID string)
 	return r.inner.CurrentGraphVersion(ctx, repoID)
 }
 
+// stubObserveKey identifies a (repoID, method) pair for once-gated
+// logging on Phase 64-deferred read paths.
+type stubObserveKey struct{ repoID, method string }
+
+// stubObserveState is the observability harness for unwired Phase 64
+// read paths on rankStoreAdapter. emit() increments
+// SemanticGraphRepairInc("stub_no_data") on every call AND emits
+// EXACTLY ONE WARN log per (repoID, method) pair per process via a
+// per-key sync.Once. Nil-safe: a nil receiver is a silent no-op so
+// production paths that construct an adapter without metrics+logger
+// (e.g. early bootstrap) keep working.
+//
+// Closes 62-VERIFICATION.md gap truth #21 (WR-05): operators monitoring
+// helix_semantic_graph_repair_total{outcome="stub_no_data"} get a
+// non-zero rate proportional to scheduler activity → clear "rank wired
+// but data not yet flowing" signal, instead of mistaking a clean stub
+// path for outcome="applied" success.
+type stubObserveState struct {
+	mu      sync.Mutex
+	onceMap map[stubObserveKey]*sync.Once
+	metrics graphpkg.MetricsSink
+	logger  *slog.Logger
+}
+
+func (st *stubObserveState) emit(repoID, method string) {
+	if st == nil {
+		return
+	}
+	if st.metrics != nil {
+		st.metrics.SemanticGraphRepairInc("stub_no_data")
+	}
+	st.mu.Lock()
+	if st.onceMap == nil {
+		st.onceMap = make(map[stubObserveKey]*sync.Once)
+	}
+	key := stubObserveKey{repoID: repoID, method: method}
+	once, ok := st.onceMap[key]
+	if !ok {
+		once = &sync.Once{}
+		st.onceMap[key] = once
+	}
+	st.mu.Unlock()
+	once.Do(func() {
+		if st.logger != nil {
+			st.logger.Warn(
+				"rankStoreAdapter: production read method is stubbed; rank surface returns empty until Phase 64 lands the typed effective-graph queries",
+				"method", method,
+				"repo_id", repoID,
+				"phase", "64",
+				"see", "62-VERIFICATION.md truth #21 (WR-05); closure 62-08-PLAN.md",
+			)
+		}
+	})
+}
+
 // rankStoreAdapter wraps *semanticstore.Store with the graph.SchedulerStore
 // surface. Methods that have direct DuckDB-side counterparts forward
 // straight; methods that require new query logic are best-effort no-op
@@ -221,15 +276,31 @@ func (r repairStoreShim) CurrentGraphVersion(ctx context.Context, repoID string)
 // errors so the scheduler keeps running; the rank surface stays empty
 // until those are wired, but the Phase 62 P03 lifecycle / single-bump /
 // per-workspace-isolation invariants ALL hold.
+//
+// stubObserve is the Phase 62-08 observability harness: each stubbed
+// read method emits SemanticGraphRepairInc("stub_no_data") on every
+// call and a once-gated WARN log per (repoID, method) so operators see
+// the deferred dependency instead of clean "applied" success counts.
 type rankStoreAdapter struct {
-	store *semanticstore.Store
+	store       *semanticstore.Store
+	stubObserve *stubObserveState
 }
 
-func newRankStoreAdapter(s *semanticstore.Store) *rankStoreAdapter {
+// newRankStoreAdapter constructs the production adapter. metrics + logger
+// flow into the stubObserve harness so the four Phase 64-deferred read
+// methods surface operator-visible signal until Phase 64 lands real
+// queries. Both are nil-safe: a nil sink/logger keeps the harness silent.
+func newRankStoreAdapter(s *semanticstore.Store, metrics graphpkg.MetricsSink, logger *slog.Logger) *rankStoreAdapter {
 	if s == nil {
 		return nil
 	}
-	return &rankStoreAdapter{store: s}
+	return &rankStoreAdapter{
+		store: s,
+		stubObserve: &stubObserveState{
+			metrics: metrics,
+			logger:  logger,
+		},
+	}
 }
 
 func (a *rankStoreAdapter) LockWorkspace(repoID string) func() {
@@ -248,27 +319,40 @@ func (a *rankStoreAdapter) CurrentGraphVersion(ctx context.Context, repoID strin
 	return a.store.CurrentGraphVersion(ctx, repoID)
 }
 
-func (a *rankStoreAdapter) QueryEffectiveGraph(_ context.Context, _, _ string) ([]graphpkg.NodeID, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
+// TODO(phase-64): The four read methods below are stubs. The real
+// implementations land in Phase 64 alongside the MCP tool surface; see
+// 62-VERIFICATION.md gap truth #21 (WR-05) and 62-08-PLAN.md observability
+// bridge that surfaces the gap via SemanticGraphRepairInc("stub_no_data")
+// + a once-WARN log per (workspace, method). Until Phase 64 wires real
+// queries, the scheduler runs against an empty effective-graph and writes
+// empty score generations; operators should monitor
+// helix_semantic_graph_repair_total{outcome="stub_no_data"} as the canary
+// signal that distinguishes "no data yet" from clean "applied" repair.
+func (a *rankStoreAdapter) QueryEffectiveGraph(_ context.Context, repoID, _ string) ([]graphpkg.NodeID, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
 	// Phase 64 follow-up: typed query reads through internal/semantic/store/effective.go.
+	a.stubObserve.emit(repoID, "QueryEffectiveGraph")
 	return nil, map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, nil
 }
 
-func (a *rankStoreAdapter) QueryEffectiveAdjacency(_ context.Context, _, _ string) (map[graphpkg.NodeID]map[graphpkg.NodeID]float64, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
+func (a *rankStoreAdapter) QueryEffectiveAdjacency(_ context.Context, repoID, _ string) (map[graphpkg.NodeID]map[graphpkg.NodeID]float64, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
 	// Phase 64 follow-up: the adjacency query is the inverse of the
 	// effective-graph view. Returning empty maps here keeps the scheduler
 	// alive — its incremental path will compute an empty frontier and
 	// short-circuit cleanly.
+	a.stubObserve.emit(repoID, "QueryEffectiveAdjacency")
 	return map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, nil
 }
 
-func (a *rankStoreAdapter) CountStaleScoreRows(_ context.Context, _, _ string) (int, int, error) {
+func (a *rankStoreAdapter) CountStaleScoreRows(_ context.Context, repoID, _ string) (int, int, error) {
 	// Phase 64 follow-up: SELECT COUNT(*) FROM semantic_graph_scores WHERE
 	// repo_id=? AND score_name=? AND status='stale' / total counterpart.
+	a.stubObserve.emit(repoID, "CountStaleScoreRows")
 	return 0, 0, nil
 }
 
-func (a *rankStoreAdapter) MarkAllScoreRowsStale(_ context.Context, _, _ string) error {
+func (a *rankStoreAdapter) MarkAllScoreRowsStale(_ context.Context, repoID, _ string) error {
 	// Phase 64 follow-up: bulk UPDATE on semantic_graph_scores.
+	a.stubObserve.emit(repoID, "MarkAllScoreRowsStale")
 	return nil
 }
 

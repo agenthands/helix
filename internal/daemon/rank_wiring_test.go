@@ -151,11 +151,17 @@ func TestRankStoreAdapter_StubObservability_PerMethodGate(t *testing.T) {
 }
 
 // newRankStoreAdapterForTest is the test seam that returns an adapter
-// wired with the recording sink + logger. RED state: returns nil so each
-// method call panics on nil dereference. Task 2 implements the real seam
-// returning a fully-wired *rankStoreAdapter.
-func newRankStoreAdapterForTest(t *testing.T, _ graphpkg.MetricsSink, _ *slog.Logger) *rankStoreAdapter {
+// wired with the recording sink + logger. The four stub methods only
+// dereference a.stubObserve — they never touch a.store — so leaving
+// store nil is safe for these unit tests. Production wiring goes through
+// newRankStoreAdapter(store, metrics, logger) in daemon.go.
+func newRankStoreAdapterForTest(t *testing.T, sink graphpkg.MetricsSink, logger *slog.Logger) *rankStoreAdapter {
 	t.Helper()
-	// RED: implementation lands in Task 2.
-	return nil
+	return &rankStoreAdapter{
+		store: nil, // not exercised by the four stub methods.
+		stubObserve: &stubObserveState{
+			metrics: sink,
+			logger:  logger,
+		},
+	}
 }

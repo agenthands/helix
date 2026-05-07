@@ -348,7 +348,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// shutdown is preserved because the bundle returns on ctx.Done.
 	var rank *rankBundle
 	if semanticStore != nil && live != nil && live.handler != nil {
-		rankAdapter := newRankStoreAdapter(semanticStore)
+		rankAdapter := newRankStoreAdapter(semanticStore, observability.Metrics(), logger)
 		rank = newRankBundle(
 			cfg.SemanticIndex.PageRank,
 			cfg.SemanticIndex.Graph,

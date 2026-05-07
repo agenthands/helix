@@ -249,31 +249,50 @@ func parseAssignment(sig string) string {
 	return ""
 }
 
+// suffixRule maps a recognised identifier suffix to its full-form type
+// name. The slice ordering is the match-priority order (CR-03 closure):
+// sort-before-iterate locks deterministic match selection regardless of
+// future additions that may alias one suffix as another's tail.
+type suffixRule struct{ short, long string }
+
+// goSuffixRules is sorted ascending by short. Adding a rule MUST preserve
+// the sort order so determinism remains structural rather than incidental.
+// Today's set is overlap-free at the tail level so behaviour is unchanged
+// for existing inputs; the slice form is a contract upgrade that locks
+// down future additions.
+var goSuffixRules = []suffixRule{
+	{short: "Cfg", long: "Config"},
+	{short: "Conf", long: "Configuration"},
+	{short: "Conn", long: "Connection"},
+	{short: "Ctrl", long: "Controller"},
+	{short: "Hdlr", long: "Handler"},
+	{short: "Mgr", long: "Manager"},
+	{short: "Repo", long: "Repository"},
+	{short: "Svc", long: "Service"},
+}
+
 // guessFromName implements the heuristic name-shape match. The current
 // rule converts a camelCase identifier ending in a recognised suffix
 // (e.g., "Repo" → "Repository") into its full-form type name.
 func guessFromName(name string) string {
+	return guessFromNameWithRules(name, goSuffixRules)
+}
+
+// guessFromNameWithRules is the test-seam variant. CR-03 invariant:
+// callers MUST pass rules sorted ascending by short for deterministic
+// match priority.
+func guessFromNameWithRules(name string, rules []suffixRule) string {
 	if name == "" {
 		return ""
 	}
-	suffixMap := map[string]string{
-		"Repo":   "Repository",
-		"Svc":    "Service",
-		"Mgr":    "Manager",
-		"Ctrl":   "Controller",
-		"Cfg":    "Config",
-		"Conf":   "Configuration",
-		"Hdlr":   "Handler",
-		"Conn":   "Connection",
-	}
-	for short, long := range suffixMap {
-		if strings.HasSuffix(name, short) && len(name) > len(short) {
+	for _, r := range rules {
+		if strings.HasSuffix(name, r.short) && len(name) > len(r.short) {
 			// Convert the prefix to TitleCase + the long form.
-			prefix := strings.TrimSuffix(name, short)
+			prefix := strings.TrimSuffix(name, r.short)
 			if prefix == "" {
-				return long
+				return r.long
 			}
-			return strings.ToUpper(prefix[:1]) + prefix[1:] + long
+			return strings.ToUpper(prefix[:1]) + prefix[1:] + r.long
 		}
 	}
 	return ""

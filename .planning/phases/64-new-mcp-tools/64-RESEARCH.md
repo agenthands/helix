@@ -582,37 +582,37 @@ func (s *Store) MarkAllScoreRowsStale(ctx context.Context, repoID, projection st
 
 **Cross-cutting concerns:** the `cmd/vet-noduckdb` analyzer (Phase 57) requires duckdb-go imports stay in `internal/semantic/store/` — the new file is in the right place.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Single skill package vs four packages?**
+1. **RESOLVED: Single skill package vs four packages?**
    - What we know: `internal/skill/repomap/skill.go` ships two tools in one package; `internal/kernel/symbols/tools.go` ships nine tools in one package. The codebase is already comfortable with multi-tool packages.
    - What's unclear: CONTEXT.md "Claude's Discretion" leaves it to planner; Phase 65 strangler-fig will likely add tools that overlap conceptually with semantic.
-   - Recommendation: ONE package `internal/skill/semantic/` with separate files per tool (`tools_index.go`, etc.). Phase 65 lands in the same package; if it grows past ~6 tools, split later.
+   - **RESOLVED:** ONE package `internal/skill/semantic/` with separate files per tool (`tools_index.go`, etc.). Phase 65 lands in the same package; if it grows past ~6 tools, split later.
 
-2. **Where does the `IndexRunner`'s background-build progress live?**
+2. **RESOLVED: Where does the `IndexRunner`'s background-build progress live?**
    - What we know: D-04 timeout response carries `files_indexed`, `files_reused` "so far"; the runner must expose a progress accessor.
    - What's unclear: Atomic counters on `*buildState`? Or read from `semantic_snapshots` row counts mid-write?
-   - Recommendation: atomic counters on `*buildState` (one per file processed). Concrete shape locked at plan time; researcher flags this for explicit task in plan.
+   - **RESOLVED:** atomic counters on `*buildState` (one per file processed). Concrete shape locked at plan time; researcher flags this for explicit task in plan.
 
-3. **`status=building` field placement in response envelope?**
+3. **RESOLVED: `status=building` field placement in response envelope?**
    - What we know: CONTEXT.md "Claude's Discretion" recommends a top-level `status` field with closed enum `committed | building | failed`.
    - What's unclear: Whether SPEC §23.1 envelope already names this field something else.
-   - Recommendation: planner reads SPEC-DRAFT.md §23.1 verbatim to confirm field name; if SPEC is silent, use `status` per CONTEXT.md recommendation.
+   - **RESOLVED:** planner reads SPEC-DRAFT.md §23.1 verbatim to confirm field name; if SPEC is silent, use `status` per CONTEXT.md recommendation.
 
-4. **Profile YAML registration mechanism: skill name vs tool list?**
+4. **RESOLVED: Profile YAML registration mechanism: skill name vs tool list?**
    - What we know: Existing profiles use `skills:` (e.g., `repomap`, `health`) — adding the four tools should mean adding a new `semantic` skill identifier and listing it in each profile YAML's `skills:` block. D-14 says all 5 profiles get all 4 tools.
    - What's unclear: Whether a single `semantic` skill identifier or one per tool is preferred. Codebase has 1:1 (skill→multiple tools) precedent (`repomap`, `symbol-retrieval`).
-   - Recommendation: ONE `semantic` skill identifier added to all 5 profile YAMLs and 4 mode YAMLs (`read`/`edit`/`review`/`admin`). Mirrors `repomap` and `symbol-retrieval`.
+   - **RESOLVED:** ONE `semantic` skill identifier added to all 5 profile YAMLs and 4 mode YAMLs (`read`/`edit`/`review`/`admin`). Mirrors `repomap` and `symbol-retrieval`.
 
-5. **Mode YAML enforcement vs handler enforcement double-check?**
+5. **RESOLVED: Mode YAML enforcement vs handler enforcement double-check?**
    - What we know: Existing `read.yaml` excludes editing tools by listing them in `exclude_tools`; `ProfileFilterMiddleware` filters `tools/list` by `AllowedTools`.
    - What's unclear: If `read.yaml` should `exclude_tools: [index_semantic_graph]` (so the tool doesn't appear in `tools/list` for read mode) AND the handler should reject when called anyway. Belt-and-braces.
-   - Recommendation: BOTH layers — `tools/list` doesn't show `index_semantic_graph` in read mode; if the agent calls it directly anyway (cached schema), the handler returns the structured mode-violation envelope. Acceptance test #5 covers handler-side; profile filter test covers tools/list-side.
+   - **RESOLVED:** BOTH layers — `tools/list` doesn't show `index_semantic_graph` in read mode; if the agent calls it directly anyway (cached schema), the handler returns the structured mode-violation envelope. Acceptance test #5 covers handler-side; profile filter test covers tools/list-side.
 
-6. **bleve recovery: block vs return-stale?**
+6. **RESOLVED: bleve recovery: block vs return-stale?**
    - What we know: CONTEXT.md "Claude's Discretion" recommends "block with `freshness=stale, retrieval_pending=true`"; says agent calls during rebuild should not crash.
    - What's unclear: Whether the rebuild blocks the request mid-call (synchronous wait) or returns immediately with the pending flag (agent retries).
-   - Recommendation: Return immediately with `retrieval_pending=true`; agents poll `get_semantic_graph_status` (which exposes the rebuild progress). Aligns with the partial-state pattern of `index_semantic_graph` D-01.
+   - **RESOLVED:** Return immediately with `retrieval_pending=true`; agents poll `get_semantic_graph_status` (which exposes the rebuild progress). Aligns with the partial-state pattern of `index_semantic_graph` D-01.
 
 ## Environment Availability
 

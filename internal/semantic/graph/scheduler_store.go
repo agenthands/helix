@@ -45,6 +45,14 @@ type SchedulerStore interface {
 	// CountStaleScoreRows returns (stale, total) for (repo, projection).
 	// The scheduler uses the ratio to drive its full-recompute decision
 	// (D-08 FullRecomputeThreshold).
+	//
+	// LOCK CONTRACT (CR-01 closure, 62-07): Implementations
+	// MUST NOT acquire the workspace lock returned by LockWorkspace.
+	// RankScheduler invokes this method AFTER tx.Commit() AND AFTER
+	// releasing the workspace lock; any implementation that re-acquires
+	// LockWorkspace would self-deadlock against the caller's prior
+	// release. Open a fresh read tx without the workspace lock, or use
+	// an unlocked counter view.
 	CountStaleScoreRows(ctx context.Context, repoID, projection string) (stale, total int, err error)
 
 	// MarkAllScoreRowsStale flips every score row for (repo, projection)

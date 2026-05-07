@@ -43,19 +43,19 @@ type recorderStoreAccessor struct {
 	t *testing.T
 
 	// Injection points for the read surface.
-	graphVersion       uint64
-	graphVersionErr    error
-	overlayHasPending  bool
-	latestSnapshot     uint64
-	latestSnapshotErr  error
-	queryAdjOut        map[graph.NodeID]map[graph.NodeID]float64
-	queryAdjIn         map[graph.NodeID]map[graph.NodeID]float64
-	queryAdjErr        error
+	graphVersion      uint64
+	graphVersionErr   error
+	overlayHasPending bool
+	latestSnapshot    uint64
+	latestSnapshotErr error
+	queryAdjOut       map[graph.NodeID]map[graph.NodeID]float64
+	queryAdjIn        map[graph.NodeID]map[graph.NodeID]float64
+	queryAdjErr       error
 
 	// Forbidden-call counters (assertion canaries).
-	beginSnapshotCalls    atomic.Int64
-	commitSnapshotCalls   atomic.Int64
-	abortSnapshotCalls    atomic.Int64
+	beginSnapshotCalls      atomic.Int64
+	commitSnapshotCalls     atomic.Int64
+	abortSnapshotCalls      atomic.Int64
 	writeSnapshotFactsCalls atomic.Int64
 }
 
@@ -101,8 +101,8 @@ func (r *recorderStoreAccessor) WriteSnapshotFacts(ctx context.Context, snapID u
 // recorderCompactorAccessor implements CompactorAccessor. OnFlush calls
 // t.Fatal — the refresh handler must NEVER trigger compaction (D-13).
 type recorderCompactorAccessor struct {
-	t        *testing.T
-	calls    atomic.Int64
+	t     *testing.T
+	calls atomic.Int64
 }
 
 func (r *recorderCompactorAccessor) OnFlush(ws workspace.WorkspaceKey) error {
@@ -155,9 +155,9 @@ func (m *mockLiveAccessor) firstCall() recordedLiveCall {
 // mockQueueAccessor implements QueueAccessor with a depth function so tests
 // can model "drains over time" behavior.
 type mockQueueAccessor struct {
-	depthFn        func() int
-	lastEnqueueAt  int64
-	depthCalls     atomic.Int64
+	depthFn       func() int
+	lastEnqueueAt int64
+	depthCalls    atomic.Int64
 }
 
 func (m *mockQueueAccessor) DepthAll(ws workspace.WorkspaceKey) int {

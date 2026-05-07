@@ -76,6 +76,15 @@ func (f *fakeOverlay) UpdateLastVacuumAt(_ context.Context, _ string, _ interfac
 	return nil
 }
 
+// CurrentOverlayEpoch (Phase 63 review CR-01): returns 0 by default —
+// the unit-fake compactor tests do not exercise concurrent overlay
+// writers, so the captured-epoch value is irrelevant for these
+// scenarios. Tests that need a non-zero epoch can set fakeOverlay.epoch
+// and have the method return that value.
+func (f *fakeOverlay) CurrentOverlayEpoch(_ context.Context, _ string) (uint64, error) {
+	return 0, nil
+}
+
 // fakeStore stubs the snapshot-tx surface. Each call increments a
 // counter so tests can assert call orderings.
 type fakeStore struct {

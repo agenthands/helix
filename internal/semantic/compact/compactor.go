@@ -47,11 +47,18 @@ type SnapshotStore interface {
 }
 
 // OverlayOps is the narrow overlay-side surface the compactor consumes
-// for the pre-flight size guard + the VACUUM-cadence persistence.
-// *store.Store satisfies via OverlayRowCount + UpdateLastVacuumAt.
+// for the pre-flight size guard + the VACUUM-cadence persistence + the
+// captured-epoch read (Phase 63 review CR-03). *store.Store satisfies
+// via OverlayRowCount + UpdateLastVacuumAt + CurrentOverlayEpoch.
 type OverlayOps interface {
 	OverlayRowCount(ctx context.Context, repoID string, capturedEpoch uint64) (int, error)
 	UpdateLastVacuumAt(ctx context.Context, repoID string, t interface{}) error
+	// CurrentOverlayEpoch returns the current overlay write_epoch for
+	// repoID (mirrors store.Store.CurrentGraphVersion). Phase 63 review
+	// CR-01: the compactor reads this BEFORE BeginSnapshot so
+	// ClearOverlayLE only deletes rows committed before the snapshot tx
+	// opened. Returns 0 if no overlay writes have happened yet for repoID.
+	CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error)
 }
 
 // Deps bundles the dependencies passed to NewCompactor.
@@ -183,16 +190,19 @@ func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 		return
 	}
 
-	// Choose a captured_epoch. The compactor reads the current overlay
-	// epoch from CurrentGraphVersion-style probes is not the right
-	// path — the captured_epoch is the write_epoch we are CASing on.
-	// For Phase 63 P63-02 we use a conservative max-uint64 sentinel
-	// (∀ rows ≤ ∞) when the store doesn't expose a typed epoch read;
-	// production wiring may narrow this later. The size guard + the
-	// CAS contract still hold because rows committed during compaction
-	// receive write_epoch > capturedEpoch via BeginOverlayTx's monotone
-	// allocator, which we read AFTER selecting capturedEpoch.
-	capturedEpoch := c.captureEpoch(ctx)
+	// Capture the current overlay write_epoch BEFORE opening the snapshot
+	// tx (Phase 60 D-04 CAS contract / Phase 63 review CR-01). The read is
+	// issued on s.db (not in any tx) so it observes the most-recently-
+	// committed bump from BeginOverlayTx's monotone allocator. Rows
+	// committed AFTER this read receive write_epoch > capturedEpoch and
+	// SURVIVE the subsequent snap.ClearOverlayLE — preventing the
+	// silent-data-loss scenario the design exists to close.
+	capturedEpoch, err := c.deps.OverlayOps.CurrentOverlayEpoch(ctx, c.repoID)
+	if err != nil {
+		outcome = "error"
+		c.deps.Logger.Warn("compact.CurrentOverlayEpoch", "repo_id", c.repoID, "err", err)
+		return
+	}
 
 	// Pre-flight size guard.
 	rows, err := c.deps.OverlayOps.OverlayRowCount(ctx, c.repoID, capturedEpoch)
@@ -266,27 +276,6 @@ func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 	c.maybeVacuum(ctx)
 
 	return
-}
-
-// captureEpoch returns the current overlay write_epoch the compactor is
-// CASing on. P63-02 conservative implementation: max-uint64 sentinel so
-// every row committed BEFORE this call is in scope.
-//
-// The CAS contract is preserved because BeginOverlayTx allocates
-// epoch += 1 monotonically; concurrent writes after this call will
-// receive write_epoch = N+1 where N ≥ capturedEpoch is impossible if
-// capturedEpoch is max-uint64, but they will be excluded by the
-// `WHERE write_epoch <= capturedEpoch` clause where capturedEpoch is
-// captured BEFORE the new tx opens. In practice the daemon wiring
-// passes the most-recently-seen epoch via accessor; the simplified
-// in-package fallback works for the tests + the integration smoke
-// because no concurrent writer races with the compactor in those
-// scenarios.
-func (c *Compactor) captureEpoch(_ context.Context) uint64 {
-	// Use a high-bit-clear sentinel since duckdb-go rejects high-bit
-	// uint64 binds. (1 << 62) covers ~4.6e18, far above any plausible
-	// per-workspace epoch counter.
-	return 1 << 62
 }
 
 // Run is callable from a goroutine. Compile-time guard ensures Compactor

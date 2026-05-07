@@ -1001,6 +1001,42 @@ func (s *Store) CurrentGraphVersion(ctx context.Context, repoID string) (uint64,
 	return gv, nil
 }
 
+// CurrentOverlayEpoch reads the current overlay write_epoch for repoID
+// from semantic_live_overlay_meta. Mirrors CurrentGraphVersion's
+// no-mutex MVCC read pattern.
+//
+// Phase 63 review CR-03: consumed by the compactor's captureEpoch path
+// to read the current epoch BEFORE BeginSnapshot opens its tx. The
+// captured value bounds Snapshot.ClearOverlayLE (`WHERE write_epoch <=
+// ?`) so rows committed during compaction (write_epoch > capturedEpoch)
+// SURVIVE — closes the Phase 60 D-04 CAS contract. The previous
+// implementation in compact.captureEpoch returned a `1<<62` sentinel
+// that included future epochs and silently deleted concurrent overlay
+// writes.
+//
+// Returns (0, nil) when the meta row does not exist (no overlay writes
+// have occurred yet for repoID — the row is upserted by BeginOverlayTx).
+func (s *Store) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("CurrentOverlayEpoch: nil store")
+	}
+	if repoID == "" {
+		return 0, fmt.Errorf("CurrentOverlayEpoch: empty repoID")
+	}
+	var ep uint64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT current_epoch FROM semantic_live_overlay_meta
+		 WHERE repo_id = ?
+	`, repoID).Scan(&ep)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("CurrentOverlayEpoch(%q): %w", repoID, err)
+	}
+	return ep, nil
+}
+
 // LockOverlayWorkspace acquires the per-workspace overlay mutex for repoID
 // and returns a release function. The mutex is the SAME one used by
 // BeginOverlayTx (D-04 / D-06 invariant: graph_version advance MUST run

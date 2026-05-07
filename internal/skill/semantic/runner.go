@@ -3,10 +3,12 @@ package semantic
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/agenthands/helix/internal/workspace"
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrModeMustBeResolved is returned by IndexRunner.Run when the caller passes
@@ -17,11 +19,21 @@ var ErrModeMustBeResolved = errors.New(
 	"IndexRunner.Run requires resolved mode (full|incremental); call ResolveAuto first",
 )
 
+// defaultRunnerTimeout is the per-call ceiling applied when NewIndexRunner is
+// called with timeout=0. SPEC §23.1 documents 120s as the index_semantic_graph
+// default.
+const defaultRunnerTimeout = 120 * time.Second
+
+// buildFn is the concrete build function that BeginSnapshot /
+// WriteSnapshotFacts / CommitSnapshot under the bgCtx the runner provides.
+// Production wiring lands in P64-08; tests inject a mock buildFn.
+type buildFnT func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st *buildState) (IndexResult, error)
+
 // buildState is the per-build progress record shared between the foreground
-// (sync-with-timeout) caller and the background buildFn goroutine.
-//
-// Stub for the RED phase — Task 2 fills in the singleflight + sync.Map
-// orchestration that uses this struct.
+// (sync-with-timeout) caller and the background buildFn goroutine. The
+// foreground caller reads progress fields under timeout; the background
+// goroutine writes them as it makes progress so a partial result is
+// observable.
 type buildState struct {
 	snapshotID   uint64
 	startedAt    time.Time
@@ -32,27 +44,143 @@ type buildState struct {
 	done         chan struct{}
 }
 
-// IndexRunner is the skeleton type that the GREEN phase (Task 2) implements.
-// This stub exists so the RED-phase tests compile and fail at runtime.
-type IndexRunner struct{}
-
-// NewIndexRunner is the production constructor — Task 2 fills in the body.
-func NewIndexRunner(
-	store StoreAccessor,
-	buildFn func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st *buildState) (IndexResult, error),
-	timeout time.Duration,
-) *IndexRunner {
-	return &IndexRunner{}
+// IndexRunner orchestrates index_semantic_graph dispatch:
+//   - singleflight.Group keyed (workspace_repoRoot, RESOLVED-mode) so concurrent
+//     callers join the same in-flight build (D-02).
+//   - sync-with-timeout: the foreground caller blocks up to maxMs; on timeout,
+//     a partial IndexResult{Status: building, Partial: true} is returned and
+//     the background build keeps running (D-04).
+//   - mode-resolution: ResolveAuto answers "full" | "incremental" per D-03.
+//   - B5 invariant: Run rejects mode="auto" / mode="" with
+//     ErrModeMustBeResolved so the singleflight key is always keyed on the
+//     resolved mode. The handler is the sole site that resolves "auto".
+type IndexRunner struct {
+	sf       singleflight.Group
+	inFlight sync.Map // key=repoRoot string -> *buildState
+	store    StoreAccessor
+	buildFn  buildFnT
+	timeout  time.Duration
 }
 
-// Run is the production-bound singleflight + sync-with-timeout dispatcher.
-// Stub for the RED phase — Task 2 implements it.
+// NewIndexRunner constructs a runner with the given store accessor (used by
+// ResolveAuto) and buildFn (executed inside the singleflight). When timeout
+// is zero, defaultRunnerTimeout (120s) is applied.
+func NewIndexRunner(store StoreAccessor, buildFn buildFnT, timeout time.Duration) *IndexRunner {
+	if timeout <= 0 {
+		timeout = defaultRunnerTimeout
+	}
+	return &IndexRunner{
+		store:   store,
+		buildFn: buildFn,
+		timeout: timeout,
+	}
+}
+
+// Run executes (or joins an in-flight) index build for the workspace under
+// the resolved mode, blocking up to maxMs milliseconds. On timeout, returns
+// an IndexResult with Partial=true and Status=building; the background
+// build keeps running.
+//
+// B5 contract: mode MUST be a resolved mode ("full" or "incremental"). Passing
+// "auto" or "" returns ErrModeMustBeResolved without invoking buildFn — the
+// handler is solely responsible for auto resolution via ResolveAuto.
 func (r *IndexRunner) Run(ctx context.Context, ws workspace.WorkspaceKey, mode string, maxMs int) (IndexResult, error) {
-	panic("not implemented")
+	if mode == "auto" || mode == "" {
+		return IndexResult{}, ErrModeMustBeResolved
+	}
+
+	// Singleflight key includes the RESOLVED mode so two callers asking for
+	// different modes (e.g., "full" + "incremental") do NOT collapse, while
+	// two callers asking for the same resolved mode share the same build.
+	key := ws.RepoRoot + "|" + mode
+
+	deadline := time.Duration(maxMs) * time.Millisecond
+	if deadline <= 0 || deadline > r.timeout {
+		deadline = r.timeout
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	startedAt := time.Now()
+
+	ch := r.sf.DoChan(key, func() (any, error) {
+		// CRITICAL (D-04): bgCtx is derived from context.Background(), NOT
+		// the request ctx. A timed-out caller must not cancel the in-flight
+		// build — the build must keep running so its eventual commit is
+		// observable via get_semantic_graph_status.
+		bgCtx, bgCancel := context.WithCancel(context.Background())
+		st := &buildState{
+			startedAt: time.Now(),
+			mode:      mode,
+			cancel:    bgCancel,
+			done:      make(chan struct{}),
+		}
+		r.inFlight.Store(ws.RepoRoot, st)
+		defer r.inFlight.Delete(ws.RepoRoot)
+		defer close(st.done)
+		defer bgCancel()
+		if r.buildFn == nil {
+			return IndexResult{}, errors.New("IndexRunner: buildFn not wired")
+		}
+		return r.buildFn(bgCtx, ws, mode, st)
+	})
+
+	select {
+	case v := <-ch:
+		var res IndexResult
+		if v.Val != nil {
+			res, _ = v.Val.(IndexResult)
+		}
+		res.DurationMs = time.Since(startedAt).Milliseconds()
+		if v.Err != nil {
+			res.Status = IndexStatusFailed
+			return res, v.Err
+		}
+		res.Status = IndexStatusCommitted
+		return res, nil
+
+	case <-callCtx.Done():
+		// Read in-flight progress for the partial result. The build keeps
+		// running in the background.
+		var partial IndexResult
+		if v, ok := r.inFlight.Load(ws.RepoRoot); ok {
+			st := v.(*buildState)
+			partial.SnapshotID = st.snapshotID
+			partial.FilesIndexed = st.filesIndexed.Load()
+			partial.FilesReused = st.filesReused.Load()
+		}
+		partial.Partial = true
+		partial.Status = IndexStatusBuilding
+		partial.Freshness = FreshnessStale
+		partial.DurationMs = deadline.Milliseconds()
+		return partial, nil
+	}
 }
 
-// ResolveAuto resolves mode="auto" to "full" or "incremental" per CONTEXT.md
-// D-03. Stub for the RED phase — Task 2 implements it.
+// ResolveAuto resolves mode="auto" to "full" (no committed snapshot exists)
+// or "incremental" (committed snapshot exists). Per CONTEXT.md D-03.
+//
+// On store error (e.g., DB unreachable), returns "full" — the safer default
+// because a full build can recover from a degraded snapshot history.
 func (r *IndexRunner) ResolveAuto(ctx context.Context, ws workspace.WorkspaceKey) string {
-	panic("not implemented")
+	if r.store == nil {
+		return "full"
+	}
+	latest, err := r.store.LatestCommittedSnapshot(ctx, ws.Hash())
+	if err != nil || latest == 0 {
+		return "full"
+	}
+	return "incremental"
+}
+
+// Shutdown cancels every in-flight background build so daemon shutdown drops
+// builds cleanly rather than leaving zombie goroutines. Safe to call multiple
+// times.
+func (r *IndexRunner) Shutdown(ctx context.Context) {
+	r.inFlight.Range(func(key, value any) bool {
+		if st, ok := value.(*buildState); ok && st.cancel != nil {
+			st.cancel()
+		}
+		return true
+	})
 }

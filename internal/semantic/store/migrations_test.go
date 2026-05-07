@@ -309,14 +309,16 @@ func TestMigration003_FreshLandsAtV3(t *testing.T) {
 		t.Fatal("Open(fresh) produced a Store with nil db")
 	}
 
-	// schema_version row max() must be 3 after fresh open (001 stamped 1,
-	// 002 stamped 2, 003 stamped 3).
+	// schema_version row max() must be ≥ 3 after fresh open (001 stamped 1,
+	// 002 stamped 2, 003 stamped 3, …). Phase 63 P63-02 Task 1 added
+	// migration004 so fresh-open lands at 4; this test cares only that
+	// the v3 contract is in place (columns + indexes), so we assert ≥ 3.
 	var version int
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if version != 3 {
-		t.Errorf("fresh schema_version: got %d, want 3", version)
+	if version < 3 {
+		t.Errorf("fresh schema_version: got %d, want >= 3", version)
 	}
 
 	// v3 columns must be visible.
@@ -382,8 +384,10 @@ func TestMigration003_UpgradeFromV1(t *testing.T) {
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version after upgrade: %v", err)
 	}
-	if version != 3 {
-		t.Errorf("upgraded schema_version: got %d, want 3", version)
+	// Phase 63 P63-02 Task 1: registry now ends at v4; this test asserts
+	// the v1→{≥3} upgrade path lands the v3 columns. >= 3 is sufficient.
+	if version < 3 {
+		t.Errorf("upgraded schema_version: got %d, want >= 3", version)
 	}
 	if !columnExists(t, db, "semantic_live_overlay_meta", "current_epoch") {
 		t.Error("missing current_epoch on semantic_live_overlay_meta after v1→v3 upgrade")
@@ -436,8 +440,10 @@ func TestMigration003_UpgradeFromV2(t *testing.T) {
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version after upgrade: %v", err)
 	}
-	if version != 3 {
-		t.Errorf("upgraded schema_version: got %d, want 3", version)
+	// Phase 63 P63-02 Task 1: registry now ends at v4; the test asserts
+	// the v2→{≥3} upgrade path lands the v3 columns. >= 3 is sufficient.
+	if version < 3 {
+		t.Errorf("upgraded schema_version: got %d, want >= 3", version)
 	}
 
 	// Pre-existing meta row's current_epoch column took the DEFAULT 0.

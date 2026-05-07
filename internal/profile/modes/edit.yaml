@@ -10,6 +10,7 @@ skills:
   - memory
   - workflow
   - file-ops
+  - semantic
 
 tools:
   - get_token_budget
@@ -18,6 +19,7 @@ exclude_tools:
   - replace_lines
   - insert_at_line
   - delete_lines
+  - index_semantic_graph
 
 prompts: {}
 

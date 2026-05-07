@@ -142,6 +142,7 @@
   - [x] 59.1-04-PLAN.md — Wave 4 doc sweep with split-runner amendments (CLAUDE/README/CONTRIBUTING/CHANGELOG/PROJECT/REQUIREMENTS/deferred-items/51.1-SUMMARY/v1.10-ROADMAP) + Gatekeeper workaround in INSTALL.md (D-19) + 3 NEW deferred items (DEF-59-NOTARIZE/DARWIN-SMOKE/DARWIN-CANARY)
   - [x] 59.1-05-PLAN.md — Wave 5 release-smoke finalization + per-runner Pass-1≡Pass-2 reproducibility verification on BOTH runners (HARD GATE; D-09/D-10 amended; cross-runner byte-equality NOT a gate per Pitfall 8)
 - [x] Phase 60: Live Update Pipeline (0/6 plans) (completed 2026-05-05)
+  > **Phase 60 P04 obligation (from 62-09 closure):** the full FileFact upsert MUST record SymbolDiff entries via `internal/semantic/live/handler.FileFactDiffRecorder.RecordSymbol*` so Phase 62's post-commit `ApplyRepair` hook fires productively in production. Until P04 lands, `handler.UpdateChangedFile` emits a once-INFO log per workspace surfacing the empty-diff short-circuit (62-VERIFICATION.md truth #22).
   Plans:
   - [x] 60-01-PLAN.md — Wave 0 vet-nokernel2semantic analyzer enforcing LIVE-07 invariant #1 (kernel→semantic boundary)
   - [x] 60-02-PLAN.md — Wave 1 schema migration v2→v3 (current_epoch + 4× write_epoch + 4 indexes) + overlay writer (BeginOverlayTx + MarkFileDeleted/MarkSymbolsDeleted/MarkReferencesDeleted/MarkEdgesDeleted) + per-tx epoch contract under -race stress
@@ -157,6 +158,7 @@
   - [x] 61-04-PLAN.md — ENRICH-05 stress test + acceptance closeout + REQUIREMENTS.md check-off [ENRICH-05, ENRICH-01..ENRICH-04]
   - [x] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
 - [x] Phase 62: Graph Engine, Ranking & Type Resolution (5/5 plans)
+  > **Cross-phase carry-forward (62-09 closure):** the live handler now threads a `FileFactDiffRecorder` through every overlay tx; populators in Phase 60 P04 (full FileFact upsert) and any future Phase 62 type-resolver live-edge retrofit MUST write through `internal/semantic/live/handler.FileFactDiffRecorder` so the post-commit `ApplyRepair` hook surfaces graph-changing edits in production. Until those populators land, the empty-diff once-INFO log per workspace at `helix.live.handler` surfaces the gap. Phase 60 entry above carries the populator obligation.
   Plans:
   - [x] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
   - [x] 62-02-PLAN.md — Wave 2 — graph_version + ApplyRepair single-bump + score_status read API + UpsertGraphScores/UpsertEdgesWithMerge + handler post-commit hook + 4 config keys + 5 bounded-label metrics [GRAPH-03, GRAPH-05]

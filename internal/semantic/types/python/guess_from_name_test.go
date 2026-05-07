@@ -25,9 +25,12 @@ func TestGuessFromName_Deterministic(t *testing.T) {
 // iteration makes the lexicographically smaller short ("bar_repo") win
 // — under map iteration this would flip-flop run to run.
 func TestGuessFromName_DeterministicUnderOverlap(t *testing.T) {
+	// Sorted ascending by short — invariant required by guessFromNameWithRules.
+	// "bar_repo" < "repo" lexicographically, so bar_repo MUST win when both
+	// match `foo_bar_repo` (suffix _repo and suffix _bar_repo both match).
 	rules := []suffixRule{
-		{short: "repo", long: "Repository"},
 		{short: "bar_repo", long: "BarRepoFull"},
+		{short: "repo", long: "Repository"},
 	}
 	first := guessFromNameWithRules("foo_bar_repo", rules)
 	for i := 0; i < 100; i++ {

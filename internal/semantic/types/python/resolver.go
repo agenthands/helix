@@ -189,24 +189,41 @@ func parsePyAssignment(sig string) string {
 	return ""
 }
 
+// suffixRule maps a recognised snake_case suffix to its full-form type
+// name. Phase 62 CR-03 closure: sort-before-iterate locks deterministic
+// match priority regardless of future suffix additions that may alias
+// one suffix as another's tail.
+type suffixRule struct{ short, long string }
+
+// pySuffixRules is sorted ascending by short. Adding a rule MUST
+// preserve the sort order so determinism remains structural.
+var pySuffixRules = []suffixRule{
+	{short: "cfg", long: "Config"},
+	{short: "conn", long: "Connection"},
+	{short: "ctrl", long: "Controller"},
+	{short: "mgr", long: "Manager"},
+	{short: "repo", long: "Repository"},
+	{short: "svc", long: "Service"},
+}
+
+// guessFromName implements the heuristic name-shape match for Python.
+// Python convention: snake_case. Heuristic recognises short suffixes
+// even when joined by underscore (e.g., `user_repo` → `UserRepository`).
 func guessFromName(name string) string {
+	return guessFromNameWithRules(name, pySuffixRules)
+}
+
+// guessFromNameWithRules is the test-seam variant. CR-03 invariant:
+// callers MUST pass rules sorted ascending by short for deterministic
+// match priority.
+func guessFromNameWithRules(name string, rules []suffixRule) string {
 	if name == "" {
 		return ""
 	}
-	// Python convention: snake_case. Heuristic recognises short suffixes
-	// even when joined by underscore (e.g., `user_repo` → `UserRepository`).
-	suffixMap := map[string]string{
-		"repo": "Repository",
-		"svc":  "Service",
-		"mgr":  "Manager",
-		"ctrl": "Controller",
-		"cfg":  "Config",
-		"conn": "Connection",
-	}
 	low := strings.ToLower(name)
-	for short, long := range suffixMap {
-		if strings.HasSuffix(low, "_"+short) {
-			prefix := strings.TrimSuffix(low, "_"+short)
+	for _, r := range rules {
+		if strings.HasSuffix(low, "_"+r.short) {
+			prefix := strings.TrimSuffix(low, "_"+r.short)
 			parts := strings.Split(prefix, "_")
 			out := ""
 			for _, p := range parts {
@@ -215,7 +232,7 @@ func guessFromName(name string) string {
 				}
 				out += strings.ToUpper(p[:1]) + p[1:]
 			}
-			return out + long
+			return out + r.long
 		}
 	}
 	return ""

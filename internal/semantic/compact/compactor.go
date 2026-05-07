@@ -161,8 +161,17 @@ func (c *Compactor) PublicTriggerForTest() {
 // label observed on SemanticCompactionDurationVec.
 //
 // D-01 hard invariant: BeginSnapshot → WriteSnapshotFacts →
-// snap.DeleteSnapshotsBeyond → snap.ClearOverlayLE → CommitSnapshot all
+// snap.ClearOverlayLE → snap.DeleteSnapshotsBeyond → CommitSnapshot all
 // run on the SAME tx. CHECKPOINT runs outside the tx (COMPACT-03).
+//
+// Phase 63 review WR-01: this order matches the canonical
+// fakeCompactor witness in
+// internal/semantic/store/snapshot_fake_compactor_test.go (Begin →
+// Write → ClearOverlayLE → DeleteSnapshotsBeyond → Commit). Keeping
+// production and the snapshot-side reference fake in agreement
+// minimizes the window during which the new snapshot exists alongside
+// obsolete overlay rows, and prevents future maintainers from "fixing"
+// production back to a different order based on a stale doc comment.
 func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 	outcome = "success"
 	start := c.now()
@@ -245,14 +254,21 @@ func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 		return
 	}
 
-	if err := snap.DeleteSnapshotsBeyond(ctx, c.cfg.SnapshotRetention); err != nil {
-		_ = c.deps.Store.AbortSnapshot(ctx, snap, "retention: "+err.Error())
+	// Phase 63 review WR-01: ClearOverlayLE BEFORE DeleteSnapshotsBeyond
+	// (matches the canonical fakeCompactor cycle in
+	// snapshot_fake_compactor_test.go). DuckDB serializes statements
+	// inside the tx so the final committed state is identical regardless
+	// of order, but the fakeCompactor ordering is the documented
+	// reference and minimizes the in-tx window where the new snapshot
+	// exists alongside obsolete overlay rows.
+	if err := snap.ClearOverlayLE(ctx, c.repoID, capturedEpoch); err != nil {
+		_ = c.deps.Store.AbortSnapshot(ctx, snap, "clear_overlay: "+err.Error())
 		outcome = "error"
 		return
 	}
 
-	if err := snap.ClearOverlayLE(ctx, c.repoID, capturedEpoch); err != nil {
-		_ = c.deps.Store.AbortSnapshot(ctx, snap, "clear_overlay: "+err.Error())
+	if err := snap.DeleteSnapshotsBeyond(ctx, c.cfg.SnapshotRetention); err != nil {
+		_ = c.deps.Store.AbortSnapshot(ctx, snap, "retention: "+err.Error())
 		outcome = "error"
 		return
 	}

@@ -465,6 +465,13 @@ func (snap *Snapshot) DeleteSnapshotsBeyond(ctx context.Context, retain int) err
 
 	// Materialize the set of doomed snapshot_ids first (everything outside
 	// the keep set) so we can cascade per-table deletes.
+	//
+	// Phase 63 review CR-04: tie-break ORDER BY on snapshot_id DESC so
+	// the survivor set is deterministic when two snapshots share an
+	// indistinguishable created_at (sub-microsecond writes; container
+	// time-namespace skew). Without the tie-break, DuckDB's
+	// implementation-defined tie resolution makes retention behavior
+	// flaky under retain<priors and same-clock-bucket creation.
 	rows, err := snap.tx.QueryContext(ctx, `
 		SELECT snapshot_id FROM semantic_snapshots
 		 WHERE repo_id = ? AND snapshot_id != ?
@@ -472,7 +479,7 @@ func (snap *Snapshot) DeleteSnapshotsBeyond(ctx context.Context, retain int) err
 		       SELECT snapshot_id FROM semantic_snapshots
 		        WHERE repo_id = ? AND snapshot_id != ?
 		          AND status = 'committed'
-		        ORDER BY created_at DESC
+		        ORDER BY created_at DESC, snapshot_id DESC
 		        LIMIT ?
 		   )
 	`, snap.RepoID, snap.ID, snap.RepoID, snap.ID, retain-1)

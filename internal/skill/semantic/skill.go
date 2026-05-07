@@ -225,6 +225,5 @@ func GetSemanticSkill() *SemanticSkill {
 // plans can land in parallel. The vars (rather than consts) accommodate
 // the const declaration that W1/W2 plans bring in their tool files.
 var (
-	statusHelp  = "get_semantic_graph_status: stub help (replaced by P64-06)"
 	contextHelp = "get_semantic_context: stub help (replaced by P64-07)"
 )

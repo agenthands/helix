@@ -57,6 +57,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -535,27 +536,38 @@ func (snap *Snapshot) DeleteSnapshotsBeyond(ctx context.Context, retain int) err
 
 	// Per-table cascade. The schema doesn't enforce FK cascade, so we issue
 	// explicit deletes for every fact table keyed on snapshot_id. Order is
-	// not load-bearing — all run in the same tx. Each statement is a
-	// hardcoded constant (no string interpolation, no caller-derived data
-	// in the SQL) so the parameterization invariant is preserved: only
-	// snapshot_id flows through `?` binds.
-	cascade := []struct {
-		name string
-		sql  string
-	}{
-		{"semantic_files", `DELETE FROM semantic_files WHERE snapshot_id=?`},
-		{"semantic_symbols", `DELETE FROM semantic_symbols WHERE snapshot_id=?`},
-		{"semantic_references", `DELETE FROM semantic_references WHERE snapshot_id=?`},
-		{"semantic_edges", `DELETE FROM semantic_edges WHERE snapshot_id=?`},
-		{"semantic_nodes", `DELETE FROM semantic_nodes WHERE snapshot_id=?`},
-		{"semantic_diagnostics", `DELETE FROM semantic_diagnostics WHERE snapshot_id=?`},
-		{"semantic_snapshots", `DELETE FROM semantic_snapshots WHERE snapshot_id=?`},
+	// not load-bearing — all run in the same tx.
+	//
+	// Phase 63 review WR-05: collapse the prior len(doomed)×7 ExecContext
+	// loop into one DELETE per table by binding the doomed ids as a
+	// parameter-expansion list (`IN (?, ?, ...)`). Placeholder-string
+	// generation derives ONLY from len(doomed) — the SQL itself remains
+	// hardcoded except for the per-statement table name and the
+	// expansion of `?`s; no caller-derived data flows into the SQL
+	// string. The doomed ids continue to flow through positional `?`
+	// binds, preserving the parameterization invariant.
+	tables := []string{
+		"semantic_files",
+		"semantic_symbols",
+		"semantic_references",
+		"semantic_edges",
+		"semantic_nodes",
+		"semantic_diagnostics",
+		"semantic_snapshots",
 	}
-	for _, id := range doomed {
-		for _, c := range cascade {
-			if _, err := snap.tx.ExecContext(ctx, c.sql, id); err != nil {
-				return fmt.Errorf("DeleteSnapshotsBeyond(%s, snap=%d): %w", c.name, id, err)
-			}
+	placeholders := strings.Repeat("?,", len(doomed))
+	placeholders = placeholders[:len(placeholders)-1] // drop trailing ","
+	args := make([]any, len(doomed))
+	for i, id := range doomed {
+		args[i] = id
+	}
+	for _, table := range tables {
+		// Concatenation is bounded to two trusted constants (table name
+		// from the hardcoded slice above + placeholder string built from
+		// len(doomed)). No caller-supplied data flows into the SQL.
+		stmt := "DELETE FROM " + table + " WHERE snapshot_id IN (" + placeholders + ")"
+		if _, err := snap.tx.ExecContext(ctx, stmt, args...); err != nil {
+			return fmt.Errorf("DeleteSnapshotsBeyond(%s): %w", table, err)
 		}
 	}
 	return nil

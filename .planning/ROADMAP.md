@@ -169,10 +169,10 @@
   - [x] 62-07-PLAN.md — Gap closure (CR-01) — explicit lock release between tx.Commit and CountStaleScoreRows + SchedulerStore.CountStaleScoreRows lock contract [GRAPH-03, GRAPH-04, GRAPH-05]
   - [x] 62-08-PLAN.md — Gap closure (truth #21 / WR-05) — rankStoreAdapter stub observability via outcome=stub_no_data closed-enum extension + sync.Once-gated WARN per (workspace, method) + TODO(phase-64) anchor [GRAPH-04, GRAPH-05]
   - [x] 62-09-PLAN.md — Gap closure (truth #22) — FileFactDiffRecorder seam threaded through Handler.UpdateChangedFile + once-INFO empty-diff log [GRAPH-03, GRAPH-05]
-- [ ] Phase 63: Compaction & Retention (0/2 plans)
+- [x] Phase 63: Compaction & Retention (0/2 plans) (completed 2026-05-07)
   Plans:
   - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
-  - [ ] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
+  - [x] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
 - [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)

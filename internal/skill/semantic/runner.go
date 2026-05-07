@@ -35,7 +35,11 @@ type buildFnT func(ctx context.Context, ws workspace.WorkspaceKey, mode string, 
 // goroutine writes them as it makes progress so a partial result is
 // observable.
 type buildState struct {
-	snapshotID   uint64
+	// snapshotID is atomic because the foreground caller (timeout path) reads
+	// it concurrently with the background buildFn that writes the in-flight
+	// id once it knows it (e.g., right after BeginSnapshot returns). Use Load/
+	// Store; never read the field directly.
+	snapshotID   atomic.Uint64
 	startedAt    time.Time
 	mode         string
 	filesIndexed atomic.Int64
@@ -145,7 +149,7 @@ func (r *IndexRunner) Run(ctx context.Context, ws workspace.WorkspaceKey, mode s
 		var partial IndexResult
 		if v, ok := r.inFlight.Load(ws.RepoRoot); ok {
 			st := v.(*buildState)
-			partial.SnapshotID = st.snapshotID
+			partial.SnapshotID = st.snapshotID.Load()
 			partial.FilesIndexed = st.filesIndexed.Load()
 			partial.FilesReused = st.filesReused.Load()
 		}

@@ -59,11 +59,11 @@ func TestIndexRunner_SingleflightJoin_DifferentModesNoCollapse(t *testing.T) {
 	r := NewIndexRunner(store, mb.makeBuildFn(), 10*time.Second)
 
 	var (
-		wg     sync.WaitGroup
-		resA   IndexResult
-		resB   IndexResult
-		errA   error
-		errB   error
+		wg   sync.WaitGroup
+		resA IndexResult
+		resB IndexResult
+		errA error
+		errB error
 	)
 	wg.Add(2)
 	go func() {

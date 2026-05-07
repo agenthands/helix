@@ -60,7 +60,7 @@ func (m *mockBuild) makeBuildFn() func(ctx context.Context, ws workspace.Workspa
 
 		// Set the in-flight snapshot id immediately so timeout-partial tests
 		// can read it from r.inFlight without racing the build's first tick.
-		st.snapshotID = m.snapshotID
+		st.snapshotID.Store(m.snapshotID)
 		// Halfway through the simulated delay, bump progress counters so the
 		// timeout-partial test sees > 0 partial progress.
 		if m.delay > 0 {

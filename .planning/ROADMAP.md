@@ -173,7 +173,7 @@
   Plans:
   - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
   - [x] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
-- [ ] Phase 64: New MCP Tools (P0 set of 4) (0/8 plans)
+- [ ] Phase 64: New MCP Tools (P0 set of 4) (2/8 plans)
   **Goal:** Agents can index, refresh, inspect, and query the semantic graph through four new MCP tools (`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`) whose responses always carry `freshness` + `graph_version` fields, profile/mode gating respects the existing matrix, and selection is deterministic.
   **Depends on:** Phase 62, Phase 63
   **Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05
@@ -184,7 +184,7 @@
   4. `tools/list` filters the four tools out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
   Plans:
   - [x] 64-01-PLAN.md — [BLOCKING WAVE-0 GATE] bleve binary-size + 50k-symbol indexing throughput benchmark vs DuckDB FTS5; commits PASS/FAIL verdict per D-08 [TOOL-04]
-  - [ ] 64-02-PLAN.md — Wave 0 (TDD) effective-graph queries on *Store: QueryEffectiveAdjacency + CountStaleScoreRows + MarkAllScoreRowsStale + LatestCommittedSnapshot (deferred-from-63) [TOOL-03, TOOL-04]
+  - [x] 64-02-PLAN.md — Wave 0 (TDD) effective-graph queries on *Store: QueryEffectiveAdjacency + CountStaleScoreRows + MarkAllScoreRowsStale + LatestCommittedSnapshot (deferred-from-63) [TOOL-03, TOOL-04]
   - [ ] 64-03-PLAN.md — Wave 0 skill skeleton: SemanticSkill+init() registration, mode_check.go (NEW pattern), envelope.go closed enums, 5 profile YAMLs + 4 mode YAMLs updated for `semantic` skill (D-14) [TOOL-05]
   - [ ] 64-04-PLAN.md — Wave 1 (TDD) IndexRunner singleflight (D-02) + sync-with-timeout dispatch (D-01/D-04) + tools_index.go handler with mode-tier check + path-traversal hardening [TOOL-01, TOOL-05]
   - [ ] 64-05-PLAN.md — Wave 1 (TDD) tools_refresh.go: read+ tier, paths strict-subset (D-11), wait_for_lsp polling (D-12), no-snapshot/no-compactor invariant (D-09/D-13) [TOOL-02, TOOL-05]

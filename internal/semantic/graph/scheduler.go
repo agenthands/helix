@@ -234,8 +234,23 @@ func (s *RankScheduler) runIncrementalRepair(ctx context.Context) {
 		MaxIter: s.cfg.MaxIter,
 	})
 
+	// CR-01 (62-07) closure: acquire the workspace lock for the tx body,
+	// but release it EXPLICITLY between tx.Commit() and the post-commit
+	// CountStaleScoreRows probe below — see the explicit releaseOnce()
+	// after `s.metricInc("applied")`. SchedulerStore.CountStaleScoreRows
+	// is contractually forbidden from acquiring this lock (see
+	// scheduler_store.go); the explicit release backs that contract by
+	// structure rather than callee discipline. The deferred releaseOnce
+	// serves as a panic / early-return safety net only.
 	release := s.store.LockWorkspace(s.repoID)
-	defer release()
+	released := false
+	releaseOnce := func() {
+		if !released {
+			released = true
+			release()
+		}
+	}
+	defer releaseOnce()
 
 	tx, err := s.store.BeginRepairTx(ctx, s.repoID)
 	if err != nil {
@@ -277,8 +292,16 @@ func (s *RankScheduler) runIncrementalRepair(ctx context.Context) {
 	committed = true
 	s.metricInc("applied")
 
+	// CR-01 (62-07): explicit release BEFORE the post-commit probe. The
+	// deferred releaseOnce above becomes a no-op via the idempotency
+	// guard. CountStaleScoreRows MUST NOT re-acquire the workspace lock
+	// (see SchedulerStore.CountStaleScoreRows contract); this explicit
+	// release converts that convention into structure.
+	releaseOnce()
+
 	// Reset the long-idle timer when an incremental repair lands AND the
 	// post-write stale-fraction has cleared the threshold (Pitfall 4).
+	// CountStaleScoreRows runs lock-free per the SchedulerStore contract.
 	stale, total, err := s.store.CountStaleScoreRows(ctx, s.repoID, s.cfg.Projection)
 	if err == nil && total > 0 {
 		ratio := float64(stale) / float64(total)
@@ -302,6 +325,11 @@ func (s *RankScheduler) maybeFullRecompute(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	// CR-01 (62-07): CountStaleScoreRows is invoked lock-free here too —
+	// this path does NOT hold the workspace lock; RunFullRecompute
+	// acquires it internally for the recompute tx (D-10). The
+	// SchedulerStore.CountStaleScoreRows contract (no workspace lock
+	// re-acquisition) holds for both call sites.
 	stale, total, err := s.store.CountStaleScoreRows(ctx, s.repoID, s.cfg.Projection)
 	if err != nil {
 		s.metricInc("error")

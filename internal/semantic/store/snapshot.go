@@ -409,8 +409,14 @@ func (s *Store) CommitSnapshot(ctx context.Context, snap *Snapshot, summary Snap
 // AbortSnapshot rolls back the snapshot tx — DuckDB ACID makes the pending
 // row disappear without an explicit DELETE. Double-abort and
 // abort-after-commit are rejected.
+//
+// Phase 63 review WR-02: ctx is now actually consumed. *sql.Tx.Rollback()
+// has no ctx-aware overload, but we (a) pipe ctx through to the slog
+// emission so trace propagation reaches the abort log line, and (b)
+// surface ctx.Err() in the returned error when the parent ctx is
+// already cancelled at entry — the rollback is still attempted (the tx
+// must not leak) but the cause is reported back to the caller.
 func (s *Store) AbortSnapshot(ctx context.Context, snap *Snapshot, reason string) error {
-	_ = ctx
 	if s == nil {
 		return fmt.Errorf("AbortSnapshot: nil store")
 	}
@@ -424,16 +430,28 @@ func (s *Store) AbortSnapshot(ctx context.Context, snap *Snapshot, reason string
 		return fmt.Errorf("AbortSnapshot: already committed")
 	}
 
-	slog.Default().Info("snapshot aborted",
+	slog.Default().InfoContext(ctx, "snapshot aborted",
 		"snapshot_id", snap.ID,
 		"repo_id", snap.RepoID,
 		"reason", reason,
 	)
 
-	if err := snap.tx.Rollback(); err != nil {
-		return fmt.Errorf("AbortSnapshot: %w", err)
+	rbErr := snap.tx.Rollback()
+	snap.aborted = rbErr == nil
+
+	// If the parent ctx was already cancelled at entry, surface the
+	// cancellation as the primary error (the rollback is best-effort:
+	// callers still expect the tx not to leak even when cancelled).
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if rbErr != nil {
+			return fmt.Errorf("AbortSnapshot: ctx cancelled: %w (rollback also failed: %v)", ctxErr, rbErr)
+		}
+		return fmt.Errorf("AbortSnapshot: ctx cancelled: %w", ctxErr)
 	}
-	snap.aborted = true
+
+	if rbErr != nil {
+		return fmt.Errorf("AbortSnapshot: %w", rbErr)
+	}
 	return nil
 }
 

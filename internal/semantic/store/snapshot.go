@@ -245,6 +245,13 @@ func (s *Store) BeginSnapshot(ctx context.Context, meta SnapshotMeta) (*Snapshot
 	// provide minimal placeholder values for the columns the compactor does
 	// not currently set; P63-02 (compactor) supplies real values via meta
 	// extension if needed.
+	//
+	// Phase 63 review WR-04: created_at uses DuckDB-side `now()` rather
+	// than a Go-side time.Now() bind so all timestamps in the
+	// semantic_snapshots table are written by the same clock (the DB
+	// engine's). Test seed paths and CommitSnapshot follow the same
+	// convention, eliminating Go-vs-DB clock-skew incoherence under
+	// container time-namespaces and monotonic-vs-wall clock swaps.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO semantic_snapshots (
 			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
@@ -252,9 +259,9 @@ func (s *Store) BeginSnapshot(ctx context.Context, meta SnapshotMeta) (*Snapshot
 			partial, created_at
 		) VALUES (
 			?, ?, '', ?, 'compact', '', ?, 'phase63', 'pending',
-			false, ?
+			false, now()
 		)
-	`, id, meta.RepoID, meta.BaseSnapshotID, CurrentSchemaVersion, time.Now()); err != nil {
+	`, id, meta.RepoID, meta.BaseSnapshotID, CurrentSchemaVersion); err != nil {
 		_ = tx.Rollback()
 		return nil, fmt.Errorf("BeginSnapshot: insert pending row: %w", err)
 	}
@@ -381,11 +388,15 @@ func (s *Store) CommitSnapshot(ctx context.Context, snap *Snapshot, summary Snap
 		return fmt.Errorf("CommitSnapshot: already aborted")
 	}
 
+	// Phase 63 review WR-04: committed_at uses DuckDB-side `now()` to
+	// keep timestamp clocks consistent with BeginSnapshot's `now()`
+	// stamp (and the seed-helper's monotone fixture clocks). See
+	// BeginSnapshot for the rationale.
 	if _, err := snap.tx.ExecContext(ctx, `
 		UPDATE semantic_snapshots
-		   SET status='committed', committed_at=?
+		   SET status='committed', committed_at=now()
 		 WHERE snapshot_id=?
-	`, time.Now(), snap.ID); err != nil {
+	`, snap.ID); err != nil {
 		return fmt.Errorf("CommitSnapshot: flip status: %w", err)
 	}
 

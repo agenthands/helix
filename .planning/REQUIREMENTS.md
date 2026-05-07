@@ -67,7 +67,7 @@ Each requirement is testable from an agent/user perspective and maps to one road
 - [ ] **TOOL-01**: `index_semantic_graph` MCP tool (mode `review+` / `admin`) builds or refreshes a committed snapshot; supports `auto`, `full`, `incremental`, `refresh` modes; returns snapshot id, graph version, files indexed/reused, partial state, freshness, duration.
 - [ ] **TOOL-02**: `refresh_semantic_graph` MCP tool (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters; returns graph version, files updated, deltas, pending LSP, freshness.
 - [ ] **TOOL-03**: `get_semantic_graph_status` MCP tool (mode `read+`) returns the SPEC §23.3 status object: latest snapshot id, graph version, overlay state, pending LSP count, freshness, per-projection score status, cluster status, last-live-update latency.
-- [ ] **TOOL-04**: `get_semantic_context` MCP tool (mode `read+`) returns ranked, evidence-backed context for a task/symbol/file selection under a token budget; response always includes `freshness_mode`, `graph_version`, `overlay_active`, `freshness`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
+- [x] **TOOL-04**: `get_semantic_context` MCP tool (mode `read+`) returns ranked, evidence-backed context for a task/symbol/file selection under a token budget; response always includes `freshness_mode`, `graph_version`, `overlay_active`, `freshness`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
 - [ ] **TOOL-05**: All four tools respect profile/mode gating per SPEC §30.2; `tools/list` filters them out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
 
 > Deferred to v1.10.x: `explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`. Multi-projection PageRank also deferred.
@@ -222,7 +222,7 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | TOOL-01 | Phase 64 | Pending |
 | TOOL-02 | Phase 64 | Pending |
 | TOOL-03 | Phase 64 | Pending |
-| TOOL-04 | Phase 64 | Pending |
+| TOOL-04 | Phase 64 | Complete |
 | TOOL-05 | Phase 64 | Pending |
 | INTEG-01 | Phase 65 | Pending |
 | INTEG-02 | Phase 65 | Pending |

@@ -183,7 +183,7 @@
   3. An agent calling `get_semantic_context` receives `freshness=structurally_fresh_semantically_pending` after a single Helix edit and within the foreground-tool budget; the response includes `freshness_mode`, `graph_version`, `overlay_active`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
   4. `tools/list` filters the four tools out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
   Plans:
-  - [ ] 64-01-PLAN.md — [BLOCKING WAVE-0 GATE] bleve binary-size + 50k-symbol indexing throughput benchmark vs DuckDB FTS5; commits PASS/FAIL verdict per D-08 [TOOL-04]
+  - [x] 64-01-PLAN.md — [BLOCKING WAVE-0 GATE] bleve binary-size + 50k-symbol indexing throughput benchmark vs DuckDB FTS5; commits PASS/FAIL verdict per D-08 [TOOL-04]
   - [ ] 64-02-PLAN.md — Wave 0 (TDD) effective-graph queries on *Store: QueryEffectiveAdjacency + CountStaleScoreRows + MarkAllScoreRowsStale + LatestCommittedSnapshot (deferred-from-63) [TOOL-03, TOOL-04]
   - [ ] 64-03-PLAN.md — Wave 0 skill skeleton: SemanticSkill+init() registration, mode_check.go (NEW pattern), envelope.go closed enums, 5 profile YAMLs + 4 mode YAMLs updated for `semantic` skill (D-14) [TOOL-05]
   - [ ] 64-04-PLAN.md — Wave 1 (TDD) IndexRunner singleflight (D-02) + sync-with-timeout dispatch (D-01/D-04) + tools_index.go handler with mode-tier check + path-traversal hardening [TOOL-01, TOOL-05]

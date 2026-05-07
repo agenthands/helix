@@ -188,7 +188,7 @@
   - [x] 64-03-PLAN.md — Wave 0 skill skeleton: SemanticSkill+init() registration, mode_check.go (NEW pattern), envelope.go closed enums, 5 profile YAMLs + 4 mode YAMLs updated for `semantic` skill (D-14) [TOOL-05]
   - [x] 64-04-PLAN.md — Wave 1 (TDD) IndexRunner singleflight (D-02) + sync-with-timeout dispatch (D-01/D-04) + tools_index.go handler with mode-tier check + path-traversal hardening [TOOL-01, TOOL-05]
   - [x] 64-05-PLAN.md — Wave 1 (TDD) tools_refresh.go: read+ tier, paths strict-subset (D-11), wait_for_lsp polling (D-12), no-snapshot/no-compactor invariant (D-09/D-13) [TOOL-02, TOOL-05]
-  - [ ] 64-06-PLAN.md — Wave 1 tools_status.go: SPEC §23.3 envelope fan-out across all read-only accessors; closed-enum freshness [TOOL-03, TOOL-05]
+  - [x] 64-06-PLAN.md — Wave 1 tools_status.go: SPEC §23.3 envelope fan-out across all read-only accessors; closed-enum freshness [TOOL-03, TOOL-05]
   - [ ] 64-07-PLAN.md — Wave 1 (TDD) retrieval package: bleve scorch + corpus mapping (D-06) + weighted RRF (D-07) + dual-store recovery + tools_context.go with determinism harness (10× byte-identical) [TOOL-04, TOOL-05]
   - [ ] 64-08-PLAN.md — Wave 2 daemon glue: semantic_wiring.go bundle + production buildFn + imports.go blank import + daemon.go register*SemanticGraph + rank_wiring stub-collapse + profile-filter test + get_tool_help test + 6 end-to-end integration tests closing CONTEXT.md acceptance #1/#2/#3/#5/#6 [TOOL-01..TOOL-05]
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)

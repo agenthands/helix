@@ -29,6 +29,44 @@ const defaultRunnerTimeout = 120 * time.Second
 // Production wiring lands in P64-08; tests inject a mock buildFn.
 type buildFnT func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st *buildState) (IndexResult, error)
 
+// BuildState is the EXPORTED seam over the in-flight build's progress
+// counters. The runner exposes this to out-of-package callers (the daemon's
+// makeProductionBuildFn in internal/daemon/semantic_wiring.go) so the
+// production buildFn can stamp in-flight progress without reaching into the
+// runner's private buildState type.
+//
+// Closes a P64-08 dependency gap surfaced during execution (truth-21
+// follow-up): the previous buildFnT signature pinned *buildState, which is
+// package-private and unreachable from internal/daemon. The exported
+// RunnerBuildFn type below uses this interface so the production wiring
+// compiles cleanly.
+type BuildState interface {
+	// SetSnapshotID stamps the in-flight snapshot id once BeginSnapshot
+	// returns. The foreground caller's timeout path reads this back via
+	// r.inFlight when surfacing a partial result.
+	SetSnapshotID(id uint64)
+	// AddFilesIndexed atomically increments the in-flight counter. The
+	// foreground caller's partial-result envelope consumes this.
+	AddFilesIndexed(delta int64)
+	// AddFilesReused atomically increments the reused counter (incremental
+	// builds short-circuit reused files instead of reprocessing).
+	AddFilesReused(delta int64)
+}
+
+// RunnerBuildFn is the EXPORTED build-function shape NewIndexRunnerWithExportedBuildFn
+// accepts. Wraps a *buildState into the BuildState interface so out-of-
+// package wiring (daemon) can construct buildFns against a stable surface.
+type RunnerBuildFn func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st BuildState) (IndexResult, error)
+
+// SetSnapshotID stamps the snapshot id atomically.
+func (b *buildState) SetSnapshotID(id uint64) { b.snapshotID.Store(id) }
+
+// AddFilesIndexed increments the in-flight files-indexed counter.
+func (b *buildState) AddFilesIndexed(delta int64) { b.filesIndexed.Add(delta) }
+
+// AddFilesReused increments the in-flight files-reused counter.
+func (b *buildState) AddFilesReused(delta int64) { b.filesReused.Add(delta) }
+
 // buildState is the per-build progress record shared between the foreground
 // (sync-with-timeout) caller and the background buildFn goroutine. The
 // foreground caller reads progress fields under timeout; the background
@@ -78,6 +116,23 @@ func NewIndexRunner(store StoreAccessor, buildFn buildFnT, timeout time.Duration
 		buildFn: buildFn,
 		timeout: timeout,
 	}
+}
+
+// NewProductionIndexRunner is the EXPORTED constructor for production wiring
+// (internal/daemon/semantic_wiring.go). It takes a RunnerBuildFn — the
+// exported build-function shape that consumes the BuildState interface —
+// and wraps it into the private buildFnT signature the runner uses
+// internally. This keeps the existing test surface (NewIndexRunner +
+// *buildState) intact while letting out-of-package callers compose against
+// a stable seam.
+func NewProductionIndexRunner(store StoreAccessor, buildFn RunnerBuildFn, timeout time.Duration) *IndexRunner {
+	if buildFn == nil {
+		return NewIndexRunner(store, nil, timeout)
+	}
+	wrapped := func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st *buildState) (IndexResult, error) {
+		return buildFn(ctx, ws, mode, st)
+	}
+	return NewIndexRunner(store, wrapped, timeout)
 }
 
 // Run executes (or joins an in-flight) index build for the workspace under

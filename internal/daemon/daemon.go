@@ -37,15 +37,16 @@ import (
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
-	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/semantic/types"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
+	semanticpkg "github.com/agenthands/helix/internal/skill/semantic"
 	"github.com/agenthands/helix/internal/treesitter"
 	"github.com/agenthands/helix/internal/workspace"
 	gen "github.com/agenthands/helix/protocol/gen"
@@ -167,6 +168,14 @@ type Daemon struct {
 	// compactors are spun up lazily in SetActivateCallback via
 	// compact.ensureCompactor.
 	compact *compactBundle
+
+	// semantic holds the Phase 64 P64-08 semantic-skill production wiring
+	// (bleve handles + IndexRunner + 7 narrow accessor adapters). nil
+	// when the semantic store is not open. Run pulls semantic.Run(gctx)
+	// into the top-level errgroup; per-workspace bleve engines + recovery
+	// probes are spun up lazily in SetActivateCallback via
+	// semantic.ensureRetrieval.
+	semantic *semanticBundle
 
 	// typeResolver is the Phase 62 P05 type-resolver dispatcher — the
 	// 7-language registry (go / typescript / javascript / python / java /
@@ -411,6 +420,43 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		}
 	}
 
+	// 6f.2 Phase 64 P64-08: semantic skill production wiring. Constructed
+	// alongside compactBndl — needs the store, the rank bundle (for the
+	// scheduler accessor), the lspenrich queue (for the queue accessor),
+	// the live bundle (for the live + flush accessors), and the compactor
+	// bundle (for the compactor accessor). The session-lookup closure is
+	// captured once below (after the InstallMiddleware site reaches
+	// scope) and passed in via setter so all accessors share a single
+	// source of truth (closes checker W2 at the production layer).
+	//
+	// Wiring order:
+	//   1. Construct sBndl with a placeholder getSession (nil); register
+	//      tools & runner at this point.
+	//   2. Once getSessionFn is built (after step 14 below), call
+	//      sBndl.SetSessionFn(getSessionFn) so the session adapter is
+	//      live-wired.
+	//
+	// The bundle returns nil when the store is nil (semantic disabled);
+	// downstream wiring is a no-op in that case.
+	var sBndl *semanticBundle
+	if semanticStore != nil {
+		var lspQ *lspenrich.LaneQueue
+		if live != nil {
+			lspQ = live.lspQueue
+		}
+		sBndl = newSemanticBundle(
+			loadSemanticConfig(),
+			semanticStore,
+			rank,
+			lspQ,
+			live,
+			compactBndl,
+			logger,
+			observability.Metrics(),
+			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
+		)
+	}
+
 	// 6g. Phase 62 P05: type-resolver dispatcher.
 	//
 	// Constructed when the semantic store is open. The dispatcher carries
@@ -621,6 +667,27 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	isActiveFn := func() bool { return activeWSKey.RepoRoot != "" }
 	helixMCP.InstallLazyInitMiddleware(mcpServer.SDK(), lazyActivateFn, isActiveFn, "", logger)
 
+	// 14d. Phase 64 P64-08: wire the semantic skill's SessionAccessor with
+	// the SAME getSessionFn closure passed to InstallMiddleware (single
+	// source of truth — closes checker W2 at the production layer). Then
+	// register the four MCP tools (index/refresh/status/context) so they
+	// surface in tools/list and route to the skill's typed-args handlers.
+	if sBndl != nil {
+		sBndl.SetSessionFn(getSessionFn)
+		if sBndl.skill != nil {
+			tracer := observability.Tracer()
+			semanticpkg.RegisterAll(mcpServer, sBndl.skill, tracer)
+			logger.Info("semantic MCP tools registered",
+				"tools", []string{
+					"index_semantic_graph",
+					"refresh_semantic_graph",
+					"get_semantic_graph_status",
+					"get_semantic_context",
+				},
+			)
+		}
+	}
+
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session
 	// so TelemetryMiddleware can surface it as the "language" metric label.
@@ -673,6 +740,13 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		if compactBndl != nil {
 			compactBndl.ensureCompactor(ctx, repoPath, activeWSKey)
 		}
+		// Phase 64 P64-08: lazy-construct the per-workspace bleve
+		// retrieval engine + recovery probe. nil-safe: short-circuits
+		// when sBndl is nil (semantic disabled). The probe runs in its
+		// own goroutine inside ensureRetrieval — non-blocking.
+		if sBndl != nil {
+			sBndl.ensureRetrieval(ctx, activeWSKey)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
@@ -699,6 +773,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		live:                    live,
 		rank:                    rank,
 		compact:                 compactBndl,
+		semantic:                sBndl,
 		typeResolver:            typeResolver,
 	}, nil
 }
@@ -827,6 +902,16 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if d.compact != nil {
 		g.Go(func() error {
 			return d.compact.Run(gctx)
+		})
+	}
+
+	// Phase 64 P64-08: semantic-bundle Run blocks on ctx.Done() and
+	// closes every bleve handle + the IndexRunner on shutdown. Per-
+	// workspace bleve engines are constructed lazily by ensureRetrieval
+	// inside the SetActivateCallback closure.
+	if d.semantic != nil {
+		g.Go(func() error {
+			return d.semantic.Run(gctx)
 		})
 	}
 

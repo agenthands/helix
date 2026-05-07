@@ -13,7 +13,6 @@ package compact_test
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"testing"
 
@@ -38,33 +37,18 @@ import (
 //     written during the concurrent window survived).
 func TestCAS_InterleaveOverlayWritesWithCompaction(t *testing.T) {
 	wsDir := t.TempDir()
-	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
-	cfg := semantic.Config{Store: semantic.StoreConfig{
-		Kind: "duckdb", Path: ".helix/semantic.duckdb",
-	}}
-	_ = dbPath
-	_ = cfg
-
-	// Use the test helper from the store package via a lightweight
-	// constructor mirror: we cannot import store_test internal helpers
-	// from a sibling _test package, so build a minimal config inline.
-	// The store.Open API takes a semantic.Config.
+	// Build a minimal store.Open config inline (we cannot import
+	// store_test internal helpers from a sibling _test package). The
+	// path is workspace-relative; changeWD below changes process cwd
+	// into wsDir so the relative `.helix/semantic.duckdb` resolves.
 	storeCfg := semantic.Config{Store: semantic.StoreConfig{
 		Kind: "duckdb",
 		Path: ".helix/semantic.duckdb",
 	}}
-	storeCfg.Store.Path = ".helix/semantic.duckdb"
 
 	provider := obs.Noop(nil)
 	t.Setenv("HELIX_TEST_WSDIR", wsDir)
-	defer func() {
-		_ = wsDir
-	}()
-	// Open a per-test store using the store.Open public API. We pass
-	// the working directory via cfg.Store.Path which is workspace-
-	// relative; the helper changes process cwd into wsDir.
-	cwd := t.TempDir()
-	_ = cwd
+
 	prevDir := changeWD(t, wsDir)
 	defer prevDir()
 

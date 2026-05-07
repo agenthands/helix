@@ -80,6 +80,16 @@ type Compactor struct {
 	deps        Deps
 	now         func() time.Time
 
+	// parentCtx is captured at Run() time so AfterFunc callbacks
+	// (fire()) and PublicTriggerForTest derive a child ctx that honors
+	// daemon-level cancellation. Phase 63 review WR-06: pre-fix fire()
+	// used context.Background(), so a long-running compaction (e.g., a
+	// future VACUUM piggyback) would not honor shutdown signals — the
+	// daemon would block on the in-flight tx until DuckDB's internal
+	// timeout fired.
+	parentCtxMu sync.Mutex
+	parentCtx   context.Context
+
 	mu           sync.Mutex
 	timer        *time.Timer
 	lastBaseID   uint64
@@ -115,11 +125,21 @@ func (c *Compactor) SetNow(now func() time.Time) {
 // Run blocks until ctx is cancelled, then stops the timer cleanly.
 // Errors return ctx.Err() so the daemon errgroup propagates the
 // cancellation.
+//
+// Phase 63 review WR-06: ctx is also captured into c.parentCtx so the
+// AfterFunc-driven fire() callback can derive a child ctx that honors
+// daemon-level cancellation. Calls to OnFlush BEFORE Run() (i.e., the
+// timer was scheduled but Run never executed) fall back to
+// context.Background() — a transient state that lasts only until Run
+// captures the real ctx.
 func (c *Compactor) Run(ctx context.Context) error {
 	if c == nil {
 		<-ctx.Done()
 		return ctx.Err()
 	}
+	c.parentCtxMu.Lock()
+	c.parentCtx = ctx
+	c.parentCtxMu.Unlock()
 	<-ctx.Done()
 	c.mu.Lock()
 	if c.timer != nil {
@@ -127,6 +147,21 @@ func (c *Compactor) Run(ctx context.Context) error {
 	}
 	c.mu.Unlock()
 	return ctx.Err()
+}
+
+// runContext returns the captured parent ctx (set by Run) or
+// context.Background() if Run has not yet been called. nil-safe.
+func (c *Compactor) runContext() context.Context {
+	if c == nil {
+		return context.Background()
+	}
+	c.parentCtxMu.Lock()
+	ctx := c.parentCtx
+	c.parentCtxMu.Unlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 // OnFlush resets the AfterFunc timer to fire CompactAfterIdle from now.
@@ -147,14 +182,24 @@ func (c *Compactor) OnFlush() {
 // fire is the AfterFunc callback. Runs in its own goroutine (AfterFunc
 // already spawns one); MUST NOT spawn another to keep the structured
 // concurrency contract clear.
+//
+// Phase 63 review WR-06: derives the run ctx from the parent ctx
+// captured by Run(), so daemon shutdown cancellation flows through to
+// the compaction tx. Pre-fix fire() used context.Background() and a
+// long-running compaction (e.g., the future VACUUM piggyback) would
+// block daemon shutdown until DuckDB's internal timeout fired.
 func (c *Compactor) fire() {
-	c.runCompaction(context.Background())
+	c.runCompaction(c.runContext())
 }
 
 // PublicTriggerForTest synchronously invokes runCompaction. Test seam
 // only — production callers should rely on the OnFlush/timer path.
+//
+// Uses the captured parent ctx (or context.Background() pre-Run) so
+// tests that wire a real ctx via Run see the same cancellation
+// semantics fire() does.
 func (c *Compactor) PublicTriggerForTest() {
-	c.runCompaction(context.Background())
+	c.runCompaction(c.runContext())
 }
 
 // runCompaction is the single-tx compaction body. Returns the outcome

@@ -536,14 +536,19 @@ func (snap *Snapshot) DeleteSnapshotsBeyond(ctx context.Context, retain int) err
 // snap.ClearOverlayLE rather than reaching into snap.tx directly — there
 // is no public Tx() accessor on *Snapshot.
 //
-// Pending-rows counter reset (P63-02 contract): when the parent *Store
-// exposes an `overlayPendingRowsFor(repoID) *atomic.Int64` field (added by
-// P63-02 Task 1), reset it to 0 AFTER all four DELETEs succeed. The reset
-// must happen AFTER the DELETEs, not before — otherwise the gate could
-// observe `OverlayHasPendingRows == false` while rows still exist on disk.
-// Today the field doesn't exist; the reset is guarded behind a runtime
-// nil-check so this snippet is forward-compatible with P63-02 without
-// requiring a follow-up edit.
+// Pending-rows counter accounting (Phase 63 review CR-02): the in-memory
+// pending-rows counter (overlayPendingRowsFor / OverlayHasPendingRows) is
+// the proxy for the gate's BlockedOverlayEmpty check. Pre-fix, this
+// method unconditionally Store(0)'d the counter — but the CAS contract
+// preserves rows with write_epoch > capturedEpoch, and forcing the
+// counter to zero in their presence would make OverlayHasPendingRows
+// return false while pending rows still exist on disk, deadlocking the
+// gate at BlockedOverlayEmpty until the next concurrent overlay write
+// re-stamped the counter. Post-fix, we sum the per-table RowsAffected
+// from the four DELETEs and atomically subtract that count from the
+// in-memory counter (clamped at zero so a counter that under-counted
+// pre-existing rows can never go negative). The subtract must happen
+// AFTER all four DELETEs succeed.
 func (snap *Snapshot) ClearOverlayLE(ctx context.Context, repoID string, capturedEpoch uint64) error {
 	if snap == nil || snap.tx == nil {
 		return fmt.Errorf("ClearOverlayLE: nil snapshot")
@@ -571,31 +576,52 @@ func (snap *Snapshot) ClearOverlayLE(ctx context.Context, repoID string, capture
 		{"semantic_live_overlay_references", `DELETE FROM semantic_live_overlay_references WHERE repo_id = ? AND write_epoch <= ?`},
 		{"semantic_live_overlay_edges", `DELETE FROM semantic_live_overlay_edges WHERE repo_id = ? AND write_epoch <= ?`},
 	}
+	var totalDeleted int64
 	for _, d := range overlayDeletes {
-		if _, err := snap.tx.ExecContext(ctx, d.sql, repoID, capturedEpoch); err != nil {
+		res, err := snap.tx.ExecContext(ctx, d.sql, repoID, capturedEpoch)
+		if err != nil {
 			return fmt.Errorf("ClearOverlayLE(%s): %w", d.name, err)
+		}
+		// RowsAffected may return an error on drivers that do not support
+		// it; we tolerate that by treating it as zero (the counter then
+		// drifts conservatively high and the gate stays unblocked at
+		// worst — preferable to the pre-fix blanket zero-out).
+		if n, raerr := res.RowsAffected(); raerr == nil && n > 0 {
+			totalDeleted += n
 		}
 	}
 
-	// Forward-compatible pending-rows counter reset (P63-02 wires this).
-	// When the field is added the runtime nil-check below activates the
-	// reset; until then this is a no-op. See doc comment above for the
-	// AFTER-DELETE ordering rationale.
-	resetOverlayPendingRowsIfPresent(snap.store, repoID)
+	// Phase 63 review CR-02: AFTER all four DELETEs succeed, decrement the
+	// in-memory pending-rows counter by the number of rows deleted (NOT
+	// unconditionally zero it). Rows committed during compaction with
+	// write_epoch > capturedEpoch are NOT deleted and MUST keep the
+	// counter positive so the next gate evaluation correctly observes
+	// OverlayHasPendingRows == true.
+	subtractOverlayPendingRowsIfPresent(snap.store, repoID, totalDeleted)
 
 	return nil
 }
 
-// resetOverlayPendingRowsIfPresent resets the *Store's per-workspace
-// pending-rows atomic counter to 0. Phase 63 P63-02 Task 1 wires the
-// real reset (P63-01 left this as a forward-compatible no-op).
+// subtractOverlayPendingRowsIfPresent atomically decrements the *Store's
+// per-workspace pending-rows counter by n, clamped at zero. Phase 63
+// review CR-02: replaces the unconditional Store(0) reset that
+// destroyed the OverlayHasPendingRows signal in the presence of rows
+// committed during compaction (write_epoch > capturedEpoch — which
+// SURVIVE ClearOverlayLE per the Phase 60 D-04 CAS contract).
 //
 // Called from Snapshot.ClearOverlayLE AFTER the four overlay-table
-// DELETEs succeed — the AFTER ordering is load-bearing: if reset ran
-// before the DELETEs the gate could observe OverlayHasPendingRows ==
-// false while overlay rows still existed on disk. nil-safe.
-func resetOverlayPendingRowsIfPresent(s *Store, repoID string) {
-	if s == nil || repoID == "" {
+// DELETEs succeed — the AFTER ordering is load-bearing: if the
+// decrement ran before the DELETEs the gate could observe
+// OverlayHasPendingRows == false transiently while overlay rows still
+// existed on disk. nil-safe.
+//
+// Clamp-at-zero is defensive: the counter is bumped by overlay-write
+// helpers that may under-count (e.g., if a row is overwritten by an
+// ON CONFLICT DO UPDATE the counter is bumped twice but only one row
+// exists); a strict subtract could otherwise underflow. The clamp
+// preserves the gate's monotone-towards-zero invariant.
+func subtractOverlayPendingRowsIfPresent(s *Store, repoID string, n int64) {
+	if s == nil || repoID == "" || n <= 0 {
 		return
 	}
 	s.overlayCountsMu.Lock()
@@ -604,7 +630,16 @@ func resetOverlayPendingRowsIfPresent(s *Store, repoID string) {
 	if !ok || c == nil {
 		return
 	}
-	c.Store(0)
+	for {
+		cur := c.Load()
+		next := cur - n
+		if next < 0 {
+			next = 0
+		}
+		if c.CompareAndSwap(cur, next) {
+			return
+		}
+	}
 }
 
 // nullIfEmpty maps "" → nil (so the database/sql driver writes SQL NULL)

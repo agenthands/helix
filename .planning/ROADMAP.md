@@ -173,7 +173,7 @@
   Plans:
   - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
   - [x] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
-- [x] Phase 64: New MCP Tools (P0 set of 4) (7/8 plans) (completed 2026-05-07)
+- [x] Phase 64: New MCP Tools (P0 set of 4) (8/8 plans) — VERIFIED PASSED-WITH-CARRYOVER 2026-05-08 (2 Phase-65 carryover items: production buildFn empty-Facts placeholder + zero-value WorkspaceKey from session adapter)
   **Goal:** Agents can index, refresh, inspect, and query the semantic graph through four new MCP tools (`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`) whose responses always carry `freshness` + `graph_version` fields, profile/mode gating respects the existing matrix, and selection is deterministic.
   **Depends on:** Phase 62, Phase 63
   **Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05

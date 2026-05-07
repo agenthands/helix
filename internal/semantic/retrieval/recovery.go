@@ -2,7 +2,9 @@ package retrieval
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,8 +13,6 @@ import (
 	"github.com/agenthands/helix/internal/workspace"
 )
 
-// recovery.go — STUB (RED gate). Real implementation lands in Task 2 GREEN.
-//
 // Bleve dual-store reconciliation: at workspace activation, compare the
 // bleve segment's last-indexed snapshot id against the *Store's latest
 // committed snapshot id. On mismatch (incl. missing bleve), spawn a
@@ -24,6 +24,10 @@ import (
 // snapshot id whose facts the bleve segment reflects. Read via
 // Engine.GetMeta; written via Engine.SetMeta on rebuild commit.
 const metaKeyLastIndexed = "last_indexed_snapshot_id"
+
+// rebuildBatchSize bounds the per-batch UpsertBatch size so a 100k-symbol
+// rebuild doesn't construct a 100k-document bleve.Batch in one shot.
+const rebuildBatchSize = 1000
 
 // StoreReader is a consumer-defined interface seam (Go idiom). Production
 // wiring (P64-08) passes a *internal/semantic/store.Store value, which
@@ -65,8 +69,16 @@ type Recoverer struct {
 
 // NewRecoverer constructs a Recoverer wrapping engine + store. logger may be
 // nil; the Recoverer falls back to slog.Default() in that case.
-func NewRecoverer(engine *Engine, store StoreReader, logger *slog.Logger) *Recoverer {
-	panic("retrieval.NewRecoverer: not implemented (RED gate — Task 2 GREEN fills this in)")
+func NewRecoverer(engine *Engine, reader StoreReader, logger *slog.Logger) *Recoverer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Recoverer{
+		engine:   engine,
+		store:    reader,
+		logger:   logger,
+		statuses: make(map[string]*RecoveryStatus),
+	}
 }
 
 // Probe compares the bleve segment's last-indexed snapshot id against the
@@ -76,13 +88,175 @@ func NewRecoverer(engine *Engine, store StoreReader, logger *slog.Logger) *Recov
 // Probe is non-blocking: while a rebuild is in flight, RetrievalPending(ws)
 // returns true. Callers (get_semantic_context handler) surface that state
 // to agents via RetrievalPending=true / Freshness=stale on the response.
+//
+// Recovery decision tree:
+//  1. latest := store.LatestCommittedSnapshot(repoID).
+//  2. latest == 0 → no committed snapshot exists; nothing to rebuild.
+//  3. raw := engine.GetMeta(metaKeyLastIndexed); parse uint64.
+//  4. raw == latest → bleve is current; no-op.
+//  5. raw > latest → post-rollback case; log WARN + treat as missing.
+//  6. raw < latest (or unset/parse-fail) → spawn background rebuild.
 func (r *Recoverer) Probe(ctx context.Context, ws workspace.WorkspaceKey) error {
-	panic("retrieval.Recoverer.Probe: not implemented (RED gate)")
+	if r == nil || r.engine == nil || r.store == nil {
+		return fmt.Errorf("retrieval.Probe: recoverer not fully constructed")
+	}
+	repoID := ws.Hash()
+
+	latest, err := r.store.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		r.logger.Warn("retrieval.Probe: LatestCommittedSnapshot failed",
+			"repo_id", repoID, "err", err)
+		return nil // tolerate; recovery can run on the next activation
+	}
+	if latest == 0 {
+		// No committed snapshot exists — nothing to rebuild.
+		return nil
+	}
+
+	rawBytes, err := r.engine.GetMeta(metaKeyLastIndexed)
+	if err != nil {
+		r.logger.Warn("retrieval.Probe: GetMeta failed; treating as missing",
+			"repo_id", repoID, "err", err)
+		// Continue to rebuild path.
+	}
+	var raw uint64
+	if len(rawBytes) > 0 {
+		parsed, perr := strconv.ParseUint(string(rawBytes), 10, 64)
+		if perr != nil {
+			r.logger.Warn("retrieval.Probe: last_indexed_snapshot_id parse failed; treating as missing",
+				"repo_id", repoID, "raw", string(rawBytes), "err", perr)
+			raw = 0
+		} else {
+			raw = parsed
+		}
+	}
+
+	switch {
+	case raw == latest:
+		// Bleve is current — no-op.
+		return nil
+	case raw > latest:
+		// Post-rollback case: bleve thinks it's ahead of the store. Log a
+		// warning and rebuild from scratch (treat as missing).
+		r.logger.Warn("retrieval.Probe: bleve last_indexed > store latest (post-rollback?); rebuilding",
+			"repo_id", repoID, "bleve_last", raw, "store_latest", latest)
+	default:
+		// raw < latest (or 0/unset) — normal stale/missing rebuild.
+	}
+
+	r.spawnRebuild(ws, latest)
+	return nil
 }
 
 // RetrievalPending reports whether a rebuild is currently in flight for ws.
 // Returns false if no rebuild has been started or the most-recent rebuild
 // has completed.
 func (r *Recoverer) RetrievalPending(ws workspace.WorkspaceKey) bool {
-	panic("retrieval.Recoverer.RetrievalPending: not implemented (RED gate)")
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	st, ok := r.statuses[ws.Hash()]
+	if !ok {
+		return false
+	}
+	return st.InProgress
+}
+
+// spawnRebuild registers a RecoveryStatus and launches the background
+// rebuild goroutine. Caller is Probe; this method is internal-only.
+//
+// The goroutine consumes ctx.Background()-derived context so a request-
+// scoped cancellation cannot abort an in-flight rebuild (mirrors P64-04
+// IndexRunner D-04 invariant).
+func (r *Recoverer) spawnRebuild(ws workspace.WorkspaceKey, snapshotID uint64) {
+	repoID := ws.Hash()
+
+	r.mu.Lock()
+	if existing, ok := r.statuses[repoID]; ok && existing.InProgress {
+		// Rebuild already running for this workspace — coalesce.
+		r.mu.Unlock()
+		return
+	}
+	st := &RecoveryStatus{
+		InProgress: true,
+		StartedAt:  time.Now(),
+	}
+	r.statuses[repoID] = st
+	r.mu.Unlock()
+
+	go func() {
+		bgCtx := context.Background()
+		err := r.rebuildBlocking(bgCtx, ws, snapshotID, st)
+		r.mu.Lock()
+		st.InProgress = false
+		r.mu.Unlock()
+		if err != nil {
+			r.logger.Error("retrieval.rebuild: failed",
+				"repo_id", repoID, "snapshot", snapshotID, "err", err)
+			return
+		}
+		r.logger.Info("retrieval.rebuild: complete",
+			"repo_id", repoID, "snapshot", snapshotID, "indexed", st.Indexed.Load())
+	}()
+}
+
+// rebuildBlocking walks the committed snapshot, batches symbols into
+// SymbolDocs via corpus.MapSymbolToDoc, and upserts in bounded batches to
+// the bleve engine. On successful completion, persists the snapshot id via
+// Engine.SetMeta(metaKeyLastIndexed).
+//
+// Note on file content for comment-window extraction: IterateCommittedSymbols
+// returns SymbolRow without file source bytes. We pass nil for fileSource to
+// MapSymbolToDoc, accepting that the comment-window field is empty for
+// symbols indexed via recovery (rather than at the original commit time).
+// Bleve queries against the other text fields (name, path, docstring) still
+// work. If a future phase wants comment-window on recovery, 64-02 can extend
+// SymbolRow to include file bytes.
+func (r *Recoverer) rebuildBlocking(ctx context.Context, ws workspace.WorkspaceKey, snapshotID uint64, st *RecoveryStatus) error {
+	batch := make([]SymbolDoc, 0, rebuildBatchSize)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := r.engine.UpsertBatch(ctx, batch); err != nil {
+			return fmt.Errorf("UpsertBatch (size=%d): %w", len(batch), err)
+		}
+		st.Indexed.Add(int64(len(batch)))
+		batch = batch[:0]
+		return nil
+	}
+
+	var iterErr error
+	walkErr := r.store.IterateCommittedSymbols(ctx, snapshotID, func(row store.SymbolRow) bool {
+		// Recovery does not load file source for the comment window — see
+		// docstring above for rationale.
+		batch = append(batch, MapSymbolToDoc(row, nil))
+		if len(batch) >= rebuildBatchSize {
+			if err := flush(); err != nil {
+				iterErr = err
+				return false // abort iteration on flush error
+			}
+		}
+		return true
+	})
+	if iterErr != nil {
+		return iterErr
+	}
+	if walkErr != nil {
+		return fmt.Errorf("IterateCommittedSymbols(snap=%d): %w", snapshotID, walkErr)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+
+	// Persist the new last_indexed marker. This is the recovery's commit
+	// point: subsequent Probe calls will see raw == latest and short-
+	// circuit until the next snapshot commit.
+	if err := r.engine.SetMeta(metaKeyLastIndexed, []byte(strconv.FormatUint(snapshotID, 10))); err != nil {
+		return fmt.Errorf("SetMeta(last_indexed=%d): %w", snapshotID, err)
+	}
+	return nil
 }

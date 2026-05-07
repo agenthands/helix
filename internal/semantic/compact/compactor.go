@@ -13,7 +13,6 @@ package compact
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -345,9 +344,3 @@ func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 var _ interface {
 	Run(ctx context.Context) error
 } = (*Compactor)(nil)
-
-// errClosed is the sentinel for context cancellation paths that don't
-// flow through ctx.Err() directly.
-var errClosed = errors.New("compactor closed")
-
-var _ = errClosed // reserved for future shutdown-error surfaces

@@ -147,7 +147,10 @@ type Metrics struct {
 	SemanticGraphScoreStatusVec *prometheus.CounterVec
 
 	// Phase 62 P02: repair outcome counter.
-	// Closed-enum "outcome" ∈ {"applied","frontier_overflow","preempted","error"}.
+	// Closed-enum "outcome" ∈ {"applied","frontier_overflow","preempted","error","stub_no_data"}.
+	// stub_no_data was added by Phase 62-08 to surface deferred Phase 64
+	// read paths on rankStoreAdapter (62-VERIFICATION.md gap truth #21,
+	// WR-05) so dashboards distinguish "no data yet" from clean repair.
 	SemanticGraphRepairVec *prometheus.CounterVec
 
 	// Phase 62 P02: graph_version gauge per workspace.
@@ -366,7 +369,7 @@ func newMetrics() *Metrics {
 		SemanticGraphRepairVec: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "helix_semantic_graph_repair_total",
-				Help: "ApplyRepair outcomes by category (applied/frontier_overflow/preempted/error). Phase 62 P02 D-06/D-09.",
+				Help: "ApplyRepair outcomes by category (applied/frontier_overflow/preempted/error/stub_no_data — the last surfaces Phase 64-deferred read paths on rankStoreAdapter). Phase 62 P02 D-06/D-09; stub_no_data added by 62-08.",
 			},
 			[]string{"outcome"},
 		),
@@ -711,6 +714,10 @@ var graphRepairOutcomes = map[string]struct{}{
 	"frontier_overflow":  {},
 	"preempted":          {},
 	"error":              {},
+	// 62-08: surfaces the four deferred Phase 64 read paths on
+	// rankStoreAdapter (62-VERIFICATION.md gap truth #21 / WR-05) so
+	// dashboards distinguish "no data yet" from clean repair.
+	"stub_no_data":       {},
 }
 
 // typesConfidenceTiers is the SPEC §38.2 ladder rendered as bucketed
@@ -756,7 +763,12 @@ func (m *Metrics) SemanticGraphScoreStatusInc(projection, status string) {
 }
 
 // SemanticGraphRepairInc increments the ApplyRepair outcome counter.
-// outcome ∈ {applied, frontier_overflow, preempted, error}.
+// outcome ∈ {applied, frontier_overflow, preempted, error, stub_no_data}.
+// stub_no_data is emitted by rankStoreAdapter for the four read methods
+// that are deferred to Phase 64 (QueryEffectiveGraph, QueryEffectiveAdjacency,
+// CountStaleScoreRows, MarkAllScoreRowsStale). See
+// internal/daemon/rank_wiring.go for the call sites and 62-VERIFICATION.md
+// gap truth #21 (WR-05) for the gap closure context.
 func (m *Metrics) SemanticGraphRepairInc(outcome string) {
 	if _, ok := graphRepairOutcomes[outcome]; !ok {
 		return

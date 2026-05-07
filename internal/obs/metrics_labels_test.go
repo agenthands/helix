@@ -188,6 +188,7 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.SemanticGraphPagerankObserve("incremental", "call_graph", 0.005)
 	m.SemanticGraphScoreStatusInc("call_graph", "exact")
 	m.SemanticGraphRepairInc("applied")
+	m.SemanticGraphRepairInc("stub_no_data") // 62-08 closure: keep family scanned for the new outcome (WR-05).
 	m.SemanticGraphVersionSet("ws-aaa", 1)
 	m.SemanticTypesResolutionInc("go", "1.00")
 

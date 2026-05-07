@@ -85,6 +85,21 @@ var carveOuts = map[string]map[string]bool{
 	"helix_semantic_graph_repair_total":              {},
 	"helix_semantic_graph_version":                   {"workspace_label": true},
 	"helix_semantic_types_resolution_total":          {"confidence_tier": true},
+	// Phase 63 P63-02 D-04: compaction + vacuum metrics. The
+	// `outcome` label is already in AllowedLabels (D-04 RED tag), so
+	// it does not need a carve-out — but `reason` on
+	// helix_semantic_compaction_blocked_total is a new closed-enum
+	// label name (BlockedReason: overlay_empty, idle_too_short,
+	// edit_tx_active, overlay_tx_active, lsp_pending, rank_repairing).
+	// Pre-fix this entry was missing AND the family was not primed in
+	// TestMetricsLabelsAllowlist; Gather() drops empty families so
+	// the lint silently passed at CI time but would have failed at
+	// runtime on the first emission. Phase 63 review IN-04 closes
+	// both halves: adds the carve-out here and primes the family in
+	// the test below.
+	"helix_semantic_compaction_blocked_total":     {"reason": true},
+	"helix_semantic_compaction_duration_seconds":  {},
+	"helix_semantic_vacuum_duration_seconds":      {},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -191,6 +206,15 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.SemanticGraphRepairInc("stub_no_data") // 62-08 closure: keep family scanned for the new outcome (WR-05).
 	m.SemanticGraphVersionSet("ws-aaa", 1)
 	m.SemanticTypesResolutionInc("go", "1.00")
+	// Phase 63 review IN-04: prime the compaction + vacuum vectors so
+	// TestMetricsLabelsAllowlist scans their labels (Pitfall #3 from
+	// Phase 53 D-13 — empty families are dropped by Gather()). Without
+	// these primings the `reason` label on
+	// helix_semantic_compaction_blocked_total escapes the lint until
+	// it is emitted at runtime on a live registry.
+	m.SemanticCompactionObserve("success", 0.1)
+	m.SemanticCompactionBlocked("overlay_empty")
+	m.SemanticVacuumObserve("success", 0.1)
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

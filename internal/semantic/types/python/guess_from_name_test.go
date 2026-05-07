@@ -46,15 +46,24 @@ func TestGuessFromName_DeterministicUnderOverlap(t *testing.T) {
 }
 
 // TestGuessFromName_NoMapIteration is a meta-guard against future
-// regressions to the bare `for k, v := range suffixMap` pattern.
+// regressions to bare unsorted-map range iteration over the suffix
+// rules. Pattern is constructed at runtime so this source file itself
+// does not match the repo-wide determinism grep gate.
 func TestGuessFromName_NoMapIteration(t *testing.T) {
 	path := filepath.Join("resolver.go")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read resolver.go: %v", err)
 	}
-	re := regexp.MustCompile(`for [_a-zA-Z]+, [_a-zA-Z]+ := range suffixMap`)
+	re := regexp.MustCompile(forbiddenSuffixMapPattern())
 	if re.Match(data) {
-		t.Fatalf("resolver.go contains forbidden pattern `for k, v := range suffixMap`; CR-03 requires sorted slice iteration")
+		t.Fatalf("resolver.go contains forbidden unsorted suffix-map iteration; CR-03 requires sorted slice iteration")
 	}
+}
+
+// forbiddenSuffixMapPattern returns the regex source that detects the
+// banned pattern. Built from string fragments so this file does not
+// itself match a repo-wide grep for the forbidden pattern.
+func forbiddenSuffixMapPattern() string {
+	return "for [_a-zA-Z]+, [_a-zA-Z]+ := range " + "suffix" + "Map"
 }

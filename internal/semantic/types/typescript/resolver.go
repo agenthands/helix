@@ -186,25 +186,44 @@ func parseTSAssignment(sig string) string {
 	return ""
 }
 
+// suffixRule maps a recognised camelCase suffix to its full-form type
+// name. Phase 62 CR-03 closure: sort-before-iterate locks deterministic
+// match priority regardless of future suffix additions that may alias
+// one suffix as another's tail.
+type suffixRule struct{ short, long string }
+
+// tsSuffixRules is sorted ascending by short. Adding a rule MUST
+// preserve the sort order so determinism remains structural. TS/JS
+// convention: camelCase tokens. Today's set is overlap-free at the tail
+// level; the structural sort guards future additions.
+var tsSuffixRules = []suffixRule{
+	{short: "Cfg", long: "Config"},
+	{short: "Conn", long: "Connection"},
+	{short: "Ctrl", long: "Controller"},
+	{short: "Mgr", long: "Manager"},
+	{short: "Repo", long: "Repository"},
+	{short: "Svc", long: "Service"},
+}
+
+// guessFromName implements the heuristic name-shape match for TS/JS.
 func guessFromName(name string) string {
+	return guessFromNameWithRules(name, tsSuffixRules)
+}
+
+// guessFromNameWithRules is the test-seam variant. CR-03 invariant:
+// callers MUST pass rules sorted ascending by short for deterministic
+// match priority.
+func guessFromNameWithRules(name string, rules []suffixRule) string {
 	if name == "" {
 		return ""
 	}
-	suffixMap := map[string]string{
-		"Repo": "Repository",
-		"Svc":  "Service",
-		"Mgr":  "Manager",
-		"Ctrl": "Controller",
-		"Cfg":  "Config",
-		"Conn": "Connection",
-	}
-	for short, long := range suffixMap {
-		if strings.HasSuffix(name, short) && len(name) > len(short) {
-			prefix := strings.TrimSuffix(name, short)
+	for _, r := range rules {
+		if strings.HasSuffix(name, r.short) && len(name) > len(r.short) {
+			prefix := strings.TrimSuffix(name, r.short)
 			if prefix == "" {
-				return long
+				return r.long
 			}
-			return strings.ToUpper(prefix[:1]) + prefix[1:] + long
+			return strings.ToUpper(prefix[:1]) + prefix[1:] + r.long
 		}
 	}
 	return ""

@@ -61,6 +61,28 @@ import (
 	"time"
 )
 
+// Phase 63 review IN-03: hoist control-plane string constants out of
+// the BeginSnapshot INSERT. Downstream readers (admin/status, future
+// cluster-side introspection) match on these values; embedding them as
+// SQL string literals meant a v1.10 binary still wrote `'phase63'` for
+// compaction-origin snapshots even after a follow-up phase rewrites
+// the compactor.
+const (
+	// snapshotKindCompact is the `kind` column value stamped on every
+	// row produced by the compaction pipeline (BeginSnapshot). Other
+	// snapshot kinds (e.g., bootstrap, manual) would use distinct
+	// literals when those producers land.
+	snapshotKindCompact = "compact"
+
+	// snapshotIndexerVersion is the `indexer_version` column value
+	// stamped on every row produced by BeginSnapshot. Bumped per phase
+	// so downstream readers can correlate row-level data with the
+	// schema/extractor combination that wrote it. Replace with a
+	// build-time constant (e.g., from internal/version) when the
+	// indexer-version registry lands.
+	snapshotIndexerVersion = "phase63"
+)
+
 // SnapshotMeta is the input payload to BeginSnapshot.
 type SnapshotMeta struct {
 	// RepoID is the workspace identifier the snapshot belongs to. Required.
@@ -253,16 +275,24 @@ func (s *Store) BeginSnapshot(ctx context.Context, meta SnapshotMeta) (*Snapshot
 	// engine's). Test seed paths and CommitSnapshot follow the same
 	// convention, eliminating Go-vs-DB clock-skew incoherence under
 	// container time-namespaces and monotonic-vs-wall clock swaps.
+	// Phase 63 review IN-03: bind kind / indexer_version through `?`
+	// placeholders backed by package constants instead of inline SQL
+	// literals so downstream readers (admin/status, cluster
+	// introspection) reason about them as configuration rather than
+	// magic strings. status='pending' stays inline because it is bound
+	// to the BeginSnapshot vs CommitSnapshot lifecycle, not to a
+	// caller-controllable value.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO semantic_snapshots (
 			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
 			worktree_hash, schema_version, indexer_version, status,
 			partial, created_at
 		) VALUES (
-			?, ?, '', ?, 'compact', '', ?, 'phase63', 'pending',
+			?, ?, '', ?, ?, '', ?, ?, 'pending',
 			false, now()
 		)
-	`, id, meta.RepoID, meta.BaseSnapshotID, CurrentSchemaVersion); err != nil {
+	`, id, meta.RepoID, meta.BaseSnapshotID,
+		snapshotKindCompact, CurrentSchemaVersion, snapshotIndexerVersion); err != nil {
 		_ = tx.Rollback()
 		return nil, fmt.Errorf("BeginSnapshot: insert pending row: %w", err)
 	}

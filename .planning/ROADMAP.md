@@ -171,7 +171,7 @@
   - [x] 62-09-PLAN.md — Gap closure (truth #22) — FileFactDiffRecorder seam threaded through Handler.UpdateChangedFile + once-INFO empty-diff log [GRAPH-03, GRAPH-05]
 - [ ] Phase 63: Compaction & Retention (0/2 plans)
   Plans:
-  - [ ] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
+  - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
   - [ ] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)

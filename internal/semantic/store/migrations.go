@@ -534,6 +534,46 @@ func schema3Statements() []string {
 	}
 }
 
+// applyMigration004 lights up Phase 63 P63-02 Task 1 / D-05 storage: a
+// `last_vacuum_at TIMESTAMP DEFAULT NULL` column on
+// semantic_live_overlay_meta so the compactor's VACUUM piggyback can
+// store the previous run's wall-clock time and check the configured
+// vacuum_interval against it without having to keep state in process
+// memory across daemon restarts.
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no
+// reindex, no data backfill. Existing rows take DEFAULT NULL (which
+// signals "never vacuumed" → the next eligible window fires).
+//
+// Rollback follows the same model as Phase 60 applyMigration003:
+// DuckDB's ALTER TABLE DROP COLUMN support is incomplete; downgrade
+// requires the quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration004(ctx context.Context, db *sql.DB) error {
+	stmts := schema4Statements()
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration004: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema4Statements returns the v3→v4 DDL: one ALTER TABLE adding the
+// last_vacuum_at column, then the schema_version stamp. Two statements.
+//
+// Acceptance grep gates in 63-02-PLAN.md scan THIS function — keep the
+// `last_vacuum_at` literal on its own logical line so per-column presence
+// regexes match.
+func schema4Statements() []string {
+	return []string{
+		// VACUUM-cadence storage column.
+		`ALTER TABLE semantic_live_overlay_meta ADD COLUMN last_vacuum_at TIMESTAMP DEFAULT NULL`,
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (4, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

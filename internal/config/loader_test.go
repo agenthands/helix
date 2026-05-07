@@ -482,6 +482,23 @@ func TestLoad_SemanticIndexDefaults(t *testing.T) {
 	}
 }
 
+// TestLoad_MaintenanceDefaults asserts the Phase 63 P63-02 maintenance.*
+// defaults surface via the 4-layer koanf precedence. Default vacuum_enabled
+// MUST be false (CONTEXT.md D-05 + planner instruction).
+func TestLoad_MaintenanceDefaults(t *testing.T) {
+	cfg, err := Load("/nonexistent/global.yml", "", nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.SemanticIndex.Maintenance.VacuumEnabled {
+		t.Errorf("expected maintenance.vacuum_enabled=false, got true (CONTEXT.md D-05)")
+	}
+	if cfg.SemanticIndex.Maintenance.VacuumInterval != "168h" {
+		t.Errorf("expected maintenance.vacuum_interval=168h, got %q",
+			cfg.SemanticIndex.Maintenance.VacuumInterval)
+	}
+}
+
 // TestLoad_SemanticExtractionDefaults asserts the four genuinely-new
 // Phase 59 P02 keys under semantic_index.extraction.* surface via the
 // 4-layer koanf precedence. Mirrors TestLoad_SemanticIndexDefaults style.

@@ -17,6 +17,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gengraph "github.com/agenthands/helix/internal/graph"
@@ -63,11 +64,21 @@ type RankScheduler struct {
 	// pending holds the union of ChangedNodes across all advances seen
 	// since the last incremental repair. Reset under timerMu when the
 	// debounce fires and the incremental repair starts.
-	timerMu       sync.Mutex
+	timerMu        sync.Mutex
 	pendingChanged []NodeID
-	debounceTimer *time.Timer
-	longIdleTimer *time.Timer
-	lastSeenGV    uint64
+	debounceTimer  *time.Timer
+	longIdleTimer  *time.Timer
+	lastSeenGV     uint64
+
+	// Phase 63 P63-02 Task 1: in-flight repair counter. Incremented at the
+	// top of runIncrementalRepair / maybeFullRecompute, decremented in a
+	// defer; the compaction gate's IsQuiescent helper combines this with
+	// pendingChanged emptiness to answer "is the rank scheduler currently
+	// dormant?" — RESEARCH.md call-out: pendingChanged is cleared TOO EARLY
+	// inside runIncrementalRepair (the slice clears before the work runs),
+	// so a `len(pendingChanged) == 0` test alone would falsely report
+	// quiescence mid-repair. The in-flight counter closes that gap.
+	inFlightCount atomic.Int32
 }
 
 // NewRankScheduler constructs a scheduler bound to the given store. Run
@@ -177,6 +188,11 @@ func (s *RankScheduler) runIncrementalRepair(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	// Phase 63 P63-02 Task 1: stamp in-flight so IsQuiescent reports
+	// false during the entire repair. Decrement on every return path.
+	s.inFlightCount.Add(1)
+	defer s.inFlightCount.Add(-1)
+
 	s.timerMu.Lock()
 	changed := s.pendingChanged
 	s.pendingChanged = nil
@@ -325,6 +341,12 @@ func (s *RankScheduler) maybeFullRecompute(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	// Phase 63 P63-02 Task 1: stamp in-flight so IsQuiescent reports
+	// false during the entire recompute (incl. preempted-then-incremental
+	// chain — the chained call inside this body re-increments via its
+	// own defer).
+	s.inFlightCount.Add(1)
+	defer s.inFlightCount.Add(-1)
 	// CR-01 (62-07): CountStaleScoreRows is invoked lock-free here too —
 	// this path does NOT hold the workspace lock; RunFullRecompute
 	// acquires it internally for the recompute tx (D-10). The
@@ -376,6 +398,26 @@ func (s *RankScheduler) metricInc(outcome string) {
 		return
 	}
 	s.metrics.SemanticGraphRepairInc(outcome)
+}
+
+// IsQuiescent reports whether the scheduler currently has no pending or
+// in-flight work. Combines the pendingChanged slice (under timerMu) with
+// the atomic inFlightCount that wraps runIncrementalRepair /
+// maybeFullRecompute. O(1); CONTEXT.md D-04 hard invariant: NO I/O.
+//
+// Consumed by the Phase 63 compaction gate to decide whether the rank
+// engine is currently active and would conflict with a compaction tx.
+//
+// nil-safe: a nil receiver returns true (a non-existent scheduler is
+// trivially quiescent).
+func (s *RankScheduler) IsQuiescent() bool {
+	if s == nil {
+		return true
+	}
+	s.timerMu.Lock()
+	pending := len(s.pendingChanged)
+	s.timerMu.Unlock()
+	return pending == 0 && s.inFlightCount.Load() == 0
 }
 
 // mergeSorted returns a sorted-ascending dedup of `existing` ∪ `incoming`.

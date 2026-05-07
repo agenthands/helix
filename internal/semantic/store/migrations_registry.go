@@ -28,6 +28,7 @@ var migrations = []Migration{
 	{From: 0, To: 1, Kind: MigrationInPlace, Apply: applyMigration001},
 	{From: 1, To: 2, Kind: MigrationInPlace, Apply: applyMigration002},
 	{From: 2, To: 3, Kind: MigrationInPlace, Apply: applyMigration003},
+	{From: 3, To: 4, Kind: MigrationInPlace, Apply: applyMigration004},
 }
 
 // runMigrations progressively applies every Migration in the registry whose

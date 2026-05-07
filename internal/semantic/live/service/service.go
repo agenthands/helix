@@ -46,6 +46,47 @@ type Service struct {
 	mu         sync.RWMutex
 	coalescers map[workspace.WorkspaceKey]*coalescer.Coalescer
 	cancels    map[workspace.WorkspaceKey]context.CancelFunc
+
+	// Phase 63 P63-02 Task 3: optional post-flush hook fan-out. When
+	// set, every coalescer started by Start gets its own
+	// SetOnFlush(func() { onFlushHook(ws) }) closure so the
+	// per-workspace flush-completion signal reaches the daemon's
+	// compactBundle.OnCoalescerFlush. Nil-safe.
+	onFlushMu   sync.Mutex
+	onFlushHook func(workspace.WorkspaceKey)
+}
+
+// SetOnFlushHook registers a process-global post-flush callback. Phase
+// 63 P63-02 Task 3: the daemon wires this to
+// compactBundle.OnCoalescerFlush so the compaction timer is reset on
+// every flush.
+//
+// MUST be called before Start to take effect on the first coalescer
+// (the hook is captured at Start time). Nil clears the hook.
+func (s *Service) SetOnFlushHook(fn func(workspace.WorkspaceKey)) {
+	if s == nil {
+		return
+	}
+	s.onFlushMu.Lock()
+	s.onFlushHook = fn
+	s.onFlushMu.Unlock()
+}
+
+// LastFlushAt returns the per-workspace coalescer's most-recent flush
+// timestamp, or the zero value when no coalescer is registered for ws.
+// Phase 63 P63-02 Task 3: consumed by the compaction gate via the
+// daemon's coalescerAccessor adapter. nil-safe.
+func (s *Service) LastFlushAt(ws workspace.WorkspaceKey) time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+	s.mu.RLock()
+	c, ok := s.coalescers[ws]
+	s.mu.RUnlock()
+	if !ok || c == nil {
+		return time.Time{}
+	}
+	return c.LastFlushAt()
 }
 
 // ClassifierFunc is the signature the daemon-wired classifier closure
@@ -89,6 +130,16 @@ func (s *Service) Start(ctx context.Context, ws workspace.WorkspaceKey) {
 		return
 	}
 	c := coalescer.New(ws, s.cfg, s.handler, s.logger)
+	// Phase 63 P63-02 Task 3: forward post-flush signals into the
+	// daemon-installed hook. Closure captures ws so the daemon's
+	// OnCoalescerFlush(ws) receives the right key.
+	s.onFlushMu.Lock()
+	hook := s.onFlushHook
+	s.onFlushMu.Unlock()
+	if hook != nil {
+		wsCapture := ws
+		c.SetOnFlush(func() { hook(wsCapture) })
+	}
 	cctx, cancel := context.WithCancel(ctx)
 	s.coalescers[ws] = c
 	s.cancels[ws] = cancel

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -134,6 +135,23 @@ type Store struct {
 	// do NOT serialize. See overlay.go for the full lock protocol.
 	overlayLocksMu sync.Mutex
 	overlayLocks   map[string]*sync.Mutex
+
+	// Phase 63 P63-02 Task 1: per-workspace counters consumed by the
+	// compaction gate. Both maps are lazily installed under
+	// overlayCountsMu; the per-workspace atomic.Int32 / atomic.Int64
+	// values are then mutated lock-free.
+	//
+	//   - overlayTxCounts: number of currently-open OverlayTx handles per
+	//     repoID. Incremented in BeginOverlayTx, decremented in
+	//     OverlayTx.releaseLock. Drives BlockedOverlayTxActive.
+	//   - overlayPendingRows: cumulative count of overlay row writes since
+	//     the last ClearOverlayLE drained the table. Bumped on every
+	//     successful overlay-row write path; reset to 0 when
+	//     ClearOverlayLE removes ≥ 1 row. Drives BlockedOverlayEmpty
+	//     in O(1) without a SELECT (CONTEXT.md D-04 hard invariant).
+	overlayCountsMu    sync.Mutex
+	overlayTxCounts    map[string]*atomic.Int32
+	overlayPendingRows map[string]*atomic.Int64
 }
 
 // Open opens (or quarantines+rebuilds, or hard-fails) the DuckDB file at

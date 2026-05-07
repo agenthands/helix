@@ -23,9 +23,9 @@ import (
 	"github.com/agenthands/helix/internal/semantic/live/coalescer"
 	"github.com/agenthands/helix/internal/semantic/live/handler"
 	"github.com/agenthands/helix/internal/semantic/live/scanner"
-	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	liveservice "github.com/agenthands/helix/internal/semantic/live/service"
 	"github.com/agenthands/helix/internal/semantic/live/watcher"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/workspace"
@@ -71,6 +71,16 @@ type liveBundle struct {
 	// SetRankApplier(graph.NewEngine(...)) here so each successful
 	// graph-changing tx fans out to the per-workspace RankScheduler.
 	handler *handler.Handler
+}
+
+// LastFlushAt forwards to the live service's per-workspace coalescer.
+// Phase 63 P63-02 Task 3: consumed by the compaction gate via the
+// daemon's coalescerAccessor adapter. nil-safe.
+func (b *liveBundle) LastFlushAt(ws workspace.WorkspaceKey) time.Time {
+	if b == nil || b.service == nil {
+		return time.Time{}
+	}
+	return b.service.LastFlushAt(ws)
 }
 
 // Run starts the long-lived enrichment worker goroutines. Returns nil

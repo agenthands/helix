@@ -249,6 +249,8 @@ func registerCreateFile(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn fu
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: path").
 				WithTool("create_file").Error()), nil, nil
 		}
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKeyFn())()
 
 		if err := CreateFile(root, args.Path, args.Content); err != nil {
 			return errorResult(err.Error()), nil, nil
@@ -397,6 +399,8 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: pattern").
 				WithTool("replace_in_file").Error()), nil, nil
 		}
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKeyFn())()
 
 		count, err := ReplaceInFile(root, args.Path, args.Pattern, args.Replacement, args.IsRegex)
 		if err != nil {
@@ -491,6 +495,8 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn fun
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: search").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKeyFn())()
 
 		allowEllipsis := !args.DisableEllipsis
 		result, err := FuzzyEdit(root, args.Path, args.Search, args.Replacement, allowEllipsis)

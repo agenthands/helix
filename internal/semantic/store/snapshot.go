@@ -572,12 +572,25 @@ func (snap *Snapshot) ClearOverlayLE(ctx context.Context, repoID string, capture
 	return nil
 }
 
-// resetOverlayPendingRowsIfPresent is the forward-compatible hook for
-// P63-02's pending-rows counter. P63-02 will redeclare this function (or
-// its callers) with a real reset; until then it is a no-op so P63-01 can
-// land without referencing a not-yet-existing field.
-func resetOverlayPendingRowsIfPresent(_ *Store, _ string) {
-	// no-op until P63-02 lands the counter
+// resetOverlayPendingRowsIfPresent resets the *Store's per-workspace
+// pending-rows atomic counter to 0. Phase 63 P63-02 Task 1 wires the
+// real reset (P63-01 left this as a forward-compatible no-op).
+//
+// Called from Snapshot.ClearOverlayLE AFTER the four overlay-table
+// DELETEs succeed — the AFTER ordering is load-bearing: if reset ran
+// before the DELETEs the gate could observe OverlayHasPendingRows ==
+// false while overlay rows still existed on disk. nil-safe.
+func resetOverlayPendingRowsIfPresent(s *Store, repoID string) {
+	if s == nil || repoID == "" {
+		return
+	}
+	s.overlayCountsMu.Lock()
+	c, ok := s.overlayPendingRows[repoID]
+	s.overlayCountsMu.Unlock()
+	if !ok || c == nil {
+		return
+	}
+	c.Store(0)
 }
 
 // nullIfEmpty maps "" → nil (so the database/sql driver writes SQL NULL)

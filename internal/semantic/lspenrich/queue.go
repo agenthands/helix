@@ -2,6 +2,8 @@ package lspenrich
 
 import (
 	"context"
+	"sync/atomic"
+	"time"
 
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 )
@@ -28,6 +30,12 @@ const (
 type LaneQueue struct {
 	high       *lspqueue.Queue
 	background *lspqueue.Queue
+
+	// Phase 63 P63-02 Task 1: timestamp of the most recent successful
+	// EnqueueLane (nanos via atomic.Int64). Consumed by the compaction
+	// gate to decide "any pending LSP enrichment work that we should not
+	// compact in front of?" without touching the queue itself.
+	lastEnqueueNs atomic.Int64
 }
 
 // NewLaneQueue constructs a 2-lane queue with the supplied per-lane buffer
@@ -43,14 +51,44 @@ func NewLaneQueue(highBuf, bgBuf int) *LaneQueue {
 // the job was queued, false if the target lane buffer was full or the lane
 // argument is unknown (closed-enum guard).
 func (q *LaneQueue) EnqueueLane(lane Lane, job lspqueue.RevalidateFileJob) bool {
+	var ok bool
 	switch lane {
 	case LaneHigh:
-		return q.high.Enqueue(job)
+		ok = q.high.Enqueue(job)
 	case LaneBackground:
-		return q.background.Enqueue(job)
+		ok = q.background.Enqueue(job)
 	default:
 		return false
 	}
+	if ok {
+		// Phase 63 P63-02 Task 1: stamp the last-enqueue clock for the
+		// compaction gate (LSP-pending detection). Atomic store; no I/O.
+		q.lastEnqueueNs.Store(time.Now().UnixNano())
+	}
+	return ok
+}
+
+// LastEnqueueAt returns the wall-clock time of the most recent successful
+// EnqueueLane. Returns time.Time{} (zero value) when nothing has ever been
+// enqueued. O(1) atomic read; CONTEXT.md D-04 hard invariant: NO I/O.
+func (q *LaneQueue) LastEnqueueAt() time.Time {
+	if q == nil {
+		return time.Time{}
+	}
+	n := q.lastEnqueueNs.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n)
+}
+
+// DepthAll returns the sum of buffered counts across both lanes. Consumed
+// by the compaction gate's LSP-pending check. O(1) (chan len reads).
+func (q *LaneQueue) DepthAll() int {
+	if q == nil {
+		return 0
+	}
+	return q.Depth(LaneHigh) + q.Depth(LaneBackground)
 }
 
 // Enqueue is the legacy single-method shape preserved for backward-compat

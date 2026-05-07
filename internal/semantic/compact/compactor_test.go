@@ -1,0 +1,282 @@
+// Phase 63 P63-02 Task 2: compactor unit tests via fakes.
+//
+// These tests exercise the compaction-control flow without spinning up
+// a real DuckDB store. The runCompaction body is exercised in the
+// integration smoke test; here we focus on the gate re-check, the
+// pre-flight size guard, and the metric outcome labels.
+
+package compact_test
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/agenthands/helix/internal/semantic/compact"
+	"github.com/agenthands/helix/internal/semantic/store"
+	"github.com/agenthands/helix/internal/workspace"
+)
+
+// fakeMetrics records every observation so tests can assert outcomes.
+type fakeMetrics struct {
+	mu               sync.Mutex
+	compactionCalls  []compactionObs
+	compactionBlocks []string
+	vacuumCalls      []vacuumObs
+}
+type compactionObs struct {
+	outcome string
+	seconds float64
+}
+type vacuumObs struct {
+	outcome string
+	seconds float64
+}
+
+func (m *fakeMetrics) SemanticCompactionObserve(outcome string, seconds float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.compactionCalls = append(m.compactionCalls, compactionObs{outcome, seconds})
+}
+func (m *fakeMetrics) SemanticCompactionBlocked(reason string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.compactionBlocks = append(m.compactionBlocks, reason)
+}
+func (m *fakeMetrics) SemanticVacuumObserve(outcome string, seconds float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.vacuumCalls = append(m.vacuumCalls, vacuumObs{outcome, seconds})
+}
+func (m *fakeMetrics) lastCompaction() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.compactionCalls) == 0 {
+		return ""
+	}
+	return m.compactionCalls[len(m.compactionCalls)-1].outcome
+}
+
+// fakeOverlay returns a configurable rowcount + records calls.
+type fakeOverlay struct {
+	rows                 int
+	rowsErr              error
+	rowCountCalls        int
+	updateLastVacuumCall int
+}
+
+func (f *fakeOverlay) OverlayRowCount(_ context.Context, _ string, _ uint64) (int, error) {
+	f.rowCountCalls++
+	return f.rows, f.rowsErr
+}
+func (f *fakeOverlay) UpdateLastVacuumAt(_ context.Context, _ string, _ interface{}) error {
+	f.updateLastVacuumCall++
+	return nil
+}
+
+// fakeStore stubs the snapshot-tx surface. Each call increments a
+// counter so tests can assert call orderings.
+type fakeStore struct {
+	mu                 sync.Mutex
+	beginCalls         int
+	beginErr           error
+	writeCalls         int
+	writeErr           error
+	commitCalls        int
+	commitErr          error
+	abortCalls         int
+	abortReasons       []string
+	checkpointCalls    int
+	vacuumCalls        int
+	vacuumErr          error
+	deleteRetentionErr error
+	clearOverlayErr    error
+}
+
+func (f *fakeStore) BeginSnapshot(_ context.Context, meta store.SnapshotMeta) (*store.Snapshot, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.beginCalls++
+	if f.beginErr != nil {
+		return nil, f.beginErr
+	}
+	// We can't construct a real *store.Snapshot from outside the
+	// store package; tests that need this construct a real store via
+	// the integration smoke test. Unit tests assert outcomes via the
+	// metric counts and the BeginSnapshot fail path.
+	return nil, errors.New("fakeStore: real *store.Snapshot construction not supported in unit fake")
+}
+func (f *fakeStore) WriteSnapshotFacts(_ context.Context, _ *store.Snapshot, _ store.Facts) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.writeCalls++
+	return f.writeErr
+}
+func (f *fakeStore) CommitSnapshot(_ context.Context, _ *store.Snapshot, _ store.SnapshotSummary) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commitCalls++
+	return f.commitErr
+}
+func (f *fakeStore) AbortSnapshot(_ context.Context, _ *store.Snapshot, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.abortCalls++
+	f.abortReasons = append(f.abortReasons, reason)
+	return nil
+}
+func (f *fakeStore) Vacuum(_ context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.vacuumCalls++
+	return f.vacuumErr
+}
+func (f *fakeStore) Checkpoint(_ context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.checkpointCalls++
+	return nil
+}
+
+// gateAlwaysReady is a CompactionGate stand-in for tests that want to
+// exercise the runCompaction body without a real gate.
+//
+// We construct the gate via NewCompactionGate with happy fakes since
+// the gate type is concrete.
+func gateAlwaysReady() *compact.CompactionGate {
+	now := time.Now()
+	deps := compact.GateDeps{
+		Coalescer: &fixedFlush{lastFlushAt: now.Add(-time.Hour)},
+		OverlayTx: &fixedOpenTx{count: 0},
+		OverlayRow: &fixedPending{
+			pending: true,
+		},
+		LSPQueue:   &fixedLSP{depth: 0},
+		Scheduler:  &fixedQuiescent{q: true},
+		KernelEdit: &fixedEditTx{count: 0},
+	}
+	return compact.NewCompactionGate("repo", deps, compact.GateConfig{
+		CompactAfterIdle:     5 * time.Second,
+		LSPCompactionMaxWait: 30 * time.Second,
+	}, func() time.Time { return now })
+}
+
+type fixedFlush struct{ lastFlushAt time.Time }
+
+func (f *fixedFlush) LastFlushAt() time.Time { return f.lastFlushAt }
+
+type fixedOpenTx struct{ count int }
+
+func (f *fixedOpenTx) OverlayTxOpenCount(workspace.WorkspaceKey) int { return f.count }
+
+type fixedPending struct{ pending bool }
+
+func (f *fixedPending) OverlayHasPendingRows(string) bool { return f.pending }
+func (f *fixedPending) OverlayRowCount(_ context.Context, _ string, _ uint64) (int, error) {
+	return 0, nil
+}
+
+type fixedLSP struct {
+	depth   int
+	lastEnq time.Time
+}
+
+func (f *fixedLSP) Depth() int               { return f.depth }
+func (f *fixedLSP) LastEnqueueAt() time.Time { return f.lastEnq }
+
+type fixedQuiescent struct{ q bool }
+
+func (f *fixedQuiescent) IsQuiescent(workspace.WorkspaceKey) bool { return f.q }
+
+type fixedEditTx struct{ count int }
+
+func (f *fixedEditTx) ActiveEditTxCount(workspace.WorkspaceKey) int { return f.count }
+
+func TestCompactor_RunCompaction_PartialOnSizeGuard(t *testing.T) {
+	m := &fakeMetrics{}
+	o := &fakeOverlay{rows: 999_999} // > MaxOverlayRows default 4000
+	s := &fakeStore{}
+	c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{
+		MaxOverlayRows: 4000,
+	}, compact.Deps{
+		Gate:       gateAlwaysReady(),
+		Store:      s,
+		OverlayOps: o,
+		Metrics:    m,
+	})
+	// Drive runCompaction directly via the public OnFlush path, which
+	// won't fire a real timer because c.cfg.CompactAfterIdle is now
+	// default. Instead, invoke the (unexported) fire() body via a
+	// public seam: trigger OnFlush, then sleep less than the timer.
+	// Simpler: call NewCompactor's exposed RunOnce-style helper. Since
+	// runCompaction is unexported, we use a tiny public seam.
+	//
+	// Public seam: TestRunCompaction is exposed only through the
+	// fact that the timer-driven path is identical in behavior. The
+	// alternative is testing through OnFlush + a real timer; for unit
+	// scope we compute the outcome by invoking via the
+	// PublicTriggerForTest hook in the package (added below).
+	c.PublicTriggerForTest()
+	if got := m.lastCompaction(); got != "partial" {
+		t.Errorf("outcome: got %q, want partial", got)
+	}
+	if s.beginCalls != 0 {
+		t.Errorf("BeginSnapshot calls on partial: got %d, want 0", s.beginCalls)
+	}
+}
+
+func TestCompactor_RunCompaction_SkippedBlockedWhenGateNotReady(t *testing.T) {
+	m := &fakeMetrics{}
+	o := &fakeOverlay{rows: 0}
+	s := &fakeStore{}
+
+	// Build a gate that blocks on overlay_empty.
+	now := time.Now()
+	gate := compact.NewCompactionGate("repo", compact.GateDeps{
+		OverlayRow: &fixedPending{pending: false},
+	}, compact.GateConfig{CompactAfterIdle: 5 * time.Second}, func() time.Time { return now })
+
+	c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{}, compact.Deps{
+		Gate:       gate,
+		Store:      s,
+		OverlayOps: o,
+		Metrics:    m,
+	})
+	c.PublicTriggerForTest()
+
+	if got := m.lastCompaction(); got != "skipped_blocked" {
+		t.Errorf("outcome: got %q, want skipped_blocked", got)
+	}
+	if len(m.compactionBlocks) == 0 || m.compactionBlocks[0] != string(compact.BlockedOverlayEmpty) {
+		t.Errorf("blocked reason: got %v, want overlay_empty", m.compactionBlocks)
+	}
+	if o.rowCountCalls != 0 {
+		t.Errorf("OverlayRowCount on skipped: got %d calls, want 0", o.rowCountCalls)
+	}
+}
+
+func TestCompactor_OnFlush_ResetsTimer(t *testing.T) {
+	// Tight timer — fires within 50ms of OnFlush.
+	m := &fakeMetrics{}
+	o := &fakeOverlay{rows: 0}
+	s := &fakeStore{}
+	gate := gateAlwaysReady()
+	c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{
+		CompactAfterIdle: 30 * time.Millisecond,
+	}, compact.Deps{Gate: gate, Store: s, OverlayOps: o, Metrics: m})
+	c.OnFlush()
+	// Wait for the timer to fire.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if got := m.lastCompaction(); got != "" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	got := m.lastCompaction()
+	if got == "" {
+		t.Fatal("compaction never fired after OnFlush+timer")
+	}
+}

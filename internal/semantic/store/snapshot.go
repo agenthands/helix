@@ -199,10 +199,19 @@ type SnapshotSummary struct {
 }
 
 // BeginSnapshot opens a snapshot-write transaction for meta.RepoID. It
-// allocates a fresh snapshot_id (max+1 inside the tx), inserts a pending
-// row in semantic_snapshots, and returns a *Snapshot bound to the tx. The
-// caller MUST terminate via CommitSnapshot or AbortSnapshot — leaking the
-// tx leaks a DuckDB transaction slot.
+// allocates a fresh snapshot_id from the dedicated DuckDB SEQUENCE
+// `semantic_snapshot_id_seq` (Phase 63 review CR-03 — replaces the racy
+// MAX+1 SELECT that produced PRIMARY KEY collisions under concurrent
+// BeginSnapshot calls), inserts a pending row in semantic_snapshots, and
+// returns a *Snapshot bound to the tx. The caller MUST terminate via
+// CommitSnapshot or AbortSnapshot — leaking the tx leaks a DuckDB
+// transaction slot.
+//
+// The id allocation runs OUTSIDE the snapshot tx (mirrors the
+// current_epoch bump in overlay.go:116-136) so concurrent allocators
+// observe a globally-monotone sequence rather than the per-tx MVCC
+// snapshot of the table. The SEQUENCE is created by applyMigration005
+// (schema v4→v5).
 //
 // CapturedEpoch is stamped on the in-memory Snapshot (not persisted in
 // Schema 3) so ClearOverlayLE can later bound its DELETE without a
@@ -215,32 +224,37 @@ func (s *Store) BeginSnapshot(ctx context.Context, meta SnapshotMeta) (*Snapshot
 		return nil, fmt.Errorf("BeginSnapshot: empty repoID")
 	}
 
+	// Allocate snapshot_id from the dedicated SEQUENCE on s.db (NOT inside
+	// the snapshot tx) so concurrent BeginSnapshot calls observe a
+	// globally-monotone allocation rather than colliding on a shared
+	// per-tx MVCC snapshot of MAX(snapshot_id). Mirrors the current_epoch
+	// bump pattern in overlay.go:116-136.
+	var id uint64
+	if err := s.db.QueryRowContext(ctx, `SELECT nextval('semantic_snapshot_id_seq')`).Scan(&id); err != nil {
+		return nil, fmt.Errorf("BeginSnapshot: allocate snapshot_id: %w", err)
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("BeginSnapshot: open tx: %w", err)
 	}
 
-	// Allocate snapshot_id = max(snapshot_id)+1 inside the tx and INSERT a
-	// pending row, returning the assigned id. DuckDB supports
-	// INSERT ... RETURNING. semantic_snapshots requires several NOT NULL
-	// columns (repo_id, repo_root, kind, worktree_hash, schema_version,
-	// indexer_version, status, created_at) — provide minimal placeholder
-	// values for the columns the compactor does not currently set; P63-02
-	// (compactor) supplies real values via meta extension if needed.
-	var id uint64
-	row := tx.QueryRowContext(ctx, `
+	// INSERT the pending row using the pre-allocated id. semantic_snapshots
+	// requires several NOT NULL columns (repo_id, repo_root, kind,
+	// worktree_hash, schema_version, indexer_version, status, created_at) —
+	// provide minimal placeholder values for the columns the compactor does
+	// not currently set; P63-02 (compactor) supplies real values via meta
+	// extension if needed.
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO semantic_snapshots (
 			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
 			worktree_hash, schema_version, indexer_version, status,
 			partial, created_at
 		) VALUES (
-			(SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots),
-			?, '', ?, 'compact', '', ?, 'phase63', 'pending',
+			?, ?, '', ?, 'compact', '', ?, 'phase63', 'pending',
 			false, ?
 		)
-		RETURNING snapshot_id
-	`, meta.RepoID, meta.BaseSnapshotID, CurrentSchemaVersion, time.Now())
-	if err := row.Scan(&id); err != nil {
+	`, id, meta.RepoID, meta.BaseSnapshotID, CurrentSchemaVersion, time.Now()); err != nil {
 		_ = tx.Rollback()
 		return nil, fmt.Errorf("BeginSnapshot: insert pending row: %w", err)
 	}

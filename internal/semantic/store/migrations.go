@@ -574,6 +574,61 @@ func schema4Statements() []string {
 	}
 }
 
+// applyMigration005 lights up the snapshot-id allocation SEQUENCE (Phase
+// 63 review CR-03). Pre-CR-03 BeginSnapshot allocated snapshot_id via
+// `(SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots)`
+// inside the snapshot tx — two concurrent BeginSnapshot calls (different
+// repos, same store) both observed the same MAX and produced a primary-
+// key collision when the second tx committed. The fix mirrors the
+// `current_epoch` pattern in overlay.go:116-136: a DuckDB SEQUENCE
+// allocates non-conflicting values across concurrent txs without taking
+// a process-wide lock around the SELECT+INSERT.
+//
+// `START` is set high enough to avoid collisions with rows seeded by
+// pre-migration code (test fixtures that bypass BeginSnapshot still use
+// `MAX+1` directly; the SEQUENCE primes from the existing MAX so future
+// BeginSnapshot allocations land above any historical row).
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no
+// reindex, no data backfill.
+//
+// Rollback follows the same model as Phase 60 applyMigration003: DuckDB's
+// DROP SEQUENCE support is incomplete; downgrade requires the
+// quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration005(ctx context.Context, db *sql.DB) error {
+	// Read the existing MAX(snapshot_id) so the SEQUENCE starts above any
+	// row already in semantic_snapshots (preserves uniqueness across the
+	// migration boundary even if pre-migration code allocated some IDs).
+	var startAt int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots`).Scan(&startAt); err != nil {
+		return fmt.Errorf("applyMigration005: read MAX(snapshot_id): %w", err)
+	}
+	if startAt < 1 {
+		startAt = 1
+	}
+	stmts := schema5Statements(startAt)
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration005: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema5Statements returns the v4→v5 DDL: CREATE SEQUENCE for
+// snapshot_id allocation, then the schema_version stamp. The sequence
+// is referenced by BeginSnapshot via `nextval('semantic_snapshot_id_seq')`.
+func schema5Statements(startAt int64) []string {
+	return []string{
+		// Snapshot-id allocator — used by BeginSnapshot in place of the
+		// racy MAX+1 SELECT (Phase 63 review CR-03).
+		fmt.Sprintf(`CREATE SEQUENCE IF NOT EXISTS semantic_snapshot_id_seq START %d`, startAt),
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (5, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

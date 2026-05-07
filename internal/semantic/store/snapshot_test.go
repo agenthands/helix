@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // openStoreForSnapshotTest reuses the overlay test bring-up so snapshot tests
@@ -448,14 +449,25 @@ func itoaSimple(i int) string {
 
 // seedCommittedSnapshots inserts n rows directly via store.db with status='committed'
 // for repoID. Returns the list of allocated snapshot_id values in insertion order
-// (also matching created_at order — each row gets `now()` and we insert sequentially).
+// (also matching created_at order: each row receives a Go-side time.Now() that
+// monotonically increases by 1 ms per insertion so ORDER BY created_at DESC
+// produces a deterministic ordering — closes Phase 63 review CR-04, which
+// flagged the prior `now()`-based seed as flaky under sub-microsecond
+// collisions).
 //
 // Bypasses the BeginSnapshot API by design: the test verifies the new API's
-// retention semantics, not the seed-via-API path.
+// retention semantics, not the seed-via-API path. snapshot_id is allocated
+// from the same SEQUENCE BeginSnapshot uses (Phase 63 review CR-03) so
+// seeded ids never collide with subsequent BeginSnapshot allocations in
+// the same test.
 func seedCommittedSnapshots(t *testing.T, s *Store, repoID string, n int) []uint64 {
 	t.Helper()
+	base := time.Now().UTC().Truncate(time.Millisecond)
 	out := make([]uint64, 0, n)
 	for i := 0; i < n; i++ {
+		// Strictly-monotone created_at: 1ms apart so ORDER BY created_at
+		// DESC has no ties at sub-microsecond resolution.
+		ts := base.Add(time.Duration(i) * time.Millisecond)
 		var id uint64
 		err := s.db.QueryRow(`
 			INSERT INTO semantic_snapshots (
@@ -463,12 +475,12 @@ func seedCommittedSnapshots(t *testing.T, s *Store, repoID string, n int) []uint
 				worktree_hash, schema_version, indexer_version, status,
 				partial, created_at, committed_at
 			) VALUES (
-				(SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots),
+				nextval('semantic_snapshot_id_seq'),
 				?, '', 0, 'compact', '', 1, 'test', 'committed',
-				false, now(), now()
+				false, ?, ?
 			)
 			RETURNING snapshot_id
-		`, repoID).Scan(&id)
+		`, repoID, ts, ts).Scan(&id)
 		if err != nil {
 			t.Fatalf("seedCommittedSnapshots #%d: %v", i, err)
 		}

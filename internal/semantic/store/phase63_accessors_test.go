@@ -30,8 +30,12 @@ func TestApplyMigration004_AddsLastVacuumAtColumn(t *testing.T) {
 	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
 		t.Fatalf("read schema_version: %v", err)
 	}
-	if version != 4 {
-		t.Errorf("schema_version after Open: got %d, want 4", version)
+	// Phase 63 review CR-03 bumps CurrentSchemaVersion to 5 (adds the
+	// snapshot-id SEQUENCE migration). The last_vacuum_at column landed
+	// at v4 and persists across the v4→v5 migration, so this test still
+	// asserts the column existence below.
+	if version != CurrentSchemaVersion {
+		t.Errorf("schema_version after Open: got %d, want %d (CurrentSchemaVersion)", version, CurrentSchemaVersion)
 	}
 
 	// Column existence probe via information_schema.

@@ -20,6 +20,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/agenthands/helix/internal/semantic"
 	graphpkg "github.com/agenthands/helix/internal/semantic/graph"
@@ -28,6 +29,114 @@ import (
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 )
+
+// FileFactDiffRecorder is the tx-scoped recorder that future populators
+// (Phase 60 P04 full FileFact upsert; future type-resolver live-edge
+// retrofit) write through as they mutate the overlay tx. The handler
+// constructs one recorder per tx span, hands it to populators, then
+// snapshots its state immediately after tx.Commit() to feed the post-
+// commit ComputeGraphRepair → ApplyRepair pipeline.
+//
+// The recorder is intentionally narrow: five SymbolDiff variants (matching
+// graphpkg.SymbolDiff fields verbatim) plus AddedEdges/RemovedEdges record
+// methods. It does NOT validate (the consumer of the snapshot validates);
+// it does NOT deduplicate (graphpkg.ComputeGraphRepair handles dedup via
+// nodeSet); it does NOT lock (each instance is owned by exactly one tx
+// goroutine).
+//
+// CONCURRENCY CONTRACT: a FileFactDiffRecorder MUST be owned by a single
+// goroutine for the lifetime of one overlay tx. Cross-goroutine sharing is
+// a data race on the underlying slices (matching the graphpkg.nodeSet
+// contract documented at internal/semantic/graph/repair.go:138-145).
+//
+// 62-09 closure (truth #22): the recorder seam is the single point where
+// Phase 60 P04 (full FileFact upsert) and any future Phase 62 type-resolver
+// live-edge retrofit MUST populate SymbolDiff entries / edge add/remove
+// sets. Until those populators land, the recorder stays empty in
+// production and the post-commit hook short-circuits via IsEmpty(); a
+// once-INFO log per workspace per process surfaces the gap to operators.
+type FileFactDiffRecorder struct {
+	removedSymbols []graphpkg.SymbolDiff
+	changedSymbols []graphpkg.SymbolDiff
+	addedSymbols   []graphpkg.SymbolDiff
+	addedEdges     []graphpkg.GraphEdge
+	removedEdges   []graphpkg.GraphEdge
+}
+
+// RecordSymbolRemoved appends a removed-symbol diff entry. Method names
+// match the graphpkg.SymbolDiff bit-flags so populators read clearly at
+// the call site. Nil-receiver-safe (no-op).
+func (r *FileFactDiffRecorder) RecordSymbolRemoved(d graphpkg.SymbolDiff) {
+	if r == nil {
+		return
+	}
+	r.removedSymbols = append(r.removedSymbols, d)
+}
+
+// RecordSymbolChanged appends a changed-symbol diff entry. Nil-receiver-safe.
+func (r *FileFactDiffRecorder) RecordSymbolChanged(d graphpkg.SymbolDiff) {
+	if r == nil {
+		return
+	}
+	r.changedSymbols = append(r.changedSymbols, d)
+}
+
+// RecordSymbolAdded appends an added-symbol diff entry. Nil-receiver-safe.
+func (r *FileFactDiffRecorder) RecordSymbolAdded(d graphpkg.SymbolDiff) {
+	if r == nil {
+		return
+	}
+	r.addedSymbols = append(r.addedSymbols, d)
+}
+
+// RecordEdgeAdded appends an added-edge entry. Nil-receiver-safe.
+func (r *FileFactDiffRecorder) RecordEdgeAdded(e graphpkg.GraphEdge) {
+	if r == nil {
+		return
+	}
+	r.addedEdges = append(r.addedEdges, e)
+}
+
+// RecordEdgeRemoved appends a removed-edge entry. Nil-receiver-safe.
+func (r *FileFactDiffRecorder) RecordEdgeRemoved(e graphpkg.GraphEdge) {
+	if r == nil {
+		return
+	}
+	r.removedEdges = append(r.removedEdges, e)
+}
+
+// Snapshot returns the FileFactDiff value the handler hands to
+// graphpkg.ComputeGraphRepair. After Snapshot() returns, the recorder MUST
+// NOT be mutated further (single-snapshot per recorder). Nil-receiver-safe
+// (returns the zero FileFactDiff).
+func (r *FileFactDiffRecorder) Snapshot() graphpkg.FileFactDiff {
+	if r == nil {
+		return graphpkg.FileFactDiff{}
+	}
+	return graphpkg.FileFactDiff{
+		RemovedSymbols: r.removedSymbols,
+		ChangedSymbols: r.changedSymbols,
+		AddedSymbols:   r.addedSymbols,
+		AddedEdges:     r.addedEdges,
+		RemovedEdges:   r.removedEdges,
+	}
+}
+
+// IsEmpty reports whether any record method was invoked. When true, the
+// downstream graphpkg.ComputeGraphRepair would itself produce an empty
+// GraphRepair (D-06 body-only / no-flag short-circuit), so the handler
+// avoids the snapshot allocation and the ComputeGraphRepair call entirely.
+// Nil-receiver-safe (returns true).
+func (r *FileFactDiffRecorder) IsEmpty() bool {
+	if r == nil {
+		return true
+	}
+	return len(r.removedSymbols) == 0 &&
+		len(r.changedSymbols) == 0 &&
+		len(r.addedSymbols) == 0 &&
+		len(r.addedEdges) == 0 &&
+		len(r.removedEdges) == 0
+}
 
 // OverlayWriter is the subset of *store.Store the handler needs.
 //
@@ -119,6 +228,29 @@ type Handler struct {
 	// wired via SetRankApplier from the daemon bootstrap when the rank
 	// engine is constructed (CR-04 nil-safety invariant).
 	rankApplier RankApplier
+
+	// emptyDiffOnces gates the empty-diff INFO log per workspace per
+	// process. 62-09 closure (truth #22): production callers see exactly
+	// one log per (workspace, Handler instance) until Phase 60 P04 /
+	// future type-resolver retrofit populate the recorder. Key: repoID
+	// string. Value: *sync.Once.
+	emptyDiffOnces sync.Map
+
+	// populateRecorderForTest is an unexported test-only seam that lets
+	// handler_test.go simulate Phase 60 P04 / future type-resolver
+	// retrofit populators without pre-implementing those phases. It is
+	// invoked AFTER UpsertOverlayFile and BEFORE Commit. It MUST remain
+	// nil in production; the only writer is SetPopulateRecorderForTest
+	// in export_test.go.
+	populateRecorderForTest func(*FileFactDiffRecorder)
+}
+
+// emptyDiffOnce fires fn exactly once per repoID per Handler instance.
+// 62-09 closure: surfaces the empty-FileFactDiff path so operators see
+// ApplyRepair short-circuits in production until populators land.
+func (h *Handler) emptyDiffOnce(repoID string, fn func()) {
+	v, _ := h.emptyDiffOnces.LoadOrStore(repoID, &sync.Once{})
+	v.(*sync.Once).Do(fn)
 }
 
 // SetRankApplier installs (or replaces) the Phase 62 RankApplier hook.
@@ -206,11 +338,13 @@ func (h *Handler) UpdateChangedFile(ctx context.Context, repoID semantic.RepoID,
 // and LaneBackground (everything else). Phase 61 D-01.
 //
 // W2 LOCKED — handler-tracked diff (no OverlayTx.Diff method): the handler
-// accumulates a graphpkg.FileFactDiff LOCALLY during the tx span. Phase 60
-// P02's UpsertOverlayFile is the only fact write today (no symbol/edge
-// mutation), so the diff is empty for now and the Phase 62 hook short-
-// circuits via repair.IsEmpty(). Phase 60 P04 / Phase 62 P05 will populate
-// the diff as the symbol-level upsert paths land.
+// accumulates a graphpkg.FileFactDiff LOCALLY via FileFactDiffRecorder
+// during the tx span. Phase 60 P02's UpsertOverlayFile is the only fact
+// write today (no symbol/edge mutation), so the recorder stays empty in
+// production and the Phase 62 hook short-circuits via recorder.IsEmpty();
+// the empty path emits a once-INFO log per workspace per Handler instance
+// to surface the gap. Phase 60 P04 (full FileFact upsert) and any future
+// Phase 62 type-resolver retrofit MUST populate the recorder.
 func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic.RepoID, path string, kind live.SourceChangeKind) error {
 	hash, err := h.Hasher(path)
 	if err != nil {
@@ -224,29 +358,64 @@ func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic
 		_ = tx.Rollback()
 		return fmt.Errorf("UpdateChangedFile: upsert: %w", err)
 	}
-	// Phase 60 P02 surface writes only the file-row contentHash. No
-	// symbol-level diff information flows here yet, so the local diff is
-	// empty and the Phase 62 hook will short-circuit via repair.IsEmpty().
-	// Phase 60 P04 (full FileFact upsert) and Phase 62 P05 (type resolver
-	// edge emission) will fill this struct from their own tx-scoped
-	// recorders when they land.
-	var diff graphpkg.FileFactDiff
+
+	// === 62-09 closure: tx-scoped FileFactDiffRecorder ===
+	// The recorder is the single populator surface future phases write
+	// through, BEFORE tx.Commit(). It is owned by this goroutine for the
+	// lifetime of this tx span (concurrency contract above on
+	// FileFactDiffRecorder).
+	//
+	// TODO(phase-60-p04): UpsertOverlayFile (and the upcoming full
+	// FileFact upsert variant) MUST record SymbolDiff entries via
+	// recorder.RecordSymbolChanged / RecordSymbolRemoved /
+	// RecordSymbolAdded.
+	//
+	// TODO(phase-62-future): a live type-resolver invocation feeding the
+	// recorder via recorder.RecordEdgeAdded / RecordEdgeRemoved would
+	// close the type-resolver half of truth #22.
+	recorder := &FileFactDiffRecorder{}
+	if h.populateRecorderForTest != nil {
+		// Test-only seam (export_test.go SetPopulateRecorderForTest);
+		// production code paths leave the field nil.
+		h.populateRecorderForTest(recorder)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+
 	// === Phase 62 P02 post-commit hook ===
-	// Fires AFTER tx.Commit() succeeds and BEFORE EnqueueLane. Body-only
-	// edits are short-circuited via repair.IsEmpty() inside ApplyRepair,
-	// so a nil-rich (no-flag) diff costs only a CurrentGraphVersion read.
+	// Fires AFTER tx.Commit() succeeds and BEFORE EnqueueLane. Empty
+	// recorder (today's production state) emits a once-INFO log per
+	// workspace and skips ApplyRepair entirely. Populated recorder
+	// (future Phase 60 P04 / type-resolver retrofit) snapshots, computes
+	// the GraphRepair, and fires ApplyRepair if non-empty.
 	if h.rankApplier != nil {
-		repair := graphpkg.ComputeGraphRepair(diff)
-		if !repair.IsEmpty() {
-			if _, _, err := h.rankApplier.ApplyRepair(ctx, string(repoID), repair); err != nil {
-				// Non-fatal: a missed advance is degraded but safe — the
-				// next tx that DOES advance graph_version will surface
-				// fresh score rows. Log and continue to the LSP enqueue.
-				h.Logger.Warn("apply_repair failed",
-					"err", err, "repo_id", repoID, "path", path)
+		if recorder.IsEmpty() {
+			// 62-09 closure: surface the empty-diff path so operators
+			// see that ApplyRepair short-circuits in production until
+			// populators land. Per-workspace once-gated to avoid log
+			// spam.
+			h.emptyDiffOnce(string(repoID), func() {
+				h.Logger.Info(
+					"live FileFactDiff is empty; ApplyRepair short-circuited (Phase 60 P04 full FileFact upsert + future type-resolver retrofit will populate)",
+					"repo_id", repoID,
+					"phase_dependency", "60-P04",
+					"see", "62-VERIFICATION.md truth #22; closure 62-09-PLAN.md",
+				)
+			})
+		} else {
+			diff := recorder.Snapshot()
+			repair := graphpkg.ComputeGraphRepair(diff)
+			if !repair.IsEmpty() {
+				if _, _, err := h.rankApplier.ApplyRepair(ctx, string(repoID), repair); err != nil {
+					// Non-fatal: a missed advance is degraded but safe —
+					// the next tx that DOES advance graph_version will
+					// surface fresh score rows. Log and continue to the
+					// LSP enqueue.
+					h.Logger.Warn("apply_repair failed",
+						"err", err, "repo_id", repoID, "path", path)
+				}
 			}
 		}
 	}

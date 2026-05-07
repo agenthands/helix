@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: Live Semantic Index
 status: executing
-last_updated: "2026-05-07T21:51:35.801Z"
+last_updated: "2026-05-07T22:04:16.303Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 50
-  completed_plans: 44
-  percent: 88
+  completed_plans: 45
+  percent: 90
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 ## Current Position
 
 Phase: 64 (new-mcp-tools) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 
 - Phase 57: PASSED — store + pipeline DAG library + 57-05 hardening pass (SC-1 get_health, CR-01 path traversal, CR-02 schema timeout, WR-01 migration tx, WR-02 analyzer prefix, WR-03 transient retry, BL-01 absolute-path follow-up — all CLOSED)
@@ -36,6 +36,6 @@ Status: Ready to execute
 - Phase 61: PASSED — LSP enrichment worker + production CascadeLSP dispatch wiring (gap #1 CLOSED)
 - Phase 62: GAP CLOSURE SHIPPED (re-verify pending) — CR-03 sort-before-iterate restored (62-06), CR-01 scheduler lock release-before-probe (62-07), rankStoreAdapter stub_no_data observability (62-08), FileFactDiffRecorder seam + once-INFO empty-diff log (62-09); ROADMAP cross-phase populator notes added for Phase 60 P04 + future type-resolver retrofit
 - Phase 63: PASSED — compaction & retention (2/2 plans); UAT 10/10 passed; SECURITY 12/12 threats closed, 0 open; REVIEW + REVIEW-FIX shipped (IN-03 magic-literal constants, IN-04 reason-label carve-out)
-- Phase 64: EXECUTING — Plans 01-02 PASSED. Plan 01: bleve gate PASS (bleve v2.4.4 cleared both D-08 thresholds; 8.81 MiB / 50 MiB binary; 0.61x / 5x indexing). Plan 02: effective-graph queries on *Store landed (5 methods + SymbolRow type; 14 RED→GREEN tests; race-clean lock-free reads). Schema-reality reconciliation: edge_kind IS the projection axis; status='deleted' is the overlay tombstone discriminator; SymbolRow.Path JOINed via semantic_files. P64-04/06/07 now have a stable Store dependency.
+- Phase 64: EXECUTING — Plans 01-03 PASSED. Plan 01: bleve gate PASS (bleve v2.4.4 cleared both D-08 thresholds; 8.81 MiB / 50 MiB binary; 0.61x / 5x indexing). Plan 02: effective-graph queries on *Store landed (5 methods + SymbolRow type; 14 RED→GREEN tests; race-clean lock-free reads). Plan 03: semantic skill skeleton FINAL (skill.go + accessors.go + envelope.go + mode_check.go); 8 narrow accessor interfaces FROZEN for wave-2 consumers (StoreAccessor, SchedulerAccessor with ScoreStatus + ClusterStatus, QueueAccessor, LiveAccessor, RunnerAccessor with ResolveAuto, RetrievalAccessor with TopEdgesFor, CompactorAccessor with OnFlush, SessionAccessor with two methods); BOTH session helpers (sessionSnapshot + workspaceKey) ship in skill.go; closed-enum response shapes (Freshness, IndexStatus, FreshnessMode, ClusterStatus); NEW per-handler mode-tier check pattern (modeTier enum + checkMode); PermissionDenied added as 8th error Kind; D-14 wired across 5 profiles + 4 modes; index_semantic_graph excluded in read.yaml + edit.yaml. Decisions: SessionAccessor.Workspace(ctx) added because *mcp.SessionInfo only carries a hashed WorkspaceKey string; help-text constants stay with their tool files via stub-replace pattern (zero conflict surface across parallel wave-2 plans). 7 tests / 32 sub-tests PASS. Wave-1 (P64-04) now has a stable skill skeleton dependency.
 
-Last activity: 2026-05-08 — Phase 64 Plan 02 complete (effective-graph queries)
+Last activity: 2026-05-08 — Phase 64 Plan 03 complete (semantic skill skeleton FINAL)

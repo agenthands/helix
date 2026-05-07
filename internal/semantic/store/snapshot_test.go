@@ -2,7 +2,8 @@ package store
 
 import (
 	"context"
-	"os/exec"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -401,20 +402,22 @@ func TestSnapshot_ClearOverlayLE_AfterCommit(t *testing.T) {
 }
 
 // TestSnapshot_TxAccessor_Absent verifies the encapsulation invariant: there
-// is NO public Tx() accessor on *Snapshot. Verified via grep on the package
-// source — if anyone adds `func (s *Snapshot) Tx(...)` or
-// `func (snap *Snapshot) Tx(...)` this test trips.
+// is NO public Tx() accessor on *Snapshot. Phase 63 review WR-03 replaces
+// the prior `exec.Command("grep", ...)` shell-out (non-portable: required
+// `grep` on PATH with `-nE` flag set, broke on Windows + minimal CI images)
+// with a native os.ReadFile + regexp scan. Same invariant, no PATH
+// dependency.
 func TestSnapshot_TxAccessor_Absent(t *testing.T) {
-	out, err := exec.Command("grep", "-nE", `^func \(\w+ \*Snapshot\) Tx\(`, "snapshot.go").Output()
+	src, err := os.ReadFile("snapshot.go")
 	if err != nil {
-		// grep exits 1 when no match found — that is the success case.
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return
-		}
-		t.Fatalf("grep failed unexpectedly: %v (out=%q)", err, string(out))
+		t.Fatalf("read snapshot.go: %v", err)
 	}
-	if len(out) > 0 {
-		t.Errorf("encapsulation violated — public Tx() accessor on *Snapshot:\n%s", string(out))
+	// Match `func (<receiver> *Snapshot) Tx(` at the start of a line —
+	// the only shape an exported accessor could take. (?m) enables
+	// multiline mode so `^` anchors to line starts.
+	re := regexp.MustCompile(`(?m)^func \(\w+ \*Snapshot\) Tx\(`)
+	if loc := re.FindIndex(src); loc != nil {
+		t.Errorf("encapsulation violated — public Tx() accessor on *Snapshot at byte offset %d", loc[0])
 	}
 }
 

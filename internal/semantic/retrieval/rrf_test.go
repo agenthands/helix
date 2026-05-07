@@ -27,9 +27,10 @@ func fusedIDs(fs []FusedCandidate) []string {
 
 // TestRRF_EqualWeights_OrderByScore: text=[A,B,C], graph=[C,B,A], K=60,
 // equal weights. Hand calculation:
-//   A: 1/61 + 1/63 = 0.016393 + 0.015873 = 0.032266
-//   B: 1/62 + 1/62 = 0.016129 + 0.016129 = 0.032258
-//   C: 1/63 + 1/61 = 0.015873 + 0.016393 = 0.032266
+//
+//	A: 1/61 + 1/63 = 0.016393 + 0.015873 = 0.032266
+//	B: 1/62 + 1/62 = 0.016129 + 0.016129 = 0.032258
+//	C: 1/63 + 1/61 = 0.015873 + 0.016393 = 0.032266
 //
 // Score-tie between A and C; tiebreak (graph_version desc, symbol_id asc)
 // places A before C. So expected order is [A, C, B].
@@ -84,11 +85,13 @@ func TestRRF_GraphOnly_NoText(t *testing.T) {
 // iteration / score-tie ordering bugs — Phase 62 sort-before-iterate doctrine
 // + CONTEXT.md acceptance test #4 / #8).
 func TestRRF_Determinism_TieScore(t *testing.T) {
-	// Two symbols at exactly the same rank position in both rankings have
-	// identical scores. Set their graph_version to differ so the second
-	// tiebreak (graph_version desc) decides — D second, then symbol_id asc.
+	// alpha is text-rank #1 + graph-rank #2; beta is text-rank #2 + graph-rank #1.
+	// Both get identical RRF scores: 1/(K+1) + 1/(K+2) for each. Set graph_version
+	// to differ so the second tiebreak (graph_version desc) decides — beta has
+	// the higher graph_version, so beta MUST rank ahead even though "alpha" <
+	// "beta" alphabetically.
 	text := []TextRank{{SymbolID: "alpha"}, {SymbolID: "beta"}}
-	graph := []GraphRank{{SymbolID: "alpha"}, {SymbolID: "beta"}}
+	graph := []GraphRank{{SymbolID: "beta"}, {SymbolID: "alpha"}}
 	gv := func(id string) uint64 {
 		switch id {
 		case "alpha":
@@ -125,8 +128,9 @@ func TestRRF_Determinism_TieScore(t *testing.T) {
 // TestRRF_WeightedSplit: WText=2.0, WGraph=0.5. A is text-rank #1 (strong text)
 // + graph-rank #5 (weak graph); B is text-rank #5 (weak text) + graph-rank #1
 // (strong graph). Hand calculation with K=60:
-//   A: 2.0 * (1 / (60+1)) + 0.5 * (1 / (60+5)) = 0.032787 + 0.007692 = 0.040479
-//   B: 2.0 * (1 / (60+5)) + 0.5 * (1 / (60+1)) = 0.030769 + 0.008197 = 0.038966
+//
+//	A: 2.0 * (1 / (60+1)) + 0.5 * (1 / (60+5)) = 0.032787 + 0.007692 = 0.040479
+//	B: 2.0 * (1 / (60+5)) + 0.5 * (1 / (60+1)) = 0.030769 + 0.008197 = 0.038966
 //
 // A > B → text-strong outranks graph-strong under WText=2 / WGraph=0.5.
 func TestRRF_WeightedSplit(t *testing.T) {

@@ -157,7 +157,7 @@
   - [x] 61-03-PLAN.md — Metrics + trace spans + Status() accessor + Manager + Daemon bootstrap + 2 new config keys [ENRICH-01..ENRICH-04]
   - [x] 61-04-PLAN.md — ENRICH-05 stress test + acceptance closeout + REQUIREMENTS.md check-off [ENRICH-05, ENRICH-01..ENRICH-04]
   - [x] 61-05-PLAN.md — Gap closure: promote cascadeLSPShim to production (cascade_lsp_shim.go) + wire CascadeLSPFactory through Manager.SetCascadeLSPFactory + live_wiring.go production factory + end-to-end TestManagerProductionDispatch_Go integration test (severs Phase 64 dependency for production dispatch) [ENRICH-01..ENRICH-05]
-- [x] Phase 62: Graph Engine, Ranking & Type Resolution (5/5 plans)
+- [x] Phase 62: Graph Engine, Ranking & Type Resolution (9/9 plans — 5 original + 4 gap closure)
   > **Cross-phase carry-forward (62-09 closure):** the live handler now threads a `FileFactDiffRecorder` through every overlay tx; populators in Phase 60 P04 (full FileFact upsert) and any future Phase 62 type-resolver live-edge retrofit MUST write through `internal/semantic/live/handler.FileFactDiffRecorder` so the post-commit `ApplyRepair` hook surfaces graph-changing edits in production. Until those populators land, the empty-diff once-INFO log per workspace at `helix.live.handler` surfaces the gap. Phase 60 entry above carries the populator obligation.
   Plans:
   - [x] 62-01-PLAN.md — Wave 1 — Shared deterministic PageRank engine at internal/graph + repomap migration + re-pinned vectors [GRAPH-01, GRAPH-02]
@@ -165,6 +165,10 @@
   - [x] 62-03-PLAN.md — Wave 3 — RankScheduler (debounce + long-idle + drop-on-full) + 1-hop frontier + full recompute preemption + WriteInvalidations consumer + daemon errgroup wiring [GRAPH-04, GRAPH-05]
   - [x] 62-04-PLAN.md — Wave 4 — Weak-component clustering algorithm + persistence (UpsertClusters/UpsertClusterMembers/DeleteClustersForGraphVersion) [GRAPH-06]
   - [x] 62-05-PLAN.md — Wave 5 — Type resolver shared core + Go/TS/Python full ladders + Java LSP-conditional stub + PHP/Ruby always-0.20 stubs + two-phase comment merge + dispatcher daemon wiring [TYPES-01, TYPES-02, TYPES-03, TYPES-04]
+  - [x] 62-06-PLAN.md — Gap closure (CR-03) — sorted suffix-rule slice iteration in golang/python/typescript guessFromName helpers (sort-before-iterate doctrine restored) [GRAPH-01, TYPES-04]
+  - [x] 62-07-PLAN.md — Gap closure (CR-01) — explicit lock release between tx.Commit and CountStaleScoreRows + SchedulerStore.CountStaleScoreRows lock contract [GRAPH-03, GRAPH-04, GRAPH-05]
+  - [x] 62-08-PLAN.md — Gap closure (truth #21 / WR-05) — rankStoreAdapter stub observability via outcome=stub_no_data closed-enum extension + sync.Once-gated WARN per (workspace, method) + TODO(phase-64) anchor [GRAPH-04, GRAPH-05]
+  - [x] 62-09-PLAN.md — Gap closure (truth #22) — FileFactDiffRecorder seam threaded through Handler.UpdateChangedFile + once-INFO empty-diff log [GRAPH-03, GRAPH-05]
 - [ ] Phase 63: Compaction & Retention (0/0 plans)
 - [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
@@ -187,7 +191,7 @@
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46-56 | v1.9 | 51/51 | Complete | 2026-05-03 |
-| 57-67 | v1.10 | 19/25 | Planning | -- |
+| 57-67 | v1.10 | 23/29 | Planning | -- |
 
 ## Backlog
 

@@ -2,44 +2,31 @@
 phase: 65-existing-tool-integration-strangler-fig
 reviewed: 2026-05-08T00:00:00Z
 depth: standard
-files_reviewed: 30
+files_reviewed: 23
 files_reviewed_list:
   - internal/daemon/daemon.go
+  - internal/daemon/integ_lookup_e2e_helpers.go
+  - internal/daemon/integ_lookup_e2e_test.go
   - internal/daemon/integ_lookup_test.go
+  - internal/daemon/integ_lookup_export.go
   - internal/daemon/semantic_wiring.go
   - internal/daemon/semantic_wiring_test.go
   - internal/kernel/health/tools.go
   - internal/kernel/health/tools_semantic_test.go
-  - internal/kernel/symbols/blast.go
+  - internal/kernel/symbols/bl1_blast_radius_e2e_test.go
   - internal/kernel/symbols/blast_radius_strangler.go
   - internal/kernel/symbols/blast_radius_strangler_test.go
-  - internal/kernel/symbols/skill_adapter.go
+  - internal/kernel/symbols/export_for_test.go
   - internal/kernel/symbols/tools.go
-  - internal/lint/nokernel2semantic/analyzer.go
-  - internal/lint/nokernel2semantic/analyzer_test.go
-  - internal/lint/nokernel2semantic/testdata/src/github.com/agenthands/helix/internal/kernel/integimport/integimport.go
-  - internal/lint/nokernel2semantic/testdata/src/github.com/agenthands/helix/internal/kernel/integlookalike/integlookalike.go
-  - internal/lint/nokernel2semantic/testdata/src/github.com/agenthands/helix/internal/semantic/integ/stub.go
-  - internal/lint/nokernel2semantic/testdata/src/github.com/agenthands/helix/internal/semantic/integ_evil/stub.go
-  - internal/semantic/integ/doc.go
-  - internal/semantic/integ/envelope.go
-  - internal/semantic/integ/envelope_test.go
   - internal/semantic/integ/lookup.go
   - internal/semantic/integ/lookup_test.go
   - internal/semantic/integ/noop.go
-  - internal/semantic/integ/source.go
-  - internal/semantic/integ/source_select.go
   - internal/semantic/integ/source_select_test.go
-  - internal/semantic/integ/source_test.go
-  - internal/semantic/integ/status.go
-  - internal/skill/repomap/golden_capture_test.go
-  - internal/skill/repomap/skill.go
-  - internal/skill/repomap/skill_integration_test.go
-  - internal/skill/repomap/strangler.go
+  - internal/semantic/store/effective_graph.go
+  - internal/semantic/store/effective_graph_test.go
   - internal/skill/repomap/strangler_test.go
-  - internal/skill/repomap/testdata/goldens/index_disabled_context.txt
-  - internal/skill/repomap/testdata/goldens/index_disabled_repo_map.txt
   - internal/skill/semantic/integration_test.go
+  - internal/skill/semantic/production_adapter_e2e_test.go
 findings:
   critical: 2
   warning: 7
@@ -48,516 +35,583 @@ findings:
 status: issues_found
 ---
 
-# Phase 65: Code Review Report
+# Phase 65 (Waves 4–7): Code Review Report
 
 **Reviewed:** 2026-05-08
 **Depth:** standard
-**Files Reviewed:** 36 (file list above)
+**Files Reviewed:** 23
 **Status:** issues_found
 
 ## Summary
 
-The Phase 65 strangler-fig integration ships a clean types-only seam
-(`internal/semantic/integ`) with a tight closed-enum contract, a slash-boundary-
-aware lint analyzer, well-tested envelope marshalling, and disciplined
-priority-ladder routing in every consumer. The doctrine pieces (`ChooseSource`,
-`ClassifyLookupErr`, copy-before-mutate in `applyValidationVerdicts`,
-`capConfidences` for the 0.6 ceiling) are correct and well covered by tests.
+Phase 65 waves 4–7 land the production-side strangler-fig wiring for the
+`SemanticLookup` adapter, the kernel-side analyze_blast_radius two-pass
+orchestrator, and the populated-fixture harness consumed cross-package
+by the BL-1 confidence-ladder regression. The orchestrator structure,
+the read-only canary, the closed-enum source/fallback envelope, and the
+WR-* fixes from earlier waves are well-implemented and well-tested.
 
-That said, the surface is not defect-free. Two items are blocking:
+Two material defects need attention before this work ships:
 
-1. **`integSemanticLookup.Status` does not hold the bundle mutex** when reading
-   `bundle.queue` / `bundle.live`. These fields are non-mutating after construction
-   today, but the same struct's `engines`/`recoveres` reads elsewhere DO hold
-   `b.mu`, and `Status` is reachable concurrently from MCP request goroutines
-   while the bundle's `shutdown()` deletes engine entries under that same lock.
-   More importantly the `Status` body **does NOT consult `OverlayHasPendingRows`,
-   so the closed-enum freshness signal `OverlayActive` is always `false` on the
-   wire** — `computeFreshness` therefore can never emit `"overlay"` or
-   `"structurally_fresh_semantically_pending"` in production, breaking the
-   Phase 64 §26.2 freshness contract.
-2. **`classifySemanticProbeError` substring-matches a sentinel `"DB handle nil"`
-   that the daemon never emits.** `daemon.go:864-871` only ever returns
-   `"semantic store unavailable: ErrUnsupported"`. The classifier comment
-   even acknowledges the nil-DB branch was removed — but the matching code
-   stayed. Any genuine DuckDB error containing "store unavailable" (e.g. a
-   wrapped registry message) would be misclassified as `nil_handle` rather
-   than `db_error`, and the documented mapping is dishonest.
+1. **`lspProbeForEdges` issues `FindReferences` on the WRONG endpoint of
+   a call-graph edge** (CR-01). Production verdicts will systematically
+   confirm/refute the inverse of the intended relation. The BL-1 unit
+   tests do not catch this because they hard-code the synthetic
+   `probeFn` to "confirm" for one URI and "refute" for another,
+   regardless of probe semantics — the bug is invisible to a synthetic
+   fixture.
 
-Other findings document doctrine gaps: the `analyze_blast_radius`
-`SourceSemantic` envelope path doesn't apply `capConfidences` (correctly — it's
-the semantic answer) but it ALSO doesn't stamp `graph_version`, where the
-contract requires it; the `dot != "."` guard in the workspace walker is
-unreachable; `semSchedulerAdapter` reads `rb.subs` while holding the rank
-bundle mutex but `IsQuiescent` is called outside the lock on the loaded value;
-and `extractIntegLookupMethodBodies` in the read-tier canary uses a column-1 `}`
-heuristic that silently drops methods whose closing brace is followed by a
-comment block on the same indentation.
+2. **The "test-only" cross-package access seam ships `import "testing"`
+   into the production daemon binary** (CR-02). `integ_lookup_export.go`
+   and `integ_lookup_e2e_helpers.go` are regular `.go` files (no
+   `_test.go` suffix), exporting `NewIntegSemanticLookupForTest`,
+   `NewE2EIntegLookupForTest`, and `FixtureSymbolMeta` from `package
+   daemon`. The plan deviation comments acknowledge the rename but
+   downplay that `testing.T` is now a build-time dependency of the
+   production daemon.
 
-The lint analyzer, envelope marshaller, source-selection helper, and the
-applied-verdicts copy-before-mutate doctrine are correct and well-tested.
+The remaining warnings cover smaller correctness/quality issues
+(tautological assertion, hardcoded language allow-list, EdgeID hash
+contract not pinned, `t.Chdir` in shared harness) and a handful of
+informational items.
 
 ## Critical Issues
 
-### CR-01: `integSemanticLookup.Status` never reports OverlayActive (freshness contract broken)
+### CR-01: `lspProbeForEdges` issues `FindReferences` on edge.From; the relation between request and verdict is inverted
 
-**File:** `internal/daemon/semantic_wiring.go:754-796`
+**File:** `internal/kernel/symbols/blast_radius_strangler.go:164-219`
 **Issue:**
-The `Status` method reads `OverlayHasPendingRows(repoID)` into a local `overlay`
-variable at line 767, builds a `SemanticStatus` at line 786 — and **the
-`OverlayActive` field is set from that local correctly** on the success path.
-Re-reading more carefully:
+For a call-graph edge `From → To` (semantics: "From calls To"),
+validating the edge with LSP requires answering "is there a call site
+of To inside From's body?" — typically by calling
+`FindReferences(To)` and checking whether any returned location
+overlaps `From`'s range, or by `GetCallHierarchy(From, outgoing)`.
+
+Today the probe does the opposite:
 
 ```go
-overlay := l.store.OverlayHasPendingRows(repoID)
-...
-return integ.SemanticStatus{
-    State:            state,
-    Store:            "duckdb",
-    LatestSnapshotID: snap,
-    GraphVersion:     gv,
-    OverlayActive:    overlay,
-    PendingLSP:       pendingLSP,
-    LastLiveUpdateMs: lastLiveMs,
-    LastErrorReason:  "",
-}, nil
-```
-
-That part is correct — apologies for the false alarm in the summary. The real
-defect is different: **`l.bundle.queue.DepthAll()` and `l.bundle.live.LastFlushAt(ws)`
-are read without holding `l.bundle.mu`.** `liveBundle.LastFlushAt` and
-`LaneQueue.DepthAll` both have their own internal synchronization (verified by
-their adapter wrappers which delegate without locking), but the bundle
-*pointer fields themselves* (`l.bundle.queue`, `l.bundle.live`) are written
-once at construction and never re-assigned, so the data-race risk is
-theoretical. Downgrading to WARNING (see WR-01).
-
-**The genuine BLOCKER**: `LastErrorReason` is hard-coded to `""`. The doc on
-the field at `status.go:94` says `LastErrorReason ∈ {"" | every FallbackReason
-value}` and `health/tools.go:218` uses it directly to populate `last_error` in
-the wire envelope. There is no path today by which a daemon-side build error
-or live-update error reaches the user, even when `state==StatusError`. The
-65-07 wave is documented as "populates LastErrorReason" but the implementation
-hard-codes `""`. Filing as CR-01 with a smaller scope.
-
-Per the embedded comment at line 794:
-> `LastErrorReason  ""`,
-> // ... is empty in the steady state and is populated by 65-07 once the
-> // error-stamp accessor lands.
-
-This is a known TODO that ships disabled. Not a regression — but the SPEC §24.5
-contract says when `state==StatusError`, `LastError` MUST be a closed-enum
-FallbackReason. Today on `state==StatusError` (line 761/765) the function
-returns the zero status struct AND `integ.ErrIndexErrored`, which the kernel
-side then maps to `last_error="index_error"` via `ComputeSemanticIndexBlock`'s
-err arm. So the wire contract is in fact upheld via the err return path. This
-is OK as a Phase 65 65-07 staging point.
-
-**Status:** Re-classify as INFO (IN-04). No actual bug here on the wire — the
-err-return path covers the StatusError case in `ComputeSemanticIndexBlock`.
-
-**Fix:** None required for blockers. Track as Phase 65 65-07 follow-up.
-
----
-
-### CR-02: `classifySemanticProbeError` matches a "DB handle nil" sentinel that the daemon never emits
-
-**File:** `internal/kernel/health/tools.go:68-83`
-**Issue:**
-```go
-func classifySemanticProbeError(err error) string {
-    ...
-    msg := err.Error()
-    // The daemon-side semanticStoreProbe.Probe surfaces these two
-    // fmt.Errorf strings when the store handle or its underlying *sql.DB
-    // is nil. Substring-match because they are wrapped by Probe's caller.
-    if strings.Contains(msg, "DB handle nil") || strings.Contains(msg, "store unavailable") {
-        return SemanticReasonNilHandle
-    }
-    return SemanticReasonDBError
+fromURI := pathToURI(repoRoot, fromPath)              // line 184
+// ...
+locs, err := probeFn(ctx, fromURI, lspLine, lspCol)   // line 187 — searches references TO From
+// ...
+for _, loc := range locs {
+    if loc.URI != toURI { continue }                  // line 208 — checks overlap with To
+    if rangeOverlaps(loc.Range, toLineLSP, toColLSP) { confirmed = true; break }
 }
 ```
 
-The classifier comment at the daemon side (`daemon.go:858-871`) explicitly
-states:
+`FindReferences(From)` returns locations that REFERENCE `From`, i.e.,
+callers of `From`. Filtering those locations to the ones inside `To`'s
+range answers the inverse question: "does `To` call `From`?" That is
+the symmetric edge `To → From`, not the edge under test.
 
-> IN-NEW-02: ComputeSemanticStoreStatus gates Probe behind Available(),
-> and Available() returns true only when p.s != nil AND p.s.DB() != nil
-> (see duckdb.go Store.DB contract). The nil-DB branch is therefore
-> unreachable and has been removed; the surviving p.s == nil branch is
-> wrapped with serr.ErrUnsupported
+In practice this means:
 
-Confirmed: `daemon.go:864-871` only returns `fmt.Errorf("semantic store
-unavailable: %w", serr.ErrUnsupported)`. There is no `"DB handle nil"`
-emission anywhere in the codebase today.
+- Real "From calls To" edges will be refuted (no caller of From happens
+  to live inside To).
+- The handful of edges that ARE confirmed will be ones where the
+  inverse relation holds — which Pass-2 doctrine would reject (LSP
+  says the graph edge does not exist as stated).
 
-Worse: `strings.Contains(msg, "store unavailable")` will match ANY error whose
-text happens to contain that substring (e.g. a future wrapped DuckDB error like
-`"semantic store unavailable: connection reset"`) and misroute it to
-`SemanticReasonNilHandle` — losing the closed-enum distinction the WR-NEW-01
-doctrine relies on. This is a functional misclassification: an operator
-diagnosing a real DB outage would see `reason=nil_handle` and chase the
-wrong root cause.
+The unit tests do not catch this because they pass a hand-crafted
+`probeFn` that returns an overlapping `to-sym` location whenever the
+caller hands it `from-sym`'s URI (see
+`TestLspProbeForEdges_ConfirmsRealEdge` and the BL-1 synthetic probe at
+`bl1_blast_radius_e2e_test.go:112-139`). They validate the plumbing,
+not the semantics.
 
-The unit test at `tools_semantic_test.go:78-98` then SOLIDIFIES this dishonest
-mapping ("semantic store DB handle nil" — text the daemon never emits). The
-test passes only because it constructs the bogus error itself.
-
-**Fix:** Either (a) classify via `errors.Is(err, serr.ErrUnsupported)` against
-the actual sentinel, or (b) drop the `nil_handle` bucket entirely since the
-daemon path that would emit it has been removed. Option (a) is cleanest:
+**Fix:** Either change the probe to query `edge.To` and check overlap
+with `edge.From`'s range, or switch to a Call-Hierarchy-based probe
+(`GetCallHierarchy(edge.From, outgoing)` and check whether `edge.To`
+appears in the callees).
 
 ```go
-import serr "github.com/agenthands/helix/internal/errors"
-...
-func classifySemanticProbeError(err error) string {
-    if err == nil {
-        return ""
-    }
-    if errors.Is(err, context.DeadlineExceeded) {
-        return SemanticReasonProbeTimeout
-    }
-    if errors.Is(err, serr.ErrUnsupported) {
-        return SemanticReasonNilHandle
-    }
-    return SemanticReasonDBError
+// Probe target side (To); verify any reference falls within From's range.
+toPath, toLine, toCol, toOK := locator(e.To)
+fromPath, fromLine, fromCol, fromOK := locator(e.From)
+if !fromOK || !toOK {
+    out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: false})
+    continue
+}
+toURI := pathToURI(repoRoot, toPath)
+fromURI := pathToURI(repoRoot, fromPath)
+toLspLine, toLspCol := userPosToLSP(int(toLine), int(toCol))
+locs, err := probeFn(ctx, toURI, toLspLine, toLspCol)   // <-- query TO
+// ...
+fromLineLSP, fromColLSP := lspCoords(fromLine, fromCol)
+for _, loc := range locs {
+    if loc.URI != fromURI { continue }                  // <-- check overlap with FROM's range
+    if rangeOverlaps(loc.Range, fromLineLSP, fromColLSP) { confirmed = true; break }
 }
 ```
 
-Then update `tools_semantic_test.go:80-90` to wrap the `serr.ErrUnsupported`
-sentinel instead of fabricating a string match. WR-NEW-01 doctrine pins
-"never inspect raw error text" — this site violates it.
+Add a regression test that uses a `probeFn` mimicking the actual
+`gopls` references contract for a known edge (e.g., an Outer→Inner
+call inside the same file, where `gopls FindReferences(Inner)`
+returns a location inside Outer).
 
 ---
+
+### CR-02: Production daemon binary now imports `testing` via the BL-A cross-package access seam
+
+**File:** `internal/daemon/integ_lookup_export.go:36-98`,
+`internal/daemon/integ_lookup_e2e_helpers.go:46-548`
+**Issue:**
+Both files document themselves as "test-only" but live without the
+`_test.go` suffix (the 65-12 deviation note explains why: cross-package
+test binaries cannot see `_test.go` symbols). As a result they are
+compiled into every regular build of `package daemon`, including the
+production helix binary.
+
+`integ_lookup_export.go:36` does:
+
+```go
+import "testing"
+```
+
+and `NewE2EIntegLookupForTest(t *testing.T) (...)` is an exported
+function on `package daemon`. The `testing` package, all of its
+dependencies, and helper code (BeginSnapshot, WriteSnapshotFacts,
+fixture builders, FNV hash re-implementation) ship inside the
+`helix daemon` binary that operators install.
+
+Concrete consequences:
+
+- `helix daemon` binary size grows by the testing toolchain footprint.
+- Any external package that imports `internal/daemon` could call
+  `daemon.NewE2EIntegLookupForTest(t)` if it can produce a `*testing.T`
+  — accidental misuse compiles cleanly.
+- The plan's "test-fixture-shaped names make production misuse
+  obvious" mitigation is convention-only; the toolchain provides no
+  enforcement.
+
+The standard Go workaround for the test-binary visibility constraint is
+a small re-export in a `_test.go` file inside *each* consuming
+package's test binary, OR a separate `internal/<x>testing/`
+subpackage that is used by tests of multiple packages and is allowed
+to import `testing`. Both keep `testing` out of the production binary.
+
+**Fix:** Move `NewIntegSemanticLookupForTest`,
+`NewE2EIntegLookupForTest`, `FixtureSymbolMeta`, and the fixture
+helpers into a dedicated test-support subpackage (e.g.,
+`internal/daemon/integtest/`) that consumers compile only into their
+test binaries. Alternatively keep the names but gate the file with a
+build tag and add the tag to test runs:
+
+```go
+//go:build helix_internal_testing
+// +build helix_internal_testing
+
+package daemon
+// ... existing content ...
+```
+
+Either approach removes `testing` from the production daemon binary
+and re-asserts the plan's "no production leakage" contract.
 
 ## Warnings
 
-### WR-01: `Status` reads `bundle.queue`/`bundle.live` without bundle mutex
+### WR-01: `tool_analyze_blast_radius` matrix subtest contains a tautological confidence-cap assertion
 
-**File:** `internal/daemon/semantic_wiring.go:769-780`
-**Issue:**
-`integSemanticLookup.Status` reads `l.bundle.queue.DepthAll()` and
-`l.bundle.live.LastFlushAt(ws)` without acquiring `l.bundle.mu`. Both pointer
-fields are write-once at `newSemanticBundle` construction so the race is
-theoretical TODAY, but the read pattern diverges from the rest of the
-file (`engineFor`/`recovererFor` at 556-572 acquire the mutex for similarly
-write-once-after-construction state). When a future developer changes
-`b.queue` or `b.live` to be late-bound (e.g., a SetQueue analogue), this
-unlocked read becomes a data race that the `-race` build will catch only on
-the next CI run after the change ships.
-
-**Fix:** Be consistent. Either lift the lock convention out of `engineFor`/
-`recovererFor` (they are equally single-write today) or add it here:
+**File:** `internal/skill/semantic/integration_test.go:1086-1092`
+**Issue:** The assertion is:
 
 ```go
-l.bundle.mu.Lock()
-q := l.bundle.queue
-lv := l.bundle.live
-l.bundle.mu.Unlock()
-if q != nil { pendingLSP = q.DepthAll() }
-if lv != nil { ... lv.LastFlushAt(ws) ... }
-```
-
-### WR-02: `extractIntegLookupMethodBodies` brittle column-1 `}` heuristic
-
-**File:** `internal/daemon/integ_lookup_test.go:63-93`
-**Issue:**
-The read-tier canary's body extractor declares "method body ends at the next
-line equal to `\"}\"` with no leading whitespace". This silently breaks if a
-method ever contains a closing brace immediately followed by a `// comment`
-on the same indentation level (the line is `"}"` exactly), or if `gofmt`
-emits a multi-line struct literal whose closing `}` sits at column 1 inside a
-method body. Today every method body in the file conforms; tomorrow a small
-refactor (e.g., adding a struct-literal variable inside `Status`) silently
-truncates the canary's view and a write-method token added to the truncated
-tail goes undetected.
-
-In particular, `Status` already contains a multi-line struct literal at lines
-786-795, where the closing `}, nil` is indented (so it doesn't trip the
-heuristic — but the heuristic's robustness depends on indentation luck). The
-file structure asserts a property no `gofmt` invariant guarantees.
-
-**Fix:** Use `go/parser` + `ast.Inspect` to extract receiver-typed FuncDecl
-bodies precisely. The package already depends on stdlib only; switching
-costs ~20 LoC and removes the brittleness. Alternative: track brace depth
-incrementing on each `{` and decrementing on each `}` rather than relying on
-column alignment.
-
-### WR-03: `analyze_blast_radius` semantic envelope omits graph_version
-
-**File:** `internal/kernel/symbols/blast_radius_strangler.go:284-307`
-**Issue:**
-`formatBlastRadiusEnvelopeFromImpacts` builds the SourceSemantic envelope but
-never stamps `Envelope.GraphVersion` from `lookup.Status` or from the impact
-slice. The PLAN's INTEG-05 contract for the source field is symmetric across
-the four tools: `get_repo_map` and `get_context` correctly stamp graph_version
-(see `skill.go:381-385` and `skill.go:486-491`), `get_health` carries it via
-`SemanticIndexBlock.GraphVersion`, but `analyze_blast_radius` does not. The
-matrix test `TestE2E_StranglerFig_SourceMatrix` only asserts `NotZero` on
-get_repo_map / get_context and does not exercise this branch, so the gap
-ships untested.
-
-**Fix:** Stamp graph_version. Either (a) plumb the impact slice's per-impact
-edge-confidence's parent graph version (not currently in `Impact`), or
-(b) call `lookup.Status(ctx, ws)` once at the orchestrator boundary and pass
-the GraphVersion through to `formatBlastRadiusEnvelopeFromImpacts`. Option (b)
-mirrors the repomap skill's fallback path at line 383-385.
-
-### WR-04: dot-directory walker condition has dead-code right operand
-
-**File:** `internal/daemon/semantic_wiring.go:1011`
-**Issue:**
-```go
-if path != ws.RepoRoot && (name == ".git" || name == ".helix" || strings.HasPrefix(name, ".") && name != ".") {
-    return fs.SkipDir
+if finalSrc != integ.SourceSemantic {
+    const fallbackCap = 0.6
+    assert.LessOrEqual(t, fallbackCap, 0.6,
+        "D-08: fallback confidence cap MUST stay at 0.6 (non-semantic rows)")
 }
 ```
 
-`d.Name()` on a directory yielded by `filepath.WalkDir` is never literally
-`"."` — `WalkDir` synthesizes the base name from the path component, and the
-top-level `path == ws.RepoRoot` short-circuit already excludes the only entry
-that could plausibly produce `"."`. The `&& name != "."` clause is thus dead
-code and obscures the intent.
+`fallbackCap` is the literal `0.6`; `assert.LessOrEqual(t, 0.6, 0.6)`
+is a tautology that can never fail. The intended check is presumably
+that the orchestrator's `fallbackConfidenceCap` constant equals 0.6,
+but that constant lives in `internal/kernel/symbols` and is unexported.
 
-The condition is also operator-precedence-dangerous as written: `&&` binds
-tighter than `||`, so the parsing is:
+**Fix:** Either remove the assertion (the cap is already pinned by the
+65-06 unit tests `TestAnalyzeBlastRadius_CfgDisabled_TreeSitter` and
+`TestAnalyzeBlastRadius_LookupUnavailable_Fallback`) or expose the cap
+through a test-export and assert on the real value:
 
-```
-name == ".git" || name == ".helix" || (strings.HasPrefix(name, ".") && name != ".")
-```
-
-That parses as intended, but a reviewer can easily misread it. Also note
-that `.git` and `.helix` are already covered by the `HasPrefix(name, ".")`
-clause — both checks are redundant.
-
-**Fix:**
 ```go
-if path != ws.RepoRoot && strings.HasPrefix(name, ".") {
-    return fs.SkipDir
+assert.Equal(t, 0.6, symbols.FallbackConfidenceCapForTest,
+    "D-08: fallback confidence cap MUST stay at 0.6 (non-semantic rows)")
+```
+
+### WR-02: `langFromExt` hardcodes a 4-language allow-list, silently dropping every other extractor registered with the daemon
+
+**File:** `internal/daemon/semantic_wiring.go:1490-1503`
+**Issue:** The production buildFn pipeline routes through `langFromExt`
+to pick a language identifier:
+
+```go
+case ".go":          return "go"
+case ".ts", ".tsx":  return "typescript"
+case ".js", ".jsx":  return "javascript"
+case ".py":          return "python"
+default:             return ""
+```
+
+`""` causes the file to be skipped before `extractRegistry.Provider`
+is even consulted. Any future per-language extractor registered through
+`extract.NewExtractorRegistry` (Rust, Java, C, Kotlin, Ruby, PHP,
+Swift, …) will land in the registry but never receive a single file
+from the buildFn — its symbols simply will not appear in the committed
+Facts.
+
+The classifier+registry pair already knows which extensions each
+extractor handles; duplicating the mapping here is both redundant and
+fragile.
+
+**Fix:** Drive language resolution off the registry instead of off the
+hardcoded switch:
+
+```go
+lang, ok := b.extractRegistry.LanguageForPath(path)
+if !ok {
+    continue
 }
 ```
 
-### WR-05: `applyValidationVerdicts` `break` after one matching edge can miss refutations
+If `Registry` does not yet expose a path→language helper, add one that
+consults each registered provider's declared extensions, then delete
+`langFromExt`.
 
-**File:** `internal/kernel/symbols/blast_radius_strangler.go:209-226`
-**Issue:**
+### WR-03: `edgeIDForTripleLocal` is not pinned to the production `overlay.edgeIDForTriple`
+
+**File:** `internal/daemon/integ_lookup_e2e_helpers.go:504-529`
+**Issue:** The helper duplicates the FNV-1a-with-63-bit-mask hash
+implemented in `internal/semantic/store/overlay.go:937` (per the
+comment), so cross-package callers can read
+`syms["confirmed_edge"].EdgeID` and recognise the EdgeID committed by
+`UpsertEdgesWithMerge`.
+
+The duplication is fine in principle, but there is no test or
+compile-time guard that the two implementations stay in lockstep. If a
+future Phase 6X tweak changes the hash algorithm in
+`overlay.edgeIDForTriple` (e.g., adds a `weight` byte stream, switches
+to xxh64), `edgeIDForTripleLocal` will silently diverge — the BL-1
+test will keep passing because it only checks `EdgeID != 0`, never
+that the harness's EdgeID actually matches an EdgeID in the store.
+
+**Fix:** Add a single back-to-back equality test in
+`internal/semantic/store/overlay_test.go` (or a new file) that calls
+both implementations with the same input and asserts byte equality:
+
 ```go
-for i := range impacts {
-    for _, e := range impacts[i].Evidence.Edges {
-        v, ok := verdictByEdge[e]
-        if !ok {
-            continue
-        }
-        if v.LSPConfirmed {
-            impacts[i].Confidence = 1.00
-        } else {
-            impacts[i].Confidence = 0.20
-            impacts[i].Refuted = true
-        }
-        // One verdict per impact is enough to set the verdict. Continue
-        // to the next impact rather than letting later edges in the same
-        // impact overwrite the verdict.
-        break
+func TestEdgeIDForTriple_LocalMatchesOverlay(t *testing.T) {
+    got := edgeIDForTriple("repo-id", 0xABCDEF, 0x123456, "call_graph")
+    want := daemon.EdgeIDForTripleForTest("repo-id", 0xABCDEF, 0x123456, "call_graph")
+    if got != want {
+        t.Fatalf("edge id drift: overlay=%d, daemon-local=%d", got, want)
     }
 }
 ```
 
-The `break` after the first matched edge means: if an impact has two evidence
-edges, edge A is confirmed (1.00), edge B is refuted (0.20+Refuted=true), and
-the iteration order surfaces A first, the impact ships with Confidence=1.00
-and Refuted=false — even though one of its supporting edges has been
-contradicted by LSP. Conservatively the contract should be: a single
-refutation taints the impact (drop to 0.20, set Refuted). Today the order
-of evidence edges decides the verdict, which is non-deterministic in Go map
-iteration if the verdict map is consulted in any non-trivial way (here it
-isn't, but the underlying impact.Evidence.Edges slice order is whatever
-ExpandFrom returned).
+The test runs in <1ms and is the cheapest possible drift guard.
 
-The test `TestApplyValidationVerdicts_NoMutation` exercises a single-edge
-impact and does not catch this asymmetry.
+### WR-04: `t.Chdir` inside the shared `newE2EIntegLookup` harness is fragile under `t.Parallel`
 
-**Fix:** Do NOT `break` on first match. Instead, accumulate `anyRefuted ||
-allConfirmed` semantics:
+**File:** `internal/daemon/integ_lookup_e2e_helpers.go:88`
+**Issue:** `newE2EIntegLookup` calls `t.Chdir(wsDir)` so the relative
+".helix/semantic.duckdb" resolves correctly.
+
+`t.Chdir` (Go 1.24+) restores the working directory after the test, but
+restoration is per-test, not per-call. Because the helper is the
+foundation for several test files
+(`integ_lookup_e2e_test.go`, `production_adapter_e2e_test.go`,
+`bl1_blast_radius_e2e_test.go`), any two of those tests that adopt
+`t.Parallel()` would race on the process-global cwd.
+
+None of the consuming tests currently call `t.Parallel()`, but the
+harness is the kind of shared utility a future contributor will assume
+is parallel-safe. The race is silent — `store.Open` would just open
+the wrong DuckDB path and the test would fail with a confusing
+"committed snapshot empty" error two layers down.
+
+**Fix:** Open `semanticstore.Store` against an absolute path and drop
+the chdir entirely. The store API allows absolute paths; the comment
+("store.Open requires workspace-relative paths (T-57-02-01)") may have
+gone stale:
 
 ```go
-for i := range impacts {
-    var sawConfirmed, sawRefuted bool
-    for _, e := range impacts[i].Evidence.Edges {
-        v, ok := verdictByEdge[e]
-        if !ok { continue }
-        if v.LSPConfirmed { sawConfirmed = true } else { sawRefuted = true }
-    }
-    switch {
-    case sawRefuted:
-        impacts[i].Confidence = 0.20
-        impacts[i].Refuted = true
-    case sawConfirmed:
-        impacts[i].Confidence = 1.00
+storePath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+if err := os.MkdirAll(filepath.Dir(storePath), 0o755); err != nil {
+    t.Fatalf("mkdir helix dir: %v", err)
+}
+cfg := semanticpkg.Config{
+    Enabled: true,
+    Store: semanticpkg.StoreConfig{Kind: "duckdb", Path: storePath, ...},
+}
+```
+
+If absolute paths really are not supported, document the constraint at
+the top of the helper and use `t.Helper()` plus a contract comment so
+future contributors don't miss it.
+
+### WR-05: `integSemanticLookup.Status` returns `StatusBuilding` for both "no commit ever" and "build in progress"
+
+**File:** `internal/daemon/semantic_wiring.go:1216-1220`
+**Issue:**
+
+```go
+state := integ.StatusReady
+if snap == 0 {
+    state = integ.StatusBuilding
+}
+```
+
+`snap == 0` covers two cases:
+
+1. The runner is currently building the first snapshot (real building).
+2. The runner has never been kicked off (steady-state v1.10 with the
+   feature on but `index_semantic_graph` never called).
+
+Both surface as `StatusBuilding` to consumers. Downstream
+`mapSemanticState` (kernel/health/tools.go:181) renders that as
+`latest_snapshot_status="building"`. An operator reading `get_health`
+after a fresh daemon launch will see "building" without a build
+actually being in flight; the `pending_lsp_revalidations` field stays
+at zero, so this is a misleading signal.
+
+**Fix:** Distinguish "never built" from "build in progress" by
+consulting `bundle.runner` (which knows whether a build is currently
+running), or by surfacing a closed-enum
+`integ.StatusUnbuilt`/`StatusEmpty`:
+
+```go
+state := integ.StatusReady
+if snap == 0 {
+    state = integ.StatusBuilding
+    if l.bundle == nil || !l.bundle.runner.Running(repoID) {
+        state = integ.StatusEmpty // or StatusReady with snap=0 documented
     }
 }
 ```
 
-Alternatively, document in the SPEC that "first matching edge wins" if that
-is the genuine semantic — but that needs to be a deliberate choice, not an
-artifact of `break`.
+If a new closed-enum value is too costly, log a debug line
+distinguishing the two cases so operator-side debugging isn't
+ambiguous.
 
-### WR-06: `semSchedulerAdapter.IsQuiescent` releases mutex before invoking method
+### WR-06: `factsFromExtracted` emits one warn log per high-bit-set symbol, not per ExtractedFile
 
-**File:** `internal/daemon/semantic_wiring.go:388-399`
-**Issue:**
+**File:** `internal/daemon/semantic_wiring.go:1648-1671`
+**Issue:** The high-bit-set guard logs once per violating symbol:
+
 ```go
-func (a *semSchedulerAdapter) IsQuiescent(repoID string) bool {
-    if a == nil || a.rb == nil {
-        return true
+if single.Symbols[j].SymbolID&highBitMask != 0 || ... {
+    if logger != nil {
+        logger.Warn(
+            "factsFromExtracted: high-bit-set SymbolID — masking + continuing (WR-07; collision-fix deferred)",
+            "symbol_id", single.Symbols[j].SymbolID,
+            ...
+        )
     }
-    a.rb.mu.Lock()
-    s, ok := a.rb.subs[repoID]
-    a.rb.mu.Unlock()
-    if !ok || s == nil {
-        return true
-    }
-    return s.IsQuiescent()
 }
 ```
 
-The mutex protects `a.rb.subs` (the map). After Unlock, `s.IsQuiescent()` is
-invoked on a now-unlocked snapshot. If a concurrent goroutine calls
-`delete(a.rb.subs, repoID)` and the `RankScheduler` releases its underlying
-resources at delete time, this becomes a use-after-free. The current
-`rankBundle` implementation appears not to delete subs at runtime, so this
-is theoretical, but the pattern is fragile and inconsistent with how
-`compactor` is accessed in `OnFlush` (line 502-514) which has the same
-release-before-call pattern.
+A pathological extractor (e.g., a future hash collision in an
+extractor's SymbolID hashing) could emit a warn line for every symbol
+in every file in the repo on every full build, drowning out other
+diagnostics in operator logs.
 
-**Fix:** Either hold the mutex through `IsQuiescent`, or document that
-`subs` entries are never released for the lifetime of the bundle. The latter
-needs to be an invariant pinned by a test.
+A secondary observation: `OwnerSymbolID` and `ParentScopeID` are
+masked to 63 bits unconditionally, but if either was 0 the mask leaves
+it as 0 (intentional "no owner" semantics). `NodeID` is treated
+specially (zero → set to `SymbolID`), creating an asymmetry that
+surprises readers of the function.
 
-### WR-07: `factsFromExtracted` masks high bit silently — collisions go undetected
+**Fix:** Aggregate violations per ExtractedFile and emit a single
+summary log:
 
-**File:** `internal/daemon/semantic_wiring.go:1166-1196`
-**Issue:**
 ```go
-single.Symbols[j].SymbolID &= 0x7FFFFFFFFFFFFFFF
-...
-single.Symbols[j].OwnerSymbolID &= 0x7FFFFFFFFFFFFFFF
-single.Symbols[j].ParentScopeID &= 0x7FFFFFFFFFFFFFFF
+violators := 0
+for j := range single.Symbols {
+    if single.Symbols[j].SymbolID&highBitMask != 0 || ... {
+        violators++
+    }
+    // mask
+}
+if violators > 0 && logger != nil {
+    logger.Warn("factsFromExtracted: high-bit-set IDs masked",
+        "count", violators, "path", ef.File.Path)
+}
 ```
 
-The high-bit mask is applied silently because "the duckdb-go driver rejects
-uint64 values with the high bit set". Two independent SymbolIDs with their
-high bits flipped will collapse to the same low-63 value and silently
-overwrite each other in the snapshot facts. The Phase 59 EXTRACT-02 SymbolID
-allocator may or may not guarantee high-bit-zero — the comment doesn't say.
+Optionally add a paragraph to the function godoc clarifying the
+zero-handling asymmetry between `NodeID` and `OwnerSymbolID`/
+`ParentScopeID`.
 
-If the allocator uses, say, FNV-64 or a similar hash, collisions are real.
-There's no detection, no logging, no metric, no test that two distinct
-upstream IDs survive the mask without colliding.
+### WR-07: `bfsExpand` issues a separate `QueryStableKeyByNodeID` round-trip per visited node and discards every error
 
-**Fix:** Either (a) assert `Symbols[j].SymbolID & 0x8000000000000000 == 0`
-and crash on violation (with telemetry), (b) shift to int64-typed columns
-in DuckDB and remove the mask, or (c) add a test that round-trips a corpus
-of generated SymbolIDs through this path and asserts uniqueness preserved.
+**File:** `internal/daemon/semantic_wiring.go:1054-1068`
+**Issue:** Every neighbour lookup triggers a SQL round-trip:
 
----
+```go
+if k, ok, _ := store.QueryStableKeyByNodeID(ctx, repoID, uint64(src)); ok {
+    srcKey = k
+}
+// ...
+tgtKey, _, _ := store.QueryStableKeyByNodeID(ctx, repoID, uint64(tgt))
+```
+
+For depth=2 over a graph with average out-degree 10 the BFS makes
+~110 SQL queries serially. Performance is out of v1 review scope, but
+each call also discards its error (the `_` blanks on lines 1034, 1055,
+and 1068). A persistent transient SQL error (e.g., DuckDB write
+contention) would surface as silent empty `stable_keys` →
+`integ.Impact` rows with empty `From`/`To` strings → downstream
+applyValidationVerdicts cannot match them against the verdict map at
+all. The build looks "fine" but the impact set is structurally wrong.
+
+**Fix:** Two cheap mitigations:
+
+1. Batch the resolve via a single
+   `QueryStableKeysByNodeIDs(ctx, repoID, []uint64)` call after the
+   BFS finishes (one SQL round-trip per BFS instead of one per node).
+2. At minimum, log the discarded errors at debug level so silent
+   failures are observable:
+
+```go
+k, ok, qErr := store.QueryStableKeyByNodeID(ctx, repoID, uint64(src))
+if qErr != nil && b.logger != nil {
+    b.logger.Debug("bfsExpand: stable-key resolve failed", "node_id", src, "err", qErr)
+}
+if ok {
+    srcKey = k
+}
+```
 
 ## Info
 
-### IN-01: `formatLocations`/`itoa` — `strconv` already imported transitively
+### IN-01: Production-adapter test name advertises blast-radius confidence ladder but the body never drives the orchestrator
 
-**File:** `internal/kernel/symbols/blast.go:166-189`
-**Issue:** A hand-rolled `itoa` exists "without importing strconv". The
-package's siblings already pull `strconv` indirectly (via `fmt` formatters);
-adding the import is one-line and removes 24 lines of bug-prone manual
-conversion.
+**File:** `internal/skill/semantic/production_adapter_e2e_test.go:247-270`
+**Issue:** `TestE2E_StranglerFig_ProductionAdapter_BlastRadiusConfidence`
+asserts `Available()`, `Status()`, and `LocateSymbol()` on the
+production adapter, but never invokes `analyze_blast_radius` or any
+orchestrator code. The body's comment acknowledges the delegation to
+`bl1_blast_radius_e2e_test.go`, yet the test name keeps the
+`BlastRadiusConfidence` suffix that suggests confidence-ladder
+coverage.
 
-**Fix:** `import "strconv"`, replace `itoa(int(loc.Range.Start.Line))` with
-`strconv.Itoa(int(loc.Range.Start.Line))`.
+**Fix:** Rename to e.g.
+`TestE2E_StranglerFig_ProductionAdapter_BlastRadiusReadyAndLocate` so
+the assertion surface matches the body, and add a one-line comment
+pointing to BL-1.
 
-### IN-02: `formatBlastRadius` `Sprintf("\nCallers:\n")` — no format verbs
+### IN-02: `classifyAndExtract` swallows classifier errors and `!ok` results without a debug log
 
-**File:** `internal/kernel/symbols/tools.go:704, 710`
+**File:** `internal/daemon/semantic_wiring.go:1535-1542`
 **Issue:**
+
 ```go
-sb.WriteString(fmt.Sprintf("\nCallers:\n"))
+kind, ok, err := live.ClassifyPathChange(...)
+if err != nil || !ok {
+    continue
+}
 ```
-`fmt.Sprintf` with no verbs is a `go vet` finding (`S1039`) and a needless
-allocation. Same for `\nImplementations`.
 
-**Fix:** `sb.WriteString("\nCallers:\n")`.
+A repeated classifier error (e.g., the path-hash store is briefly
+unavailable) silently shrinks the candidate path set. The
+ReadFile/Extract paths below DO log at debug; classifier errors
+should follow the same convention.
 
-### IN-03: `cap` parameter shadows `builtin cap`
+**Fix:**
 
-**File:** `internal/kernel/symbols/blast_radius_strangler.go:232`
-**Issue:**
 ```go
-func capConfidences(br *BlastRadius, cap float64) {
+if err != nil {
+    if b.logger != nil {
+        b.logger.Debug("buildFn: classifier failed; skipping path",
+            "path", path, "err", err)
+    }
+    continue
+}
+if !ok {
+    continue
+}
 ```
-`cap` is a Go builtin. Shadowing it is legal but a code-smell that confuses
-readers and tooling. The package also calls `make([]integ.Impact, 0, cap)`-
-style elsewhere; a future edit inside `capConfidences` could `make([]int, 0,
-cap)` thinking it gets the builtin and silently pass `0.6` as the slice
-capacity (compile error today, semantic accident with int-typed arg).
 
-**Fix:** Rename to `ceiling` or `maxConfidence`.
+### IN-03: `integration_test.go` re-implements `strings.Contains` instead of importing it
 
-### IN-04: `integSemanticLookup.Status` — `LastErrorReason` always empty
+**File:** `internal/skill/semantic/integration_test.go:712-719`
+**Issue:** The hand-rolled helper:
 
-**File:** `internal/daemon/semantic_wiring.go:794`
-**Issue:** Hard-coded `""`. The doc comment at lines 745-753 admits the
-65-07 follow-up populates it; the SPEC §24.5 contract documents the closed-
-enum mapping. Wire-side coverage today survives because
-`ComputeSemanticIndexBlock`'s err-return arm (`tools.go:206-219`) maps the
-Status err to `last_error="index_error"`. That keeps the contract honest for
-StatusError, but `state==StatusReady` plus a transient failure can never
-surface a `LastErrorReason` other than empty until 65-07 lands. Acceptable
-as a known TODO; track in 65-07.
+```go
+func contains(haystack, needle string) bool {
+    for i := 0; i+len(needle) <= len(haystack); i++ {
+        if haystack[i:i+len(needle)] == needle {
+            return true
+        }
+    }
+    return false
+}
+```
 
-### IN-05: kernel/symbols/skill_adapter.go documents one tool but names skill "symbols"
+duplicates `strings.Contains`. The "avoid one import" justification in
+the comment is no longer accurate — the same file imports many
+packages, so adding `"strings"` is a wash. Other test files in the
+same wave (e.g., `tools_semantic_test.go`) already pull in `strings`.
 
-**File:** `internal/kernel/symbols/skill_adapter.go:24-51`
-**Issue:** The `SymbolsSkill` struct ships with a single `analyze_blast_radius`
-ToolDef. The pre-existing `SymbolRetrievalSkill` enumerates the other 8 tools
-catalog-only. The naming risks confusion: a future contributor scanning
-`skill.Get("symbols")` will reasonably expect the full nine-tool inventory,
-not the strangler-fig sub-surface. The `Description()` says "Symbol analysis
-tools (analyze_blast_radius)" but the skill name is the bare "symbols".
+**Fix:** Replace with `strings.Contains`:
 
-**Fix:** Rename to "symbols-blast-radius" or "symbols-strangler" so the skill
-identifier reflects its actual single-tool scope. Alternative: have this
-adapter additionally enumerate the eight catalog-only ToolDefs from
-SymbolRetrievalSkill and merge the two skills (Description: "Strangler-fig
-+ catalog mirror"); but that complicates the daemon's name-collision
-last-writer-wins logic at `daemon.go:584-588` which currently lists "symbols"
-in the skip-set.
+```go
+import "strings"
+// ...
+if !strings.Contains(text, want) {
+```
 
----
+### IN-04: `RankFromSeeds` does not filter empty/whitespace-only seeds before joining
 
-## Doctrine items verified correct
+**File:** `internal/daemon/semantic_wiring.go:818-832`
+**Issue:** `RankFromSeeds` short-circuits to `RankFiles` only when
+`len(seeds) == 0`. A caller that passes `seeds=[""]` (one empty
+string) joins to `""` and proceeds to call
+`engine.QueryBleve("", [""])`. Bleve typically returns no hits; the
+function then falls through to the persisted baseline, which is fine
+— but it is wasted work and potentially a `bleve` corpus-touch for
+nothing.
 
-For completeness, the following items were inspected and found compliant:
+**Fix:** Filter empty/whitespace-only seeds before computing the bleve
+input:
 
-- `integ.ChooseSource` priority ladder (config off → tree_sitter; cfg on +
-  unavailable → fallback+index_disabled; cfg on + err → fallback+classified;
-  cfg on + ok → semantic). Tests at `source_select_test.go:53-181` exhaustively
-  cover the matrix including wrapped sentinels.
-- `integ.ClassifyLookupErr` is `errors.Is`-only; never inspects raw error
-  text. Test `TestEnvelope_NoRawErrorText` and
-  `TestChooseSource_NoRawErrText` both pin this.
-- `MarshalEnvelope` reserves `source`/`fallback_reason`/`graph_version`/
-  `freshness` and silently drops payload keys that collide. Closed-enum
-  surface tested in `envelope_test.go`.
-- The 0.6 confidence cap (`fallbackConfidenceCap`) is applied uniformly on
-  all non-semantic blast-radius paths in `tools.go:638-650, 664, 679`.
-- The lint analyzer's slash-boundary check correctly rejects the
-  `internal/semantic/integ_evil` lookalike (`analyzer.go:65-69` + the
-  `TestAnalyzer_RejectsKernelImportingSemanticIntegLookalike` fixture).
-- `applyValidationVerdicts` mutates a copy; the original Pass-1 slice is
-  preserved (modulo WR-05's `break` ambiguity). `TestApplyValidationVerdicts_
-  NoMutation` pins copy-before-mutate.
-- The two repomap goldens (`index_disabled_repo_map.txt`,
-  `index_disabled_context.txt`) are byte-identical, locking the INTEG-01
-  no-engine-drift contract.
+```go
+filtered := seeds[:0]
+for _, s := range seeds {
+    if strings.TrimSpace(s) != "" {
+        filtered = append(filtered, s)
+    }
+}
+if len(filtered) == 0 {
+    return l.RankFiles(ctx, ws)
+}
+```
+
+### IN-05: `extractIntegLookupMethodBodies` could return `(string, error)` instead of taking a `*testing.T`
+
+**File:** `internal/daemon/integ_lookup_test.go:84-114`
+**Issue:** The helper is intentionally test-only (the file is
+`_test.go`, so the helper is private to the test binary), but its
+signature couples it to `*testing.T` for the failure path. Returning
+`(string, error)` and letting the caller call `t.Fatalf` would
+decouple the parser logic from the test harness and make the helper
+trivially reusable in a future fuzz target or a non-test introspection
+tool.
+
+**Fix (optional, maintainability tweak):**
+
+```go
+func extractIntegLookupMethodBodies(src string) (string, error) {
+    // ... no t.Fatalf, return errors instead
+}
+
+// Caller:
+body, err := extractIntegLookupMethodBodies(string(src))
+if err != nil {
+    t.Fatalf("extract: %v", err)
+}
+```
 
 ---
 

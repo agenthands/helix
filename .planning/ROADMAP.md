@@ -202,11 +202,11 @@
   4. Every MCP envelope from a semantic-aware tool returns `source: semantic | tree_sitter | fallback` so callers can detect path drift.
   **Carryover from Phase 64:** production buildFn empty-Facts placeholder; zero-value WorkspaceKey from session adapter (deferred 2026-05-08 per phase 64 verification).
   Plans:
-  - [ ] 65-00-PLAN.md — Wave 0 vet allowlist: nokernel2semantic permits internal/semantic/integ (M-vet unblock for 65-03/65-06)
-  - [ ] 65-01-PLAN.md — Wave 0 (TDD) production buildFn: per-language extract + classifier walk + ToStoreFacts → WriteSnapshotFacts (D-09 carryover #1)
-  - [ ] 65-02-PLAN.md — Wave 0 (TDD) WorkspaceKey adapter: closure pass-through replaces zero-value return (D-09 carryover #2)
-  - [ ] 65-03-PLAN.md — Wave 1 (TDD) internal/semantic/integ types-only package + integSemanticLookup production adapter + read-tier grep canary (D-01/D-02/D-03; INTEG-01..05)
-  - [ ] 65-04-PLAN.md — Wave 1 (TDD) source-field envelope contract + ChooseSource priority ladder + closed-enum matrix tests (D-04/D-05; Pitfall §3; INTEG-05)
+  - [x] 65-00-PLAN.md — Wave 0 vet allowlist: nokernel2semantic permits internal/semantic/integ (M-vet unblock for 65-03/65-06)
+  - [x] 65-01-PLAN.md — Wave 0 (TDD) production buildFn: per-language extract + classifier walk + ToStoreFacts → WriteSnapshotFacts (D-09 carryover #1)
+  - [x] 65-02-PLAN.md — Wave 0 (TDD) WorkspaceKey adapter: closure pass-through replaces zero-value return (D-09 carryover #2)
+  - [x] 65-03-PLAN.md — Wave 1 (TDD) internal/semantic/integ types-only package + integSemanticLookup production adapter + read-tier grep canary (D-01/D-02/D-03; INTEG-01..05)
+  - [x] 65-04-PLAN.md — Wave 1 (TDD) source-field envelope contract + ChooseSource priority ladder + closed-enum matrix tests (D-04/D-05; Pitfall §3; INTEG-05)
   - [ ] 65-05-PLAN.md — Wave 2 (TDD) get_repo_map + get_context wired via SetSemanticLookup; JSON envelope wrap; index-disabled goldens preserved verbatim (INTEG-01/02/05)
   - [ ] 65-06-PLAN.md — Wave 2 (TDD) analyze_blast_radius two-pass: lookup.ExpandFrom + LSP-validates-critical-edges; fallback confidence cap ≤ 0.6 (D-07/D-08; INTEG-03/05)
   - [ ] 65-07-PLAN.md — Wave 2 (TDD) get_health semantic_index block additive (Phase 57 SC-1 preserved; WR-NEW-01 closed-enum last_error) (INTEG-04/05)

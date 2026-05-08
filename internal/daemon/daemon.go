@@ -576,7 +576,11 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
-	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore}, healthSemIndex, healthCfgGate, healthLookup, wsKeyFn)
+	// WR-2 / IN-04 (Phase 65 65-11 Task 2): the probe carries the bundle
+	// pointer so Probe() can stamp lastErrReason on SELECT 1 failure and
+	// clear it on success. sBndl is nil when semantic is disabled — the
+	// bundle setter is nil-safe.
+	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore, bundle: sBndl}, healthSemIndex, healthCfgGate, healthLookup, wsKeyFn)
 	help.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
@@ -844,7 +848,18 @@ func (d *Daemon) SemanticStore() *semanticstore.Store { return d.semanticStore }
 // internal/kernel/health.SemanticStoreProbe interface (SC-1). Defined
 // here — not in health/ — so the kernel package stays free of
 // internal/semantic imports.
-type semanticStoreProbe struct{ s *semanticstore.Store }
+//
+// Phase 65 65-11 Task 2 (WR-2 / IN-04): the probe holds an optional
+// bundle pointer so the Probe-time SELECT 1 failure path can stamp the
+// bundle's lastErrReason via SetLastErrorReason. The bundle pointer is
+// optional (nil-safe via the bundle's setter) — when semantic is
+// disabled (sBndl == nil), Probe() still returns the closed-enum
+// ErrUnsupported and kernel/health classifies it via the existing
+// classifySemanticProbeError code path.
+type semanticStoreProbe struct {
+	s      *semanticstore.Store
+	bundle *semanticBundle
+}
 
 // Available reports whether the underlying store is functional. Nil-safe.
 func (p semanticStoreProbe) Available() bool {
@@ -861,13 +876,34 @@ func (p semanticStoreProbe) Available() bool {
 // wrapped with serr.ErrUnsupported so callers (and the closed-enum
 // classifier in kernel/health) can distinguish a "feature disabled"
 // state from a transient DB failure.
+//
+// Phase 65 65-11 Task 2 (WR-2 / IN-04): on a SELECT 1 failure (the
+// "live store handle present but the underlying connection is sick"
+// path), the probe stamps the bundle's lastErrReason via
+// SetLastErrorReason(integ.FallbackReasonIndexError) so a subsequent
+// get_health.semantic_index.last_error reports the closed-enum reason.
+// On success, the stamp is cleared (setter accepts an empty reason).
 func (p semanticStoreProbe) Probe(ctx context.Context) error {
 	if p.s == nil {
+		// WR-2: pre-store-construction path; the bundle does not exist
+		// here either (sBndl is nil when semantic is disabled), so we
+		// can't stamp. Operator-visible via the existing log line.
 		return fmt.Errorf("semantic store unavailable: %w", serr.ErrUnsupported)
 	}
 	db := p.s.DB()
 	var one int
-	return db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+	if err := db.QueryRowContext(ctx, "SELECT 1").Scan(&one); err != nil {
+		// WR-2 / IN-04: stamp FallbackReasonIndexError on Probe-time
+		// SQL failure so get_health.semantic_index.last_error surfaces
+		// the closed-enum reason (NOT the raw SQL error text — that
+		// would leak DB internals through WR-NEW-01's envelope shield).
+		p.bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+		return err
+	}
+	// WR-2: clear the stamp on probe success so a previously-stamped
+	// transient error stops surfacing once the store recovers.
+	p.bundle.SetLastErrorReason("")
+	return nil
 }
 
 // daemonSemIndexAccessor adapts an integ.SemanticLookup to the

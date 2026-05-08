@@ -8,13 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/agenthands/helix/internal/kernel/health"
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	skillsemantic "github.com/agenthands/helix/internal/skill/semantic"
 	"github.com/agenthands/helix/internal/treesitter"
@@ -264,5 +267,180 @@ func TestFactsFromExtracted_HighBitSetSymbolIDLogged(t *testing.T) {
 	// Sanity: warn-level diagnostic.
 	if !strings.Contains(logged, "level=WARN") {
 		t.Errorf("captured log text = %q; want a level=WARN line for the high-bit diagnostic", logged)
+	}
+}
+
+// TestSemanticBundle_BuildFailure_StampsLastErrReason — Phase 65 65-11 Task 2
+// WR-2 / IN-04 regression. Asserts the bundle's lastErrReason field becomes a
+// closed-enum integ.FallbackReason (NOT empty) after SetLastErrorReason runs,
+// and that concurrent reads under bundle.mu are safe.
+//
+// Path A — direct unit test on SetLastErrorReason: ensures the setter writes
+// the field, the read path observes it, and concurrent Set + Status() reads do
+// not race. The lock contract is the WR-01 fix.
+//
+// Path B — end-to-end via integSemanticLookup.Status: builds a minimal
+// *semanticBundle, stamps lastErrReason via SetLastErrorReason, calls Status()
+// against a real store, and asserts Status.LastErrorReason carries the
+// closed-enum string. This is the WR-2-mandated end-to-end assertion that
+// proves the pipeline from SetLastErrorReason → Status → SemanticStatus is
+// intact.
+func TestSemanticBundle_BuildFailure_StampsLastErrReason(t *testing.T) {
+	if testing.Short() {
+		t.Skip("opens DuckDB store; skipping in -short")
+	}
+
+	t.Run("Path A: SetLastErrorReason writes field observably", func(t *testing.T) {
+		bundle := &semanticBundle{}
+		// Empty by default.
+		bundle.mu.Lock()
+		got := bundle.lastErrReason
+		bundle.mu.Unlock()
+		if got != "" {
+			t.Fatalf("baseline lastErrReason = %q, want \"\"", got)
+		}
+
+		bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+		bundle.mu.Lock()
+		got = bundle.lastErrReason
+		bundle.mu.Unlock()
+		if got != integ.FallbackReasonIndexError {
+			t.Errorf("after SetLastErrorReason: got %q, want %q",
+				got, integ.FallbackReasonIndexError)
+		}
+
+		// Nil-safety: setter on a nil bundle must not panic.
+		var nilBundle *semanticBundle
+		nilBundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+	})
+
+	t.Run("Path A: concurrent Set + Status reads", func(t *testing.T) {
+		bundle := &semanticBundle{}
+		const N = 200
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < N; i++ {
+				bundle.SetLastErrorReason(integ.FallbackReasonIndexBuilding)
+				bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for i := 0; i < N; i++ {
+				bundle.mu.Lock()
+				_ = bundle.lastErrReason
+				bundle.mu.Unlock()
+			}
+		}()
+		wg.Wait()
+		// Survival is the assertion (run with -race to catch any drift).
+	})
+
+	t.Run("Path B: end-to-end via integSemanticLookup.Status", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		wsDir := t.TempDir()
+		t.Chdir(wsDir)
+		ws := workspace.WorkspaceKey{RepoRoot: wsDir, Language: "go", Toolchain: "go1.22"}
+
+		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		metrics := obs.Noop(logger.Handler()).Metrics()
+		storeCfg := semantic.Config{
+			Enabled: true,
+			Store: semantic.StoreConfig{
+				Kind:        "duckdb",
+				Path:        filepath.Join(".helix", "semantic.duckdb"),
+				MemoryLimit: "256MiB",
+				Threads:     2,
+			},
+		}
+		store, err := semanticstore.Open(ctx, storeCfg, logger, metrics)
+		if err != nil {
+			t.Fatalf("semanticstore.Open: %v", err)
+		}
+		t.Cleanup(func() { _ = store.Close() })
+
+		bundle := &semanticBundle{
+			store:   store,
+			logger:  logger,
+			metrics: metrics,
+		}
+		bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+
+		lookup := &integSemanticLookup{
+			bundle:    bundle,
+			store:     store,
+			enabledFn: func() bool { return true },
+			wsKeyFn:   func() workspace.WorkspaceKey { return ws },
+		}
+		st, err := lookup.Status(ctx, ws)
+		if err != nil {
+			t.Fatalf("Status: %v", err)
+		}
+		if st.LastErrorReason != string(integ.FallbackReasonIndexError) {
+			t.Errorf("Status.LastErrorReason = %q, want %q (WR-2 / IN-04 closed-enum)",
+				st.LastErrorReason, string(integ.FallbackReasonIndexError))
+		}
+	})
+}
+
+// TestGetHealthSemanticStoreStatus_StampsLastErrReason — Phase 65 65-11 Task 2
+// WR-2 mandated end-to-end assertion. The kernel-side ComputeSemanticIndexBlock
+// drives an integ.SemanticLookup → SemanticStatus → SemanticIndexBlock pipeline
+// and surfaces SemanticStatus.LastErrorReason as the closed-enum
+// SemanticIndexBlock.LastError on the get_health envelope. The pre-fix path
+// hard-coded LastErrorReason="" inside Status, so LastError on the envelope
+// was always empty regardless of how badly the bundle was failing. After the
+// WR-2 fix, the closed-enum reason flows end-to-end.
+func TestGetHealthSemanticStoreStatus_StampsLastErrReason(t *testing.T) {
+	if testing.Short() {
+		t.Skip("opens DuckDB store; skipping in -short")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	wsDir := t.TempDir()
+	t.Chdir(wsDir)
+	ws := workspace.WorkspaceKey{RepoRoot: wsDir, Language: "go", Toolchain: "go1.22"}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	metrics := obs.Noop(logger.Handler()).Metrics()
+	storeCfg := semantic.Config{
+		Enabled: true,
+		Store: semantic.StoreConfig{
+			Kind:        "duckdb",
+			Path:        filepath.Join(".helix", "semantic.duckdb"),
+			MemoryLimit: "256MiB",
+			Threads:     2,
+		},
+	}
+	store, err := semanticstore.Open(ctx, storeCfg, logger, metrics)
+	if err != nil {
+		t.Fatalf("semanticstore.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	bundle := &semanticBundle{
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
+	}
+	bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+
+	lookup := &integSemanticLookup{
+		bundle:    bundle,
+		store:     store,
+		enabledFn: func() bool { return true },
+		wsKeyFn:   func() workspace.WorkspaceKey { return ws },
+	}
+	accessor := &daemonSemIndexAccessor{lookup: lookup}
+
+	blk := health.ComputeSemanticIndexBlock(ctx, accessor, ws)
+	if blk.LastError != string(integ.FallbackReasonIndexError) {
+		t.Errorf("get_health.semantic_index.last_error = %q, want %q (WR-2: closed-enum NOT empty)",
+			blk.LastError, string(integ.FallbackReasonIndexError))
 	}
 }

@@ -346,6 +346,130 @@ func (s *Store) QuerySymbolPath(ctx context.Context, snapshotID uint64, symbolID
 	return path, true, nil
 }
 
+// QuerySymbolByLocation returns the stable_key of the symbol whose source
+// range contains (line, col) in the file at path, at the latest committed
+// snapshot for repoID. Returns ("", false, nil) on miss (or when no
+// committed snapshot exists). Inner-scope preference: when multiple
+// symbols overlap (line, col), the smallest span (end_byte - start_byte)
+// wins.
+//
+// line and col are 1-based to match LSP's external surface (mirrors
+// SemanticLookup.SymbolID's contract).
+//
+// Phase 65 65-11 Task 1.
+func (s *Store) QuerySymbolByLocation(
+	ctx context.Context, repoID, path string, line, col uint32,
+) (string, bool, error) {
+	if s == nil || s.db == nil {
+		return "", false, errors.New("QuerySymbolByLocation: nil store")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return "", false, fmt.Errorf("QuerySymbolByLocation: %w", err)
+	}
+	if latest == 0 {
+		return "", false, nil
+	}
+	const q = `
+		SELECT sym.stable_key
+		  FROM semantic_symbols AS sym
+		  JOIN semantic_files AS f
+		    ON f.snapshot_id = sym.snapshot_id AND f.file_id = sym.file_id
+		 WHERE sym.snapshot_id = ?
+		   AND f.path          = ?
+		   AND (
+		         (sym.start_line < ?) OR
+		         (sym.start_line = ? AND sym.start_col <= ?)
+		       )
+		   AND (
+		         (sym.end_line > ?) OR
+		         (sym.end_line = ? AND sym.end_col >= ?)
+		       )
+		 ORDER BY (sym.end_byte - sym.start_byte) ASC
+		 LIMIT 1
+	`
+	var stableKey string
+	err = s.db.QueryRowContext(ctx, q,
+		latest, path,
+		line, line, col,
+		line, line, col,
+	).Scan(&stableKey)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("QuerySymbolByLocation(%q, %q, %d:%d): %w",
+			repoID, path, line, col, err)
+	}
+	return stableKey, true, nil
+}
+
+// QueryNodeIDByStableKey resolves stable_key → graph.NodeID (=symbol_id) at
+// the latest committed snapshot for repoID. Returns (0, false, nil) on miss
+// (or when no committed snapshot exists).
+//
+// Phase 65 65-11 Task 1: paired with QuerySymbolByLocation to drive
+// integSemanticLookup.ExpandFrom's BFS — start nodes are stable_keys, the
+// adjacency map is keyed on graph.NodeID.
+func (s *Store) QueryNodeIDByStableKey(ctx context.Context, repoID, stableKey string) (uint64, bool, error) {
+	if s == nil || s.db == nil {
+		return 0, false, errors.New("QueryNodeIDByStableKey: nil store")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return 0, false, fmt.Errorf("QueryNodeIDByStableKey: %w", err)
+	}
+	if latest == 0 {
+		return 0, false, nil
+	}
+	const q = `
+		SELECT symbol_id FROM semantic_symbols
+		 WHERE snapshot_id = ? AND stable_key = ?
+		 LIMIT 1
+	`
+	var symID uint64
+	if err := s.db.QueryRowContext(ctx, q, latest, stableKey).Scan(&symID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("QueryNodeIDByStableKey(%q, %q): %w", repoID, stableKey, err)
+	}
+	return symID, true, nil
+}
+
+// QueryStableKeyByNodeID resolves graph.NodeID (=symbol_id) → stable_key at
+// the latest committed snapshot for repoID. Returns ("", false, nil) on miss
+// (or when no committed snapshot exists). Inverse of QueryNodeIDByStableKey.
+//
+// Phase 65 65-11 Task 1: ExpandFrom's BFS materializes []integ.Impact whose
+// SymbolID field is a stable_key; the adjacency frontier is keyed on
+// graph.NodeID, so this is the per-step translation.
+func (s *Store) QueryStableKeyByNodeID(ctx context.Context, repoID string, nodeID uint64) (string, bool, error) {
+	if s == nil || s.db == nil {
+		return "", false, errors.New("QueryStableKeyByNodeID: nil store")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return "", false, fmt.Errorf("QueryStableKeyByNodeID: %w", err)
+	}
+	if latest == 0 {
+		return "", false, nil
+	}
+	const q = `
+		SELECT stable_key FROM semantic_symbols
+		 WHERE snapshot_id = ? AND symbol_id = ?
+		 LIMIT 1
+	`
+	var sk string
+	if err := s.db.QueryRowContext(ctx, q, latest, nodeID).Scan(&sk); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("QueryStableKeyByNodeID(%q, %d): %w", repoID, nodeID, err)
+	}
+	return sk, true, nil
+}
+
 // IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 // in stable symbol_id ASC order, invoking fn(row). If fn returns false,
 // iteration aborts cleanly without error. Honors ctx cancellation via the

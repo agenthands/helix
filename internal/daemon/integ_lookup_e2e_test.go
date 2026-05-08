@@ -396,8 +396,11 @@ func stampFixtureScoresAndEdges(
 	confFrom, confTo := nodeIDFromMeta(syms["confirmed_edge_from"]), nodeIDFromMeta(syms["confirmed_edge_to"])
 	refFrom, refTo := nodeIDFromMeta(syms["refuted_edge_from"]), nodeIDFromMeta(syms["refuted_edge_to"])
 
-	confirmedEdgeKind := "CALLS"
-	refutedEdgeKind := "CALLS"
+	// EdgeKind aligns with the rank-scheduler projection ("call_graph"),
+	// matching the QueryEffectiveAdjacency filter used by ExpandFrom.
+	// Phase 65 65-11 Task 2 (Rule 3 deviation, see SUMMARY).
+	confirmedEdgeKind := "call_graph"
+	refutedEdgeKind := "call_graph"
 
 	edgeRows := []semanticstore.EdgeRow{
 		{
@@ -438,7 +441,7 @@ func stampFixtureScoresAndEdges(
 		edgeRows = append(edgeRows, semanticstore.EdgeRow{
 			SrcNodeID:       from,
 			DstNodeID:       to,
-			EdgeKind:        "CALLS",
+			EdgeKind:        "call_graph",
 			Source:          "lsp.callHierarchy",
 			Confidence:      0.95,
 			Weight:          0.5,
@@ -615,11 +618,12 @@ func TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore(t *testing.T) {
 	}
 }
 
-// TestIntegSemanticLookup_E2E_SymbolID_RealStore — PENDING 65-11. Once 65-11
-// wires the canonical symbol-id reader, SymbolID(ctx, ws, path, line, col)
-// must return a non-empty integ.SymbolID matching syms[canonical].
+// TestIntegSemanticLookup_E2E_SymbolID_RealStore — Phase 65 65-11 GREEN gate.
+// Drives SymbolID(ctx, ws, path, line, col) for a known fixture entry
+// (confirmed_edge_from = file 0, sym 0) and asserts the returned SymbolID is
+// the one the BL-A canonical-key contract publishes (the fixture's symbol
+// stable_key, since SymbolID == stable_key at the integ boundary).
 func TestIntegSemanticLookup_E2E_SymbolID_RealStore(t *testing.T) {
-	t.Skipf("PENDING 65-11 — integSemanticLookup.SymbolID is a stub returning ErrNoSnapshot.")
 	lookup, ws, _, syms, cleanup := newE2EIntegLookup(t)
 	defer cleanup()
 	pick := syms["confirmed_edge_from"]
@@ -628,28 +632,44 @@ func TestIntegSemanticLookup_E2E_SymbolID_RealStore(t *testing.T) {
 		t.Fatalf("SymbolID: %v", err)
 	}
 	if got == "" {
-		t.Fatalf("SymbolID: got empty, want %q", pick.SymbolID)
+		t.Fatalf("SymbolID: got empty, want a stable_key matching pick.StableKey=%q", pick.StableKey)
 	}
-	if got != pick.SymbolID {
-		t.Errorf("SymbolID: got %q, want %q", got, pick.SymbolID)
+	if string(got) != pick.StableKey {
+		t.Errorf("SymbolID: got %q, want %q (stable_key surface)", got, pick.StableKey)
 	}
 }
 
-// TestIntegSemanticLookup_E2E_ExpandFrom_RealStore — PENDING 65-11. Once
-// 65-11 wires BFS over QueryEffectiveAdjacency, ExpandFrom(ctx, ws,
-// knownSym, 2) must return non-empty []integ.Impact (the fixture commits
-// >= 5 edges).
+// TestIntegSemanticLookup_E2E_ExpandFrom_RealStore — Phase 65 65-11 GREEN gate.
+// Drives ExpandFrom for a known seed (confirmed_edge_from) at depth=2 and
+// asserts the BFS returns non-empty []integ.Impact backed by the canonical
+// confirmable + filler edges committed by the fixture. Each impact must carry
+// a Phase 62 closed-ladder confidence and a non-empty stable_key SymbolID.
 func TestIntegSemanticLookup_E2E_ExpandFrom_RealStore(t *testing.T) {
-	t.Skipf("PENDING 65-11 — integSemanticLookup.ExpandFrom is a stub returning ErrNoSnapshot.")
 	lookup, ws, _, syms, cleanup := newE2EIntegLookup(t)
 	defer cleanup()
 	root := syms["confirmed_edge_from"]
-	imps, err := lookup.ExpandFrom(context.Background(), ws, root.SymbolID, 2)
+	// SymbolID at the integ boundary IS the stable_key (Phase 65 65-11 contract).
+	rootSym := integ.SymbolID(root.StableKey)
+	imps, err := lookup.ExpandFrom(context.Background(), ws, rootSym, 2)
 	if err != nil {
 		t.Fatalf("ExpandFrom: %v", err)
 	}
 	if len(imps) == 0 {
 		t.Fatalf("ExpandFrom: empty frontier; fixture has >= 5 edges so depth=2 must yield >= 1 impact")
+	}
+	// Phase 62 confidence ladder (closed values: 1.00 / 0.95 / 0.80 / 0.70 / 0.45).
+	allowed := map[float64]bool{1.00: true, 0.95: true, 0.80: true, 0.70: true, 0.45: true}
+	for i, im := range imps {
+		if im.SymbolID == "" {
+			t.Errorf("imps[%d].SymbolID is empty (must be a stable_key)", i)
+		}
+		if !allowed[im.Confidence] {
+			t.Errorf("imps[%d].Confidence = %g; want one of the Phase 62 closed-ladder values (1.00 / 0.95 / 0.80 / 0.70 / 0.45)",
+				i, im.Confidence)
+		}
+		if im.EdgeKind == "" {
+			t.Errorf("imps[%d].EdgeKind is empty; want \"calls\" or similar", i)
+		}
 	}
 }
 

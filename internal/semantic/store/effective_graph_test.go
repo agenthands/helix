@@ -921,3 +921,66 @@ func TestStore_QueryStableKeyByNodeID_HitAndMiss(t *testing.T) {
 		t.Errorf("got=(%q, %v), want (\"\", false) for unknown node id", got, ok)
 	}
 }
+
+// --- Phase 65 65-12 Task 1: QuerySymbolLocationByStableKey ---
+
+// Test 9a: hit — stable_key resolves to (path, start_line, start_col).
+func TestStore_QuerySymbolLocationByStableKey_Hit(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-9a"
+	const snap uint64 = 9001
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 9001, repoID,
+		"src/loc.go", "Locator", "loc-stable-key",
+		42, 7, 60, 1)
+
+	path, line, col, ok, err := s.QuerySymbolLocationByStableKey(ctx, repoID, "loc-stable-key")
+	if err != nil {
+		t.Fatalf("QuerySymbolLocationByStableKey: %v", err)
+	}
+	if !ok {
+		t.Fatalf("got ok=false, want true on stable-key hit")
+	}
+	if path != "src/loc.go" {
+		t.Errorf("path: got %q, want %q", path, "src/loc.go")
+	}
+	if line != 42 {
+		t.Errorf("line: got %d, want 42", line)
+	}
+	if col != 7 {
+		t.Errorf("col: got %d, want 7", col)
+	}
+}
+
+// Test 9b: miss — unknown stable_key returns ("", 0, 0, false, nil).
+func TestStore_QuerySymbolLocationByStableKey_Miss(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-9b"
+	const snap uint64 = 9002
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 9002, repoID,
+		"src/loc.go", "Locator", "loc-stable-key",
+		10, 1, 20, 1)
+
+	path, line, col, ok, err := s.QuerySymbolLocationByStableKey(ctx, repoID, "no-such-key")
+	if err != nil {
+		t.Fatalf("QuerySymbolLocationByStableKey: %v", err)
+	}
+	if ok || path != "" || line != 0 || col != 0 {
+		t.Errorf("got=(%q, %d, %d, %v), want (\"\", 0, 0, false) for unknown key",
+			path, line, col, ok)
+	}
+}
+
+// Test 9c: no committed snapshot — clean miss, no error.
+func TestStore_QuerySymbolLocationByStableKey_NoCommittedSnapshot(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	path, line, col, ok, err := s.QuerySymbolLocationByStableKey(ctx, "r-never-opened", "any-key")
+	if err != nil {
+		t.Fatalf("QuerySymbolLocationByStableKey: %v", err)
+	}
+	if ok || path != "" || line != 0 || col != 0 {
+		t.Errorf("got=(%q, %d, %d, %v), want (\"\", 0, 0, false) when no committed snapshot",
+			path, line, col, ok)
+	}
+}

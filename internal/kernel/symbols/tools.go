@@ -669,7 +669,22 @@ func registerAnalyzeBlastRadius(
 			return textResult(string(out)), nil, nil
 		}
 
-		impacts, semSrc, semReason, semGraphVersion, expandErr := analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym)
+		// Phase 65 65-12 Task 2: build the kernel-side lspProbeFn closure.
+		// The closure captures the orchestrator-held lease + lookup.LocateSymbol
+		// and feeds them to lspProbeForEdges, which performs the Pass-2 LSP
+		// probe directly on the lease (daemon-side ValidateCriticalEdges is
+		// a permanent passthrough — no LSP traffic).
+		lspProbeFn := func(probeCtx context.Context, edges []integ.Edge) []integ.ValidatedEdge {
+			locator := func(s integ.SymbolID) (string, uint32, uint32, bool) {
+				p, l, c, ok, _ := lookup.LocateSymbol(probeCtx, ws, s)
+				return p, l, c, ok
+			}
+			probe := func(pCtx context.Context, uri string, line, col int) ([]SymbolLocation, error) {
+				return FindReferences(pCtx, lease, uri, line, col, false)
+			}
+			return lspProbeForEdges(probeCtx, edges, locator, probe, rt.Key().RepoRoot)
+		}
+		impacts, semSrc, semReason, semGraphVersion, expandErr := analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym, lspProbeFn)
 		if expandErr != nil {
 			// Pass 1 error: drop to LSP fallback with the classified reason.
 			br, lspErr := AnalyzeBlastRadius(ctx, lease, uri, lspLine, lspCol)

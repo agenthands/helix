@@ -191,6 +191,9 @@ func (f *fakeSemLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Wor
 func (f *fakeSemLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (integ.SemanticStatus, error) {
 	return integ.SemanticStatus{}, integ.ErrIndexErrored
 }
+func (f *fakeSemLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (string, uint32, uint32, bool, error) {
+	return "", 0, 0, false, integ.ErrIndexErrored
+}
 
 // fakeCfgGate matches the production daemonCfgGate shape.
 type fakeCfgGate struct{ enabled bool }

@@ -72,6 +72,11 @@ func (f *fakeLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Worksp
 func (f *fakeLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (integ.SemanticStatus, error) {
 	return f.status, nil
 }
+func (f *fakeLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (string, uint32, uint32, bool, error) {
+	// Phase 65 65-12 Task 1: repomap tests never drive the kernel-side
+	// blast-radius LSP probe; surface a clean miss.
+	return "", 0, 0, false, nil
+}
 
 // fakeCfg is the test ConfigGate double (matches the production daemonCfgGate
 // shape). semanticIndexEnabled drives the priority-ladder gate.

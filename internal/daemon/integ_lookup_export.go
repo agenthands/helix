@@ -1,24 +1,28 @@
-// integ_lookup_export_for_test.go — Phase 65 65-09 / WR-6 / BL-A
-// test-only constructors + exported FixtureSymbolMeta type.
+// integ_lookup_export.go — Phase 65 65-09 / WR-6 / BL-A test-fixture
+// constructors + exported FixtureSymbolMeta type.
 //
-// Naming: this file uses the `_test.go` suffix in `package daemon` (NOT
-// `package daemon_test`). Per the standard Go build convention, files
-// named `*_test.go` are compiled into test binaries only — never into
-// production binaries. No build tag is needed; no production leakage
-// occurs.
+// Phase 65 65-12 deviation note (Rule 3): the file was originally named
+// integ_lookup_export_for_test.go (with the `_test.go` suffix to
+// guarantee exclusion from production binaries). 65-12 BL-1 surfaced
+// that Go's test-binary visibility rule prevents cross-package
+// consumption of `_test.go` symbols (the test binary for package
+// internal/kernel/symbols cannot see daemon's `*_test.go` symbols).
+// To preserve the BL-A cross-package access seam contract, the file
+// was renamed (no `_test.go` suffix) and now lives in the regular
+// build set. The constructor names (NewIntegSemanticLookupForTest,
+// NewE2EIntegLookupForTest, FixtureSymbolMeta) make their
+// test-fixture intent unambiguous; nothing in production code (any
+// non-test daemon source) calls them.
 //
-// Cross-package consumers:
+// Cross-package consumers (now actually working post-65-12):
 //   - internal/skill/semantic/integration_test.go
 //     (TestE2E_StranglerFig_ProductionAdapter_SourceSemantic, 65-12 Task 4)
 //     uses NewIntegSemanticLookupForTest with its own caller-built store.
-//   - internal/kernel/symbols/blast_radius_strangler_test.go
+//   - internal/kernel/symbols/bl1_blast_radius_e2e_test.go
 //     (TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder, 65-12 Task 2
 //     BL-1) uses NewE2EIntegLookupForTest with the fully-populated
 //     fixture so every argument to the kernel-side BL-1 test sources
 //     from the canonical syms map.
-//
-// The standard build never sees these symbols (file excluded from non-
-// test builds).
 //
 // Plan-vs-tree drift note: the plan referred to FixtureSymbolMeta.EdgeID
 // as type integ.EdgeID, but no such type exists in the integ package

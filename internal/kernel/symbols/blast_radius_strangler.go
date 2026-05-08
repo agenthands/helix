@@ -42,6 +42,7 @@ import (
 
 	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // blastRadiusExpansionDepth is the depth bound passed to lookup.ExpandFrom.
@@ -83,14 +84,24 @@ const fallbackConfidenceCap = 0.6
 // Status errors are non-fatal — the orchestrator returns graphVersion=0 and
 // lets the envelope omit the field via integ.MarshalEnvelope's omitempty.
 //
-// Signature stays single-arg per WR-5: no lspProbeFn parameter (that lands
-// in 65-12 Task 2 which migrates the orchestrator to the LSP-validation
-// arm).
+// Phase 65 65-12 Task 2 architectural decision: the daemon-side
+// integSemanticLookup.ValidateCriticalEdges is now a permanent passthrough
+// (returns input edges with LSPConfirmed=false, no LSP traffic). The
+// kernel-side analyzeBlastRadiusViaLookup orchestrator performs the
+// Pass-2 LSP probe directly via FindReferences using the lease the caller
+// holds. Concrete wiring lives in registerAnalyzeBlastRadius (tools.go).
+//
+// lspProbeFn is the kernel-side Pass-2 probe. When non-nil,
+// analyzeBlastRadiusViaLookup invokes it INSTEAD of
+// lookup.ValidateCriticalEdges. nil → falls through to the legacy
+// lookup.ValidateCriticalEdges path which test fakes (matrixLookup,
+// fakeLookup) still drive verdicts through.
 func analyzeBlastRadiusViaLookup(
 	ctx context.Context,
 	lookup integ.SemanticLookup,
 	ws workspace.WorkspaceKey,
 	sym integ.SymbolID,
+	lspProbeFn func(context.Context, []integ.Edge) []integ.ValidatedEdge,
 ) ([]integ.Impact, integ.Source, integ.FallbackReason, uint64, error) {
 	// Pass 1: persisted-graph expansion. Cheap, depth-bounded.
 	impacts, err := lookup.ExpandFrom(ctx, ws, sym, blastRadiusExpansionDepth)
@@ -106,13 +117,25 @@ func analyzeBlastRadiusViaLookup(
 	// Pass 2: filter critical edges, run the LSP probe.
 	critical := filterCritical(impactsCopy)
 	if len(critical) > 0 {
-		verdicts, vErr := lookup.ValidateCriticalEdges(ctx, ws, edgesOf(critical))
-		if vErr == nil {
-			applyValidationVerdicts(impactsCopy, verdicts)
+		var verdicts []integ.ValidatedEdge
+		if lspProbeFn != nil {
+			// Kernel-side probe (Phase 65 65-12). Daemon-side
+			// ValidateCriticalEdges is a no-op passthrough; production
+			// callers route through this closure built by
+			// registerAnalyzeBlastRadius.
+			verdicts = lspProbeFn(ctx, edgesOf(critical))
+		} else {
+			// Legacy / test-fake path: lookup (e.g., matrixLookup) drives
+			// real verdicts. Preserves the pre-65-12 semantic for any
+			// test that still exercises the orchestrator with a fake
+			// SemanticLookup whose ValidateCriticalEdges returns
+			// LSPConfirmed=true synthetic results.
+			v, vErr := lookup.ValidateCriticalEdges(ctx, ws, edgesOf(critical))
+			if vErr == nil {
+				verdicts = v
+			}
 		}
-		// vErr non-nil → leave Pass 1 confidences; the LSP probe is unavailable
-		// but the persisted graph is the canonical answer at this point.
-		// Caller still reports source=semantic.
+		applyValidationVerdicts(impactsCopy, verdicts)
 	}
 
 	// WR-03: thread graph_version through to the envelope. Single Status
@@ -123,6 +146,91 @@ func analyzeBlastRadiusViaLookup(
 		graphVersion = status.GraphVersion
 	}
 	return impactsCopy, integ.SourceSemantic, "", graphVersion, nil
+}
+
+// lspProbeForEdges runs the kernel-side Pass-2 LSP probe over a slice of
+// edges. For each edge, it (a) resolves edge.From's (path, line, col) via
+// the locator closure, (b) calls probeFn(uri, line, col) — typically
+// FindReferences against the orchestrator-held lease — and (c) confirms
+// the edge if any returned SymbolLocation overlaps edge.To's location
+// (resolved via the same locator). Edges whose locator misses or whose
+// probe returns no overlap are returned with LSPConfirmed=false (refuted).
+//
+// The locator is typically lookup.LocateSymbol bound to ctx + ws; the
+// probeFn is typically a closure over the orchestrator's lease that
+// invokes FindReferences.
+//
+// Phase 65 65-12 Task 2.
+func lspProbeForEdges(
+	ctx context.Context,
+	edges []integ.Edge,
+	locator func(integ.SymbolID) (path string, line, col uint32, ok bool),
+	probeFn func(ctx context.Context, uri string, line, col int) ([]SymbolLocation, error),
+	repoRoot string,
+) []integ.ValidatedEdge {
+	out := make([]integ.ValidatedEdge, 0, len(edges))
+	for _, e := range edges {
+		// Resolve From → query coordinates. Miss on either endpoint refutes
+		// the edge — the kernel-side probe cannot validate an edge whose
+		// endpoints the persisted graph cannot locate.
+		fromPath, fromLine, fromCol, fromOK := locator(e.From)
+		toPath, toLine, toCol, toOK := locator(e.To)
+		if !fromOK || !toOK {
+			out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: false})
+			continue
+		}
+		// LSP coordinates are 0-based; locator returns 1-based per the
+		// SemanticLookup.LocateSymbol contract.
+		fromURI := pathToURI(repoRoot, fromPath)
+		toURI := pathToURI(repoRoot, toPath)
+		lspLine, lspCol := userPosToLSP(int(fromLine), int(fromCol))
+		locs, err := probeFn(ctx, fromURI, lspLine, lspCol)
+		if err != nil {
+			// Probe error — refute this edge but keep going. The
+			// orchestrator-level Pass-2 contract is that probe errors are
+			// non-fatal; the caller still reports source=semantic and the
+			// per-edge verdict captures the unconfirmed state.
+			out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: false})
+			continue
+		}
+		// Check if any returned location overlaps edge.To's coordinates.
+		// Target line/col are 1-based; LSP locations are 0-based.
+		toLineLSP := uint32(0)
+		if toLine > 0 {
+			toLineLSP = toLine - 1
+		}
+		toColLSP := uint32(0)
+		if toCol > 0 {
+			toColLSP = toCol - 1
+		}
+		confirmed := false
+		for _, loc := range locs {
+			if loc.URI != toURI {
+				continue
+			}
+			if rangeOverlaps(loc.Range, toLineLSP, toColLSP) {
+				confirmed = true
+				break
+			}
+		}
+		out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: confirmed})
+	}
+	return out
+}
+
+// rangeOverlaps reports whether the LSP Range contains the (line, col)
+// position. Both inputs are 0-based. Ranges are half-open [start, end).
+func rangeOverlaps(r gen.Range, line, col uint32) bool {
+	if line < r.Start.Line || line > r.End.Line {
+		return false
+	}
+	if line == r.Start.Line && col < r.Start.Character {
+		return false
+	}
+	if line == r.End.Line && col > r.End.Character {
+		return false
+	}
+	return true
 }
 
 // filterCritical returns the subset of impacts whose Pass-2 LSP probe

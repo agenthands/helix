@@ -26,6 +26,7 @@ package symbols
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
+	gen "github.com/agenthands/helix/protocol/gen"
 )
 
 // fakeLookup is a hand-rolled SemanticLookup test double mirroring the
@@ -47,6 +49,9 @@ type fakeLookup struct {
 	validateRes  []integ.ValidatedEdge
 	validateErr  error
 	status       integ.SemanticStatus
+	// locate is the optional LocateSymbol hook (Phase 65 65-12 Task 1).
+	// nil → returns ("", 0, 0, false, nil); non-nil → invoked verbatim.
+	locate func(integ.SymbolID) (string, uint32, uint32, bool, error)
 }
 
 func (f *fakeLookup) Available() bool { return f.available }
@@ -80,6 +85,18 @@ func (f *fakeLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Worksp
 }
 func (f *fakeLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (integ.SemanticStatus, error) {
 	return f.status, nil
+}
+func (f *fakeLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, sym integ.SymbolID) (string, uint32, uint32, bool, error) {
+	// Phase 65 65-12 Task 2: existing orchestrator tests never call
+	// LocateSymbol (they use lspProbeFn=nil). The new accumulator test
+	// for lspProbeForEdges injects locateFn directly; this stub exists
+	// purely to satisfy the interface. Returns a clean miss so the
+	// kernel-side probe — if ever wired to this fake — drops every
+	// edge as Refuted, which the new tests assert.
+	if locFn := f.locate; locFn != nil {
+		return locFn(sym)
+	}
+	return "", 0, 0, false, nil
 }
 
 // fakeCfg is the test ConfigGate double matching the production daemonCfgGate.
@@ -164,7 +181,11 @@ func TestAnalyzeBlastRadius_SemanticTwoPass(t *testing.T) {
 		validateRes:  pass2,
 	}
 
-	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	// Phase 65 65-12 Task 2 BL-3 migration: pass nil lspProbeFn so the
+// orchestrator falls back to lookup.ValidateCriticalEdges — preserves
+// the legacy semantic exercised by the matrix test fakes (matrixLookup,
+// fakeLookup) which still drive synthetic verdicts.
+impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"), nil)
 	require.NoError(t, err)
 	assert.Equal(t, integ.SourceSemantic, src)
 	assert.Empty(t, string(reason))
@@ -264,7 +285,11 @@ func TestAnalyzeBlastRadius_Pass1Error_FallsBackToLSP(t *testing.T) {
 		expandErr: integ.ErrIndexBuilding,
 	}
 
-	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	// Phase 65 65-12 Task 2 BL-3 migration: pass nil lspProbeFn so the
+// orchestrator falls back to lookup.ValidateCriticalEdges — preserves
+// the legacy semantic exercised by the matrix test fakes (matrixLookup,
+// fakeLookup) which still drive synthetic verdicts.
+impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"), nil)
 	require.Error(t, err, "Pass 1 ExpandFrom error MUST surface as the function error so caller can drop to LSP")
 	assert.Equal(t, integ.SourceFallback, src)
 	assert.Equal(t, integ.FallbackReasonIndexBuilding, reason,
@@ -314,7 +339,11 @@ func TestAnalyzeBlastRadius_Pass2Error_KeepsPass1(t *testing.T) {
 		validateErr:  errStub("network error"),
 	}
 
-	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	// Phase 65 65-12 Task 2 BL-3 migration: pass nil lspProbeFn so the
+// orchestrator falls back to lookup.ValidateCriticalEdges — preserves
+// the legacy semantic exercised by the matrix test fakes (matrixLookup,
+// fakeLookup) which still drive synthetic verdicts.
+impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"), nil)
 	require.NoError(t, err, "Pass 2 LSP error is non-fatal — Pass 1 still trusted")
 	assert.Equal(t, integ.SourceSemantic, src,
 		"Pass 2 error MUST keep source=semantic — Pass 1 result is the canonical answer")
@@ -488,4 +517,240 @@ func TestApplyValidationVerdicts_NoMutation(t *testing.T) {
 	// The ORIGINAL Pass 1 slice retains the pre-mutation confidence.
 	assert.Equal(t, originalConf, pass1[0].Confidence,
 		"original Pass 1 slice MUST be untouched (Pitfall §6 copy-before-mutate)")
+}
+
+// ---------------------------------------------------------------------------
+// 8. lspProbeForEdges — Phase 65 65-12 Task 2 kernel-side LSP probe.
+// ---------------------------------------------------------------------------
+
+// lspProbeFixture wires a synthetic locator + probeFn for the unit tests:
+// the locator is a static map sym → (path, line, col); probeFn is a static
+// map (uri, line, col) → []SymbolLocation OR an injected error.
+type lspProbeFixture struct {
+	t          *testing.T
+	locations  map[integ.SymbolID]struct{ Path string; Line, Col uint32 }
+	probeFn    func(ctx context.Context, uri string, line, col int) ([]SymbolLocation, error)
+}
+
+func (f *lspProbeFixture) locator(sym integ.SymbolID) (string, uint32, uint32, bool) {
+	loc, ok := f.locations[sym]
+	if !ok {
+		return "", 0, 0, false
+	}
+	return loc.Path, loc.Line, loc.Col, true
+}
+
+// TestLspProbeForEdges_ConfirmsRealEdge — happy path: probeFn returns a
+// SymbolLocation overlapping edge.To's coordinates → LSPConfirmed=true.
+func TestLspProbeForEdges_ConfirmsRealEdge(t *testing.T) {
+	repoRoot := "/repo"
+	edge := integ.Edge{From: "from-sym", To: "to-sym", Kind: "calls"}
+	fix := &lspProbeFixture{
+		t: t,
+		locations: map[integ.SymbolID]struct{ Path string; Line, Col uint32 }{
+			"from-sym": {Path: "src/from.go", Line: 5, Col: 1},
+			"to-sym":   {Path: "src/to.go", Line: 10, Col: 2},
+		},
+		probeFn: func(_ context.Context, uri string, line, col int) ([]SymbolLocation, error) {
+			// Returns a single location that overlaps edge.To (line 10 col 2 → LSP 9, 1).
+			return []SymbolLocation{{
+				URI: pathToURI(repoRoot, "src/to.go"),
+				Range: gen.Range{
+					Start: gen.Position{Line: 9, Character: 1},
+					End:   gen.Position{Line: 9, Character: 5},
+				},
+			}}, nil
+		},
+	}
+	out := lspProbeForEdges(context.Background(), []integ.Edge{edge}, fix.locator, fix.probeFn, repoRoot)
+	require.Len(t, out, 1)
+	assert.True(t, out[0].LSPConfirmed, "edge whose probe returns an overlapping location MUST be confirmed")
+	assert.Equal(t, edge, out[0].Edge)
+}
+
+// TestLspProbeForEdges_RefutesMissingEdge — probeFn returns no locations →
+// LSPConfirmed=false.
+func TestLspProbeForEdges_RefutesMissingEdge(t *testing.T) {
+	repoRoot := "/repo"
+	edge := integ.Edge{From: "from-sym", To: "to-sym", Kind: "calls"}
+	fix := &lspProbeFixture{
+		t: t,
+		locations: map[integ.SymbolID]struct{ Path string; Line, Col uint32 }{
+			"from-sym": {Path: "src/from.go", Line: 5, Col: 1},
+			"to-sym":   {Path: "src/to.go", Line: 10, Col: 2},
+		},
+		probeFn: func(_ context.Context, _ string, _, _ int) ([]SymbolLocation, error) {
+			return nil, nil
+		},
+	}
+	out := lspProbeForEdges(context.Background(), []integ.Edge{edge}, fix.locator, fix.probeFn, repoRoot)
+	require.Len(t, out, 1)
+	assert.False(t, out[0].LSPConfirmed, "edge whose probe returns no locations MUST be refuted")
+}
+
+// TestLspProbeForEdges_LocatorMissReturnsRefuted — locator misses on either
+// endpoint → edge is refuted without invoking probeFn.
+func TestLspProbeForEdges_LocatorMissReturnsRefuted(t *testing.T) {
+	repoRoot := "/repo"
+	edge := integ.Edge{From: "missing-sym", To: "to-sym", Kind: "calls"}
+	called := false
+	fix := &lspProbeFixture{
+		t: t,
+		locations: map[integ.SymbolID]struct{ Path string; Line, Col uint32 }{
+			"to-sym": {Path: "src/to.go", Line: 10, Col: 2},
+		},
+		probeFn: func(_ context.Context, _ string, _, _ int) ([]SymbolLocation, error) {
+			called = true
+			return nil, nil
+		},
+	}
+	out := lspProbeForEdges(context.Background(), []integ.Edge{edge}, fix.locator, fix.probeFn, repoRoot)
+	require.Len(t, out, 1)
+	assert.False(t, out[0].LSPConfirmed, "edge whose endpoint locator misses MUST be refuted")
+	assert.False(t, called, "probeFn MUST NOT be invoked when the locator misses")
+}
+
+// TestLspProbeForEdges_FindReferencesErrorReturnsRefuted — probeFn errors →
+// LSPConfirmed=false, no fatal return.
+func TestLspProbeForEdges_FindReferencesErrorReturnsRefuted(t *testing.T) {
+	repoRoot := "/repo"
+	edge := integ.Edge{From: "from-sym", To: "to-sym", Kind: "calls"}
+	fix := &lspProbeFixture{
+		t: t,
+		locations: map[integ.SymbolID]struct{ Path string; Line, Col uint32 }{
+			"from-sym": {Path: "src/from.go", Line: 5, Col: 1},
+			"to-sym":   {Path: "src/to.go", Line: 10, Col: 2},
+		},
+		probeFn: func(_ context.Context, _ string, _, _ int) ([]SymbolLocation, error) {
+			return nil, errors.New("probe error")
+		},
+	}
+	out := lspProbeForEdges(context.Background(), []integ.Edge{edge}, fix.locator, fix.probeFn, repoRoot)
+	require.Len(t, out, 1)
+	assert.False(t, out[0].LSPConfirmed, "edge whose probe errored MUST be refuted (non-fatal)")
+}
+
+// TestLspProbeForEdges_AccumulatorSemantics — Phase 65 65-12 Task 2 BL-3
+// regression: ensures the WR-05 accumulator semantics from 65-11
+// (a single refutation taints the impact regardless of confirmations on
+// sibling edges) ALSO fire when verdicts come from lspProbeFn (the
+// kernel-side path) — not just from lookup.ValidateCriticalEdges. The
+// existing TestApplyValidationVerdicts_RefutationTaintsRegardlessOfConfirmation
+// guards the verdict applier; this test guards the kernel-side probe →
+// applier path.
+func TestLspProbeForEdges_AccumulatorSemantics(t *testing.T) {
+	repoRoot := "/repo"
+
+	edgeConfirmed := integ.Edge{From: "src", To: "tgt-A", Kind: "calls", Confidence: 0.45}
+	edgeRefuted := integ.Edge{From: "src", To: "tgt-B", Kind: "calls", Confidence: 0.45}
+
+	fix := &lspProbeFixture{
+		t: t,
+		locations: map[integ.SymbolID]struct{ Path string; Line, Col uint32 }{
+			"src":   {Path: "src/from.go", Line: 5, Col: 1},
+			"tgt-A": {Path: "src/a.go", Line: 10, Col: 2},
+			"tgt-B": {Path: "src/b.go", Line: 20, Col: 4},
+		},
+		probeFn: func(_ context.Context, uri string, _, _ int) ([]SymbolLocation, error) {
+			// Always return a hit overlapping tgt-A but NEVER overlapping tgt-B.
+			// The probe is fired once per edge with edge.From's coords; the
+			// fixture's locations map reads back tgt-A from src/a.go.
+			//
+			// Since lspProbeForEdges issues the probe with edge.From's URI
+			// (which is the same src/from.go for both edges), we return
+			// locations covering tgt-A's coordinates — confirming the first
+			// edge — but NOT tgt-B's, so the second is refuted.
+			_ = uri // both edges share the same From URI
+			return []SymbolLocation{{
+				URI: pathToURI(repoRoot, "src/a.go"),
+				Range: gen.Range{
+					Start: gen.Position{Line: 9, Character: 1},
+					End:   gen.Position{Line: 9, Character: 5},
+				},
+			}}, nil
+		},
+	}
+	verdicts := lspProbeForEdges(context.Background(),
+		[]integ.Edge{edgeConfirmed, edgeRefuted}, fix.locator, fix.probeFn, repoRoot)
+	require.Len(t, verdicts, 2)
+	require.True(t, verdicts[0].LSPConfirmed, "edge[0] (tgt-A) must be confirmed by the synthetic probe")
+	require.False(t, verdicts[1].LSPConfirmed, "edge[1] (tgt-B) must be refuted (no overlap)")
+
+	impacts := []integ.Impact{
+		{
+			SymbolID:   "tgt-multi",
+			Confidence: 0.45,
+			Evidence:   integ.Evidence{Edges: []integ.Edge{edgeConfirmed, edgeRefuted}},
+		},
+	}
+	applyValidationVerdicts(impacts, verdicts)
+	assert.InDelta(t, 0.20, impacts[0].Confidence, 1e-9,
+		"BL-3: a single lspProbeFn refutation MUST drop confidence to 0.20 even when sibling was confirmed")
+	assert.True(t, impacts[0].Refuted,
+		"BL-3: a single lspProbeFn refutation MUST set Refuted=true regardless of sibling confirmations")
+}
+
+// TestAnalyzeBlastRadiusViaLookup_AppliesLspProbeWhenProvided pins the
+// new orchestrator contract: when lspProbeFn != nil it is consulted
+// INSTEAD of lookup.ValidateCriticalEdges.
+func TestAnalyzeBlastRadiusViaLookup_AppliesLspProbeWhenProvided(t *testing.T) {
+	ctx := context.Background()
+	ws := workspace.WorkspaceKey{RepoRoot: "/repo", Language: "go"}
+
+	edgeA := integ.Edge{From: "src", To: "tgt-A", Kind: "calls", Confidence: 0.45}
+	pass1 := []integ.Impact{
+		{SymbolID: "tgt-A", Confidence: 0.45, Evidence: integ.Evidence{Edges: []integ.Edge{edgeA}}},
+	}
+	// validateRes returns LSPConfirmed=false — if it were consulted,
+	// confidence would NOT flip to 1.00. The lspProbeFn returns
+	// LSPConfirmed=true and MUST win.
+	lookup := &fakeLookup{
+		available:    true,
+		expandResult: pass1,
+		validateRes: []integ.ValidatedEdge{
+			{Edge: edgeA, LSPConfirmed: false},
+		},
+	}
+	probeCalled := false
+	lspProbeFn := func(_ context.Context, edges []integ.Edge) []integ.ValidatedEdge {
+		probeCalled = true
+		out := make([]integ.ValidatedEdge, len(edges))
+		for i, e := range edges {
+			out[i] = integ.ValidatedEdge{Edge: e, LSPConfirmed: true}
+		}
+		return out
+	}
+	impacts, src, _, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"), lspProbeFn)
+	require.NoError(t, err)
+	assert.Equal(t, integ.SourceSemantic, src)
+	require.True(t, probeCalled, "lspProbeFn MUST be invoked when non-nil")
+	require.Len(t, impacts, 1)
+	assert.Equal(t, 1.00, impacts[0].Confidence,
+		"lspProbeFn confirmed verdict MUST flip confidence to 1.00 (NOT 0.20 from lookup.ValidateCriticalEdges)")
+}
+
+// TestAnalyzeBlastRadiusViaLookup_FallsBackToLookupValidateWhenLspProbeNil
+// pins the legacy semantic: when lspProbeFn==nil the orchestrator still
+// consults lookup.ValidateCriticalEdges (preserves matrix-fake semantic).
+func TestAnalyzeBlastRadiusViaLookup_FallsBackToLookupValidateWhenLspProbeNil(t *testing.T) {
+	ctx := context.Background()
+	ws := workspace.WorkspaceKey{RepoRoot: "/repo", Language: "go"}
+
+	edgeA := integ.Edge{From: "src", To: "tgt-A", Kind: "calls", Confidence: 0.45}
+	pass1 := []integ.Impact{
+		{SymbolID: "tgt-A", Confidence: 0.45, Evidence: integ.Evidence{Edges: []integ.Edge{edgeA}}},
+	}
+	lookup := &fakeLookup{
+		available:    true,
+		expandResult: pass1,
+		validateRes: []integ.ValidatedEdge{
+			{Edge: edgeA, LSPConfirmed: true},
+		},
+	}
+	impacts, src, _, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"), nil)
+	require.NoError(t, err)
+	assert.Equal(t, integ.SourceSemantic, src)
+	require.Len(t, impacts, 1)
+	assert.Equal(t, 1.00, impacts[0].Confidence,
+		"nil lspProbeFn MUST fall back to lookup.ValidateCriticalEdges (legacy semantic)")
 }

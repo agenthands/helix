@@ -45,4 +45,34 @@ func TestNoopLookup_AvailableFalse(t *testing.T) {
 	if _, err := l.Status(ctx, ws); !errors.Is(err, ErrIndexErrored) {
 		t.Errorf("Status: want ErrIndexErrored, got %v", err)
 	}
+	if _, _, _, _, err := l.LocateSymbol(ctx, ws, SymbolID("s")); !errors.Is(err, ErrIndexErrored) {
+		t.Errorf("LocateSymbol: want ErrIndexErrored, got %v", err)
+	}
+}
+
+// TestNoopLookup_LocateSymbol_ReturnsErrIndexErrored pins Phase 65 65-12 Task 1
+// — the NoopLookup default surfaces an ErrIndexErrored on LocateSymbol so the
+// kernel-side analyze_blast_radius Pass-2 probe can recognize the
+// "production lookup never wired" wiring bug and fall through to LSP fallback.
+// The (path, line, col, ok) return must all be zero-valued on the
+// ErrIndexErrored path so callers cannot accidentally consume a stale
+// location.
+func TestNoopLookup_LocateSymbol_ReturnsErrIndexErrored(t *testing.T) {
+	var l SemanticLookup = NoopLookup{}
+	path, line, col, ok, err := l.LocateSymbol(context.Background(), workspace.WorkspaceKey{}, SymbolID("anything"))
+	if !errors.Is(err, ErrIndexErrored) {
+		t.Errorf("err: want ErrIndexErrored, got %v", err)
+	}
+	if path != "" {
+		t.Errorf("path: want empty, got %q", path)
+	}
+	if line != 0 {
+		t.Errorf("line: want 0, got %d", line)
+	}
+	if col != 0 {
+		t.Errorf("col: want 0, got %d", col)
+	}
+	if ok {
+		t.Errorf("ok: want false, got true")
+	}
 }

@@ -40,6 +40,9 @@ func (availableLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Work
 func (availableLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (SemanticStatus, error) {
 	panic("availableLookup.Status not used by ChooseSource")
 }
+func (availableLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (string, uint32, uint32, bool, error) {
+	panic("availableLookup.LocateSymbol not used by ChooseSource")
+}
 
 // TestChooseSource_PriorityLadder asserts the Pitfall §3 priority ladder:
 //

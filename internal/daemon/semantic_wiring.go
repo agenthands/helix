@@ -1116,9 +1116,21 @@ func confidenceFromWeight(weight float64) float64 {
 	}
 }
 
-// ValidateCriticalEdges runs Pass 2 LSP validation. 65-03 stub returns
-// the input edges with LSPConfirmed=false (M-readtier-safe pass-through —
-// no LSP traffic, no confidence change). 65-06 ships the real validator.
+// ValidateCriticalEdges runs Pass 2 LSP validation. Phase 65 65-12 Task 2
+// architectural decision: this method is a permanent passthrough — it
+// returns the input edges with LSPConfirmed=false, without issuing any
+// LSP traffic. The Pass-2 LSP probe responsibility is moved to the
+// kernel-side analyze_blast_radius orchestrator (lspProbeForEdges in
+// internal/kernel/symbols/blast_radius_strangler.go), which uses the
+// lspool.WorkerLease the orchestrator already holds. The daemon-side
+// adapter cannot perform LSP work without either borrowing a kernel-side
+// LSP client (back-call breach) or duplicating LSP machinery on the
+// daemon side; both are M-readtier breaches.
+//
+// Test fakes (matrixLookup, fakeLookup) MAY still drive verdicts
+// directly — that path is preserved by the lspProbeFn==nil fallback in
+// analyzeBlastRadiusViaLookup. In production, lspProbeFn is always
+// non-nil, so this method is invoked but its result is discarded.
 func (l *integSemanticLookup) ValidateCriticalEdges(_ context.Context, _ workspace.WorkspaceKey, edges []integ.Edge) ([]integ.ValidatedEdge, error) {
 	if !l.Available() {
 		return nil, integ.ErrIndexErrored
@@ -1128,6 +1140,27 @@ func (l *integSemanticLookup) ValidateCriticalEdges(_ context.Context, _ workspa
 		out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: false})
 	}
 	return out, nil
+}
+
+// LocateSymbol resolves an integ.SymbolID (= the Phase 59 EXTRACT-02
+// stable_key, per 65-11 Task 2 contract) into the symbol's declaration
+// location at the latest committed snapshot. Returns
+// ("", 0, 0, false, ErrIndexErrored) on Available()==false; otherwise
+// delegates to *Store.QuerySymbolLocationByStableKey.
+//
+// Phase 65 65-12 Task 1: produced for the kernel-side analyze_blast_radius
+// Pass-2 LSP probe. The probe needs (path, line, col) per edge endpoint
+// to issue FindReferences via the orchestrator-held lease.
+func (l *integSemanticLookup) LocateSymbol(ctx context.Context, ws workspace.WorkspaceKey, sym integ.SymbolID) (string, uint32, uint32, bool, error) {
+	if !l.Available() {
+		return "", 0, 0, false, integ.ErrIndexErrored
+	}
+	repoID := ws.Hash()
+	path, line, col, ok, err := l.store.QuerySymbolLocationByStableKey(ctx, repoID, string(sym))
+	if err != nil {
+		return "", 0, 0, false, fmt.Errorf("integSemanticLookup.LocateSymbol: %w", err)
+	}
+	return path, line, col, ok, nil
 }
 
 // Status returns a closed-shape SemanticStatus. 65-03 wires every field

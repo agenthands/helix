@@ -68,6 +68,27 @@ import (
 //     server is unhealthy); the consumer caps confidence at the fallback
 //     ceiling (≤ 0.6 per D-08).
 //
+//     Phase 65 65-12 architectural note: production
+//     ValidateCriticalEdges implementations are PASSTHROUGHs (return the
+//     input edges with LSPConfirmed=false, no LSP traffic). The
+//     kernel-side analyze_blast_radius orchestrator now performs the
+//     Pass-2 LSP probe directly via FindReferences using the lease it
+//     already holds; the daemon-side adapter cannot perform LSP work
+//     without a back-call breach. Test fakes (matrixLookup,
+//     fakeLookup) may still drive verdicts directly for unit-test
+//     scenarios. See internal/kernel/symbols/blast_radius_strangler.go
+//     lspProbeFn for the kernel-side probe.
+//
+//   - LocateSymbol returns the (path, line, col) of the symbol's
+//     declaration at the latest committed snapshot. Used by the
+//     kernel-side analyze_blast_radius Pass-2 LSP probe to derive the
+//     (line, col) input for FindReferences from a stable SymbolID. line
+//     and col are 1-based. (ok=false, err=nil) on miss; (ok=false,
+//     err=non-nil) on error. (Phase 65 65-12 Task 1; closes the
+//     SymbolID-only seam previously exposed by SemanticLookup so the
+//     kernel can issue the LSP probe without re-resolving locations
+//     against the cursor coordinates.)
+//
 //   - Status returns a closed-shape snapshot of the engine state for
 //     get_health and per-call freshness reporting. Cheap (a few atomic
 //     reads + one snapshot-id read). v1.10 does not cache.
@@ -78,5 +99,6 @@ type SemanticLookup interface {
 	RankFromSeeds(ctx context.Context, ws workspace.WorkspaceKey, seeds []string) ([]RankedFile, error)
 	ExpandFrom(ctx context.Context, ws workspace.WorkspaceKey, sym SymbolID, depth int) ([]Impact, error)
 	ValidateCriticalEdges(ctx context.Context, ws workspace.WorkspaceKey, edges []Edge) ([]ValidatedEdge, error)
+	LocateSymbol(ctx context.Context, ws workspace.WorkspaceKey, sym SymbolID) (path string, line, col uint32, ok bool, err error)
 	Status(ctx context.Context, ws workspace.WorkspaceKey) (SemanticStatus, error)
 }

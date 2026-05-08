@@ -56,3 +56,10 @@ func (NoopLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Workspace
 func (NoopLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (SemanticStatus, error) {
 	return SemanticStatus{}, ErrIndexErrored
 }
+
+// LocateSymbol returns ("", 0, 0, false, ErrIndexErrored). Phase 65 65-12 Task 1
+// — the production lookup has not been wired; the kernel-side LSP probe must
+// see this as a wiring bug, not a steady-state miss.
+func (NoopLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (string, uint32, uint32, bool, error) {
+	return "", 0, 0, false, ErrIndexErrored
+}

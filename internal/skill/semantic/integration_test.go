@@ -782,6 +782,14 @@ func (m *matrixLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (inte
 	}
 	return m.status, nil
 }
+func (m *matrixLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (string, uint32, uint32, bool, error) {
+	// Phase 65 65-12 Task 1: matrix tests don't drive the kernel-side
+	// LSP probe; surface ErrIndexErrored so any accidental call stands
+	// out. The matrix exercises Source × FallbackReason at the
+	// envelope-shape boundary, never the analyze_blast_radius
+	// orchestrator's lspProbeFn.
+	return "", 0, 0, false, integ.ErrIndexErrored
+}
 
 // matrixCfg is the tiny ConfigGate test double for the matrix.
 type matrixCfg struct{ enabled bool }

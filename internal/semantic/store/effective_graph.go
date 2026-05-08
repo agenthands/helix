@@ -470,6 +470,55 @@ func (s *Store) QueryStableKeyByNodeID(ctx context.Context, repoID string, nodeI
 	return sk, true, nil
 }
 
+// QuerySymbolLocationByStableKey returns the (path, start_line, start_col)
+// of the symbol identified by stableKey at the latest committed snapshot for
+// repoID. Returns ("", 0, 0, false, nil) on miss (or when no committed
+// snapshot exists). Phase 65 65-12 Task 1 — backs the production
+// integSemanticLookup.LocateSymbol method, which the kernel-side
+// analyze_blast_radius Pass-2 LSP probe consumes to derive the (line, col)
+// input for FindReferences from a stable SymbolID.
+//
+// Returned line/col are the symbol's start coordinates, 1-based, matching
+// the LSP external surface convention used by SymbolID(). The smallest
+// inner-scope tiebreak is NOT applied here — by stable_key, every symbol is
+// uniquely identified.
+//
+// Reads under no workspace lock (scheduler_store.go:48-56).
+func (s *Store) QuerySymbolLocationByStableKey(
+	ctx context.Context, repoID, stableKey string,
+) (path string, line, col uint32, ok bool, err error) {
+	if s == nil || s.db == nil {
+		return "", 0, 0, false, errors.New("QuerySymbolLocationByStableKey: nil store")
+	}
+	latest, e := s.LatestCommittedSnapshot(ctx, repoID)
+	if e != nil {
+		return "", 0, 0, false, fmt.Errorf("QuerySymbolLocationByStableKey: %w", e)
+	}
+	if latest == 0 {
+		return "", 0, 0, false, nil
+	}
+	const q = `
+		SELECT f.path, sym.start_line, sym.start_col
+		  FROM semantic_symbols AS sym
+		  JOIN semantic_files AS f
+		    ON f.snapshot_id = sym.snapshot_id
+		   AND f.file_id     = sym.file_id
+		 WHERE sym.snapshot_id = ?
+		   AND sym.stable_key  = ?
+		 LIMIT 1
+	`
+	var startLine, startCol int
+	err = s.db.QueryRowContext(ctx, q, latest, stableKey).Scan(&path, &startLine, &startCol)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", 0, 0, false, nil
+		}
+		return "", 0, 0, false, fmt.Errorf("QuerySymbolLocationByStableKey(%q, %q): %w",
+			repoID, stableKey, err)
+	}
+	return path, uint32(startLine), uint32(startCol), true, nil
+}
+
 // IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 // in stable symbol_id ASC order, invoking fn(row). If fn returns false,
 // iteration aborts cleanly without error. Honors ctx cancellation via the

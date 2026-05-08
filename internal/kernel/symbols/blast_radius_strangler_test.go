@@ -47,6 +47,9 @@ type fakeLookup struct {
 	validateRes  []integ.ValidatedEdge
 	validateErr  error
 	status       integ.SemanticStatus
+	// locate is the optional LocateSymbol hook (Phase 65 65-12 Task 1).
+	// nil → returns ("", 0, 0, false, nil); non-nil → invoked verbatim.
+	locate func(integ.SymbolID) (string, uint32, uint32, bool, error)
 }
 
 func (f *fakeLookup) Available() bool { return f.available }
@@ -80,6 +83,18 @@ func (f *fakeLookup) ValidateCriticalEdges(_ context.Context, _ workspace.Worksp
 }
 func (f *fakeLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (integ.SemanticStatus, error) {
 	return f.status, nil
+}
+func (f *fakeLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, sym integ.SymbolID) (string, uint32, uint32, bool, error) {
+	// Phase 65 65-12 Task 2: existing orchestrator tests never call
+	// LocateSymbol (they use lspProbeFn=nil). The new accumulator test
+	// for lspProbeForEdges injects locateFn directly; this stub exists
+	// purely to satisfy the interface. Returns a clean miss so the
+	// kernel-side probe — if ever wired to this fake — drops every
+	// edge as Refuted, which the new tests assert.
+	if locFn := f.locate; locFn != nil {
+		return locFn(sym)
+	}
+	return "", 0, 0, false, nil
 }
 
 // fakeCfg is the test ConfigGate double matching the production daemonCfgGate.

@@ -1,6 +1,7 @@
 package repomap
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -137,7 +138,12 @@ func TestPipelineRanked(t *testing.T) {
 }
 
 // TestGetRepoMap_WithWorkspace verifies the full get_repo_map tool call
-// returns ranked symbols. (RMAP-06)
+// returns ranked symbols. (RMAP-06) Phase 65 65-05: result is now a JSON
+// envelope (Pitfall §2). The tree-text contract is preserved verbatim under
+// env.Tree; the surrounding envelope adds source / fallback_reason /
+// graph_version / freshness. With no SemanticLookup wired and no ConfigGate
+// (cfg==nil → SemanticIndexEnabled()==false branch), source must be
+// "tree_sitter" per D-04 / Pitfall §3.
 func TestGetRepoMap_WithWorkspace(t *testing.T) {
 	s, _ := newIntegrationSkill(t)
 
@@ -145,12 +151,22 @@ func TestGetRepoMap_WithWorkspace(t *testing.T) {
 		"token_budget": float64(4096),
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, result, "No files found", "get_repo_map should return data, not empty message")
-	assert.Contains(t, result, ".go", "output should contain Go files")
+
+	var env struct {
+		Source         string `json:"source"`
+		FallbackReason string `json:"fallback_reason,omitempty"`
+		Tree           string `json:"tree"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+	assert.NotContains(t, env.Tree, "No files found", "get_repo_map should return data, not empty message")
+	assert.Contains(t, env.Tree, ".go", "tree should contain Go files")
+	assert.Equal(t, "tree_sitter", env.Source, "no cfg gate → source==tree_sitter (D-04 / Pitfall §3)")
+	assert.Empty(t, env.FallbackReason, "tree_sitter steady state has no fallback_reason")
 }
 
 // TestGetContext_WithWorkspace verifies get_context with seed files returns
-// personalized ranked output. (RMAP-07)
+// personalized ranked output. (RMAP-07) Phase 65 65-05: result is now a JSON
+// envelope (Pitfall §2). Same JSON-wrap update as TestGetRepoMap_WithWorkspace.
 func TestGetContext_WithWorkspace(t *testing.T) {
 	s, dir := newIntegrationSkill(t)
 
@@ -163,8 +179,16 @@ func TestGetContext_WithWorkspace(t *testing.T) {
 		"token_budget": float64(4096),
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, result, "No files found", "get_context should return data")
-	assert.NotEmpty(t, result)
+
+	var env struct {
+		Source         string `json:"source"`
+		FallbackReason string `json:"fallback_reason,omitempty"`
+		Tree           string `json:"tree"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+	assert.NotContains(t, env.Tree, "No files found", "get_context should return data")
+	assert.NotEmpty(t, env.Tree)
+	assert.Equal(t, "tree_sitter", env.Source, "no cfg gate → source==tree_sitter (D-04 / Pitfall §3)")
 }
 
 // TestEnrichFromLSP_CallbackInvoked verifies the enrichFn callback is called

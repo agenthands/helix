@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/kernel/health"
 	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
@@ -72,16 +74,21 @@ func TestSemanticStoreStatus_Unhealthy(t *testing.T) {
 	}
 }
 
-// TestSemanticStoreStatus_Unhealthy_NilHandle proves the daemon-side
-// nil-handle sentinels ("DB handle nil", "store unavailable") map to the
-// "nil_handle" bucket. WR-NEW-01.
+// TestSemanticStoreStatus_Unhealthy_NilHandle proves an error wrapping
+// serr.ErrUnsupported maps to the "nil_handle" bucket. WR-NEW-01 +
+// REVIEW.md CR-02: classifier matches the sentinel via errors.Is,
+// never substring text.
 func TestSemanticStoreStatus_Unhealthy_NilHandle(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
 	}{
-		{"db_handle_nil", errors.New("semantic store DB handle nil")},
-		{"store_unavailable", errors.New("semantic store unavailable")},
+		{"sentinel_direct", serr.ErrUnsupported},
+		{"sentinel_wrapped_fmt_errorf",
+			fmt.Errorf("semantic store unavailable: %w", serr.ErrUnsupported)},
+		{"sentinel_double_wrapped",
+			fmt.Errorf("probe failed: %w",
+				fmt.Errorf("semantic store unavailable: %w", serr.ErrUnsupported))},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -94,6 +101,23 @@ func TestSemanticStoreStatus_Unhealthy_NilHandle(t *testing.T) {
 				t.Fatalf("Reason=%q, want %q", st.Reason, health.SemanticReasonNilHandle)
 			}
 		})
+	}
+}
+
+// TestSemanticStoreStatus_Unhealthy_DBErrorTextLooksLikeNilHandle is the
+// CR-02 regression guard: an error whose .Error() string contains the
+// substring "store unavailable" but does NOT wrap serr.ErrUnsupported
+// MUST classify as db_error, not nil_handle. WR-NEW-01.
+func TestSemanticStoreStatus_Unhealthy_DBErrorTextLooksLikeNilHandle(t *testing.T) {
+	err := errors.New("semantic store unavailable: connection reset")
+	p := fakeProbeWithErr{err: err}
+	st := health.ComputeSemanticStoreStatus(context.Background(), p)
+	if st.State != "unhealthy" {
+		t.Fatalf("State=%q, want unhealthy", st.State)
+	}
+	if st.Reason != health.SemanticReasonDBError {
+		t.Fatalf("Reason=%q, want %q (substring text must NOT route to nil_handle)",
+			st.Reason, health.SemanticReasonDBError)
 	}
 }
 

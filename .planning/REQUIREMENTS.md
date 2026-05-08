@@ -29,11 +29,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### EXTRACT — Tree-sitter Extraction & Stable Symbol Identity
 
-- [ ] **EXTRACT-01**: Tree-sitter extraction produces typed symbols, references, imports, and syntax edges for **Go**, **TypeScript / JavaScript**, and **Python** files inside the workspace; non-supported languages emit a `partial:true` extraction marker.
-- [ ] **EXTRACT-02**: Stable symbol IDs use the contract from SPEC §11.1 (LSP identity → package/module path + owner path + qualified name + kind + signature hash → file path fallback). Identity must survive whitespace-only changes, file-path renames where content hash is unchanged, and exported-symbol moves where qualified name is unchanged.
-- [ ] **EXTRACT-03**: A 30+ before/after test matrix per first-class language exercises stable-key behavior across overload signatures, generics, anonymous closures, decorators (Python), and method-on-receiver renames; identity transitions are explicit.
-- [ ] **EXTRACT-04**: Tree-sitter and LSP facts merge per SPEC §11.2 with the documented confidence ladder (1.00 LSP-confirmed, 0.95 merged, 0.80 ts+local, 0.70 ts-only, 0.45 heuristic).
-- [ ] **EXTRACT-05**: Extraction reuses the single canonical `GrammarRegistry` injected from daemon bootstrap (no duplicate registries, BUG-04 invariant preserved).
+- [x] **EXTRACT-01**: Tree-sitter extraction produces typed symbols, references, imports, and syntax edges for **Go**, **TypeScript / JavaScript**, and **Python** files inside the workspace; non-supported languages emit a `partial:true` extraction marker.
+- [x] **EXTRACT-02**: Stable symbol IDs use the contract from SPEC §11.1 (LSP identity → package/module path + owner path + qualified name + kind + signature hash → file path fallback). Identity must survive whitespace-only changes, file-path renames where content hash is unchanged, and exported-symbol moves where qualified name is unchanged.
+- [x] **EXTRACT-03**: A 30+ before/after test matrix per first-class language exercises stable-key behavior across overload signatures, generics, anonymous closures, decorators (Python), and method-on-receiver renames; identity transitions are explicit.
+- [x] **EXTRACT-04**: Tree-sitter and LSP facts merge per SPEC §11.2 with the documented confidence ladder (1.00 LSP-confirmed, 0.95 merged, 0.80 ts+local, 0.70 ts-only, 0.45 heuristic).
+- [x] **EXTRACT-05**: Extraction reuses the single canonical `GrammarRegistry` injected from daemon bootstrap (no duplicate registries, BUG-04 invariant preserved).
 
 ### LIVE — Live Update Pipeline
 
@@ -187,11 +187,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | REL-04 | Phase 58 | Pending |
 | REL-05 | Phase 58 | Pending |
 | REL-06 | Phase 58 | Pending |
-| EXTRACT-01 | Phase 59 | Pending |
-| EXTRACT-02 | Phase 59 | Pending |
-| EXTRACT-03 | Phase 59 | Pending |
-| EXTRACT-04 | Phase 59 | Pending |
-| EXTRACT-05 | Phase 59 | Pending |
+| EXTRACT-01 | Phase 59 | Complete |
+| EXTRACT-02 | Phase 59 | Complete |
+| EXTRACT-03 | Phase 59 | Complete |
+| EXTRACT-04 | Phase 59 | Complete |
+| EXTRACT-05 | Phase 59 | Complete |
 | LIVE-01 | Phase 60 | Complete |
 | LIVE-02 | Phase 60 | Complete |
 | LIVE-03 | Phase 60 | Complete |

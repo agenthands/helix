@@ -132,7 +132,7 @@
 
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (5/5 plans complete; verifier passed — gap-closure 57-05 closed SC-1 + CR-01/02 + WR-01/02/03; 57-REVIEW-57-05 follow-up pass closed BL-01 + 6 add'l findings) (completed 2026-05-06)
 - [x] Phase 58: v1.9 Carryover -- Release & Distribution (4/4 plans) (completed 2026-05-04)
-- [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
+- [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (5/5 plans) (completed 2026-05-04; 2026-05-08 CONTEXT update adds D-06/D-07/D-08/D-11 — Phase 65 unblock delta, re-plan only the new tasks)
 - [x] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (6/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release; re-verifier 2026-05-06 PASSED (cosign verify-blob against real v1.10.7 sigstore bundles + Gatekeeper xattr mechanism + linux gcc resolution all closed) (completed 2026-05-04, re-verified 2026-05-06)
   Plans:
   - [x] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
@@ -192,6 +192,16 @@
   - [x] 64-07-PLAN.md — Wave 1 (TDD) retrieval package: bleve scorch + corpus mapping (D-06) + weighted RRF (D-07) + dual-store recovery + tools_context.go with determinism harness (10× byte-identical) [TOOL-04, TOOL-05]
   - [x] 64-08-PLAN.md — Wave 2 daemon glue: semantic_wiring.go bundle + production buildFn + imports.go blank import + daemon.go register*SemanticGraph + rank_wiring stub-collapse + profile-filter test + get_tool_help test + 6 end-to-end integration tests closing CONTEXT.md acceptance #1/#2/#3/#5/#6 [TOOL-01..TOOL-05]
 - [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
+  **Goal:** `get_repo_map`, `get_context`, `analyze_blast_radius`, and `get_health` consult the semantic graph when available — with zero source change to `internal/repomap` engine — and fall back to v1.9 behavior automatically when the index is disabled, building, or errored.
+  **Depends on:** Phase 64
+  **Requirements:** INTEG-01, INTEG-02, INTEG-03, INTEG-04, INTEG-05
+  **Success Criteria:**
+  1. With the semantic index populated, `get_repo_map` and `get_context` return ranked output sourced from persisted graph scores + clusters; with `semantic_index.enabled=false` they return the v1.9 tree-sitter + PageRank output (index-disabled goldens preserved).
+  2. `analyze_blast_radius` returns `confidence` and `evidence` per impacted node when the semantic graph is available; on fallback, confidence drops to ≤ 0.6 and the result envelope says so.
+  3. `get_health` includes a `semantic_index` section: store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error.
+  4. Every MCP envelope from a semantic-aware tool returns `source: semantic | tree_sitter | fallback` so callers can detect path drift.
+  **Carryover from Phase 64:** production buildFn empty-Facts placeholder; zero-value WorkspaceKey from session adapter (deferred 2026-05-08 per phase 64 verification).
+  Plans: TBD
 - [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
 - [ ] Phase 67: Evaluation Harness (0/0 plans)
 

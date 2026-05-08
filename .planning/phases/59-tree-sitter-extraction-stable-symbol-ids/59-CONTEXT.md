@@ -1,7 +1,8 @@
 # Phase 59: Tree-sitter Extraction & Stable Symbol IDs - Context
 
 **Gathered:** 2026-05-04
-**Status:** Ready for planning
+**Updated:** 2026-05-08 — D-06 / D-07 / D-08 / D-11 added to unblock Phase 65
+**Status:** Phase 59 base shipped & VERIFIED 2026-05-04 (4/4 must-haves). 2026-05-08 update layers a small interface-promotion + adapter + bookkeeping delta required by Phase 65 Wave 0 (production buildFn). Re-plan only the new tasks; do NOT re-discuss the original D-01..D-05 decisions.
 
 <domain>
 ## Phase Boundary
@@ -492,6 +493,146 @@ Everything else gets a `semantic_files` row with `extraction_status=unsupported`
   )
   ```
 
+### 2026-05-08 update — Phase 65 unblock delta
+
+The base Phase 59 (D-01..D-05) verified PASSED 2026-05-04. Phase 65 Wave 0
+(production buildFn at `internal/daemon/semantic_wiring.go:687-742`) cannot
+consume the shipped extractors polymorphically because (a) `Extract` was not
+promoted to the `extract.Provider` interface and (b) no `*ExtractedFile →
+semanticstore.Facts` adapter exists. The four decisions below close that gap.
+They are additive — base D-01..D-05 still hold verbatim.
+
+- **D-06: Promote `Extract` onto the `extract.Provider` interface.** Each
+  per-language provider already implements
+  `Extract(ctx context.Context, source []byte, file extract.SourceFile)
+  (*extract.ExtractedFile, error)` as a concrete method
+  (`internal/semantic/extract/golang/provider.go:72`,
+  `typescript/provider.go`, `python/provider.go`). The 2026-05-04
+  comment at `extract/provider.go:11-15` ("Per-language helper signatures
+  ... are intentionally NOT here yet — they are finalized in Phase 59 P04
+  when the per-language providers land") was the right call at design
+  time and the wrong shape now that P04 has shipped. Promote it.
+
+  ```go
+  // internal/semantic/extract/provider.go
+  type LanguageMetadata interface {
+      Language() string
+      Extensions() []string
+      SupportsLSPEnrichment() bool
+  }
+
+  type ExtractionPipeline interface {
+      Extract(ctx context.Context, source []byte, file SourceFile) (*ExtractedFile, error)
+  }
+
+  type Provider interface {
+      LanguageMetadata
+      ExtractionPipeline
+      TreeSitterLanguage() *tree_sitter.Language
+      Queries() string
+  }
+  ```
+
+  **Hard invariants:**
+  - The signature MUST match the existing concrete `Extract` method shape
+    byte-for-byte — `(ctx context.Context, source []byte, file SourceFile)
+    (*ExtractedFile, error)` — so promotion is a 1-line interface delta
+    plus mock retrofits, not a per-provider rewrite.
+  - The named sub-interfaces (`LanguageMetadata`, `ExtractionPipeline`)
+    are non-load-bearing today — they exist so future helper sub-types
+    can attach without churning every consumer. Phase 65 callers should
+    type against `Provider` not the partial sub-interfaces unless they
+    have a concrete reason to narrow.
+  - The deferred helper sub-types from the original P02 design
+    (`ImportResolver`, `ScopeBuilder`, `SymbolNormalizer`,
+    `ReferenceClassifier`, `QueryBundle`) stay deferred — they do not
+    exist as concrete types yet and adding them speculatively would lock
+    in shapes ahead of need. `Queries() string` stays as-is for now.
+
+  **Why not a registry-level helper (`Registry.Extract(lang, ...)`):**
+  pretends `Provider` is lookup-only while implementing provider
+  behavior — splits the responsibility. Extraction is provider-owned.
+
+  **Why not concrete-package import from Phase 65:** every future
+  language addition would force a Phase 65 edit. Forfeits the registry
+  abstraction at exactly the place the abstraction matters.
+
+  **Phase 65 call site after promotion:**
+
+  ```go
+  provider, ok := registry.Provider(lang)
+  if !ok { /* unsupported_language path */ }
+  extracted, err := provider.Extract(ctx, source, file)
+  ```
+
+- **D-07: Phase 65 owns the workspace walk; `ScheduleInitialExtraction`
+  stays state-only.** The 2026-05-04 verification flagged the scheduler
+  body as `STATIC` (state transition only, no file walk) and treated that
+  as intentional. Phase 65 confirms the same boundary going forward —
+  Phase 65's production buildFn drives its own walk and dispatches to
+  providers via D-06's interface. The scheduler's value to Phase 65 is
+  the orchestration surface (`Status`/`Subscribe`/job lifecycle/priority
+  queue helpers from `internal/semantic/scheduler/priority.go`), not the
+  walk itself.
+
+  **Hard invariants:**
+  - Phase 59 ships NO new file-walk code in this update.
+  - The 4-tier `PriorityQueue` from `internal/semantic/scheduler/priority.go`
+    is exported / consumable by Phase 65's buildFn — if it currently is
+    package-private, expose what's needed (planner's call). No new logic
+    inside the queue.
+  - Phase 65's buildFn is responsible for reporting progress back into
+    the scheduler's `Status()` so external observers see consistent
+    state. The scheduler does not introspect the buildFn.
+
+- **D-08: `*ExtractedFile → semanticstore.Facts` adapter lives in
+  `internal/semantic/extract/`.** Ship `extract.ToStoreFacts` (or
+  similar — planner picks final name) as a pure conversion function:
+
+  ```go
+  // internal/semantic/extract/to_store.go (NEW)
+  func ToStoreFacts(files []*ExtractedFile) semanticstore.Facts
+  ```
+
+  **Rationale:** the fact-shape conversion is intimate with the
+  `*ExtractedFile` shape; placing the adapter next to the fact
+  definitions keeps the conversion under the same review lens as the
+  shapes it converts. Phase 65's buildFn becomes a thin orchestrator
+  (walk → Extract → ToStoreFacts → WriteSnapshotFacts) instead of
+  carrying conversion logic.
+
+  **Hard invariants:**
+  - Pure function — no I/O, no scheduler/store dependencies. Determinism
+    is the contract: same `[]*ExtractedFile` → byte-identical
+    `semanticstore.Facts`.
+  - The function lives under `internal/semantic/extract/` but the
+    package MUST NOT introduce a cyclic import:
+    `internal/semantic/extract/` already does not import
+    `internal/semantic/store/`; this conversion needs the store's
+    `Facts` type, so the adapter file imports
+    `internal/semantic/store/` one-way (extract → store). That edge is
+    new — verify it does not close a cycle (store does not import
+    extract today; the cycle check is the planner's gate).
+  - If the cycle check fails, fall back to placing the adapter in
+    `internal/semantic/store/` as `Facts.FromExtracted([]*ExtractedFile)`
+    — preserves the shape with the inverse import direction. The user's
+    locked decision is "live in extract/" but cycle-safety is a hard
+    constraint that overrides location preference.
+
+- **D-11: Bookkeeping — tick EXTRACT-01..05 and correct ROADMAP plan
+  count in this update.** REQUIREMENTS.md still shows the EXTRACT
+  requirements as `[ ]` Pending and ROADMAP.md line 135 says "Phase 59
+  (0/0 plans)" though five plans (59-01..59-05) shipped. This is
+  documentation drift that already caused Phase 65's CONTEXT.md to
+  declare the phase BLOCKED on Phase 59 when in fact the base phase had
+  shipped. Fix in this same commit:
+  - REQUIREMENTS.md `[ ]` → `[x]` for EXTRACT-01..05 in both the
+    requirement-detail block and the requirement-table.
+  - ROADMAP.md line 135 `(0/0 plans)` → `(5/5 plans)`.
+  - Cross-reference: `.planning/phases/59-.../59-VERIFICATION.md`
+    (already PASSED 2026-05-04) is the evidence that the requirements
+    are satisfied.
+
 ### Acceptance criteria (must hold at end of phase)
 
 1. `internal/semantic/extract/` does not import `internal/repomap`.
@@ -518,6 +659,34 @@ Everything else gets a `semantic_files` row with `extraction_status=unsupported`
 11. EXTRACT-05 invariant: every provider receives the daemon-injected
     `*treesitter.GrammarRegistry`. A regression test attempts to construct a
     second `GrammarRegistry` inside the semantic extractor path and fails.
+
+### Acceptance criteria — 2026-05-08 update (D-06 / D-07 / D-08 / D-11)
+
+12. The `extract.Provider` interface in
+    `internal/semantic/extract/provider.go` declares `Extract(ctx
+    context.Context, source []byte, file SourceFile) (*ExtractedFile,
+    error)`. The three concrete providers (`golang`, `typescript`,
+    `python`) compile against the new interface without source change to
+    their `Extract` method bodies.
+13. A polymorphic call site exercises the promoted method:
+    `registry.Provider("go").Extract(...)` (or equivalent) succeeds in a
+    test under `internal/semantic/extract/`. No type assertion on
+    concrete `*Provider` types is needed in the call site.
+14. `internal/semantic/scheduler/`'s `ScheduleInitialExtraction` body
+    remains state-only (Phase 65 owns the walk per D-07). The 2026-05-04
+    "STATIC" data-flow note in 59-VERIFICATION.md remains accurate after
+    this update.
+15. `extract.ToStoreFacts([]*ExtractedFile) semanticstore.Facts` (or
+    fallback location per D-08 cycle-safety clause) is a pure
+    deterministic function with a unit test asserting same-input →
+    byte-identical output across repeated calls.
+16. `go vet ./...` and `go test ./internal/semantic/...` pass after the
+    interface promotion. The Phase 59 P04 golden snapshots remain
+    byte-identical (the promotion is a contract widening, not a
+    behavioral change).
+17. REQUIREMENTS.md EXTRACT-01..05 read `[x]` (both the detail block and
+    the requirement table). ROADMAP.md line 135 reads `(5/5 plans)`. No
+    other phases or requirements are touched in this bookkeeping pass.
 
 ### Claude's Discretion (no user input needed)
 
@@ -661,6 +830,33 @@ Everything else gets a `semantic_files` row with `extraction_status=unsupported`
 - `cmd/vet-noduckdb/` — Phase 57 vet-tool. Phase 59's `internal/semantic/extract/`
   packages MUST NOT import `duckdb-go`; the existing analyzer enforces this.
 
+### 2026-05-08 update — additional refs for D-06 / D-07 / D-08 / D-11
+
+- `internal/semantic/extract/provider.go` — current `Provider` interface
+  (5 methods, lookup-side). D-06 promotes `Extract` to this interface.
+- `internal/semantic/extract/golang/provider.go:72` — concrete `Extract`
+  signature; the promoted interface method MUST match this byte-for-byte.
+- `internal/semantic/extract/typescript/provider.go` — concrete `Extract`.
+- `internal/semantic/extract/python/provider.go` — concrete `Extract`.
+- `internal/semantic/extract/registry.go` — Registry; D-06 unchanged at
+  the registry level (`Provider(lang)` already returns the interface).
+- `internal/semantic/store/snapshot.go` — `WriteSnapshotFacts` and the
+  `Facts` type that D-08's `ToStoreFacts` returns.
+- `internal/daemon/semantic_wiring.go:687-742` — Phase 65 Wave 0
+  consumer; the production buildFn placeholder this update unblocks.
+- `internal/semantic/scheduler/priority.go` — 4-tier `PriorityQueue`
+  Phase 65's buildFn may consume per D-07; check current export
+  surface.
+- `.planning/phases/59-.../59-VERIFICATION.md` — 2026-05-04 PASSED
+  evidence; D-11 cites this when ticking REQUIREMENTS.md.
+- `.planning/REQUIREMENTS.md` — EXTRACT-01..05 (`[ ]` today; `[x]` post
+  D-11). Both the detail block and the requirement table.
+- `.planning/ROADMAP.md:135` — `(0/0 plans)` today; `(5/5 plans)` post
+  D-11.
+- `.planning/phases/65-existing-tool-integration-strangler-fig/65-CONTEXT.md`
+  D-09/D-10 — Phase 65's "BLOCKED on Phase 59" claim that this update
+  retires.
+
 </canonical_refs>
 
 <code_context>
@@ -801,9 +997,27 @@ Everything else gets a `semantic_files` row with `extraction_status=unsupported`
   timeout by default (per user prescription). Future phase may add one if
   large-monorepo runs need it.
 
+### Deferred — 2026-05-08 update
+
+- **Helper sub-types on `Provider`** (`ImportResolver`, `ScopeBuilder`,
+  `SymbolNormalizer`, `ReferenceClassifier`, `QueryBundle`) — the
+  original P02 design referenced these as future extension points.
+  D-06 splits the interface into `LanguageMetadata` +
+  `ExtractionPipeline` so they can attach later without churning every
+  consumer, but the helper types themselves stay deferred until a
+  consumer actually needs them. Do not add speculatively.
+- **Phase 59-side workspace walker** — D-07 locks Phase 65 as the owner
+  of the file walk. If a future phase needs a generic walker, ship it
+  as `extract.WalkAndExtract(ctx, registry, root, opts)` per the option
+  rejected in 2026-05-08 discussion. Not in this update.
+- **`Facts.FromExtracted` on the store side** — only ships if D-08's
+  cycle-safety check fails. If extract → store imports cleanly, this
+  variant stays deferred indefinitely.
+
 </deferred>
 
 ---
 
 *Phase: 59-tree-sitter-extraction-stable-symbol-ids*
 *Context gathered: 2026-05-04*
+*Updated: 2026-05-08 — D-06 / D-07 / D-08 / D-11 (Phase 65 unblock delta)*

@@ -37,6 +37,7 @@ import (
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
@@ -532,7 +533,24 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// (activeWSKey / activeWSLang / wsKeyFn / workspaceRootFn are declared
 	// earlier — step 6f.2 — so newSemanticBundle can capture wsKeyFn.)
 
-	symbols.RegisterTools(mcpServer, k, wsKeyFn)
+	// Phase 65 65-06: thread the daemon-wired SemanticLookup + ConfigGate
+	// into symbols.RegisterTools so registerAnalyzeBlastRadius can route
+	// through integ.ChooseSource(cfgGate, lookup, nil) for the cfg-disabled →
+	// SourceTreeSitter contract (D-04 + Pitfall §3) BEFORE any semantic call.
+	//
+	// The lookupFn is a closure rather than a fixed lookup so the daemon
+	// retains the option to swap the production adapter in later (mirrors
+	// the SetSemanticLookup post-init wiring used by RepoMapSkill in 65-05).
+	// nil sBndl is normalized to NoopLookup{} so ChooseSource always sees a
+	// valid SemanticLookup interface value.
+	symbolsLookupFn := func() integ.SemanticLookup {
+		if sBndl != nil {
+			return sBndl.integLookupAccessor()
+		}
+		return integ.NoopLookup{}
+	}
+	symbolsCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	symbols.RegisterTools(mcpServer, k, wsKeyFn, symbolsLookupFn, symbolsCfgGate)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
 	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
 	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
@@ -555,7 +573,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	for _, tp := range skill.ToolProviders() {
 		// Skip kernel skill adapters (already registered via RegisterTools above).
 		switch tp.Name() {
-		case "symbol-retrieval", "symbol-editing", "file-ops", "diagnostics":
+		case "symbol-retrieval", "symbol-editing", "file-ops", "diagnostics", "symbols":
 			continue
 		}
 		registerSkillTools(mcpServer, tp, logger)

@@ -4,7 +4,27 @@ import (
 	"context"
 
 	"github.com/agenthands/helix/internal/kernel/lspool"
+	"github.com/agenthands/helix/internal/semantic/integ"
 )
+
+// NodeImpact is one entry in a BlastRadius.PerNode slice — the per-symbol
+// confidence + evidence pair the Phase 65 strangler-fig orchestrator surfaces
+// on the MCP envelope (INTEG-03 / INTEG-05). The shape mirrors integ.Impact
+// so the v1.9 LSP fallback path can synthesize NodeImpact entries from
+// DirectRefs / Callers / Implementations and have the same hard-cap
+// (capConfidences) and envelope-render helper apply uniformly across the
+// semantic / tree_sitter / fallback paths (D-08).
+//
+// SymbolID is stored as a plain string (not integ.SymbolID) so this type can
+// also represent LSP-derived synthetic nodes that have no canonical Phase 59
+// EXTRACT-02 SymbolID — the integ.SymbolID conversion happens at the
+// orchestrator boundary.
+type NodeImpact struct {
+	SymbolID   string
+	Confidence float64
+	Evidence   integ.Evidence
+	Refuted    bool
+}
 
 // BlastRadius represents the combined impact analysis for a symbol.
 type BlastRadius struct {
@@ -13,6 +33,13 @@ type BlastRadius struct {
 	Implementations []SymbolLocation
 	AffectedFiles   []string // unique files across all results
 	TotalImpact     int      // total unique locations
+	// PerNode is the per-symbol confidence + evidence list rendered on the
+	// MCP envelope (Phase 65 INTEG-03 / INTEG-05). Synthesized from
+	// DirectRefs / Callers / Implementations on the v1.9 LSP path with
+	// confidence=1.0 (LSP-derived); the strangler-fig orchestrator then
+	// applies capConfidences(0.6) uniformly to enforce the D-08 cap on every
+	// non-semantic path.
+	PerNode []NodeImpact
 }
 
 // AnalyzeBlastRadius combines references, call hierarchy, and implementations
@@ -78,6 +105,53 @@ func AnalyzeBlastRadius(ctx context.Context, lease *lspool.WorkerLease, uri stri
 		br.AffectedFiles = append(br.AffectedFiles, f)
 	}
 	br.TotalImpact = len(locationSet)
+
+	// Synthesize PerNode entries from the LSP-derived DirectRefs +
+	// Implementations + Callers so the strangler-fig confidence cap +
+	// envelope render apply uniformly. LSP-derived → confidence 1.0 by the
+	// Phase 62 D-12 ladder; the strangler-fig caller hard-caps to ≤ 0.6 on
+	// every non-semantic path (D-08).
+	br.PerNode = make([]NodeImpact, 0, len(br.DirectRefs)+len(br.Implementations)+len(br.Callers))
+	for _, loc := range br.DirectRefs {
+		br.PerNode = append(br.PerNode, NodeImpact{
+			SymbolID:   locationKey(loc),
+			Confidence: 1.0,
+			Evidence: integ.Evidence{
+				LSPLocations: []integ.LSPLocation{{
+					Path: loc.URI,
+					Line: uint32(loc.Range.Start.Line + 1),
+					Col:  uint32(loc.Range.Start.Character + 1),
+				}},
+			},
+		})
+	}
+	for _, loc := range br.Implementations {
+		br.PerNode = append(br.PerNode, NodeImpact{
+			SymbolID:   locationKey(loc),
+			Confidence: 1.0,
+			Evidence: integ.Evidence{
+				LSPLocations: []integ.LSPLocation{{
+					Path: loc.URI,
+					Line: uint32(loc.Range.Start.Line + 1),
+					Col:  uint32(loc.Range.Start.Character + 1),
+				}},
+			},
+		})
+	}
+	var walkCallers func(nodes []HierarchyNode)
+	walkCallers = func(nodes []HierarchyNode) {
+		for _, n := range nodes {
+			br.PerNode = append(br.PerNode, NodeImpact{
+				SymbolID:   n.URI + ":" + n.Name,
+				Confidence: 1.0,
+				Evidence: integ.Evidence{
+					LSPLocations: []integ.LSPLocation{{Path: n.URI}},
+				},
+			})
+			walkCallers(n.Children)
+		}
+	}
+	walkCallers(br.Callers)
 
 	return br, nil
 }

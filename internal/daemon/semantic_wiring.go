@@ -506,6 +506,11 @@ func (a *semCompactorAdapter) OnFlush(ws workspace.WorkspaceKey) error {
 // production layer.
 type semSessionAdapter struct {
 	getSession func(ctx context.Context) *mcp.SessionInfo
+	// wsKeyFn returns the daemon's active workspace key. Phase 65 65-02
+	// adds this so Workspace(ctx) can return a real workspace.WorkspaceKey
+	// instead of the zero value (D-09 carryover #2). RED-only stub: still
+	// unused by Workspace(); GREEN replaces the body.
+	wsKeyFn func() workspace.WorkspaceKey
 }
 
 func (a *semSessionAdapter) Session(ctx context.Context) *mcp.SessionInfo {

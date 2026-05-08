@@ -560,13 +560,14 @@ func TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore(t *testing.T) {
 	lookup, ws, _, syms, cleanup := newE2EIntegLookup(t)
 	defer cleanup()
 
-	// Seed with the stable_key of one fixture symbol — the bleve corpus
-	// indexes name + path + stable_key tokens, so the seed selects that
-	// symbol (and bleve scores it via DocIDQuery boost when its decimal
-	// id appears in anchors). For the anchor-side boost to fire we pass
-	// the decimal SymbolID string as the anchor.
-	confFrom := syms["confirmed_edge_from"]
-	seeds := []string{string(confFrom.SymbolID)}
+	// Seed with the stable_key of a symbol in a LOW-ranked file — the
+	// fixture stamps file0 with the highest persisted score and file2
+	// with the lowest. To detect silent RRF degradation we need bleve
+	// to bias the fused ordering AWAY from the persisted baseline.
+	// Picking a seed whose translated path is file2 ensures the fused
+	// top entry is no longer file0 — proof that bleve+RRF is firing.
+	refTo := syms["refuted_edge_to"] // file 2, sym 1
+	seeds := []string{string(refTo.SymbolID)}
 
 	seeded, err := lookup.RankFromSeeds(context.Background(), ws, seeds)
 	if err != nil {

@@ -40,6 +40,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -389,9 +390,15 @@ func (a *semSchedulerAdapter) IsQuiescent(repoID string) bool {
 	if a == nil || a.rb == nil {
 		return true
 	}
+	// WR-06: lock held through IsQuiescent. The bundle mutex is released
+	// only AFTER the per-sub IsQuiescent() read returns. Rationale (REVIEW
+	// option A): IsQuiescent is a cheap atomic-bool read that does not
+	// block, so the slight extension of the bundle mutex's hold time is
+	// safe; the alternative (release-then-call) raced with subs[repoID]
+	// being mutated concurrently and could deref a freed sub.
 	a.rb.mu.Lock()
+	defer a.rb.mu.Unlock()
 	s, ok := a.rb.subs[repoID]
-	a.rb.mu.Unlock()
 	if !ok || s == nil {
 		return true
 	}
@@ -699,23 +706,213 @@ func (l *integSemanticLookup) SymbolID(_ context.Context, _ workspace.WorkspaceK
 	return integ.SymbolID(""), integ.ErrNoSnapshot
 }
 
+// defaultRankProjection is the projection key consumed by RankFiles and
+// RankFromSeeds. "call_graph" is Phase 62's primary projection — the
+// kernel-side blast-radius / repomap consumers all read against it.
+const defaultRankProjection = "call_graph"
+
+// rrfFusionConstant is the standard reciprocal-rank-fusion (RRF) k
+// parameter (Cormack & Clarke 2009). k=60 is the canonical value used
+// across the IR literature; smaller values bias toward top-ranked
+// items, larger toward broader coverage.
+const rrfFusionConstant = 60.0
+
 // RankFiles returns the workspace-wide ranked file list for the default
-// "call_graph" projection. 65-03 stub returns ErrNoSnapshot; 65-05 wires
-// the persisted-score reader (RESEARCH Open Question #2 resolution).
-func (l *integSemanticLookup) RankFiles(_ context.Context, _ workspace.WorkspaceKey) ([]integ.RankedFile, error) {
+// "call_graph" projection. Phase 65 65-10 Task 2 — real implementation
+// (was a 65-03 stub returning ErrNoSnapshot).
+//
+// Reads *Store.QueryRankedFiles for (repoID, "call_graph") at the latest
+// committed snapshot. Returns ErrNoSnapshot when no scores exist (either
+// the store is empty or the rank scheduler has not yet emitted scores
+// for the latest commit).
+func (l *integSemanticLookup) RankFiles(ctx context.Context, ws workspace.WorkspaceKey) ([]integ.RankedFile, error) {
 	if !l.Available() {
 		return nil, integ.ErrIndexErrored
 	}
-	return nil, integ.ErrNoSnapshot
+	repoID := ws.Hash()
+	rows, err := l.store.QueryRankedFiles(ctx, repoID, defaultRankProjection, 0)
+	if err != nil {
+		return nil, fmt.Errorf("integSemanticLookup.RankFiles: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, integ.ErrNoSnapshot
+	}
+	out := make([]integ.RankedFile, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, integ.RankedFile{
+			Path:         r.Path,
+			Score:        r.Score,
+			Projection:   defaultRankProjection,
+			GraphVersion: r.GraphVersion,
+		})
+	}
+	return out, nil
 }
 
-// RankFromSeeds returns a ranked file list biased toward seeds. 65-03 stub
-// returns ErrNoSnapshot; 65-05 wires the bleve + RRF fuse pipeline.
-func (l *integSemanticLookup) RankFromSeeds(_ context.Context, _ workspace.WorkspaceKey, _ []string) ([]integ.RankedFile, error) {
+// RankFromSeeds returns a ranked file list biased toward seeds. Phase 65
+// 65-10 Task 2 — real implementation (was a 65-03 stub returning
+// ErrNoSnapshot).
+//
+// Algorithm: reciprocal rank fusion (RRF, k=60) over two ranked sources:
+//
+//  1. The persisted graph-score baseline from QueryRankedFiles for the
+//     default "call_graph" projection.
+//  2. The bleve-backed text-rank list from the per-workspace retrieval
+//     engine, with `seeds` joined as the query string and passed verbatim
+//     as anchors (anchored docs that ALSO match the query score higher).
+//
+// Each source contributes 1/(k + rank) per file; collisions ADD. Result
+// sort: score DESC, path ASC.
+//
+// Empty seeds short-circuit to RankFiles. When BOTH sources return empty
+// — either the persisted scores are absent AND bleve has no hits — the
+// function returns ErrNoSnapshot.
+func (l *integSemanticLookup) RankFromSeeds(ctx context.Context, ws workspace.WorkspaceKey, seeds []string) ([]integ.RankedFile, error) {
 	if !l.Available() {
 		return nil, integ.ErrIndexErrored
 	}
-	return nil, integ.ErrNoSnapshot
+	if len(seeds) == 0 {
+		return l.RankFiles(ctx, ws)
+	}
+	repoID := ws.Hash()
+
+	rows, err := l.store.QueryRankedFiles(ctx, repoID, defaultRankProjection, 0)
+	if err != nil {
+		return nil, fmt.Errorf("integSemanticLookup.RankFromSeeds: persisted: %w", err)
+	}
+
+	var textRanks []retrieval.TextRank
+	if l.retrieval != nil {
+		engine := l.retrieval.engineFor(ws)
+		if engine != nil {
+			tr, qErr := engine.QueryBleve(strings.Join(seeds, " "), seeds)
+			if qErr != nil {
+				return nil, integ.ErrBleveRebuilding
+			}
+			textRanks = tr
+		}
+	}
+
+	if len(rows) == 0 && len(textRanks) == 0 {
+		return nil, integ.ErrNoSnapshot
+	}
+
+	fused := rrfFuseFiles(ctx, l.store, repoID, rows, textRanks)
+
+	out := make([]integ.RankedFile, 0, len(fused))
+	for _, f := range fused {
+		out = append(out, integ.RankedFile{
+			Path:         f.Path,
+			Score:        f.Score,
+			Projection:   defaultRankProjection,
+			GraphVersion: f.GraphVersion,
+		})
+	}
+	return out, nil
+}
+
+// fusedRow is one entry in the RRF-fused output. GraphVersion is
+// inherited from the persisted baseline when the path appears there;
+// paths sourced exclusively from bleve text-rank carry GraphVersion=0
+// (they are not anchored to a graph commit).
+type fusedRow struct {
+	Path         string
+	Score        float64
+	GraphVersion uint64
+}
+
+// rrfFuseFiles fuses (baseline persisted scores, bleve text-rank hits)
+// via reciprocal rank fusion (k=60). Each input contributes 1/(k+rank)
+// per appearance; collisions on the same path SUM. Bleve hits are
+// translated to file paths via resolveSymbolPath (Phase 65 65-10 Task 0
+// pin: TextRank.SymbolID is decimal symbol_id format → SQL JOIN on
+// semantic_symbols.symbol_id at the latest committed snapshot).
+//
+// Sort: score DESC, then path ASC (matches the underlying QueryRankedFiles
+// stable-key tiebreak).
+func rrfFuseFiles(
+	ctx context.Context,
+	store *semanticstore.Store,
+	repoID string,
+	baseline []semanticstore.RankedFileRow,
+	textRanks []retrieval.TextRank,
+) []fusedRow {
+	scoreByPath := make(map[string]*fusedRow, len(baseline)+len(textRanks))
+	for i, r := range baseline {
+		rank := i + 1
+		scoreByPath[r.Path] = &fusedRow{
+			Path:         r.Path,
+			Score:        1.0 / (rrfFusionConstant + float64(rank)),
+			GraphVersion: r.GraphVersion,
+		}
+	}
+	// Resolve the latest committed snapshot for repoID once so the bleve
+	// path-translation lookup can JOIN on (snapshot_id, symbol_id).
+	// Failure (or empty snapshot) is non-fatal — fall back to baseline-only.
+	var latestSnap uint64
+	if len(textRanks) > 0 && store != nil {
+		if snap, err := store.LatestCommittedSnapshot(ctx, repoID); err == nil {
+			latestSnap = snap
+		}
+	}
+	if latestSnap == 0 {
+		// No snapshot to resolve against — emit baseline-only.
+		out := make([]fusedRow, 0, len(scoreByPath))
+		for _, fr := range scoreByPath {
+			out = append(out, *fr)
+		}
+		sortFusedRows(out)
+		return out
+	}
+	for i, tr := range textRanks {
+		rank := i + 1
+		path, ok := resolveSymbolPath(ctx, store, latestSnap, tr.SymbolID)
+		if !ok {
+			continue
+		}
+		contribution := 1.0 / (rrfFusionConstant + float64(rank))
+		if existing, present := scoreByPath[path]; present {
+			existing.Score += contribution
+		} else {
+			scoreByPath[path] = &fusedRow{Path: path, Score: contribution}
+		}
+	}
+	out := make([]fusedRow, 0, len(scoreByPath))
+	for _, fr := range scoreByPath {
+		out = append(out, *fr)
+	}
+	sortFusedRows(out)
+	return out
+}
+
+// sortFusedRows applies the (score DESC, path ASC) ordering used by every
+// rrfFuseFiles return path.
+func sortFusedRows(rows []fusedRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Score != rows[j].Score {
+			return rows[i].Score > rows[j].Score
+		}
+		return rows[i].Path < rows[j].Path
+	})
+}
+
+// resolveSymbolPath looks up the file path of a TextRank.SymbolID at the
+// given snapshot. Phase 65 65-10 Task 0 BL-4 pin: TextRank.SymbolID is
+// decimal symbol_id format (strconv.FormatUint(uint64, 10), set by
+// retrieval/corpus.go via store.SymbolRow.SymbolID), so the lookup goes
+// through *Store.QuerySymbolPath which parses the decimal and JOINs
+// semantic_symbols on (snapshot_id, symbol_id).
+//
+// Returns ("", false) on miss or any non-nil error from the store.
+func resolveSymbolPath(ctx context.Context, store *semanticstore.Store, snapshotID uint64, symbolID string) (string, bool) {
+	if store == nil || snapshotID == 0 {
+		return "", false
+	}
+	path, ok, err := store.QuerySymbolPath(ctx, snapshotID, symbolID)
+	if err != nil || !ok {
+		return "", false
+	}
+	return path, true
 }
 
 // ExpandFrom returns the depth-bounded blast-radius frontier rooted at
@@ -933,7 +1130,7 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 		//    symbols / references can be re-stamped with the file's
 		//    assigned FileID — preserving the (snapshot_id, file_id) and
 		//    (snapshot_id, symbol_id / ref_id) primary-key invariants.
-		facts := factsFromExtracted(extracted, repoID)
+		facts := factsFromExtracted(extracted, repoID, b.logger)
 
 		// 5. Snapshot lifecycle.
 		snap, err := b.store.BeginSnapshot(ctx, semanticstore.SnapshotMeta{
@@ -1006,9 +1203,16 @@ func (b *semanticBundle) collectCandidatePaths(ws workspace.WorkspaceKey, _ stri
 			return nil
 		}
 		// Skip well-known generated / VCS / helix-local subtrees.
+		// WR-04: simplified — git/helix/any other dot-directory is
+		// uniformly excluded by the strings.HasPrefix(name, ".") check.
+		// The pre-WR-04 form named git+helix as separate equality arms
+		// against the same prefix predicate; the named arms were dead
+		// code (every match would also satisfy the prefix check). The
+		// `name != "."` guard is also dead — d.Name() never returns "."
+		// for a non-root entry produced by filepath.WalkDir.
 		name := d.Name()
 		if d.IsDir() {
-			if path != ws.RepoRoot && (name == ".git" || name == ".helix" || strings.HasPrefix(name, ".") && name != ".") {
+			if path != ws.RepoRoot && strings.HasPrefix(name, ".") {
 				return fs.SkipDir
 			}
 			return nil
@@ -1145,10 +1349,22 @@ func (b *semanticBundle) classifyAndExtract(ctx context.Context, repoID string, 
 //     at INSERT time per its contract); the buildFn assigns them here.
 //
 // Returns a Facts value safe to pass directly to *Store.WriteSnapshotFacts.
-func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string) semanticstore.Facts {
+//
+// WR-07 / WR-1 (Phase 65 65-10 Task 2): the high-bit-set guard is now
+// surfaced. On every input symbol, if SymbolID / OwnerSymbolID /
+// ParentScopeID has the high bit set (which the duckdb-go driver
+// rejects), `logger` (when non-nil) emits a warn-level diagnostic with
+// the violating IDs AND the function continues with the masked low-63
+// value (LOG + MASK + CONTINUE). Skip-on-violation cascades into the
+// snapshot pipeline and breaks ingest determinism; logging-only does
+// not. A genuine collision-fix (assigning fresh IDs on conflict) is
+// tracked as a deferred follow-up — see plan's `<deferred>` block.
+func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string, logger *slog.Logger) semanticstore.Facts {
 	if len(extracted) == 0 {
 		return semanticstore.Facts{}
 	}
+	const highBitMask uint64 = 0x8000000000000000
+	const lowBitsMask uint64 = 0x7FFFFFFFFFFFFFFF
 	out := semanticstore.Facts{
 		Files:      make([]semanticstore.FileFact, 0, len(extracted)),
 		Symbols:    make([]semanticstore.SymbolFact, 0, 4*len(extracted)),
@@ -1170,17 +1386,39 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string) seman
 		}
 		for j := range single.Symbols {
 			single.Symbols[j].FileID = fileID
+
+			// WR-07 / WR-1: assert SymbolID high-bit is zero. On
+			// violation, LOG at warn level AND continue with the masked
+			// low-63 value. Skip-on-violation cascades into the snapshot
+			// pipeline and breaks ingest determinism; logging surfaces
+			// the bug to operators without breaking the build. A
+			// genuine collision-fix (assigning fresh IDs on conflict)
+			// is tracked as a deferred follow-up — see plan's
+			// <deferred> block.
+			if single.Symbols[j].SymbolID&highBitMask != 0 ||
+				single.Symbols[j].OwnerSymbolID&highBitMask != 0 ||
+				single.Symbols[j].ParentScopeID&highBitMask != 0 {
+				if logger != nil {
+					logger.Warn(
+						"factsFromExtracted: high-bit-set SymbolID — masking + continuing (WR-07; collision-fix deferred)",
+						"symbol_id", single.Symbols[j].SymbolID,
+						"owner_symbol_id", single.Symbols[j].OwnerSymbolID,
+						"parent_scope_id", single.Symbols[j].ParentScopeID,
+					)
+				}
+			}
+
 			// Mask SymbolID / NodeID to 63 bits — the duckdb-go driver
 			// rejects uint64 values with the high bit set. Mirrors the
 			// overlay edge-id helper at internal/semantic/store/overlay.go:937.
-			single.Symbols[j].SymbolID &= 0x7FFFFFFFFFFFFFFF
+			single.Symbols[j].SymbolID &= lowBitsMask
 			if single.Symbols[j].NodeID == 0 {
 				single.Symbols[j].NodeID = single.Symbols[j].SymbolID
 			} else {
-				single.Symbols[j].NodeID &= 0x7FFFFFFFFFFFFFFF
+				single.Symbols[j].NodeID &= lowBitsMask
 			}
-			single.Symbols[j].OwnerSymbolID &= 0x7FFFFFFFFFFFFFFF
-			single.Symbols[j].ParentScopeID &= 0x7FFFFFFFFFFFFFFF
+			single.Symbols[j].OwnerSymbolID &= lowBitsMask
+			single.Symbols[j].ParentScopeID &= lowBitsMask
 		}
 		for j := range single.References {
 			single.References[j].FileID = fileID

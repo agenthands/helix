@@ -309,6 +309,43 @@ func (s *Store) QueryRankedFiles(
 	return out, nil
 }
 
+// QuerySymbolPath resolves the file path of (snapshotID, symbolID) at the
+// given committed snapshot. Returns ("", false, nil) when no symbol matches.
+//
+// Phase 65 65-10 Task 2: backs *integSemanticLookup.RankFromSeeds's
+// resolveSymbolPath helper for the decimal-symbol_id format pinned by
+// Task 0. The argument is parsed as a base-10 uint64; non-numeric strings
+// resolve as a clean miss (returns "", false, nil) — they're a Task 0
+// format mismatch, not a SQL error.
+//
+// Reads under no workspace lock (scheduler_store.go:48-56).
+func (s *Store) QuerySymbolPath(ctx context.Context, snapshotID uint64, symbolID string) (string, bool, error) {
+	if s == nil || s.db == nil {
+		return "", false, errors.New("QuerySymbolPath: nil store")
+	}
+	symID, err := strconv.ParseUint(symbolID, 10, 64)
+	if err != nil {
+		// Format mismatch with Task 0's TEXTRANK_SYMBOLID_FORMAT contract;
+		// treated as a clean miss, not a SQL error.
+		return "", false, nil
+	}
+	const q = `
+		SELECT f.path FROM semantic_symbols AS sym
+		  JOIN semantic_files AS f
+		    ON f.snapshot_id = sym.snapshot_id AND f.file_id = sym.file_id
+		 WHERE sym.snapshot_id = ? AND sym.symbol_id = ?
+		 LIMIT 1
+	`
+	var path string
+	if err := s.db.QueryRowContext(ctx, q, snapshotID, symID).Scan(&path); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("QuerySymbolPath(snap=%d, sym=%q): %w", snapshotID, symbolID, err)
+	}
+	return path, true, nil
+}
+
 // IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 // in stable symbol_id ASC order, invoking fn(row). If fn returns false,
 // iteration aborts cleanly without error. Honors ctx cancellation via the

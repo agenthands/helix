@@ -451,6 +451,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			lspQ,
 			live,
 			compactBndl,
+			semanticExtractRegistry,
 			logger,
 			observability.Metrics(),
 			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed

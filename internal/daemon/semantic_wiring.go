@@ -42,6 +42,7 @@ import (
 
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
+	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
@@ -82,14 +83,15 @@ func loadSemanticConfig() semanticConfig {
 // semanticBundle owns the daemon-side semantic skill state. nil-safe at every
 // accessor.
 type semanticBundle struct {
-	cfg       semanticConfig
-	store     *semanticstore.Store
-	scheduler *rankBundle
-	queue     *lspenrich.LaneQueue
-	live      *liveBundle
-	compact   *compactBundle
-	logger    *slog.Logger
-	metrics   *obs.Metrics
+	cfg             semanticConfig
+	store           *semanticstore.Store
+	scheduler       *rankBundle
+	queue           *lspenrich.LaneQueue
+	live            *liveBundle
+	compact         *compactBundle
+	extractRegistry *extract.Registry
+	logger          *slog.Logger
+	metrics         *obs.Metrics
 
 	// getSession is the per-request session-lookup closure captured from
 	// daemon.go (the SAME closure passed to InstallMiddleware at
@@ -129,6 +131,7 @@ func newSemanticBundle(
 	queue *lspenrich.LaneQueue,
 	live *liveBundle,
 	compact *compactBundle,
+	extractRegistry *extract.Registry,
 	logger *slog.Logger,
 	metrics *obs.Metrics,
 	getSession func(ctx context.Context) *mcp.SessionInfo,
@@ -137,17 +140,18 @@ func newSemanticBundle(
 		return nil
 	}
 	b := &semanticBundle{
-		cfg:        cfg,
-		store:      store,
-		scheduler:  scheduler,
-		queue:      queue,
-		live:       live,
-		compact:    compact,
-		logger:     logger,
-		metrics:    metrics,
-		getSession: getSession,
-		engines:    make(map[string]*retrieval.Engine),
-		recoveres:  make(map[string]*retrieval.Recoverer),
+		cfg:             cfg,
+		store:           store,
+		scheduler:       scheduler,
+		queue:           queue,
+		live:            live,
+		compact:         compact,
+		extractRegistry: extractRegistry,
+		logger:          logger,
+		metrics:         metrics,
+		getSession:      getSession,
+		engines:         make(map[string]*retrieval.Engine),
+		recoveres:       make(map[string]*retrieval.Recoverer),
 	}
 
 	// Construct the production buildFn FIRST (its closure captures b) so

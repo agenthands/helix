@@ -708,71 +708,11 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 		}
 
 		// 2. Walk (full mode) or drain overlay (incremental mode) to build
-		//    the candidate path set. Each path is classified via
-		//    live.ClassifyPathChange; deletes / unknown / lookup-error paths
-		//    are dropped. The classifier enforces symlink + missing-path
-		//    policies (T-65-01-01 mitigation).
+		//    the candidate path set, then run the per-path classify + extract
+		//    loop. Per-file errors are non-fatal (research §Pattern 4
+		//    acceptable error behavior).
 		paths := b.collectCandidatePaths(ws, mode)
-
-		// 3. Per-path classify + extract loop. Per-file errors are non-fatal
-		//    (Rule: research §Pattern 4 acceptable error behavior). The
-		//    FileHashLookup is the same storeFileHashLookup adapter the live
-		//    bundle uses (live_wiring.go:156-164) so the classifier sees a
-		//    consistent view of the snapshot+overlay store.
-		hashLookup := &storeFileHashLookup{store: b.store}
-		var extracted []*extract.ExtractedFile
-		for _, path := range paths {
-			kind, ok, err := live.ClassifyPathChange(
-				ctx,
-				semanticpkg.RepoID(repoID),
-				path,
-				hashLookup,
-				nil, // hasher: classifier falls back to default
-				live.ChangeSourceFsnotify,
-			)
-			if err != nil || !ok {
-				continue
-			}
-			if kind == live.ChangeFileDeleted {
-				// Deletion: nothing to extract; the snapshot's effective
-				// graph drops the file via the BaseSnapshotID lineage.
-				continue
-			}
-			lang := langFromExt(path)
-			if lang == "" {
-				continue
-			}
-			provider, ok := b.extractRegistry.Provider(lang)
-			if !ok {
-				// Language not first-class today; skip silently. Phase 59
-				// emits partial=true for these via the scheduler path; the
-				// production buildFn keeps the loop simple.
-				continue
-			}
-			source, err := os.ReadFile(path)
-			if err != nil {
-				if b.logger != nil {
-					b.logger.Debug("buildFn: read source failed; skipping path",
-						"path", path, "err", err)
-				}
-				continue
-			}
-			ef, err := provider.Extract(ctx, source, extract.SourceFile{
-				Path:     path,
-				Language: lang,
-			})
-			if err != nil {
-				if b.logger != nil {
-					b.logger.Debug("buildFn: provider.Extract failed; skipping path",
-						"path", path, "lang", lang, "err", err)
-				}
-				continue
-			}
-			if ef == nil {
-				continue
-			}
-			extracted = append(extracted, ef)
-		}
+		extracted := b.classifyAndExtract(ctx, repoID, paths)
 
 		// 4. Convert per-language facts to the locked store wire format.
 		//    ToStoreFacts is the Phase 65 D-08 unblock adapter; it leaves
@@ -894,6 +834,82 @@ func langFromExt(path string) string {
 	default:
 		return ""
 	}
+}
+
+// classifyAndExtract runs the per-path classify + extract loop. For each
+// candidate path it asks live.ClassifyPathChange whether the path is a
+// real source file (skipping deletes / unknown / lookup-error paths), maps
+// the extension to a language, resolves the per-language provider, reads
+// the source bytes, and calls provider.Extract.
+//
+// Per-file errors are non-fatal (research §Pattern 4 acceptable error
+// behavior): read failures, classifier errors, and per-extractor failures
+// log at debug and the loop continues. Total failure (zero successful
+// extractions) returns an empty slice; the caller still commits an empty
+// snapshot, matching Phase 64 behavior.
+//
+// The FileHashLookup is the same storeFileHashLookup adapter the live
+// bundle uses (live_wiring.go:156-164) so the classifier sees a
+// consistent view of the snapshot+overlay store.
+func (b *semanticBundle) classifyAndExtract(ctx context.Context, repoID string, paths []string) []*extract.ExtractedFile {
+	if len(paths) == 0 || b.extractRegistry == nil {
+		return nil
+	}
+	hashLookup := &storeFileHashLookup{store: b.store}
+	var extracted []*extract.ExtractedFile
+	for _, path := range paths {
+		kind, ok, err := live.ClassifyPathChange(
+			ctx,
+			semanticpkg.RepoID(repoID),
+			path,
+			hashLookup,
+			nil, // hasher: classifier falls back to default
+			live.ChangeSourceFsnotify,
+		)
+		if err != nil || !ok {
+			continue
+		}
+		if kind == live.ChangeFileDeleted {
+			// Deletion: nothing to extract; the snapshot's effective graph
+			// drops the file via the BaseSnapshotID lineage.
+			continue
+		}
+		lang := langFromExt(path)
+		if lang == "" {
+			continue
+		}
+		provider, ok := b.extractRegistry.Provider(lang)
+		if !ok {
+			// Language not first-class today; skip silently. Phase 59
+			// emits partial=true for these via the scheduler path; the
+			// production buildFn keeps the loop simple.
+			continue
+		}
+		source, err := os.ReadFile(path)
+		if err != nil {
+			if b.logger != nil {
+				b.logger.Debug("buildFn: read source failed; skipping path",
+					"path", path, "err", err)
+			}
+			continue
+		}
+		ef, err := provider.Extract(ctx, source, extract.SourceFile{
+			Path:     path,
+			Language: lang,
+		})
+		if err != nil {
+			if b.logger != nil {
+				b.logger.Debug("buildFn: provider.Extract failed; skipping path",
+					"path", path, "lang", lang, "err", err)
+			}
+			continue
+		}
+		if ef == nil {
+			continue
+		}
+		extracted = append(extracted, ef)
+	}
+	return extracted
 }
 
 // factsFromExtracted composes the wire-format Facts payload from a slice of

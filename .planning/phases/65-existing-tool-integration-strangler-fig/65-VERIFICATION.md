@@ -1,35 +1,18 @@
 ---
 phase: 65-existing-tool-integration-strangler-fig
-verified: 2026-05-08T14:34:24Z
-status: gaps_found
-score: 2/4 must-haves verified
+verified: 2026-05-08T17:48:26Z
+status: passed
+score: 4/4 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "With the semantic index populated, get_repo_map and get_context return ranked output sourced from persisted graph scores + clusters"
-    status: failed
-    reason: "Production integSemanticLookup adapter ships with RankFiles and RankFromSeeds as stubs that unconditionally return integ.ErrNoSnapshot whenever Available()==true. The 65-03 SUMMARY's Stubs Table promises these methods 'Resolve in 65-05', but the 65-05 commit (0f11d8a0) modified internal/daemon/semantic_wiring.go only to add daemonCfgGate — the stub bodies are unchanged. Consequence: with cfg.SemanticIndex.Enabled=true and a fully populated, committed snapshot, the consumer-side ChooseSource ladder always reclassifies the lookup error to SourceFallback + FallbackReasonNoSnapshotYet. The semantic-source path is never reachable in production."
-    artifacts:
-      - path: internal/daemon/semantic_wiring.go
-        issue: "RankFiles (line 705-710), RankFromSeeds (line 714-719), SymbolID (line 695-700), ExpandFrom (line 724-729) all return ErrNoSnapshot when Available — never read from store/retrieval/rank state."
-      - path: internal/skill/repomap/skill.go
-        issue: "execGetRepoMap line 362 calls lookup.RankFiles which always errors → reclassifies to SourceFallback. End-to-end semantic path never executes against a populated index."
-    missing:
-      - "Real implementation of RankFiles: query the rank store for projection='call_graph' and return []integ.RankedFile with non-empty graph_version (RESEARCH §Pattern 2 / 65-03 plan deferred to 65-05)."
-      - "Real implementation of RankFromSeeds: bleve query + RRF fuse over seeds, returning []integ.RankedFile (65-03 plan deferred to 65-05)."
-      - "An integration test that drives the *production* integSemanticLookup adapter (not the matrixLookup fake) against a populated DuckDB snapshot and asserts envelope.source == 'semantic'. The TestE2E_StranglerFig_SourceMatrix test at internal/skill/semantic/integration_test.go uses a hand-rolled matrixLookup that returns ranked data; the production adapter is never exercised end-to-end with a real snapshot."
-  - truth: "analyze_blast_radius returns confidence and evidence per impacted node when the semantic graph is available"
-    status: failed
-    reason: "Production integSemanticLookup.SymbolID, ExpandFrom, and ValidateCriticalEdges are stubs. The kernel-side orchestrator (analyzeBlastRadiusViaLookup) is correctly wired and unit-tested with a fakeLookup (7 passing tests in blast_radius_strangler_test.go), but in production the SymbolID call at tools.go:656 immediately returns ErrNoSnapshot, the handler reclassifies via ClassifyLookupErr, and falls back to the LSP-only path with capped confidence ≤ 0.6. The semantic two-pass orchestrator is never reachable in production. Confidence + evidence per impacted node IS produced by the LSP fallback path (capped at 0.6) but the semantic 1.00/0.20 ladder is unreachable."
-    artifacts:
-      - path: internal/daemon/semantic_wiring.go
-        issue: "SymbolID line 695: 'return integ.SymbolID(\"\"), integ.ErrNoSnapshot' on the success branch when Available; ExpandFrom line 728 same; ValidateCriticalEdges line 738 returns input edges with LSPConfirmed=false (no LSP traffic)."
-      - path: internal/kernel/symbols/tools.go
-        issue: "Line 656 lookup.SymbolID error always triggers fbReason path → never enters analyzeBlastRadiusViaLookup in production."
-    missing:
-      - "Real SymbolID lookup against the store's symbol index by (repoID, path, line, col) returning Phase 59 EXTRACT-02 stable IDs (deferred from 65-03 to 65-06; never landed)."
-      - "Real ExpandFrom: BFS over store.QueryEffectiveAdjacency to depth=2 mapping rows → Impact with Phase 62 confidence ladder (deferred from 65-03 to 65-06; never landed)."
-      - "Real ValidateCriticalEdges: kernel-side LSP probe over critical edges (deferred from 65-03 to 65-06; never landed)."
-      - "End-to-end integration test that exercises the *production* analyzeBlastRadiusViaLookup path against a populated graph and asserts source==semantic with non-zero non-fallback confidence values (1.00 confirmed, 0.20 refuted)."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 2/4
+  gaps_closed:
+    - "With the semantic index populated, get_repo_map and get_context return ranked output sourced from persisted graph scores + clusters"
+    - "analyze_blast_radius returns confidence and evidence per impacted node when the semantic graph is available"
+  gaps_remaining: []
+  regressions: []
+gaps: []
 human_verification: []
 overrides: []
 ---
@@ -38,9 +21,9 @@ overrides: []
 
 **Phase Goal:** `get_repo_map`, `get_context`, `analyze_blast_radius`, and `get_health` consult the semantic graph when available — with zero source change to `internal/repomap` engine — and fall back to v1.9 behavior automatically when the index is disabled, building, or errored.
 
-**Verified:** 2026-05-08T14:34:24Z
-**Status:** gaps_found (2/4 must-haves verified — 2 BLOCKERs from production-stub method bodies)
-**Re-verification:** No — initial verification
+**Verified:** 2026-05-08T17:48:26Z
+**Status:** passed (4/4 must-haves verified — both prior BLOCKER gaps closed)
+**Re-verification:** Yes — after gap-closure waves 4-7 (plans 65-09 through 65-12)
 
 ## Goal Achievement
 
@@ -48,80 +31,87 @@ overrides: []
 
 | # | Truth (ROADMAP Success Criterion) | Status | Evidence |
 |---|-----------------------------------|--------|----------|
-| 1 | With the semantic index populated, `get_repo_map` and `get_context` return ranked output sourced from persisted graph scores + clusters; with `semantic_index.enabled=false` they return v1.9 tree-sitter + PageRank output (index-disabled goldens preserved). | **FAILED (BLOCKER)** | Index-disabled half VERIFIED (goldens at `internal/skill/repomap/testdata/goldens/index_disabled_*.txt` exist; `TestEnvelope_IndexDisabledIsTreeSitter` passes; `git log -- internal/repomap/` confirms zero source change to engine). Index-populated half FAILS: production `integSemanticLookup.RankFiles` and `RankFromSeeds` return `ErrNoSnapshot` when Available — `internal/daemon/semantic_wiring.go:705-710, 714-719`. The matrix test exercises only a fake `matrixLookup`. |
-| 2 | `analyze_blast_radius` returns `confidence` and `evidence` per impacted node when the semantic graph is available; on fallback, confidence drops to ≤ 0.6 and the result envelope says so. | **FAILED (BLOCKER)** | Fallback half VERIFIED: `capConfidences(br, 0.6)` invoked on both `SourceTreeSitter` and `SourceFallback` arms (`internal/kernel/symbols/tools.go:645`); `TestAnalyzeBlastRadius_CfgDisabled_TreeSitter` and `TestAnalyzeBlastRadius_LookupUnavailable_Fallback` pin the cap. Semantic half FAILS: production `integSemanticLookup.SymbolID` returns `ErrNoSnapshot` at `semantic_wiring.go:695-700`, so the handler at `tools.go:656-657` always reclassifies to fallback before reaching `analyzeBlastRadiusViaLookup`. The 1.00 / 0.20 confidence ladder is never observable in production. |
-| 3 | `get_health` includes a `semantic_index` section: store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error. | ✓ VERIFIED | `SemanticIndexBlock` struct at `internal/kernel/health/tools.go:161-170` contains all 8 SPEC §24.5 fields (`Enabled`, `Store`, `LatestSnapshotStatus`, `GraphVersion`, `OverlayActive`, `PendingLSPRevalidations`, `LastLiveUpdateMs`, `LastError`). `ComputeSemanticIndexBlock` (`tools.go:202`) maps `integ.SemanticStatus` → wire JSON; daemon adapter implemented; envelope omitempty preserves SC-1 (`TestGetHealth_SC1Preserved` passes). Production `integSemanticLookup.Status` is REAL (not stubbed) — reads `LatestCommittedSnapshot`, `CurrentGraphVersion`, `OverlayHasPendingRows`, `queue.DepthAll`, `live.LastFlushAt`. `LastErrorReason` is hard-coded to `""` (acknowledged by 65-03 as Phase 65 65-07 follow-up; SPEC §24.5 contract upheld via Status err-return path). |
-| 4 | Every MCP envelope from a semantic-aware tool returns `source: semantic | tree_sitter | fallback` so callers can detect path drift. | ✓ VERIFIED | `integ.MarshalEnvelope` invoked in all four tool paths: `internal/skill/repomap/skill.go:407, 511` (get_repo_map, get_context); `internal/kernel/symbols/blast_radius_strangler.go:278, 303` (analyze_blast_radius); `internal/kernel/health/tools.go:244 (Source string field)` (get_health). Closed-enum constants at `internal/semantic/integ/source.go`; `ChooseSource` priority ladder uniformly used. `TestEnvelope_ClosedEnum`, `TestChooseSource_PriorityLadder`, and `TestE2E_StranglerFig_SourceMatrix` pin the field across all 24 (row × tool) cells. NB: which value the source field carries in production is governed by Truths 1+2 above. |
+| 1 | With the semantic index populated, `get_repo_map` and `get_context` return ranked output sourced from persisted graph scores + clusters; with `semantic_index.enabled=false` they return v1.9 tree-sitter + PageRank output (index-disabled goldens preserved). | ✓ VERIFIED | **Index-disabled half** still verified (goldens at `internal/skill/repomap/testdata/goldens/index_disabled_*.txt`; engine source untouched). **Index-populated half NOW verified**: `internal/daemon/semantic_wiring.go:772-794` — `RankFiles` reads `*Store.QueryRankedFiles` and maps `RankedFileRow → integ.RankedFile{Path, Score, Projection:"call_graph", GraphVersion}`. `RankFromSeeds` (lines 814-863) RRF-fuses the persisted baseline against `*retrieval.Engine.QueryBleve`, with k=60 and a `resolveSymbolPath` decimal-symbol-id resolver. Production-adapter regression test `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` (`internal/skill/semantic/production_adapter_e2e_test.go:204`) drives a real `*Store` + `daemon.NewIntegSemanticLookupForTest` → `RepoMapSkill.SetSemanticLookup`, parses the JSON envelope, and asserts `env.Source == "semantic"` AND `env.GraphVersion != 0` for both `get_repo_map` and `get_context`. PASSes. The closed-enum `semantic` value is reachable on the wire. |
+| 2 | `analyze_blast_radius` returns `confidence` and `evidence` per impacted node when the semantic graph is available; on fallback, confidence drops to ≤ 0.6 and the result envelope says so. | ✓ VERIFIED | **Fallback half** still verified (`capConfidences(br, 0.6)` at `tools.go:645`). **Semantic half NOW verified**: `integSemanticLookup.SymbolID` (`semantic_wiring.go:738-751`) delegates to `*Store.QuerySymbolByLocation`. `ExpandFrom` (lines 983-1011) BFS-expands `*Store.QueryEffectiveAdjacency` for `"call_graph"` to depth 2 with the Phase 62 confidence ladder (`bfsExpand` + `confidenceFromWeight`). The kernel-side `lspProbeForEdges` (`internal/kernel/symbols/blast_radius_strangler.go:164-219`) performs the Pass-2 LSP probe via `FindReferences` against the orchestrator-held lease; the daemon-side `ValidateCriticalEdges` is now a permanent passthrough (line 1134-1143). The handler at `tools.go:677-687` constructs the `lspProbeFn` closure from `lookup.LocateSymbol` + `FindReferences(lease,...)` and threads it into `analyzeBlastRadiusViaLookup`. **`TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder`** (`internal/kernel/symbols/bl1_blast_radius_e2e_test.go:55`) drives the production adapter against `daemon.NewE2EIntegLookupForTest`'s populated DuckDB fixture and asserts `confidence == 1.00` + `Refuted=false` on the confirmed edge AND `confidence == 0.20` + `Refuted=true` on the refuted edge. PASSes. The 1.00 / 0.20 ladder is now observable end-to-end through the production handler path. |
+| 3 | `get_health` includes a `semantic_index` section: store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error. | ✓ VERIFIED | All 8 SPEC §24.5 fields present in `SemanticIndexBlock` (`internal/kernel/health/tools.go:161-170`). `ComputeSemanticIndexBlock` maps `integ.SemanticStatus` → wire JSON; `LastErrorReason` is now stamped via `*semanticBundle.SetLastErrorReason` (semantic_wiring.go:146-160) at every enumerated build/live/overlay-flush error path (Probe SELECT 1 fail; BeginSnapshot/WriteSnapshotFacts/CommitSnapshot fail; cleared on success). `TestSemanticBundle_BuildFailure_StampsLastErrReason` and `TestGetHealthSemanticStoreStatus_StampsLastErrReason` pin the closed-enum reason flowing end-to-end. CR-02 misclassification fix landed: `classifySemanticProbeError` now uses `errors.Is(err, serr.ErrUnsupported)` (tools.go:84) instead of substring matching; `TestSemanticStoreStatus_Unhealthy_DBErrorTextLooksLikeNilHandle` regression guard PASSes. |
+| 4 | Every MCP envelope from a semantic-aware tool returns `source: semantic \| tree_sitter \| fallback` so callers can detect path drift. | ✓ VERIFIED | `integ.MarshalEnvelope` invoked across all four tool paths. Closed-enum constants at `internal/semantic/integ/source.go`; `ChooseSource` priority ladder uniform across consumers. `TestEnvelope_ClosedEnum`, `TestChooseSource_PriorityLadder`, and `TestE2E_StranglerFig_SourceMatrix` (24 subtests) pin the field. **NEW**: production-adapter regression `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` proves `Source==semantic` on the wire — not just via the matrix fake. |
 
-**Score:** 2/4 truths verified
+**Score:** 4/4 truths verified
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `internal/lint/nokernel2semantic/analyzer.go` | Allowlist for `internal/semantic/integ` | ✓ VERIFIED | `allowedSemanticIntegPath` constant present; tests `TestAnalyzer_AllowsKernelImportingSemanticInteg`, `TestAnalyzer_RejectsKernelImportingSemantic`, `TestAnalyzer_RejectsKernelImportingSemanticIntegLookalike` all pass. |
-| `internal/semantic/integ/{doc,lookup,source,status,noop,envelope,source_select}.go` | Types-only seam | ✓ VERIFIED | All files exist; `SemanticLookup` interface, closed-enum `Source`/`FallbackReason`, value types, `NoopLookup`, `Envelope`, `ChooseSource`, `ClassifyLookupErr` all present. `go test ./internal/semantic/integ/... -count=1` passes. |
-| `internal/daemon/semantic_wiring.go` (production buildFn) | Real walk → classify → extract → ToStoreFacts → WriteSnapshotFacts pipeline | ✓ VERIFIED | D-09 carryover #1 closed at `feat(65-01)` commit `8ac60229`. `ClassifyPathChange` at line 1073, `ToStoreFacts` at line 1166, `WriteSnapshotFacts` at line 957. `TestProductionBuildFn_WritesNonEmptyFacts` and `TestE2E_IndexThenContext_SymbolCount` pass with real Facts. |
-| `internal/daemon/semantic_wiring.go` (semSessionAdapter wsKeyFn) | Workspace key from daemon active closure | ✓ VERIFIED | D-09 carryover #2 closed at `feat(65-02)` commit `6348c3db`. `Workspace()` returns `a.wsKeyFn()` (line 542-547). `TestSemSessionAdapter_WorkspaceResolved` passes. |
-| `internal/daemon/semantic_wiring.go` (integSemanticLookup adapter) | Production read-tier adapter wrapping store + retrieval + scheduler | ⚠️ STUB | Type exists (line 668); compile-time assertion `var _ integ.SemanticLookup = (*integSemanticLookup)(nil)` at line 1211. `Available()` and `Status()` are real. **`SymbolID`, `RankFiles`, `RankFromSeeds`, `ExpandFrom` return `ErrNoSnapshot` unconditionally when `Available()==true`** (lines 695-728). `ValidateCriticalEdges` returns input edges with `LSPConfirmed=false` (no actual LSP probe). The 65-03 SUMMARY's "Resolves in 65-05/65-06" deferral was never delivered: 65-05 commit `0f11d8a0` modified `semantic_wiring.go` only to add `daemonCfgGate`; 65-06 did not touch the file. |
-| `internal/skill/repomap/skill.go` (SetSemanticLookup wiring) | Setter + lookup() normalizer + ChooseSource + JSON envelope | ✓ VERIFIED | `SetSemanticLookup` at line 172; `SetConfigGate`; `lookup()` nil-normalizer; `execGetRepoMap`/`execGetContext` route through `ChooseSource`; output JSON-wrapped via `MarshalEnvelope`. Skill code is correct and well-tested with a fake lookup. |
-| `internal/skill/repomap/strangler.go` | adaptRankedFiles + computeFreshness | ✓ VERIFIED | Both helpers present; sort-before-iterate doctrine preserved; closed-enum freshness mapping correct. |
-| `internal/skill/repomap/testdata/goldens/index_disabled_*.txt` | Byte-identical v1.9 tree text fixtures | ✓ VERIFIED | Both files exist (372 bytes each). `TestEnvelope_IndexDisabledIsTreeSitter` passes; `INTEG-01` fail-loud comment present. |
-| `internal/kernel/symbols/skill_adapter.go` | SymbolsSkill ToolProvider | ✓ VERIFIED | `SymbolsSkill` registers via `init()`; `Tools()` returns `analyze_blast_radius` ToolDef. |
-| `internal/kernel/symbols/blast_radius_strangler.go` | Two-pass orchestrator + filterCritical + applyValidationVerdicts + capConfidences | ✓ VERIFIED | All helpers present at lines 79-243. `analyzeBlastRadiusViaLookup` two-pass logic correct (Pass 1 ExpandFrom; copy-before-mutate; filterCritical; Pass 2 ValidateCriticalEdges; verdicts applied). 7/7 tests pass. **Note:** correct in isolation; never reached in production due to upstream stubs (see Truth 2). |
-| `internal/kernel/symbols/tools.go` (registerAnalyzeBlastRadius widened) | Accepts lookupFn + cfgGate; ChooseSource ladder at handler entry | ✓ VERIFIED | Signature widened (line 593-600); `integ.ChooseSource` at line 636; three-arm switch at lines 637-653; cap applied uniformly on tree_sitter + fallback arms. |
-| `internal/kernel/health/tools.go` (semantic_index block) | SemanticIndexBlock + ComputeSemanticIndexBlock + RegisterTools widened | ✓ VERIFIED | Block struct (8 fields per SPEC §24.5); `ComputeSemanticIndexBlock` real; envelope adds top-level `Source` field; `nilIfDisabled` preserves omitempty. SC-1 envelope unchanged (`TestSemanticStoreStatus_JSONShape` passes). |
-| `internal/skill/semantic/integration_test.go` (matrix) | TestE2E_StranglerFig_SourceMatrix table-driven | ⚠️ FAKE-ONLY | 6 rows × 4 tools = 24 subtests pass, but the matrix uses a hand-rolled `matrixLookup` SemanticLookup fake (line 748+). The production `integSemanticLookup` adapter is never exercised end-to-end with a real DuckDB snapshot. The test pins the closed-enum contract correctly but does not exercise the goal SC #1 / #2 against the production code path. |
+| `internal/lint/nokernel2semantic/analyzer.go` | Allowlist for `internal/semantic/integ` | ✓ VERIFIED | Tests pass (`go test ./internal/lint/nokernel2semantic/...`). |
+| `internal/semantic/integ/{doc,lookup,source,status,noop,envelope,source_select}.go` | Types-only seam + `LocateSymbol` (added 65-12) | ✓ VERIFIED | All files exist; `LocateSymbol` added to interface (lookup.go:102) + `NoopLookup` (noop.go:63). |
+| `internal/semantic/store/effective_graph.go` (readers) | `QueryRankedFiles` (65-10), `QuerySymbolPath` (65-10), `QuerySymbolByLocation` (65-11), `QueryNodeIDByStableKey` (65-11), `QueryStableKeyByNodeID` (65-11), `QuerySymbolLocationByStableKey` (65-12) | ✓ VERIFIED | All 6 readers present; `TestStore_Query*` tests pass (`go test ./internal/semantic/store/... -count=1`). |
+| `internal/daemon/semantic_wiring.go` (production buildFn) | Real walk → classify → extract → ToStoreFacts → WriteSnapshotFacts pipeline | ✓ VERIFIED | Carryover #1 closed at 65-01. |
+| `internal/daemon/semantic_wiring.go` (semSessionAdapter wsKeyFn) | Workspace key from daemon active closure | ✓ VERIFIED | Carryover #2 closed at 65-02. |
+| `internal/daemon/semantic_wiring.go` (integSemanticLookup adapter) | Production read-tier adapter wrapping store + retrieval + scheduler | ✓ VERIFIED | All 8 methods now real (was 5 stubs). `Available()`, `SymbolID` (738), `RankFiles` (772), `RankFromSeeds` (814), `ExpandFrom` (983), `ValidateCriticalEdges` (1134, intentional kernel-side passthrough), `LocateSymbol` (1154), `Status` (1175). `lastErrReason` field + `SetLastErrorReason` setter (146-160) close IN-04. |
+| `internal/daemon/integ_lookup_e2e_test.go` + `integ_lookup_e2e_helpers.go` | E2E harness driving production adapter against DuckDB fixture | ✓ VERIFIED | 65-09 created the harness; 65-10/11/12 flipped Skipfs to GREEN. 6 production-adapter tests now pass with no Skipfs (`TestIntegSemanticLookup_E2E_*`). |
+| `internal/daemon/integ_lookup_export.go` | Cross-package access seam (`NewIntegSemanticLookupForTest`, `NewE2EIntegLookupForTest`, `FixtureSymbolMeta`) | ⚠️ INFO | File renamed from `_for_test.go` to `.go` in 65-12 (Rule 3 deviation acknowledged in 65-12 SUMMARY) so the BL-1 cross-package test could compile. Test-fixture-named symbols are now in production package source. `go tool nm` confirms `daemon.NewE2EIntegLookupForTest`, `daemon.NewIntegSemanticLookupForTest`, `daemon.FixtureSymbolMeta`, etc. are NOT in the linked production binary (linker dead-code-eliminates them — nothing in production calls them). The `testing` package is reachable from production (5 testing.* symbols in binary), but bound size impact is trivial. The original WR-6 doctrine was tightened by Go's test-binary visibility rule; the chosen alternative preserves the BL-A cross-package contract without leaking into the binary. |
+| `internal/kernel/symbols/blast_radius_strangler.go` | Two-pass orchestrator + `lspProbeForEdges` + `lspProbeFn` parameter + accumulator semantics + graph_version stamping | ✓ VERIFIED | All helpers present. WR-05 accumulator at lines 343-368 (sawConfirmed/sawRefuted; refutation taints). WR-03 `formatBlastRadiusEnvelopeFromImpacts(impacts, src, reason, graphVersion)` at line 432. `analyzeBlastRadiusViaLookup` 5-return form with `lspProbeFn` parameter (lines 95-149). `lspProbeForEdges` (164-219) performs FindReferences via injected probeFn and overlap-checks against edge.To. |
+| `internal/kernel/symbols/tools.go` (registerAnalyzeBlastRadius) | lspProbeFn closure construction | ✓ VERIFIED | Closure at lines 677-686 captures lease + lookup.LocateSymbol; threaded via `analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym, lspProbeFn)` at line 687. |
+| `internal/kernel/symbols/bl1_blast_radius_e2e_test.go` | BL-1 verifier-mandated kernel-side confidence-ladder regression | ✓ VERIFIED | NEW file in `package symbols_test`. `TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder` consumes `daemon.NewE2EIntegLookupForTest` (BL-A canonical-key contract); asserts `confidence == 1.00 + Refuted=false` (confirmed) AND `confidence == 0.20 + Refuted=true` (refuted) END-TO-END through the production orchestrator + lspProbeForEdges + applyValidationVerdicts path. PASSes. |
+| `internal/kernel/symbols/export_for_test.go` | Test-only re-exports | ✓ VERIFIED | `_test.go`-suffixed file in `package symbols`; re-exports `AnalyzeBlastRadiusViaLookupForTest`, `LspProbeForEdgesForTest`, `PathToURIForTest`. Excluded from production by Go test-binary rule. |
+| `internal/kernel/health/tools.go` (semantic_index block + classifier) | Block + ComputeSemanticIndexBlock + errors.Is(err, ErrUnsupported) classifier | ✓ VERIFIED | All 8 SPEC §24.5 fields present. CR-02 fix: `classifySemanticProbeError` (line 84) uses `errors.Is(err, serr.ErrUnsupported)`; `strings.Contains` is gone. |
+| `internal/skill/repomap/skill.go` (SetSemanticLookup wiring) | Setter + lookup() normalizer + ChooseSource + JSON envelope | ✓ VERIFIED | Skill code unchanged from prior verification (correct). |
+| `internal/skill/semantic/production_adapter_e2e_test.go` | Production-adapter SourceSemantic E2E in black-box test package | ✓ VERIFIED | NEW file (`package semantic_test`). Both tests pass. The strict 1.00/0.20 lives kernel-side; this delegates per BL-1 contract. |
+| `internal/daemon/integ_lookup_test.go` (read-tier canary) | go/parser-based body extraction (was column-1 brace heuristic) | ✓ VERIFIED | WR-02 fix landed at 65-12. `TestExtractIntegLookupMethodBodies_ParserSeesAllMethods` + `TestExtractIntegLookupMethodBodies_ReceiverCount` pass (8 methods on `*integSemanticLookup`). `grep "go/parser" internal/daemon/integ_lookup_test.go` returns 1 match; `line == "}"` returns 0. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| RepoMapSkill.execGetRepoMap | integ.SemanticLookup.RankFiles | `lookup.RankFiles(ctx, ws)` | ⚠️ WIRED-TO-STUB | Skill side wired correctly; production lookup returns ErrNoSnapshot unconditionally. |
-| RepoMapSkill.execGetContext | integ.SemanticLookup.RankFromSeeds | `lookup.RankFromSeeds(ctx, ws, files)` | ⚠️ WIRED-TO-STUB | Same. |
-| analyze_blast_radius handler | integ.SemanticLookup.SymbolID | `lookup.SymbolID(ctx, ws, args.Path, lspLine, lspCol)` | ⚠️ WIRED-TO-STUB | Same — handler always falls back. |
-| analyzeBlastRadiusViaLookup | integ.SemanticLookup.ExpandFrom + ValidateCriticalEdges | direct call | ⚠️ UNREACHABLE | Orchestrator is correct but unreachable because SymbolID upstream errors. |
-| Daemon post-init | RepoMapSkill.SetSemanticLookup | `repomapSkill.SetSemanticLookup(sBndl.integLookupAccessor())` | ✓ WIRED | `internal/daemon/daemon.go:679`. |
-| Daemon post-init | symbols.RegisterTools (lookupFn + cfgGate) | parameters threaded | ✓ WIRED | New signature accepts both; daemon constructs and threads. |
-| Daemon post-init | health.RegisterTools (cfgGate, semLookup, semIndex) | parameters threaded | ✓ WIRED | All three threaded; daemonSemIndexAccessor wraps integSemanticLookup.Status. |
+| RepoMapSkill.execGetRepoMap | integ.SemanticLookup.RankFiles → *Store.QueryRankedFiles | persisted graph scores | ✓ WIRED-AND-FLOWING | RankFiles returns real `[]integ.RankedFile` with non-zero `GraphVersion` (verified by E2E test). |
+| RepoMapSkill.execGetContext | integ.SemanticLookup.RankFromSeeds → bleve QueryBleve + RRF fuse | RRF k=60 over baseline + textRank | ✓ WIRED-AND-FLOWING | `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` exercises both `get_repo_map` and `get_context`; both emit `Source==semantic`. |
+| analyze_blast_radius handler | integ.SemanticLookup.SymbolID → *Store.QuerySymbolByLocation | 1-based (line, col) → stable_key | ✓ WIRED-AND-FLOWING | BL-1 test resolves `confirmed_edge_from.SymbolID` then drives ExpandFrom successfully. |
+| analyzeBlastRadiusViaLookup | integ.SemanticLookup.ExpandFrom → BFS over QueryEffectiveAdjacency | depth=2; Phase 62 confidence ladder | ✓ WIRED-AND-FLOWING | BFS visits canonical edges; impacts emitted for confirmed_edge_to + refuted_edge_to. |
+| analyzeBlastRadiusViaLookup | lspProbeFn → lspProbeForEdges → FindReferences | kernel-side LSP probe via lease | ✓ WIRED-AND-FLOWING | BL-1 test asserts confirmed → 1.00 (probe overlap match); refuted → 0.20 + Refuted (probe miss). |
+| get_health.semantic_index | integSemanticLookup.Status → store accessors + bundle.lastErrReason | concurrent-safe under bundle.mu | ✓ WIRED-AND-FLOWING | All 8 fields populated; LastErrorReason now real (was hard-coded ""). |
+| Daemon post-init | RepoMapSkill.SetSemanticLookup, analyze_blast_radius lookupFn, health semIndex accessor | parameters threaded | ✓ WIRED | Unchanged from prior verification. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|---------------------|--------|
-| `execGetRepoMap` (semantic arm) | `ranked []integ.RankedFile` | `lookup.RankFiles` (production) | **No — always errors with ErrNoSnapshot** | ✗ HOLLOW (semantic arm unreachable) |
-| `execGetRepoMap` (fallback arm) | `treeText` from `renderV19` | `s.graph.RankFiles(0.85, ...)` over FileGraph | Yes (existing v1.9 path) | ✓ FLOWING |
-| `execGetContext` (semantic arm) | `ranked []integ.RankedFile` | `lookup.RankFromSeeds` (production) | **No — same** | ✗ HOLLOW |
-| `analyze_blast_radius` (semantic arm) | `impacts []integ.Impact` | `lookup.SymbolID` then `lookup.ExpandFrom` | **No — SymbolID errors first** | ✗ HOLLOW |
-| `analyze_blast_radius` (fallback arm) | `br.PerNode` | `AnalyzeBlastRadius` (LSP) → `capConfidences(br, 0.6)` | Yes (LSP-derived) | ✓ FLOWING |
-| `get_health` (semantic_index block) | `SemanticIndexBlock` fields | `accessor.Status` → `integSemanticLookup.Status` (REAL) → store accessors | Yes | ✓ FLOWING |
+| `execGetRepoMap` (semantic arm) | `ranked []integ.RankedFile` | `lookup.RankFiles` (production, calls `*Store.QueryRankedFiles`) | **Yes — real persisted scores via SQL aggregate** | ✓ FLOWING |
+| `execGetRepoMap` (fallback arm) | `treeText` from `renderV19` | `s.graph.RankFiles(0.85, ...)` over FileGraph | Yes | ✓ FLOWING |
+| `execGetContext` (semantic arm) | `ranked []integ.RankedFile` | `lookup.RankFromSeeds` (RRF fusion of persisted + bleve) | **Yes — RRF k=60 over both sources** | ✓ FLOWING |
+| `analyze_blast_radius` (semantic arm) | `impacts []integ.Impact` | `lookup.SymbolID` → `lookup.ExpandFrom` → `lspProbeForEdges` → `applyValidationVerdicts` | **Yes — real BFS over QueryEffectiveAdjacency + LSP probe via FindReferences** | ✓ FLOWING |
+| `analyze_blast_radius` (fallback arm) | `br.PerNode` | `AnalyzeBlastRadius` (LSP) → `capConfidences(br, 0.6)` | Yes | ✓ FLOWING |
+| `get_health` (semantic_index block) | `SemanticIndexBlock` fields | `accessor.Status` → `integSemanticLookup.Status` (real) → store accessors + `bundle.lastErrReason` | Yes — including LastErrorReason via SetLastErrorReason stamp/clear | ✓ FLOWING |
 
-**Note on Level-4 finding:** Per the goal-backward methodology, an artifact that is wired (Level 3) but does not produce real data (Level 4) is HOLLOW. The semantic arms of three of the four tools are wired-but-hollow in production.
+**No HOLLOW or STUB artifacts remain.**
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
 | Phase 65 packages compile | `go build ./internal/... ./cmd/...` | exit 0 (Swift binding macro warning only) | ✓ PASS |
-| Phase 65 packages pass vet | `go vet ./internal/lint/nokernel2semantic/... ./internal/semantic/integ/... ./internal/kernel/symbols/... ./internal/kernel/health/... ./internal/skill/repomap/... ./internal/daemon/...` | exit 0 | ✓ PASS |
+| Phase 65 packages pass vet | `go vet ./internal/... ./cmd/...` | exit 0 | ✓ PASS |
 | Lint analyzer tests | `go test ./internal/lint/nokernel2semantic/... -count=1` | PASS | ✓ PASS |
 | integ package tests | `go test ./internal/semantic/integ/... -count=1` | PASS | ✓ PASS |
 | Symbols + health + repomap tests | `go test ./internal/kernel/symbols/... ./internal/kernel/health/... ./internal/skill/repomap/... -count=1` | PASS | ✓ PASS |
-| Daemon phase 65 tests | `go test ./internal/daemon/... -count=1 -run "TestProductionBuildFn|TestSemSessionAdapter|TestIntegSemanticLookup"` | PASS | ✓ PASS |
-| Strangler-fig matrix (24 subtests) | `go test ./internal/skill/semantic/... -run "TestE2E_StranglerFig_SourceMatrix"` | PASS — but uses fake `matrixLookup`, not production adapter | ⚠️ PASS (FAKE-ONLY) |
-| 15-symbol fixture (post-65-01) | `go test ./internal/skill/semantic/... -run "TestE2E_IndexThenContext_SymbolCount"` | PASS | ✓ PASS |
-| End-to-end production-adapter `source==semantic` | (no such test exists) | — | ✗ MISSING |
-| End-to-end production-adapter `confidence==1.00` (validated edge) | (no such test exists) | — | ✗ MISSING |
+| Daemon phase 65 tests | `go test ./internal/daemon/... -count=1` | PASS | ✓ PASS |
+| Production-adapter E2E (RankFiles, RankFromSeeds, SymbolID, ExpandFrom, ValidateCriticalEdges Passthrough, Status) | `go test ./internal/daemon/... -run "TestIntegSemanticLookup_E2E"` | 6 PASS, 0 SKIP | ✓ PASS |
+| BL-1 confidence-ladder kernel-side regression | `go test ./internal/kernel/symbols/... -run "TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder"` | PASS (asserts 1.00 + 0.20) | ✓ PASS |
+| Production-adapter SourceSemantic skill-level | `go test ./internal/skill/semantic/... -run "TestE2E_StranglerFig_ProductionAdapter"` | 2 PASS, 0 SKIP | ✓ PASS |
+| Read-tier canary | `go test ./internal/daemon/... -run "TestIntegSemanticLookup_ReadTierCanary"` | PASS (after go/parser rewrite at WR-02) | ✓ PASS |
+| WR-2 LastErrorReason regression | `go test ./internal/daemon/... -run "TestSemanticBundle_BuildFailure\|TestGetHealthSemanticStoreStatus_StampsLastErrReason"` | PASS | ✓ PASS |
+| WR-05 accumulator regression | `go test ./internal/kernel/symbols/... -run "TestApplyValidationVerdicts_RefutationTainsRegardlessOfConfirmation\|TestLspProbeForEdges_AccumulatorSemantics"` | PASS | ✓ PASS |
+| Strangler-fig matrix (24 subtests; existing) | `go test ./internal/skill/semantic/... -run "TestE2E_StranglerFig_SourceMatrix"` | 24 PASS | ✓ PASS |
+| Production binary symbol leak check | `go tool nm $(/tmp/helix-verify) \| grep -E "NewE2EIntegLookupForTest\|NewIntegSemanticLookupForTest\|FixtureSymbolMeta"` | empty (linker DCE removes unused test-fixture symbols) | ✓ PASS |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|------------|-------------|--------|----------|
-| INTEG-01 | 65-00, 65-01, 65-03, 65-05, 65-08 | get_repo_map consults SetSemanticLookup; falls back on disabled/building/errored; zero source change to internal/repomap engine. | **PARTIAL — BLOCKED** | Falls-back half VERIFIED (config-disabled goldens, engine untouched). Semantic-on half BLOCKED — RankFiles is a stub. |
-| INTEG-02 | 65-01, 65-02, 65-03, 65-05, 65-08 | get_context delegates to semantic retrieval engine when available with same fallback contract. | **PARTIAL — BLOCKED** | Same — RankFromSeeds is a stub. |
-| INTEG-03 | 65-00, 65-03, 65-06, 65-08 | analyze_blast_radius uses semantic graph expansion + LSP validation when available; per-node confidence + evidence; falls back when disabled. | **PARTIAL — BLOCKED** | Fallback path with 0.6 cap VERIFIED. Semantic two-pass orchestrator correct in isolation but unreachable: SymbolID/ExpandFrom/ValidateCriticalEdges are stubs. |
-| INTEG-04 | 65-00, 65-07, 65-08 | get_health includes semantic_index section (store kind, snapshot status, graph version, overlay active, pending LSP count, last live-update latency, last error). | ✓ SATISFIED | All 8 SPEC §24.5 fields present and populated by real `integSemanticLookup.Status` (Status is the one real method). LastErrorReason hard-coded to "" but covered by err-return path. |
-| INTEG-05 | 65-03, 65-04, 65-05, 65-06, 65-07, 65-08 | Every MCP envelope from a semantic-aware tool returns source field (semantic | tree_sitter | fallback). | ✓ SATISFIED | Closed-enum source field stamped on all four envelopes via `MarshalEnvelope`/struct tag. ChooseSource ladder uniform across consumers. Note: in production the `semantic` value is unreachable (see INTEG-01/02/03). |
+| INTEG-01 | 65-00..65-12 | get_repo_map consults SetSemanticLookup; falls back on disabled/building/errored; zero source change to internal/repomap engine. | ✓ SATISFIED | Both halves verified. Engine source untouched (`git log -- internal/repomap/`); semantic-on path produces real `RankedFile` rows from persisted scores. `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` PASSes. |
+| INTEG-02 | 65-00..65-12 | get_context delegates to semantic retrieval engine when available with same fallback contract. | ✓ SATISFIED | RankFromSeeds RRF-fuses persisted scores + bleve text-rank; `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` covers `get_context` envelope; `TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore` BL-4 silent-degradation guard PASSes. |
+| INTEG-03 | 65-00..65-12 | analyze_blast_radius uses semantic graph expansion + LSP validation when available; per-node confidence + evidence; falls back when disabled. | ✓ SATISFIED | Two-pass orchestrator reachable in production via real SymbolID/ExpandFrom + kernel-side lspProbeForEdges. `TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder` asserts the 1.00 / 0.20 confidence ladder END-TO-END. |
+| INTEG-04 | 65-00, 65-07, 65-08, 65-09, 65-11 | get_health includes semantic_index section. | ✓ SATISFIED | All 8 SPEC §24.5 fields populated by real `integSemanticLookup.Status`. LastErrorReason now real (was hard-coded ""); CR-02 classifier closed. |
+| INTEG-05 | 65-03..65-12 | Every MCP envelope from a semantic-aware tool returns source field. | ✓ SATISFIED | Closed-enum source field stamped on all four envelopes. The `semantic` value is now reachable on the wire (was unreachable in initial verification). |
 
 **Orphaned requirements:** None — all 5 IDs (INTEG-01..INTEG-05) appear in plan frontmatter.
 
@@ -129,44 +119,58 @@ overrides: []
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `internal/daemon/semantic_wiring.go` | 695-728 | `RankFiles`, `RankFromSeeds`, `SymbolID`, `ExpandFrom` all return `ErrNoSnapshot` on the `Available==true` branch. Method parameters all underscore-discarded. Comments say "65-05 wires the persisted-score reader" / "65-06 wires BFS over QueryEffectiveAdjacency" — those wires never landed. | 🛑 BLOCKER | Goal SC #1 and #2 unreachable in production. |
-| `internal/daemon/semantic_wiring.go` | 734-742 | `ValidateCriticalEdges` returns input edges with `LSPConfirmed=false` (no LSP traffic). | 🛑 BLOCKER (contributes to INTEG-03 gap) | Pass-2 verdicts can never confirm/refute in production. |
-| `internal/kernel/health/tools.go` | 75-83 | `classifySemanticProbeError` substring-matches `"DB handle nil"` (not emitted by daemon) and `"store unavailable"` (would catch any future wrapped DuckDB error). REVIEW.md CR-02 BLOCKER. | ⚠️ WARNING | Misclassifies real DB errors as `nil_handle`; violates WR-NEW-01 doctrine. Does not block goal but corrupts operator diagnostics. |
-| `internal/daemon/semantic_wiring.go` | 794 | `LastErrorReason` hard-coded to `""` even on `state==StatusReady` with transient error. | ℹ️ INFO | Acknowledged in 65-03 SUMMARY as 65-07 follow-up that did not land; SPEC §24.5 contract upheld via err-return path so wire surface is honest. |
-| `internal/kernel/symbols/blast_radius_strangler.go` | 284-307 | `formatBlastRadiusEnvelopeFromImpacts` does not stamp `graph_version` (REVIEW WR-03). Other three tools do stamp it. | ⚠️ WARNING | Asymmetric envelope between four tools; semantic envelope has empty graph_version. Would not surface in production today because semantic arm is unreachable. |
-| `internal/kernel/symbols/blast_radius_strangler.go` | 209-226 | `applyValidationVerdicts` `break`s after first matching edge per impact, so refutations after a confirmation are silently lost (REVIEW WR-05). | ⚠️ WARNING | Order-dependent verdict; non-deterministic if evidence-edges order is non-stable. Not exercised in production today. |
+| `internal/daemon/integ_lookup_export.go` | 33-98 | Test-fixture-named symbols in regular `.go` (not `_test.go`) source. The 65-12 Rule 3 deviation acknowledged the BL-A cross-package contract was structurally unimplementable as `_test.go` (Go's test-binary visibility rule); the file was renamed and now lives in production source. | ℹ️ INFO | Linker DCE removes unused symbols from the final binary (`go tool nm` confirms zero leak); 5 `testing.*` symbols make it through (trivial size impact). The original WR-6 doctrine was tightened by Go's compile rules; the chosen alternative preserves BL-A. |
+| `internal/daemon/integ_lookup_e2e_helpers.go` | 38-54 | Same — fixture builders in regular `.go` package source. | ℹ️ INFO | Same — naming makes intent unambiguous; nothing in production daemon wiring calls these helpers; linker DCE handles them. |
+| `internal/daemon/semantic_wiring.go` | 1166-1199 | `LastErrorReason` field-comment still says "65-07 follow-up that did not land" — outdated; the WR-2 wiring landed in 65-11. Doc string drift. | ℹ️ INFO | Doc-only; runtime behavior is correct. |
+
+No 🛑 BLOCKERs and no ⚠️ WARNINGs remain. The two prior BLOCKER stub bodies at `semantic_wiring.go:695-742` are now real implementations.
 
 ### Code Review Cross-Reference (REVIEW.md)
 
-REVIEW.md catalogues 14 findings (2 critical, 7 warning, 5 info). Of those, two interact with goal verification:
+REVIEW.md catalogues 14 findings. After waves 4-7 closure:
 
-- **CR-01:** Re-classified to INFO (IN-04) by reviewer; not a goal-violation. CONFIRMED — Status err-return path preserves wire contract.
-- **CR-02:** `classifySemanticProbeError` substring sentinel mismatch. BLOCKER from review's perspective on diagnostic correctness, but **not a goal-violation** for Phase 65 — get_health still returns a `semantic_store` block per SC-1; the misclassification corrupts operator diagnostics rather than breaking the success criterion. Surfaced here as ⚠️ WARNING per the verifier prompt's guidance.
+- **CR-02** (substring sentinel): closed at 65-09 Task 3 — `errors.Is(err, serr.ErrUnsupported)` + regression guard test PASSES.
+- **WR-01** (Status mutex): closed at 65-11 — single critical section.
+- **WR-02** (column-1 brace heuristic): closed at 65-12 Task 3 — go/parser-based extractor.
+- **WR-03** (graph_version stamping): closed at 65-11 — `formatBlastRadiusEnvelopeFromImpacts` accepts and stamps `graphVersion`.
+- **WR-04** (dot-walker dead code): closed at 65-10.
+- **WR-05** (verdict break-on-first-match): closed at 65-11 — sawConfirmed/sawRefuted accumulator.
+- **WR-06** (IsQuiescent lock): closed at 65-10 — lock held through call.
+- **WR-07 / WR-1** (high-bit symbol_id): closed at 65-10 with LOG + MASK + CONTINUE; genuine collision-fix tracked as deferred follow-up (acknowledged in 65-10 SUMMARY's `<deferred>` block).
+- **IN-04** (LastErrorReason hard-coded ""): closed at 65-11 — bundle.lastErrReason field + SetLastErrorReason setter wired at every enumerated build/live/overlay-flush path.
 
 ### Carryover from Phase 64
 
 | Carryover | Status | Evidence |
 |-----------|--------|----------|
-| D-09 #1 — production buildFn empty-Facts placeholder | ✓ CLOSED | 65-01 commit `8ac60229` replaced placeholder with real walk → classify → ToStoreFacts → WriteSnapshotFacts pipeline. `TestProductionBuildFn_WritesNonEmptyFacts` passes; `TestE2E_IndexThenContext_SymbolCount` reports 15 symbols. |
-| D-09 #2 — zero-value WorkspaceKey from session adapter | ✓ CLOSED | 65-02 commit `6348c3db` threaded `wsKeyFn` closure through `newSemanticBundle` into `semSessionAdapter`. `Workspace()` now returns `a.wsKeyFn()`. `TestSemSessionAdapter_WorkspaceResolved` passes. |
+| D-09 #1 — production buildFn empty-Facts placeholder | ✓ CLOSED | 65-01. |
+| D-09 #2 — zero-value WorkspaceKey from session adapter | ✓ CLOSED | 65-02. |
 
 ### Human Verification Required
 
-None — the gaps are observable programmatically (stub method bodies returning unconditional sentinel errors).
+None — all gaps were observable programmatically (stub method bodies returning sentinel errors); the gap closures landed real implementations with real regression tests that drive the production adapter end-to-end.
 
 ### Gaps Summary
 
-The phase ships a clean architectural seam (`internal/semantic/integ`), correct consumer-side wiring in all four tools, a uniform closed-enum source field, a populated `semantic_index` block in `get_health`, and the two Phase 64 carryover items. The lint analyzer, envelope marshaller, source-selection helper, two-pass orchestrator, confidence cap, and JSON wrapper are all correct and well-tested.
+The phase ships a complete strangler-fig migration: clean architectural seam (`internal/semantic/integ`), real production-side `*integSemanticLookup` adapter (all 8 methods), uniform closed-enum source field on all four tool envelopes, populated `semantic_index` block in `get_health` with real LastErrorReason wiring, kernel-side LSP probe (`lspProbeForEdges`) replacing the daemon-side passthrough, two-pass orchestrator threading `lspProbeFn` correctly, accumulator-based verdict semantics, graph_version stamping on the semantic envelope, sentinel-based health classifier, go/parser-based read-tier canary, and an end-to-end BL-1 regression that asserts the 1.00 / 0.20 confidence ladder against the real adapter via `daemon.NewE2EIntegLookupForTest`.
 
-The blocking gap is on the daemon side: the production `integSemanticLookup` adapter ships with five of its seven methods as stubs that unconditionally return `ErrNoSnapshot` (or pass through edges with `LSPConfirmed=false`). The 65-03 plan and SUMMARY explicitly defer the real ranking/expansion/symbol-translation logic to 65-05 (RankFiles/RankFromSeeds) and 65-06 (ExpandFrom/SymbolID/ValidateCriticalEdges); but the 65-05 commit modified `semantic_wiring.go` only to add `daemonCfgGate`, and 65-06 did not touch the file at all. The deferral was never honoured.
+Both prior BLOCKERs from the initial verification are closed:
 
-Consequence: with `cfg.SemanticIndex.Enabled=true` and a fully populated, committed snapshot, the consumer-side `ChooseSource` ladder always reclassifies the lookup error to `SourceFallback` + `FallbackReasonNoSnapshotYet`. The semantic arms of `get_repo_map`, `get_context`, and `analyze_blast_radius` are unreachable. The closed-enum `semantic` source value cannot appear on the wire — only `tree_sitter` (cfg off) or `fallback + no_snapshot_yet` (cfg on, populated index, but stubbed lookup). This violates ROADMAP success criteria #1 and #2 directly.
+1. **Truth #1** — RankFiles + RankFromSeeds are real implementations reading `*Store.QueryRankedFiles` and RRF-fusing against bleve. The production-adapter regression test `TestE2E_StranglerFig_ProductionAdapter_SourceSemantic` proves `Source==semantic` on the wire for both `get_repo_map` and `get_context` against a populated DuckDB snapshot.
+2. **Truth #2** — SymbolID + ExpandFrom + LocateSymbol are real implementations. The kernel-side `lspProbeForEdges` performs the Pass-2 LSP probe via FindReferences against the orchestrator-held lease. The BL-1 test `TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder` asserts the 1.00 / 0.20 confidence ladder END-TO-END through the production handler path with no Skipfs and no abbreviated-form hedges.
 
-The matrix integration test passes only because it uses a hand-rolled `matrixLookup` fake; it does not drive the production `integSemanticLookup` adapter against a real DuckDB snapshot. There is no end-to-end regression harness for the semantic-source path.
+Truths #3 and #4 remained verified across both runs.
 
-The two gap entries in the YAML frontmatter group these defects by goal-truth (one truth covers RankFiles/RankFromSeeds for SC#1; one covers SymbolID/ExpandFrom/ValidateCriticalEdges for SC#2). The structure is suitable for `/gsd-plan-phase --gaps` consumption.
+The verifier's two BL-A / WR-6 concerns about the cross-package test edge are tracked as INFO findings:
+
+- The `_test.go` → `.go` rename was a Rule 3 deviation acknowledged in 65-12 SUMMARY; Go's test-binary rule forbade the original BL-A contract. The chosen alternative leaks 5 trivial `testing.*` symbols into the binary but the linker DCE removes the named test-fixture symbols.
+- The kernel→daemon test-only import edge stays in `*_test.go` files, so production kernel code remains free of `internal/daemon` imports. The lint analyzer at `internal/lint/nokernel2semantic/analyzer.go` was confirmed to NOT restrict this edge (only `internal/kernel→internal/semantic`, with `internal/semantic/integ` allowlisted).
+
+The 14 REVIEW findings catalogued in `65-REVIEW.md` are now all addressed: 9 closed, 1 closed-with-deferred-follow-up (WR-07 collision-fix), 4 reclassified as info-only or non-goal-blockers in prior verification.
+
+Phase 65 goal achievement: **PASSED**. Ready to proceed to Phase 66.
 
 ---
 
-_Verified: 2026-05-08T14:34:24Z_
+_Verified: 2026-05-08T17:48:26Z_
 _Verifier: Claude (gsd-verifier)_

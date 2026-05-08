@@ -164,7 +164,7 @@ func TestAnalyzeBlastRadius_SemanticTwoPass(t *testing.T) {
 		validateRes:  pass2,
 	}
 
-	impacts, src, reason, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
 	require.NoError(t, err)
 	assert.Equal(t, integ.SourceSemantic, src)
 	assert.Empty(t, string(reason))
@@ -264,7 +264,7 @@ func TestAnalyzeBlastRadius_Pass1Error_FallsBackToLSP(t *testing.T) {
 		expandErr: integ.ErrIndexBuilding,
 	}
 
-	impacts, src, reason, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
 	require.Error(t, err, "Pass 1 ExpandFrom error MUST surface as the function error so caller can drop to LSP")
 	assert.Equal(t, integ.SourceFallback, src)
 	assert.Equal(t, integ.FallbackReasonIndexBuilding, reason,
@@ -314,7 +314,7 @@ func TestAnalyzeBlastRadius_Pass2Error_KeepsPass1(t *testing.T) {
 		validateErr:  errStub("network error"),
 	}
 
-	impacts, src, reason, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
+	impacts, src, reason, _, err := analyzeBlastRadiusViaLookup(ctx, lookup, ws, integ.SymbolID("src"))
 	require.NoError(t, err, "Pass 2 LSP error is non-fatal — Pass 1 still trusted")
 	assert.Equal(t, integ.SourceSemantic, src,
 		"Pass 2 error MUST keep source=semantic — Pass 1 result is the canonical answer")
@@ -372,6 +372,95 @@ func TestFilterCritical_PublicAPIBoundary(t *testing.T) {
 	assert.Equal(t, integ.SymbolID("a"), out[0].SymbolID, "low-confidence in-pkg is critical")
 	assert.Equal(t, integ.SymbolID("b"), out[1].SymbolID, "cross-pkg + exported target is critical")
 	assert.Equal(t, integ.SymbolID("e"), out[2].SymbolID, "low conf + cross-pkg + exported is critical")
+}
+
+// ---------------------------------------------------------------------------
+// 7a. applyValidationVerdicts — WR-05 accumulator semantics (Phase 65 65-11).
+// ---------------------------------------------------------------------------
+
+// TestApplyValidationVerdicts_RefutationTaintsRegardlessOfConfirmation pins
+// WR-05: when an impact has multiple evidence edges and at least ONE edge is
+// refuted, the impact MUST be marked Refuted regardless of any confirmations
+// on sibling edges. The pre-WR-05 implementation used a `break` after the
+// first matching verdict, so a confirmation on edge[0] would mask a refutation
+// on edge[1].
+func TestApplyValidationVerdicts_RefutationTaintsRegardlessOfConfirmation(t *testing.T) {
+	edgeConfirmed := integ.Edge{From: "src", To: "tgt-A", Kind: "calls", Confidence: 0.45}
+	edgeRefuted := integ.Edge{From: "src", To: "tgt-B", Kind: "calls", Confidence: 0.45}
+
+	impacts := []integ.Impact{
+		{
+			SymbolID:   "tgt-multi",
+			Confidence: 0.45,
+			Evidence: integ.Evidence{Edges: []integ.Edge{
+				edgeConfirmed, // first edge: confirmed
+				edgeRefuted,   // second edge: refuted — MUST taint the impact
+			}},
+		},
+	}
+
+	verdicts := []integ.ValidatedEdge{
+		{Edge: edgeConfirmed, LSPConfirmed: true},
+		{Edge: edgeRefuted, LSPConfirmed: false},
+	}
+
+	applyValidationVerdicts(impacts, verdicts)
+
+	assert.InDelta(t, 0.20, impacts[0].Confidence, 1e-9,
+		"WR-05: any single refutation MUST drop confidence to 0.20 even when sibling edges were confirmed")
+	assert.True(t, impacts[0].Refuted,
+		"WR-05: any single refutation MUST set Refuted=true regardless of sibling confirmations")
+}
+
+// TestApplyValidationVerdicts_AllConfirmedFlipsToOne preserves the existing
+// confirmed-only path: when every matched verdict is LSPConfirmed=true and no
+// edges are refuted, Confidence flips to 1.00 and Refuted stays false.
+func TestApplyValidationVerdicts_AllConfirmedFlipsToOne(t *testing.T) {
+	edgeA := integ.Edge{From: "src", To: "tgt-A", Kind: "calls", Confidence: 0.45}
+	edgeB := integ.Edge{From: "src", To: "tgt-B", Kind: "calls", Confidence: 0.45}
+
+	impacts := []integ.Impact{
+		{
+			SymbolID:   "tgt-multi",
+			Confidence: 0.45,
+			Evidence:   integ.Evidence{Edges: []integ.Edge{edgeA, edgeB}},
+		},
+	}
+
+	verdicts := []integ.ValidatedEdge{
+		{Edge: edgeA, LSPConfirmed: true},
+		{Edge: edgeB, LSPConfirmed: true},
+	}
+
+	applyValidationVerdicts(impacts, verdicts)
+	assert.Equal(t, 1.00, impacts[0].Confidence,
+		"WR-05: every-confirmed impact MUST flip Confidence to 1.00")
+	assert.False(t, impacts[0].Refuted,
+		"WR-05: every-confirmed impact MUST NOT be Refuted")
+}
+
+// ---------------------------------------------------------------------------
+// 7b. formatBlastRadiusEnvelopeFromImpacts — WR-03 graph_version stamp.
+// ---------------------------------------------------------------------------
+
+// TestFormatBlastRadiusEnvelopeFromImpacts_StampsGraphVersion pins WR-03: the
+// semantic-arm envelope MUST carry the graph_version threaded from
+// lookup.Status. The pre-WR-03 implementation hardcoded GraphVersion=0 (the
+// integ.Envelope zero-value), so the envelope omitted the key entirely.
+func TestFormatBlastRadiusEnvelopeFromImpacts_StampsGraphVersion(t *testing.T) {
+	impacts := []integ.Impact{
+		{SymbolID: "X", Confidence: 0.95, Evidence: integ.Evidence{}},
+	}
+	const wantGV uint64 = 4242
+
+	out, err := formatBlastRadiusEnvelopeFromImpacts(impacts, integ.SourceSemantic, "", wantGV)
+	require.NoError(t, err)
+
+	var env envelopePayload
+	require.NoError(t, json.Unmarshal(out, &env))
+	assert.Equal(t, "semantic", env.Source)
+	assert.Equal(t, wantGV, env.GraphVersion,
+		"WR-03: envelope.graph_version MUST be the value threaded from lookup.Status")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,5 +190,79 @@ func TestSemSessionAdapter_WorkspaceResolved(t *testing.T) {
 	emptyAdapter := &semSessionAdapter{}
 	if got := emptyAdapter.Workspace(context.Background()); got != (workspace.WorkspaceKey{}) {
 		t.Errorf("semSessionAdapter{wsKeyFn:nil}.Workspace() = %+v, want zero-value", got)
+	}
+}
+
+// TestFactsFromExtracted_HighBitSetSymbolIDLogged is the Phase 65 65-10
+// Task 2 RED gate for WR-07 / WR-1 (LOG + MASK + CONTINUE).
+//
+// The pre-65-10 factsFromExtracted SILENTLY masks the high bit of
+// SymbolID / NodeID / OwnerSymbolID / ParentScopeID at lines 1176-1183
+// of semantic_wiring.go. The W-07 fix asserts the high bit is zero,
+// LOGS at warn level on violation, AND continues with the masked
+// low-63 value. Skip-on-violation cascades into snapshot ingest
+// determinism; logging surfaces the bug to operators without breaking
+// the build.
+//
+// This test:
+//   - Builds an ExtractedFile with one Symbol whose SymbolID has the
+//     high bit set (0x8000000000000000 | 42).
+//   - Captures slog output via a TextHandler bound to a *bytes.Buffer.
+//   - Asserts the resulting Facts row carries the masked low-63 value
+//     (42 in this case) and the captured log text contains the
+//     diagnostic substring "high-bit-set".
+func TestFactsFromExtracted_HighBitSetSymbolIDLogged(t *testing.T) {
+	const highBit uint64 = 0x8000000000000000
+	const wantMasked uint64 = 42
+	const violatingID = highBit | wantMasked
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	ef := &extract.ExtractedFile{
+		File: extract.FileFact{
+			Path:     "src/violator.go",
+			Language: "go",
+		},
+		Symbols: []extract.SymbolFact{
+			{
+				ID:               semantic.SymbolID(violatingID),
+				Language:         "go",
+				Kind:             extract.SymbolKind("function"),
+				Name:             "Violator",
+				QualifiedName:    "violator.Violator",
+				StableKey: extract.StableSymbolKey{
+					RepoID:        "r-violator",
+					Language:      "go",
+					QualifiedName: "violator.Violator",
+					Kind:          "function",
+				},
+				Visibility:       "exported",
+				Confidence:       1.0,
+				ExtractionSource: "tree_sitter",
+				Range: extract.Range{
+					Start: extract.Position{Line: 1, Column: 1},
+					End:   extract.Position{Line: 5, Column: 1},
+				},
+			},
+		},
+	}
+
+	got := factsFromExtracted([]*extract.ExtractedFile{ef}, "r-violator", logger)
+	if len(got.Symbols) != 1 {
+		t.Fatalf("got %d Symbols, want 1", len(got.Symbols))
+	}
+	if got.Symbols[0].SymbolID != wantMasked {
+		t.Errorf("SymbolID = %#x, want masked low-63 value %#x (continue-with-mask, NOT skip)",
+			got.Symbols[0].SymbolID, wantMasked)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "high-bit-set") {
+		t.Errorf("captured log text = %q; want substring %q (WR-07 warn log)", logged, "high-bit-set")
+	}
+	// Sanity: warn-level diagnostic.
+	if !strings.Contains(logged, "level=WARN") {
+		t.Errorf("captured log text = %q; want a level=WARN line for the high-bit diagnostic", logged)
 	}
 }

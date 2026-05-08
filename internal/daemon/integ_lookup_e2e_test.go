@@ -136,10 +136,33 @@ func newE2EIntegLookup(t *testing.T) (
 		t.Fatalf("stampFixtureScoresAndEdges: %v", err)
 	}
 
-	// Construct the *integSemanticLookup directly. bundle is intentionally
+	// Phase 65 65-10 Task 2 (Rule 3 blocking deviation):
+	// Populate the bleve index from the committed snapshot via the same
+	// SymbolRow → SymbolDoc mapper the production recovery probe uses.
+	// This is the minimum the plan's BL-4 silent-degradation guard
+	// requires — without an indexed bleve corpus, RankFromSeeds collapses
+	// to the unseeded baseline and the BL-4 inequality cannot fire.
+	if err := primeBleveCorpus(context.Background(), store, engine, snapID); err != nil {
+		_ = engine.Close()
+		_ = store.Close()
+		t.Fatalf("primeBleveCorpus: %v", err)
+	}
+
+	// Construct a minimal *semanticBundle so the *semRetrievalAdapter can
+	// resolve the per-workspace engine. bundle.live and bundle.queue stay
 	// nil — Status() PendingLSP / LastLiveUpdateMs paths nil-guard.
+	bundle := &semanticBundle{
+		store:   store,
+		logger:  logger,
+		metrics: provider.Metrics(),
+		engines: map[string]*retrieval.Engine{ws.RepoRoot: engine},
+	}
+	bundle.retrievalAdapter = &semRetrievalAdapter{bundle: bundle}
+
 	lookup = &integSemanticLookup{
+		bundle:    bundle,
 		store:     store,
+		retrieval: bundle.retrievalAdapter,
 		enabledFn: func() bool { return true },
 		wsKeyFn:   func() workspace.WorkspaceKey { return ws },
 	}
@@ -149,6 +172,29 @@ func newE2EIntegLookup(t *testing.T) (
 		_ = store.Close()
 	}
 	return lookup, ws, store, syms, cleanup
+}
+
+// primeBleveCorpus indexes every SymbolRow at snapshotID into the bleve
+// engine using the same retrieval/corpus.MapSymbolToDoc the production
+// Recoverer.Probe uses. Phase 65 65-10 Task 2 BL-4 guard prerequisite.
+func primeBleveCorpus(
+	ctx context.Context,
+	store *semanticstore.Store,
+	engine *retrieval.Engine,
+	snapshotID uint64,
+) error {
+	var docs []retrieval.SymbolDoc
+	err := store.IterateCommittedSymbols(ctx, snapshotID, func(row semanticstore.SymbolRow) bool {
+		docs = append(docs, retrieval.MapSymbolToDoc(row, nil))
+		return true
+	})
+	if err != nil {
+		return fmt.Errorf("primeBleveCorpus: iterate: %w", err)
+	}
+	if err := engine.UpsertBatch(ctx, docs); err != nil {
+		return fmt.Errorf("primeBleveCorpus: upsert: %w", err)
+	}
+	return nil
 }
 
 // makeFullFixtureFacts builds 3 files × 5 symbols with deterministic
@@ -477,12 +523,11 @@ func sortByKey(entries []fixtureScoreEntry) {
 
 // ---------- Tests ----------
 
-// TestIntegSemanticLookup_E2E_RankFiles_RealStore — PENDING 65-10. Once
-// 65-10 lands the persisted-score reader, lookup.RankFiles must return the
-// full ranked file list with Projection="call_graph" and non-zero
-// GraphVersion.
+// TestIntegSemanticLookup_E2E_RankFiles_RealStore — Phase 65 65-10 GREEN
+// gate. Asserts lookup.RankFiles returns a non-empty slice with
+// Path / Projection="call_graph" / non-zero GraphVersion populated from
+// the persisted semantic_graph_scores snapshot built by newE2EIntegLookup.
 func TestIntegSemanticLookup_E2E_RankFiles_RealStore(t *testing.T) {
-	t.Skipf("PENDING 65-10 — integSemanticLookup.RankFiles is a stub returning ErrNoSnapshot; this gate flips GREEN once 65-10 lands.")
 	lookup, ws, _, _, cleanup := newE2EIntegLookup(t)
 	defer cleanup()
 	got, err := lookup.RankFiles(context.Background(), ws)
@@ -505,16 +550,26 @@ func TestIntegSemanticLookup_E2E_RankFiles_RealStore(t *testing.T) {
 	}
 }
 
-// TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore — PENDING 65-10. Once
-// 65-10 lands the bleve + RRF fuse pipeline, RankFromSeeds must produce an
-// ordering OBSERVABLY DIFFERENT from RankFiles for the same workspace
-// (BL-4 — silent RRF degradation guard).
+// TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore — Phase 65 65-10
+// GREEN gate. Asserts the bleve + RRF fuse pipeline produces an ordering
+// OBSERVABLY DIFFERENT from RankFiles when seeds bias the result (BL-4
+// silent-degradation guard — if resolveSymbolPath cannot translate
+// TextRank.SymbolID into a path, RRF contributes nothing and the result
+// collapses to the unseeded ordering).
 func TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore(t *testing.T) {
-	t.Skipf("PENDING 65-10 — integSemanticLookup.RankFromSeeds is a stub returning ErrNoSnapshot.")
 	lookup, ws, _, syms, cleanup := newE2EIntegLookup(t)
 	defer cleanup()
-	seedPath := syms["confirmed_edge_from"].Path
-	seeded, err := lookup.RankFromSeeds(context.Background(), ws, []string{seedPath})
+
+	// Seed with the stable_key of a symbol in a LOW-ranked file — the
+	// fixture stamps file0 with the highest persisted score and file2
+	// with the lowest. To detect silent RRF degradation we need bleve
+	// to bias the fused ordering AWAY from the persisted baseline.
+	// Picking a seed whose translated path is file2 ensures the fused
+	// top entry is no longer file0 — proof that bleve+RRF is firing.
+	refTo := syms["refuted_edge_to"] // file 2, sym 1
+	seeds := []string{string(refTo.SymbolID)}
+
+	seeded, err := lookup.RankFromSeeds(context.Background(), ws, seeds)
 	if err != nil {
 		t.Fatalf("RankFromSeeds: %v", err)
 	}
@@ -522,11 +577,41 @@ func TestIntegSemanticLookup_E2E_RankFromSeeds_RealStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RankFiles: %v", err)
 	}
-	// BL-4: seeded ordering must observably differ from plain (otherwise
-	// RRF silently degraded to the unseeded path).
-	if len(seeded) != 0 && len(plain) != 0 && seeded[0].Path == plain[0].Path {
-		t.Logf("seeded top=%q plain top=%q — verifier will replace this Logf with a stricter assertion in 65-10",
-			seeded[0].Path, plain[0].Path)
+	if len(seeded) == 0 {
+		t.Fatalf("RankFromSeeds returned empty slice; want non-empty after 65-10")
+	}
+	if len(plain) == 0 {
+		t.Fatalf("RankFiles returned empty slice; want non-empty after 65-10")
+	}
+
+	// Shape check: every entry has Path / Projection populated.
+	for i, rf := range seeded {
+		if rf.Path == "" {
+			t.Errorf("seeded[%d].Path is empty", i)
+		}
+		if rf.Projection != "call_graph" {
+			t.Errorf("seeded[%d].Projection=%q, want call_graph", i, rf.Projection)
+		}
+	}
+
+	// BL-4 silent-degradation guard: with a populated bleve corpus and a
+	// real seed, the fused ordering MUST differ from the unseeded baseline
+	// in at least one position. A byte-identical match means the
+	// resolveSymbolPath SQL key does not match the TextRank.SymbolID
+	// format pinned by Task 0 (or the engine returned no hits, or the
+	// fusion arithmetic is wrong) — surface the silent-degradation here.
+	same := len(seeded) == len(plain)
+	if same {
+		for i := range seeded {
+			if seeded[i].Path != plain[i].Path {
+				same = false
+				break
+			}
+		}
+	}
+	if same {
+		t.Fatalf("RankFromSeeds ordering is byte-identical to RankFiles — BL-4 silent-degradation guard fired; check resolveSymbolPath SQL key matches Task 0 TEXTRANK_SYMBOLID_FORMAT (decimal_symbol_id). seeded=%v plain=%v",
+			seeded, plain)
 	}
 }
 

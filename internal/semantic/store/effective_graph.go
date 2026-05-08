@@ -225,6 +225,127 @@ func (s *Store) LatestCommittedSnapshot(ctx context.Context, repoID string) (uin
 	return id, nil
 }
 
+// RankedFileRow is one row returned by QueryRankedFiles. Score is the
+// per-file aggregated PageRank score (MAX over the file's symbols);
+// GraphVersion is the (repo_id, projection)-stamped graph_version under
+// which the scores were computed (Phase 62 D-07 contract).
+type RankedFileRow struct {
+	Path         string
+	Score        float64
+	GraphVersion uint64
+}
+
+// QueryRankedFiles returns the per-file aggregated PageRank scores for
+// (repoID, projection) at the latest committed snapshot. Aggregation:
+// MAX over the file's symbols (the symbol with the highest centrality is
+// the file's representative — Phase 62 D-07 score-name contract).
+//
+// Sort: score DESC, then path ASC (Phase 62 CR-03 stable-key tiebreak).
+//
+// limit <= 0 means "no limit". Empty result is (nil, nil).
+//
+// Reads under no workspace lock (scheduler_store.go:48-56). Returns
+// (nil, nil) when no committed snapshot exists for repoID.
+//
+// Phase 65 65-10 Task 1.
+func (s *Store) QueryRankedFiles(
+	ctx context.Context, repoID, projection string, limit int,
+) ([]RankedFileRow, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("QueryRankedFiles: nil store")
+	}
+	if projection == "" {
+		return nil, errors.New("QueryRankedFiles: empty projection")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("QueryRankedFiles: %w", err)
+	}
+	if latest == 0 {
+		return nil, nil
+	}
+	const baseQ = `
+		SELECT f.path, MAX(g.score) AS score, MAX(g.graph_version) AS gv
+		  FROM semantic_graph_scores AS g
+		  JOIN semantic_symbols AS sym
+		    ON sym.symbol_id   = g.node_id
+		   AND sym.snapshot_id = ?
+		  JOIN semantic_files AS f
+		    ON f.file_id     = sym.file_id
+		   AND f.snapshot_id = sym.snapshot_id
+		 WHERE g.repo_id    = ?
+		   AND g.score_name = ?
+		   AND g.status IN ('exact', 'approximate')
+		 GROUP BY f.path
+		 ORDER BY score DESC, f.path ASC
+	`
+	q := baseQ
+	args := []any{latest, repoID, projection}
+	if limit > 0 {
+		q += " LIMIT ?"
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("QueryRankedFiles(%q, %q): %w", repoID, projection, err)
+	}
+	defer rows.Close()
+
+	var out []RankedFileRow
+	for rows.Next() {
+		var (
+			path  string
+			score float64
+			gv    uint64
+		)
+		if err := rows.Scan(&path, &score, &gv); err != nil {
+			return nil, fmt.Errorf("QueryRankedFiles scan: %w", err)
+		}
+		out = append(out, RankedFileRow{Path: path, Score: score, GraphVersion: gv})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryRankedFiles rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// QuerySymbolPath resolves the file path of (snapshotID, symbolID) at the
+// given committed snapshot. Returns ("", false, nil) when no symbol matches.
+//
+// Phase 65 65-10 Task 2: backs *integSemanticLookup.RankFromSeeds's
+// resolveSymbolPath helper for the decimal-symbol_id format pinned by
+// Task 0. The argument is parsed as a base-10 uint64; non-numeric strings
+// resolve as a clean miss (returns "", false, nil) — they're a Task 0
+// format mismatch, not a SQL error.
+//
+// Reads under no workspace lock (scheduler_store.go:48-56).
+func (s *Store) QuerySymbolPath(ctx context.Context, snapshotID uint64, symbolID string) (string, bool, error) {
+	if s == nil || s.db == nil {
+		return "", false, errors.New("QuerySymbolPath: nil store")
+	}
+	symID, err := strconv.ParseUint(symbolID, 10, 64)
+	if err != nil {
+		// Format mismatch with Task 0's TEXTRANK_SYMBOLID_FORMAT contract;
+		// treated as a clean miss, not a SQL error.
+		return "", false, nil
+	}
+	const q = `
+		SELECT f.path FROM semantic_symbols AS sym
+		  JOIN semantic_files AS f
+		    ON f.snapshot_id = sym.snapshot_id AND f.file_id = sym.file_id
+		 WHERE sym.snapshot_id = ? AND sym.symbol_id = ?
+		 LIMIT 1
+	`
+	var path string
+	if err := s.db.QueryRowContext(ctx, q, snapshotID, symID).Scan(&path); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("QuerySymbolPath(snap=%d, sym=%q): %w", snapshotID, symbolID, err)
+	}
+	return path, true, nil
+}
+
 // IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 // in stable symbol_id ASC order, invoking fn(row). If fn returns false,
 // iteration aborts cleanly without error. Honors ctx cancellation via the

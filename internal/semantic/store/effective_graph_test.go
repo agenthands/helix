@@ -691,3 +691,233 @@ func TestStore_QueryRankedFiles_RespectsLimit(t *testing.T) {
 		t.Errorf("results not score-DESC: got %v", got)
 	}
 }
+
+// --- Phase 65 65-11 Task 1: QuerySymbolByLocation + Node/StableKey resolvers ---
+
+// seedSnapshotSymbolWithRange inserts a (semantic_files, semantic_symbols) pair
+// with explicit (start_line, start_col, end_line, end_col, stable_key) plus
+// derived start_byte / end_byte (start_byte = startLine*1000+startCol, the
+// inner-scope discriminator QuerySymbolByLocation orders by). Stamps a
+// dedicated INSERT OR IGNORE on semantic_files so multiple symbols can share a
+// path within the same snapshot.
+func seedSnapshotSymbolWithRange(
+	t *testing.T,
+	ctx context.Context,
+	s *Store,
+	snapID, fileID, symbolID uint64,
+	repoID, path, name, stableKey string,
+	startLine, startCol, endLine, endCol int,
+) {
+	t.Helper()
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_files (
+			snapshot_id, file_id, repo_id, path, language, content_hash,
+			size_bytes, line_count, generated, ignored, indexed_at
+		) VALUES (?, ?, ?, ?, 'go', 'h', 100, 100, false, false, now())
+	`, snapID, fileID, repoID, path); err != nil {
+		t.Fatalf("seedSnapshotSymbolWithRange: file (snap=%d, file=%d): %v", snapID, fileID, err)
+	}
+	startByte := startLine*1000 + startCol
+	endByte := endLine*1000 + endCol
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO semantic_symbols (
+			snapshot_id, symbol_id, node_id, file_id, language, kind, name,
+			qualified_name, stable_key, start_byte, end_byte, start_line,
+			start_col, end_line, end_col, extraction_source, confidence
+		) VALUES (?, ?, ?, ?, 'go', 'func', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tree-sitter', 1.0)
+	`, snapID, symbolID, symbolID, fileID, name, name, stableKey,
+		startByte, endByte, startLine, startCol, endLine, endCol); err != nil {
+		t.Fatalf("seedSnapshotSymbolWithRange: symbol (snap=%d, sym=%d): %v", snapID, symbolID, err)
+	}
+}
+
+// Test 1: hit on the exact start-of-range coordinate.
+func TestStore_QuerySymbolByLocation_HitOnExactStart(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-1"
+	const snap uint64 = 8001
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "src/a.go::Alpha",
+		10, 5, 20, 1)
+
+	got, ok, err := s.QuerySymbolByLocation(ctx, repoID, "src/a.go", 10, 5)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation: %v", err)
+	}
+	if !ok {
+		t.Fatalf("got ok=false, want true on exact-start hit")
+	}
+	if got != "src/a.go::Alpha" {
+		t.Errorf("got stable_key=%q, want %q", got, "src/a.go::Alpha")
+	}
+}
+
+// Test 2: hit on a coordinate strictly inside the range.
+func TestStore_QuerySymbolByLocation_HitInsideRange(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-2"
+	const snap uint64 = 8002
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "alpha-stable",
+		10, 1, 20, 80)
+
+	got, ok, err := s.QuerySymbolByLocation(ctx, repoID, "src/a.go", 15, 30)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation: %v", err)
+	}
+	if !ok {
+		t.Fatalf("got ok=false, want true on inside-range hit")
+	}
+	if got != "alpha-stable" {
+		t.Errorf("got stable_key=%q, want %q", got, "alpha-stable")
+	}
+}
+
+// Test 3: miss when the coordinate is strictly outside every symbol range.
+func TestStore_QuerySymbolByLocation_MissOutsideRange(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-3"
+	const snap uint64 = 8003
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "alpha-stable",
+		10, 1, 20, 80)
+
+	got, ok, err := s.QuerySymbolByLocation(ctx, repoID, "src/a.go", 5, 1)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation (before range): %v", err)
+	}
+	if ok || got != "" {
+		t.Errorf("got=(%q, %v), want ('', false) before range", got, ok)
+	}
+	got, ok, err = s.QuerySymbolByLocation(ctx, repoID, "src/a.go", 30, 1)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation (after range): %v", err)
+	}
+	if ok || got != "" {
+		t.Errorf("got=(%q, %v), want ('', false) after range", got, ok)
+	}
+}
+
+// Test 4: a symbol at the right (line, col) but in a different file is a miss.
+func TestStore_QuerySymbolByLocation_PathMismatch(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-4"
+	const snap uint64 = 8004
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "alpha-stable",
+		10, 1, 20, 80)
+
+	got, ok, err := s.QuerySymbolByLocation(ctx, repoID, "src/other.go", 15, 30)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation: %v", err)
+	}
+	if ok || got != "" {
+		t.Errorf("got=(%q, %v), want ('', false) for different path", got, ok)
+	}
+}
+
+// Test 5: when multiple symbols overlap the (line, col), the smallest-span
+// (innermost) one wins.
+func TestStore_QuerySymbolByLocation_PrefersInnerScope(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-loc-5"
+	const snap uint64 = 8005
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	// Outer symbol spans lines 5-30.
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Outer", "outer-stable",
+		5, 1, 30, 1)
+	// Inner symbol spans lines 10-15.
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 101, repoID,
+		"src/a.go", "Inner", "inner-stable",
+		10, 1, 15, 1)
+
+	got, ok, err := s.QuerySymbolByLocation(ctx, repoID, "src/a.go", 12, 5)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation: %v", err)
+	}
+	if !ok {
+		t.Fatalf("got ok=false, want true (both outer + inner overlap)")
+	}
+	if got != "inner-stable" {
+		t.Errorf("got stable_key=%q, want %q (inner-scope MUST win on overlap)",
+			got, "inner-stable")
+	}
+}
+
+// Test 6: when no committed snapshot exists for repoID, the reader returns
+// a clean miss without error (consistent with QueryRankedFiles).
+func TestStore_QuerySymbolByLocation_NoCommittedSnapshot(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	got, ok, err := s.QuerySymbolByLocation(ctx, "r-never-opened", "src/a.go", 10, 1)
+	if err != nil {
+		t.Fatalf("QuerySymbolByLocation: %v", err)
+	}
+	if ok || got != "" {
+		t.Errorf("got=(%q, %v), want ('', false) when no committed snapshot", got, ok)
+	}
+}
+
+// Test 7: QueryNodeIDByStableKey hit + miss.
+func TestStore_QueryNodeIDByStableKey_HitAndMiss(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-node-7"
+	const snap uint64 = 8007
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 7777, repoID,
+		"src/a.go", "Sigma", "sigma-key",
+		10, 1, 20, 1)
+
+	got, ok, err := s.QueryNodeIDByStableKey(ctx, repoID, "sigma-key")
+	if err != nil {
+		t.Fatalf("QueryNodeIDByStableKey hit: %v", err)
+	}
+	if !ok || got != 7777 {
+		t.Errorf("got=(%d, %v), want (7777, true)", got, ok)
+	}
+	got, ok, err = s.QueryNodeIDByStableKey(ctx, repoID, "no-such-key")
+	if err != nil {
+		t.Fatalf("QueryNodeIDByStableKey miss: %v", err)
+	}
+	if ok || got != 0 {
+		t.Errorf("got=(%d, %v), want (0, false) for unknown key", got, ok)
+	}
+	// No committed snapshot path: clean miss without error.
+	got, ok, err = s.QueryNodeIDByStableKey(ctx, "r-never-opened", "sigma-key")
+	if err != nil {
+		t.Fatalf("QueryNodeIDByStableKey no-snapshot: %v", err)
+	}
+	if ok || got != 0 {
+		t.Errorf("got=(%d, %v), want (0, false) when no committed snapshot", got, ok)
+	}
+}
+
+// Test 8: QueryStableKeyByNodeID hit + miss (inverse of Test 7).
+func TestStore_QueryStableKeyByNodeID_HitAndMiss(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-node-8"
+	const snap uint64 = 8008
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 8888, repoID,
+		"src/a.go", "Tau", "tau-key",
+		10, 1, 20, 1)
+
+	got, ok, err := s.QueryStableKeyByNodeID(ctx, repoID, 8888)
+	if err != nil {
+		t.Fatalf("QueryStableKeyByNodeID hit: %v", err)
+	}
+	if !ok || got != "tau-key" {
+		t.Errorf("got=(%q, %v), want (\"tau-key\", true)", got, ok)
+	}
+	got, ok, err = s.QueryStableKeyByNodeID(ctx, repoID, 99999)
+	if err != nil {
+		t.Fatalf("QueryStableKeyByNodeID miss: %v", err)
+	}
+	if ok || got != "" {
+		t.Errorf("got=(%q, %v), want (\"\", false) for unknown node id", got, ok)
+	}
+}

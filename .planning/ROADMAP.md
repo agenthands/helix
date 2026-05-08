@@ -191,7 +191,7 @@
   - [x] 64-06-PLAN.md — Wave 1 tools_status.go: SPEC §23.3 envelope fan-out across all read-only accessors; closed-enum freshness [TOOL-03, TOOL-05]
   - [x] 64-07-PLAN.md — Wave 1 (TDD) retrieval package: bleve scorch + corpus mapping (D-06) + weighted RRF (D-07) + dual-store recovery + tools_context.go with determinism harness (10× byte-identical) [TOOL-04, TOOL-05]
   - [x] 64-08-PLAN.md — Wave 2 daemon glue: semantic_wiring.go bundle + production buildFn + imports.go blank import + daemon.go register*SemanticGraph + rank_wiring stub-collapse + profile-filter test + get_tool_help test + 6 end-to-end integration tests closing CONTEXT.md acceptance #1/#2/#3/#5/#6 [TOOL-01..TOOL-05]
-- [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
+- [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/9 plans)
   **Goal:** `get_repo_map`, `get_context`, `analyze_blast_radius`, and `get_health` consult the semantic graph when available — with zero source change to `internal/repomap` engine — and fall back to v1.9 behavior automatically when the index is disabled, building, or errored.
   **Depends on:** Phase 64
   **Requirements:** INTEG-01, INTEG-02, INTEG-03, INTEG-04, INTEG-05
@@ -201,7 +201,16 @@
   3. `get_health` includes a `semantic_index` section: store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error.
   4. Every MCP envelope from a semantic-aware tool returns `source: semantic | tree_sitter | fallback` so callers can detect path drift.
   **Carryover from Phase 64:** production buildFn empty-Facts placeholder; zero-value WorkspaceKey from session adapter (deferred 2026-05-08 per phase 64 verification).
-  Plans: TBD
+  Plans:
+  - [ ] 65-00-PLAN.md — Wave 0 vet allowlist: nokernel2semantic permits internal/semantic/integ (M-vet unblock for 65-03/65-06)
+  - [ ] 65-01-PLAN.md — Wave 0 (TDD) production buildFn: per-language extract + classifier walk + ToStoreFacts → WriteSnapshotFacts (D-09 carryover #1)
+  - [ ] 65-02-PLAN.md — Wave 0 (TDD) WorkspaceKey adapter: closure pass-through replaces zero-value return (D-09 carryover #2)
+  - [ ] 65-03-PLAN.md — Wave 1 (TDD) internal/semantic/integ types-only package + integSemanticLookup production adapter + read-tier grep canary (D-01/D-02/D-03; INTEG-01..05)
+  - [ ] 65-04-PLAN.md — Wave 1 (TDD) source-field envelope contract + ChooseSource priority ladder + closed-enum matrix tests (D-04/D-05; Pitfall §3; INTEG-05)
+  - [ ] 65-05-PLAN.md — Wave 2 (TDD) get_repo_map + get_context wired via SetSemanticLookup; JSON envelope wrap; index-disabled goldens preserved verbatim (INTEG-01/02/05)
+  - [ ] 65-06-PLAN.md — Wave 2 (TDD) analyze_blast_radius two-pass: lookup.ExpandFrom + LSP-validates-critical-edges; fallback confidence cap ≤ 0.6 (D-07/D-08; INTEG-03/05)
+  - [ ] 65-07-PLAN.md — Wave 2 (TDD) get_health semantic_index block additive (Phase 57 SC-1 preserved; WR-NEW-01 closed-enum last_error) (INTEG-04/05)
+  - [ ] 65-08-PLAN.md — Wave 3 acceptance closure: index-disabled tree text byte-identical + {source × fallback_reason} matrix across all 4 tools
 - [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
 - [ ] Phase 67: Evaluation Harness (0/0 plans)
 

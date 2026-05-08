@@ -927,24 +927,28 @@ func (NoopLookup) Available() bool { return false }
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **How does `RankedFile` map onto `internal/repomap.FileGraph.RankFiles` output for the existing `TreeRenderer`?**
+   **RESOLVED:** Plan 65-05 ships a small `adaptRankedFiles` adapter in `internal/skill/repomap/skill.go` that converts integ-shape `RankedFile` to renderer-shape; renderer remains untouched (INTEG-01 honored).
    - What we know: `TreeRenderer.RenderBudgeted` at `internal/skill/repomap/skill.go:281` accepts the v1.9 ranked-file shape produced by `internal/repomap.FileGraph.RankFiles`.
    - What's unclear: whether the integ-package `RankedFile` (from persisted Phase 62 scores) needs an explicit adapter or whether the renderer can accept a duck-typed input.
    - Recommendation: Plan a small adapter (`adaptRankedFiles`) in `internal/skill/repomap/skill.go` that converts integ-shape to renderer-shape. Keep it tiny — INTEG-01 forbids touching the engine, and the renderer is engine-resident.
 
 2. **Does the `*Store` expose a public `RankFiles`/`RankFromSeeds` reader for the Phase 65 lookup, or does Phase 65 need to add one?**
+   **RESOLVED:** Phase 65 adds `*Store.QueryRankedFiles` and `*Store.QuerySymbolPath` (gap-closure plan 65-10) reading directly from `semantic_graph_scores`; `*RankScheduler` is NOT threaded through the adapter.
    - What we know: Phase 62 persists scores under `semantic_graph_scores`; `*Store.QueryEffectiveAdjacency` is exposed; rank engine internals are NOT publicly readable.
    - What's unclear: whether the Phase 65 lookup adapter at `integSemanticLookup.RankFiles` reads scores via a (yet-to-be-named) public method on `*Store` OR via `*RankScheduler` directly.
    - Recommendation: Plan a small `*Store.QueryRankedFiles(ctx, repoID, projection, limit) ([]RankedFile, error)` in the same wave as 65-03, OR thread the existing `*RankScheduler` / `rankBundle.QueryScores(...)` (if it exists) through the production adapter. Researcher could not verify which without reading more of `internal/graph/`/`internal/semantic/graph/` than the time budget allowed; planner confirms during Wave 1.
 
 3. **`analyze_blast_radius` — what's the canonical `SymbolID` translation between LSP file:line:col args and the integ-side stable symbol identity?**
+   **RESOLVED:** `SymbolID(ctx, ws, path, line, col) (SymbolID, error)` is added to the integ `SemanticLookup` interface (D-03 update via 65-03/65-11); kernel-side adapter calls it directly without importing extract or store.
    - What we know: SPEC §11.1 defines stable symbol IDs (LSP identity → package/module path + qualified name + kind + signature hash → file path fallback). Phase 59 EXTRACT-02 ships this contract.
    - What's unclear: the Phase 65 kernel-side adapter receives `(line, col, path)` from `BlastRadiusArgs` and must translate to a `SymbolID` to pass to `lookup.ExpandFrom`. The translation likely lives in extract or store, but the kernel can't import either (`vet-nokernel2semantic`).
    - Recommendation: Add a `SymbolID(ctx, ws, path, line, col) (SymbolID, error)` method to the integ `SemanticLookup` interface, OR translate inside the daemon-side adapter and surface the `SymbolID` through the lookup bridge. **Flag for planner — this is a missing piece in CONTEXT.md D-03 that will surface in 65-06.**
 
 4. **Should the production adapter cache `Status()` between calls or compute every time?**
+   **RESOLVED:** No cache for v1.10; per-call cost (a few atomic reads + `LatestCommittedSnapshot` SQL) deemed acceptable. Revisit in Phase 67 evaluation harness if a hot-path emerges.
    - What we know: `Status()` is called from `get_health` (low-frequency), but also potentially from the per-call source classifier on every `get_repo_map`/`get_context` to compute `freshness`.
    - What's unclear: whether the per-call cost (a few atomic reads + a `sql` query for `LatestCommittedSnapshot`) is hot enough to warrant caching.
    - Recommendation: No cache for v1.10. Profile in Phase 67 eval; revisit in v1.10.x if a hot-path emerges.
@@ -1163,11 +1167,14 @@ The acceptance closure plan must exercise every `(source, fallback_reason)` pair
 | Architecture | HIGH | Three setter precedents (`SetEnrichFn`, `SetFallbackDeps`, `SetMetricsSink`) + Phase 64 narrow-accessor pattern + `health/skill_adapter.go` precedent all verified. |
 | Pitfalls | HIGH | Each pitfall traces to a specific file/line/test. The `nokernel2semantic` collision (Pitfall §1) is the load-bearing finding. |
 
-### Open Questions
+### Open Questions (RESOLVED)
 
 1. Public read API on `*Store` for ranked files (vs threading `*RankScheduler` through). Plan a small reader in Wave 1 if absent.
+   **RESOLVED:** Gap-closure plan 65-10 adds `*Store.QueryRankedFiles` + `*Store.QuerySymbolPath`; `*RankScheduler` not threaded through the adapter.
 2. SymbolID translation seam for `analyze_blast_radius` (kernel-side) — likely needs a method addition to the integ `SemanticLookup` interface.
+   **RESOLVED:** `SymbolID(ctx, ws, path, line, col) (SymbolID, error)` added to integ.SemanticLookup interface (Phase 65 wave 1); kernel-side adapter consumes it directly.
 3. `Status()` caching strategy — recommend no cache for v1.10; profile in Phase 67.
+   **RESOLVED:** No cache for v1.10; per-call cost acceptable; revisit in Phase 67 evaluation harness.
 
 ### Ready for Planning
 

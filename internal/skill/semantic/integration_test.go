@@ -1141,3 +1141,37 @@ func TestE2E_StranglerFig_SourceMatrix(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Phase 65 65-09 — production-adapter strangler-fig E2E placeholders.
+//
+// These two tests are GREEN-flipped in 65-12 Task 4 once the harness from
+// 65-09 + RankFiles from 65-10 + Status GraphVersion from 65-11 are all
+// landed. Until then they Skipf with a precise PENDING message naming
+// the wave that unblocks them.
+//
+// WR-4 note: the harness wiring (newE2EIntegLookup, NewIntegSemanticLookupForTest,
+// NewE2EIntegLookupForTest, FixtureSymbolMeta, ScoreRow + EdgeRow fixture)
+// ships in 65-09. 65-12 Task 4 only flips the Skipf line and adds the
+// assertion body — no harness work happens in 65-12.
+// ---------------------------------------------------------------------------
+
+// TestE2E_StranglerFig_ProductionAdapter_SourceSemantic — PENDING 65-12
+// Task 4. Post-flip body asserts envelope.Source == integ.SourceSemantic
+// and envelope.GraphVersion != 0.
+func TestE2E_StranglerFig_ProductionAdapter_SourceSemantic(t *testing.T) {
+	t.Skipf("PENDING 65-12 Task 4 — production-adapter SourceSemantic envelope unreachable until RankFiles + Status GraphVersion lands. The harness (newE2EIntegLookup, NewIntegSemanticLookupForTest, NewE2EIntegLookupForTest, FixtureSymbolMeta, ScoreRow + EdgeRow fixture) ships in 65-09; 65-12 Task 4 flips this Skipf and adds the assertion body.")
+	// Post-flip body is fully specified in 65-12 Task 4 action.
+}
+
+// TestE2E_StranglerFig_ProductionAdapter_BlastRadiusConfidence — PENDING
+// 65-12. Per BL-1 the concrete confidence assertion lives in
+// internal/kernel/symbols/blast_radius_strangler_test.go using
+// daemon.NewE2EIntegLookupForTest from 65-09; this skill-level test
+// becomes a thin smoke assertion at the wire boundary.
+func TestE2E_StranglerFig_ProductionAdapter_BlastRadiusConfidence(t *testing.T) {
+	t.Skipf("PENDING 65-12 — semantic 1.00/0.20 confidence ladder unreachable in production until SymbolID/ExpandFrom/lspProbeForEdges land. Per BL-1 the concrete confidence assertion lives in internal/kernel/symbols/blast_radius_strangler_test.go (TestRegisterAnalyzeBlastRadius_E2E_ConfidenceLadder + sibling tests) using daemon.NewE2EIntegLookupForTest from 65-09; this skill-level test surfaces a thin envelope-shape smoke check at the wire boundary.")
+	// Post-flip body is fully specified in 65-12 Task 4 action; the
+	// bulk of confidence-ladder assertion responsibility is in
+	// 65-12 Task 2's kernel-side test bodies (BL-1 fix).
+}

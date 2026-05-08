@@ -496,3 +496,198 @@ var _ SymbolRow = SymbolRow{}
 // maps round-trip through. If this drifts, the adapters in
 // internal/daemon/rank_wiring.go would silently lose type identity.
 var _ graph.NodeID = uint64(0)
+
+// --- Phase 65 65-10 Task 1: QueryRankedFiles ---
+
+// seedSnapshotFileAndSymbol inserts a (semantic_files, semantic_symbols) pair
+// keyed at snapshotID. Score rows JOIN to these to resolve per-file paths in
+// QueryRankedFiles.
+func seedSnapshotFileAndSymbol(
+	t *testing.T,
+	ctx context.Context,
+	s *Store,
+	snapID, fileID, symbolID uint64,
+	repoID, path, name string,
+) {
+	t.Helper()
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_files (
+			snapshot_id, file_id, repo_id, path, language, content_hash,
+			size_bytes, line_count, generated, ignored, indexed_at
+		) VALUES (?, ?, ?, ?, 'go', 'h', 100, 10, false, false, now())
+	`, snapID, fileID, repoID, path); err != nil {
+		t.Fatalf("seedSnapshotFileAndSymbol: file (snap=%d, file=%d): %v", snapID, fileID, err)
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO semantic_symbols (
+			snapshot_id, symbol_id, node_id, file_id, language, kind, name,
+			qualified_name, stable_key, start_byte, end_byte, start_line,
+			start_col, end_line, end_col, extraction_source, confidence
+		) VALUES (?, ?, ?, ?, 'go', 'func', ?, ?, ?, 0, 100, 1, 0, 5, 0, 'tree-sitter', 1.0)
+	`, snapID, symbolID, symbolID, fileID, name, name, name); err != nil {
+		t.Fatalf("seedSnapshotFileAndSymbol: symbol (snap=%d, sym=%d): %v", snapID, symbolID, err)
+	}
+}
+
+// seedScoreRowWithValue inserts a semantic_graph_scores row with an explicit
+// score value (the existing seedScoreRow helper hardcodes 0.5).
+func seedScoreRowWithValue(
+	t *testing.T,
+	ctx context.Context,
+	s *Store,
+	repoID string,
+	gv, nodeID uint64,
+	scoreName, status string,
+	score float64,
+) {
+	t.Helper()
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO semantic_graph_scores (
+			repo_id, snapshot_id, graph_version, node_id, score_name,
+			score, rank, status, computed_at, algorithm_version
+		) VALUES (?, 0, ?, ?, ?, ?, NULL, ?, now(), 'test')
+	`, repoID, gv, nodeID, scoreName, score, status); err != nil {
+		t.Fatalf("seedScoreRowWithValue(%q, gv=%d, node=%d, name=%q, status=%q, score=%g): %v",
+			repoID, gv, nodeID, scoreName, status, score, err)
+	}
+}
+
+// Test 1: empty store → (nil, nil)
+func TestStore_QueryRankedFiles_EmptyStore(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	got, err := s.QueryRankedFiles(ctx, "r-empty", "call_graph", 0)
+	if err != nil {
+		t.Fatalf("QueryRankedFiles: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %v, want nil for empty store", got)
+	}
+}
+
+// Test 2: 5 score rows over 3 distinct files → per-file MAX score, sorted DESC.
+func TestStore_QueryRankedFiles_PopulatedSnapshot(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-pop"
+	const snap uint64 = 7001
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+
+	// Three files; symbol IDs allocated dense.
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 1, 101, repoID, "src/a.go", "A1")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 1, 102, repoID, "src/a.go", "A2")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 2, 201, repoID, "src/b.go", "B1")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 3, 301, repoID, "src/c.go", "C1")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 3, 302, repoID, "src/c.go", "C2")
+
+	// Score rows: a.go has 0.3 + 0.7 (max=0.7); b.go has 0.5; c.go has 0.9 + 0.1 (max=0.9).
+	const gv uint64 = 1
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 101, "call_graph", "exact", 0.3)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 102, "call_graph", "exact", 0.7)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 201, "call_graph", "exact", 0.5)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 301, "call_graph", "exact", 0.9)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 302, "call_graph", "exact", 0.1)
+
+	got, err := s.QueryRankedFiles(ctx, repoID, "call_graph", 0)
+	if err != nil {
+		t.Fatalf("QueryRankedFiles: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3 distinct files (got=%v)", len(got), got)
+	}
+	// Sorted DESC by per-file MAX score: c.go(0.9), a.go(0.7), b.go(0.5).
+	wantPaths := []string{"src/c.go", "src/a.go", "src/b.go"}
+	wantScores := []float64{0.9, 0.7, 0.5}
+	for i, want := range wantPaths {
+		if got[i].Path != want {
+			t.Errorf("got[%d].Path = %q, want %q", i, got[i].Path, want)
+		}
+		if got[i].Score != wantScores[i] {
+			t.Errorf("got[%d].Score = %g, want %g", i, got[i].Score, wantScores[i])
+		}
+	}
+}
+
+// Test 3: identical scores → tiebreak by path ASC.
+func TestStore_QueryRankedFiles_StableKeyTiebreak(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-tie"
+	const snap uint64 = 7002
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 1, 101, repoID, "src/zeta.go", "Z")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 2, 201, repoID, "src/alpha.go", "A")
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 3, 301, repoID, "src/beta.go", "B")
+
+	const gv uint64 = 1
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 101, "call_graph", "exact", 0.5)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 201, "call_graph", "exact", 0.5)
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 301, "call_graph", "exact", 0.5)
+
+	got, err := s.QueryRankedFiles(ctx, repoID, "call_graph", 0)
+	if err != nil {
+		t.Fatalf("QueryRankedFiles: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3", len(got))
+	}
+	wantPaths := []string{"src/alpha.go", "src/beta.go", "src/zeta.go"}
+	for i, want := range wantPaths {
+		if got[i].Path != want {
+			t.Errorf("got[%d].Path = %q, want %q (path-ASC tiebreak)", i, got[i].Path, want)
+		}
+	}
+}
+
+// Test 4: every returned row carries a non-zero graph_version equal to the
+// score row's graph_version.
+func TestStore_QueryRankedFiles_GraphVersionStamped(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-gv"
+	const snap uint64 = 7003
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+
+	seedSnapshotFileAndSymbol(t, ctx, s, snap, 1, 101, repoID, "src/a.go", "A")
+	const gv uint64 = 42
+	seedScoreRowWithValue(t, ctx, s, repoID, gv, 101, "call_graph", "exact", 0.5)
+
+	got, err := s.QueryRankedFiles(ctx, repoID, "call_graph", 0)
+	if err != nil {
+		t.Fatalf("QueryRankedFiles: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1", len(got))
+	}
+	if got[0].GraphVersion != gv {
+		t.Errorf("got[0].GraphVersion = %d, want %d (must be the score-row gv, NOT 0 or snapshot_id)",
+			got[0].GraphVersion, gv)
+	}
+}
+
+// Test 5: limit caps the number of returned rows.
+func TestStore_QueryRankedFiles_RespectsLimit(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-lim"
+	const snap uint64 = 7004
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+
+	// 10 files, descending scores 0.95, 0.85, 0.75, ...
+	const gv uint64 = 1
+	for i := 0; i < 10; i++ {
+		fileID := uint64(i + 1)
+		symID := 100 + uint64(i)
+		path := "src/f" + string(rune('0'+i)) + ".go"
+		seedSnapshotFileAndSymbol(t, ctx, s, snap, fileID, symID, repoID, path, "S")
+		seedScoreRowWithValue(t, ctx, s, repoID, gv, symID, "call_graph", "exact", 0.95-0.10*float64(i))
+	}
+
+	got, err := s.QueryRankedFiles(ctx, repoID, "call_graph", 3)
+	if err != nil {
+		t.Fatalf("QueryRankedFiles: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3 (limit=3 over 10 files)", len(got))
+	}
+	// Top 3 by score-DESC.
+	if got[0].Score < got[1].Score || got[1].Score < got[2].Score {
+		t.Errorf("results not score-DESC: got %v", got)
+	}
+}

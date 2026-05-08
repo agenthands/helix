@@ -103,6 +103,16 @@ type semanticBundle struct {
 	// daemon.go:584). Closes W2 at the production layer.
 	getSession func(ctx context.Context) *mcp.SessionInfo
 
+	// wsKeyFn is the daemon's active-workspace closure (the same one
+	// already passed to symbols.RegisterTools / edit.RegisterTools /
+	// fileops.RegisterTools at internal/daemon/daemon.go:524). Closes
+	// Phase 64 carryover D-09 #2: semSessionAdapter.Workspace returns
+	// a real workspace.WorkspaceKey instead of the zero value, so
+	// retrieval queries via the session adapter are workspace-scoped
+	// (RESEARCH §Pattern 3 a). Multi-workspace expansion will swap
+	// this closure for a real registry without changing the field shape.
+	wsKeyFn func() workspace.WorkspaceKey
+
 	// runner is the daemon-singleton IndexRunner; one runner manages all
 	// workspaces (singleflight key includes the repo root).
 	runner *semantic.IndexRunner
@@ -140,6 +150,7 @@ func newSemanticBundle(
 	logger *slog.Logger,
 	metrics *obs.Metrics,
 	getSession func(ctx context.Context) *mcp.SessionInfo,
+	wsKeyFn func() workspace.WorkspaceKey,
 ) *semanticBundle {
 	if store == nil {
 		return nil
@@ -155,6 +166,7 @@ func newSemanticBundle(
 		logger:          logger,
 		metrics:         metrics,
 		getSession:      getSession,
+		wsKeyFn:         wsKeyFn,
 		engines:         make(map[string]*retrieval.Engine),
 		recoveres:       make(map[string]*retrieval.Recoverer),
 	}
@@ -322,7 +334,7 @@ func (b *semanticBundle) compactorAccessor() semantic.CompactorAccessor {
 	return &semCompactorAdapter{cb: b.compact}
 }
 func (b *semanticBundle) sessionAccessor() semantic.SessionAccessor {
-	return &semSessionAdapter{getSession: b.getSession}
+	return &semSessionAdapter{getSession: b.getSession, wsKeyFn: b.wsKeyFn}
 }
 
 // ----- Adapter implementations -----
@@ -506,11 +518,7 @@ func (a *semCompactorAdapter) OnFlush(ws workspace.WorkspaceKey) error {
 // production layer.
 type semSessionAdapter struct {
 	getSession func(ctx context.Context) *mcp.SessionInfo
-	// wsKeyFn returns the daemon's active workspace key. Phase 65 65-02
-	// adds this so Workspace(ctx) can return a real workspace.WorkspaceKey
-	// instead of the zero value (D-09 carryover #2). RED-only stub: still
-	// unused by Workspace(); GREEN replaces the body.
-	wsKeyFn func() workspace.WorkspaceKey
+	wsKeyFn    func() workspace.WorkspaceKey
 }
 
 func (a *semSessionAdapter) Session(ctx context.Context) *mcp.SessionInfo {
@@ -520,22 +528,21 @@ func (a *semSessionAdapter) Session(ctx context.Context) *mcp.SessionInfo {
 	return a.getSession(ctx)
 }
 
-func (a *semSessionAdapter) Workspace(ctx context.Context) workspace.WorkspaceKey {
-	if a == nil || a.getSession == nil {
+// Workspace returns the daemon's active workspace key via the wsKeyFn
+// closure. nil-safe: a nil adapter or a nil closure returns the zero
+// WorkspaceKey (T-65-02-01 mitigation). Closes Phase 64 carryover
+// D-09 #2 — the unconditional zero return is gone. The closure source
+// of truth is internal/daemon/daemon.go:524 (the same activeWSKey
+// closure already passed to symbols/edit/fileops RegisterTools).
+//
+// Multi-workspace expansion will swap this closure for a real registry
+// without changing the field shape; the closure-based pass-through is
+// the simplest single-workspace implementation today.
+func (a *semSessionAdapter) Workspace(_ context.Context) workspace.WorkspaceKey {
+	if a == nil || a.wsKeyFn == nil {
 		return workspace.WorkspaceKey{}
 	}
-	sess := a.getSession(ctx)
-	if sess == nil {
-		return workspace.WorkspaceKey{}
-	}
-	// SessionInfo.WorkspaceKey is the hashed repo identifier (a string),
-	// not the canonical workspace.WorkspaceKey struct. The daemon owns
-	// the only authoritative workspace.WorkspaceKey, captured via the
-	// `activeWSKey` variable in the SetActivateCallback closure. For
-	// Phase 64 we fall back to the zero value — handlers tolerate the
-	// zero key (returns repoID="") and surface their existing
-	// "no workspace" envelopes. Phase 65 wires a real registry lookup.
-	return workspace.WorkspaceKey{}
+	return a.wsKeyFn()
 }
 
 // semRetrievalAdapter implements RetrievalAccessor. Delegates QueryBleve /

@@ -551,6 +551,16 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 	symbolsCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
 	symbols.RegisterTools(mcpServer, k, wsKeyFn, symbolsLookupFn, symbolsCfgGate)
+
+	// Phase 65 65-07 INTEG-04 / INTEG-05: capture the wired SemanticLookup
+	// once for both the get_health source-field stamp and the semantic_index
+	// block. healthLookup is normalized to integ.NoopLookup{} when sBndl is
+	// nil (semantic disabled) so integ.ChooseSource always sees a valid
+	// SemanticLookup interface value, and the SemanticIndexAccessor adapter
+	// always has a non-nil delegate.
+	healthLookup := symbolsLookupFn()
+	healthSemIndex := &daemonSemIndexAccessor{lookup: healthLookup}
+	healthCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
 	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
 	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
@@ -566,7 +576,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
-	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore})
+	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore}, healthSemIndex, healthCfgGate, healthLookup, wsKeyFn)
 	help.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
@@ -859,6 +869,39 @@ func (p semanticStoreProbe) Probe(ctx context.Context) error {
 	var one int
 	return db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
 }
+
+// daemonSemIndexAccessor adapts an integ.SemanticLookup to the
+// internal/kernel/health.SemanticIndexAccessor interface (Phase 65 65-07
+// INTEG-04). Defined here — not in health/ — so the kernel package stays
+// free of internal/semantic concretions; the kernel only sees the integ
+// value-types boundary.
+//
+// The lookup field is normalized to integ.NoopLookup{} at construction in
+// daemon.go (step 10 / health.RegisterTools wiring) so Status always has
+// a non-nil delegate. NoopLookup.Status returns
+// (SemanticStatus{}, integ.ErrIndexErrored), which kernel/health's
+// ComputeSemanticIndexBlock surfaces as a closed-enum
+// LastError="index_error" (WR-NEW-01).
+//
+// M-readtier: the underlying integSemanticLookup.Status method body is
+// guarded by the grep canary at internal/daemon/integ_lookup_test.go;
+// this adapter delegates without adding any write-method tokens.
+type daemonSemIndexAccessor struct {
+	lookup integ.SemanticLookup
+}
+
+// Status delegates to the underlying SemanticLookup. Read-only by
+// contract (M-readtier).
+func (a *daemonSemIndexAccessor) Status(ctx context.Context, ws workspace.WorkspaceKey) (integ.SemanticStatus, error) {
+	if a == nil || a.lookup == nil {
+		return integ.SemanticStatus{}, integ.ErrIndexErrored
+	}
+	return a.lookup.Status(ctx, ws)
+}
+
+// Compile-time guard: daemonSemIndexAccessor must satisfy
+// health.SemanticIndexAccessor.
+var _ health.SemanticIndexAccessor = (*daemonSemIndexAccessor)(nil)
 
 // MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
 func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }

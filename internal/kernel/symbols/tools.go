@@ -11,6 +11,7 @@ import (
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
 )
 
@@ -81,7 +82,19 @@ type BlastRadiusArgs struct {
 // RegisterTools registers all 9 symbol retrieval tools with the MCP server.
 // Each handler is wrapped with kernel.WrapToolSpan to produce kernel.tool.{name}
 // sub-spans under the TelemetryMiddleware span (Phase 12, TRACE-03).
-func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) {
+//
+// Phase 65 65-06: lookupFn returns the daemon-wired integ.SemanticLookup
+// (NoopLookup{} when semantic disabled). cfgGate carries the koanf-resolved
+// SemanticIndex.Enabled flag. Both feed integ.ChooseSource(cfgGate, lookup,
+// nil) at handler entry so the cfg-disabled → tree_sitter contract (D-04 +
+// Pitfall §3) is honoured before any lookup call.
+func RegisterTools(
+	server *mcp.SerenaMCPServer,
+	k *kernel.Kernel,
+	wsKeyFn func() workspace.WorkspaceKey,
+	lookupFn func() integ.SemanticLookup,
+	cfgGate integ.ConfigGate,
+) {
 	tracer := k.Tracer()
 	registerGoToDefinition(server, k, wsKeyFn, tracer)
 	registerFindReferences(server, k, wsKeyFn, tracer)
@@ -91,7 +104,7 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func()
 	registerFindImplementations(server, k, wsKeyFn, tracer)
 	registerGetCallHierarchy(server, k, wsKeyFn, tracer)
 	registerGetTypeHierarchy(server, k, wsKeyFn, tracer)
-	registerAnalyzeBlastRadius(server, k, wsKeyFn, tracer)
+	registerAnalyzeBlastRadius(server, k, wsKeyFn, tracer, lookupFn, cfgGate)
 }
 
 // --- helpers ---
@@ -557,7 +570,34 @@ func registerGetTypeHierarchy(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsK
 	server.Registry().Register(&mcp.ToolDef{Name: "get_type_hierarchy", Description: "Get type hierarchy (subtypes and/or supertypes) for a symbol", BriefDescription: "Get the type hierarchy (supertypes and subtypes)", HelpText: getTypeHierarchyHelp})
 }
 
-func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+// registerAnalyzeBlastRadius wires the strangler-fig-aware analyze_blast_radius
+// MCP handler. Phase 65 65-06.
+//
+// Source-selection at handler entry routes through integ.ChooseSource(cfgGate,
+// lookup, nil) so the cfg-disabled → SourceTreeSitter contract (D-04 +
+// Pitfall §3) is honoured BEFORE any semantic call. A bare
+// `lookup == nil || !lookup.Available()` short-circuit would defeat that
+// contract — the cfg gate MUST win.
+//
+// Three dispatch arms:
+//
+//   - SourceTreeSitter (cfg disabled): pure-LSP path via the existing
+//     AnalyzeBlastRadius primitive (blast.go), confidence hard-capped at
+//     fallbackConfidenceCap (D-08 + ROADMAP SC #2).
+//   - SourceFallback (cfg enabled but lookup unavailable): same pure-LSP
+//     path, same cap, but envelope reports source=fallback +
+//     ChooseSource's classified reason (defensive D-05 row).
+//   - SourceSemantic: two-pass orchestrator (analyzeBlastRadiusViaLookup).
+//     A Pass 1 error re-classifies via ClassifyLookupErr and falls through
+//     to the LSP fallback path with the cap.
+func registerAnalyzeBlastRadius(
+	server *mcp.SerenaMCPServer,
+	k *kernel.Kernel,
+	wsKeyFn func() workspace.WorkspaceKey,
+	tracer trace.Tracer,
+	lookupFn func() integ.SemanticLookup,
+	cfgGate integ.ConfigGate,
+) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "analyze_blast_radius",
 		Description: "Analyze the blast radius (impact) of changing a symbol",
@@ -575,11 +615,79 @@ func registerAnalyzeBlastRadius(server *mcp.SerenaMCPServer, k *kernel.Kernel, w
 			return errorResult(serr.Wrap(serr.Internal, "acquire session", err).Error()), nil, nil
 		}
 		lspLine, lspCol := userPosToLSP(args.Line, args.Col)
-		br, err := AnalyzeBlastRadius(ctx, lease, pathToURI(rt.Key().RepoRoot, args.Path), lspLine, lspCol)
-		if err != nil {
-			return errorResult(err.Error()), nil, nil
+		uri := pathToURI(rt.Key().RepoRoot, args.Path)
+		ws := rt.Key()
+
+		// Resolve the wired lookup. nil is normalized to NoopLookup{} so the
+		// priority-ladder gate at integ.ChooseSource always sees a valid
+		// SemanticLookup interface value.
+		var lookup integ.SemanticLookup
+		if lookupFn != nil {
+			lookup = lookupFn()
 		}
-		return textResult(formatBlastRadius(br)), nil, nil
+		if lookup == nil {
+			lookup = integ.NoopLookup{}
+		}
+
+		// D-04 + Pitfall §3: cfg gate is the FIRST decision. ChooseSource
+		// returns SourceTreeSitter when the feature is off, SourceFallback +
+		// FallbackReasonIndexDisabled when the feature is on but the lookup
+		// is unavailable (defensive D-05 row), SourceSemantic otherwise.
+		src, reason := integ.ChooseSource(cfgGate, lookup, nil)
+		switch src {
+		case integ.SourceTreeSitter, integ.SourceFallback:
+			// Both non-semantic arms render the v1.9 LSP-derived BlastRadius
+			// with the D-08 / ROADMAP SC #2 confidence cap applied uniformly.
+			br, err := AnalyzeBlastRadius(ctx, lease, uri, lspLine, lspCol)
+			if err != nil {
+				return errorResult(err.Error()), nil, nil
+			}
+			capConfidences(br, fallbackConfidenceCap)
+			out, marshErr := formatBlastRadiusEnvelope(br, src, reason)
+			if marshErr != nil {
+				return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
+			}
+			return textResult(string(out)), nil, nil
+		case integ.SourceSemantic:
+			// fall through to the two-pass orchestrator below
+		}
+
+		// SourceSemantic arm: translate cursor → SymbolID, run two-pass.
+		sym, sErr := lookup.SymbolID(ctx, ws, args.Path, uint32(lspLine), uint32(lspCol))
+		if sErr != nil {
+			// Pass 1-equivalent error — classify and fall back to LSP.
+			fbReason := integ.ClassifyLookupErr(sErr)
+			br, lspErr := AnalyzeBlastRadius(ctx, lease, uri, lspLine, lspCol)
+			if lspErr != nil {
+				return errorResult(lspErr.Error()), nil, nil
+			}
+			capConfidences(br, fallbackConfidenceCap)
+			out, marshErr := formatBlastRadiusEnvelope(br, integ.SourceFallback, fbReason)
+			if marshErr != nil {
+				return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
+			}
+			return textResult(string(out)), nil, nil
+		}
+
+		impacts, semSrc, semReason, expandErr := analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym)
+		if expandErr != nil {
+			// Pass 1 error: drop to LSP fallback with the classified reason.
+			br, lspErr := AnalyzeBlastRadius(ctx, lease, uri, lspLine, lspCol)
+			if lspErr != nil {
+				return errorResult(lspErr.Error()), nil, nil
+			}
+			capConfidences(br, fallbackConfidenceCap)
+			out, marshErr := formatBlastRadiusEnvelope(br, semSrc, semReason)
+			if marshErr != nil {
+				return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
+			}
+			return textResult(string(out)), nil, nil
+		}
+		out, marshErr := formatBlastRadiusEnvelopeFromImpacts(impacts, semSrc, semReason)
+		if marshErr != nil {
+			return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
+		}
+		return textResult(string(out)), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "analyze_blast_radius", Description: "Analyze the blast radius (impact) of changing a symbol", BriefDescription: "Analyze the impact of changing a symbol", HelpText: analyzeBlastRadiusHelp})
 }

@@ -669,7 +669,7 @@ func registerAnalyzeBlastRadius(
 			return textResult(string(out)), nil, nil
 		}
 
-		impacts, semSrc, semReason, expandErr := analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym)
+		impacts, semSrc, semReason, semGraphVersion, expandErr := analyzeBlastRadiusViaLookup(ctx, lookup, ws, sym)
 		if expandErr != nil {
 			// Pass 1 error: drop to LSP fallback with the classified reason.
 			br, lspErr := AnalyzeBlastRadius(ctx, lease, uri, lspLine, lspCol)
@@ -683,7 +683,7 @@ func registerAnalyzeBlastRadius(
 			}
 			return textResult(string(out)), nil, nil
 		}
-		out, marshErr := formatBlastRadiusEnvelopeFromImpacts(impacts, semSrc, semReason)
+		out, marshErr := formatBlastRadiusEnvelopeFromImpacts(impacts, semSrc, semReason, semGraphVersion)
 		if marshErr != nil {
 			return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
 		}

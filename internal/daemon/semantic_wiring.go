@@ -133,6 +133,30 @@ type semanticBundle struct {
 	// recoveres under b.mu so per-workspace recovery state stays coherent
 	// with ensureRetrieval.
 	retrievalAdapter *semRetrievalAdapter
+
+	// lastErrReason carries the most recent build/live/overlay-flush
+	// closed-enum FallbackReason; set via SetLastErrorReason at every
+	// daemon-side error path that owns a bundle pointer (Phase 65 65-11
+	// Task 2 — IN-04 / WR-2). Read by integSemanticLookup.Status under
+	// bundle.mu so kernel/health surfaces the closed-enum reason on
+	// get_health.semantic_index.last_error.
+	lastErrReason integ.FallbackReason
+}
+
+// SetLastErrorReason stamps the bundle's lastErrReason field with a closed-enum
+// FallbackReason. Called by every daemon-side build/live/overlay-flush error
+// path so integSemanticLookup.Status surfaces a stable closed-enum reason
+// (NOT raw error text) on the get_health envelope. Pass "" to clear after a
+// successful commit. Nil-safe.
+//
+// Phase 65 65-11 Task 2 — IN-04 / WR-2.
+func (b *semanticBundle) SetLastErrorReason(r integ.FallbackReason) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	b.lastErrReason = r
+	b.mu.Unlock()
 }
 
 // newSemanticBundle constructs the bundle. Returns nil when the store is nil
@@ -696,14 +720,34 @@ func (l *integSemanticLookup) Available() bool {
 }
 
 // SymbolID translates an LSP file:line:col location into a stable Phase 59
-// EXTRACT-02 SymbolID (Open Question #3 resolution). 65-03 stub returns
-// ErrNoSnapshot until 65-06 wires the canonical reader; the interface
-// shape and error contract are stable.
-func (l *integSemanticLookup) SymbolID(_ context.Context, _ workspace.WorkspaceKey, _ string, _, _ uint32) (integ.SymbolID, error) {
+// EXTRACT-02 SymbolID. Phase 65 65-11 Task 2 — real implementation
+// backed by *Store.QuerySymbolByLocation.
+//
+// Returns:
+//   - (stableKey, nil) on hit at the latest committed snapshot.
+//   - ("", integ.ErrNoSnapshot) when no snapshot covers (path, line, col)
+//     (either no snapshot has been committed yet OR the cursor lies outside
+//     every symbol's range — caller treats both as "fall through to LSP").
+//   - ("", integ.ErrIndexErrored) when the lookup is unavailable.
+//   - ("", wrapped store error) on a real SQL error.
+//
+// SymbolID at the integ boundary IS the stable_key (Phase 59 EXTRACT-02
+// canonical identity); kernel callers pass it back through ExpandFrom and
+// the orchestrator without ever round-tripping it through the store-side
+// uint64 graph.NodeID surface.
+func (l *integSemanticLookup) SymbolID(ctx context.Context, ws workspace.WorkspaceKey, path string, line, col uint32) (integ.SymbolID, error) {
 	if !l.Available() {
 		return integ.SymbolID(""), integ.ErrIndexErrored
 	}
-	return integ.SymbolID(""), integ.ErrNoSnapshot
+	repoID := ws.Hash()
+	stableKey, ok, err := l.store.QuerySymbolByLocation(ctx, repoID, path, line, col)
+	if err != nil {
+		return integ.SymbolID(""), fmt.Errorf("integSemanticLookup.SymbolID: %w", err)
+	}
+	if !ok {
+		return integ.SymbolID(""), integ.ErrNoSnapshot
+	}
+	return integ.SymbolID(stableKey), nil
 }
 
 // defaultRankProjection is the projection key consumed by RankFiles and
@@ -915,14 +959,161 @@ func resolveSymbolPath(ctx context.Context, store *semanticstore.Store, snapshot
 	return path, true
 }
 
-// ExpandFrom returns the depth-bounded blast-radius frontier rooted at
-// sym. 65-03 stub returns ErrNoSnapshot; 65-06 wires BFS over
-// QueryEffectiveAdjacency with the Phase 62 confidence ladder.
-func (l *integSemanticLookup) ExpandFrom(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID, _ int) ([]integ.Impact, error) {
+// ExpandFrom returns the depth-bounded blast-radius frontier rooted at sym.
+// Phase 65 65-11 Task 2 — real implementation: BFS over the (repoID,
+// "call_graph") effective adjacency to depth=2, mapping each edge's weight
+// onto the Phase 62 closed-ladder confidence. Each visited node yields one
+// integ.Impact whose Evidence carries the (from, to, kind, confidence) edge
+// and whose SymbolID is the target's stable_key.
+//
+// Returns:
+//   - ([]Impact, nil) — including ([]Impact{}, nil) when the seed has no
+//     outbound edges (depth=0 frontier is empty by definition; the caller
+//     treats a non-nil empty slice as "no expansion" rather than an error).
+//   - (nil, integ.ErrIndexErrored) when Available()==false.
+//   - (nil, integ.ErrNoSnapshot) when the seed sym is not present in the
+//     latest committed snapshot.
+//
+// The seed itself is NOT emitted as an Impact (the orchestrator treats the
+// seed cursor specially); only neighbors at distance >= 1 from the seed are.
+//
+// depth <= 0 is normalized to the default (2). depth > 2 still works but is
+// a SemanticLookup contract violation upstream — the orchestrator caps at
+// blastRadiusExpansionDepth.
+func (l *integSemanticLookup) ExpandFrom(ctx context.Context, ws workspace.WorkspaceKey, sym integ.SymbolID, depth int) ([]integ.Impact, error) {
 	if !l.Available() {
 		return nil, integ.ErrIndexErrored
 	}
-	return nil, integ.ErrNoSnapshot
+	if depth <= 0 {
+		depth = 2
+	}
+	repoID := ws.Hash()
+
+	// Resolve the seed stable_key → graph.NodeID. A miss here is the
+	// "seed not in latest committed snapshot" path; the orchestrator
+	// classifies it as ErrNoSnapshot and falls through to LSP.
+	startNode, ok, err := l.store.QueryNodeIDByStableKey(ctx, repoID, string(sym))
+	if err != nil {
+		return nil, fmt.Errorf("integSemanticLookup.ExpandFrom: resolve start: %w", err)
+	}
+	if !ok {
+		return nil, integ.ErrNoSnapshot
+	}
+
+	// Pull the effective adjacency once for the whole BFS (snapshot edges ⊕
+	// live overlay edges, status='live' tombstoned overlay rows excluded).
+	out, _, err := l.store.QueryEffectiveAdjacency(ctx, repoID, defaultRankProjection)
+	if err != nil {
+		return nil, fmt.Errorf("integSemanticLookup.ExpandFrom: %w", err)
+	}
+
+	return bfsExpand(ctx, l.store, repoID, graph.NodeID(startNode), out, depth), nil
+}
+
+// bfsExpand performs a frontier-based BFS over the outbound adjacency map
+// rooted at start, to the given depth. Each visited target yields one
+// integ.Impact carrying the edge that brought us there as Evidence, the
+// target's stable_key as SymbolID, and a Phase 62 closed-ladder confidence
+// derived from the edge weight.
+//
+// Visit-once semantics: a node first reached at depth d is NOT re-emitted
+// when re-encountered at a later depth. This keeps the result set bounded
+// even on graphs with high in-degree.
+func bfsExpand(
+	ctx context.Context,
+	store *semanticstore.Store,
+	repoID string,
+	start graph.NodeID,
+	out map[graph.NodeID]map[graph.NodeID]float64,
+	depth int,
+) []integ.Impact {
+	visited := map[graph.NodeID]struct{}{start: {}}
+	frontier := []graph.NodeID{start}
+	impacts := make([]integ.Impact, 0, 8)
+
+	startKey, _, _ := store.QueryStableKeyByNodeID(ctx, repoID, uint64(start))
+
+	for d := 1; d <= depth; d++ {
+		next := make([]graph.NodeID, 0, len(frontier))
+		for _, src := range frontier {
+			neighbors, ok := out[src]
+			if !ok {
+				continue
+			}
+			// Stable per-frontier-node ordering: edges arrive from a
+			// map iteration so we sort target NodeIDs ASC before
+			// emitting impacts. Determinism matters for cross-test
+			// assertions.
+			targets := make([]graph.NodeID, 0, len(neighbors))
+			for tgt := range neighbors {
+				targets = append(targets, tgt)
+			}
+			sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+
+			srcKey := startKey
+			if src != start {
+				if k, ok, _ := store.QueryStableKeyByNodeID(ctx, repoID, uint64(src)); ok {
+					srcKey = k
+				}
+			}
+
+			for _, tgt := range targets {
+				if _, seen := visited[tgt]; seen {
+					continue
+				}
+				visited[tgt] = struct{}{}
+				next = append(next, tgt)
+
+				weight := neighbors[tgt]
+				tgtKey, _, _ := store.QueryStableKeyByNodeID(ctx, repoID, uint64(tgt))
+				confidence := confidenceFromWeight(weight)
+				edge := integ.Edge{
+					From:       integ.SymbolID(srcKey),
+					To:         integ.SymbolID(tgtKey),
+					Kind:       "calls",
+					Confidence: confidence,
+				}
+				impacts = append(impacts, integ.Impact{
+					SymbolID:   integ.SymbolID(tgtKey),
+					EdgeKind:   "calls",
+					Confidence: confidence,
+					Evidence: integ.Evidence{
+						Edges: []integ.Edge{edge},
+						Ranks: []float64{weight},
+					},
+				})
+			}
+		}
+		if len(next) == 0 {
+			break
+		}
+		frontier = next
+	}
+	return impacts
+}
+
+// confidenceFromWeight maps a graph edge weight onto the Phase 62 closed-ladder
+// confidence values:
+//
+//	weight >= 1.00 → 0.95 (snapshot+overlay merged; LSP-validated probe in 65-12 flips to 1.00)
+//	weight >= 0.80 → 0.80 (tree-sitter + local resolution)
+//	weight >= 0.60 → 0.70 (tree-sitter only)
+//	weight <  0.60 → 0.45 (heuristic / weak signal)
+//
+// The 1.00 value is reserved for the Pass-2 LSP-confirmed path (set by
+// applyValidationVerdicts in the kernel orchestrator); ExpandFrom never
+// emits 1.00 itself because Pass 1 alone cannot LSP-confirm an edge.
+func confidenceFromWeight(weight float64) float64 {
+	switch {
+	case weight >= 1.00:
+		return 0.95
+	case weight >= 0.80:
+		return 0.80
+	case weight >= 0.60:
+		return 0.70
+	default:
+		return 0.45
+	}
 }
 
 // ValidateCriticalEdges runs Pass 2 LSP validation. 65-03 stub returns
@@ -963,14 +1154,27 @@ func (l *integSemanticLookup) Status(ctx context.Context, ws workspace.Workspace
 	}
 	overlay := l.store.OverlayHasPendingRows(repoID)
 
+	// WR-01 (Phase 65 65-11 Task 2): snapshot bundle.queue / bundle.live /
+	// bundle.lastErrReason under bundle.mu. The pre-WR-01 code released the
+	// lock between the queue and live reads, which raced with concurrent
+	// SetLastErrorReason / engine eviction. Hold the lock for the whole
+	// snapshot, then call DepthAll / LastFlushAt OUTSIDE the lock — those
+	// methods take their own internal locks and could deadlock if invoked
+	// while we hold bundle.mu.
 	var pendingLSP int
 	var lastLiveMs int64
+	var lastErr integ.FallbackReason
 	if l.bundle != nil {
-		if l.bundle.queue != nil {
-			pendingLSP = l.bundle.queue.DepthAll()
+		l.bundle.mu.Lock()
+		q := l.bundle.queue
+		lv := l.bundle.live
+		lastErr = l.bundle.lastErrReason
+		l.bundle.mu.Unlock()
+		if q != nil {
+			pendingLSP = q.DepthAll()
 		}
-		if l.bundle.live != nil {
-			if t := l.bundle.live.LastFlushAt(ws); !t.IsZero() {
+		if lv != nil {
+			if t := lv.LastFlushAt(ws); !t.IsZero() {
 				lastLiveMs = t.UnixMilli()
 			}
 		}
@@ -988,7 +1192,7 @@ func (l *integSemanticLookup) Status(ctx context.Context, ws workspace.Workspace
 		OverlayActive:    overlay,
 		PendingLSP:       pendingLSP,
 		LastLiveUpdateMs: lastLiveMs,
-		LastErrorReason:  "",
+		LastErrorReason:  string(lastErr),
 	}, nil
 }
 
@@ -1138,6 +1342,11 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			BaseSnapshotID: baseSnapshotID,
 		})
 		if err != nil {
+			// WR-2 / IN-04 (Phase 65 65-11 Task 2): stamp the closed-enum
+			// reason so get_health.semantic_index.last_error surfaces
+			// "index_error" (NOT raw error text or empty) until the next
+			// successful build clears the stamp.
+			b.SetLastErrorReason(integ.FallbackReasonIndexError)
 			return semantic.IndexResult{}, fmt.Errorf("buildFn: BeginSnapshot: %w", err)
 		}
 		committed := false
@@ -1152,6 +1361,8 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 		st.SetSnapshotID(snap.ID)
 
 		if err := b.store.WriteSnapshotFacts(ctx, snap, facts); err != nil {
+			// WR-2 / IN-04: stamp index_error on WriteSnapshotFacts failure.
+			b.SetLastErrorReason(integ.FallbackReasonIndexError)
 			return semantic.IndexResult{}, fmt.Errorf("buildFn: WriteSnapshotFacts: %w", err)
 		}
 		st.AddFilesIndexed(int64(len(extracted)))
@@ -1163,9 +1374,15 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			DurationMs:     time.Since(startedAt).Milliseconds(),
 		}
 		if err := b.store.CommitSnapshot(ctx, snap, summary); err != nil {
+			// WR-2 / IN-04: stamp index_error on CommitSnapshot failure.
+			b.SetLastErrorReason(integ.FallbackReasonIndexError)
 			return semantic.IndexResult{}, fmt.Errorf("buildFn: CommitSnapshot: %w", err)
 		}
 		committed = true
+
+		// WR-2: clear the lastErrReason stamp on successful commit so a
+		// previously-stamped transient error stops surfacing on get_health.
+		b.SetLastErrorReason("")
 
 		return semantic.IndexResult{
 			SnapshotID:   snap.ID,

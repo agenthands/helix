@@ -396,8 +396,11 @@ func stampFixtureScoresAndEdges(
 	confFrom, confTo := nodeIDFromMeta(syms["confirmed_edge_from"]), nodeIDFromMeta(syms["confirmed_edge_to"])
 	refFrom, refTo := nodeIDFromMeta(syms["refuted_edge_from"]), nodeIDFromMeta(syms["refuted_edge_to"])
 
-	confirmedEdgeKind := "CALLS"
-	refutedEdgeKind := "CALLS"
+	// EdgeKind aligns with the rank-scheduler projection ("call_graph"),
+	// matching the QueryEffectiveAdjacency filter used by ExpandFrom.
+	// Phase 65 65-11 Task 2 (Rule 3 deviation, see SUMMARY).
+	confirmedEdgeKind := "call_graph"
+	refutedEdgeKind := "call_graph"
 
 	edgeRows := []semanticstore.EdgeRow{
 		{
@@ -438,7 +441,7 @@ func stampFixtureScoresAndEdges(
 		edgeRows = append(edgeRows, semanticstore.EdgeRow{
 			SrcNodeID:       from,
 			DstNodeID:       to,
-			EdgeKind:        "CALLS",
+			EdgeKind:        "call_graph",
 			Source:          "lsp.callHierarchy",
 			Confidence:      0.95,
 			Weight:          0.5,

@@ -76,16 +76,26 @@ const fallbackConfidenceCap = 0.6
 // Pass 2 errors are absorbed (logged debug at the call site if desired):
 // keeping Pass 1 verdicts is the doctrine when the LSP probe is unavailable
 // (RESEARCH Code Example 2).
+//
+// WR-03 (Phase 65 65-11): the orchestrator now also returns the persisted
+// graph_version (from a single lookup.Status call after Pass 1 succeeds) so
+// formatBlastRadiusEnvelopeFromImpacts can stamp it on the semantic envelope.
+// Status errors are non-fatal — the orchestrator returns graphVersion=0 and
+// lets the envelope omit the field via integ.MarshalEnvelope's omitempty.
+//
+// Signature stays single-arg per WR-5: no lspProbeFn parameter (that lands
+// in 65-12 Task 2 which migrates the orchestrator to the LSP-validation
+// arm).
 func analyzeBlastRadiusViaLookup(
 	ctx context.Context,
 	lookup integ.SemanticLookup,
 	ws workspace.WorkspaceKey,
 	sym integ.SymbolID,
-) ([]integ.Impact, integ.Source, integ.FallbackReason, error) {
+) ([]integ.Impact, integ.Source, integ.FallbackReason, uint64, error) {
 	// Pass 1: persisted-graph expansion. Cheap, depth-bounded.
 	impacts, err := lookup.ExpandFrom(ctx, ws, sym, blastRadiusExpansionDepth)
 	if err != nil {
-		return nil, integ.SourceFallback, integ.ClassifyLookupErr(err), err
+		return nil, integ.SourceFallback, integ.ClassifyLookupErr(err), 0, err
 	}
 
 	// Pitfall §6: copy Pass 1 BEFORE applying any Pass 2 verdicts. Tests
@@ -95,17 +105,24 @@ func analyzeBlastRadiusViaLookup(
 
 	// Pass 2: filter critical edges, run the LSP probe.
 	critical := filterCritical(impactsCopy)
-	if len(critical) == 0 {
-		return impactsCopy, integ.SourceSemantic, "", nil
+	if len(critical) > 0 {
+		verdicts, vErr := lookup.ValidateCriticalEdges(ctx, ws, edgesOf(critical))
+		if vErr == nil {
+			applyValidationVerdicts(impactsCopy, verdicts)
+		}
+		// vErr non-nil → leave Pass 1 confidences; the LSP probe is unavailable
+		// but the persisted graph is the canonical answer at this point.
+		// Caller still reports source=semantic.
 	}
-	verdicts, vErr := lookup.ValidateCriticalEdges(ctx, ws, edgesOf(critical))
-	if vErr == nil {
-		applyValidationVerdicts(impactsCopy, verdicts)
+
+	// WR-03: thread graph_version through to the envelope. Single Status
+	// call at the orchestrator boundary — Status errors are non-fatal
+	// (graphVersion=0 means MarshalEnvelope omits the key via omitempty).
+	var graphVersion uint64
+	if status, sErr := lookup.Status(ctx, ws); sErr == nil {
+		graphVersion = status.GraphVersion
 	}
-	// vErr non-nil → leave Pass 1 confidences; the LSP probe is unavailable
-	// but the persisted graph is the canonical answer at this point. Caller
-	// still reports source=semantic.
-	return impactsCopy, integ.SourceSemantic, "", nil
+	return impactsCopy, integ.SourceSemantic, "", graphVersion, nil
 }
 
 // filterCritical returns the subset of impacts whose Pass-2 LSP probe
@@ -192,8 +209,20 @@ func edgesOf(impacts []integ.Impact) []integ.Edge {
 }
 
 // applyValidationVerdicts applies Pass-2 ValidatedEdge verdicts to the
-// impacts slice. Confirmed edges flip Confidence to 1.00; refuted edges
-// flip Confidence to 0.20 AND set Refuted=true.
+// impacts slice. The pre-WR-05 form broke after the first matching verdict,
+// which masked refutations on sibling edges when a confirmation appeared
+// first. WR-05 (Phase 65 65-11 Task 2) replaces that with sawConfirmed /
+// sawRefuted accumulators evaluated AFTER walking every evidence edge:
+//
+//   - sawRefuted=true (regardless of sawConfirmed) →
+//       Confidence=0.20, Refuted=true
+//   - sawConfirmed=true && !sawRefuted →
+//       Confidence=1.00, Refuted unchanged
+//   - neither → impact untouched
+//
+// The doctrine: a single refutation taints the impact. The persisted graph
+// said the edge exists; the LSP says it doesn't. We trust the LSP probe
+// over the graph, regardless of how many sibling edges were confirmed.
 //
 // The caller MUST pass a COPY of the Pass 1 slice — applyValidationVerdicts
 // mutates impacts[i].Confidence and impacts[i].Refuted in place. Pitfall §6
@@ -207,21 +236,25 @@ func applyValidationVerdicts(impacts []integ.Impact, verdicts []integ.ValidatedE
 		verdictByEdge[v.Edge] = v
 	}
 	for i := range impacts {
+		var sawConfirmed, sawRefuted bool
 		for _, e := range impacts[i].Evidence.Edges {
 			v, ok := verdictByEdge[e]
 			if !ok {
 				continue
 			}
 			if v.LSPConfirmed {
-				impacts[i].Confidence = 1.00
+				sawConfirmed = true
 			} else {
-				impacts[i].Confidence = 0.20
-				impacts[i].Refuted = true
+				sawRefuted = true
 			}
-			// One verdict per impact is enough to set the verdict. Continue
-			// to the next impact rather than letting later edges in the same
-			// impact overwrite the verdict.
-			break
+		}
+		switch {
+		case sawRefuted:
+			// Refutation taints regardless of sibling confirmations (WR-05).
+			impacts[i].Confidence = 0.20
+			impacts[i].Refuted = true
+		case sawConfirmed:
+			impacts[i].Confidence = 1.00
 		}
 	}
 }
@@ -284,7 +317,11 @@ func formatBlastRadiusEnvelope(br *BlastRadius, src integ.Source, reason integ.F
 // formatBlastRadiusEnvelopeFromImpacts produces the canonical JSON envelope
 // for the SourceSemantic path — the orchestrator returns []integ.Impact, not
 // a *BlastRadius, because the persisted graph is authoritative.
-func formatBlastRadiusEnvelopeFromImpacts(impacts []integ.Impact, src integ.Source, reason integ.FallbackReason) ([]byte, error) {
+//
+// WR-03 (Phase 65 65-11): the graphVersion argument is the value threaded
+// from analyzeBlastRadiusViaLookup's lookup.Status call after Pass 1.
+// graphVersion=0 causes MarshalEnvelope to omit the key (omitempty contract).
+func formatBlastRadiusEnvelopeFromImpacts(impacts []integ.Impact, src integ.Source, reason integ.FallbackReason, graphVersion uint64) ([]byte, error) {
 	perNode := make([]map[string]interface{}, 0, len(impacts))
 	for _, im := range impacts {
 		entry := map[string]interface{}{
@@ -303,6 +340,7 @@ func formatBlastRadiusEnvelopeFromImpacts(impacts []integ.Impact, src integ.Sour
 	return integ.MarshalEnvelope(integ.Envelope{
 		Source:         src,
 		FallbackReason: reason,
+		GraphVersion:   graphVersion,
 	}, payload)
 }
 

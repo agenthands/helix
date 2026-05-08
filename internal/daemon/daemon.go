@@ -632,6 +632,26 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		}
 	}
 
+	// 12e. Wire repomap skill SemanticLookup + ConfigGate (Phase 65 65-05,
+	// INTEG-01 / INTEG-02 / INTEG-05). When sBndl is non-nil (semantic
+	// enabled and the bundle constructed), pass the production
+	// integSemanticLookup adapter through the integLookupAccessor accessor
+	// declared in semantic_wiring.go. When sBndl is nil (semantic disabled),
+	// SetSemanticLookup is skipped — the skill's lookup() accessor normalizes
+	// nil to integ.NoopLookup{} so the priority-ladder gate at ChooseSource
+	// always sees a valid SemanticLookup.
+	//
+	// The ConfigGate is wired ALWAYS (even when sBndl is nil) so the v1.9
+	// steady-state path renders source="tree_sitter" instead of
+	// source="fallback" + reason="index_disabled" when the feature is off
+	// (D-04 / Pitfall §3).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetConfigGate(&daemonCfgGate{enabled: cfg.SemanticIndex.Enabled})
+		if sBndl != nil {
+			rs.SetSemanticLookup(sBndl.integLookupAccessor())
+		}
+	}
+
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches

@@ -16,8 +16,10 @@ import (
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/repomap"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/skill"
 	"github.com/agenthands/helix/internal/treesitter"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 const (
@@ -50,6 +52,20 @@ type RepoMapSkill struct {
 	// observe per-extractor latency (Q-2 Option 2 — extractor type is
 	// known here, not in cache.go).
 	metrics repomap.MetricsSink
+
+	// semanticLookup is the optional Phase 65 strangler-fig seam
+	// (INTEG-01 / INTEG-02). When wired and Available(), get_repo_map /
+	// get_context delegate ranking to lookup.RankFiles / RankFromSeeds and
+	// stamp source="semantic" on the envelope; otherwise the existing v1.9
+	// tree-sitter + PageRank path runs and stamps source="tree_sitter" or
+	// source="fallback" per ChooseSource (Pitfall §3 priority ladder).
+	// nil-normalized to integ.NoopLookup{} via the lookup() accessor.
+	semanticLookup integ.SemanticLookup
+
+	// cfgGate is the daemon-side ConfigGate (small interface — just
+	// SemanticIndexEnabled()). Wired by SetConfigGate at daemon post-init.
+	// nil-tolerant: ChooseSource treats nil as "feature off" → SourceTreeSitter.
+	cfgGate integ.ConfigGate
 }
 
 // FallbackDeps holds dependencies for LSP-based fallback tag extraction.
@@ -141,6 +157,53 @@ func (s *RepoMapSkill) SetMetricsSink(sink repomap.MetricsSink) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.metrics = sink
+}
+
+// SetSemanticLookup wires the integ.SemanticLookup seam (Phase 65 65-05,
+// INTEG-01 / INTEG-02 / INTEG-05). Joins the SetEnrichFn / SetFallbackDeps /
+// SetMetricsSink family at daemon post-init. nil-tolerant: a nil argument
+// is the equivalent of "never wired" — the lookup() accessor normalizes the
+// nil to integ.NoopLookup{} so the priority-ladder gate at ChooseSource
+// always sees a valid SemanticLookup interface value.
+//
+// Threat T-65-05-04 (M-readtier) disposition: the production lookup adapter
+// is read-only (grep canary at internal/daemon/integ_lookup_test.go); the
+// skill never reaches snapshot-write surfaces through this setter.
+func (s *RepoMapSkill) SetSemanticLookup(lookup integ.SemanticLookup) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.semanticLookup = lookup
+}
+
+// SetConfigGate wires the daemon-side ConfigGate (Phase 65 65-05). The
+// ChooseSource priority ladder consults cfg.SemanticIndexEnabled() FIRST
+// (D-04 / Pitfall §3); a nil cfg is treated as "feature off" so the steady-
+// state v1.9 path renders source="tree_sitter".
+func (s *RepoMapSkill) SetConfigGate(cfg integ.ConfigGate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfgGate = cfg
+}
+
+// lookup returns the wired SemanticLookup, normalizing nil to
+// integ.NoopLookup{} so the priority-ladder gate at ChooseSource always sees
+// a valid interface value. Mirrors metricsSink()'s nil-normalizer pattern.
+func (s *RepoMapSkill) lookup() integ.SemanticLookup {
+	s.mu.Lock()
+	l := s.semanticLookup
+	s.mu.Unlock()
+	if l == nil {
+		return integ.NoopLookup{}
+	}
+	return l
+}
+
+// configGate returns the wired ConfigGate (or nil). ChooseSource is
+// nil-tolerant; returning nil here is the equivalent of "feature off".
+func (s *RepoMapSkill) configGate() integ.ConfigGate {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfgGate
 }
 
 // metricsSink returns the wired sink, normalizing nil to NoopSink{}. Used
@@ -266,27 +329,94 @@ func (s *RepoMapSkill) ExecuteTool(name string, args map[string]interface{}) (st
 }
 
 // execGetRepoMap handles the get_repo_map tool: uniform PageRank per D-05.
+//
+// Phase 65 65-05 strangler-fig integration (INTEG-01 + INTEG-05):
+//
+//  1. ChooseSource consults the wired ConfigGate / SemanticLookup via the
+//     priority ladder (Pitfall §3): config off → SourceTreeSitter; cfg on
+//     but lookup unavailable → SourceFallback + index_disabled (defensive
+//     D-05); cfg on + lookup available → semantic path (or SourceFallback +
+//     classified reason on err).
+//  2. Tree text comes from EITHER the lookup (semantic path: RankFiles +
+//     adaptRankedFiles → renderer) OR the v1.9 path (renderV19); the
+//     existing TreeRenderer.RenderBudgeted is the only renderer in either
+//     branch (INTEG-01: zero source change to internal/repomap engine).
+//  3. Output is JSON-wrapped via integ.MarshalEnvelope (Pitfall §2): the
+//     tree text is preserved verbatim under "tree", the envelope adds
+//     source / fallback_reason / graph_version / freshness.
 func (s *RepoMapSkill) execGetRepoMap(args map[string]interface{}) (string, error) {
 	budget := extractTokenBudget(args, defaultRepoMapBudget)
+	ctx := context.Background()
+	ws := s.workspaceKey()
 
-	if err := s.ensureGraph(); err != nil {
-		return "", serr.Wrap(serr.Internal, "building reference graph", err).WithTool("get_repo_map")
+	cfg := s.configGate()
+	lookup := s.lookup()
+	src, reason := integ.ChooseSource(cfg, lookup, nil)
+
+	var (
+		treeText string
+		graphVer uint64
+	)
+	switch src {
+	case integ.SourceSemantic:
+		ranked, lerr := lookup.RankFiles(ctx, ws)
+		if lerr != nil {
+			// Reclassify: semantic-on err → SourceFallback + classified reason.
+			src, reason = integ.ChooseSource(cfg, lookup, lerr)
+			text, v19Err := s.renderV19(budget, nil)
+			if v19Err != nil {
+				return "", serr.Wrap(serr.Internal, "building reference graph", v19Err).WithTool("get_repo_map")
+			}
+			treeText = text
+		} else {
+			adapted := adaptRankedFiles(ranked)
+			if err := s.ensureRenderer(); err != nil {
+				return "", serr.Wrap(serr.Internal, "preparing renderer", err).WithTool("get_repo_map")
+			}
+			treeText = s.renderer.RenderBudgeted(adapted, budget)
+			// Capture graph_version from one of the ranked entries
+			// (RankedFile.GraphVersion is per-call stable from the Phase 62
+			// D-07 contract); fall back to lookup.Status if the ranked list
+			// is empty.
+			if len(ranked) > 0 {
+				graphVer = ranked[0].GraphVersion
+			} else if status, sErr := lookup.Status(ctx, ws); sErr == nil {
+				graphVer = status.GraphVersion
+			}
+		}
+	default:
+		// SourceTreeSitter or SourceFallback (defensive index_disabled): run
+		// the v1.9 path. Plain "fallback" classification has no graph_version.
+		text, v19Err := s.renderV19(budget, nil)
+		if v19Err != nil {
+			return "", serr.Wrap(serr.Internal, "building reference graph", v19Err).WithTool("get_repo_map")
+		}
+		treeText = text
 	}
 
-	ranked := s.graph.RankFiles(0.85, nil)
-	if len(ranked) == 0 {
-		return "No files found in repository.", nil
+	if treeText == "" {
+		treeText = "No files found in repository."
 	}
 
-	output := s.renderer.RenderBudgeted(ranked, budget)
-	if output == "" {
-		return "No files found in repository.", nil
+	env := integ.Envelope{
+		Source:         src,
+		FallbackReason: reason,
+		GraphVersion:   graphVer,
+		Freshness:      computeFreshness(ctx, lookup, ws),
 	}
-
-	return output, nil
+	out, mErr := integ.MarshalEnvelope(env, map[string]any{"tree": treeText})
+	if mErr != nil {
+		return "", serr.Wrap(serr.Internal, "marshaling envelope", mErr).WithTool("get_repo_map")
+	}
+	return string(out), nil
 }
 
 // execGetContext handles the get_context tool: personalized PageRank per D-04.
+//
+// Phase 65 65-05 strangler-fig integration (INTEG-02 + INTEG-05): mirrors
+// execGetRepoMap's source-selection ladder, but the semantic arm calls
+// lookup.RankFromSeeds(ctx, ws, files) instead of RankFiles. Output is JSON-
+// wrapped (Pitfall §2). Same INTEG-01 contract — internal/repomap untouched.
 func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, error) {
 	// Extract and validate files parameter.
 	filesRaw, ok := args["files"]
@@ -327,27 +457,118 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 		s.logger.Debug("get_context task_description received (reserved for future use)", "description", desc)
 	}
 
+	ctx := context.Background()
+	ws := s.workspaceKey()
+
+	cfg := s.configGate()
+	lookup := s.lookup()
+	src, reason := integ.ChooseSource(cfg, lookup, nil)
+
+	var (
+		treeText string
+		graphVer uint64
+	)
+	switch src {
+	case integ.SourceSemantic:
+		ranked, lerr := lookup.RankFromSeeds(ctx, ws, files)
+		if lerr != nil {
+			src, reason = integ.ChooseSource(cfg, lookup, lerr)
+			text, v19Err := s.renderV19(budget, files)
+			if v19Err != nil {
+				return "", serr.Wrap(serr.Internal, "building reference graph", v19Err).WithTool("get_context")
+			}
+			treeText = text
+		} else {
+			adapted := adaptRankedFiles(ranked)
+			if err := s.ensureRenderer(); err != nil {
+				return "", serr.Wrap(serr.Internal, "preparing renderer", err).WithTool("get_context")
+			}
+			treeText = s.renderer.RenderBudgeted(adapted, budget)
+			if len(ranked) > 0 {
+				graphVer = ranked[0].GraphVersion
+			} else if status, sErr := lookup.Status(ctx, ws); sErr == nil {
+				graphVer = status.GraphVersion
+			}
+		}
+	default:
+		text, v19Err := s.renderV19(budget, files)
+		if v19Err != nil {
+			return "", serr.Wrap(serr.Internal, "building reference graph", v19Err).WithTool("get_context")
+		}
+		treeText = text
+	}
+
+	if treeText == "" {
+		treeText = "No files found in repository."
+	}
+
+	env := integ.Envelope{
+		Source:         src,
+		FallbackReason: reason,
+		GraphVersion:   graphVer,
+		Freshness:      computeFreshness(ctx, lookup, ws),
+	}
+	out, mErr := integ.MarshalEnvelope(env, map[string]any{"tree": treeText})
+	if mErr != nil {
+		return "", serr.Wrap(serr.Internal, "marshaling envelope", mErr).WithTool("get_context")
+	}
+	return string(out), nil
+}
+
+// renderV19 runs the v1.9 tree-sitter + PageRank path. When seedFiles is
+// non-nil and non-empty the call uses Personalized PageRank (one-weight on
+// each seed); otherwise uniform PageRank. Extracted from the previous
+// execGetRepoMap / execGetContext bodies so the strangler-fig branches can
+// share the v1.9 rendering pipeline without duplicating the ensureGraph +
+// RankFiles + RenderBudgeted block.
+func (s *RepoMapSkill) renderV19(budget int, seedFiles []string) (string, error) {
 	if err := s.ensureGraph(); err != nil {
-		return "", serr.Wrap(serr.Internal, "building reference graph", err).WithTool("get_context")
+		return "", err
 	}
-
-	// Build personalization map: seed files get weight 1.0 per D-04.
-	personalization := make(map[string]float64, len(files))
-	for _, fp := range files {
-		personalization[fp] = 1.0
+	var personalization map[string]float64
+	if len(seedFiles) > 0 {
+		personalization = make(map[string]float64, len(seedFiles))
+		for _, fp := range seedFiles {
+			personalization[fp] = 1.0
+		}
 	}
-
 	ranked := s.graph.RankFiles(0.85, personalization)
 	if len(ranked) == 0 {
-		return "No files found in repository.", nil
+		return "", nil
 	}
+	return s.renderer.RenderBudgeted(ranked, budget), nil
+}
 
-	output := s.renderer.RenderBudgeted(ranked, budget)
-	if output == "" {
-		return "No files found in repository.", nil
+// ensureRenderer guarantees s.renderer is constructed for the semantic-on
+// branches that bypass ensureCache (the lookup provides the ranked file list,
+// so the cache walk is unnecessary on the semantic path). The renderer is
+// created lazily because rootDir may be set after Init via SetWorkspaceRoot.
+func (s *RepoMapSkill) ensureRenderer() error {
+	s.mu.Lock()
+	if s.renderer != nil {
+		s.mu.Unlock()
+		return nil
 	}
+	root := s.resolveRoot()
+	s.mu.Unlock()
+	if root == "" || root == "." {
+		return serr.New(serr.Internal, "workspace root not set; call activate_project first")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.renderer != nil {
+		return nil
+	}
+	s.renderer = repomap.NewTreeRenderer(s.elider, s.cache, root)
+	return nil
+}
 
-	return output, nil
+// workspaceKey returns the WorkspaceKey for the current rootDir. Single-
+// workspace daemons (Phase 65 baseline) return a key with RepoRoot set;
+// multi-workspace expansion will swap this for a real registry lookup
+// without changing the strangler-fig call sites.
+func (s *RepoMapSkill) workspaceKey() workspace.WorkspaceKey {
+	return workspace.WorkspaceKey{RepoRoot: s.resolveRoot()}
 }
 
 // skipDirs contains directory names to skip during workspace walk.

@@ -795,6 +795,32 @@ func (l *integSemanticLookup) Status(ctx context.Context, ws workspace.Workspace
 	}, nil
 }
 
+// daemonCfgGate is the production ConfigGate consumed by Phase 65 strangler-
+// fig consumers (RepoMapSkill in 65-05; kernel/symbols + kernel/health in
+// 65-06 / 65-07). Wraps the daemon's koanf-resolved
+// cfg.SemanticIndex.Enabled flag so the skill side does not import internal/
+// config directly.
+//
+// Construction site: internal/daemon/daemon.go step 12e — the wiring takes
+// place even when sBndl is nil (semantic disabled), so the priority ladder
+// emits SourceTreeSitter for the steady-state v1.9 path (D-04 / Pitfall §3)
+// instead of SourceFallback + index_disabled.
+type daemonCfgGate struct {
+	enabled bool
+}
+
+// SemanticIndexEnabled reports whether the koanf-resolved cfg.SemanticIndex
+// .Enabled flag is on.
+func (g *daemonCfgGate) SemanticIndexEnabled() bool {
+	if g == nil {
+		return false
+	}
+	return g.enabled
+}
+
+// Compile-time guard: daemonCfgGate must satisfy integ.ConfigGate.
+var _ integ.ConfigGate = (*daemonCfgGate)(nil)
+
 // integLookupAccessor returns a SemanticLookup adapter wired to the bundle.
 // Returns nil on nil receiver. Phase 65 65-04 / 65-05 / 65-06 / 65-07 will
 // SetSemanticLookup on consumer skills (RepoMapSkill, kernel/symbols

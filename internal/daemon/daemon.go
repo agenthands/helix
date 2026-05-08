@@ -438,6 +438,15 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	//
 	// The bundle returns nil when the store is nil (semantic disabled);
 	// downstream wiring is a no-op in that case.
+	// Hoisted from former step 10 so newSemanticBundle can capture the
+	// wsKeyFn closure (Phase 65 65-02: closes D-09 carryover #2 by
+	// threading the daemon's active-workspace registry into
+	// semSessionAdapter; RESEARCH §Pattern 3 a).
+	var activeWSKey workspace.WorkspaceKey
+	var activeWSLang string
+	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
+	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
+
 	var sBndl *semanticBundle
 	if semanticStore != nil {
 		var lspQ *lspenrich.LaneQueue
@@ -455,6 +464,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			logger,
 			observability.Metrics(),
 			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
+			wsKeyFn,
 		)
 	}
 
@@ -519,10 +529,8 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 
 	// 10. Register kernel tools with MCP server.
-	var activeWSKey workspace.WorkspaceKey
-	var activeWSLang string
-	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
-	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
+	// (activeWSKey / activeWSLang / wsKeyFn / workspaceRootFn are declared
+	// earlier — step 6f.2 — so newSemanticBundle can capture wsKeyFn.)
 
 	symbols.RegisterTools(mcpServer, k, wsKeyFn)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)

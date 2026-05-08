@@ -151,3 +151,42 @@ func TestProductionBuildFn_WritesNonEmptyFacts(t *testing.T) {
 	// Sanity: the runner build-state mock satisfies the interface.
 	var _ skillsemantic.BuildState = (*testBuildState)(nil)
 }
+
+// TestSemSessionAdapter_WorkspaceResolved is the Phase 65 / 65-02 RED gate.
+//
+// It constructs a semSessionAdapter with a stubbed wsKeyFn returning a
+// known non-zero workspace.WorkspaceKey and asserts that
+// adapter.Workspace(ctx) returns that exact key — closing Phase 64
+// carryover D-09 #2 (the previous implementation returned
+// workspace.WorkspaceKey{} unconditionally).
+//
+// The adapter MUST also nil-guard a missing closure (returns the zero
+// key without panicking) so pre-init use is fail-safe.
+func TestSemSessionAdapter_WorkspaceResolved(t *testing.T) {
+	wantKey := workspace.WorkspaceKey{
+		RepoRoot:  "/tmp/test-ws",
+		Language:  "go",
+		Toolchain: "go1.22",
+	}
+
+	adapter := &semSessionAdapter{
+		wsKeyFn: func() workspace.WorkspaceKey { return wantKey },
+	}
+
+	got := adapter.Workspace(context.Background())
+	if got != wantKey {
+		t.Errorf("Workspace() = %+v, want %+v (D-09 carryover #2: zero-value workspace.WorkspaceKey{} regression)",
+			got, wantKey)
+	}
+
+	// Nil-guard: a nil adapter and a nil-closure adapter both return the
+	// zero WorkspaceKey without panicking (T-65-02-01 mitigation).
+	var nilAdapter *semSessionAdapter
+	if got := nilAdapter.Workspace(context.Background()); got != (workspace.WorkspaceKey{}) {
+		t.Errorf("(*semSessionAdapter)(nil).Workspace() = %+v, want zero-value", got)
+	}
+	emptyAdapter := &semSessionAdapter{}
+	if got := emptyAdapter.Workspace(context.Background()); got != (workspace.WorkspaceKey{}) {
+		t.Errorf("semSessionAdapter{wsKeyFn:nil}.Workspace() = %+v, want zero-value", got)
+	}
+}

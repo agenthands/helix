@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -11,15 +12,20 @@ import (
 
 // fakeProvider is a minimal Provider for registry-construction tests.
 // It does NOT exercise extraction; the registry only indexes by language.
+// The Extract method exists solely to satisfy the D-06-widened Provider
+// interface — registry-construction tests never invoke it.
 type fakeProvider struct {
 	lang string
 }
 
-func (f *fakeProvider) Language() string                     { return f.lang }
-func (f *fakeProvider) Extensions() []string                 { return nil }
+func (f *fakeProvider) Language() string                          { return f.lang }
+func (f *fakeProvider) Extensions() []string                      { return nil }
 func (f *fakeProvider) TreeSitterLanguage() *tree_sitter.Language { return nil }
-func (f *fakeProvider) Queries() string                      { return "" }
-func (f *fakeProvider) SupportsLSPEnrichment() bool          { return false }
+func (f *fakeProvider) Queries() string                           { return "" }
+func (f *fakeProvider) SupportsLSPEnrichment() bool               { return false }
+func (f *fakeProvider) Extract(ctx context.Context, source []byte, file SourceFile) (*ExtractedFile, error) {
+	return nil, nil
+}
 
 // TestRegistry_NilGrammarPanics asserts NewExtractorRegistry panics when
 // passed a nil GrammarRegistry — wiring bugs must surface at daemon start,

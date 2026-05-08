@@ -211,7 +211,7 @@
   - [x] 65-06-PLAN.md — Wave 2 (TDD) analyze_blast_radius two-pass: lookup.ExpandFrom + LSP-validates-critical-edges; fallback confidence cap ≤ 0.6 (D-07/D-08; INTEG-03/05)
   - [x] 65-07-PLAN.md — Wave 2 (TDD) get_health semantic_index block additive (Phase 57 SC-1 preserved; WR-NEW-01 closed-enum last_error) (INTEG-04/05)
   - [x] 65-08-PLAN.md — Wave 3 acceptance closure: index-disabled tree text byte-identical + {source × fallback_reason} matrix across all 4 tools
-  - [ ] 65-09-PLAN.md — Wave 4 (TDD, gap closure) production-adapter E2E test scaffolding (Skipf gates) + BL-A populated-harness builder (NewE2EIntegLookupForTest with canonical syms keys) + REVIEW.md CR-02 closed-enum classifier fix (errors.Is(serr.ErrUnsupported))
+  - [x] 65-09-PLAN.md — Wave 4 (TDD, gap closure) production-adapter E2E test scaffolding (Skipf gates) + BL-A populated-harness builder (NewE2EIntegLookupForTest with canonical syms keys) + REVIEW.md CR-02 closed-enum classifier fix (errors.Is(serr.ErrUnsupported))
   - [ ] 65-10-PLAN.md — Wave 5 (TDD, gap closure) integSemanticLookup.RankFiles + RankFromSeeds real implementations + *Store.QueryRankedFiles + *Store.QuerySymbolPath + WR-04/WR-06/WR-07 fixes (INTEG-01/02)
   - [ ] 65-11-PLAN.md — Wave 6 (TDD, gap closure) integSemanticLookup.SymbolID + ExpandFrom real implementations + *Store.QuerySymbolByLocation/QueryNodeIDByStableKey/QueryStableKeyByNodeID + WR-01/IN-04/WR-05/WR-03 fixes (INTEG-03)
   - [ ] 65-12-PLAN.md — Wave 7 (TDD, gap closure) kernel-side LSP probe via lspProbeFn + integ.SemanticLookup.LocateSymbol + BL-1 confidence-ladder kernel-side test (consumes 65-09 BL-A harness) + production-adapter SourceSemantic + BlastRadiusConfidence E2E green + WR-02 go/parser canary (INTEG-03/05)

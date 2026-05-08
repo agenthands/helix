@@ -191,7 +191,7 @@
   - [x] 64-06-PLAN.md — Wave 1 tools_status.go: SPEC §23.3 envelope fan-out across all read-only accessors; closed-enum freshness [TOOL-03, TOOL-05]
   - [x] 64-07-PLAN.md — Wave 1 (TDD) retrieval package: bleve scorch + corpus mapping (D-06) + weighted RRF (D-07) + dual-store recovery + tools_context.go with determinism harness (10× byte-identical) [TOOL-04, TOOL-05]
   - [x] 64-08-PLAN.md — Wave 2 daemon glue: semantic_wiring.go bundle + production buildFn + imports.go blank import + daemon.go register*SemanticGraph + rank_wiring stub-collapse + profile-filter test + get_tool_help test + 6 end-to-end integration tests closing CONTEXT.md acceptance #1/#2/#3/#5/#6 [TOOL-01..TOOL-05]
-- [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (9/13 plans) (gap-closure 2026-05-08 — 4 follow-up plans for VERIFICATION.md gaps + REVIEW.md findings)
+- [x] Phase 65: Existing-Tool Integration (Strangler Fig) (9/13 plans) (gap-closure 2026-05-08 — 4 follow-up plans for VERIFICATION.md gaps + REVIEW.md findings) (completed 2026-05-08)
   **Goal:** `get_repo_map`, `get_context`, `analyze_blast_radius`, and `get_health` consult the semantic graph when available — with zero source change to `internal/repomap` engine — and fall back to v1.9 behavior automatically when the index is disabled, building, or errored.
   **Depends on:** Phase 64
   **Requirements:** INTEG-01, INTEG-02, INTEG-03, INTEG-04, INTEG-05
@@ -214,7 +214,7 @@
   - [x] 65-09-PLAN.md — Wave 4 (TDD, gap closure) production-adapter E2E test scaffolding (Skipf gates) + BL-A populated-harness builder (NewE2EIntegLookupForTest with canonical syms keys) + REVIEW.md CR-02 closed-enum classifier fix (errors.Is(serr.ErrUnsupported))
   - [x] 65-10-PLAN.md — Wave 5 (TDD, gap closure) integSemanticLookup.RankFiles + RankFromSeeds real implementations + *Store.QueryRankedFiles + *Store.QuerySymbolPath + WR-04/WR-06/WR-07 fixes (INTEG-01/02)
   - [x] 65-11-PLAN.md — Wave 6 (TDD, gap closure) integSemanticLookup.SymbolID + ExpandFrom real implementations + *Store.QuerySymbolByLocation/QueryNodeIDByStableKey/QueryStableKeyByNodeID + WR-01/IN-04/WR-05/WR-03 fixes (INTEG-03)
-  - [ ] 65-12-PLAN.md — Wave 7 (TDD, gap closure) kernel-side LSP probe via lspProbeFn + integ.SemanticLookup.LocateSymbol + BL-1 confidence-ladder kernel-side test (consumes 65-09 BL-A harness) + production-adapter SourceSemantic + BlastRadiusConfidence E2E green + WR-02 go/parser canary (INTEG-03/05)
+  - [x] 65-12-PLAN.md — Wave 7 (TDD, gap closure) kernel-side LSP probe via lspProbeFn + integ.SemanticLookup.LocateSymbol + BL-1 confidence-ladder kernel-side test (consumes 65-09 BL-A harness) + production-adapter SourceSemantic + BlastRadiusConfidence E2E green + WR-02 go/parser canary (INTEG-03/05)
 - [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
 - [ ] Phase 67: Evaluation Harness (0/0 plans)
 

@@ -14,11 +14,12 @@
 //     in internal/skill/semantic/accessors.go (StoreAccessor,
 //     SchedulerAccessor, QueueAccessor, LiveAccessor, RetrievalAccessor,
 //     CompactorAccessor, SessionAccessor).
-//   - makeProductionBuildFn — the pipeline that BeginSnapshot /
-//     WriteSnapshotFacts / CommitSnapshot consumed by IndexRunner. The
-//     full-pipeline composition is documented inline (closes W3 at the
-//     doc layer); a TODO(phase-65) anchor flags the gap that the
-//     production indexer chain will fill.
+//   - makeProductionBuildFn — the production pipeline consumed by
+//     IndexRunner: walk → live.ClassifyPathChange → per-language
+//     provider.Extract → factsFromExtracted (composes extract.ToStoreFacts
+//     plus per-file FileID / NodeID assignment) → store.WriteSnapshotFacts
+//     → CommitSnapshot. Phase 65 (65-01) replaced the Phase 64 empty-Facts
+//     placeholder with this pipeline (D-09 carryover #1).
 //
 // Closes W1 (production layer): semSchedulerAdapter.ClusterStatus returns
 // ClusterStatus{State:"unknown", Reason:"phase-62-clustering-no-status-accessor"}
@@ -35,13 +36,17 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
+	semanticpkg "github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/live"
@@ -681,19 +686,18 @@ func (a *semRetrievalAdapter) TopEdgesFor(_ context.Context, repoID, symbolID st
 // TestE2E_IndexThenContext_SymbolCount in
 // internal/skill/semantic/integration_test.go — closes W3 at the test layer.
 //
-// TODO(phase-65): replace this minimal-commit composition with the
-// production indexer chain (per-language fact extraction + classifier walk +
-// overlay drain) once the strangler-fig integration ships. Phase 64's
-// pipeline commits an empty snapshot; the rank engine, retrieval engine,
-// and downstream tools accept an empty snapshot as a valid "no facts yet"
-// state — see snapshot.go:309-407 for the empty-Facts no-op path on
-// WriteSnapshotFacts.
+// Phase 65 (65-01) replaces the empty-Facts placeholder with the real
+// production pipeline (D-09 carryover #1): walk → ClassifyPathChange →
+// per-language Extract → ToStoreFacts → WriteSnapshotFacts. Per-file
+// extraction failures are non-fatal (RESEARCH.md §Pattern 4): the build
+// commits whatever extracted successfully; total failure still commits an
+// empty snapshot, matching Phase 64 behavior.
 func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 	return func(ctx context.Context, ws workspace.WorkspaceKey, mode string, st semantic.BuildState) (semantic.IndexResult, error) {
 		repoID := ws.Hash()
 		startedAt := time.Now()
 
-		// Resolve base snapshot for incremental mode.
+		// 1. Resolve base snapshot for incremental mode.
 		var baseSnapshotID uint64
 		if mode == "incremental" {
 			latest, err := b.store.LatestCommittedSnapshot(ctx, repoID)
@@ -703,9 +707,83 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			baseSnapshotID = latest
 		}
 
-		// 4. Snapshot lifecycle. Phase 64 ships an empty-Facts commit
-		// (TODO(phase-65) — see header comment for the production
-		// pipeline that will replace this).
+		// 2. Walk (full mode) or drain overlay (incremental mode) to build
+		//    the candidate path set. Each path is classified via
+		//    live.ClassifyPathChange; deletes / unknown / lookup-error paths
+		//    are dropped. The classifier enforces symlink + missing-path
+		//    policies (T-65-01-01 mitigation).
+		paths := b.collectCandidatePaths(ws, mode)
+
+		// 3. Per-path classify + extract loop. Per-file errors are non-fatal
+		//    (Rule: research §Pattern 4 acceptable error behavior). The
+		//    FileHashLookup is the same storeFileHashLookup adapter the live
+		//    bundle uses (live_wiring.go:156-164) so the classifier sees a
+		//    consistent view of the snapshot+overlay store.
+		hashLookup := &storeFileHashLookup{store: b.store}
+		var extracted []*extract.ExtractedFile
+		for _, path := range paths {
+			kind, ok, err := live.ClassifyPathChange(
+				ctx,
+				semanticpkg.RepoID(repoID),
+				path,
+				hashLookup,
+				nil, // hasher: classifier falls back to default
+				live.ChangeSourceFsnotify,
+			)
+			if err != nil || !ok {
+				continue
+			}
+			if kind == live.ChangeFileDeleted {
+				// Deletion: nothing to extract; the snapshot's effective
+				// graph drops the file via the BaseSnapshotID lineage.
+				continue
+			}
+			lang := langFromExt(path)
+			if lang == "" {
+				continue
+			}
+			provider, ok := b.extractRegistry.Provider(lang)
+			if !ok {
+				// Language not first-class today; skip silently. Phase 59
+				// emits partial=true for these via the scheduler path; the
+				// production buildFn keeps the loop simple.
+				continue
+			}
+			source, err := os.ReadFile(path)
+			if err != nil {
+				if b.logger != nil {
+					b.logger.Debug("buildFn: read source failed; skipping path",
+						"path", path, "err", err)
+				}
+				continue
+			}
+			ef, err := provider.Extract(ctx, source, extract.SourceFile{
+				Path:     path,
+				Language: lang,
+			})
+			if err != nil {
+				if b.logger != nil {
+					b.logger.Debug("buildFn: provider.Extract failed; skipping path",
+						"path", path, "lang", lang, "err", err)
+				}
+				continue
+			}
+			if ef == nil {
+				continue
+			}
+			extracted = append(extracted, ef)
+		}
+
+		// 4. Convert per-language facts to the locked store wire format.
+		//    ToStoreFacts is the Phase 65 D-08 unblock adapter; it leaves
+		//    FileID / NodeID / RefID zero-valued by contract. The buildFn
+		//    composes ToStoreFacts in a per-file loop here so per-file
+		//    symbols / references can be re-stamped with the file's
+		//    assigned FileID — preserving the (snapshot_id, file_id) and
+		//    (snapshot_id, symbol_id / ref_id) primary-key invariants.
+		facts := factsFromExtracted(extracted, repoID)
+
+		// 5. Snapshot lifecycle.
 		snap, err := b.store.BeginSnapshot(ctx, semanticstore.SnapshotMeta{
 			RepoID:         repoID,
 			BaseSnapshotID: baseSnapshotID,
@@ -724,12 +802,16 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 		// timeout path can surface it.
 		st.SetSnapshotID(snap.ID)
 
-		// Empty-Facts commit (placeholder — TODO(phase-65)).
-		if err := b.store.WriteSnapshotFacts(ctx, snap, semanticstore.Facts{}); err != nil {
+		if err := b.store.WriteSnapshotFacts(ctx, snap, facts); err != nil {
 			return semantic.IndexResult{}, fmt.Errorf("buildFn: WriteSnapshotFacts: %w", err)
 		}
+		st.AddFilesIndexed(int64(len(extracted)))
+
 		summary := semanticstore.SnapshotSummary{
-			DurationMs: time.Since(startedAt).Milliseconds(),
+			FileCount:      len(facts.Files),
+			SymbolCount:    len(facts.Symbols),
+			ReferenceCount: len(facts.References),
+			DurationMs:     time.Since(startedAt).Milliseconds(),
 		}
 		if err := b.store.CommitSnapshot(ctx, snap, summary); err != nil {
 			return semantic.IndexResult{}, fmt.Errorf("buildFn: CommitSnapshot: %w", err)
@@ -738,11 +820,153 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 
 		return semantic.IndexResult{
 			SnapshotID:   snap.ID,
-			FilesIndexed: 0,
+			FilesIndexed: int64(len(extracted)),
 			FilesReused:  0,
 			DurationMs:   time.Since(startedAt).Milliseconds(),
 		}, nil
 	}
+}
+
+// collectCandidatePaths builds the candidate path set the production buildFn
+// classifies + extracts:
+//
+//   - mode=full: walk ws.RepoRoot via filepath.WalkDir, skipping the
+//     `.helix/` and `.git/` subtrees plus all dot-directories. Returns
+//     absolute paths to regular files only (no directories, no symlinks).
+//   - mode=incremental: today the live overlay does not expose an
+//     enumerable per-path drain surface (Phase 60 bumped pending counters
+//     but kept the per-path set internal to the coalescer). Until that
+//     surface lands, fall back to the same full-walk path so an
+//     incremental request still produces a non-empty Facts commit when
+//     the workspace has source files. The overlay-drain optimization is
+//     a follow-up.
+func (b *semanticBundle) collectCandidatePaths(ws workspace.WorkspaceKey, _ string) []string {
+	if ws.RepoRoot == "" {
+		return nil
+	}
+	var paths []string
+	_ = filepath.WalkDir(ws.RepoRoot, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			// Per-entry walk error: skip the entry, keep walking siblings.
+			if d != nil && d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		// Skip well-known generated / VCS / helix-local subtrees.
+		name := d.Name()
+		if d.IsDir() {
+			if path != ws.RepoRoot && (name == ".git" || name == ".helix" || strings.HasPrefix(name, ".") && name != ".") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		// Reject symlinks at enumeration time (T-60-04-03 mitigation; the
+		// classifier double-checks downstream).
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		// Reject anything that's not a regular file.
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
+	return paths
+}
+
+// langFromExt maps a file path to a canonical extract.Provider language
+// identifier. Returns "" for unrecognized extensions; the buildFn loop
+// treats that as "skip silently". The mapping mirrors the per-language
+// providers registered by the daemon at bootstrap (Phase 59 P05): Go,
+// TypeScript / TSX, JavaScript / JSX, Python.
+func langFromExt(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go":
+		return "go"
+	case ".ts", ".tsx":
+		return "typescript"
+	case ".js", ".jsx":
+		return "javascript"
+	case ".py":
+		return "python"
+	default:
+		return ""
+	}
+}
+
+// factsFromExtracted composes the wire-format Facts payload from a slice of
+// per-language ExtractedFile records. Each ExtractedFile is converted via
+// extract.ToStoreFacts (the locked Phase 65 D-08 adapter) and then re-
+// stamped with:
+//
+//   - a per-file FileID allocated as a 1-based index (so the
+//     (snapshot_id, file_id) PK is dense and collision-free within the
+//     snapshot), plus the snapshot's RepoID on every FileFact.
+//   - the same FileID propagated onto every Symbol and Reference belonging
+//     to that file (so the symbols/references rows reference a real
+//     semantic_files row at the schema level — this is the linkage that
+//     ToStoreFacts intentionally drops because the wire shape is flat).
+//   - per-symbol NodeID = SymbolID (Schema 5 has no separate node-id
+//     allocator at this layer; the kernel-side node-id model collapses to
+//     symbol-id for the symbol-anchored rows the buildFn emits today).
+//   - per-reference RefID and NodeID derived from a 1-based incrementing
+//     index, scoped to the snapshot. References extracted by the per-
+//     language providers carry zero IDs (extract.ToStoreFacts leaves them
+//     at INSERT time per its contract); the buildFn assigns them here.
+//
+// Returns a Facts value safe to pass directly to *Store.WriteSnapshotFacts.
+func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string) semanticstore.Facts {
+	if len(extracted) == 0 {
+		return semanticstore.Facts{}
+	}
+	out := semanticstore.Facts{
+		Files:      make([]semanticstore.FileFact, 0, len(extracted)),
+		Symbols:    make([]semanticstore.SymbolFact, 0, 4*len(extracted)),
+		References: make([]semanticstore.ReferenceFact, 0, 4*len(extracted)),
+	}
+	var refSeq uint64
+	for i, ef := range extracted {
+		if ef == nil {
+			continue
+		}
+		fileID := uint64(i + 1)
+		// Reuse ToStoreFacts for the field-by-field translation, then re-
+		// stamp the IDs / RepoID. Wrapping a single ExtractedFile keeps the
+		// per-file linkage between symbols/references and their owning file.
+		single := extract.ToStoreFacts([]*extract.ExtractedFile{ef})
+		for j := range single.Files {
+			single.Files[j].FileID = fileID
+			single.Files[j].RepoID = repoID
+		}
+		for j := range single.Symbols {
+			single.Symbols[j].FileID = fileID
+			// Mask SymbolID / NodeID to 63 bits — the duckdb-go driver
+			// rejects uint64 values with the high bit set. Mirrors the
+			// overlay edge-id helper at internal/semantic/store/overlay.go:937.
+			single.Symbols[j].SymbolID &= 0x7FFFFFFFFFFFFFFF
+			if single.Symbols[j].NodeID == 0 {
+				single.Symbols[j].NodeID = single.Symbols[j].SymbolID
+			} else {
+				single.Symbols[j].NodeID &= 0x7FFFFFFFFFFFFFFF
+			}
+			single.Symbols[j].OwnerSymbolID &= 0x7FFFFFFFFFFFFFFF
+			single.Symbols[j].ParentScopeID &= 0x7FFFFFFFFFFFFFFF
+		}
+		for j := range single.References {
+			single.References[j].FileID = fileID
+			refSeq++
+			single.References[j].RefID = refSeq
+			if single.References[j].NodeID == 0 {
+				single.References[j].NodeID = refSeq
+			}
+		}
+		out.Files = append(out.Files, single.Files...)
+		out.Symbols = append(out.Symbols, single.Symbols...)
+		out.References = append(out.References, single.References...)
+	}
+	return out
 }
 
 // ----- Compile-time interface guards -----

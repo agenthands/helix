@@ -49,6 +49,7 @@ import (
 	semanticpkg "github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/graph"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/retrieval"
@@ -639,6 +640,179 @@ func (a *semRetrievalAdapter) TopEdgesFor(_ context.Context, repoID, symbolID st
 	return nil, nil
 }
 
+// ----- integ.SemanticLookup production adapter (Phase 65 65-03) -----
+
+// integSemanticLookup adapts the daemon's semanticBundle to the
+// integ.SemanticLookup interface (Phase 65 D-03). Read-only by contract:
+// the M-readtier mitigation forbids any reference to the snapshot-write
+// surface (BeginSnapshot / CommitSnapshot / AbortSnapshot /
+// WriteSnapshotFacts / OnFlush / BumpGraphVersion) inside any method body
+// here. The grep canary at internal/daemon/integ_lookup_test.go
+// (TestIntegSemanticLookup_ReadTierCanary) blocks new write-method tokens
+// from sneaking in.
+//
+// Joins the existing semStoreAdapter / semRetrievalAdapter family —
+// composes them rather than re-deriving any state. Method bodies that need
+// the underlying *semanticstore.Store / *semRetrievalAdapter / *rankBundle
+// reach through the bundle pointer (l.bundle.store, l.bundle.scheduler,
+// etc.) so per-workspace state stays coherent with the rest of the
+// semantic surface.
+//
+// Phase 65 65-03 introduces the type with the correct shape and read-only
+// method bodies; full ranking / expansion / validation logic ships in
+// 65-05 (RankFiles + RankFromSeeds), 65-06 (ExpandFrom +
+// ValidateCriticalEdges + SymbolID), and 65-07 (Status field-source
+// completion). Until those waves land the methods return Phase 65 D-06
+// "no committed snapshot" / "not yet implemented" sentinels — the
+// surface is stable for the consumer adapters wired in 65-04.
+type integSemanticLookup struct {
+	bundle    *semanticBundle
+	store     *semanticstore.Store
+	retrieval *semRetrievalAdapter
+	rank      *rankBundle
+	enabledFn func() bool
+	wsKeyFn   func() workspace.WorkspaceKey
+}
+
+// Available reports whether the lookup is configured AND the underlying
+// store handle is live. False on nil receiver, nil enabledFn (treated as
+// "not wired"), enabledFn()==false, or nil store. Per D-06, this never
+// triggers background indexing.
+func (l *integSemanticLookup) Available() bool {
+	if l == nil {
+		return false
+	}
+	if l.enabledFn == nil || !l.enabledFn() {
+		return false
+	}
+	return l.store != nil
+}
+
+// SymbolID translates an LSP file:line:col location into a stable Phase 59
+// EXTRACT-02 SymbolID (Open Question #3 resolution). 65-03 stub returns
+// ErrNoSnapshot until 65-06 wires the canonical reader; the interface
+// shape and error contract are stable.
+func (l *integSemanticLookup) SymbolID(_ context.Context, _ workspace.WorkspaceKey, _ string, _, _ uint32) (integ.SymbolID, error) {
+	if !l.Available() {
+		return integ.SymbolID(""), integ.ErrIndexErrored
+	}
+	return integ.SymbolID(""), integ.ErrNoSnapshot
+}
+
+// RankFiles returns the workspace-wide ranked file list for the default
+// "call_graph" projection. 65-03 stub returns ErrNoSnapshot; 65-05 wires
+// the persisted-score reader (RESEARCH Open Question #2 resolution).
+func (l *integSemanticLookup) RankFiles(_ context.Context, _ workspace.WorkspaceKey) ([]integ.RankedFile, error) {
+	if !l.Available() {
+		return nil, integ.ErrIndexErrored
+	}
+	return nil, integ.ErrNoSnapshot
+}
+
+// RankFromSeeds returns a ranked file list biased toward seeds. 65-03 stub
+// returns ErrNoSnapshot; 65-05 wires the bleve + RRF fuse pipeline.
+func (l *integSemanticLookup) RankFromSeeds(_ context.Context, _ workspace.WorkspaceKey, _ []string) ([]integ.RankedFile, error) {
+	if !l.Available() {
+		return nil, integ.ErrIndexErrored
+	}
+	return nil, integ.ErrNoSnapshot
+}
+
+// ExpandFrom returns the depth-bounded blast-radius frontier rooted at
+// sym. 65-03 stub returns ErrNoSnapshot; 65-06 wires BFS over
+// QueryEffectiveAdjacency with the Phase 62 confidence ladder.
+func (l *integSemanticLookup) ExpandFrom(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID, _ int) ([]integ.Impact, error) {
+	if !l.Available() {
+		return nil, integ.ErrIndexErrored
+	}
+	return nil, integ.ErrNoSnapshot
+}
+
+// ValidateCriticalEdges runs Pass 2 LSP validation. 65-03 stub returns
+// the input edges with LSPConfirmed=false (M-readtier-safe pass-through —
+// no LSP traffic, no confidence change). 65-06 ships the real validator.
+func (l *integSemanticLookup) ValidateCriticalEdges(_ context.Context, _ workspace.WorkspaceKey, edges []integ.Edge) ([]integ.ValidatedEdge, error) {
+	if !l.Available() {
+		return nil, integ.ErrIndexErrored
+	}
+	out := make([]integ.ValidatedEdge, 0, len(edges))
+	for _, e := range edges {
+		out = append(out, integ.ValidatedEdge{Edge: e, LSPConfirmed: false})
+	}
+	return out, nil
+}
+
+// Status returns a closed-shape SemanticStatus. 65-03 wires every field
+// that already has a read-only accessor — store snapshot id and graph
+// version, overlay-pending, queue depth, last-flush. PendingLSP routes
+// through the existing semQueueAdapter; LastLiveUpdateMs through
+// semLiveAdapter. LastErrorReason is empty in the steady state and is
+// populated by 65-07 once the error-stamp accessor lands. The closed-enum
+// State is StatusReady when the lookup is available (consumers map to
+// StatusDisabled on Available()==false themselves via the source-selection
+// step — Pitfall §3).
+func (l *integSemanticLookup) Status(ctx context.Context, ws workspace.WorkspaceKey) (integ.SemanticStatus, error) {
+	if !l.Available() {
+		return integ.SemanticStatus{State: integ.StatusDisabled, Store: "duckdb"}, nil
+	}
+	repoID := ws.Hash()
+	snap, err := l.store.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return integ.SemanticStatus{State: integ.StatusError, Store: "duckdb"}, integ.ErrIndexErrored
+	}
+	gv, err := l.store.CurrentGraphVersion(ctx, repoID)
+	if err != nil {
+		return integ.SemanticStatus{State: integ.StatusError, Store: "duckdb"}, integ.ErrIndexErrored
+	}
+	overlay := l.store.OverlayHasPendingRows(repoID)
+
+	var pendingLSP int
+	var lastLiveMs int64
+	if l.bundle != nil {
+		if l.bundle.queue != nil {
+			pendingLSP = l.bundle.queue.DepthAll()
+		}
+		if l.bundle.live != nil {
+			if t := l.bundle.live.LastFlushAt(ws); !t.IsZero() {
+				lastLiveMs = t.UnixMilli()
+			}
+		}
+	}
+
+	state := integ.StatusReady
+	if snap == 0 {
+		state = integ.StatusBuilding
+	}
+	return integ.SemanticStatus{
+		State:            state,
+		Store:            "duckdb",
+		LatestSnapshotID: snap,
+		GraphVersion:     gv,
+		OverlayActive:    overlay,
+		PendingLSP:       pendingLSP,
+		LastLiveUpdateMs: lastLiveMs,
+		LastErrorReason:  "",
+	}, nil
+}
+
+// integLookupAccessor returns a SemanticLookup adapter wired to the bundle.
+// Returns nil on nil receiver. Phase 65 65-04 / 65-05 / 65-06 / 65-07 will
+// SetSemanticLookup on consumer skills (RepoMapSkill, kernel/symbols
+// blast-radius bridge, kernel/health) using this accessor.
+func (b *semanticBundle) integLookupAccessor() integ.SemanticLookup {
+	if b == nil {
+		return integ.NoopLookup{}
+	}
+	return &integSemanticLookup{
+		bundle:    b,
+		store:     b.store,
+		retrieval: b.retrievalAdapter,
+		rank:      b.scheduler,
+		enabledFn: func() bool { return b.store != nil },
+		wsKeyFn:   b.wsKeyFn,
+	}
+}
+
 // ----- Production buildFn — closes W3 at the doc layer. -----
 
 // makeProductionBuildFn returns a buildFn (semantic.RunnerBuildFn) that the
@@ -1008,4 +1182,5 @@ var (
 	_ semantic.CompactorAccessor = (*semCompactorAdapter)(nil)
 	_ semantic.SessionAccessor   = (*semSessionAdapter)(nil)
 	_ retrieval.StoreReader      = (*semanticstore.Store)(nil)
+	_ integ.SemanticLookup       = (*integSemanticLookup)(nil)
 )

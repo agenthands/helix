@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/agenthands/helix/internal/mcp"
@@ -57,10 +57,19 @@ const (
 )
 
 // classifySemanticProbeError maps a probe error onto the closed Reason
-// enum (WR-NEW-01). Mapping rules:
+// enum (WR-NEW-01).
+//
+// Mapping rules (Phase 65 65-09 / REVIEW.md CR-02):
 //   - errors.Is(err, context.DeadlineExceeded) → "probe_timeout"
-//   - the daemon-side adapter's nil-handle sentinels → "nil_handle"
-//   - any other non-nil error → "db_error"
+//   - errors.Is(err, serr.ErrUnsupported)      → "nil_handle"
+//     (the daemon emits fmt.Errorf("semantic store unavailable: %w",
+//     serr.ErrUnsupported) at daemon.go:866; matching the sentinel
+//     guarantees no future wrapped DuckDB error containing the
+//     substring "store unavailable" misroutes through this bucket)
+//   - any other non-nil error                  → "db_error"
+//
+// The classifier never inspects raw error text — string substring
+// matching is forbidden by WR-NEW-01.
 //
 // nil errors return "" so callers can short-circuit on the empty string.
 // The full error text is intentionally NOT returned — log it via slog
@@ -72,11 +81,7 @@ func classifySemanticProbeError(err error) string {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return SemanticReasonProbeTimeout
 	}
-	msg := err.Error()
-	// The daemon-side semanticStoreProbe.Probe surfaces these two
-	// fmt.Errorf strings when the store handle or its underlying *sql.DB
-	// is nil. Substring-match because they are wrapped by Probe's caller.
-	if strings.Contains(msg, "DB handle nil") || strings.Contains(msg, "store unavailable") {
+	if errors.Is(err, serr.ErrUnsupported) {
 		return SemanticReasonNilHandle
 	}
 	return SemanticReasonDBError

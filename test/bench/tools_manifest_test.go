@@ -249,4 +249,12 @@ var benchTools = []benchCase{
 	{name: "get_tool_help", args: map[string]any{
 		"tool_name": "ping",
 	}},
+
+	// === Semantic graph (4, Phase 64) ========================================
+	{name: "index_semantic_graph", args: map[string]any{}},
+	{name: "refresh_semantic_graph", args: map[string]any{}},
+	{name: "get_semantic_graph_status", args: map[string]any{}},
+	{name: "get_semantic_context", args: map[string]any{
+		"query": "ping",
+	}},
 }

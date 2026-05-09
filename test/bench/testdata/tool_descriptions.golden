@@ -16,11 +16,14 @@ get_diagnostics: Get compiler errors and warnings for a file
 get_health: Check workspace health and language server status
 get_hover_info: Get type information and documentation for a symbol
 get_repo_map: Get a ranked overview of repository structure and key files
+get_semantic_context: Semantic context retrieval
+get_semantic_graph_status: Semantic index status
 get_symbol_overview: List all symbols defined in a file with their types
 get_token_budget: Get token budget for current profile and mode
 get_tool_help: Get detailed usage documentation for an MCP tool
 get_type_hierarchy: Get the type hierarchy (supertypes and subtypes)
 go_to_definition: Jump to where a symbol is defined
+index_semantic_graph: Index the semantic graph
 insert_after_symbol: Insert code after a symbol definition
 insert_before_symbol: Insert code before a symbol definition
 list_directory: List files and directories in a path
@@ -30,6 +33,7 @@ ping: Echo a message back for connectivity testing
 prepare_for_new_conversation: Prepare a summary for handing off to the next session
 read_file: Read the contents of a file
 read_memory: Read a specific memory file by name
+refresh_semantic_graph: Refresh live overlay
 rename_memory: Rename or move a memory file
 rename_symbol: Rename a symbol across the entire workspace
 replace_in_file: Replace text in a file using exact string matching

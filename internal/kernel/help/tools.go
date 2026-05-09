@@ -14,7 +14,8 @@ import (
 
 // GetToolHelpArgs is the input schema for the get_tool_help tool.
 type GetToolHelpArgs struct {
-	ToolName string `json:"tool_name" jsonschema:"required,Name of the tool to get help for"`
+	ToolName string `json:"tool_name,omitempty" jsonschema:"Name of the tool to get help for"`
+	Topic    string `json:"topic,omitempty" jsonschema:"Documentation topic name (alternative to tool_name): guardrails, dod, workflow:rename, workflow:delete, workflow:large-edit, workflow:security-sensitive-edit"`
 }
 
 // RegisterTools registers the get_tool_help MCP tool with the server.
@@ -25,8 +26,28 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 		Name:        "get_tool_help",
 		Description: "Get comprehensive documentation for any MCP tool including parameters, types, and usage examples",
 	}, kernel.WrapToolSpan(tracer, "get_tool_help", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetToolHelpArgs) (*mcpsdk.CallToolResult, any, error) {
+		// Dispatch on Topic first (D-24 additive path).
+		if args.Topic != "" {
+			t, ok := defaultTopics.Get(args.Topic)
+			if !ok {
+				available := defaultTopics.Names()
+				return errorResult(fmt.Sprintf(
+					"Topic %q not found. Available topics: %s",
+					args.Topic,
+					strings.Join(available, ", "),
+				)), nil, nil
+			}
+			// If both Topic and ToolName are set, prefer Topic with a note.
+			content := t.Content
+			if args.ToolName != "" {
+				content = fmt.Sprintf("(Note: both 'topic' and 'tool_name' were provided; returning topic %q. Set only one to avoid ambiguity.)\n\n%s", args.Topic, content)
+			}
+			return textResult(content), nil, nil
+		}
+
+		// Existing tool_name dispatch path — preserved unchanged.
 		if args.ToolName == "" {
-			return errorResult("tool_name is required"), nil, nil
+			return errorResult("specify tool_name or topic — both are empty"), nil, nil
 		}
 
 		// Look up tool definition from registry (T-38-01: validate tool_name exists).

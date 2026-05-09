@@ -32,6 +32,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
+
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // OverlayTx is the per-tx handle returned by BeginOverlayTx. Each tx carries
@@ -50,6 +53,13 @@ type OverlayTx struct {
 	// regardless of underlying tx outcome, so the lock is always freed.
 	unlock     func()
 	unlockOnce sync.Once
+
+	// Phase 63 P63-02 Task 1: closure into the parent *Store's
+	// overlayPendingRowsFor(repoID).Add(1) so each overlay-row write
+	// increments the in-memory counter consumed by the compaction gate
+	// (BlockedOverlayEmpty). Nil-safe: when set to nil (test fakes that
+	// don't go through BeginOverlayTx) bumpPending becomes a no-op.
+	bumpPendingFn func()
 }
 
 // Epoch returns the write_epoch stamped on every fact row written through
@@ -133,12 +143,157 @@ func (s *Store) BeginOverlayTx(ctx context.Context, repoID string) (*OverlayTx, 
 		return nil, fmt.Errorf("BeginOverlayTx: open tx: %w", err)
 	}
 
+	// Phase 63 P63-02 Task 1: bump the per-workspace open-tx counter and
+	// wrap mu.Unlock so the counter decrements in lockstep with the lock
+	// release. The counter feeds the compaction gate's
+	// BlockedOverlayTxActive check (in-memory atomic; no I/O).
+	txCounter := s.overlayTxCountFor(repoID)
+	txCounter.Add(1)
+	unlock := func() {
+		txCounter.Add(-1)
+		mu.Unlock()
+	}
+
+	// Phase 63 P63-02 Task 1: pending-rows bumper closure. Consumed by
+	// BlockedOverlayEmpty (in-memory proxy). Reset to 0 inside
+	// Snapshot.ClearOverlayLE after the per-table DELETEs.
+	pendingCounter := s.overlayPendingRowsFor(repoID)
+	bumpPendingFn := func() { pendingCounter.Add(1) }
+
 	return &OverlayTx{
-		tx:     tx,
-		repoID: repoID,
-		epoch:  epoch,
-		unlock: mu.Unlock,
+		tx:            tx,
+		repoID:        repoID,
+		epoch:         epoch,
+		unlock:        unlock,
+		bumpPendingFn: bumpPendingFn,
 	}, nil
+}
+
+// overlayTxCountFor returns the lazy-installed open-tx counter for repoID.
+// Phase 63 P63-02 Task 1: feeds BlockedOverlayTxActive without I/O.
+func (s *Store) overlayTxCountFor(repoID string) *atomic.Int32 {
+	s.overlayCountsMu.Lock()
+	defer s.overlayCountsMu.Unlock()
+	if s.overlayTxCounts == nil {
+		s.overlayTxCounts = map[string]*atomic.Int32{}
+	}
+	c, ok := s.overlayTxCounts[repoID]
+	if !ok {
+		c = &atomic.Int32{}
+		s.overlayTxCounts[repoID] = c
+	}
+	return c
+}
+
+// overlayPendingRowsFor returns the lazy-installed pending-rows counter
+// for repoID. Phase 63 P63-02 Task 1: in-memory proxy for
+// "OverlayHasPendingRows" — bumped on every successful overlay row write,
+// reset to 0 inside Snapshot.ClearOverlayLE after the per-table DELETEs
+// remove rows. Backs the gate's BlockedOverlayEmpty check without I/O.
+func (s *Store) overlayPendingRowsFor(repoID string) *atomic.Int64 {
+	s.overlayCountsMu.Lock()
+	defer s.overlayCountsMu.Unlock()
+	if s.overlayPendingRows == nil {
+		s.overlayPendingRows = map[string]*atomic.Int64{}
+	}
+	c, ok := s.overlayPendingRows[repoID]
+	if !ok {
+		c = &atomic.Int64{}
+		s.overlayPendingRows[repoID] = c
+	}
+	return c
+}
+
+// OverlayTxOpenCount returns the number of currently-open OverlayTx
+// handles for ws.RepoRoot. Phase 63 P63-02 Task 1: O(1) atomic read; the
+// gate consumes this for BlockedOverlayTxActive without I/O.
+func (s *Store) OverlayTxOpenCount(ws workspace.WorkspaceKey) int {
+	if s == nil {
+		return 0
+	}
+	s.overlayCountsMu.Lock()
+	c, ok := s.overlayTxCounts[ws.RepoRoot]
+	s.overlayCountsMu.Unlock()
+	if !ok || c == nil {
+		return 0
+	}
+	return int(c.Load())
+}
+
+// OverlayHasPendingRows reports whether the in-memory pending-rows
+// counter for repoID is positive. Phase 63 P63-02 Task 1: O(1) atomic
+// read; CONTEXT.md D-04 hard invariant — NO I/O. Consumed by the
+// compaction gate's BlockedOverlayEmpty check.
+//
+// Bumped on every successful overlay row write (UpsertOverlayFile,
+// MarkFileDeleted, MarkSymbolsDeleted, MarkReferencesDeleted,
+// MarkEdgesDeleted) by Add(1). Reset to 0 by Snapshot.ClearOverlayLE
+// AFTER the per-table DELETEs remove rows.
+func (s *Store) OverlayHasPendingRows(repoID string) bool {
+	if s == nil {
+		return false
+	}
+	s.overlayCountsMu.Lock()
+	c, ok := s.overlayPendingRows[repoID]
+	s.overlayCountsMu.Unlock()
+	if !ok || c == nil {
+		return false
+	}
+	return c.Load() > 0
+}
+
+// OverlayRowCount issues the I/O-bound `SELECT COUNT(*) ... WHERE
+// write_epoch <= ?` per overlay table and sums the four results. Phase
+// 63 P63-02 Task 1: this is the SIZE GUARD path used ONLY by the
+// compactor's pre-flight (runCompaction) — it is NEVER consumed by the
+// gate. The gate uses OverlayHasPendingRows (in-memory) per CONTEXT.md
+// D-04 hard invariant.
+//
+// Bound by capturedEpoch so rows committed during the compaction window
+// (write_epoch > capturedEpoch) are excluded — same CAS contract as
+// Snapshot.ClearOverlayLE.
+func (s *Store) OverlayRowCount(ctx context.Context, repoID string, capturedEpoch uint64) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("OverlayRowCount: nil store")
+	}
+	if repoID == "" {
+		return 0, fmt.Errorf("OverlayRowCount: empty repoID")
+	}
+	queries := []struct {
+		table string
+		sql   string
+	}{
+		{"semantic_live_overlay_files", `SELECT COUNT(*) FROM semantic_live_overlay_files WHERE repo_id = ? AND write_epoch <= ?`},
+		{"semantic_live_overlay_symbols", `SELECT COUNT(*) FROM semantic_live_overlay_symbols WHERE repo_id = ? AND write_epoch <= ?`},
+		{"semantic_live_overlay_references", `SELECT COUNT(*) FROM semantic_live_overlay_references WHERE repo_id = ? AND write_epoch <= ?`},
+		{"semantic_live_overlay_edges", `SELECT COUNT(*) FROM semantic_live_overlay_edges WHERE repo_id = ? AND write_epoch <= ?`},
+	}
+	total := 0
+	for _, q := range queries {
+		var n int
+		if err := s.db.QueryRowContext(ctx, q.sql, repoID, capturedEpoch).Scan(&n); err != nil {
+			return 0, fmt.Errorf("OverlayRowCount(%s): %w", q.table, err)
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// Checkpoint issues a DuckDB CHECKPOINT statement on the store handle
+// (outside any tx). Phase 63 P63-02 Task 1: invoked by the compactor
+// AFTER CommitSnapshot to flush the WAL — bounds .duckdb growth across
+// repeated commit cycles (COMPACT-03 invariant).
+//
+// Returned errors are non-fatal at the caller level (compactor logs and
+// continues); the next idle window retries. nil-safe.
+func (s *Store) Checkpoint(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("Checkpoint: nil store")
+	}
+	if _, err := s.db.ExecContext(ctx, "CHECKPOINT"); err != nil {
+		return fmt.Errorf("Checkpoint: %w", err)
+	}
+	return nil
 }
 
 // overlayLockFor returns the per-workspace mutex for repoID, lazily
@@ -183,6 +338,28 @@ func (t *OverlayTx) releaseLock() {
 	t.unlockOnce.Do(t.unlock)
 }
 
+// bumpPending increments the per-workspace pending-rows counter through
+// the parent *Store. Phase 63 P63-02 Task 1: consumed by the compaction
+// gate's BlockedOverlayEmpty check. Called by every overlay-write path
+// (UpsertOverlayFile / MarkFileDeleted / Mark*Deleted) after a successful
+// ExecContext.
+//
+// We need a back-reference to *Store; OverlayTx doesn't currently hold
+// one — but BeginOverlayTx is the only constructor and it has access.
+// Rather than threading a *Store pointer through OverlayTx (and disturbing
+// the existing struct shape), we close over `bumpPending` via the unlock
+// closure path: the unlock func already captures `txCounter` (the
+// per-workspace open-tx counter). We do the same for pending rows by
+// stamping a `bumpPendingFn` field on OverlayTx. Below the path is a
+// no-op when bumpPendingFn is nil (test paths that construct an
+// OverlayTx without going through BeginOverlayTx).
+func (t *OverlayTx) bumpPending() {
+	if t == nil || t.bumpPendingFn == nil {
+		return
+	}
+	t.bumpPendingFn()
+}
+
 // FlushOverlay is a no-op today; reserved for future cooperative drain
 // semantics if Phase 63's compaction pipeline needs them. Always returns
 // nil. Callers may invoke at shutdown without harm.
@@ -195,7 +372,7 @@ func (s *Store) FlushOverlay(_ context.Context) error { return nil }
 
 // UpsertOverlayFile inserts (or replaces) one row in semantic_live_overlay_files
 // for this tx's (repo_id, path), stamped with this tx's write_epoch. The
-// minimal payload set (path, content_hash, file_id=0, language='', status='live')
+// minimal payload set (path, content_hash, file_id=0, language=”, status='live')
 // is what Phase 60 P02 ships for the epoch contract test; the full FileFact
 // upsert (real file_id from semantic_files, language detection) is filled by
 // Phase 60 P04 (the live handler).
@@ -219,6 +396,7 @@ func (t *OverlayTx) UpsertOverlayFile(ctx context.Context, path, contentHash str
 	if err != nil {
 		return fmt.Errorf("UpsertOverlayFile(%q, %q): %w", t.repoID, path, err)
 	}
+	t.bumpPending()
 	return nil
 }
 
@@ -246,6 +424,7 @@ func (t *OverlayTx) MarkFileDeleted(ctx context.Context, path string) error {
 	if err != nil {
 		return fmt.Errorf("MarkFileDeleted(%q, %q): %w", t.repoID, path, err)
 	}
+	t.bumpPending()
 	return nil
 }
 
@@ -279,6 +458,7 @@ func (t *OverlayTx) MarkSymbolsDeleted(ctx context.Context, fileIDs []uint64) er
 		`, t.epoch, t.repoID, id); err != nil {
 			return fmt.Errorf("MarkSymbolsDeleted(%q, file_id=%d): %w", t.repoID, id, err)
 		}
+		t.bumpPending()
 	}
 	return nil
 }
@@ -302,6 +482,7 @@ func (t *OverlayTx) MarkReferencesDeleted(ctx context.Context, fileIDs []uint64)
 		`, t.epoch, t.repoID, id); err != nil {
 			return fmt.Errorf("MarkReferencesDeleted(%q, file_id=%d): %w", t.repoID, id, err)
 		}
+		t.bumpPending()
 	}
 	return nil
 }
@@ -392,6 +573,7 @@ func (t *OverlayTx) MarkEdgesDeleted(ctx context.Context, nodeIDs []uint64) erro
 		`, t.epoch, t.repoID, id, id); err != nil {
 			return fmt.Errorf("MarkEdgesDeleted(%q, node_id=%d): %w", t.repoID, id, err)
 		}
+		t.bumpPending()
 	}
 	return nil
 }
@@ -421,8 +603,8 @@ type EdgeRow struct {
 	Source               string  // "lsp.<call>" | "comment.<kind>"
 	Confidence           float64 // 1.0 for LSP, 0.60 for comment, etc.
 	Weight               float64
-	ValidationState      string  // "validated" | "unresolved"
-	FactJSON             []byte  // optional; nil writes JSON NULL
+	ValidationState      string // "validated" | "unresolved"
+	FactJSON             []byte // optional; nil writes JSON NULL
 }
 
 // scoreStatusWriteEnum is the closed-enum allowlist for ScoreRow.Status at
@@ -566,6 +748,7 @@ func (t *OverlayTx) UpsertEdgesWithMerge(ctx context.Context, edges []EdgeRow) e
 			return fmt.Errorf("UpsertEdgesWithMerge(%q, %d→%d %s): %w",
 				t.repoID, e.SrcNodeID, e.DstNodeID, e.EdgeKind, err)
 		}
+		t.bumpPending()
 	}
 	return nil
 }
@@ -816,6 +999,42 @@ func (s *Store) CurrentGraphVersion(ctx context.Context, repoID string) (uint64,
 		return 0, fmt.Errorf("CurrentGraphVersion(%q): %w", repoID, err)
 	}
 	return gv, nil
+}
+
+// CurrentOverlayEpoch reads the current overlay write_epoch for repoID
+// from semantic_live_overlay_meta. Mirrors CurrentGraphVersion's
+// no-mutex MVCC read pattern.
+//
+// Phase 63 review CR-03: consumed by the compactor's captureEpoch path
+// to read the current epoch BEFORE BeginSnapshot opens its tx. The
+// captured value bounds Snapshot.ClearOverlayLE (`WHERE write_epoch <=
+// ?`) so rows committed during compaction (write_epoch > capturedEpoch)
+// SURVIVE — closes the Phase 60 D-04 CAS contract. The previous
+// implementation in compact.captureEpoch returned a `1<<62` sentinel
+// that included future epochs and silently deleted concurrent overlay
+// writes.
+//
+// Returns (0, nil) when the meta row does not exist (no overlay writes
+// have occurred yet for repoID — the row is upserted by BeginOverlayTx).
+func (s *Store) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("CurrentOverlayEpoch: nil store")
+	}
+	if repoID == "" {
+		return 0, fmt.Errorf("CurrentOverlayEpoch: empty repoID")
+	}
+	var ep uint64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT current_epoch FROM semantic_live_overlay_meta
+		 WHERE repo_id = ?
+	`, repoID).Scan(&ep)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("CurrentOverlayEpoch(%q): %w", repoID, err)
+	}
+	return ep, nil
 }
 
 // LockOverlayWorkspace acquires the per-workspace overlay mutex for repoID

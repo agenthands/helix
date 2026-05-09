@@ -21,6 +21,7 @@ skills:
   - repomap
   - health
   - help
+  - semantic
 
 tools: []
 
@@ -43,6 +44,9 @@ tool_description_overrides:
 
 default_mode: review
 single_project: false
+
+guardrails:
+  enforcement: enforce
 
 allowed_mode_transitions:
   read:

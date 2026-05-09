@@ -534,6 +534,101 @@ func schema3Statements() []string {
 	}
 }
 
+// applyMigration004 lights up Phase 63 P63-02 Task 1 / D-05 storage: a
+// `last_vacuum_at TIMESTAMP DEFAULT NULL` column on
+// semantic_live_overlay_meta so the compactor's VACUUM piggyback can
+// store the previous run's wall-clock time and check the configured
+// vacuum_interval against it without having to keep state in process
+// memory across daemon restarts.
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no
+// reindex, no data backfill. Existing rows take DEFAULT NULL (which
+// signals "never vacuumed" → the next eligible window fires).
+//
+// Rollback follows the same model as Phase 60 applyMigration003:
+// DuckDB's ALTER TABLE DROP COLUMN support is incomplete; downgrade
+// requires the quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration004(ctx context.Context, db *sql.DB) error {
+	stmts := schema4Statements()
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration004: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema4Statements returns the v3→v4 DDL: one ALTER TABLE adding the
+// last_vacuum_at column, then the schema_version stamp. Two statements.
+//
+// Acceptance grep gates in 63-02-PLAN.md scan THIS function — keep the
+// `last_vacuum_at` literal on its own logical line so per-column presence
+// regexes match.
+func schema4Statements() []string {
+	return []string{
+		// VACUUM-cadence storage column.
+		`ALTER TABLE semantic_live_overlay_meta ADD COLUMN last_vacuum_at TIMESTAMP DEFAULT NULL`,
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (4, now())`,
+	}
+}
+
+// applyMigration005 lights up the snapshot-id allocation SEQUENCE (Phase
+// 63 review CR-03). Pre-CR-03 BeginSnapshot allocated snapshot_id via
+// `(SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots)`
+// inside the snapshot tx — two concurrent BeginSnapshot calls (different
+// repos, same store) both observed the same MAX and produced a primary-
+// key collision when the second tx committed. The fix mirrors the
+// `current_epoch` pattern in overlay.go:116-136: a DuckDB SEQUENCE
+// allocates non-conflicting values across concurrent txs without taking
+// a process-wide lock around the SELECT+INSERT.
+//
+// `START` is set high enough to avoid collisions with rows seeded by
+// pre-migration code (test fixtures that bypass BeginSnapshot still use
+// `MAX+1` directly; the SEQUENCE primes from the existing MAX so future
+// BeginSnapshot allocations land above any historical row).
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no
+// reindex, no data backfill.
+//
+// Rollback follows the same model as Phase 60 applyMigration003: DuckDB's
+// DROP SEQUENCE support is incomplete; downgrade requires the
+// quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration005(ctx context.Context, db *sql.DB) error {
+	// Read the existing MAX(snapshot_id) so the SEQUENCE starts above any
+	// row already in semantic_snapshots (preserves uniqueness across the
+	// migration boundary even if pre-migration code allocated some IDs).
+	var startAt int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(snapshot_id),0)+1 FROM semantic_snapshots`).Scan(&startAt); err != nil {
+		return fmt.Errorf("applyMigration005: read MAX(snapshot_id): %w", err)
+	}
+	if startAt < 1 {
+		startAt = 1
+	}
+	stmts := schema5Statements(startAt)
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration005: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema5Statements returns the v4→v5 DDL: CREATE SEQUENCE for
+// snapshot_id allocation, then the schema_version stamp. The sequence
+// is referenced by BeginSnapshot via `nextval('semantic_snapshot_id_seq')`.
+func schema5Statements(startAt int64) []string {
+	return []string{
+		// Snapshot-id allocator — used by BeginSnapshot in place of the
+		// racy MAX+1 SELECT (Phase 63 review CR-03).
+		fmt.Sprintf(`CREATE SEQUENCE IF NOT EXISTS semantic_snapshot_id_seq START %d`, startAt),
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (5, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

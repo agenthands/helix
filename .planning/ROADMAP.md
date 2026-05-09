@@ -132,7 +132,7 @@
 
 - [x] Phase 57: Semantic Store Foundation + Pipeline DAG Library (5/5 plans complete; verifier passed — gap-closure 57-05 closed SC-1 + CR-01/02 + WR-01/02/03; 57-REVIEW-57-05 follow-up pass closed BL-01 + 6 add'l findings) (completed 2026-05-06)
 - [x] Phase 58: v1.9 Carryover -- Release & Distribution (4/4 plans) (completed 2026-05-04)
-- [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (0/0 plans) (completed 2026-05-04)
+- [x] Phase 59: Tree-sitter Extraction & Stable Symbol IDs (7/7 plans) (completed 2026-05-04; 2026-05-08 D-06/D-07/D-08/D-11 delta added 59-06/59-07 — Phase 65 unblock complete)
 - [x] Phase 59.1: drop-cgo-0-single-mode-cgo-1-build-release (6/6 plans, INSERTED) — Drop CGO=0 — single-mode CGO=1 build & release; re-verifier 2026-05-06 PASSED (cosign verify-blob against real v1.10.7 sigstore bundles + Gatekeeper xattr mechanism + linux gcc resolution all closed) (completed 2026-05-04, re-verified 2026-05-06)
   Plans:
   - [x] 59.1-00-PLAN.md — Wave 0 pre-execution probes (darwin zig cc, release-smoke target, D-14 lock)
@@ -169,10 +169,60 @@
   - [x] 62-07-PLAN.md — Gap closure (CR-01) — explicit lock release between tx.Commit and CountStaleScoreRows + SchedulerStore.CountStaleScoreRows lock contract [GRAPH-03, GRAPH-04, GRAPH-05]
   - [x] 62-08-PLAN.md — Gap closure (truth #21 / WR-05) — rankStoreAdapter stub observability via outcome=stub_no_data closed-enum extension + sync.Once-gated WARN per (workspace, method) + TODO(phase-64) anchor [GRAPH-04, GRAPH-05]
   - [x] 62-09-PLAN.md — Gap closure (truth #22) — FileFactDiffRecorder seam threaded through Handler.UpdateChangedFile + once-INFO empty-diff log [GRAPH-03, GRAPH-05]
-- [ ] Phase 63: Compaction & Retention (0/0 plans)
-- [ ] Phase 64: New MCP Tools (P0 set of 4) (0/0 plans)
-- [ ] Phase 65: Existing-Tool Integration (Strangler Fig) (0/0 plans)
-- [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/0 plans)
+- [x] Phase 63: Compaction & Retention (0/2 plans) (completed 2026-05-07)
+  Plans:
+  - [x] 63-01-PLAN.md — Wave 1 — Snapshot-write API on *Store (BeginSnapshot/WriteSnapshotFacts/CommitSnapshot/AbortSnapshot/DeleteSnapshotsBeyond) + synthetic fake-compactor fixture (TDD; foundation for P63-02) [COMPACT-01, COMPACT-04]
+  - [x] 63-02-PLAN.md — Wave 2 — internal/semantic/compact/ package (compactor goroutine + CompactionGate.IsReady aggregator + VACUUM no-op piggyback) + 6 accessor additions on existing components + migration004 (last_vacuum_at) + daemon wiring + maintenance.* config + helix_semantic_compaction/vacuum metrics + vet-compact-uses-store analyzer + kill-mid-compact subprocess test + CAS interleave property test + long-repo bench fixture [COMPACT-01, COMPACT-02, COMPACT-03, COMPACT-04, COMPACT-05]
+- [x] Phase 64: New MCP Tools (P0 set of 4) (8/8 plans) — VERIFIED PASSED-WITH-CARRYOVER 2026-05-08 (2 Phase-65 carryover items: production buildFn empty-Facts placeholder + zero-value WorkspaceKey from session adapter)
+  **Goal:** Agents can index, refresh, inspect, and query the semantic graph through four new MCP tools (`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`) whose responses always carry `freshness` + `graph_version` fields, profile/mode gating respects the existing matrix, and selection is deterministic.
+  **Depends on:** Phase 62, Phase 63
+  **Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05
+  **Success Criteria:**
+  1. An agent calling `index_semantic_graph` (mode `review+`/`admin`) builds or refreshes a committed snapshot in `auto`/`full`/`incremental`/`refresh` modes and receives snapshot id, graph version, files indexed/reused, partial state, freshness, and duration.
+  2. An agent calling `refresh_semantic_graph` (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters.
+  3. An agent calling `get_semantic_context` receives `freshness=structurally_fresh_semantically_pending` after a single Helix edit and within the foreground-tool budget; the response includes `freshness_mode`, `graph_version`, `overlay_active`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
+  4. `tools/list` filters the four tools out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
+  Plans:
+  - [x] 64-01-PLAN.md — [BLOCKING WAVE-0 GATE] bleve binary-size + 50k-symbol indexing throughput benchmark vs DuckDB FTS5; commits PASS/FAIL verdict per D-08 [TOOL-04]
+  - [x] 64-02-PLAN.md — Wave 0 (TDD) effective-graph queries on *Store: QueryEffectiveAdjacency + CountStaleScoreRows + MarkAllScoreRowsStale + LatestCommittedSnapshot (deferred-from-63) [TOOL-03, TOOL-04]
+  - [x] 64-03-PLAN.md — Wave 0 skill skeleton: SemanticSkill+init() registration, mode_check.go (NEW pattern), envelope.go closed enums, 5 profile YAMLs + 4 mode YAMLs updated for `semantic` skill (D-14) [TOOL-05]
+  - [x] 64-04-PLAN.md — Wave 1 (TDD) IndexRunner singleflight (D-02) + sync-with-timeout dispatch (D-01/D-04) + tools_index.go handler with mode-tier check + path-traversal hardening [TOOL-01, TOOL-05]
+  - [x] 64-05-PLAN.md — Wave 1 (TDD) tools_refresh.go: read+ tier, paths strict-subset (D-11), wait_for_lsp polling (D-12), no-snapshot/no-compactor invariant (D-09/D-13) [TOOL-02, TOOL-05]
+  - [x] 64-06-PLAN.md — Wave 1 tools_status.go: SPEC §23.3 envelope fan-out across all read-only accessors; closed-enum freshness [TOOL-03, TOOL-05]
+  - [x] 64-07-PLAN.md — Wave 1 (TDD) retrieval package: bleve scorch + corpus mapping (D-06) + weighted RRF (D-07) + dual-store recovery + tools_context.go with determinism harness (10× byte-identical) [TOOL-04, TOOL-05]
+  - [x] 64-08-PLAN.md — Wave 2 daemon glue: semantic_wiring.go bundle + production buildFn + imports.go blank import + daemon.go register*SemanticGraph + rank_wiring stub-collapse + profile-filter test + get_tool_help test + 6 end-to-end integration tests closing CONTEXT.md acceptance #1/#2/#3/#5/#6 [TOOL-01..TOOL-05]
+- [x] Phase 65: Existing-Tool Integration (Strangler Fig) (9/13 plans) (gap-closure 2026-05-08 — 4 follow-up plans for VERIFICATION.md gaps + REVIEW.md findings) (completed 2026-05-08)
+  **Goal:** `get_repo_map`, `get_context`, `analyze_blast_radius`, and `get_health` consult the semantic graph when available — with zero source change to `internal/repomap` engine — and fall back to v1.9 behavior automatically when the index is disabled, building, or errored.
+  **Depends on:** Phase 64
+  **Requirements:** INTEG-01, INTEG-02, INTEG-03, INTEG-04, INTEG-05
+  **Success Criteria:**
+  1. With the semantic index populated, `get_repo_map` and `get_context` return ranked output sourced from persisted graph scores + clusters; with `semantic_index.enabled=false` they return the v1.9 tree-sitter + PageRank output (index-disabled goldens preserved).
+  2. `analyze_blast_radius` returns `confidence` and `evidence` per impacted node when the semantic graph is available; on fallback, confidence drops to ≤ 0.6 and the result envelope says so.
+  3. `get_health` includes a `semantic_index` section: store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error.
+  4. Every MCP envelope from a semantic-aware tool returns `source: semantic | tree_sitter | fallback` so callers can detect path drift.
+  **Carryover from Phase 64:** production buildFn empty-Facts placeholder; zero-value WorkspaceKey from session adapter (deferred 2026-05-08 per phase 64 verification).
+  Plans:
+  - [x] 65-00-PLAN.md — Wave 0 vet allowlist: nokernel2semantic permits internal/semantic/integ (M-vet unblock for 65-03/65-06)
+  - [x] 65-01-PLAN.md — Wave 0 (TDD) production buildFn: per-language extract + classifier walk + ToStoreFacts → WriteSnapshotFacts (D-09 carryover #1)
+  - [x] 65-02-PLAN.md — Wave 0 (TDD) WorkspaceKey adapter: closure pass-through replaces zero-value return (D-09 carryover #2)
+  - [x] 65-03-PLAN.md — Wave 1 (TDD) internal/semantic/integ types-only package + integSemanticLookup production adapter + read-tier grep canary (D-01/D-02/D-03; INTEG-01..05)
+  - [x] 65-04-PLAN.md — Wave 1 (TDD) source-field envelope contract + ChooseSource priority ladder + closed-enum matrix tests (D-04/D-05; Pitfall §3; INTEG-05)
+  - [x] 65-05-PLAN.md — Wave 2 (TDD) get_repo_map + get_context wired via SetSemanticLookup; JSON envelope wrap; index-disabled goldens preserved verbatim (INTEG-01/02/05)
+  - [x] 65-06-PLAN.md — Wave 2 (TDD) analyze_blast_radius two-pass: lookup.ExpandFrom + LSP-validates-critical-edges; fallback confidence cap ≤ 0.6 (D-07/D-08; INTEG-03/05)
+  - [x] 65-07-PLAN.md — Wave 2 (TDD) get_health semantic_index block additive (Phase 57 SC-1 preserved; WR-NEW-01 closed-enum last_error) (INTEG-04/05)
+  - [x] 65-08-PLAN.md — Wave 3 acceptance closure: index-disabled tree text byte-identical + {source × fallback_reason} matrix across all 4 tools
+  - [x] 65-09-PLAN.md — Wave 4 (TDD, gap closure) production-adapter E2E test scaffolding (Skipf gates) + BL-A populated-harness builder (NewE2EIntegLookupForTest with canonical syms keys) + REVIEW.md CR-02 closed-enum classifier fix (errors.Is(serr.ErrUnsupported))
+  - [x] 65-10-PLAN.md — Wave 5 (TDD, gap closure) integSemanticLookup.RankFiles + RankFromSeeds real implementations + *Store.QueryRankedFiles + *Store.QuerySymbolPath + WR-04/WR-06/WR-07 fixes (INTEG-01/02)
+  - [x] 65-11-PLAN.md — Wave 6 (TDD, gap closure) integSemanticLookup.SymbolID + ExpandFrom real implementations + *Store.QuerySymbolByLocation/QueryNodeIDByStableKey/QueryStableKeyByNodeID + WR-01/IN-04/WR-05/WR-03 fixes (INTEG-03)
+  - [x] 65-12-PLAN.md — Wave 7 (TDD, gap closure) kernel-side LSP probe via lspProbeFn + integ.SemanticLookup.LocateSymbol + BL-1 confidence-ladder kernel-side test (consumes 65-09 BL-A harness) + production-adapter SourceSemantic + BlastRadiusConfidence E2E green + WR-02 go/parser canary (INTEG-03/05)
+- [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/6 plans)
+  Plans:
+  - [x] 66-01-PLAN.md — Wave 1 (TDD) receipt foundation: ID/class enum/scope union, store (TTL/janitor/LRU/graph_version invalidation), ValidateReceiptForOperation, 5-layer enforcement resolver, issue sink, serr.GuardrailViolation, 3 receipt counters [GUARD-03/04/05/07]
+  - [x] 66-02-PLAN.md — Wave 1 (TDD) SemanticLookup.Visibility + IsEntrypointReachable (OI-02/OI-03), GuardrailsConfig D-22 extension, per-profile YAML defaults (ci-bot=enforce; rest=warn) [GUARD-07]
+  - [x] 66-03-PLAN.md — Wave 2 (TDD) five rule predicates G-001..G-005 + RuleEvaluator dispatch + G-005 catalogs (Go/TS/JS/Python via embed.FS) [GUARD-02/07]
+  - [x] 66-04-PLAN.md — Wave 3 GuardrailMiddleware + production deps + skill + daemon step 14b.5 + TelemetryMiddleware outcome extension + 5-step LIFO regression test [GUARD-01/03/04/05/07]
+  - [ ] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
+  - [ ] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
 - [ ] Phase 67: Evaluation Harness (0/0 plans)
 
 **Full details:** `.planning/milestones/v1.10-ROADMAP.md`

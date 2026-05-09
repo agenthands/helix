@@ -324,6 +324,9 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 				WithTool("replace_symbol_body").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx so the
+		// compaction gate sees BlockedEditTxActive while this tool runs.
+		defer k.BeginEditTx(wsKey)()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			outcome = "internal"
@@ -414,6 +417,8 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 				WithTool("insert_before_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKey)()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			outcome = "internal"
@@ -483,6 +488,8 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 				WithTool("insert_after_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKey)()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			outcome = "internal"
@@ -549,6 +556,8 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 				WithTool("rename_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKey)()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			outcome = "internal"
@@ -615,6 +624,8 @@ func registerSafeDelete(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStore
 				WithTool("safe_delete_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()
+		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
+		defer k.BeginEditTx(wsKey)()
 		rt, err := k.GetRuntime(wsKey)
 		if err != nil {
 			outcome = "internal"

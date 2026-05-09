@@ -1,6 +1,7 @@
 package repomap
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -137,7 +138,12 @@ func TestPipelineRanked(t *testing.T) {
 }
 
 // TestGetRepoMap_WithWorkspace verifies the full get_repo_map tool call
-// returns ranked symbols. (RMAP-06)
+// returns ranked symbols. (RMAP-06) Phase 65 65-05: result is now a JSON
+// envelope (Pitfall §2). The tree-text contract is preserved verbatim under
+// env.Tree; the surrounding envelope adds source / fallback_reason /
+// graph_version / freshness. With no SemanticLookup wired and no ConfigGate
+// (cfg==nil → SemanticIndexEnabled()==false branch), source must be
+// "tree_sitter" per D-04 / Pitfall §3.
 func TestGetRepoMap_WithWorkspace(t *testing.T) {
 	s, _ := newIntegrationSkill(t)
 
@@ -145,12 +151,22 @@ func TestGetRepoMap_WithWorkspace(t *testing.T) {
 		"token_budget": float64(4096),
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, result, "No files found", "get_repo_map should return data, not empty message")
-	assert.Contains(t, result, ".go", "output should contain Go files")
+
+	var env struct {
+		Source         string `json:"source"`
+		FallbackReason string `json:"fallback_reason,omitempty"`
+		Tree           string `json:"tree"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+	assert.NotContains(t, env.Tree, "No files found", "get_repo_map should return data, not empty message")
+	assert.Contains(t, env.Tree, ".go", "tree should contain Go files")
+	assert.Equal(t, "tree_sitter", env.Source, "no cfg gate → source==tree_sitter (D-04 / Pitfall §3)")
+	assert.Empty(t, env.FallbackReason, "tree_sitter steady state has no fallback_reason")
 }
 
 // TestGetContext_WithWorkspace verifies get_context with seed files returns
-// personalized ranked output. (RMAP-07)
+// personalized ranked output. (RMAP-07) Phase 65 65-05: result is now a JSON
+// envelope (Pitfall §2). Same JSON-wrap update as TestGetRepoMap_WithWorkspace.
 func TestGetContext_WithWorkspace(t *testing.T) {
 	s, dir := newIntegrationSkill(t)
 
@@ -163,8 +179,16 @@ func TestGetContext_WithWorkspace(t *testing.T) {
 		"token_budget": float64(4096),
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, result, "No files found", "get_context should return data")
-	assert.NotEmpty(t, result)
+
+	var env struct {
+		Source         string `json:"source"`
+		FallbackReason string `json:"fallback_reason,omitempty"`
+		Tree           string `json:"tree"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+	assert.NotContains(t, env.Tree, "No files found", "get_context should return data")
+	assert.NotEmpty(t, env.Tree)
+	assert.Equal(t, "tree_sitter", env.Source, "no cfg gate → source==tree_sitter (D-04 / Pitfall §3)")
 }
 
 // TestEnrichFromLSP_CallbackInvoked verifies the enrichFn callback is called
@@ -206,6 +230,95 @@ func TestRenderBudgeted_UsesTreeRenderer(t *testing.T) {
 	// With TreeRenderer's min-1-file guarantee, we should still get output.
 	assert.NotEmpty(t, result, "TreeRenderer should guarantee at least 1 file even with tiny budget")
 	assert.NotContains(t, result, "No files found")
+}
+
+// -----------------------------------------------------------------------------
+// Phase 65 INTEG-01 contract — internal/repomap engine source MUST NOT change.
+//
+// The two goldens at testdata/goldens/index_disabled_{repo_map,context}.txt
+// capture the v1.9 tree-sitter path output verbatim. If TestEnvelope_Index
+// DisabledIsTreeSitter below fails after an engine modification, the offending
+// change violates INTEG-01 (D-04 + Pitfall §3 + Phase 65 PLAN must-have
+// "index-disabled goldens are byte-identical (modulo JSON envelope wrap from
+// 65-05); env.Tree text matches pre-Phase-65 output verbatim").
+//
+// To regenerate (only after a deliberate, reviewed engine change):
+//
+//	HELIX_GOLDEN_CAPTURE=1 go test ./internal/skill/repomap/... \
+//	    -run TestCaptureIndexDisabledGoldens -count=1
+//
+// then commit the updated goldens with the engine change. Do NOT regenerate
+// to "fix" a failing test without an explicit, reviewed engine-source change.
+// -----------------------------------------------------------------------------
+
+// TestEnvelope_IndexDisabledIsTreeSitter pins the Phase 65 INTEG-01 contract:
+// when cfg.SemanticIndex.Enabled=false, the strangler-fig priority ladder
+// MUST emit source=="tree_sitter" with NO fallback_reason (D-04 / Pitfall §3),
+// and the env.Tree text MUST be byte-identical to the captured pre-Phase-65
+// golden (Pitfall §2 — JSON-wrap preserves tree-text under env.Tree byte-
+// identical). Regression guard: any engine drift in internal/repomap will
+// surface as a tree-text diff here.
+func TestEnvelope_IndexDisabledIsTreeSitter(t *testing.T) {
+	// get_repo_map: cfg gate is nil (cfg==nil → SemanticIndexEnabled()==false
+	// branch in ChooseSource → SourceTreeSitter, "" per Pitfall §3).
+	{
+		s, _ := newIntegrationSkill(t)
+		result, err := s.ExecuteTool("get_repo_map", map[string]interface{}{
+			"token_budget": float64(4096),
+		})
+		require.NoError(t, err)
+
+		var env struct {
+			Source         string `json:"source"`
+			FallbackReason string `json:"fallback_reason,omitempty"`
+			GraphVersion   uint64 `json:"graph_version,omitempty"`
+			Tree           string `json:"tree"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+		assert.Equal(t, "tree_sitter", env.Source,
+			"INTEG-01 / D-04: cfg-disabled MUST emit source=tree_sitter, NOT fallback+index_disabled")
+		assert.Empty(t, env.FallbackReason,
+			"INTEG-01 / Pitfall §3: tree_sitter steady state has empty fallback_reason")
+		assert.Zero(t, env.GraphVersion,
+			"tree_sitter path has no semantic graph_version; envelope must omit it")
+
+		// Byte-identical assertion against the captured golden.
+		expected, err := os.ReadFile(filepath.Join("testdata", "goldens", "index_disabled_repo_map.txt"))
+		require.NoError(t, err, "golden testdata/goldens/index_disabled_repo_map.txt must exist; "+
+			"regenerate via HELIX_GOLDEN_CAPTURE=1 go test -run TestCaptureIndexDisabledGoldens")
+		assert.Equal(t, string(expected), env.Tree,
+			"INTEG-01: env.Tree text MUST be byte-identical to captured pre-Phase-65 golden — "+
+				"any diff signals an engine drift in internal/repomap (D-04 violation)")
+	}
+
+	// get_context: same contract, exercised through the personalized-PageRank
+	// arm (renderV19 with seedFiles non-nil).
+	{
+		s, dir := newIntegrationSkill(t)
+		result, err := s.ExecuteTool("get_context", map[string]interface{}{
+			"files":        []interface{}{filepath.Join(dir, "server.go")},
+			"token_budget": float64(4096),
+		})
+		require.NoError(t, err)
+
+		var env struct {
+			Source         string `json:"source"`
+			FallbackReason string `json:"fallback_reason,omitempty"`
+			GraphVersion   uint64 `json:"graph_version,omitempty"`
+			Tree           string `json:"tree"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(result), &env), "result must be JSON envelope: %q", result)
+		assert.Equal(t, "tree_sitter", env.Source,
+			"INTEG-01 / D-04: cfg-disabled MUST emit source=tree_sitter on get_context too")
+		assert.Empty(t, env.FallbackReason)
+		assert.Zero(t, env.GraphVersion)
+
+		expected, err := os.ReadFile(filepath.Join("testdata", "goldens", "index_disabled_context.txt"))
+		require.NoError(t, err, "golden testdata/goldens/index_disabled_context.txt must exist; "+
+			"regenerate via HELIX_GOLDEN_CAPTURE=1 go test -run TestCaptureIndexDisabledGoldens")
+		assert.Equal(t, string(expected), env.Tree,
+			"INTEG-01: env.Tree text MUST be byte-identical to captured pre-Phase-65 golden")
+	}
 }
 
 // TestSetWorkspaceRoot_InvalidatesCache verifies SetWorkspaceRoot clears

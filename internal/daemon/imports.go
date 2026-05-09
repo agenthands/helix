@@ -8,9 +8,10 @@ import (
 	_ "github.com/agenthands/helix/internal/kernel/symbols"
 	_ "github.com/agenthands/helix/internal/profile"
 	_ "github.com/agenthands/helix/internal/skill/memory"
+	_ "github.com/agenthands/helix/internal/skill/guardrails" // Phase 66 GUARD-01: fires init() for blank-import side effects
 	_ "github.com/agenthands/helix/internal/skill/repomap"
+	_ "github.com/agenthands/helix/internal/skill/semantic"
 	_ "github.com/agenthands/helix/internal/skill/workflow"
-
 	// Phase 59 (semantic extraction): the per-language extraction providers
 	// — goextract / tsextract / pyextract — and the scheduler are imported
 	// NON-BLANK in daemon.go and constructed explicitly in steps 6c and 6d.

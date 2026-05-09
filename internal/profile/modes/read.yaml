@@ -6,6 +6,7 @@ description: >
 skills:
   - symbol-retrieval
   - memory
+  - semantic
 
 tools:
   - read_file
@@ -25,6 +26,7 @@ exclude_tools:
   - insert_at_line
   - delete_lines
   - execute_shell_command
+  - index_semantic_graph
 
 prompts: {}
 

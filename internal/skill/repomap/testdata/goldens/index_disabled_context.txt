@@ -1,0 +1,18 @@
+internal/
+  util.go
+      // L3:
+      func Clamp(val, min, max int) int { ... }
+handler.go
+    // L5:
+    func HandleRequest(s *Server) { ... }
+    // L10:
+    func HealthCheck() string { ... }
+server.go
+    // L3:
+    type Server struct {
+    	port int
+    }
+    // L7:
+    func NewServer(port int) *Server { ... }
+    // L11:
+    func (s *Server) Start() error { ... }

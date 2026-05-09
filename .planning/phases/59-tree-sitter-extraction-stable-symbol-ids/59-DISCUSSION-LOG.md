@@ -104,3 +104,98 @@
 - Hard total-extraction budget (future, only if monorepo runs need it)
 - Multi-provider per language for TS+JS split (future phase if query overlap is smaller than expected)
 - Generic config-key-coverage matrix (inherited deferral from Phase 57)
+
+---
+
+## 2026-05-08 update — Phase 65 unblock delta
+
+**Trigger:** Phase 65 (existing-tool integration / strangler fig) declared
+itself BLOCKED on Phase 59 in `65-CONTEXT.md` D-09/D-10. Reconciliation
+showed Phase 59 base verified PASSED on 2026-05-04 (4/4 must-haves) but
+Phase 65 Wave 0's production buildFn (`internal/daemon/semantic_wiring.go:687-742`)
+could not consume the shipped extractors polymorphically. Documentation
+drift (REQUIREMENTS `[ ]`, ROADMAP `0/0 plans`) compounded the confusion.
+
+### Areas discussed
+
+#### Extract API shape
+
+**Options presented:**
+1. Promote `Extract` to the `Provider` interface
+2. Add a `Registry.Extract(lang, ...)` helper, keep interface lookup-only
+3. Phase 65 imports the concrete language packages directly
+
+**User selection:** **Option 1 — promote `Extract` to `Provider`.**
+
+Rationale (paraphrased from the user's reply): extraction is provider-owned,
+not registry-owned; option 2 splits the responsibility (registry pretending
+to be lookup-only while implementing provider behavior); option 3 forfeits
+the registry abstraction at exactly the place the abstraction matters and
+forces every future language addition to edit Phase 65. User further
+proposed splitting the interface into named sub-interfaces
+(`LanguageMetadata`, `ExtractionPipeline`) for future helper attachment
+without consumer churn — captured as the recommended shape in D-06. The
+helper sub-types (`ImportResolver`, `ScopeBuilder`, `SymbolNormalizer`,
+`ReferenceClassifier`, `QueryBundle`) stay deferred since they don't exist
+as concrete types today.
+
+Decision recorded as **D-06**.
+
+#### Walk body ownership
+
+**Options presented:**
+1. Phase 65 owns the walk; scheduler stays state-only
+2. Phase 59 ships the walk inside `ScheduleInitialExtraction`
+3. Split — Phase 59 ships a `WalkAndExtract` library helper
+
+**User selection:** **Option 1 — Phase 65 owns the walk.**
+
+Confirms the 2026-05-04 verification's intentional `STATIC` data-flow
+note. Phase 59 does not ship file-walk code in this update.
+
+Decision recorded as **D-07**.
+
+#### Facts adapter location
+
+**Options presented:**
+1. `internal/semantic/extract/` — extends Phase 59
+2. `internal/semantic/store/` — Phase 57 territory
+3. `internal/daemon/semantic_wiring.go` — Phase 65 inline
+
+**User selection:** **Option 1 — `internal/semantic/extract/`.**
+
+D-08 captures the decision plus a hard cycle-safety fallback to option 2
+if the new extract → store import edge would close a cycle (planner
+gate; today store does not import extract, so the edge is expected to be
+clean).
+
+Decision recorded as **D-08**.
+
+#### Bookkeeping
+
+**Options presented:**
+1. Tick + correct in this update
+2. Defer until interface-promotion plan executes & verifies
+
+**User selection:** **Option 1 — tick + correct now.**
+
+REQUIREMENTS.md EXTRACT-01..05 → `[x]`; ROADMAP.md line 135 → `(5/5 plans)`
+with a 2026-05-08 update note. Cross-references the existing PASSED
+2026-05-04 verification.
+
+Decision recorded as **D-11**.
+
+### Deferred (this update)
+
+- Helper sub-types on `Provider` (`ImportResolver`, `ScopeBuilder`,
+  `SymbolNormalizer`, `ReferenceClassifier`, `QueryBundle`) — wait until
+  a consumer actually needs them.
+- Phase 59-side workspace walker — locked out by D-07.
+- `Facts.FromExtracted` on the store side — only if D-08 cycle check
+  fails; otherwise stays deferred indefinitely.
+
+### Scope guardrail
+
+No scope creep this round. The four delta decisions all clarify HOW to
+integrate the already-shipped extractors with the Phase 65 buildFn —
+none add new capability beyond Phase 59's existing requirement set.

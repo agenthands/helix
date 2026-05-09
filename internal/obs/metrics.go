@@ -162,6 +162,36 @@ type Metrics struct {
 	// "language" ∈ AllowedLabels;
 	// "confidence_tier" ∈ {"1.00","0.90","0.80","0.70","0.60","0.45","0.20"} (D-12).
 	SemanticTypesResolutionVec *prometheus.CounterVec
+
+	// Phase 63 P63-02 Task 3: compaction + vacuum duration histograms.
+	// Closed-enum outcome labels keep cardinality bounded (T-63-02-06
+	// mitigation). Drop-on-unknown via SemanticCompactionObserve /
+	// SemanticVacuumObserve helpers.
+	SemanticCompactionDurationVec *prometheus.HistogramVec
+	SemanticCompactionBlockedVec  *prometheus.CounterVec
+	SemanticVacuumDurationVec     *prometheus.HistogramVec
+
+	// Phase 66 P01: guardrail receipt counters (GUARD-05 telemetry).
+	// Closed-enum label discipline; drop-unknown at emission sites.
+	//
+	// helix_receipt_issued_total{class} — class ∈ {references_checked,
+	//   impact_checked, context_gathered, structural_overview, diagnostics_clean}.
+	//   Incremented on successful receipt issuance from a read-side tool.
+	//
+	// helix_receipt_expired_total{reason} — reason ∈ {ttl, graph_drift,
+	//   lru_evicted}. Incremented whenever a receipt is removed from the store.
+	//
+	// helix_receipt_lookup_total{outcome} — outcome ∈ {hit, miss, expired,
+	//   scope_mismatch, graph_drift, workspace_mismatch, freshness_rejected,
+	//   wrong_class}. Incremented on every Get() call in the store.
+	//
+	// helix_guardrail_eval_timeout_total — UNLABELED (T-66-21 fail-open audit
+	//   trail; no label to avoid cardinality from timeout sources). Incremented
+	//   from the GuardrailMiddleware eval timeout branch (Plan 04).
+	ReceiptIssuedVec    *prometheus.CounterVec
+	ReceiptExpiredVec   *prometheus.CounterVec
+	ReceiptLookupVec    *prometheus.CounterVec
+	GuardrailEvalTimeout prometheus.Counter
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -387,6 +417,58 @@ func newMetrics() *Metrics {
 			},
 			[]string{"language", "confidence_tier"},
 		),
+		// Phase 63 P63-02 Task 3: compaction + vacuum metrics.
+		SemanticCompactionDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "helix_semantic_compaction_duration_seconds",
+				Help:    "Compaction cycle duration by outcome (success/partial/skipped_blocked/error). Phase 63 D-01.",
+				Buckets: []float64{0.001, 0.005, 0.025, 0.1, 0.5, 1.0, 5.0, 15.0, 30.0, 60.0},
+			},
+			[]string{"outcome"},
+		),
+		SemanticCompactionBlockedVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_compaction_blocked_total",
+				Help: "Compaction skipped_blocked outcomes by closed-enum BlockedReason. Phase 63 D-04.",
+			},
+			[]string{"reason"},
+		),
+		SemanticVacuumDurationVec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "helix_semantic_vacuum_duration_seconds",
+				Help:    "VACUUM cycle duration by outcome (success/skipped/error). Phase 63 D-05.",
+				Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 60.0, 300.0},
+			},
+			[]string{"outcome"},
+		),
+		// Phase 66 P01: guardrail receipt counters (GUARD-05 / T-66-04/T-66-05).
+		ReceiptIssuedVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_issued_total",
+				Help: "Capability receipts issued by class. Phase 66 P01. class ∈ {references_checked, impact_checked, context_gathered, structural_overview, diagnostics_clean}.",
+			},
+			[]string{"class"},
+		),
+		ReceiptExpiredVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_expired_total",
+				Help: "Capability receipts expired by reason. Phase 66 P01. reason ∈ {ttl, graph_drift, lru_evicted}.",
+			},
+			[]string{"reason"},
+		),
+		ReceiptLookupVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_lookup_total",
+				Help: "Capability receipt lookups by outcome. Phase 66 P01. outcome ∈ {hit, miss, expired, scope_mismatch, graph_drift, workspace_mismatch, freshness_rejected, wrong_class}.",
+			},
+			[]string{"outcome"},
+		),
+		GuardrailEvalTimeout: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "helix_guardrail_eval_timeout_total",
+				Help: "Guardrail evaluation timeouts (fail-open; T-66-21 mitigation). Unlabeled to avoid cardinality from timeout sources.",
+			},
+		),
 	}
 
 	reg.MustRegister(
@@ -417,6 +499,15 @@ func newMetrics() *Metrics {
 		m.SemanticGraphRepairVec,
 		m.SemanticGraphVersionGauge,
 		m.SemanticTypesResolutionVec,
+		// Phase 63 P63-02 Task 3: compaction + vacuum metrics.
+		m.SemanticCompactionDurationVec,
+		m.SemanticCompactionBlockedVec,
+		m.SemanticVacuumDurationVec,
+		// Phase 66 P01: guardrail receipt counters.
+		m.ReceiptIssuedVec,
+		m.ReceiptExpiredVec,
+		m.ReceiptLookupVec,
+		m.GuardrailEvalTimeout,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -710,14 +801,14 @@ var graphScoreStatuses = map[string]struct{}{
 }
 
 var graphRepairOutcomes = map[string]struct{}{
-	"applied":            {},
-	"frontier_overflow":  {},
-	"preempted":          {},
-	"error":              {},
+	"applied":           {},
+	"frontier_overflow": {},
+	"preempted":         {},
+	"error":             {},
 	// 62-08: surfaces the four deferred Phase 64 read paths on
 	// rankStoreAdapter (62-VERIFICATION.md gap truth #21 / WR-05) so
 	// dashboards distinguish "no data yet" from clean repair.
-	"stub_no_data":       {},
+	"stub_no_data": {},
 }
 
 // typesConfidenceTiers is the SPEC §38.2 ladder rendered as bucketed
@@ -797,4 +888,126 @@ func (m *Metrics) SemanticTypesResolutionInc(language, confidenceTier string) {
 		return
 	}
 	m.SemanticTypesResolutionVec.WithLabelValues(language, confidenceTier).Inc()
+}
+
+// compactionOutcomes is the closed-enum allowlist for the compaction
+// duration histogram. Phase 63 D-04 / T-63-02-06 mitigation: cardinality
+// is bounded at construction time by this set.
+var compactionOutcomes = map[string]struct{}{
+	"success":         {},
+	"partial":         {},
+	"skipped_blocked": {},
+	"error":           {},
+}
+
+// vacuumOutcomes is the closed-enum allowlist for the VACUUM duration
+// histogram.
+var vacuumOutcomes = map[string]struct{}{
+	"success": {},
+	"skipped": {},
+	"error":   {},
+}
+
+// blockedReasons is the closed-enum allowlist for the
+// helix_semantic_compaction_blocked_total counter. Mirrors the gate's
+// BlockedReason enum (gate.go).
+var blockedReasons = map[string]struct{}{
+	"overlay_empty":     {},
+	"idle_too_short":    {},
+	"edit_tx_active":    {},
+	"overlay_tx_active": {},
+	"lsp_pending":       {},
+	"rank_repairing":    {},
+}
+
+// SemanticCompactionObserve records a compaction-cycle duration.
+// outcome ∈ {success, partial, skipped_blocked, error}; unknown values
+// drop the emission. Negative seconds drop. Phase 63 D-04.
+func (m *Metrics) SemanticCompactionObserve(outcome string, seconds float64) {
+	if m == nil || m.SemanticCompactionDurationVec == nil {
+		return
+	}
+	if seconds < 0 {
+		return
+	}
+	if _, ok := compactionOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticCompactionDurationVec.WithLabelValues(outcome).Observe(seconds)
+}
+
+// SemanticCompactionBlocked increments the closed-enum
+// "skipped_blocked" sub-counter keyed on BlockedReason. Unknown reasons
+// drop. Phase 63 D-04.
+func (m *Metrics) SemanticCompactionBlocked(reason string) {
+	if m == nil || m.SemanticCompactionBlockedVec == nil {
+		return
+	}
+	if _, ok := blockedReasons[reason]; !ok {
+		return
+	}
+	m.SemanticCompactionBlockedVec.WithLabelValues(reason).Inc()
+}
+
+// SemanticVacuumObserve records a VACUUM-cycle duration. outcome ∈
+// {success, skipped, error}; unknown values drop the emission. Negative
+// seconds drop. Phase 63 D-05.
+func (m *Metrics) SemanticVacuumObserve(outcome string, seconds float64) {
+	if m == nil || m.SemanticVacuumDurationVec == nil {
+		return
+	}
+	if seconds < 0 {
+		return
+	}
+	if _, ok := vacuumOutcomes[outcome]; !ok {
+		return
+	}
+	m.SemanticVacuumDurationVec.WithLabelValues(outcome).Observe(seconds)
+}
+
+// --- Phase 66 P01 helper methods (GUARD-05 receipt counters, drop-unknown closed-enum discipline) ---
+
+// ReceiptIssuedInc increments helix_receipt_issued_total.
+// class ∈ {"references_checked","impact_checked","context_gathered",
+// "structural_overview","diagnostics_clean"}; any other value is dropped
+// (Phase 66 closed enum, T-66-04 mitigation).
+func (m *Metrics) ReceiptIssuedInc(class string) {
+	switch class {
+	case "references_checked", "impact_checked", "context_gathered", "structural_overview", "diagnostics_clean":
+	default:
+		return
+	}
+	m.ReceiptIssuedVec.WithLabelValues(class).Inc()
+}
+
+// ReceiptExpiredInc increments helix_receipt_expired_total.
+// reason ∈ {"ttl","graph_drift","lru_evicted"}; any other value is dropped
+// (Phase 66 closed enum, T-66-05 mitigation).
+func (m *Metrics) ReceiptExpiredInc(reason string) {
+	switch reason {
+	case "ttl", "graph_drift", "lru_evicted":
+	default:
+		return
+	}
+	m.ReceiptExpiredVec.WithLabelValues(reason).Inc()
+}
+
+// ReceiptLookupInc increments helix_receipt_lookup_total.
+// outcome ∈ {"hit","miss","expired","scope_mismatch","graph_drift",
+// "workspace_mismatch","freshness_rejected","wrong_class"}; any other value
+// is dropped (Phase 66 closed enum, T-66-04 mitigation).
+func (m *Metrics) ReceiptLookupInc(outcome string) {
+	switch outcome {
+	case "hit", "miss", "expired", "scope_mismatch", "graph_drift", "workspace_mismatch", "freshness_rejected", "wrong_class":
+	default:
+		return
+	}
+	m.ReceiptLookupVec.WithLabelValues(outcome).Inc()
+}
+
+// GuardrailEvalTimeoutInc increments helix_guardrail_eval_timeout_total.
+// Unlabeled counter per T-66-21 fail-open mitigation (no label cardinality
+// risk from timeout sources). Called from GuardrailMiddleware eval timeout branch.
+func (m *Metrics) GuardrailEvalTimeoutInc() {
+	m.GuardrailEvalTimeout.Inc()
 }

@@ -22,6 +22,8 @@ import (
 	"github.com/agenthands/helix/internal/config"
 	"github.com/agenthands/helix/internal/degrade"
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
+	"github.com/agenthands/helix/internal/guardrails/rules"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/diag"
 	"github.com/agenthands/helix/internal/kernel/edit"
@@ -37,14 +39,17 @@ import (
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/extract"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/semantic/types"
 	"github.com/agenthands/helix/internal/skill"
 	repomapSkill "github.com/agenthands/helix/internal/skill/repomap"
+	semanticpkg "github.com/agenthands/helix/internal/skill/semantic"
 	"github.com/agenthands/helix/internal/treesitter"
 	"github.com/agenthands/helix/internal/workspace"
 	gen "github.com/agenthands/helix/protocol/gen"
@@ -159,6 +164,21 @@ type Daemon struct {
 	// level errgroup; per-workspace schedulers are spun up lazily in
 	// SetActivateCallback via rank.ensureScheduler.
 	rank *rankBundle
+
+	// compact holds the Phase 63 P63-02 per-workspace compaction
+	// worker registry. nil when the semantic store is not open. Run
+	// pulls compact.Run(gctx) into the top-level errgroup; per-workspace
+	// compactors are spun up lazily in SetActivateCallback via
+	// compact.ensureCompactor.
+	compact *compactBundle
+
+	// semantic holds the Phase 64 P64-08 semantic-skill production wiring
+	// (bleve handles + IndexRunner + 7 narrow accessor adapters). nil
+	// when the semantic store is not open. Run pulls semantic.Run(gctx)
+	// into the top-level errgroup; per-workspace bleve engines + recovery
+	// probes are spun up lazily in SetActivateCallback via
+	// semantic.ensureRetrieval.
+	semantic *semanticBundle
 
 	// typeResolver is the Phase 62 P05 type-resolver dispatcher — the
 	// 7-language registry (go / typescript / javascript / python / java /
@@ -373,6 +393,84 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		}
 	}
 
+	// 6f.1 Phase 63 P63-02: compaction worker bundle. Constructed
+	// alongside rank — needs the live bundle (for the coalescer
+	// accessor + post-flush hook), the lspenrich queue (for
+	// BlockedLSPPending), the rank bundle (for BlockedRankRepairing),
+	// and the kernel (for BlockedEditTxActive).
+	var compactBndl *compactBundle
+	if semanticStore != nil {
+		var lspQ *lspenrich.LaneQueue
+		if live != nil {
+			lspQ = live.lspQueue
+		}
+		compactBndl = newCompactBundle(
+			cfg.SemanticIndex.Maintenance,
+			cfg.SemanticIndex.LiveUpdates,
+			semanticStore,
+			live,
+			lspQ,
+			rank,
+			k,
+			observability.Metrics(),
+			logger,
+		)
+		// Wire the post-flush hook on the live service so every
+		// per-workspace coalescer signals back into the compactor.
+		if compactBndl != nil && live != nil && live.service != nil {
+			live.service.SetOnFlushHook(compactBndl.OnCoalescerFlush)
+			logger.Info("compactor post-flush hook wired to live service")
+		}
+	}
+
+	// 6f.2 Phase 64 P64-08: semantic skill production wiring. Constructed
+	// alongside compactBndl — needs the store, the rank bundle (for the
+	// scheduler accessor), the lspenrich queue (for the queue accessor),
+	// the live bundle (for the live + flush accessors), and the compactor
+	// bundle (for the compactor accessor). The session-lookup closure is
+	// captured once below (after the InstallMiddleware site reaches
+	// scope) and passed in via setter so all accessors share a single
+	// source of truth (closes checker W2 at the production layer).
+	//
+	// Wiring order:
+	//   1. Construct sBndl with a placeholder getSession (nil); register
+	//      tools & runner at this point.
+	//   2. Once getSessionFn is built (after step 14 below), call
+	//      sBndl.SetSessionFn(getSessionFn) so the session adapter is
+	//      live-wired.
+	//
+	// The bundle returns nil when the store is nil (semantic disabled);
+	// downstream wiring is a no-op in that case.
+	// Hoisted from former step 10 so newSemanticBundle can capture the
+	// wsKeyFn closure (Phase 65 65-02: closes D-09 carryover #2 by
+	// threading the daemon's active-workspace registry into
+	// semSessionAdapter; RESEARCH §Pattern 3 a).
+	var activeWSKey workspace.WorkspaceKey
+	var activeWSLang string
+	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
+	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
+
+	var sBndl *semanticBundle
+	if semanticStore != nil {
+		var lspQ *lspenrich.LaneQueue
+		if live != nil {
+			lspQ = live.lspQueue
+		}
+		sBndl = newSemanticBundle(
+			loadSemanticConfig(),
+			semanticStore,
+			rank,
+			lspQ,
+			live,
+			compactBndl,
+			semanticExtractRegistry,
+			logger,
+			observability.Metrics(),
+			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
+			wsKeyFn,
+		)
+	}
+
 	// 6g. Phase 62 P05: type-resolver dispatcher.
 	//
 	// Constructed when the semantic store is open. The dispatcher carries
@@ -434,12 +532,37 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 
 	// 10. Register kernel tools with MCP server.
-	var activeWSKey workspace.WorkspaceKey
-	var activeWSLang string
-	wsKeyFn := func() workspace.WorkspaceKey { return activeWSKey }
-	workspaceRootFn := func() string { return activeWSKey.RepoRoot }
+	// (activeWSKey / activeWSLang / wsKeyFn / workspaceRootFn are declared
+	// earlier — step 6f.2 — so newSemanticBundle can capture wsKeyFn.)
 
-	symbols.RegisterTools(mcpServer, k, wsKeyFn)
+	// Phase 65 65-06: thread the daemon-wired SemanticLookup + ConfigGate
+	// into symbols.RegisterTools so registerAnalyzeBlastRadius can route
+	// through integ.ChooseSource(cfgGate, lookup, nil) for the cfg-disabled →
+	// SourceTreeSitter contract (D-04 + Pitfall §3) BEFORE any semantic call.
+	//
+	// The lookupFn is a closure rather than a fixed lookup so the daemon
+	// retains the option to swap the production adapter in later (mirrors
+	// the SetSemanticLookup post-init wiring used by RepoMapSkill in 65-05).
+	// nil sBndl is normalized to NoopLookup{} so ChooseSource always sees a
+	// valid SemanticLookup interface value.
+	symbolsLookupFn := func() integ.SemanticLookup {
+		if sBndl != nil {
+			return sBndl.integLookupAccessor()
+		}
+		return integ.NoopLookup{}
+	}
+	symbolsCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	symbols.RegisterTools(mcpServer, k, wsKeyFn, symbolsLookupFn, symbolsCfgGate)
+
+	// Phase 65 65-07 INTEG-04 / INTEG-05: capture the wired SemanticLookup
+	// once for both the get_health source-field stamp and the semantic_index
+	// block. healthLookup is normalized to integ.NoopLookup{} when sBndl is
+	// nil (semantic disabled) so integ.ChooseSource always sees a valid
+	// SemanticLookup interface value, and the SemanticIndexAccessor adapter
+	// always has a non-nil delegate.
+	healthLookup := symbolsLookupFn()
+	healthSemIndex := &daemonSemIndexAccessor{lookup: healthLookup}
+	healthCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
 	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
 	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
@@ -455,14 +578,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
-	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore})
+	// WR-2 / IN-04 (Phase 65 65-11 Task 2): the probe carries the bundle
+	// pointer so Probe() can stamp lastErrReason on SELECT 1 failure and
+	// clear it on success. sBndl is nil when semantic is disabled — the
+	// bundle setter is nil-safe.
+	health.RegisterTools(mcpServer, k, semanticStoreProbe{s: semanticStore, bundle: sBndl}, healthSemIndex, healthCfgGate, healthLookup, wsKeyFn)
 	help.RegisterTools(mcpServer, k)
 
 	// 11. Register skill-provided tools with MCP SDK.
 	for _, tp := range skill.ToolProviders() {
 		// Skip kernel skill adapters (already registered via RegisterTools above).
 		switch tp.Name() {
-		case "symbol-retrieval", "symbol-editing", "file-ops", "diagnostics":
+		case "symbol-retrieval", "symbol-editing", "file-ops", "diagnostics", "symbols":
 			continue
 		}
 		registerSkillTools(mcpServer, tp, logger)
@@ -539,6 +666,26 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		}
 	}
 
+	// 12e. Wire repomap skill SemanticLookup + ConfigGate (Phase 65 65-05,
+	// INTEG-01 / INTEG-02 / INTEG-05). When sBndl is non-nil (semantic
+	// enabled and the bundle constructed), pass the production
+	// integSemanticLookup adapter through the integLookupAccessor accessor
+	// declared in semantic_wiring.go. When sBndl is nil (semantic disabled),
+	// SetSemanticLookup is skipped — the skill's lookup() accessor normalizes
+	// nil to integ.NoopLookup{} so the priority-ladder gate at ChooseSource
+	// always sees a valid SemanticLookup.
+	//
+	// The ConfigGate is wired ALWAYS (even when sBndl is nil) so the v1.9
+	// steady-state path renders source="tree_sitter" instead of
+	// source="fallback" + reason="index_disabled" when the feature is off
+	// (D-04 / Pitfall §3).
+	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
+		rs.SetConfigGate(&daemonCfgGate{enabled: cfg.SemanticIndex.Enabled})
+		if sBndl != nil {
+			rs.SetSemanticLookup(sBndl.integLookupAccessor())
+		}
+	}
+
 	// 14. Install middleware: TelemetryMiddleware (METRIC-02, absorbs Phase 8
 	// logging) + ProfileFilterMiddleware (PRF-03). Ordering is independent
 	// because telemetry emits on tools/call and profile filter only touches
@@ -559,6 +706,48 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// errors are enriched before telemetry classifies the outcome.
 	suggestionSchemaMap := helixMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
 	helixMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
+
+	// 14b.5. Phase 66 (GUARD-01): install Guardrail middleware AFTER Suggestion
+	// and BEFORE LazyInit so LIFO execution = LazyInit → Guardrail → Suggestion
+	// → ProfileFilter → Telemetry → handler. LazyInit-last invariant preserved
+	// (see internal/mcp/lazy_init.go:106-112).
+	{
+		var guardrailMetricsSink guardrails.MetricsSink
+		if m := observability.Metrics(); m != nil {
+			guardrailMetricsSink = metricsReceiptSink{m: m}
+		}
+		guardrailStore := guardrails.NewStore(guardrails.StoreOptions{
+			Metrics: guardrailMetricsSink,
+			Now:     time.Now,
+		})
+		// Wire the issue sink so read-tool issuance (Plan 05) lights up at runtime.
+		guardrails.SetReceiptIssueSink(func(ctx context.Context, class guardrails.ReceiptClass, scope guardrails.ReceiptScope, tool string) (guardrails.ReceiptID, error) {
+			return guardrailStore.Issue(workspace.WorkspaceKey{}, class, scope, guardrails.IssueFields{IssuingTool: tool})
+		})
+		var semanticLookup integ.SemanticLookup = integ.NoopLookup{}
+		if sBndl != nil {
+			semanticLookup = sBndl.integLookupAccessor()
+		}
+		guardrailDeps := newGuardrailDeps(
+			semanticLookup,
+			newProfileStoreResolver(profileStore),
+			cfg.SemanticIndex.Guardrails,
+			guardrailStore,
+			rules.DefaultEvaluator{},
+			noopOutlineProvider{},
+			logger,
+			observability.Metrics(),
+		)
+		helixMCP.InstallGuardrailMiddleware(mcpServer.SDK(), guardrailDeps, getSessionFn, logger)
+		// Register store shutdown with the kernel-first shutdown ordering.
+		// guardrailStore.Close() is idempotent; safe to call multiple times.
+		defer guardrailStore.Close()
+		// TODO(phase-66.x): wire guardrailDeps.OnGraphVersionAdvance to the
+		// graph_version publish/subscribe seam from Phase 62. For v1.10 the
+		// receipt store relies on TTL-only expiry; graph_version invalidation
+		// is available via OnGraphVersionAdvance but not yet auto-triggered.
+		logger.Info("guardrail middleware installed (Phase 66 GUARD-01)")
+	}
 
 	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST
 	// so it runs FIRST in the LIFO middleware chain (before TelemetryMiddleware deadline).
@@ -582,6 +771,27 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 	isActiveFn := func() bool { return activeWSKey.RepoRoot != "" }
 	helixMCP.InstallLazyInitMiddleware(mcpServer.SDK(), lazyActivateFn, isActiveFn, "", logger)
+
+	// 14d. Phase 64 P64-08: wire the semantic skill's SessionAccessor with
+	// the SAME getSessionFn closure passed to InstallMiddleware (single
+	// source of truth — closes checker W2 at the production layer). Then
+	// register the four MCP tools (index/refresh/status/context) so they
+	// surface in tools/list and route to the skill's typed-args handlers.
+	if sBndl != nil {
+		sBndl.SetSessionFn(getSessionFn)
+		if sBndl.skill != nil {
+			tracer := observability.Tracer()
+			semanticpkg.RegisterAll(mcpServer, sBndl.skill, tracer)
+			logger.Info("semantic MCP tools registered",
+				"tools", []string{
+					"index_semantic_graph",
+					"refresh_semantic_graph",
+					"get_semantic_graph_status",
+					"get_semantic_context",
+				},
+			)
+		}
+	}
 
 	// 15. Update activate_project to also activate workspace in kernel. The
 	// callback also publishes the resolved primary language into the session
@@ -629,6 +839,19 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		if rank != nil {
 			rank.ensureScheduler(ctx, repoPath)
 		}
+		// Phase 63 P63-02: lazy-construct the per-workspace compactor
+		// alongside the rank scheduler. nil-safe: the helper short-
+		// circuits when compactBndl is nil (semantic disabled).
+		if compactBndl != nil {
+			compactBndl.ensureCompactor(ctx, repoPath, activeWSKey)
+		}
+		// Phase 64 P64-08: lazy-construct the per-workspace bleve
+		// retrieval engine + recovery probe. nil-safe: short-circuits
+		// when sBndl is nil (semantic disabled). The probe runs in its
+		// own goroutine inside ensureRetrieval — non-blocking.
+		if sBndl != nil {
+			sBndl.ensureRetrieval(ctx, activeWSKey)
+		}
 		logger.Info("kernel workspace activated",
 			"root", repoPath,
 			"languages", rt.Languages(),
@@ -654,6 +877,8 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		semanticScheduler:       semanticScheduler,
 		live:                    live,
 		rank:                    rank,
+		compact:                 compactBndl,
+		semantic:                sBndl,
 		typeResolver:            typeResolver,
 	}, nil
 }
@@ -667,7 +892,18 @@ func (d *Daemon) SemanticStore() *semanticstore.Store { return d.semanticStore }
 // internal/kernel/health.SemanticStoreProbe interface (SC-1). Defined
 // here — not in health/ — so the kernel package stays free of
 // internal/semantic imports.
-type semanticStoreProbe struct{ s *semanticstore.Store }
+//
+// Phase 65 65-11 Task 2 (WR-2 / IN-04): the probe holds an optional
+// bundle pointer so the Probe-time SELECT 1 failure path can stamp the
+// bundle's lastErrReason via SetLastErrorReason. The bundle pointer is
+// optional (nil-safe via the bundle's setter) — when semantic is
+// disabled (sBndl == nil), Probe() still returns the closed-enum
+// ErrUnsupported and kernel/health classifies it via the existing
+// classifySemanticProbeError code path.
+type semanticStoreProbe struct {
+	s      *semanticstore.Store
+	bundle *semanticBundle
+}
 
 // Available reports whether the underlying store is functional. Nil-safe.
 func (p semanticStoreProbe) Available() bool {
@@ -684,14 +920,68 @@ func (p semanticStoreProbe) Available() bool {
 // wrapped with serr.ErrUnsupported so callers (and the closed-enum
 // classifier in kernel/health) can distinguish a "feature disabled"
 // state from a transient DB failure.
+//
+// Phase 65 65-11 Task 2 (WR-2 / IN-04): on a SELECT 1 failure (the
+// "live store handle present but the underlying connection is sick"
+// path), the probe stamps the bundle's lastErrReason via
+// SetLastErrorReason(integ.FallbackReasonIndexError) so a subsequent
+// get_health.semantic_index.last_error reports the closed-enum reason.
+// On success, the stamp is cleared (setter accepts an empty reason).
 func (p semanticStoreProbe) Probe(ctx context.Context) error {
 	if p.s == nil {
+		// WR-2: pre-store-construction path; the bundle does not exist
+		// here either (sBndl is nil when semantic is disabled), so we
+		// can't stamp. Operator-visible via the existing log line.
 		return fmt.Errorf("semantic store unavailable: %w", serr.ErrUnsupported)
 	}
 	db := p.s.DB()
 	var one int
-	return db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+	if err := db.QueryRowContext(ctx, "SELECT 1").Scan(&one); err != nil {
+		// WR-2 / IN-04: stamp FallbackReasonIndexError on Probe-time
+		// SQL failure so get_health.semantic_index.last_error surfaces
+		// the closed-enum reason (NOT the raw SQL error text — that
+		// would leak DB internals through WR-NEW-01's envelope shield).
+		p.bundle.SetLastErrorReason(integ.FallbackReasonIndexError)
+		return err
+	}
+	// WR-2: clear the stamp on probe success so a previously-stamped
+	// transient error stops surfacing once the store recovers.
+	p.bundle.SetLastErrorReason("")
+	return nil
 }
+
+// daemonSemIndexAccessor adapts an integ.SemanticLookup to the
+// internal/kernel/health.SemanticIndexAccessor interface (Phase 65 65-07
+// INTEG-04). Defined here — not in health/ — so the kernel package stays
+// free of internal/semantic concretions; the kernel only sees the integ
+// value-types boundary.
+//
+// The lookup field is normalized to integ.NoopLookup{} at construction in
+// daemon.go (step 10 / health.RegisterTools wiring) so Status always has
+// a non-nil delegate. NoopLookup.Status returns
+// (SemanticStatus{}, integ.ErrIndexErrored), which kernel/health's
+// ComputeSemanticIndexBlock surfaces as a closed-enum
+// LastError="index_error" (WR-NEW-01).
+//
+// M-readtier: the underlying integSemanticLookup.Status method body is
+// guarded by the grep canary at internal/daemon/integ_lookup_test.go;
+// this adapter delegates without adding any write-method tokens.
+type daemonSemIndexAccessor struct {
+	lookup integ.SemanticLookup
+}
+
+// Status delegates to the underlying SemanticLookup. Read-only by
+// contract (M-readtier).
+func (a *daemonSemIndexAccessor) Status(ctx context.Context, ws workspace.WorkspaceKey) (integ.SemanticStatus, error) {
+	if a == nil || a.lookup == nil {
+		return integ.SemanticStatus{}, integ.ErrIndexErrored
+	}
+	return a.lookup.Status(ctx, ws)
+}
+
+// Compile-time guard: daemonSemIndexAccessor must satisfy
+// health.SemanticIndexAccessor.
+var _ health.SemanticIndexAccessor = (*daemonSemIndexAccessor)(nil)
 
 // MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
 func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }
@@ -773,6 +1063,25 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if d.rank != nil {
 		g.Go(func() error {
 			return d.rank.Run(gctx)
+		})
+	}
+
+	// Phase 63 P63-02: compaction-bundle Run blocks on ctx.Done(); the
+	// per-workspace compactor goroutines spun up by ensureCompactor
+	// share the same gctx via the bundle's runCtx field.
+	if d.compact != nil {
+		g.Go(func() error {
+			return d.compact.Run(gctx)
+		})
+	}
+
+	// Phase 64 P64-08: semantic-bundle Run blocks on ctx.Done() and
+	// closes every bleve handle + the IndexRunner on shutdown. Per-
+	// workspace bleve engines are constructed lazily by ensureRetrieval
+	// inside the SetActivateCallback closure.
+	if d.semantic != nil {
+		g.Go(func() error {
+			return d.semantic.Run(gctx)
 		})
 	}
 

@@ -1,5 +1,7 @@
 package semantic
 
+import "time"
+
 // Config is the typed mirror of the koanf `semantic_index.*` block declared
 // in SPEC-DRAFT.md §25. Phase 57 plan P02 lands this typed shape with zero
 // values; plan P03 wires the koanf binding (`koanf:"semantic_index"`) onto
@@ -75,6 +77,22 @@ type Config struct {
 
 	// PhaseGraph configures the bootstrap phase-graph runner (v1.11+).
 	PhaseGraph PhaseGraphConfig `koanf:"phase_graph"`
+
+	// Maintenance configures the Phase 63 P63-02 compaction-side
+	// VACUUM cadence (D-05). Currently a no-op-by-DuckDB; default off.
+	Maintenance MaintenanceConfig `koanf:"maintenance"`
+}
+
+// MaintenanceConfig holds the Phase 63 maintenance settings.
+// Field set mirrors SPEC §25.maintenance.* (Phase 63 extension).
+type MaintenanceConfig struct {
+	// VacuumEnabled gates the compactor's VACUUM piggyback. Default
+	// false (CONTEXT.md D-05 + planner decision).
+	VacuumEnabled bool `koanf:"vacuum_enabled"`
+	// VacuumInterval is the human-readable duration between successful
+	// VACUUM runs (e.g., "168h"). Parsed via time.ParseDuration in the
+	// daemon wiring; values <= 0 fall back to a 168h default.
+	VacuumInterval string `koanf:"vacuum_interval"`
 }
 
 // StoreConfig holds the DuckDB embedded fact-store settings. SPEC-DRAFT.md
@@ -252,6 +270,13 @@ type RetrievalConfig struct {
 
 // GuardrailsConfig holds GuardrailMiddleware settings (P66).
 // Field set mirrors SPEC §25.guardrails.* verbatim.
+//
+// D-22 extension (Phase 66 Plan 02): per-rule and per-tool enforcement maps
+// (Rules/Tools) plus G004Config and G005Config substructs are additive to the
+// existing flat booleans. The flat booleans are retained for backward
+// compatibility and will be subsumed (not removed) in a post-Wave-3 cleanup.
+// Wave-2 rule predicates read from Rules/Tools maps; the flat booleans are
+// ignored by the new engine.
 type GuardrailsConfig struct {
 	Enabled                       bool   `koanf:"enabled"`                            // default true
 	Enforcement                   string `koanf:"enforcement"`                        // "warn" | "block"
@@ -260,6 +285,77 @@ type GuardrailsConfig struct {
 	RequireReferencesBeforeDelete bool   `koanf:"require_references_before_delete"`   // default true
 	RequireVerifyAfterEdit        bool   `koanf:"require_verify_after_edit"`          // default true
 	StaleGraphPolicy              string `koanf:"stale_graph_policy"`                 // "warn" | "block"
+
+	// D-22 additions (Phase 66 Plan 02):
+
+	// ReceiptTTL is the lifetime of an issued receipt. Default 5m (D-04).
+	ReceiptTTL time.Duration `koanf:"receipt_ttl"`
+
+	// Rules maps rule IDs ("G-001".."G-005") to per-rule enforcement overrides.
+	// Absent keys inherit the global Enforcement value.
+	Rules map[string]RuleConfig `koanf:"rules"`
+
+	// Tools maps tool names to per-tool enforcement overrides.
+	// Keys: rename_symbol, safe_delete_symbol, replace_symbol_body, fuzzy_edit, replace_in_file.
+	// Absent keys inherit the per-rule enforcement (D-20 precedence).
+	Tools map[string]ToolConfig `koanf:"tools"`
+
+	// G004 holds thresholds for the G-004 large-fuzzy-edit rule (D-16).
+	G004 G004Config `koanf:"G-004"`
+
+	// G005 holds security-sensitive path/symbol/import patterns for G-005 (D-17).
+	G005 G005Config `koanf:"G-005"`
+}
+
+// RuleConfig holds per-rule enforcement configuration.
+type RuleConfig struct {
+	// Enforcement is the rule-level override ("off" | "warn" | "enforce" | "require_force").
+	// When empty, the parent GuardrailsConfig.Enforcement is used (D-20).
+	Enforcement string `koanf:"enforcement"`
+}
+
+// ToolConfig holds per-tool enforcement configuration.
+type ToolConfig struct {
+	// Enforcement is the tool-level override ("off" | "warn" | "enforce" | "require_force").
+	// Highest-precedence set-wins per D-20 (tool > rule > profile > global).
+	Enforcement string `koanf:"enforcement"`
+}
+
+// G004Config holds thresholds for the G-004 large-fuzzy-edit rule (D-16).
+type G004Config struct {
+	// MaxChangedLines is the maximum number of inserted+deleted lines before
+	// G-004 triggers. Default 50 (D-16).
+	MaxChangedLines int `koanf:"max_changed_lines"`
+
+	// MaxFiles is the maximum number of touched files before G-004 triggers.
+	// Default 1 (D-16).
+	MaxFiles int `koanf:"max_files"`
+
+	// MaxFileChangeRatio is the maximum ratio of changed_lines/file_line_count
+	// before the ratio trigger fires. Default 0.30 (D-16).
+	MaxFileChangeRatio float64 `koanf:"max_file_change_ratio"`
+
+	// EnableRatioTrigger enables the file-change-ratio secondary trigger.
+	// Default true (D-16).
+	EnableRatioTrigger bool `koanf:"enable_ratio_trigger"`
+}
+
+// G005Config holds security-sensitive detection patterns for G-005 (D-17).
+type G005Config struct {
+	// PathGlobs are glob patterns matching security-sensitive file paths.
+	// Example: ["**/auth/*.go", "**/crypto/*.go", "**/middleware/auth.go"]
+	PathGlobs []string `koanf:"path_globs"`
+
+	// IdentifierPatterns are regex patterns matching security-sensitive symbol
+	// names or identifiers. Example: ["^(?i)(password|secret|token|api_?key)"]
+	IdentifierPatterns []string `koanf:"identifier_patterns"`
+
+	// ImportPatterns maps language names to lists of import patterns that
+	// indicate security-sensitive code. Patterns support exact match, wildcard
+	// suffix (e.g., "crypto/*"), package prefix (e.g., "passport-*"), scoped
+	// wildcard (e.g., "@auth/*"), and Python/Go module prefix.
+	// Keys match internal/langregistry language names (e.g., "go", "typescript").
+	ImportPatterns map[string][]string `koanf:"import_patterns"`
 }
 
 // EvalConfig holds eval-harness settings (P67).
@@ -276,12 +372,12 @@ type EvalConfig struct {
 // TypeResolutionConfig holds type-resolution pipeline parameters (P62).
 // Field set mirrors SPEC §25.type_resolution.* verbatim.
 type TypeResolutionConfig struct {
-	Enabled               bool    `koanf:"enabled"`                  // default true
-	MaxChainDepth         int     `koanf:"max_chain_depth"`          // default 8
-	MaxFixpointIterations int     `koanf:"max_fixpoint_iterations"`  // default 8
-	MinConfidenceForEdge  float64 `koanf:"min_confidence_for_edge"`  // default 0.45
-	CommentFallbacks      bool    `koanf:"comment_fallbacks"`        // default true
-	EmitUnresolvedEdges   bool    `koanf:"emit_unresolved_edges"`    // default true
+	Enabled               bool    `koanf:"enabled"`                 // default true
+	MaxChainDepth         int     `koanf:"max_chain_depth"`         // default 8
+	MaxFixpointIterations int     `koanf:"max_fixpoint_iterations"` // default 8
+	MinConfidenceForEdge  float64 `koanf:"min_confidence_for_edge"` // default 0.45
+	CommentFallbacks      bool    `koanf:"comment_fallbacks"`       // default true
+	EmitUnresolvedEdges   bool    `koanf:"emit_unresolved_edges"`   // default true
 }
 
 // PhaseGraphConfig holds bootstrap phase-graph-runner settings (v1.11+).

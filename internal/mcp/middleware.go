@@ -164,9 +164,15 @@ const (
 	outcomeLSCrash     = "ls_crash" // TODO v1.3: wire from lspool crash signals
 	outcomeTimeout     = "timeout"
 	outcomeInternal    = "internal"
+	// Phase 66 (GUARD-01/GUARD-04): two new outcome values for the guardrail path.
+	// outcomeGuardrailWarned: tool call proceeded but a Warn decision attached a warning block.
+	// outcomeGuardrailBlocked: GuardrailMiddleware blocked the tool call via GuardrailViolation.
+	outcomeGuardrailWarned  = "guardrail_warned"  // NEW Phase 66
+	outcomeGuardrailBlocked = "guardrail_blocked" // NEW Phase 66
 )
 
 // outcomeEnum is the authoritative closed-enum list for CI assertions and tests.
+// Phase 66 adds outcomeGuardrailWarned and outcomeGuardrailBlocked (GUARD-04/05).
 var outcomeEnum = []string{
 	outcomeSuccess,
 	outcomeInvalidArgs,
@@ -175,6 +181,8 @@ var outcomeEnum = []string{
 	outcomeLSCrash,
 	outcomeTimeout,
 	outcomeInternal,
+	outcomeGuardrailWarned,  // Phase 66
+	outcomeGuardrailBlocked, // Phase 66
 }
 
 // editOutcomeEnum is the closed-enum vocabulary for the helix_edit_outcome_total
@@ -246,15 +254,45 @@ func classifyOutcome(result mcpsdk.Result, err error) string {
 		if errors.Is(err, serr.ErrCircuitOpen) {
 			return outcomeCircuitOpen
 		}
+		// Phase 66 (GUARD-04): GuardrailViolation classified BEFORE the generic
+		// outcomeInternal fallback so blocked calls are visible in dashboards.
+		if errors.Is(err, serr.ErrGuardrailViolation) {
+			return outcomeGuardrailBlocked
+		}
 		return outcomeInternal
 	}
-	if ctr, ok := result.(*mcpsdk.CallToolResult); ok && ctr != nil && ctr.IsError {
-		// v1.2: without typed errors from tool handlers we cannot distinguish
-		// invalid_args / not_found / ls_crash here. Bucket as "internal" and
-		// refine in v1.3.
-		return outcomeInternal
+	if ctr, ok := result.(*mcpsdk.CallToolResult); ok && ctr != nil {
+		if ctr.IsError {
+			// v1.2: without typed errors from tool handlers we cannot distinguish
+			// invalid_args / not_found / ls_crash here. Bucket as "internal" and
+			// refine in v1.3.
+			return outcomeInternal
+		}
+		// Phase 66 (GUARD-05): warn-mode results carry a guardrailWarningSentinel
+		// prefix on a TextContent block appended by GuardrailMiddleware. Detect it
+		// here so dashboards can track warns separately from plain successes.
+		// Channel documented at guardrail_middleware.go guardrailWarningSentinel.
+		if hasGuardrailWarning(ctr) {
+			return outcomeGuardrailWarned
+		}
 	}
 	return outcomeSuccess
+}
+
+// hasGuardrailWarning returns true if the CallToolResult contains a content block
+// appended by GuardrailMiddleware in warn mode. The sentinel prefix is defined in
+// guardrail_middleware.go as guardrailWarningSentinel = "__guardrail_warning__:".
+// Scans Content in O(n); in practice n ≤ 2 (one tool result + one warning).
+func hasGuardrailWarning(ctr *mcpsdk.CallToolResult) bool {
+	for _, c := range ctr.Content {
+		if tc, ok := c.(*mcpsdk.TextContent); ok {
+			if len(tc.Text) > len(guardrailWarningSentinel) &&
+				tc.Text[:len(guardrailWarningSentinel)] == guardrailWarningSentinel {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // extractToolName pulls the tool name out of a tools/call request. Falls back

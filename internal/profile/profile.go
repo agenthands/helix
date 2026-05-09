@@ -11,6 +11,19 @@ import (
 	"github.com/agenthands/helix/internal/skill"
 )
 
+// ProfileGuardrailsConfig carries the guardrails block decoded from a
+// profile YAML file. Phase 66 Plan 02 — D-11 profile-level enforcement defaults.
+//
+// The Enforcement field is the only profile-level guardrail override this phase.
+// The full D-20 precedence resolver (ResolveGuardrailEnforcement) consults this
+// value at the profile layer (CLI > per-tool > per-rule > profile > global).
+type ProfileGuardrailsConfig struct {
+	// Enforcement is the profile-level default enforcement level.
+	// Accepted values: "off" | "warn" | "enforce" | "require_force".
+	// D-11 defaults: ci-bot → "enforce"; all other profiles → "warn".
+	Enforcement string `yaml:"enforcement"`
+}
+
 // Profile extends ContextSpec with agent-specific fields.
 // Each profile targets a specific agent environment and controls which tools
 // are exposed, how they are described, and what prompt guidance is provided.
@@ -33,6 +46,10 @@ type Profile struct {
 	// AllowedModeTransitions defines the state machine for mode switching.
 	// Key is the source mode, value is the list of allowed target modes.
 	AllowedModeTransitions map[string][]string `yaml:"allowed_mode_transitions"`
+
+	// Guardrails carries the per-profile guardrail enforcement default.
+	// Phase 66 Plan 02 — D-11 / D-22 LOCKED per-profile defaults.
+	Guardrails ProfileGuardrailsConfig `yaml:"guardrails"`
 }
 
 // Mode extends ModeSpec with behavioral policies.

@@ -20,16 +20,22 @@ test: vet
 VETTOOL=$(shell go env GOPATH)/bin/vet-noduckdb
 VETTOOL_NOKERNEL2SEMANTIC=$(shell go env GOPATH)/bin/vet-nokernel2semantic
 VETTOOL_NOSEMANTIC2KERNEL=$(shell go env GOPATH)/bin/vet-nosemantic2kernel
+VETTOOL_COMPACT_USES_STORE=$(shell go env GOPATH)/bin/vet-compact-uses-store
 
 # Phase 61 ENRICH-01: enforce semantic does not import kernel (carve-out:
 # internal/kernel/lspool). The vet-nosemantic2kernel singlechecker is the
 # symmetric sibling of vet-nokernel2semantic; together the pair pin the
 # kernel↔semantic boundary in BOTH directions on every `make vet` run.
-vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL)
+#
+# Phase 63 P63-02 Task 3: vet-compact-uses-store enforces the
+# compact→store boundary — internal/semantic/compact MUST NOT import
+# duckdb-go directly. Belt-and-braces over vet-noduckdb.
+vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOSEMANTIC2KERNEL) ./...
+	$(GO) vet -vettool=$(VETTOOL_COMPACT_USES_STORE) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
@@ -39,6 +45,9 @@ $(VETTOOL_NOKERNEL2SEMANTIC): cmd/vet-nokernel2semantic/main.go internal/lint/no
 
 $(VETTOOL_NOSEMANTIC2KERNEL): cmd/vet-nosemantic2kernel/main.go internal/lint/nosemantic2kernel/*.go
 	$(GO) install ./cmd/vet-nosemantic2kernel
+
+$(VETTOOL_COMPACT_USES_STORE): cmd/vet-compact-uses-store/main.go internal/lint/compactusesstore/*.go
+	$(GO) install ./cmd/vet-compact-uses-store
 
 fmt:
 	gofmt -w .

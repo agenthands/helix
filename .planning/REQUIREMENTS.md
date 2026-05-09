@@ -29,11 +29,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### EXTRACT — Tree-sitter Extraction & Stable Symbol Identity
 
-- [ ] **EXTRACT-01**: Tree-sitter extraction produces typed symbols, references, imports, and syntax edges for **Go**, **TypeScript / JavaScript**, and **Python** files inside the workspace; non-supported languages emit a `partial:true` extraction marker.
-- [ ] **EXTRACT-02**: Stable symbol IDs use the contract from SPEC §11.1 (LSP identity → package/module path + owner path + qualified name + kind + signature hash → file path fallback). Identity must survive whitespace-only changes, file-path renames where content hash is unchanged, and exported-symbol moves where qualified name is unchanged.
-- [ ] **EXTRACT-03**: A 30+ before/after test matrix per first-class language exercises stable-key behavior across overload signatures, generics, anonymous closures, decorators (Python), and method-on-receiver renames; identity transitions are explicit.
-- [ ] **EXTRACT-04**: Tree-sitter and LSP facts merge per SPEC §11.2 with the documented confidence ladder (1.00 LSP-confirmed, 0.95 merged, 0.80 ts+local, 0.70 ts-only, 0.45 heuristic).
-- [ ] **EXTRACT-05**: Extraction reuses the single canonical `GrammarRegistry` injected from daemon bootstrap (no duplicate registries, BUG-04 invariant preserved).
+- [x] **EXTRACT-01**: Tree-sitter extraction produces typed symbols, references, imports, and syntax edges for **Go**, **TypeScript / JavaScript**, and **Python** files inside the workspace; non-supported languages emit a `partial:true` extraction marker.
+- [x] **EXTRACT-02**: Stable symbol IDs use the contract from SPEC §11.1 (LSP identity → package/module path + owner path + qualified name + kind + signature hash → file path fallback). Identity must survive whitespace-only changes, file-path renames where content hash is unchanged, and exported-symbol moves where qualified name is unchanged.
+- [x] **EXTRACT-03**: A 30+ before/after test matrix per first-class language exercises stable-key behavior across overload signatures, generics, anonymous closures, decorators (Python), and method-on-receiver renames; identity transitions are explicit.
+- [x] **EXTRACT-04**: Tree-sitter and LSP facts merge per SPEC §11.2 with the documented confidence ladder (1.00 LSP-confirmed, 0.95 merged, 0.80 ts+local, 0.70 ts-only, 0.45 heuristic).
+- [x] **EXTRACT-05**: Extraction reuses the single canonical `GrammarRegistry` injected from daemon bootstrap (no duplicate registries, BUG-04 invariant preserved).
 
 ### LIVE — Live Update Pipeline
 
@@ -64,11 +64,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### TOOLS — New MCP Tools (P0 set: 4 of 10)
 
-- [ ] **TOOL-01**: `index_semantic_graph` MCP tool (mode `review+` / `admin`) builds or refreshes a committed snapshot; supports `auto`, `full`, `incremental`, `refresh` modes; returns snapshot id, graph version, files indexed/reused, partial state, freshness, duration.
-- [ ] **TOOL-02**: `refresh_semantic_graph` MCP tool (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters; returns graph version, files updated, deltas, pending LSP, freshness.
+- [x] **TOOL-01**: `index_semantic_graph` MCP tool (mode `review+` / `admin`) builds or refreshes a committed snapshot; supports `auto`, `full`, `incremental`, `refresh` modes; returns snapshot id, graph version, files indexed/reused, partial state, freshness, duration.
+- [x] **TOOL-02**: `refresh_semantic_graph` MCP tool (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters; returns graph version, files updated, deltas, pending LSP, freshness.
 - [ ] **TOOL-03**: `get_semantic_graph_status` MCP tool (mode `read+`) returns the SPEC §23.3 status object: latest snapshot id, graph version, overlay state, pending LSP count, freshness, per-projection score status, cluster status, last-live-update latency.
-- [ ] **TOOL-04**: `get_semantic_context` MCP tool (mode `read+`) returns ranked, evidence-backed context for a task/symbol/file selection under a token budget; response always includes `freshness_mode`, `graph_version`, `overlay_active`, `freshness`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
-- [ ] **TOOL-05**: All four tools respect profile/mode gating per SPEC §30.2; `tools/list` filters them out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
+- [x] **TOOL-04**: `get_semantic_context` MCP tool (mode `read+`) returns ranked, evidence-backed context for a task/symbol/file selection under a token budget; response always includes `freshness_mode`, `graph_version`, `overlay_active`, `freshness`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
+- [x] **TOOL-05**: All four tools respect profile/mode gating per SPEC §30.2; `tools/list` filters them out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
 
 > Deferred to v1.10.x: `explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`. Multi-projection PageRank also deferred.
 
@@ -187,11 +187,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | REL-04 | Phase 58 | Pending |
 | REL-05 | Phase 58 | Pending |
 | REL-06 | Phase 58 | Pending |
-| EXTRACT-01 | Phase 59 | Pending |
-| EXTRACT-02 | Phase 59 | Pending |
-| EXTRACT-03 | Phase 59 | Pending |
-| EXTRACT-04 | Phase 59 | Pending |
-| EXTRACT-05 | Phase 59 | Pending |
+| EXTRACT-01 | Phase 59 | Complete |
+| EXTRACT-02 | Phase 59 | Complete |
+| EXTRACT-03 | Phase 59 | Complete |
+| EXTRACT-04 | Phase 59 | Complete |
+| EXTRACT-05 | Phase 59 | Complete |
 | LIVE-01 | Phase 60 | Complete |
 | LIVE-02 | Phase 60 | Complete |
 | LIVE-03 | Phase 60 | Complete |
@@ -219,11 +219,11 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | COMPACT-03 | Phase 63 | Pending |
 | COMPACT-04 | Phase 63 | Pending |
 | COMPACT-05 | Phase 63 | Pending |
-| TOOL-01 | Phase 64 | Pending |
-| TOOL-02 | Phase 64 | Pending |
-| TOOL-03 | Phase 64 | Pending |
-| TOOL-04 | Phase 64 | Pending |
-| TOOL-05 | Phase 64 | Pending |
+| TOOL-01 | Phase 64 | Complete |
+| TOOL-02 | Phase 64 | Complete |
+| TOOL-03 | Phase 64 | In Progress (P64-02 store foundation landed; tool wrapper in P64-06) |
+| TOOL-04 | Phase 64 | In Progress (P64-02 store foundation landed; tool wrapper in P64-07) |
+| TOOL-05 | Phase 64 | Complete |
 | INTEG-01 | Phase 65 | Pending |
 | INTEG-02 | Phase 65 | Pending |
 | INTEG-03 | Phase 65 | Pending |

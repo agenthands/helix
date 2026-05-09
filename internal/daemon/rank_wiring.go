@@ -269,18 +269,12 @@ func (st *stubObserveState) emit(repoID, method string) {
 }
 
 // rankStoreAdapter wraps *semanticstore.Store with the graph.SchedulerStore
-// surface. Methods that have direct DuckDB-side counterparts forward
-// straight; methods that require new query logic are best-effort no-op
-// stubs Phase 64 will fill (CountStaleScoreRows, MarkAllScoreRowsStale,
-// QueryEffectiveAdjacency, QueryEffectiveGraph). The stubs return nil
-// errors so the scheduler keeps running; the rank surface stays empty
-// until those are wired, but the Phase 62 P03 lifecycle / single-bump /
-// per-workspace-isolation invariants ALL hold.
-//
-// stubObserve is the Phase 62-08 observability harness: each stubbed
-// read method emits SemanticGraphRepairInc("stub_no_data") on every
-// call and a once-gated WARN log per (repoID, method) so operators see
-// the deferred dependency instead of clean "applied" success counts.
+// surface. Phase 64 P64-08 collapsed the four read-method stubs to delegate
+// directly to *Store now that 64-02 shipped real implementations. The
+// stubObserve harness is retained because the public *rankStoreAdapter
+// shape still surfaces it through the constructor, and future once-WARN
+// signals (e.g., empty pre-data results in a deployment that was expected
+// to have data) can re-arm it without touching the constructor surface.
 type rankStoreAdapter struct {
 	store       *semanticstore.Store
 	stubObserve *stubObserveState
@@ -319,41 +313,52 @@ func (a *rankStoreAdapter) CurrentGraphVersion(ctx context.Context, repoID strin
 	return a.store.CurrentGraphVersion(ctx, repoID)
 }
 
-// TODO(phase-64): The four read methods below are stubs. The real
-// implementations land in Phase 64 alongside the MCP tool surface; see
-// 62-VERIFICATION.md gap truth #21 (WR-05) and 62-08-PLAN.md observability
-// bridge that surfaces the gap via SemanticGraphRepairInc("stub_no_data")
-// + a once-WARN log per (workspace, method). Until Phase 64 wires real
-// queries, the scheduler runs against an empty effective-graph and writes
-// empty score generations; operators should monitor
-// helix_semantic_graph_repair_total{outcome="stub_no_data"} as the canary
-// signal that distinguishes "no data yet" from clean "applied" repair.
-func (a *rankStoreAdapter) QueryEffectiveGraph(_ context.Context, repoID, _ string) ([]graphpkg.NodeID, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
-	// Phase 64 follow-up: typed query reads through internal/semantic/store/effective.go.
-	a.stubObserve.emit(repoID, "QueryEffectiveGraph")
-	return nil, map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, nil
+// Phase 64 P64-08 stub-collapse: the four methods below now delegate
+// verbatim to *Store. Phase 64-02 shipped QueryEffectiveAdjacency /
+// CountStaleScoreRows / MarkAllScoreRowsStale on *Store; the previous
+// stub-no-data observability harness is no longer fired on these paths.
+//
+// QueryEffectiveGraph is derived from QueryEffectiveAdjacency: the
+// scheduler's effective-graph contract is "(nodes, outgoing-adjacency)";
+// nodes are the union of source nodes from the outgoing adjacency map,
+// which is the natural projection. The stubObserve harness is retained on
+// the IngestNode-from-adjacency path because no committed snapshot still
+// produces empty results (a clean pre-data state, not a stub gap).
+func (a *rankStoreAdapter) QueryEffectiveGraph(ctx context.Context, repoID, projection string) ([]graphpkg.NodeID, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
+	out, _, err := a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
+	if err != nil {
+		return nil, nil, err
+	}
+	if out == nil {
+		out = map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}
+	}
+	// Nodes set: union of source nodes (the keys of the outgoing
+	// adjacency map are the canonical "knew about this node" set; nodes
+	// with only inbound edges still appear as targets in some src entry).
+	seen := make(map[graphpkg.NodeID]struct{}, len(out))
+	for src, dsts := range out {
+		seen[src] = struct{}{}
+		for dst := range dsts {
+			seen[dst] = struct{}{}
+		}
+	}
+	nodes := make([]graphpkg.NodeID, 0, len(seen))
+	for n := range seen {
+		nodes = append(nodes, n)
+	}
+	return nodes, out, nil
 }
 
-func (a *rankStoreAdapter) QueryEffectiveAdjacency(_ context.Context, repoID, _ string) (map[graphpkg.NodeID]map[graphpkg.NodeID]float64, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
-	// Phase 64 follow-up: the adjacency query is the inverse of the
-	// effective-graph view. Returning empty maps here keeps the scheduler
-	// alive — its incremental path will compute an empty frontier and
-	// short-circuit cleanly.
-	a.stubObserve.emit(repoID, "QueryEffectiveAdjacency")
-	return map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, map[graphpkg.NodeID]map[graphpkg.NodeID]float64{}, nil
+func (a *rankStoreAdapter) QueryEffectiveAdjacency(ctx context.Context, repoID, projection string) (map[graphpkg.NodeID]map[graphpkg.NodeID]float64, map[graphpkg.NodeID]map[graphpkg.NodeID]float64, error) {
+	return a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
 }
 
-func (a *rankStoreAdapter) CountStaleScoreRows(_ context.Context, repoID, _ string) (int, int, error) {
-	// Phase 64 follow-up: SELECT COUNT(*) FROM semantic_graph_scores WHERE
-	// repo_id=? AND score_name=? AND status='stale' / total counterpart.
-	a.stubObserve.emit(repoID, "CountStaleScoreRows")
-	return 0, 0, nil
+func (a *rankStoreAdapter) CountStaleScoreRows(ctx context.Context, repoID, projection string) (int, int, error) {
+	return a.store.CountStaleScoreRows(ctx, repoID, projection)
 }
 
-func (a *rankStoreAdapter) MarkAllScoreRowsStale(_ context.Context, repoID, _ string) error {
-	// Phase 64 follow-up: bulk UPDATE on semantic_graph_scores.
-	a.stubObserve.emit(repoID, "MarkAllScoreRowsStale")
-	return nil
+func (a *rankStoreAdapter) MarkAllScoreRowsStale(ctx context.Context, repoID, projection string) error {
+	return a.store.MarkAllScoreRowsStale(ctx, repoID, projection)
 }
 
 // rankRepairTxAdapter wraps *semanticstore.OverlayTx with the
@@ -418,9 +423,9 @@ func (a *rankRepairTxAdapter) Rollback() error { return a.tx.Rollback() }
 // SchedulerStore extension lands without an adapter update the build
 // fails here, not at first runtime call.
 var (
-	_ graphpkg.RepairTx        = (*rankRepairTxAdapter)(nil)
-	_ graphpkg.SchedulerStore  = (*rankStoreAdapter)(nil)
-	_ graphpkg.RepairStore     = repairStoreShim{}
+	_ graphpkg.RepairTx       = (*rankRepairTxAdapter)(nil)
+	_ graphpkg.SchedulerStore = (*rankStoreAdapter)(nil)
+	_ graphpkg.RepairStore    = repairStoreShim{}
 )
 
 // _ keeps unused fmt import out of the build; remove once any error

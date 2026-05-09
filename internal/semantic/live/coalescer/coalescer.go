@@ -86,10 +86,51 @@ type Coalescer struct {
 	in          chan live.SourceChangeEvent
 	drops       atomic.Uint64
 
+	// Phase 63 P63-02 Task 1: timestamp of the most recent flush START so
+	// the compaction gate can answer "has the coalescer been quiet for long
+	// enough?" without I/O. Stamped in nanos via atomic.Int64; LastFlushAt()
+	// returns time.Time{} when no flush has happened yet (zero-value).
+	lastFlushNanos atomic.Int64
+
+	// Phase 63 P63-02 Task 1: optional post-flush hook fired AFTER each
+	// flush completes (whether it dispatched events or short-circuited the
+	// empty case is irrelevant — the hook signals "the coalescer just
+	// finished a flush attempt"). Daemon wires this to compactBundle's
+	// OnCoalescerFlush; nil when unwired.
+	onFlushMu sync.Mutex
+	onFlush   func()
+
 	mu       sync.Mutex
 	pending  map[string]live.SourceChangeEvent
 	timer    *time.Timer
 	maxTimer *time.Timer
+}
+
+// LastFlushAt returns the wall-clock time of the most recent flush start.
+// Returns time.Time{} (zero value) when no flush has happened yet. O(1)
+// atomic read; CONTEXT.md D-04 hard invariant: NO I/O. Consumed by the
+// compaction gate as its idle-window proxy.
+func (c *Coalescer) LastFlushAt() time.Time {
+	if c == nil {
+		return time.Time{}
+	}
+	n := c.lastFlushNanos.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n)
+}
+
+// SetOnFlush registers a function fired after every flush completes. Nil
+// is allowed (clears the hook). Daemon wiring uses this to call
+// compactBundle.OnCoalescerFlush so the compaction timer can reset.
+func (c *Coalescer) SetOnFlush(fn func()) {
+	if c == nil {
+		return
+	}
+	c.onFlushMu.Lock()
+	c.onFlush = fn
+	c.onFlushMu.Unlock()
 }
 
 // New constructs a Coalescer for ws.  Caller MUST call Run in a separate
@@ -207,8 +248,19 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 		c.mu.Lock()
 		if len(c.pending) == 0 {
 			c.mu.Unlock()
+			// Phase 63 P63-02 Task 1: still stamp + invoke the post-flush
+			// hook on the empty-flush short-circuit. This keeps the gate's
+			// idle clock advancing on every fire (otherwise a continuous
+			// stream of events that all merge-out via the SPEC §16.2
+			// rules would leave LastFlushAt frozen at zero forever).
+			c.lastFlushNanos.Store(time.Now().UnixNano())
+			c.fireOnFlush()
 			return
 		}
+		// Stamp the flush-start timestamp BEFORE releasing c.mu so the
+		// gate's "idle since last flush" clock advances atomically with
+		// the pending-set drain.
+		c.lastFlushNanos.Store(time.Now().UnixNano())
 		snapshot := make([]live.SourceChangeEvent, 0, len(c.pending))
 		for _, v := range c.pending {
 			snapshot = append(snapshot, v)
@@ -224,6 +276,7 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 		// D-04 / 60-04 acceptance #8: empty merged set MUST NOT call
 		// Dispatch (no overlay_epoch advance for no-op flushes).
 		if len(merged) == 0 {
+			c.fireOnFlush()
 			return
 		}
 		for _, ev := range merged {
@@ -236,6 +289,19 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 				c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "applied")
 			}
 		}
+		c.fireOnFlush()
+	}
+}
+
+// fireOnFlush invokes the post-flush hook if one is registered. Failures
+// in the hook are caller responsibility (the hook is a fire-and-forget
+// signal — no return value, no error propagation back to the coalescer).
+func (c *Coalescer) fireOnFlush() {
+	c.onFlushMu.Lock()
+	fn := c.onFlush
+	c.onFlushMu.Unlock()
+	if fn != nil {
+		fn()
 	}
 }
 

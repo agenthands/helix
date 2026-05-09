@@ -215,14 +215,14 @@
   - [x] 65-10-PLAN.md — Wave 5 (TDD, gap closure) integSemanticLookup.RankFiles + RankFromSeeds real implementations + *Store.QueryRankedFiles + *Store.QuerySymbolPath + WR-04/WR-06/WR-07 fixes (INTEG-01/02)
   - [x] 65-11-PLAN.md — Wave 6 (TDD, gap closure) integSemanticLookup.SymbolID + ExpandFrom real implementations + *Store.QuerySymbolByLocation/QueryNodeIDByStableKey/QueryStableKeyByNodeID + WR-01/IN-04/WR-05/WR-03 fixes (INTEG-03)
   - [x] 65-12-PLAN.md — Wave 7 (TDD, gap closure) kernel-side LSP probe via lspProbeFn + integ.SemanticLookup.LocateSymbol + BL-1 confidence-ladder kernel-side test (consumes 65-09 BL-A harness) + production-adapter SourceSemantic + BlastRadiusConfidence E2E green + WR-02 go/parser canary (INTEG-03/05)
-- [ ] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/6 plans)
+- [x] Phase 66: Agent Guardrails (G-001..G-005, warn-default) (0/6 plans) (completed 2026-05-09)
   Plans:
   - [x] 66-01-PLAN.md — Wave 1 (TDD) receipt foundation: ID/class enum/scope union, store (TTL/janitor/LRU/graph_version invalidation), ValidateReceiptForOperation, 5-layer enforcement resolver, issue sink, serr.GuardrailViolation, 3 receipt counters [GUARD-03/04/05/07]
   - [x] 66-02-PLAN.md — Wave 1 (TDD) SemanticLookup.Visibility + IsEntrypointReachable (OI-02/OI-03), GuardrailsConfig D-22 extension, per-profile YAML defaults (ci-bot=enforce; rest=warn) [GUARD-07]
   - [x] 66-03-PLAN.md — Wave 2 (TDD) five rule predicates G-001..G-005 + RuleEvaluator dispatch + G-005 catalogs (Go/TS/JS/Python via embed.FS) [GUARD-02/07]
   - [x] 66-04-PLAN.md — Wave 3 GuardrailMiddleware + production deps + skill + daemon step 14b.5 + TelemetryMiddleware outcome extension + 5-step LIFO regression test [GUARD-01/03/04/05/07]
-  - [ ] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
-  - [ ] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
+  - [x] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
+  - [x] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
 - [ ] Phase 67: Evaluation Harness (0/0 plans)
 
 **Full details:** `.planning/milestones/v1.10-ROADMAP.md`

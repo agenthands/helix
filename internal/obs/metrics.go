@@ -170,6 +170,28 @@ type Metrics struct {
 	SemanticCompactionDurationVec *prometheus.HistogramVec
 	SemanticCompactionBlockedVec  *prometheus.CounterVec
 	SemanticVacuumDurationVec     *prometheus.HistogramVec
+
+	// Phase 66 P01: guardrail receipt counters (GUARD-05 telemetry).
+	// Closed-enum label discipline; drop-unknown at emission sites.
+	//
+	// helix_receipt_issued_total{class} — class ∈ {references_checked,
+	//   impact_checked, context_gathered, structural_overview, diagnostics_clean}.
+	//   Incremented on successful receipt issuance from a read-side tool.
+	//
+	// helix_receipt_expired_total{reason} — reason ∈ {ttl, graph_drift,
+	//   lru_evicted}. Incremented whenever a receipt is removed from the store.
+	//
+	// helix_receipt_lookup_total{outcome} — outcome ∈ {hit, miss, expired,
+	//   scope_mismatch, graph_drift, workspace_mismatch, freshness_rejected,
+	//   wrong_class}. Incremented on every Get() call in the store.
+	//
+	// helix_guardrail_eval_timeout_total — UNLABELED (T-66-21 fail-open audit
+	//   trail; no label to avoid cardinality from timeout sources). Incremented
+	//   from the GuardrailMiddleware eval timeout branch (Plan 04).
+	ReceiptIssuedVec    *prometheus.CounterVec
+	ReceiptExpiredVec   *prometheus.CounterVec
+	ReceiptLookupVec    *prometheus.CounterVec
+	GuardrailEvalTimeout prometheus.Counter
 }
 
 // newMetrics constructs a fresh *Metrics with an owned prometheus.Registry.
@@ -419,6 +441,34 @@ func newMetrics() *Metrics {
 			},
 			[]string{"outcome"},
 		),
+		// Phase 66 P01: guardrail receipt counters (GUARD-05 / T-66-04/T-66-05).
+		ReceiptIssuedVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_issued_total",
+				Help: "Capability receipts issued by class. Phase 66 P01. class ∈ {references_checked, impact_checked, context_gathered, structural_overview, diagnostics_clean}.",
+			},
+			[]string{"class"},
+		),
+		ReceiptExpiredVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_expired_total",
+				Help: "Capability receipts expired by reason. Phase 66 P01. reason ∈ {ttl, graph_drift, lru_evicted}.",
+			},
+			[]string{"reason"},
+		),
+		ReceiptLookupVec: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_receipt_lookup_total",
+				Help: "Capability receipt lookups by outcome. Phase 66 P01. outcome ∈ {hit, miss, expired, scope_mismatch, graph_drift, workspace_mismatch, freshness_rejected, wrong_class}.",
+			},
+			[]string{"outcome"},
+		),
+		GuardrailEvalTimeout: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "helix_guardrail_eval_timeout_total",
+				Help: "Guardrail evaluation timeouts (fail-open; T-66-21 mitigation). Unlabeled to avoid cardinality from timeout sources.",
+			},
+		),
 	}
 
 	reg.MustRegister(
@@ -453,6 +503,11 @@ func newMetrics() *Metrics {
 		m.SemanticCompactionDurationVec,
 		m.SemanticCompactionBlockedVec,
 		m.SemanticVacuumDurationVec,
+		// Phase 66 P01: guardrail receipt counters.
+		m.ReceiptIssuedVec,
+		m.ReceiptExpiredVec,
+		m.ReceiptLookupVec,
+		m.GuardrailEvalTimeout,
 		collectors.NewGoCollector(), // D-16: goroutines, GC, memory
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -908,4 +963,51 @@ func (m *Metrics) SemanticVacuumObserve(outcome string, seconds float64) {
 		return
 	}
 	m.SemanticVacuumDurationVec.WithLabelValues(outcome).Observe(seconds)
+}
+
+// --- Phase 66 P01 helper methods (GUARD-05 receipt counters, drop-unknown closed-enum discipline) ---
+
+// ReceiptIssuedInc increments helix_receipt_issued_total.
+// class ∈ {"references_checked","impact_checked","context_gathered",
+// "structural_overview","diagnostics_clean"}; any other value is dropped
+// (Phase 66 closed enum, T-66-04 mitigation).
+func (m *Metrics) ReceiptIssuedInc(class string) {
+	switch class {
+	case "references_checked", "impact_checked", "context_gathered", "structural_overview", "diagnostics_clean":
+	default:
+		return
+	}
+	m.ReceiptIssuedVec.WithLabelValues(class).Inc()
+}
+
+// ReceiptExpiredInc increments helix_receipt_expired_total.
+// reason ∈ {"ttl","graph_drift","lru_evicted"}; any other value is dropped
+// (Phase 66 closed enum, T-66-05 mitigation).
+func (m *Metrics) ReceiptExpiredInc(reason string) {
+	switch reason {
+	case "ttl", "graph_drift", "lru_evicted":
+	default:
+		return
+	}
+	m.ReceiptExpiredVec.WithLabelValues(reason).Inc()
+}
+
+// ReceiptLookupInc increments helix_receipt_lookup_total.
+// outcome ∈ {"hit","miss","expired","scope_mismatch","graph_drift",
+// "workspace_mismatch","freshness_rejected","wrong_class"}; any other value
+// is dropped (Phase 66 closed enum, T-66-04 mitigation).
+func (m *Metrics) ReceiptLookupInc(outcome string) {
+	switch outcome {
+	case "hit", "miss", "expired", "scope_mismatch", "graph_drift", "workspace_mismatch", "freshness_rejected", "wrong_class":
+	default:
+		return
+	}
+	m.ReceiptLookupVec.WithLabelValues(outcome).Inc()
+}
+
+// GuardrailEvalTimeoutInc increments helix_guardrail_eval_timeout_total.
+// Unlabeled counter per T-66-21 fail-open mitigation (no label cardinality
+// risk from timeout sources). Called from GuardrailMiddleware eval timeout branch.
+func (m *Metrics) GuardrailEvalTimeoutInc() {
+	m.GuardrailEvalTimeout.Inc()
 }

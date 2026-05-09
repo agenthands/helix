@@ -155,6 +155,29 @@ func DefaultConfig() map[string]interface{} {
 		"semantic_index.guardrails.require_verify_after_edit":          true,   // SPEC §25
 		"semantic_index.guardrails.stale_graph_policy":                 "warn", // SPEC §25
 
+		// guardrails.* D-22 additions (Phase 66 Plan 02):
+		"semantic_index.guardrails.receipt_ttl": "5m", // D-04: default receipt TTL
+
+		// Per-rule enforcement defaults (D-22 locked table):
+		"semantic_index.guardrails.rules.G-001.enforcement": "warn",    // D-22
+		"semantic_index.guardrails.rules.G-002.enforcement": "enforce", // D-22
+		"semantic_index.guardrails.rules.G-003.enforcement": "enforce", // D-22
+		"semantic_index.guardrails.rules.G-004.enforcement": "warn",    // D-22
+		"semantic_index.guardrails.rules.G-005.enforcement": "enforce", // D-22
+
+		// Per-tool enforcement defaults (D-22 locked table):
+		"semantic_index.guardrails.tools.rename_symbol.enforcement":      "enforce", // D-22
+		"semantic_index.guardrails.tools.safe_delete_symbol.enforcement": "enforce", // D-22
+		"semantic_index.guardrails.tools.replace_symbol_body.enforcement": "enforce", // D-22
+		"semantic_index.guardrails.tools.fuzzy_edit.enforcement":          "warn",    // D-22
+		"semantic_index.guardrails.tools.replace_in_file.enforcement":     "warn",    // D-22
+
+		// G-004 thresholds (D-16):
+		"semantic_index.guardrails.G-004.max_changed_lines":    50,              // D-16
+		"semantic_index.guardrails.G-004.max_files":            1,               // D-16
+		"semantic_index.guardrails.G-004.max_file_change_ratio": float64(0.30),  // D-16 (koanf float gotcha)
+		"semantic_index.guardrails.G-004.enable_ratio_trigger": true,            // D-16
+
 		// eval.*
 		"semantic_index.eval.enabled":                  true,                                                           // SPEC §25
 		"semantic_index.eval.default_modes":            []string{"baseline", "native", "semantic", "semantic_guarded"}, // SPEC §25 (koanf slice gotcha)

@@ -77,6 +77,12 @@ func (f *fakeLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _
 	// blast-radius LSP probe; surface a clean miss.
 	return "", 0, 0, false, nil
 }
+func (f *fakeLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (integ.Visibility, error) {
+	return integ.VisUnknown, nil
+}
+func (f *fakeLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (bool, error) {
+	return false, nil
+}
 
 // fakeCfg is the test ConfigGate double (matches the production daemonCfgGate
 // shape). semanticIndexEnabled drives the priority-ladder gate.

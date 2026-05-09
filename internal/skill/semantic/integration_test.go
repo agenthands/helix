@@ -790,6 +790,12 @@ func (m *matrixLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey,
 	// orchestrator's lspProbeFn.
 	return "", 0, 0, false, integ.ErrIndexErrored
 }
+func (m *matrixLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (integ.Visibility, error) {
+	return integ.VisUnknown, integ.ErrIndexErrored
+}
+func (m *matrixLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (bool, error) {
+	return false, integ.ErrIndexErrored
+}
 
 // matrixCfg is the tiny ConfigGate test double for the matrix.
 type matrixCfg struct{ enabled bool }

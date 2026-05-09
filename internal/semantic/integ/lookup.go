@@ -101,4 +101,19 @@ type SemanticLookup interface {
 	ValidateCriticalEdges(ctx context.Context, ws workspace.WorkspaceKey, edges []Edge) ([]ValidatedEdge, error)
 	LocateSymbol(ctx context.Context, ws workspace.WorkspaceKey, sym SymbolID) (path string, line, col uint32, ok bool, err error)
 	Status(ctx context.Context, ws workspace.WorkspaceKey) (SemanticStatus, error)
+
+	// Visibility returns the access-level classification of sym at the latest
+	// committed snapshot. Returns (VisUnknown, ErrUnsupported) when the
+	// semantic index is unavailable (D-19 conservative fallback applies).
+	// See internal/semantic/integ/visibility.go for the closed-enum values.
+	// Phase 66 Plan 02 — OI-02 resolution.
+	Visibility(ctx context.Context, ws workspace.WorkspaceKey, sym SymbolID) (Visibility, error)
+
+	// IsEntrypointReachable returns true when sym is reachable from one of
+	// the workspace's externally-callable entry points (e.g., main, HTTP
+	// handlers, exported constructors in a library). Returns (false,
+	// ErrUnsupported) when the semantic index is unavailable.
+	// Phase 66 Plan 02 — OI-03 resolution (conservative heuristic; full
+	// entry-point graph is a Phase 67 deliverable).
+	IsEntrypointReachable(ctx context.Context, ws workspace.WorkspaceKey, sym SymbolID) (bool, error)
 }

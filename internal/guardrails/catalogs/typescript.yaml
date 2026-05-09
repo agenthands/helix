@@ -1,0 +1,29 @@
+import_patterns:
+  - passport
+  - passport-*
+  - bcrypt
+  - bcryptjs
+  - argon2
+  - argon2id
+  - jsonwebtoken
+  - jose
+  - node:crypto
+  - crypto-js
+  - helmet
+  - csurf
+  - "@auth/*"
+  - next-auth
+  - next-auth/*
+  - "@nextauth/*"
+path_globs:
+  - "**/auth*.ts"
+  - "**/*Auth*.ts"
+  - "**/crypto*.ts"
+  - "**/*Token*.ts"
+  - "**/*Password*.ts"
+identifier_patterns:
+  - ".*Auth.*"
+  - ".*Token.*"
+  - ".*Password.*"
+  - ".*Secret.*"
+  - ".*Login.*"

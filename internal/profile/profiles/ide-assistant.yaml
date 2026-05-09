@@ -44,6 +44,9 @@ tool_description_overrides:
 default_mode: read
 single_project: true
 
+guardrails:
+  enforcement: warn
+
 allowed_mode_transitions:
   read:
     - edit

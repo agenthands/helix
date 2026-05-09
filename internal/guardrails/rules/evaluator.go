@@ -45,7 +45,14 @@ func (DefaultEvaluator) Evaluate(ctx context.Context, args RuleArgs, sc SessionC
 		appendIfTriggered(&decisions, EvaluateG004(ctx, args, sc))
 		appendIfTriggered(&decisions, EvaluateG005(ctx, args, sc))
 
-	case "fuzzy_edit", "replace_in_file":
+	case "fuzzy_edit":
+		appendIfTriggered(&decisions, EvaluateG001(ctx, args, sc))
+		appendIfTriggered(&decisions, EvaluateG002(ctx, args, sc))
+		appendIfTriggered(&decisions, EvaluateG003(ctx, args, sc))
+		appendIfTriggered(&decisions, EvaluateG004(ctx, args, sc))
+		appendIfTriggered(&decisions, EvaluateG005(ctx, args, sc))
+
+	case "replace_in_file":
 		appendIfTriggered(&decisions, EvaluateG001(ctx, args, sc))
 		appendIfTriggered(&decisions, EvaluateG002(ctx, args, sc))
 		appendIfTriggered(&decisions, EvaluateG003(ctx, args, sc))

@@ -22,6 +22,8 @@ import (
 	"github.com/agenthands/helix/internal/config"
 	"github.com/agenthands/helix/internal/degrade"
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
+	"github.com/agenthands/helix/internal/guardrails/rules"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/diag"
 	"github.com/agenthands/helix/internal/kernel/edit"
@@ -704,6 +706,48 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// errors are enriched before telemetry classifies the outcome.
 	suggestionSchemaMap := helixMCP.BuildToolSchemaMap(mcpServer.CollectToolSchemas())
 	helixMCP.InstallSuggestionMiddleware(mcpServer.SDK(), suggestionSchemaMap, logger)
+
+	// 14b.5. Phase 66 (GUARD-01): install Guardrail middleware AFTER Suggestion
+	// and BEFORE LazyInit so LIFO execution = LazyInit → Guardrail → Suggestion
+	// → ProfileFilter → Telemetry → handler. LazyInit-last invariant preserved
+	// (see internal/mcp/lazy_init.go:106-112).
+	{
+		var guardrailMetricsSink guardrails.MetricsSink
+		if m := observability.Metrics(); m != nil {
+			guardrailMetricsSink = metricsReceiptSink{m: m}
+		}
+		guardrailStore := guardrails.NewStore(guardrails.StoreOptions{
+			Metrics: guardrailMetricsSink,
+			Now:     time.Now,
+		})
+		// Wire the issue sink so read-tool issuance (Plan 05) lights up at runtime.
+		guardrails.SetReceiptIssueSink(func(ctx context.Context, class guardrails.ReceiptClass, scope guardrails.ReceiptScope, tool string) (guardrails.ReceiptID, error) {
+			return guardrailStore.Issue(workspace.WorkspaceKey{}, class, scope, guardrails.IssueFields{IssuingTool: tool})
+		})
+		var semanticLookup integ.SemanticLookup = integ.NoopLookup{}
+		if sBndl != nil {
+			semanticLookup = sBndl.integLookupAccessor()
+		}
+		guardrailDeps := newGuardrailDeps(
+			semanticLookup,
+			newProfileStoreResolver(profileStore),
+			cfg.SemanticIndex.Guardrails,
+			guardrailStore,
+			rules.DefaultEvaluator{},
+			noopOutlineProvider{},
+			logger,
+			observability.Metrics(),
+		)
+		helixMCP.InstallGuardrailMiddleware(mcpServer.SDK(), guardrailDeps, getSessionFn, logger)
+		// Register store shutdown with the kernel-first shutdown ordering.
+		// guardrailStore.Close() is idempotent; safe to call multiple times.
+		defer guardrailStore.Close()
+		// TODO(phase-66.x): wire guardrailDeps.OnGraphVersionAdvance to the
+		// graph_version publish/subscribe seam from Phase 62. For v1.10 the
+		// receipt store relies on TTL-only expiry; graph_version invalidation
+		// is available via OnGraphVersionAdvance but not yet auto-triggered.
+		logger.Info("guardrail middleware installed (Phase 66 GUARD-01)")
+	}
 
 	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST
 	// so it runs FIRST in the LIFO middleware chain (before TelemetryMiddleware deadline).

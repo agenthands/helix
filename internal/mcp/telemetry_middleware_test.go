@@ -203,8 +203,15 @@ func TestClassifyOutcome(t *testing.T) {
 }
 
 func TestClassifyOutcome_AllSevenEnumValuesExist(t *testing.T) {
-	// Enforce the closed 7-enum; fail if a value is missing.
-	want := []string{"success", "invalid_args", "not_found", "circuit_open", "ls_crash", "timeout", "internal"}
+	// Enforce the closed enum; fail if a value is missing.
+	// Phase 66 added guardrail_warned and guardrail_blocked (GUARD-01/GUARD-04):
+	// enum grows from 7 → 9 values.
+	want := []string{
+		"success", "invalid_args", "not_found", "circuit_open", "ls_crash",
+		"timeout", "internal",
+		"guardrail_warned",  // Phase 66
+		"guardrail_blocked", // Phase 66
+	}
 	have := mcp.OutcomeEnumForTest()
 	if len(have) != len(want) {
 		t.Fatalf("outcome enum has %d values, want %d: %v", len(have), len(want), have)

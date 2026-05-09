@@ -191,9 +191,9 @@ func TestExtractIntegLookupMethodBodies_ReceiverCount(t *testing.T) {
 			count++
 		}
 	}
-	const want = 8
+	const want = 10
 	if count != want {
-		t.Errorf("methods on (*integSemanticLookup): got %d, want %d (Available, SymbolID, RankFiles, RankFromSeeds, ExpandFrom, ValidateCriticalEdges, Status, LocateSymbol)",
+		t.Errorf("methods on (*integSemanticLookup): got %d, want %d (Available, SymbolID, RankFiles, RankFromSeeds, ExpandFrom, ValidateCriticalEdges, Status, LocateSymbol, Visibility, IsEntrypointReachable)",
 			count, want)
 	}
 }

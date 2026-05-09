@@ -220,7 +220,7 @@
   - [x] 66-01-PLAN.md — Wave 1 (TDD) receipt foundation: ID/class enum/scope union, store (TTL/janitor/LRU/graph_version invalidation), ValidateReceiptForOperation, 5-layer enforcement resolver, issue sink, serr.GuardrailViolation, 3 receipt counters [GUARD-03/04/05/07]
   - [x] 66-02-PLAN.md — Wave 1 (TDD) SemanticLookup.Visibility + IsEntrypointReachable (OI-02/OI-03), GuardrailsConfig D-22 extension, per-profile YAML defaults (ci-bot=enforce; rest=warn) [GUARD-07]
   - [x] 66-03-PLAN.md — Wave 2 (TDD) five rule predicates G-001..G-005 + RuleEvaluator dispatch + G-005 catalogs (Go/TS/JS/Python via embed.FS) [GUARD-02/07]
-  - [ ] 66-04-PLAN.md — Wave 3 GuardrailMiddleware + production deps + skill + daemon step 14b.5 + TelemetryMiddleware outcome extension + 5-step LIFO regression test [GUARD-01/03/04/05/07]
+  - [x] 66-04-PLAN.md — Wave 3 GuardrailMiddleware + production deps + skill + daemon step 14b.5 + TelemetryMiddleware outcome extension + 5-step LIFO regression test [GUARD-01/03/04/05/07]
   - [ ] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
   - [ ] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
 - [ ] Phase 67: Evaluation Harness (0/0 plans)

@@ -215,3 +215,79 @@ func buildTestResolver(t *testing.T) mcp.ProfileResolver {
 		},
 	}
 }
+
+// --- TestMiddleware_LIFOExecutionOrder_Phase66 ---
+//
+// Regression test for the 5-step LIFO middleware execution order (GUARD-01).
+//
+// AddReceivingMiddleware uses LIFO composition: the last-installed middleware
+// runs FIRST when a request arrives. The daemon install order is:
+//
+//	Step 14  — Telemetry   (installed first → runs LAST before handler)
+//	Step 14b — Suggestion  (installed second)
+//	Step 14b.5 — Guardrail (installed third)
+//	Step 14c — LazyInit    (installed LAST → runs FIRST)
+//
+// Expected tools/call execution order:
+//
+//	LazyInit → Guardrail → Suggestion → Telemetry → handler
+//
+// (ProfileFilter acts only on tools/list; omitted here.)
+//
+// Implementation: pure recording middlewares composed in a chain manually,
+// mirroring AddReceivingMiddleware's LIFO semantics without a real Server.
+func TestMiddleware_LIFOExecutionOrder_Phase66(t *testing.T) {
+	var order []string
+
+	record := func(name string) mcpsdk.Middleware {
+		return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
+			return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+				order = append(order, name)
+				return next(ctx, method, req)
+			}
+		}
+	}
+
+	// The handler is the innermost function.
+	handler := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+		order = append(order, "handler")
+		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "ok"}}}, nil
+	}
+
+	// Compose middleware in the same order as daemon install.
+	// Each Apply(next) prepends itself to the chain — last applied runs first.
+	// Daemon install order → compose from outermost (step 14) to innermost (step 14c).
+	//
+	// After composing, the innermost (last applied) runs first: LIFO.
+	telemetry := record("telemetry")
+	suggestion := record("suggestion")
+	guardrail := record("guardrail")
+	lazyInit := record("lazy_init")
+
+	// Compose LIFO chain manually:
+	// handler → telemetry(handler) → suggestion(telemetry(handler)) → ...
+	// Apply in install order; last-applied (lazyInit) runs first.
+	chain := telemetry(handler)
+	chain = suggestion(chain)
+	chain = guardrail(chain)
+	chain = lazyInit(chain)
+
+	// Invoke with a tools/call request.
+	req := makeCallToolRequest("find_references", `{}`)
+	_, err := chain(context.Background(), "tools/call", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Assert LIFO execution order: last-installed runs first.
+	expected := []string{"lazy_init", "guardrail", "suggestion", "telemetry", "handler"}
+	if len(order) != len(expected) {
+		t.Errorf("expected execution order %v, got %v", expected, order)
+		return
+	}
+	for i, want := range expected {
+		if order[i] != want {
+			t.Errorf("step %d: want %q, got %q (full order: %v)", i, want, order[i], order)
+		}
+	}
+}

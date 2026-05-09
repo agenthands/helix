@@ -11,6 +11,7 @@ import (
 	"github.com/agenthands/helix/internal/guardrails/rules"
 	helixMCP "github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
+	"github.com/agenthands/helix/internal/profile"
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
@@ -216,3 +217,23 @@ type metricsReceiptSink struct{ m *obs.Metrics }
 func (s metricsReceiptSink) ReceiptIssuedInc(class string)   { s.m.ReceiptIssuedInc(class) }
 func (s metricsReceiptSink) ReceiptExpiredInc(reason string) { s.m.ReceiptExpiredInc(reason) }
 func (s metricsReceiptSink) ReceiptLookupInc(outcome string) { s.m.ReceiptLookupInc(outcome) }
+
+// profileStoreResolver wraps *profile.ProfileStore to satisfy profileGuardrailsResolver.
+// GuardrailsEnforcement returns the profile-level enforcement string for the named
+// profile, or "" when the profile is not found or has no guardrails config.
+type profileStoreResolver struct{ store *profile.ProfileStore }
+
+func newProfileStoreResolver(store *profile.ProfileStore) profileGuardrailsResolver {
+	return profileStoreResolver{store: store}
+}
+
+func (r profileStoreResolver) GuardrailsEnforcement(profileName string) string {
+	if r.store == nil {
+		return ""
+	}
+	p, ok := r.store.Profile(profileName)
+	if !ok || p == nil {
+		return ""
+	}
+	return p.Guardrails.Enforcement
+}

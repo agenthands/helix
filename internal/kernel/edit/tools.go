@@ -11,6 +11,7 @@ import (
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/fuzzy"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/diag"
 	"github.com/agenthands/helix/internal/mcp"
@@ -706,8 +707,18 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 			return errorResult(err.Error()), nil, nil
 		}
 		if !result.HasErrors {
+			// Phase 66 D-01 GUARD-03: issue diagnostics_clean receipt ONLY when ErrorCount==0 (D-18/T-66-25).
+			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassDiagnosticsClean,
+				guardrails.DiagnosticsCleanScope{
+					FileSet:         []string{args.Path},
+					DiagnosticCount: 0,
+					ErrorCount:      0,
+					WarningCount:    0,
+					Tool:            "verify_edit",
+				}, "verify_edit")
 			return textResult("No errors found."), nil, nil
 		}
+		// result.HasErrors is true: DO NOT issue receipt (ErrorCount > 0).
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("%d error(s) found:\n", result.ErrorCount))
 		for _, e := range result.Errors {

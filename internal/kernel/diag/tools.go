@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/lspool"
 	"github.com/agenthands/helix/internal/mcp"
@@ -132,15 +133,44 @@ func registerGetDiagnostics(server *mcp.SerenaMCPServer, store *DiagnosticStore,
 		uri := fileURI(root, args.Path)
 		diags := store.GetDiagnostics(uri)
 		if len(diags) == 0 {
+			// Phase 66 D-01 GUARD-03: no diagnostics means 0 errors → issue receipt.
+			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassDiagnosticsClean,
+				guardrails.DiagnosticsCleanScope{
+					FileSet:         []string{args.Path},
+					DiagnosticCount: 0,
+					ErrorCount:      0,
+					WarningCount:    0,
+					Tool:            "get_diagnostics",
+				}, "get_diagnostics")
 			return textResult("no diagnostics for " + args.Path), nil, nil
 		}
 
 		var sb strings.Builder
+		var errorCount, warningCount int
 		for _, d := range diags {
 			sev := severityString(d.Severity)
 			line := d.Range.Start.Line + 1
 			col := d.Range.Start.Character + 1
 			sb.WriteString(fmt.Sprintf("%s:%d:%d: %s\n", sev, line, col, d.Message))
+			if d.Severity != nil {
+				switch *d.Severity {
+				case gen.DiagnosticSeverityError:
+					errorCount++
+				case gen.DiagnosticSeverityWarning:
+					warningCount++
+				}
+			}
+		}
+		// Phase 66 D-01 GUARD-03: issue diagnostics_clean receipt ONLY when ErrorCount==0 (D-18).
+		if errorCount == 0 {
+			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassDiagnosticsClean,
+				guardrails.DiagnosticsCleanScope{
+					FileSet:         []string{args.Path},
+					DiagnosticCount: len(diags),
+					ErrorCount:      errorCount,
+					WarningCount:    warningCount,
+					Tool:            "get_diagnostics",
+				}, "get_diagnostics")
 		}
 		return textResult(sb.String()), nil, nil
 	}))

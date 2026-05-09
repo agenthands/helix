@@ -2,13 +2,17 @@ package semantic
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/semantic/retrieval"
 )
 
@@ -294,7 +298,7 @@ func (s *SemanticSkill) handleGetSemanticContext(ctx context.Context, args GetSe
 	freshness := computeContextFreshness(overlayActive, pendingLSPFiles > 0, retrievalPending)
 
 	// 12. Marshal envelope (SPEC §23.4).
-	return jsonResult(ContextResult{
+	result := jsonResult(ContextResult{
 		CommonEnvelope: CommonEnvelope{
 			Freshness:     freshness,
 			GraphVersion:  graphVersion,
@@ -305,6 +309,21 @@ func (s *SemanticSkill) handleGetSemanticContext(ctx context.Context, args GetSe
 		RetrievalPending: retrievalPending,
 		Candidates:       candidates,
 	})
+
+	// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY (Pitfall 4: never defer).
+	targetSymbols := make([]integ.SymbolID, 0, len(args.Symbols))
+	for _, s := range args.Symbols {
+		targetSymbols = append(targetSymbols, integ.SymbolID(s))
+	}
+	guardrails.IssueReceiptOnSuccess(context.Background(), guardrails.ClassContextGathered,
+		guardrails.ContextGatheredScope{
+			FileSet:         args.Files,
+			TargetSymbols:   targetSymbols,
+			TaskHash:        computeSemanticTaskHash(args),
+			TokenBudgetUsed: len(candidates),
+			MaxTokens:       budget,
+		}, "get_semantic_context")
+	return result
 }
 
 // ----- helpers (P64-07-owned; do NOT add to handler_helpers.go which is
@@ -392,4 +411,21 @@ func clampToUnit(score float64) float64 {
 		return 1
 	}
 	return score
+}
+
+// computeSemanticTaskHash returns a short hex hash of the args that identify a
+// get_semantic_context call for use as the TaskHash in ContextGatheredScope.
+func computeSemanticTaskHash(args GetSemanticContextArgs) string {
+	h := sha256.New()
+	h.Write([]byte(args.Task))
+	h.Write([]byte{0})
+	for _, f := range args.Files {
+		h.Write([]byte(f))
+		h.Write([]byte{0})
+	}
+	for _, s := range args.Symbols {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }

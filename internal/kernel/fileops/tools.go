@@ -10,6 +10,7 @@ import (
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/fuzzy"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/edit"
 	"github.com/agenthands/helix/internal/mcp"
@@ -50,18 +51,20 @@ type SearchInFilesArgs struct {
 
 // ReplaceInFileArgs is the input schema for the replace_in_file tool.
 type ReplaceInFileArgs struct {
-	Path        string `json:"path" jsonschema:"File path (relative to workspace root)"`
-	Pattern     string `json:"pattern" jsonschema:"Pattern to search for (literal or regex)"`
-	Replacement string `json:"replacement" jsonschema:"Replacement string"`
-	IsRegex     bool   `json:"is_regex,omitempty" jsonschema:"Treat pattern as regex (default false)"`
+	Path        string                 `json:"path" jsonschema:"File path (relative to workspace root)"`
+	Pattern     string                 `json:"pattern" jsonschema:"Pattern to search for (literal or regex)"`
+	Replacement string                 `json:"replacement" jsonschema:"Replacement string"`
+	IsRegex     bool                   `json:"is_regex,omitempty" jsonschema:"Treat pattern as regex (default false)"`
+	Receipts    []guardrails.ReceiptID `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
 }
 
 // FuzzyEditArgs is the input schema for the fuzzy_edit tool.
 type FuzzyEditArgs struct {
-	Path            string `json:"path" jsonschema:"File path (relative to workspace root)"`
-	Search          string `json:"search" jsonschema:"Text to search for (fuzzy matched with 4-strategy cascade: exact, whitespace-normalized, indentation-flexible)"`
-	Replacement     string `json:"replacement" jsonschema:"Replacement text"`
-	DisableEllipsis bool   `json:"disable_ellipsis,omitempty" jsonschema:"Disable ... ellipsis segmentation (default false, meaning ellipsis is enabled)"`
+	Path            string                 `json:"path" jsonschema:"File path (relative to workspace root)"`
+	Search          string                 `json:"search" jsonschema:"Text to search for (fuzzy matched with 4-strategy cascade: exact, whitespace-normalized, indentation-flexible)"`
+	Replacement     string                 `json:"replacement" jsonschema:"Replacement text"`
+	DisableEllipsis bool                   `json:"disable_ellipsis,omitempty" jsonschema:"Disable ... ellipsis segmentation (default false, meaning ellipsis is enabled)"`
+	Receipts        []guardrails.ReceiptID `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
 }
 
 // --- help text constants ---

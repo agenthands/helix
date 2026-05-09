@@ -4,6 +4,7 @@ package repomap
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic/integ"
@@ -408,6 +410,14 @@ func (s *RepoMapSkill) execGetRepoMap(args map[string]interface{}) (string, erro
 	if mErr != nil {
 		return "", serr.Wrap(serr.Internal, "marshaling envelope", mErr).WithTool("get_repo_map")
 	}
+	// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY.
+	guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassStructuralOverview,
+		guardrails.StructuralOverviewScope{
+			RootPath:  s.resolveRoot(),
+			Depth:     0,
+			FileCount: 0,
+			MaxTokens: budget,
+		}, "get_repo_map")
 	return string(out), nil
 }
 
@@ -512,6 +522,15 @@ func (s *RepoMapSkill) execGetContext(args map[string]interface{}) (string, erro
 	if mErr != nil {
 		return "", serr.Wrap(serr.Internal, "marshaling envelope", mErr).WithTool("get_context")
 	}
+	// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY.
+	guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassContextGathered,
+		guardrails.ContextGatheredScope{
+			FileSet:         files,
+			TargetSymbols:   nil,
+			TaskHash:        computeContextTaskHash(files),
+			TokenBudgetUsed: len(treeText) / 4, // conservative token estimate
+			MaxTokens:       budget,
+		}, "get_context")
 	return string(out), nil
 }
 
@@ -756,4 +775,16 @@ func extractTokenBudget(args map[string]interface{}, defaultVal int) int {
 		budget = maxTokenBudget
 	}
 	return budget
+}
+
+// computeContextTaskHash returns a short hex hash of the canonical file set
+// for use as the TaskHash in a ContextGatheredScope receipt.
+// sha256 of sorted file paths joined with NUL, truncated to 16 hex chars.
+func computeContextTaskHash(files []string) string {
+	h := sha256.New()
+	for _, f := range files {
+		h.Write([]byte(f))
+		h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }

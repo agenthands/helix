@@ -1,0 +1,26 @@
+import_patterns:
+  - crypto/*
+  - crypto/cipher
+  - crypto/rand
+  - golang.org/x/crypto/*
+  - github.com/dgrijalva/jwt-go
+  - github.com/golang-jwt/jwt/*
+  - github.com/gorilla/securecookie
+  - github.com/gorilla/csrf
+  - github.com/golang/oauth2/*
+  - golang.org/x/oauth2
+path_globs:
+  - "**/auth*.go"
+  - "**/*_auth.go"
+  - "**/crypto*.go"
+  - "**/*_crypto.go"
+  - "**/*token*.go"
+  - "**/*password*.go"
+identifier_patterns:
+  - ".*Auth.*"
+  - ".*Token.*"
+  - ".*Password.*"
+  - ".*Secret.*"
+  - ".*Crypto.*"
+  - ".*Login.*"
+  - ".*Session.*"

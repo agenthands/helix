@@ -1,0 +1,31 @@
+import_patterns:
+  - cryptography.*
+  - Crypto.*
+  - bcrypt
+  - argon2
+  - argon2_cffi
+  - jwt
+  - pyjwt
+  - passlib.*
+  - flask_login
+  - flask_jwt
+  - flask_jwt_extended
+  - flask_jwt_simple
+  - django.contrib.auth
+  - django.contrib.auth.*
+  - oauthlib.*
+  - authlib.*
+  - secrets
+  - hashlib
+  - hmac
+path_globs:
+  - "**/auth*.py"
+  - "**/*_auth.py"
+  - "**/crypto*.py"
+  - "**/*token*.py"
+identifier_patterns:
+  - ".*Auth.*"
+  - ".*Token.*"
+  - ".*Password.*"
+  - ".*Secret.*"
+  - ".*Login.*"

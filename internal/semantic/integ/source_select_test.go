@@ -43,6 +43,12 @@ func (availableLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (Sema
 func (availableLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (string, uint32, uint32, bool, error) {
 	panic("availableLookup.LocateSymbol not used by ChooseSource")
 }
+func (availableLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (Visibility, error) {
+	panic("availableLookup.Visibility not used by ChooseSource")
+}
+func (availableLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (bool, error) {
+	panic("availableLookup.IsEntrypointReachable not used by ChooseSource")
+}
 
 // TestChooseSource_PriorityLadder asserts the Pitfall §3 priority ladder:
 //

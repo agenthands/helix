@@ -45,6 +45,7 @@ import (
 	"sync"
 	"time"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 	semanticpkg "github.com/agenthands/helix/internal/semantic"
@@ -1227,6 +1228,38 @@ func (l *integSemanticLookup) Status(ctx context.Context, ws workspace.Workspace
 		LastLiveUpdateMs: lastLiveMs,
 		LastErrorReason:  string(lastErr),
 	}, nil
+}
+
+// Visibility returns the access-level classification for sym at the latest
+// committed snapshot. Phase 66 Plan 02 — OI-02 resolution.
+//
+// The current implementation returns (VisUnknown, ErrUnsupported) as a seam
+// placeholder; the full store-backed implementation (reading the Visibility
+// field emitted by per-language extractors) is wired in Wave 3. Rule predicates
+// in Wave 2 call this method and fall back to D-19 conservative-warn on
+// ErrUnsupported, so the guardrail layer is safe to deploy now.
+//
+// Production callers: internal/guardrails/rules/g003_public_api_edit.go
+func (l *integSemanticLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (integ.Visibility, error) {
+	// Phase 66 Wave-3 TODO: query l.store for symbol.Visibility string, then
+	// return integ.ParseVisibility(rawVis). Store method: QuerySymbolVisibility.
+	return integ.VisUnknown, serr.ErrUnsupported
+}
+
+// IsEntrypointReachable returns true when sym is reachable from one of the
+// workspace's externally-callable entry points. Phase 66 Plan 02 — OI-03
+// resolution.
+//
+// The current implementation returns (false, ErrUnsupported) as a seam
+// placeholder; the full store-backed implementation querying the Phase 62
+// call-graph entry-point set is wired in Wave 3. Rule predicates in Wave 2
+// fall back to D-19 conservative-warn on ErrUnsupported.
+//
+// Production callers: internal/guardrails/rules/g003_public_api_edit.go
+func (l *integSemanticLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (bool, error) {
+	// Phase 66 Wave-3 TODO: query l.store for call-graph reachability from
+	// annotated entry points. Store method: QueryEntrypointReachability.
+	return false, serr.ErrUnsupported
 }
 
 // daemonCfgGate is the production ConfigGate consumed by Phase 65 strangler-

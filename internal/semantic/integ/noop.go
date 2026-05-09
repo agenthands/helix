@@ -17,6 +17,7 @@ package integ
 import (
 	"context"
 
+	"github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/workspace"
 )
 
@@ -62,4 +63,16 @@ func (NoopLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (SemanticS
 // see this as a wiring bug, not a steady-state miss.
 func (NoopLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (string, uint32, uint32, bool, error) {
 	return "", 0, 0, false, ErrIndexErrored
+}
+
+// Visibility returns (VisUnknown, ErrUnsupported). Phase 66 Plan 02 — the
+// production lookup has not been wired; D-19 conservative-warn fallback applies.
+func (NoopLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (Visibility, error) {
+	return VisUnknown, errors.ErrUnsupported
+}
+
+// IsEntrypointReachable returns (false, ErrUnsupported). Phase 66 Plan 02 — the
+// production lookup has not been wired; D-19 conservative-warn fallback applies.
+func (NoopLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ SymbolID) (bool, error) {
+	return false, errors.ErrUnsupported
 }

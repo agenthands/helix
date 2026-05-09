@@ -194,6 +194,12 @@ func (f *fakeSemLookup) Status(_ context.Context, _ workspace.WorkspaceKey) (int
 func (f *fakeSemLookup) LocateSymbol(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (string, uint32, uint32, bool, error) {
 	return "", 0, 0, false, integ.ErrIndexErrored
 }
+func (f *fakeSemLookup) Visibility(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (integ.Visibility, error) {
+	return integ.VisUnknown, integ.ErrIndexErrored
+}
+func (f *fakeSemLookup) IsEntrypointReachable(_ context.Context, _ workspace.WorkspaceKey, _ integ.SymbolID) (bool, error) {
+	return false, integ.ErrIndexErrored
+}
 
 // fakeCfgGate matches the production daemonCfgGate shape.
 type fakeCfgGate struct{ enabled bool }

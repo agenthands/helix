@@ -11,6 +11,7 @@ import (
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/fuzzy"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/kernel/diag"
 	"github.com/agenthands/helix/internal/mcp"
@@ -85,10 +86,11 @@ func ClassifyEditError(err error) string {
 
 // ReplaceBodyArgs is the input schema for the replace_symbol_body tool.
 type ReplaceBodyArgs struct {
-	Path       string `json:"path" jsonschema:"File path"`
-	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol whose body to replace"`
-	NewBody    string `json:"new_body" jsonschema:"New body content to replace with"`
-	SearchBody string `json:"search_body,omitempty" jsonschema:"Optional: fuzzy-match this text within the symbol body before replacing. When absent, replaces the entire body."`
+	Path       string                  `json:"path" jsonschema:"File path"`
+	SymbolName string                  `json:"symbol_name" jsonschema:"Name of the symbol whose body to replace"`
+	NewBody    string                  `json:"new_body" jsonschema:"New body content to replace with"`
+	SearchBody string                  `json:"search_body,omitempty" jsonschema:"Optional: fuzzy-match this text within the symbol body before replacing. When absent, replaces the entire body."`
+	Receipts   []guardrails.ReceiptID  `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
 }
 
 // InsertBeforeArgs is the input schema for the insert_before_symbol tool.
@@ -107,17 +109,19 @@ type InsertAfterArgs struct {
 
 // RenameSymbolArgs is the input schema for the rename_symbol tool.
 type RenameSymbolArgs struct {
-	Path    string `json:"path" jsonschema:"File path where symbol is defined"`
-	Line    int    `json:"line" jsonschema:"Line number of symbol (1-indexed)"`
-	Col     int    `json:"column" jsonschema:"Column number of symbol (1-indexed)"`
-	NewName string `json:"new_name" jsonschema:"New name for the symbol"`
+	Path     string                 `json:"path" jsonschema:"File path where symbol is defined"`
+	Line     int                    `json:"line" jsonschema:"Line number of symbol (1-indexed)"`
+	Col      int                    `json:"column" jsonschema:"Column number of symbol (1-indexed)"`
+	NewName  string                 `json:"new_name" jsonschema:"New name for the symbol"`
+	Receipts []guardrails.ReceiptID `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
 }
 
 // SafeDeleteArgs is the input schema for the safe_delete_symbol tool.
 type SafeDeleteArgs struct {
-	Path       string `json:"path" jsonschema:"File path"`
-	SymbolName string `json:"symbol_name" jsonschema:"Name of the symbol to delete"`
-	Force      bool   `json:"force,omitempty" jsonschema:"Delete even if references exist (default: false)"`
+	Path       string                 `json:"path" jsonschema:"File path"`
+	SymbolName string                 `json:"symbol_name" jsonschema:"Name of the symbol to delete"`
+	Force      bool                   `json:"force,omitempty" jsonschema:"Delete even if references exist (default: false)"`
+	Receipts   []guardrails.ReceiptID `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
 }
 
 // VerifyEditArgs is the input schema for the verify_edit tool.
@@ -706,8 +710,18 @@ func registerVerifyEdit(server *mcp.SerenaMCPServer, diagStore *diag.DiagnosticS
 			return errorResult(err.Error()), nil, nil
 		}
 		if !result.HasErrors {
+			// Phase 66 D-01 GUARD-03: issue diagnostics_clean receipt ONLY when ErrorCount==0 (D-18/T-66-25).
+			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassDiagnosticsClean,
+				guardrails.DiagnosticsCleanScope{
+					FileSet:         []string{args.Path},
+					DiagnosticCount: 0,
+					ErrorCount:      0,
+					WarningCount:    0,
+					Tool:            "verify_edit",
+				}, "verify_edit")
 			return textResult("No errors found."), nil, nil
 		}
+		// result.HasErrors is true: DO NOT issue receipt (ErrorCount > 0).
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("%d error(s) found:\n", result.ErrorCount))
 		for _, e := range result.Errors {

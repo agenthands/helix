@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/semantic/integ"
@@ -385,6 +386,15 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
+		// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY (Pitfall 4: never in defer).
+		// symID is not available from the LSP-only path; use empty string as sentinel.
+		guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassReferencesChecked,
+			guardrails.ReferencesCheckedScope{
+				SymbolID:     "",
+				RefCount:     len(locs),
+				FilePath:     args.Path,
+				IncludeTests: args.IncludeDecl,
+			}, "find_references")
 		return textResult(formatLocations(locs)), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "find_references", Description: "Find all references to a symbol at a given position", BriefDescription: "Find all references to a symbol", HelpText: findReferencesHelp})
@@ -647,6 +657,17 @@ func registerAnalyzeBlastRadius(
 			if marshErr != nil {
 				return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
 			}
+			// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY.
+			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassImpactChecked,
+				guardrails.ImpactCheckedScope{
+					SymbolID:        "",
+					RefCount:        br.TotalImpact,
+					PublicAPI:       false,
+					BlastNodes:      len(br.PerNode),
+					MaxDepth:        0,
+					IncludedCallers: len(br.Callers) > 0,
+					IncludedTypes:   false,
+				}, "analyze_blast_radius")
 			return textResult(string(out)), nil, nil
 		case integ.SourceSemantic:
 			// fall through to the two-pass orchestrator below
@@ -702,6 +723,17 @@ func registerAnalyzeBlastRadius(
 		if marshErr != nil {
 			return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
 		}
+		// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY (semantic arm).
+		guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassImpactChecked,
+			guardrails.ImpactCheckedScope{
+				SymbolID:        sym,
+				RefCount:        len(impacts),
+				PublicAPI:       false,
+				BlastNodes:      len(impacts),
+				MaxDepth:        0,
+				IncludedCallers: true,
+				IncludedTypes:   true,
+			}, "analyze_blast_radius")
 		return textResult(string(out)), nil, nil
 	}))
 	server.Registry().Register(&mcp.ToolDef{Name: "analyze_blast_radius", Description: "Analyze the blast radius (impact) of changing a symbol", BriefDescription: "Analyze the impact of changing a symbol", HelpText: analyzeBlastRadiusHelp})

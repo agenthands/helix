@@ -17,7 +17,16 @@ import (
 	"path/filepath"
 
 	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
 )
+
+// DeleteFileArgs is the input schema for the delete_file tool.
+// The Receipts field is required by the GuardrailMiddleware (Phase 66 GUARD-02/GUARD-03)
+// to validate that the agent has verified references before deleting a tracked source file.
+type DeleteFileArgs struct {
+	Path     string                 `json:"path" jsonschema:"File path to delete (relative to workspace root)"`
+	Receipts []guardrails.ReceiptID `json:"receipts,omitempty" jsonschema:"Receipt IDs from prior find_references / analyze_blast_radius / get_context / get_repo_map / verify_edit calls. Required by guardrails (Phase 66 GUARD-03) for destructive operations on referenced or public-API symbols. Empty array when no receipts apply."`
+}
 
 // CreateFile creates a new file with the given content.
 // Parent directories are created if they don't exist.

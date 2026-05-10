@@ -60,3 +60,34 @@ Before setting `HELIX_EVAL_ZDR_VERIFIED=1` and running eval against a non-synthe
 - [ ] **Verify the API key is covered.** ZDR applies at the organization level; confirm the specific API key used in `ANTHROPIC_API_KEY` belongs to the ZDR-enabled organization.
 - [ ] **Understand that `HELIX_EVAL_ZDR_VERIFIED=1` is human-attestation only.** Setting this variable is your attestation that the above checks have been completed. Helix does not verify ZDR status programmatically.
 - [ ] **Treat synthetic corpus runs as the default.** When in doubt, run against `eval/corpus/` (Helix OSS fixtures) only.
+
+## EVAL-07: LLM Judge Informational Status
+
+The LLM judge (`tool_behavior_judge.json`) is **INFORMATIONAL ONLY** and must **never** gate merges. Four layers of mitigation enforce this:
+
+### Four-Layer EVAL-07 Mitigation
+
+1. **Separate JSON file** — Judge output is written to `tool_behavior_judge.json`, separate from `tool_behavior.json` (heuristic CI gate). The two files are never combined.
+
+2. **INFORMATIONAL `__readme` boilerplate** — Every `tool_behavior_judge.json` (even stubs) contains `"__readme": "INFORMATIONAL — DO NOT USE FOR CI GATING"` at the top level. This is asserted by `TestJudgeOutputBoilerplate`.
+
+3. **Judge errors swallowed in Run signature** — `judge.Run(...)` returns `Output` only (no error). A complete Anthropic API outage produces a stub file with `"judge_failed": true` and exits 0. The runner exit code is computed exclusively from per-task heuristic results (see EVAL-07 comment block in `cmd/helix-eval/main.go`).
+
+4. **CI grep gate** — The `go-test.yml` workflow includes a `forbid judge in CI` step that `grep`s all workflow files for `tool_behavior_judge` references (excluding itself). Any future PR that wires the judge into a CI gate will fail this check automatically.
+
+### Quick Troubleshooting
+
+**If a CI failure mentions `tool_behavior_judge`:**
+The grep gate caught a regression. A PR has added a reference to `tool_behavior_judge.json` in a GitHub Actions workflow file. Revert the workflow change. The judge output is never CI-actionable.
+
+**If the judge section is missing from `eval_report.md`:**
+The judge was not run. Either `--no-judge` was set (default for `make eval`), or `ANTHROPIC_API_KEY` was not set. This is expected in CI. Run `make eval` locally with `ANTHROPIC_API_KEY` set to include judge output.
+
+**If `judge_failed: true` in `tool_behavior_judge.json`:**
+The Anthropic API was unreachable or returned an error. The `eval_report.md` will note this. This does not affect the eval exit code.
+
+## ZDR Operator Checklist (per quarter)
+
+- [ ] Anthropic DPA still active for the API key in use
+- [ ] `HELIX_EVAL_ZDR_VERIFIED=1` ONLY when point above is true
+- [ ] No external corpora committed to `eval/corpus/` without explicit code review

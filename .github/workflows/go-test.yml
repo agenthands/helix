@@ -95,3 +95,22 @@ jobs:
 
       - name: go test
         run: go test ./... -count=1
+
+      - name: eval-quick (harness validation)
+        # eval-quick runs the in-process scripted-agent harness validation (<30s wall-time).
+        # This is the ONLY eval target allowed in PR-gating CI (project rule: benchmarks local-only).
+        # 'make eval' (full out-of-process matrix) is EXPLICITLY excluded from all CI workflows.
+        run: make eval-quick
+        timeout-minutes: 2
+
+      - name: forbid judge in CI
+        # Grep gate: fail the build if tool_behavior_judge.json is referenced
+        # in any workflow file. The LLM judge must NEVER gate merges (EVAL-07).
+        # This step excludes itself from the search via --exclude.
+        run: |
+          if grep -r "tool_behavior_judge" .github/workflows/ --exclude="go-test.yml" ; then
+            echo "ERROR: tool_behavior_judge.json must NEVER be referenced in CI workflows (EVAL-07)."
+            echo "The LLM judge is INFORMATIONAL only. Revert the workflow change that added this reference."
+            exit 1
+          fi
+          echo "OK: no tool_behavior_judge reference found in CI workflows (excluding this file's self-reference)"

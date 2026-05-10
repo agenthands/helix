@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network
 
 BINARY=helix
 GO=go
@@ -217,6 +217,11 @@ update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE s
 # ╚══════════════════════════════════════════════════════════════════════════╝
 eval-quick:
 	go run ./cmd/helix-eval run --quick --corpus eval/fixtures --out eval/reports
+
+# eval-no-network: alias for eval-quick; use this when you want to be explicit
+# that no external network calls are made (scripted agent, no real Anthropic API).
+# Identical to eval-quick; both are the only PR-gating eval targets.
+eval-no-network: eval-quick
 
 # eval: full out-of-process matrix. Local-only; nightly CI only.
 # NEVER add this to PR-gating workflows (project rule: benchmarks local-only).

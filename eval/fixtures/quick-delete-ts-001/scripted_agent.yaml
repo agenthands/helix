@@ -1,0 +1,8 @@
+steps:
+  - tool: find_references
+    args:
+      symbol: legacyHelper
+  - tool: safe_delete_symbol
+    args:
+      symbol: legacyHelper
+      receipts: []

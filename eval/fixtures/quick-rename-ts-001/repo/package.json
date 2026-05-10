@@ -1,0 +1,7 @@
+{
+  "name": "quick-rename-ts-001",
+  "private": true,
+  "devDependencies": {
+    "typescript": "5.x"
+  }
+}

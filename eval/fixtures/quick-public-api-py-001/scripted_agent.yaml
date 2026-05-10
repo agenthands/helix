@@ -1,0 +1,11 @@
+steps:
+  - tool: analyze_blast_radius
+    args:
+      symbol: compute
+  - tool: replace_symbol_body
+    args:
+      symbol: compute
+      body: |
+        def compute(x: int) -> tuple[int, str]:
+            """Compute a result from x, returning (value, status)."""
+            return x * 2, "ok"

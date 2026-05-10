@@ -1,0 +1,14 @@
+task_kind: delete
+expect_sequence:
+  - id: delete-after-references
+    score: 1
+    pattern:
+      - tool: find_references
+      - tool: safe_delete_symbol
+receipts:
+  - id: delete-with-receipts
+    score: 1
+    when:
+      tool_used: safe_delete_symbol
+    require:
+      receipts_non_empty: false

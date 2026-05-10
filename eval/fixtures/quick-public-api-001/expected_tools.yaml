@@ -1,0 +1,15 @@
+task_kind: public_api
+expect_sequence:
+  - id: blast-radius-before-public-edit
+    score: 1
+    pattern:
+      - tool: analyze_blast_radius
+      - tool: replace_symbol_body
+forbid_set:
+  - id: avoid-direct-edit-without-blast-radius
+    score: -1
+    when:
+      tool_used: replace_symbol_body
+    require_prior:
+      any_of:
+        - analyze_blast_radius

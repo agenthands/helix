@@ -1,0 +1,8 @@
+steps:
+  - tool: find_references
+    args:
+      symbol: Foo
+  - tool: rename_symbol
+    args:
+      old_name: Foo
+      new_name: Bar

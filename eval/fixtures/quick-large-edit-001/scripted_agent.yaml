@@ -1,0 +1,8 @@
+steps:
+  - tool: replace_symbol_body
+    args:
+      symbol: Process
+      body: |
+        func Process(x int) int {
+        	return x * 2
+        }

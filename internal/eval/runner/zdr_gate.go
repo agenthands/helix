@@ -115,7 +115,16 @@ func readTaskSource(taskDir string) (CorpusSource, error) {
 	if m.Source == "" {
 		return CorpusSynthetic, nil
 	}
-	return m.Source, nil
+	// Allowlist validation: reject unknown source values so they cannot silently
+	// bypass ZDR enforcement. Without this check, any unrecognized value (e.g.
+	// source: proprietary-dataset) would fall through as CorpusSynthetic and
+	// skip the HELIX_EVAL_ZDR_VERIFIED attestation gate.
+	switch m.Source {
+	case CorpusSynthetic, CorpusHelixOSS, CorpusExternal:
+		return m.Source, nil
+	default:
+		return CorpusSynthetic, fmt.Errorf("source.yaml: unknown source %q; valid values: synthetic, helix-oss, external", m.Source)
+	}
 }
 
 // isUnderHelixRepo returns true if the given absolute path resolves under the

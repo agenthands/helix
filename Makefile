@@ -55,6 +55,17 @@ fmt:
 docs: ## Regenerate tool and language tables in README.md
 	$(GO) run ./cmd/docgen
 
+sync-docs: ## Copy root GUARDRAILS.md / DoD.md into internal/kernel/help/docs/ (Phase 66 IN-05)
+	@cp GUARDRAILS.md internal/kernel/help/docs/guardrails.md.tmp
+	@printf '<!-- Synced from /GUARDRAILS.md; do not edit directly — edit the root copy and re-run `make sync-docs` -->\n\n' \
+	  | cat - internal/kernel/help/docs/guardrails.md.tmp > internal/kernel/help/docs/guardrails.md
+	@rm internal/kernel/help/docs/guardrails.md.tmp
+	@cp DoD.md internal/kernel/help/docs/dod.md.tmp
+	@printf '<!-- Synced from /DoD.md; do not edit directly — edit the root copy and re-run `make sync-docs` -->\n\n' \
+	  | cat - internal/kernel/help/docs/dod.md.tmp > internal/kernel/help/docs/dod.md
+	@rm internal/kernel/help/docs/dod.md.tmp
+	@echo "synced GUARDRAILS.md and DoD.md to internal/kernel/help/docs/"
+
 clean-jdtls-cache: ## Wipe warm jdtls workspaces under the platform user cache dir
 	@case "$$(uname -s)" in \
 	  Darwin) DIR="$$HOME/Library/Caches/helix-test/jdtls" ;; \

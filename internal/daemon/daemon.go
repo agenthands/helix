@@ -721,8 +721,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			Now:     time.Now,
 		})
 		// Wire the issue sink so read-tool issuance (Plan 05) lights up at runtime.
+		// CR-03 fix: thread the active workspace key into the issuance closure so
+		// receipts are stored under the correct workspace identity. The closure
+		// captures activeWSKey by reference; lazyActivateFn updates it before the
+		// first tool call (LazyInit middleware runs first in the LIFO chain).
 		guardrails.SetReceiptIssueSink(func(ctx context.Context, class guardrails.ReceiptClass, scope guardrails.ReceiptScope, tool string) (guardrails.ReceiptID, error) {
-			return guardrailStore.Issue(workspace.WorkspaceKey{}, class, scope, guardrails.IssueFields{IssuingTool: tool})
+			return guardrailStore.Issue(activeWSKey, class, scope, guardrails.IssueFields{IssuingTool: tool})
 		})
 		var semanticLookup integ.SemanticLookup = integ.NoopLookup{}
 		if sBndl != nil {
@@ -737,6 +741,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			noopOutlineProvider{},
 			logger,
 			observability.Metrics(),
+			wsKeyFn,
 		)
 		helixMCP.InstallGuardrailMiddleware(mcpServer.SDK(), guardrailDeps, getSessionFn, logger)
 		// Register store shutdown with the kernel-first shutdown ordering.

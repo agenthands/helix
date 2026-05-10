@@ -30,6 +30,11 @@ type guardrailDepsImpl struct {
 	outline         rules.OutlineProvider
 	logger          *slog.Logger
 	metrics         *obs.Metrics
+	// wsKeyFn returns the active workspace key at evaluation time. Captured
+	// from daemon scope so the closure stays consistent with the lazyActivate
+	// flow (CR-03). When nil or returning a zero key, evaluation falls back
+	// to workspace.WorkspaceKey{}.
+	wsKeyFn func() workspace.WorkspaceKey
 }
 
 // profileGuardrailsResolver resolves the per-profile guardrail enforcement level.
@@ -48,6 +53,7 @@ func newGuardrailDeps(
 	outline rules.OutlineProvider,
 	logger *slog.Logger,
 	metrics *obs.Metrics,
+	wsKeyFn func() workspace.WorkspaceKey,
 ) helixMCP.MiddlewareDeps {
 	return &guardrailDepsImpl{
 		lookup:          lookup,
@@ -58,6 +64,7 @@ func newGuardrailDeps(
 		outline:         outline,
 		logger:          logger,
 		metrics:         metrics,
+		wsKeyFn:         wsKeyFn,
 	}
 }
 
@@ -161,10 +168,14 @@ func (d *guardrailDepsImpl) evaluate(ctx context.Context, toolName string, rawAr
 	// TODO(phase-66.x): pre-warm catalogs at startup to avoid per-call load.
 	catalogsMap := make(map[string]catalogs.Catalog)
 
-	// Workspace key: use empty key as fallback.
-	// TODO(phase-66.x): thread the active workspace key through session context
-	// so receipts are validated against the correct workspace's store.
-	wsKey := workspace.WorkspaceKey{}
+	// Workspace key resolved from daemon scope (CR-03). Falls back to the zero
+	// value when no workspace is active (pre-LazyInit), in which case the
+	// downstream rule predicates will validate against an empty key — receipts
+	// issued before activation are rare and harmless.
+	var wsKey workspace.WorkspaceKey
+	if d.wsKeyFn != nil {
+		wsKey = d.wsKeyFn()
+	}
 
 	sc := rules.SessionContext{
 		Workspace:          wsKey,

@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/agenthands/helix/internal/eval/budget"
@@ -84,6 +85,14 @@ func BuildEvalPhases(state *RunState) []phasegraph.PhaseSpec {
 			Requires: nil,
 			Provides: []string{"workspace"},
 			Run: func(ctx context.Context, deps phasegraph.PhaseDeps) (phasegraph.PhaseOutput, error) {
+				// Reject task IDs that would escape join roots — closes
+				// 67-SECURITY.md FLAG-2 path-traversal concern.
+				if state.TaskID == "" ||
+					state.TaskID != filepath.Clean(state.TaskID) ||
+					strings.ContainsAny(state.TaskID, `/\`) ||
+					strings.HasPrefix(state.TaskID, ".") {
+					return nil, fmt.Errorf("prepare_workspace: invalid task id %q (must not contain path separators, parent refs, or leading dot)", state.TaskID)
+				}
 				state.StartAt = time.Now()
 				state.RepoDir = state.Sandbox.RepoFor(state.TaskID, state.Mode)
 				state.HomeDir = state.Sandbox.HomeFor(state.TaskID, state.Mode)

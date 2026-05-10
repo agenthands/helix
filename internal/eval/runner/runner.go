@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +59,19 @@ func (r *Runner) taskOutDir(taskID, mode string) string {
 	return filepath.Join(r.cfg.OutDir, r.cfg.RunID, "tasks", taskID, mode)
 }
 
+// validateTaskID rejects task IDs that could escape join roots via path traversal.
+// Closes 67-SECURITY.md FLAG-2 — task IDs flow into filepath.Join with CorpusDir
+// and OutDir; a malicious ID like "../../foo" would escape both.
+func validateTaskID(id string) error {
+	if id == "" {
+		return fmt.Errorf("task id is empty")
+	}
+	if id != filepath.Clean(id) || strings.ContainsAny(id, `/\`) || strings.HasPrefix(id, ".") {
+		return fmt.Errorf("task id %q contains path separators, parent refs, or leading dot", id)
+	}
+	return nil
+}
+
 // RunTask executes all 10 phasegraph EvalPhases for (taskSpec.ID, taskSpec.Mode)
 // using the provided sandbox for filesystem isolation. It returns an EvalResult
 // capturing every measurable dimension of the run. RunTask does not return an
@@ -66,6 +80,9 @@ func (r *Runner) taskOutDir(taskID, mode string) string {
 // The returned error is non-nil only for infrastructure failures (e.g., unable
 // to create the output directory or write required artifacts).
 func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) (*report.EvalResult, error) {
+	if err := validateTaskID(ts.ID); err != nil {
+		return nil, fmt.Errorf("runner: %w", err)
+	}
 	outDir := r.taskOutDir(ts.ID, ts.Mode)
 	if err := os.MkdirAll(outDir, 0700); err != nil {
 		return nil, fmt.Errorf("runner: mkdir task outdir: %w", err)

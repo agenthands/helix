@@ -171,45 +171,51 @@ func TestSandboxConcurrent(t *testing.T) {
 }
 
 // TestSandboxRefusesSymlinkedTmpdir verifies that checkNotSymlink rejects a
-// path that resolves through a symlink and accepts a real directory.
+// path that is itself a symbolic link and accepts a real directory.
 func TestSandboxRefusesSymlinkedTmpdir(t *testing.T) {
 	realDir := t.TempDir()
 	symlinkPath := filepath.Join(t.TempDir(), "symlink")
 	require.NoError(t, os.Symlink(realDir, symlinkPath))
 
 	err := checkNotSymlink(symlinkPath)
-	assert.Error(t, err, "checkNotSymlink should reject symlinked path")
+	assert.Error(t, err, "checkNotSymlink should reject a symlinked path")
 
 	// A real directory must pass.
 	assert.NoError(t, checkNotSymlink(realDir))
 }
 
 // buildFakeHelixBin compiles a small Go program that opens a Unix socket at the
-// path specified via --socket=<path> flag, then blocks until killed.
+// path specified via --socket=<path> arg (scanned manually to skip unknown
+// flags like --serve, --profile), then blocks until killed.
 func buildFakeHelixBin(t *testing.T) string {
 	t.Helper()
 
 	src := `package main
 
 import (
-	"flag"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
 func main() {
-	socket := flag.String("socket", "", "unix socket path")
-	flag.Parse()
+	// Scan argv manually to extract --socket= value; unknown flags are ignored.
+	var socket string
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--socket=") {
+			socket = strings.TrimPrefix(arg, "--socket=")
+		}
+	}
 
-	if *socket == "" {
+	if socket == "" {
 		os.Exit(1)
 	}
 
-	_ = os.Remove(*socket)
+	_ = os.Remove(socket)
 
-	l, err := net.Listen("unix", *socket)
+	l, err := net.Listen("unix", socket)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -235,8 +241,7 @@ func main() {
 	return binFile
 }
 
-// TestFakeHelixBin is a helper that verifies the fake helix binary can bind
-// to a Unix socket (sanity check for the test infrastructure itself).
+// TestFakeHelixBin verifies the fake helix binary can bind to a Unix socket.
 func TestFakeHelixBin(t *testing.T) {
 	fakeHelixBin := buildFakeHelixBin(t)
 

@@ -56,10 +56,6 @@ func evaluateG002DeleteFile(ctx context.Context, args RuleArgs, sc SessionContex
 	}
 
 	// Check for covering receipt.
-	requiredClasses := []guardrails.ReceiptClass{
-		guardrails.ClassReferencesChecked,
-		guardrails.ClassImpactChecked,
-	}
 	target := guardrails.Target{
 		Path:         args.Path,
 		TouchedFiles: []string{args.Path},
@@ -73,7 +69,10 @@ func evaluateG002DeleteFile(ctx context.Context, args RuleArgs, sc SessionContex
 		}
 	} else {
 		target.RequiredClass = guardrails.ClassReferencesChecked
-		if findReceiptCovering(sc, args, requiredClasses, target) {
+		if findReceiptCovering(sc, args, []guardrails.ReceiptClass{
+			guardrails.ClassReferencesChecked,
+			guardrails.ClassImpactChecked,
+		}, target) {
 			return Decision{Action: Allow}
 		}
 	}

@@ -170,6 +170,17 @@ func buildModeAggregates(results []EvalResult) map[string]modeAggregate {
 		agg.GuardrailCounts.Warned += r.GuardrailCompliance.Warned
 		agg.GuardrailCounts.Blocked += r.GuardrailCompliance.Blocked
 		agg.GuardrailCounts.ReceiptsIssued += r.GuardrailCompliance.ReceiptsIssued
+		// Aggregate per-tool call counts from each result into the mode distribution
+		// (WR-04 fix: ToolCallDistribution was never populated, so the MD report always
+		// showed "(No tool calls recorded in this run.)" even when tool calls occurred).
+		if len(r.ToolCallsByTool) > 0 {
+			if agg.ToolCallDistribution == nil {
+				agg.ToolCallDistribution = make(map[string]int)
+			}
+			for tool, count := range r.ToolCallsByTool {
+				agg.ToolCallDistribution[tool] += count
+			}
+		}
 		byMode[r.Mode] = agg
 	}
 	for mode, agg := range byMode {

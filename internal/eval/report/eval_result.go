@@ -32,6 +32,10 @@ type EvalResult struct {
 		Output int `json:"output"`
 	} `json:"tokens"`
 	EditCount int `json:"edit_count"`
+	// ToolCallsByTool is the per-tool call count from the merged trace.
+	// Populated from MergedTrace.ToolCallSummary.ByTool and aggregated into
+	// modeAggregate.ToolCallDistribution by buildModeAggregates (WR-04 fix).
+	ToolCallsByTool map[string]int `json:"tool_calls_by_tool,omitempty"`
 
 	// Safety signal from Phase 66 guardrail telemetry.
 	GuardrailCompliance trace.GuardrailCounts `json:"guardrail_compliance"`

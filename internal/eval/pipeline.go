@@ -249,6 +249,14 @@ func BuildEvalPhases(state *RunState) []phasegraph.PhaseSpec {
 			Run: func(ctx context.Context, deps phasegraph.PhaseDeps) (phasegraph.PhaseOutput, error) {
 				state.Result.GuardrailCompliance = state.Merged.Guardrails
 				state.Result.EditCount = state.Merged.ToolCallSummary.Total
+				// Populate per-tool call counts so buildModeAggregates can fill
+				// ToolCallDistribution for eval_report.md (WR-04 fix).
+				if len(state.Merged.ToolCallSummary.ByTool) > 0 {
+					state.Result.ToolCallsByTool = make(map[string]int, len(state.Merged.ToolCallSummary.ByTool))
+					for tool, count := range state.Merged.ToolCallSummary.ByTool {
+						state.Result.ToolCallsByTool[tool] = count
+					}
+				}
 				state.Result.Tokens.Input = state.Merged.Usage.InputTokens
 				state.Result.Tokens.Output = state.Merged.Usage.OutputTokens
 				state.Result.DurationMs = int64(time.Since(state.StartAt) / time.Millisecond)

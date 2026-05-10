@@ -214,6 +214,14 @@ func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) 
 	// Phase 9: score_guardrails.
 	result.GuardrailCompliance = merged.Guardrails
 	result.EditCount = merged.ToolCallSummary.Total
+	// Populate per-tool call counts so buildModeAggregates can fill
+	// ToolCallDistribution for the eval_report.md tool-call table (WR-04 fix).
+	if len(merged.ToolCallSummary.ByTool) > 0 {
+		result.ToolCallsByTool = make(map[string]int, len(merged.ToolCallSummary.ByTool))
+		for tool, count := range merged.ToolCallSummary.ByTool {
+			result.ToolCallsByTool[tool] = count
+		}
+	}
 	result.Tokens.Input = merged.Usage.InputTokens
 	result.Tokens.Output = merged.Usage.OutputTokens
 	result.DurationMs = int64(time.Since(runStart) / time.Millisecond)

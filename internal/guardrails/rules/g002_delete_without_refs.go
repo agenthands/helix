@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/guardrails"
 )
 
@@ -171,7 +172,7 @@ func evaluateG002ReplaceBody(ctx context.Context, args RuleArgs, sc SessionConte
 		if err == nil && vis.IsPublicLike() {
 			triggered = true
 		}
-		if err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		if err != nil && !errors.Is(err, serr.ErrUnsupported) {
 			// unexpected error: conservative trigger
 			triggered = true
 		}

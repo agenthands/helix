@@ -5,6 +5,7 @@ import (
 	"errors"
 	"unicode"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/guardrails"
 )
 
@@ -36,7 +37,7 @@ func EvaluateG003(ctx context.Context, args RuleArgs, sc SessionContext) Decisio
 		if err == nil && vis.IsPublicLike() {
 			triggered = true
 		}
-		if err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		if err != nil && !errors.Is(err, serr.ErrUnsupported) {
 			// Unexpected error: conservative trigger.
 			triggered = true
 		}

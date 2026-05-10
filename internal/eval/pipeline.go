@@ -152,7 +152,11 @@ func BuildEvalPhases(state *RunState) []phasegraph.PhaseSpec {
 				ccStdoutPath := filepath.Join(state.ModeDir, "claude.stdout")
 
 				if _, err := os.Stat(daemonLogPath); err == nil {
-					state.DaemonTap, _ = trace.TapDaemonLog(daemonLogPath, 0)
+					// Pass the real daemon PID so TapDaemonLog's T-67-04 PID gate
+					// accepts log lines from our daemon and rejects foreign processes.
+					// state.DaemonHandle is set by run_agent when wave-2 wires the real
+					// StartDaemon call; Pid() is nil-safe and returns 0 until then.
+					state.DaemonTap, _ = trace.TapDaemonLog(daemonLogPath, state.DaemonHandle.Pid())
 				}
 				if _, err := os.Stat(ccStdoutPath); err == nil {
 					state.CCTap, _ = trace.TapCCStream(ccStdoutPath)

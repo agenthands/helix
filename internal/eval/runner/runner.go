@@ -144,8 +144,15 @@ func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) 
 	var daemonTap trace.DaemonTapResult
 	var ccTap trace.CCTapResult
 
+	// daemonHandle is set when Phase 67 wave-2 wires real subprocess orchestration
+	// (StartDaemon call in run_agent). The Pid() accessor is nil-safe and returns 0
+	// when the handle is not set, preserving current placeholder behaviour.
+	// TODO(wave-2): populate daemonHandle from the real StartDaemon call above.
+	var daemonHandle *sandbox.DaemonHandle
 	if _, err := os.Stat(daemonLogPath); err == nil {
-		daemonTap, _ = trace.TapDaemonLog(daemonLogPath, 0)
+		// Pass the real daemon PID so TapDaemonLog's T-67-04 PID gate accepts
+		// log lines from our daemon and rejects foreign-process lines.
+		daemonTap, _ = trace.TapDaemonLog(daemonLogPath, daemonHandle.Pid())
 	}
 	if _, err := os.Stat(ccStdoutPath); err == nil {
 		ccTap, _ = trace.TapCCStream(ccStdoutPath)

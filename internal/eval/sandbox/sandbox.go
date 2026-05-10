@@ -178,6 +178,16 @@ type DaemonHandle struct {
 	mode   string
 }
 
+// Pid returns the OS process ID of the daemon subprocess, or 0 if the process
+// has not been started or the handle is nil. Used by trace.TapDaemonLog to
+// gate log events to the correct daemon process (T-67-04 mitigation).
+func (h *DaemonHandle) Pid() int {
+	if h == nil || h.cmd == nil || h.cmd.Process == nil {
+		return 0
+	}
+	return h.cmd.Process.Pid
+}
+
 // Kill terminates the daemon process and waits for it to exit.
 func (h *DaemonHandle) Kill() error {
 	if h.cmd == nil || h.cmd.Process == nil {

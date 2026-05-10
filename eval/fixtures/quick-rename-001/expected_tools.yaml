@@ -1,0 +1,7 @@
+task_kind: rename
+expect_sequence:
+  - id: rename-after-references
+    score: 1
+    pattern:
+      - tool: find_references
+      - tool: rename_symbol

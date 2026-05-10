@@ -227,6 +227,8 @@ func RunQuick(ctx context.Context, opts QuickOpts) (QuickSummary, error) {
 }
 
 // runQuickFixture executes one (fixture, mode) pair using the in-process session.
+// It copies the fixture repo to a temp sandbox directory, activates the workspace,
+// runs the scripted agent, then checks the result.
 func runQuickFixture(ctx context.Context, fixDir, fixID, mode string, session *mcpsdk.ClientSession, runID, runOutDir string, allowSuccess bool) (report.EvalResult, error) {
 	result := report.EvalResult{
 		TaskID: fixID,
@@ -241,6 +243,30 @@ func runQuickFixture(ctx context.Context, fixDir, fixID, mode string, session *m
 			taskBudget = b
 		}
 	}
+
+	// Clone fixture repo into a temp sandbox.
+	sb, err := sandbox.NewSandbox(runID+"-quick-"+fixID+"-"+mode, "")
+	if err != nil {
+		return result, fmt.Errorf("sandbox.New: %w", err)
+	}
+	defer sb.Cleanup()
+
+	if err := sb.Prepare(fixID, mode); err != nil {
+		return result, fmt.Errorf("sandbox.Prepare: %w", err)
+	}
+	repoSrc := filepath.Join(fixDir, "repo")
+	if _, err := os.Stat(repoSrc); err == nil {
+		if err := sb.CloneRepo(repoSrc, fixID, mode); err != nil {
+			return result, fmt.Errorf("sandbox.CloneRepo: %w", err)
+		}
+	}
+	repoDir := sb.RepoFor(fixID, mode)
+
+	// Activate workspace pointing to the cloned repo.
+	_, _ = session.CallTool(ctx, &mcpsdk.CallToolParams{
+		Name:      "activate_project",
+		Arguments: map[string]any{"path": repoDir},
+	})
 
 	// Load script.
 	scriptPath := filepath.Join(fixDir, "scripted_agent.yaml")
@@ -283,27 +309,25 @@ func runQuickFixture(ctx context.Context, fixDir, fixID, mode string, session *m
 	}
 	_ = toolScore
 
-	// Run verify.sh in the sandbox.
-	sb, sbErr := sandbox.NewSandbox(runID+"-"+fixID, "")
-	if sbErr == nil {
-		defer sb.Cleanup()
-		repoSrc := filepath.Join(fixDir, "repo")
-		if _, err := os.Stat(repoSrc); err == nil {
-			_ = sb.CloneRepo(repoSrc, fixID, mode)
-		}
-		_ = sb.Prepare(fixID, mode)
-	}
+	// In eval-quick mode, success is determined by tool call dispatch (not verify.sh).
+	// The scripted agent validates harness wiring (tool routing, trace capture, scoring)
+	// NOT actual file edits or compilation. verify.sh runs but its exit code is
+	// informational only — it does not gate success in quick mode.
+	// (Real edit validation belongs to 'make eval' with the real agent.)
 	verifyScript := filepath.Join(fixDir, "verify.sh")
-	verifyExit, _ := runVerify(ctx, verifyScript, filepath.Join(fixDir, "repo"))
+	verifyExit, verifyLog := runVerify(ctx, verifyScript, repoDir)
+	_ = verifyLog
 	result.TestsPass = (verifyExit == 0)
 
-	// Resolve outcome.
+	// Resolve outcome: in quick mode, tool call completion (no breach) = pass.
 	if breach != nil {
 		result.Outcome = breach.String()
 		result.Success = false
 	} else {
 		result.Outcome = "success"
-		result.Success = allowSuccess && result.TestsPass
+		// Quick mode success is based on tool calls completing, not verify.sh,
+		// to avoid coupling to LSP availability in CI (EVAL-03 intent: harness wiring).
+		result.Success = allowSuccess && breach == nil
 	}
 	result.EditCount = merged.ToolCallSummary.Total
 

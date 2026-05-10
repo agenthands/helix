@@ -119,15 +119,39 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 		return fmt.Errorf("helix-eval run: ZDR gate: %w", err)
 	}
 
-	// Step 2: run the matrix.
-	if quick {
-		// TODO(Phase-67-Plan-06): wire in-process scripted agent.
-		fmt.Fprintln(cmd.OutOrStdout(), "NOTE: --quick in-process path not yet implemented (Phase 67 Plan 06).")
-		fmt.Fprintln(cmd.OutOrStdout(), "Falling through to subprocess runner with --quick ignored.")
-	}
-
 	_ = judgeModel // informational judge is Plan 06
 	_ = noJudge
+
+	// Step 2: run the matrix.
+	if quick {
+		// In-process scripted-agent path (EVAL-03, Plan 67-06a).
+		// Pitfall-6 banner is emitted inside RunQuick.
+		qOpts := runner.QuickOpts{
+			FixturesDir:  corpus,
+			Modes:        modes,
+			OutDir:       out,
+			RunID:        runID,
+			AllowSuccess: true, // --quick flag opens the success gate
+		}
+		qSummary, err := runner.RunQuick(ctx, qOpts)
+		if err != nil {
+			return fmt.Errorf("helix-eval run --quick: %w", err)
+		}
+		// Step 5: print summary.
+		total := qSummary.TotalResults
+		succeeded := 0
+		for _, r := range qSummary.Results {
+			if r.Success {
+				succeeded++
+			}
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "helix-eval quick complete: %d/%d tasks succeeded\n", succeeded, total)
+		fmt.Fprintf(cmd.OutOrStdout(), "Reports written to: %s\n", filepath.Join(out, runID))
+		if succeeded < total {
+			os.Exit(1)
+		}
+		return nil
+	}
 
 	r := runner.NewRunner(runner.Config{
 		CorpusDir:   corpus,

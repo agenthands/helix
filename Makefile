@@ -190,8 +190,31 @@ update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE s
 	@echo "trusted_root.json refreshed from live sigstore TUF; commit and bump per CONTRIBUTING.md"
 	@sha256sum internal/upgrade/trusted_root.json 2>/dev/null || shasum -a 256 internal/upgrade/trusted_root.json
 
-# eval-quick: in-process scripted-agent harness validation. <30s wall.
-# Runs on every PR. NOT real-agent behavior measurement (see eval/EVAL.md).
+# eval-quick: in-process scripted-agent harness validation. <30s wall-time for
+# the full 10-fixture set (D-05). Runs on every PR as a CI gate.
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  PITFALL 6 — CRITICAL WARNING (T-67-Pitfall-6, four-layer mitigation)   ║
+# ║                                                                          ║
+# ║  eval-quick uses a SCRIPTED AGENT that replays hard-coded MCP call       ║
+# ║  sequences. It does NOT measure real Claude Code agent behavior.         ║
+# ║                                                                          ║
+# ║  What eval-quick validates:                                              ║
+# ║    ✓ Harness wiring (daemon startup, profile loading, tool registry)     ║
+# ║    ✓ Scorer rule parsing and application                                 ║
+# ║    ✓ Report generation (5 EVAL-04 report files)                          ║
+# ║                                                                          ║
+# ║  What eval-quick does NOT validate:                                      ║
+# ║    ✗ Whether a real LLM agent chooses the right tools                    ║
+# ║    ✗ Agent cost, reasoning, or error recovery behavior                   ║
+# ║    ✗ Tool output quality or semantic correctness                         ║
+# ║                                                                          ║
+# ║  Use 'make eval' for real agent behavior measurements (nightly/release). ║
+# ║  Never report eval-quick results as agent-behavior evidence.             ║
+# ║                                                                          ║
+# ║  D-05 BUDGET: 10-fixture set target <30s wall-time on CI runners.        ║
+# ║  Plan 67-06a ships 2 reference fixtures; Plan 67-06b adds 8 more.        ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 eval-quick:
 	go run ./cmd/helix-eval run --quick --corpus eval/fixtures --out eval/reports
 

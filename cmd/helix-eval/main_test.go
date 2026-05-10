@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"strings"
+	"os"
 	"testing"
 
 	"github.com/agenthands/helix/internal/eval"
@@ -30,20 +30,41 @@ func TestHelixEvalCommandHelp(t *testing.T) {
 	assert.Contains(t, out, "eval", "help output must mention 'eval'")
 }
 
-// TestHelixEvalRunNotImplemented verifies that 'run --quick --corpus /tmp/empty'
-// exits non-zero with a "not yet implemented" message until Wave 1+ wires it.
-func TestHelixEvalRunNotImplemented(t *testing.T) {
+// TestHelixEvalRunEmptyCorpusSucceeds verifies that 'run' over an empty corpus
+// completes without error and writes all 6 report files. This replaces the
+// Wave 0 "not yet implemented" test now that Wave 3 wires the run body.
+func TestHelixEvalRunEmptyCorpusSucceeds(t *testing.T) {
+	outDir := t.TempDir()
+	corpusDir := t.TempDir() // empty corpus → 0 tasks
+
 	root := newRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"run", "--quick", "--corpus", t.TempDir()})
+	root.SetArgs([]string{
+		"run",
+		"--corpus", corpusDir,
+		"--mode", "baseline",
+		"--out", outDir,
+		"--run-id", "test-empty-corpus",
+	})
 
 	err := root.Execute()
-	require.Error(t, err, "run should return an error (not yet implemented)")
-	assert.True(t,
-		strings.Contains(err.Error(), "not yet implemented"),
-		"error message must say 'not yet implemented', got: %q", err.Error())
+	// Empty corpus should succeed (0 tasks, all reports still emitted).
+	require.NoError(t, err, "run over empty corpus should not error; got: %v\nOutput: %s", err, buf.String())
+
+	// All 6 report files should exist.
+	runDir := outDir + "/test-empty-corpus"
+	for _, f := range []string{
+		"eval_report.json", "eval_report.md",
+		"cost_summary.json", "tool_behavior.json",
+		"safety_compliance.json", "run_metadata.json",
+	} {
+		path := runDir + "/" + f
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected report file %q: %v", path, err)
+		}
+	}
 }
 
 // TestPipelineExportsEvalPhases verifies that internal/eval/pipeline.go

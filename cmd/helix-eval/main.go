@@ -4,15 +4,25 @@
 //   - helix-eval run     — dispatch tasks across modes, collect results
 //   - helix-eval validate-rules — validate expected_tools.yaml rule files
 //
-// Both subcommands return "not yet implemented" until Wave 1+ lands real bodies.
-// The binary compiles and --help works from Wave 0 onward.
+// The 'run' subcommand:
+//  1. Enforces the EVAL-06 ZDR corpus gate via runner.AssertCorpusAllowed.
+//  2. Runs all (corpus task × mode) pairs via runner.RunMatrix.
+//  3. Emits all 6 EVAL-04 report files under <out>/<run-id>/:
+//       eval_report.json, eval_report.md, cost_summary.json,
+//       tool_behavior.json, safety_compliance.json, run_metadata.json.
+//  4. Exits 0 if all tasks succeeded; exits 1 if any task failed.
+//     Judge failure does NOT affect exit code (EVAL-07).
 package main
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/agenthands/helix/internal/eval/report"
+	"github.com/agenthands/helix/internal/eval/runner"
 	"github.com/agenthands/helix/internal/eval/score"
 	"github.com/spf13/cobra"
 )
@@ -54,6 +64,7 @@ func newRunCmd() *cobra.Command {
 		judgeModel string
 		noJudge    bool
 		out        string
+		helixBin   string
 	)
 
 	cmd := &cobra.Command{
@@ -61,33 +72,123 @@ func newRunCmd() *cobra.Command {
 		Short: "Run the evaluation matrix",
 		Long: `Run the evaluation harness over the corpus for the specified modes.
 
-Without --quick, spawns out-of-process daemon + claude CLI subprocesses per
-(task, mode) pair. With --quick, uses an in-process scripted agent for fast
-harness-wiring validation.
+Without --quick, runs per-(task, mode) pairs through the phasegraph pipeline.
+With --quick, stubs the agent (harness-wiring validation only, <30s wall-time).
 
 Note: --quick does NOT measure real Claude Code agent behavior. Use 'make eval'
 for behavior measurements (see eval/EVAL.md).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = corpus
-			_ = modes
-			_ = runID
-			_ = quick
-			_ = judgeModel
-			_ = noJudge
-			_ = out
-			return fmt.Errorf("not yet implemented (Phase 67 Wave 1+)")
+			return runCommand(cmd, corpus, modes, runID, out, helixBin, quick, judgeModel, noJudge)
 		},
 	}
 
 	cmd.Flags().StringVar(&corpus, "corpus", "eval/corpus", "path to corpus directory")
 	cmd.Flags().StringArrayVar(&modes, "mode", []string{"baseline", "native", "semantic", "semantic_guarded"}, "eval mode(s); repeatable")
-	cmd.Flags().StringVar(&runID, "run-id", "", "run identifier (default: ISO-8601 timestamp + git SHA)")
+	cmd.Flags().StringVar(&runID, "run-id", "", "run identifier (default: ISO-8601 timestamp)")
 	cmd.Flags().BoolVar(&quick, "quick", false, "use in-process scripted agent (harness validation only, <30s)")
 	cmd.Flags().StringVar(&judgeModel, "judge-model", "claude-sonnet-4-6", "LLM judge model (informational only)")
-	cmd.Flags().BoolVar(&noJudge, "no-judge", false, "skip the informational LLM judge pass")
+	cmd.Flags().BoolVar(&noJudge, "no-judge", true, "skip the informational LLM judge pass (default: skip)")
 	cmd.Flags().StringVar(&out, "out", "eval/reports", "output directory for reports")
+	cmd.Flags().StringVar(&helixBin, "helix-bin", "helix", "path to the helix binary for daemon subprocess")
 
 	return cmd
+}
+
+// runCommand implements the 'run' subcommand body.
+func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, helixBin string, quick bool, judgeModel string, noJudge bool) error {
+	ctx := cmd.Context()
+
+	// Default run-id from timestamp.
+	if runID == "" {
+		runID = time.Now().UTC().Format("20060102T150405Z")
+	}
+
+	// Step 0: capture run metadata before anything else.
+	meta := report.CaptureRunMetadata(modes, corpus)
+	meta.RunID = runID
+	meta.StartedAt = time.Now().UTC()
+
+	// Create run output directory.
+	runOutDir := filepath.Join(out, runID)
+	if err := os.MkdirAll(runOutDir, 0700); err != nil {
+		return fmt.Errorf("helix-eval run: mkdir run output dir: %w", err)
+	}
+
+	// Step 1: enforce EVAL-06 ZDR gate.
+	if err := runner.AssertCorpusAllowed(corpus); err != nil {
+		return fmt.Errorf("helix-eval run: ZDR gate: %w", err)
+	}
+
+	// Step 2: run the matrix.
+	if quick {
+		// TODO(Phase-67-Plan-06): wire in-process scripted agent.
+		fmt.Fprintln(cmd.OutOrStdout(), "NOTE: --quick in-process path not yet implemented (Phase 67 Plan 06).")
+		fmt.Fprintln(cmd.OutOrStdout(), "Falling through to subprocess runner with --quick ignored.")
+	}
+
+	_ = judgeModel // informational judge is Plan 06
+	_ = noJudge
+
+	r := runner.NewRunner(runner.Config{
+		CorpusDir:   corpus,
+		OutDir:      out,
+		HelixBin:    helixBin,
+		RunID:       runID,
+		MaxParallel: 1,
+	})
+
+	results, _ := r.RunMatrix(ctx, modes)
+	// RunMatrix errors are non-fatal (individual task errors captured in results).
+
+	// Step 3: build score map (empty for now — per-task scores written by RunTask).
+	scores := make(map[string]score.Score)
+
+	meta.EndedAt = time.Now().UTC()
+
+	// Step 4: write all 6 EVAL-04 report files.
+	var writeErrors []string
+
+	if err := report.WriteRunMetadata(filepath.Join(runOutDir, "run_metadata.json"), meta); err != nil {
+		writeErrors = append(writeErrors, err.Error())
+	}
+	if err := report.WriteCostSummary(filepath.Join(runOutDir, "cost_summary.json"), results); err != nil {
+		writeErrors = append(writeErrors, err.Error())
+	}
+	if err := report.WriteSafetyCompliance(filepath.Join(runOutDir, "safety_compliance.json"), results); err != nil {
+		writeErrors = append(writeErrors, err.Error())
+	}
+	if err := report.WriteToolBehavior(filepath.Join(runOutDir, "tool_behavior.json"), scores); err != nil {
+		writeErrors = append(writeErrors, err.Error())
+	}
+	if err := report.WriteEvalReport(
+		filepath.Join(runOutDir, "eval_report.json"),
+		filepath.Join(runOutDir, "eval_report.md"),
+		results, scores, meta,
+	); err != nil {
+		writeErrors = append(writeErrors, err.Error())
+	}
+
+	if len(writeErrors) > 0 {
+		return fmt.Errorf("helix-eval run: report write errors:\n  %s", strings.Join(writeErrors, "\n  "))
+	}
+
+	// Step 5: print summary.
+	total := len(results)
+	succeeded := 0
+	for _, r := range results {
+		if r.Success {
+			succeeded++
+		}
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "helix-eval run complete: %d/%d tasks succeeded\n", succeeded, total)
+	fmt.Fprintf(cmd.OutOrStdout(), "Reports written to: %s\n", runOutDir)
+
+	// Step 6: exit code. Judge failure does NOT affect exit code (EVAL-07).
+	if succeeded < total {
+		os.Exit(1)
+	}
+
+	return nil
 }
 
 // newValidateRulesCmd returns the 'validate-rules' subcommand.

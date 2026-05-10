@@ -448,3 +448,50 @@ if err := dec.Decode(&m); err != nil { ... }
 _Reviewed: 2026-05-10_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Fix Report
+
+**Fixed at:** 2026-05-10
+**Fixer:** Claude (gsd-code-fixer)
+**Scope:** Critical + Warning (9 findings)
+**Summary:** 9 fixed / 0 skipped / 3 Info deferred (out of scope)
+
+| Finding | Title | Commit | Status |
+|---------|-------|--------|--------|
+| CR-01 | Daemon log file closed before subprocess writes | `9dcdd0aa` | FIXED |
+| CR-02 | Kill() returns ErrProcessDone despite "ignored" comment | `2958a859` | FIXED |
+| CR-03 | TapDaemonLog called with expectedPid=0 — PID gate bypassed | `196e829c` | FIXED |
+| CR-04 | Unknown source: value silently passes ZDR gate | `b06556b1` | FIXED |
+| WR-01 | defer os.RemoveAll inside loop accumulates dirs until return | `3f9db720` | FIXED |
+| WR-02 | os.Exit(1) inside RunE bypasses cobra cleanup | `78569067` | FIXED |
+| WR-03 | Kill() goroutine leak — no process-group kill on 5s timeout | `458ce42d` | FIXED |
+| WR-04 | ToolCallDistribution never populated in buildModeAggregates | `18bd93da` | FIXED |
+| WR-05 | Dead if ok := (err != nil) conditional in runVerify | `cb7409d5` | FIXED |
+| IN-01 | LLM judge Reasoning unescaped in Markdown table | — | DEFERRED (Info) |
+| IN-02 | SHA truncation min() argument order | — | DEFERRED (Info) |
+| IN-03 | source.yaml parsing lacks KnownFields(true) | — | DEFERRED (Info) |
+
+### Fix Notes
+
+**CR-01:** Changed `logFile.Close()` immediately after `cmd.Start()` to `defer logFile.Close()` so the fd stays open during the socket poll and is closed cleanly when `StartDaemon` returns.
+
+**CR-02:** Added `errors.Is(err, os.ErrProcessDone)` guard in `Kill()` to suppress the already-finished error and call `cmd.Wait()` to reap the zombie, matching the intent of the existing comment.
+
+**CR-03:** Added `Pid() int` nil-safe accessor to `DaemonHandle` in sandbox.go. Updated both `runner.go` and `pipeline.go` to call `daemonHandle.Pid()` instead of hard-coded `0`. The accessor returns 0 for a nil handle (wave-1 placeholder path), preserving current behaviour until wave-2 wires real daemon subprocess orchestration.
+
+**CR-04:** Added explicit allowlist switch in `readTaskSource` after YAML decode. Any source value other than `synthetic`, `helix-oss`, or `external` now returns an error instead of silently defaulting to `CorpusSynthetic`.
+
+**WR-01:** Wrapped the per-mode loop body in an immediately-called closure so `defer os.RemoveAll(tmpDir)` fires at end of each mode iteration rather than when `RunQuick` returns. Daemon cancel and session close also moved into the closure.
+
+**WR-02:** Replaced both `os.Exit(1)` calls inside `runCommand` (a cobra `RunE`) with `return fmt.Errorf(...)` so cobra handles the non-zero exit code and deferred cleanup functions are not bypassed.
+
+**WR-03:** On the 5-second timeout branch in `Kill()`, added `syscall.Kill(-pid, syscall.SIGKILL)` to send SIGKILL to the entire process group (negative PID), ensuring child processes spawned by the daemon are also killed.
+
+**WR-04:** Added `ToolCallsByTool map[string]int` field to `EvalResult`. Populated it from `merged.ToolCallSummary.ByTool` in both `runner.go` and `pipeline.go`. Updated `buildModeAggregates` to aggregate per-result tool counts into `modeAggregate.ToolCallDistribution`.
+
+**WR-05:** Replaced the double-nested type assertion (`if ok := (err != nil); ok { if e, ok2 := err.(*exec.ExitError)...}`) with the idiomatic `errors.As(err, &exitErr)` pattern, eliminating the always-true dead branch.
+
+_Fixed: 2026-05-10_
+_Fixer: Claude (gsd-code-fixer)_

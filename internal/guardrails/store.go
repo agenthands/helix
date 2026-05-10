@@ -25,7 +25,7 @@ type IssueFields struct {
 	Freshness     string
 	ScoreStatus   string
 	ClusterStatus string
-	PendingLSP    int
+	PendingLSPFiles int
 	LSPCoverage   float64
 	IssuingTool   string
 	IssuingCallID string
@@ -225,7 +225,7 @@ func (s *Store) Issue(ws workspace.WorkspaceKey, class ReceiptClass, scope Recei
 		Freshness:       fields.Freshness,
 		ScoreStatus:     fields.ScoreStatus,
 		ClusterStatus:   fields.ClusterStatus,
-		PendingLSPFiles: fields.PendingLSP,
+		PendingLSPFiles: fields.PendingLSPFiles,
 		LSPCoverage:     fields.LSPCoverage,
 		IssuedAt:        now,
 		ExpiresAt:       now.Add(ttl),

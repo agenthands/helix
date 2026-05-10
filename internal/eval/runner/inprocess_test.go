@@ -71,8 +71,18 @@ func TestRunQuickRunsAllFourModes(t *testing.T) {
 		t.Fatalf("RunQuick: %v", err)
 	}
 
-	// 2 fixtures × 4 modes = 8 result slots.
-	wantResults := 2 * len(defaultModes())
+	// All fixtures × 4 modes = result slots.
+	fixtureEntries, err := os.ReadDir(quickFixturesDir(t))
+	if err != nil {
+		t.Fatalf("read fixtures dir: %v", err)
+	}
+	fixtureCount := 0
+	for _, e := range fixtureEntries {
+		if e.IsDir() {
+			fixtureCount++
+		}
+	}
+	wantResults := fixtureCount * len(defaultModes())
 	if summary.TotalResults != wantResults {
 		t.Errorf("TotalResults = %d, want %d", summary.TotalResults, wantResults)
 	}

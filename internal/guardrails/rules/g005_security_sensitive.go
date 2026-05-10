@@ -2,6 +2,8 @@ package rules
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 
 	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/guardrails/catalogs"
@@ -124,38 +126,34 @@ func resolveG005Catalog(filePath string, cats map[string]catalogs.Catalog) catal
 	return catalogs.Catalog{}
 }
 
-// langFromPath returns a language key from the file extension.
+// langFromPath returns a language key from the file extension. Returns ""
+// for any extension not in the four catalogs that ship with v1.10
+// (go, typescript, javascript, python). The empty result is intentional and
+// fail-closed: resolveG005Catalog returns an empty Catalog{} for unknown
+// languages, so IsSecuritySensitive cannot fire any signal. Operators with
+// repos in Java/Rust/C#/Kotlin/Ruby/PHP/Swift/etc. should treat G-005 as a
+// no-op until that language's catalog ships in a later phase. See
+// GUARDRAILS.md > "G-005 catalog coverage" for the up-to-date status.
+//
+// IN-03: uses filepath.Ext rather than a hand-rolled scan.
 func langFromPath(path string) string {
-	// Simple extension-based detection.
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '.' {
-			ext := path[i+1:]
-			switch ext {
-			case "go":
-				return "go"
-			case "ts", "tsx":
-				return "typescript"
-			case "js", "mjs", "cjs":
-				return "javascript"
-			case "py":
-				return "python"
-			}
-			return ""
-		}
-		if path[i] == '/' || path[i] == '\\' {
-			break
-		}
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".go":
+		return "go"
+	case ".ts", ".tsx":
+		return "typescript"
+	case ".js", ".mjs", ".cjs":
+		return "javascript"
+	case ".py":
+		return "python"
 	}
 	return ""
 }
 
+// joinSignals concatenates G-005 trigger signals into a comma-separated list
+// for the violation message. WR-05: was a hand-rolled +=; replaced with
+// strings.Join.
 func joinSignals(signals []string) string {
-	result := ""
-	for i, s := range signals {
-		if i > 0 {
-			result += ", "
-		}
-		result += s
-	}
-	return result
+	return strings.Join(signals, ", ")
 }

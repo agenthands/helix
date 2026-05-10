@@ -1,0 +1,54 @@
+# baseline.yaml — Sixth Helix profile. Eval-harness control case (Phase 67 D-02).
+#
+# Assumption A1 mechanism: EMPTY-LISTS (not disable_all_tools flag).
+#
+# ProfileFilterMiddleware checks `snap.AllowedTools != nil` before filtering.
+# At session start, the daemon calls:
+#   resolved := skill.ResolveTools(profile.Skills, profile.Tools, profile.ExcludeTools)
+#   session.SetAllowedTools(toolNames(resolved))
+#
+# With skills:[] and tools:[], ResolveTools returns []  (empty, non-nil slice).
+# SetAllowedTools stores an empty non-nil slice as AllowedTools.
+# ProfileFilterMiddleware sees AllowedTools != nil, enters filtering, and returns
+# zero tools from the empty allow-list.
+#
+# A1 VERIFIED: empty lists ARE sufficient. The disable_all_tools fallback in
+# profile.go/middleware.go was NOT needed. See TestBaselineExposesZeroHelixTools.
+name: baseline
+description: >
+  Baseline eval profile for Phase 67 evaluation harness. Strips all Helix
+  tools so the agent runs against a bare MCP server — the control case for
+  measuring Helix's value. Not for general use: this profile is eval-only.
+
+prompt: |
+  You are running as the baseline eval agent. No Helix code-intelligence tools
+  are available. Solve tasks using only your built-in knowledge and any tools
+  the task environment explicitly provides. This is the control arm of the
+  eval harness.
+
+skills: []
+tools: []
+exclude_tools: []
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+guardrails:
+  enforcement: off
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

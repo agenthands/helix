@@ -4,7 +4,8 @@
 **Phase:** 67 — evaluation-harness
 **Threat model source:** 67-RESEARCH.md §Threat Model Seeds (lines 1149-1162)
 **Auditor:** security audit pass, HEAD c2563c9d..cb7409d5 (post code-review fixes)
-**Verdict:** PASS-WITH-FLAGS — 10 threats mitigated, 2 flagged (see below), 0 unmitigated blocking
+**Verdict:** PASS — 10 threats mitigated, both flags closed (see Flag Closure Log), 0 unmitigated blocking
+**Flag closure update (2026-05-10):** FLAG-1 closed by `3aabbb7b` (PID-gate fail-safe — skip tap when daemonHandle is nil). FLAG-2 closed by `e46aecd4` (path-traversal task-ID validation in RunTask + BuildEvalPhases).
 
 ---
 
@@ -76,7 +77,7 @@ None.
 
 | # | Threat | Asset | Finding | Severity |
 |---|--------|-------|---------|----------|
-| OT-1 | Path traversal via task ID | Report output directory | TaskID used as path component without sanitization (FLAG-2 above) | Low — corpus is trusted |
+| OT-1 | Path traversal via task ID | Report output directory | TaskID used as path component; **closed by `e46aecd4`** — `validateTaskID` in runner.go + inline guard in pipeline.go reject IDs with path separators, parent refs, or leading dots | CLOSED |
 | OT-2 | ZDR bypass via unknown `source:` value | Corpus source.yaml | Pre-CR-04: any unknown source value silently defaulted to `synthetic`. Post-CR-04 (`b06556b1`): `readTaskSource` allowlist rejects unknown values with error. Now CLOSED. | Closed by CR-04 |
 
 ---

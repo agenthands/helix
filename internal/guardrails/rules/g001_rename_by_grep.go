@@ -93,7 +93,7 @@ func EvaluateG001(ctx context.Context, args RuleArgs, sc SessionContext) Decisio
 		},
 		SuggestedTools: []string{"find_references", "analyze_blast_radius"},
 		SeeAlso: []SeeAlsoRef{
-			{Tool: "get_tool_help", Args: map[string]string{"topic": "workflow:rename-by-grep"}},
+			{Tool: "get_tool_help", Args: map[string]string{"topic": "workflow:rename"}},
 		},
 	}
 }

@@ -65,6 +65,10 @@ func (r *TopicRegistry) LoadDefaults(fsys embed.FS) error {
 		"workflow:delete":                  "docs/workflow_delete.md",
 		"workflow:large-edit":              "docs/workflow_large_edit.md",
 		"workflow:security-sensitive-edit": "docs/workflow_security_sensitive_edit.md",
+		// Phase 66 CR-02: alias for G-003 SeeAlso emission. The DoD document
+		// carries the public-API-edit checklist; until a dedicated doc lands
+		// the alias points at dod.md so the remediation hint resolves.
+		"workflow:public-api-edit": "docs/dod.md",
 	}
 	for topic, path := range mapping {
 		b, err := fs.ReadFile(fsys, path)

@@ -7,6 +7,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -183,7 +184,11 @@ func (h *DaemonHandle) Kill() error {
 		return nil
 	}
 	if err := h.cmd.Process.Kill(); err != nil {
-		// Ignore "process already finished" errors.
+		if errors.Is(err, os.ErrProcessDone) {
+			// Process already finished — reap the zombie if not already reaped.
+			_ = h.cmd.Wait()
+			return nil
+		}
 		return fmt.Errorf("sandbox: kill daemon %s/%s: %w", h.taskID, h.mode, err)
 	}
 

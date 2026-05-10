@@ -89,14 +89,14 @@ func findReceiptCovering(sc SessionContext, args RuleArgs, requiredClasses []gua
 		if !ok {
 			continue
 		}
-		// Check if this receipt's class is in the required set.
+		// Check each required class against this receipt. The class match is
+		// enforced inside ValidateReceiptForOperation (validate.go:69-72 raises
+		// ErrWrongReceiptClass when target.RequiredClass != rcpt.Class), so we
+		// rely on the validator as the single gate (WR-07: removed the
+		// duplicate `if rcpt.Class != required { continue }` early-out).
 		for _, required := range requiredClasses {
-			// Set the target's RequiredClass for the validation check.
 			t := target
 			t.RequiredClass = required
-			if rcpt.Class != required {
-				continue
-			}
 			if err := guardrails.ValidateReceiptForOperation(rcpt, t, sc.GraphVersion, sc.Workspace, sc.Now); err == nil {
 				return true
 			}

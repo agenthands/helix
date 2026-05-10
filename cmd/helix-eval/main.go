@@ -156,7 +156,7 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 		fmt.Fprintf(cmd.OutOrStdout(), "helix-eval quick complete: %d/%d tasks succeeded\n", succeeded, total)
 		fmt.Fprintf(cmd.OutOrStdout(), "Reports written to: %s\n", filepath.Join(out, runID))
 		if succeeded < total {
-			os.Exit(1)
+			return fmt.Errorf("helix-eval run --quick: %d/%d tasks failed", total-succeeded, total)
 		}
 		return nil
 	}
@@ -243,8 +243,10 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 	fmt.Fprintf(cmd.OutOrStdout(), "Reports written to: %s\n", runOutDir)
 
 	// Step 6: exit code. Judge failure does NOT affect exit code (EVAL-07).
+	// Return an error instead of os.Exit(1) so cobra handles the exit and
+	// deferred cleanup functions are not bypassed (WR-02 fix).
 	if succeeded < total {
-		os.Exit(1)
+		return fmt.Errorf("helix-eval run: %d/%d tasks failed", total-succeeded, total)
 	}
 
 	return nil

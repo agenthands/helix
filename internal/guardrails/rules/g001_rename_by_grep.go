@@ -81,7 +81,7 @@ func EvaluateG001(ctx context.Context, args RuleArgs, sc SessionContext) Decisio
 	}
 	var matchedSymbol string
 	for _, sym := range symbols {
-		if sym.Name == args.Find || containsIdentifier(sym.Name, args.Find) {
+		if sym.Name == args.Find {
 			matchedSymbol = sym.Name
 			break
 		}
@@ -127,12 +127,3 @@ func EvaluateG001(ctx context.Context, args RuleArgs, sc SessionContext) Decisio
 	}
 }
 
-// containsIdentifier returns true if the symbol name equals or contains find
-// as an identifier substring (whole-word boundary match by string equality
-// in the simplified Plan 03 implementation).
-// For Plan 03 we use simple string equality (the outline already filters to
-// declared symbols; callers check sym.Name == args.Find OR we can expand later).
-func containsIdentifier(symName, find string) bool {
-	// Simple equality: the find string IS the symbol name.
-	return symName == find
-}

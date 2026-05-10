@@ -752,6 +752,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// receipt store relies on TTL-only expiry; graph_version invalidation
 		// is available via OnGraphVersionAdvance but not yet auto-triggered.
 		logger.Info("guardrail middleware installed (Phase 66 GUARD-01)")
+		// WR-03: surface the production-stub gap to operators. The G-001
+		// rule predicate cannot match a symbol against an outline when the
+		// outline provider is a no-op, so G-001 effectively allows every
+		// fuzzy_edit / replace_in_file in production until a real adapter
+		// lands. The other four rules (G-002..G-005) are unaffected.
+		logger.Warn("guardrail G-001 outline provider is a no-op stub — G-001 is structurally Allow in production until a tree-sitter outline adapter is wired (TODO phase-66.x)")
 	}
 
 	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST

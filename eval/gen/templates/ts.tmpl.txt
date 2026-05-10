@@ -1,0 +1,7 @@
+{{/* TypeScript corpus task source template.
+     Renders the seed index.ts for a TS corpus task. */ -}}
+// {{.OldSymbol}} {{.Doc}}
+{{.SeedDecl}}
+
+// {{.Caller}} calls {{.OldSymbol}}.
+{{.SeedCaller}}

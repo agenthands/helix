@@ -1,0 +1,1 @@
+Change the signature of the public method `Encode` on type `Encoder` to accept a `context.Context` as its first parameter. Analyze blast radius before editing. Update all callers (and add the `context` import). The package must still vet clean.

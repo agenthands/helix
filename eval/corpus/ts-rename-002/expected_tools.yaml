@@ -1,0 +1,28 @@
+task_kind: rename
+
+expect_sequence:
+  - id: rename-after-references
+    score: 1
+    pattern:
+      - tool: find_references
+        args_match:
+          symbol: encodeMessage
+      - tool: rename_symbol
+        args_match:
+          old_name: encodeMessage
+
+expect_set:
+  - id: verified-after-edit
+    score: 1
+    tools:
+      - rename_symbol
+      - verify_edit
+
+forbid_sequence:
+  - id: rename-by-grep
+    score: -1
+    pattern:
+      - tool: search_for_pattern
+      - tool: replace_in_file
+        args_match:
+          find_regex: encodeMessage

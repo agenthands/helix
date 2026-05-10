@@ -1,0 +1,24 @@
+{{/* Go corpus task source template.
+     Renders the seed main.go for a Go corpus task. The agent's job is to
+     transform OldSymbol → NewSymbol (rename family) or remove OldSymbol
+     (delete family) or modify the body to introduce {{.Sentinel}} (public_api family).
+     The seed code MUST compile (`go vet ./...` clean) before the edit. */ -}}
+package main
+
+import (
+	"fmt"
+{{- range .GoExtraImports}}
+	"{{.}}"
+{{- end}}
+)
+
+// {{.OldSymbol}} {{.Doc}}
+{{.SeedDecl}}
+
+// {{.Caller}} calls {{.OldSymbol}}.
+{{.SeedCaller}}
+
+func main() {
+	result := {{.Caller}}({{.MainArgs}})
+	fmt.Println(result)
+}

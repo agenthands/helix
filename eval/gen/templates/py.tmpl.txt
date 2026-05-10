@@ -1,0 +1,16 @@
+{{/* Python corpus task source template.
+     Renders the seed main.py for a Python corpus task. */ -}}
+"""Seed module for {{.TaskID}}.
+
+{{.Doc}}
+"""
+
+
+{{.SeedDecl}}
+
+
+{{.SeedCaller}}
+
+
+if __name__ == "__main__":
+    print({{.Caller}}({{.MainArgs}}))

@@ -1,0 +1,1 @@
+Change the public function `Validate` so it returns a typed `*ValidationError` (declared in the package) instead of a generic `error`. Analyze blast radius before editing. Update all callers. The package must still vet clean.

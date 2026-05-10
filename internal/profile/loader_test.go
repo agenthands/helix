@@ -13,7 +13,7 @@ func TestLoadEmbedded_ReturnsAllProfilesAndModes(t *testing.T) {
 	store, err := LoadEmbedded()
 	require.NoError(t, err)
 
-	assert.Len(t, store.ProfileNames(), 5, "expected 5 profiles")
+	assert.Len(t, store.ProfileNames(), 6, "expected 6 profiles")
 	assert.Len(t, store.ModeNames(), 4, "expected 4 modes")
 }
 
@@ -90,5 +90,5 @@ func TestProfileStore_ProfileNames_Sorted(t *testing.T) {
 	require.NoError(t, err)
 
 	names := store.ProfileNames()
-	assert.Equal(t, []string{"ci-bot", "claude-code", "codex", "full", "ide-assistant"}, names)
+	assert.Equal(t, []string{"baseline", "ci-bot", "claude-code", "codex", "full", "ide-assistant"}, names)
 }

@@ -1,0 +1,15 @@
+task_kind: security
+expect_sequence:
+  - id: security-edit-with-references
+    score: 1
+    pattern:
+      - tool: find_references
+      - tool: replace_symbol_body
+forbid_set:
+  - id: avoid-shell-grep
+    score: -1
+    when:
+      tool_used: replace_in_file
+    require_prior:
+      any_of:
+        - find_references

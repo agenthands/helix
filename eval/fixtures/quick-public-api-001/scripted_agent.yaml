@@ -1,0 +1,11 @@
+steps:
+  - tool: analyze_blast_radius
+    args:
+      symbol: Greeter.Hello
+  - tool: replace_symbol_body
+    args:
+      symbol: Greeter.Hello
+      body: |
+        func (g *Greeter) Hello() (string, error) {
+        	return fmt.Sprintf("Hello, %s!", g.Name), nil
+        }

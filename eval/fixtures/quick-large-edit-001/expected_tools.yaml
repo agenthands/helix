@@ -1,0 +1,14 @@
+task_kind: large_edit
+expect_set:
+  - id: body-rewrite-tool-used
+    score: 1
+    tools:
+      - replace_symbol_body
+forbid_set:
+  - id: avoid-whole-function-regex-replace
+    score: -1
+    when:
+      tool_used: replace_in_file
+    require_prior:
+      any_of:
+        - replace_symbol_body

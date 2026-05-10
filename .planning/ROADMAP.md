@@ -223,7 +223,15 @@
   - [x] 66-04-PLAN.md — Wave 3 GuardrailMiddleware + production deps + skill + daemon step 14b.5 + TelemetryMiddleware outcome extension + 5-step LIFO regression test [GUARD-01/03/04/05/07]
   - [x] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
   - [x] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
-- [ ] Phase 67: Evaluation Harness (0/0 plans)
+- [ ] Phase 67: Evaluation Harness (0/8 plans)
+  - [ ] 67-01-baseline-profile-and-skeleton-PLAN.md — Wave 0 (TDD) baseline profile YAML + Assumption A1 verification + eval/ tree + internal/eval/* skeleton + cmd/helix-eval cobra + Makefile targets + EVAL.md TOS attestation [EVAL-02/03/04/05/06]
+  - [ ] 67-02-sandbox-and-agent-PLAN.md — Wave 1 (TDD) per-(task,mode) sandbox isolation (HOME/socket/repo/tmpdir) + claude CLI subprocess wrapper (--bare --strict-mcp-config) + budget watchdog (D-08 four-axis) [EVAL-02]
+  - [ ] 67-03-trace-tap-and-merge-PLAN.md — Wave 1 (TDD) typed trace schema + daemon JSONL stderr tap (pid-gated, T-67-04) + CC stream-json stdout tap + wall-clock merge (T-67-02 path-prefix invariant) [EVAL-01/02]
+  - [ ] 67-04-scorer-dsl-and-seed-corpus-PLAN.md — Wave 2 (TDD) heuristic rule DSL (KnownFields strict) + scorer (sequence/set/receipts) + 10 hand-authored seed tasks (Go+TS+Python; rename/delete/public-API/large-edit/security) [EVAL-01/04/05]
+  - [ ] 67-05-runner-and-reporters-PLAN.md — Wave 3 (TDD) ZDR corpus gate (EVAL-06) + EvalResult + runner filling phasegraph EvalPhases Run bodies + 5 aggregate reporters (eval_report.{json,md} cost_summary safety_compliance run_metadata tool_behavior) [EVAL-01/02/04/06]
+  - [ ] 67-06a-eval-quick-inprocess-PLAN.md — Wave 4 (TDD) in-process daemon over bufconn + scripted-agent (no claude, no subprocess) + 2 reference quick fixtures + Pitfall-6 four-layer harness-validation guard + per-mode daemon reuse [EVAL-03]
+  - [ ] 67-06b-eval-quick-fixtures-expansion-PLAN.md — Wave 4 (TDD) 8 expansion fixtures covering all 5 EVAL-05 families (rename/delete/public_api/large_edit/security) × Go/TS/Python; 10-fixture × 4-mode wall-time test asserts D-05 <30s budget [EVAL-03/05]
+  - [ ] 67-07-llm-judge-and-ci-PLAN.md — Wave 5 (TDD) hand-rolled Anthropic HTTP client + judge orchestration (trace-only, INFORMATIONAL boilerplate, signature-enforced exit-code isolation) + CI workflow (eval-quick PR-gate; grep gate forbids judge in CI) [EVAL-04/07]
 
 **Full details:** `.planning/milestones/v1.10-ROADMAP.md`
 
@@ -241,7 +249,7 @@
 | 34-38 | v1.7 | 11/11 | Complete | 2026-04-22 |
 | 39-45 | v1.8 | 19/19 | Complete | 2026-04-24 |
 | 46-56 | v1.9 | 51/51 | Complete | 2026-05-03 |
-| 57-67 | v1.10 | 23/29 | Planning | -- |
+| 57-67 | v1.10 | 23/31 | Planning | -- |
 
 ## Backlog
 

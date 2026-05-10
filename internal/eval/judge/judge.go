@@ -34,20 +34,20 @@ func ResolveModel(flag string) (string, error) {
 
 // Input is the per-(task, mode) data fed into the judge.
 type Input struct {
-	TaskID      string
-	Mode        string
-	TaskKind    string // from expected_tools.yaml
+	TaskID          string
+	Mode            string
+	TaskKind        string // from expected_tools.yaml
 	TaskDescription string // first line of task.md (TITLE ONLY — bias mitigation m4)
-	Trace       trace.MergedTrace
-	Result      report.EvalResult
+	Trace           trace.MergedTrace
+	Result          report.EvalResult
 }
 
 // Scores holds the per-axis rubric scores.
 type Scores struct {
-	RightTool  int `json:"right_tool"`
-	Evidence   int `json:"evidence"`
+	RightTool   int `json:"right_tool"`
+	Evidence    int `json:"evidence"`
 	BlastRadius int `json:"blast_radius"`
-	Recovery   int `json:"recovery"`
+	Recovery    int `json:"recovery"`
 }
 
 // Entry is a single (task, mode) judge result.

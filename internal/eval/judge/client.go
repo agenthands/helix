@@ -104,10 +104,10 @@ func NewClient(opts Options) *Client {
 
 // messagesRequest is the Anthropic Messages API request body.
 type messagesRequest struct {
-	Model     string        `json:"model"`
-	MaxTokens int           `json:"max_tokens"`
-	System    string        `json:"system"`
-	Messages  []apiMessage  `json:"messages"`
+	Model     string       `json:"model"`
+	MaxTokens int          `json:"max_tokens"`
+	System    string       `json:"system"`
+	Messages  []apiMessage `json:"messages"`
 }
 
 type apiMessage struct {

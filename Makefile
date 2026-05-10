@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check
 
 BINARY=helix
 GO=go
@@ -227,3 +227,11 @@ eval-no-network: eval-quick
 # NEVER add this to PR-gating workflows (project rule: benchmarks local-only).
 eval:
 	go run ./cmd/helix-eval run --corpus eval/corpus --mode baseline --mode native --mode semantic --mode semantic_guarded --out eval/reports
+
+# eval-attestation-check: warn-only date-staleness check for eval/EVAL.md.
+# Per project rule "benchmarks local-only", this is hygiene, not a build gate.
+# Default mode (no --strict) ALWAYS exits 0; prints WARNING/ERROR to stderr if
+# the attestation date is >180 days old or unparseable. Wired into CI as a
+# warn-only step (continue-on-error: true) — never blocks merges.
+eval-attestation-check:
+	go run ./cmd/eval-attestation-check eval/EVAL.md

@@ -103,6 +103,12 @@ jobs:
         run: make eval-quick
         timeout-minutes: 2
 
+      - name: eval-attestation-check (warn-only)
+        # Hygiene reminder per project rule "benchmarks local-only" — NEVER fails the build.
+        # Prints a stderr WARNING if eval/EVAL.md attestation is >180 days stale.
+        continue-on-error: true
+        run: make eval-attestation-check
+
       - name: forbid judge in CI
         # Grep gate: fail the build if tool_behavior_judge.json is referenced
         # in any workflow file. The LLM judge must NEVER gate merges (EVAL-07).

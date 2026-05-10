@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agenthands/helix/internal/eval/judge"
 	"github.com/agenthands/helix/internal/eval/report"
 	"github.com/agenthands/helix/internal/eval/runner"
 	"github.com/agenthands/helix/internal/eval/score"
@@ -119,8 +120,15 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 		return fmt.Errorf("helix-eval run: ZDR gate: %w", err)
 	}
 
-	_ = judgeModel // informational judge is Plan 06
-	_ = noJudge
+	// Resolve judge model. Default judgeModel flag is "claude-sonnet-4-6" (full model ID)
+	// but also accept short aliases "sonnet" / "opus" via ResolveModel.
+	resolvedModel := judgeModel
+	if m, err := judge.ResolveModel(judgeModel); err == nil {
+		resolvedModel = m
+	}
+	// If the full model ID was passed directly (e.g. "claude-sonnet-4-6"),
+	// keep it as-is — ResolveModel only knows short aliases.
+	_ = resolvedModel
 
 	// Step 2: run the matrix.
 	if quick {
@@ -164,6 +172,32 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 	results, _ := r.RunMatrix(ctx, modes)
 	// RunMatrix errors are non-fatal (individual task errors captured in results).
 
+	// Judge pass (informational only — NEVER affects exit code per EVAL-07).
+	// The judge runs post-aggregate on the full result set. It is explicitly
+	// excluded from the eval-quick path (judge is local-only, per project memory).
+	judgeReportPath := filepath.Join(runOutDir, "tool_behavior_judge.json")
+	{
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		jClient := judge.NewClient(judge.Options{APIKey: apiKey})
+		// Build judge inputs from results (trace events not available at this aggregation
+		// layer; judge sees task IDs and modes for prompt construction from trace files).
+		var judgeInputs []judge.Input
+		for _, res := range results {
+			judgeInputs = append(judgeInputs, judge.Input{
+				TaskID:          res.TaskID,
+				Mode:            res.Mode,
+				TaskKind:        "unknown", // enriched from corpus in future phases
+				TaskDescription: res.TaskID,
+			})
+		}
+		// EVAL-07: Run returns Output only (no error) — judge failures cannot propagate.
+		judgeOut := judge.RunWithOptions(ctx, jClient, judgeInputs, resolvedModel, judge.RunOptions{
+			NoJudge: noJudge,
+		})
+		_ = judge.WriteJudgeReport(judgeReportPath, judgeOut)
+		// WriteJudgeReport error is intentionally ignored — judge output is informational.
+	}
+
 	// Step 3: build score map (empty for now — per-task scores written by RunTask).
 	scores := make(map[string]score.Score)
 
@@ -184,9 +218,10 @@ func runCommand(cmd *cobra.Command, corpus string, modes []string, runID, out, h
 	if err := report.WriteToolBehavior(filepath.Join(runOutDir, "tool_behavior.json"), scores); err != nil {
 		writeErrors = append(writeErrors, err.Error())
 	}
-	if err := report.WriteEvalReport(
+	if err := report.WriteEvalReportWithJudge(
 		filepath.Join(runOutDir, "eval_report.json"),
 		filepath.Join(runOutDir, "eval_report.md"),
+		judgeReportPath,
 		results, scores, meta,
 	); err != nil {
 		writeErrors = append(writeErrors, err.Error())

@@ -10,6 +10,69 @@ import (
 	"github.com/agenthands/helix/internal/eval/score"
 )
 
+// judgeOutputForRender is the subset of tool_behavior_judge.json needed for MD rendering.
+type judgeOutputForRender struct {
+	Readme       string       `json:"__readme"`
+	JudgeModel   string       `json:"judge_model"`
+	Tasks        []judgeEntry `json:"tasks"`
+	JudgeSkipped bool         `json:"judge_skipped"`
+	JudgeFailed  bool         `json:"judge_failed"`
+	ErrorSummary string       `json:"error_summary"`
+}
+
+type judgeEntry struct {
+	TaskID    string     `json:"task_id"`
+	Mode      string     `json:"mode"`
+	Scores    judgeScore `json:"scores"`
+	Reasoning string     `json:"reasoning"`
+	Flags     []string   `json:"flags"`
+}
+
+type judgeScore struct {
+	RightTool   int `json:"right_tool"`
+	Evidence    int `json:"evidence"`
+	BlastRadius int `json:"blast_radius"`
+	Recovery    int `json:"recovery"`
+}
+
+// WriteEvalReportWithJudge is like WriteEvalReport but also reads judgeReportPath
+// (if it exists) and includes the LLM judge section in eval_report.md.
+// If judgeReportPath does not exist, the judge section renders as "(judge not run)".
+func WriteEvalReportWithJudge(jsonPath, mdPath, judgeReportPath string, results []EvalResult, scores map[string]score.Score, meta RunMetadata) error {
+	var judgeData *judgeOutputForRender
+
+	if data, err := os.ReadFile(judgeReportPath); err == nil {
+		var j judgeOutputForRender
+		if err := json.Unmarshal(data, &j); err == nil {
+			judgeData = &j
+		}
+	}
+
+	byMode := buildModeAggregates(results)
+	rep := evalReportJSON{
+		SchemaVersion: "1",
+		Metadata:      meta,
+		ByMode:        byMode,
+		Results:       results,
+	}
+
+	// Write JSON (same as WriteEvalReport).
+	jsonData, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		return fmt.Errorf("report.WriteEvalReportWithJudge marshal JSON: %w", err)
+	}
+	if err := os.WriteFile(jsonPath, jsonData, 0600); err != nil {
+		return fmt.Errorf("report.WriteEvalReportWithJudge write JSON %q: %w", jsonPath, err)
+	}
+
+	// Write Markdown with judge section.
+	mdContent := renderMarkdownWithJudge(rep, scores, results, judgeData)
+	if err := os.WriteFile(mdPath, []byte(mdContent), 0600); err != nil {
+		return fmt.Errorf("report.WriteEvalReportWithJudge write MD %q: %w", mdPath, err)
+	}
+	return nil
+}
+
 // evalReportJSON is the eval_report.json schema (schema_version: "1").
 type evalReportJSON struct {
 	SchemaVersion string                    `json:"schema_version"`
@@ -227,6 +290,77 @@ func renderMarkdown(rep evalReportJSON, _ map[string]score.Score, results []Eval
 	fmt.Fprintf(&sb, "(judge not run)\n")
 
 	return sb.String()
+}
+
+// renderMarkdownWithJudge builds the eval_report.md content with an optional judge section.
+// judgeData is nil when no judge output exists.
+func renderMarkdownWithJudge(rep evalReportJSON, _ map[string]score.Score, results []EvalResult, judgeData *judgeOutputForRender) string {
+	// Build the standard sections (reuse the same logic as renderMarkdown).
+	base := renderMarkdown(rep, nil, results)
+
+	// Replace the trailing judge section.
+	const judgeSectionHeader = "## INFORMATIONAL: LLM Judge\n"
+	idx := indexStr(base, judgeSectionHeader)
+	if idx < 0 {
+		// Fallback: append.
+		idx = len(base)
+		base += judgeSectionHeader
+	}
+	prefix := base[:idx]
+
+	var sb bytes.Buffer
+	sb.WriteString(prefix)
+
+	fmt.Fprintf(&sb, "## INFORMATIONAL: LLM Judge\n\n")
+	fmt.Fprintf(&sb, "> **DO NOT GATE CI ON THIS SECTION** (EVAL-07)\n>\n")
+	fmt.Fprintf(&sb, "> The LLM judge provides qualitative depth but is not CI-actionable.\n")
+	fmt.Fprintf(&sb, "> Its output is stored in `tool_behavior_judge.json` when run with `--no-judge=false`.\n\n")
+
+	if judgeData == nil {
+		fmt.Fprintf(&sb, "(judge not run)\n")
+		return sb.String()
+	}
+
+	if judgeData.JudgeSkipped {
+		fmt.Fprintf(&sb, "(judge not run)\n")
+		return sb.String()
+	}
+
+	if judgeData.JudgeFailed {
+		fmt.Fprintf(&sb, "**Judge failed:** %s\n\n", judgeData.ErrorSummary)
+		fmt.Fprintf(&sb, "(judge not run)\n")
+		return sb.String()
+	}
+
+	if len(judgeData.Tasks) == 0 {
+		fmt.Fprintf(&sb, "(no judge entries)\n")
+		return sb.String()
+	}
+
+	fmt.Fprintf(&sb, "| Task | Mode | RightTool | Evidence | BlastRadius | Recovery | Reasoning |\n")
+	fmt.Fprintf(&sb, "|------|------|-----------|----------|-------------|----------|-----------|\n")
+	for _, e := range judgeData.Tasks {
+		fmt.Fprintf(&sb, "| %s | %s | %+d | %+d | %+d | %+d | %s |\n",
+			e.TaskID, e.Mode,
+			e.Scores.RightTool, e.Scores.Evidence, e.Scores.BlastRadius, e.Scores.Recovery,
+			e.Reasoning)
+	}
+	fmt.Fprintf(&sb, "\n")
+
+	return sb.String()
+}
+
+// indexStr returns the index of substr in s, or -1 if not found.
+func indexStr(s, substr string) int {
+	if len(substr) == 0 {
+		return 0
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
 
 // sortedKeys returns the keys of m in sorted order.

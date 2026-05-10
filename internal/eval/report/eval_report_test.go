@@ -152,6 +152,74 @@ func TestEvalReportRendersWithoutLLMJudge(t *testing.T) {
 	}
 }
 
+// TestEvalReportMarkdownIncludesJudgeSection verifies that when judge output
+// exists in the report directory, the markdown includes the "Informational: LLM judge"
+// section with scoring data. When absent, it renders "(judge not run)".
+func TestEvalReportMarkdownIncludesJudgeSection(t *testing.T) {
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "eval_report.json")
+	mdPath := filepath.Join(dir, "eval_report.md")
+	judgeReportPath := filepath.Join(dir, "tool_behavior_judge.json")
+
+	// Write a judge report file to the same directory.
+	judgeJSON := `{
+  "__readme": "INFORMATIONAL — DO NOT USE FOR CI GATING",
+  "judge_model": "claude-sonnet-4-6",
+  "judged_at": "2026-05-10T15:00:00Z",
+  "tasks": [
+    {
+      "task_id": "task-rename",
+      "mode": "native",
+      "scores": {"right_tool": 1, "evidence": 1, "blast_radius": 1, "recovery": 0},
+      "reasoning": "used rename_symbol correctly",
+      "flags": []
+    }
+  ]
+}`
+	if err := os.WriteFile(judgeReportPath, []byte(judgeJSON), 0600); err != nil {
+		t.Fatalf("write judge report: %v", err)
+	}
+
+	if err := report.WriteEvalReportWithJudge(jsonPath, mdPath, judgeReportPath, fixtureResults(), nil, fixtureMeta()); err != nil {
+		t.Fatalf("WriteEvalReportWithJudge: %v", err)
+	}
+
+	data, err := os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("read eval_report.md: %v", err)
+	}
+	md := string(data)
+
+	// Must contain the judge section header and boilerplate.
+	if !strings.Contains(md, "INFORMATIONAL") {
+		t.Error("markdown missing INFORMATIONAL section")
+	}
+	if !strings.Contains(md, "DO NOT GATE CI") {
+		t.Error("markdown missing 'DO NOT GATE CI' warning")
+	}
+	// Must not say "(judge not run)" when judge data is present.
+	if strings.Contains(md, "(judge not run)") {
+		t.Error("markdown incorrectly says '(judge not run)' when judge data is present")
+	}
+
+	// Now test without judge data.
+	dir2 := t.TempDir()
+	jsonPath2 := filepath.Join(dir2, "eval_report.json")
+	mdPath2 := filepath.Join(dir2, "eval_report.md")
+	noJudgePath := filepath.Join(dir2, "tool_behavior_judge.json") // does not exist
+
+	if err := report.WriteEvalReportWithJudge(jsonPath2, mdPath2, noJudgePath, fixtureResults(), nil, fixtureMeta()); err != nil {
+		t.Fatalf("WriteEvalReportWithJudge (no judge): %v", err)
+	}
+	data2, err := os.ReadFile(mdPath2)
+	if err != nil {
+		t.Fatalf("read eval_report.md (no judge): %v", err)
+	}
+	if !strings.Contains(string(data2), "judge not run") {
+		t.Error("expected '(judge not run)' when no judge file exists")
+	}
+}
+
 // TestWriteToolBehavior verifies the tool behavior JSON output.
 func TestWriteToolBehavior(t *testing.T) {
 	dir := t.TempDir()

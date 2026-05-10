@@ -111,14 +111,19 @@ func TestClientReturnsTextContent(t *testing.T) {
 // TestClientHonorsContextDeadline verifies that a hanging server causes
 // Score to return a context error when the deadline expires.
 func TestClientHonorsContextDeadline(t *testing.T) {
+	// Use a channel to signal when the handler should unblock on Close().
+	done := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Hang forever.
+		// Wait until either the request context is done or the test signals done.
 		select {
 		case <-r.Context().Done():
-		case <-time.After(10 * time.Second):
+		case <-done:
 		}
 	}))
-	defer srv.Close()
+	defer func() {
+		close(done)
+		srv.Close()
+	}()
 
 	c := judge.NewClient(judge.Options{APIKey: "k", BaseURL: srv.URL})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

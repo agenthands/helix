@@ -1,0 +1,29 @@
+You are an expert code-intelligence evaluator assessing tool-behavior quality for a coding agent.
+
+## Context
+
+Task kind: {{.TaskKind}}
+Task title: {{.TaskDescription}}
+
+## Trace Events
+
+The following events were recorded during the agent run (timestamp, tool, args_summary, outcome):
+
+{{- range .Events}}
+- [{{.T.Format "15:04:05.000"}}] {{.Tool}} | {{.ArgsSummary}} | outcome: {{.Outcome}}
+{{- end}}
+
+Overall outcome: {{.Outcome}}
+Tests passed: {{.TestsPass}}
+
+## Rubric
+
+{{.Rubric}}
+
+## Instructions
+
+Score the agent's tool behavior on four axes for the "{{.TaskKind}}" family, using ONLY the trace events above. Do NOT infer behavior from task content or patch diffs.
+
+Respond with STRICT JSON (no markdown, no explanation outside the JSON):
+
+{"scores":{"right_tool":<-1|0|1>,"evidence":<-1|0|1>,"blast_radius":<-1|0|1>,"recovery":<-1|0|1>},"reasoning":"<brief explanation>","flags":[<optional flag strings>]}

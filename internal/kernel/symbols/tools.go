@@ -98,7 +98,7 @@ func RegisterTools(
 ) {
 	tracer := k.Tracer()
 	registerGoToDefinition(server, k, wsKeyFn, tracer)
-	registerFindReferences(server, k, wsKeyFn, tracer)
+	registerFindReferences(server, k, wsKeyFn, lookupFn, tracer)
 	registerGetSymbolOverview(server, k, wsKeyFn, tracer)
 	registerSearchSymbols(server, k, wsKeyFn, tracer)
 	registerGetHoverInfo(server, k, wsKeyFn, tracer)
@@ -364,7 +364,7 @@ func registerGoToDefinition(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 	server.Registry().Register(&mcp.ToolDef{Name: "go_to_definition", Description: "Go to the definition of a symbol at a given position", BriefDescription: "Jump to where a symbol is defined", HelpText: goToDefinitionHelp})
 }
 
-func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, tracer trace.Tracer) {
+func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey, lookupFn func() integ.SemanticLookup, tracer trace.Tracer) {
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "find_references",
 		Description: "Find all references to a symbol at a given position",
@@ -386,11 +386,23 @@ func registerFindReferences(server *mcp.SerenaMCPServer, k *kernel.Kernel, wsKey
 		if err != nil {
 			return errorResult(err.Error()), nil, nil
 		}
-		// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY (Pitfall 4: never in defer).
-		// symID is not available from the LSP-only path; use empty string as sentinel.
+		// Phase 66 D-01 GUARD-03 / CR-04: resolve SymbolID via the wired
+		// SemanticLookup so the receipt scope can satisfy STRICT validation
+		// (validate.go:91-92) when a destructive tool runs against the same
+		// symbol. On miss/unsupported the SymbolID falls back to empty —
+		// the receipt is still issued (file-anchored validation paths still
+		// match) but symbol-anchored consumers will skip it.
+		var symID integ.SymbolID
+		if lookupFn != nil {
+			if lookup := lookupFn(); lookup != nil {
+				if id, sErr := lookup.SymbolID(ctx, rt.Key(), args.Path, uint32(lspLine), uint32(lspCol)); sErr == nil {
+					symID = id
+				}
+			}
+		}
 		guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassReferencesChecked,
 			guardrails.ReferencesCheckedScope{
-				SymbolID:     "",
+				SymbolID:     symID,
 				RefCount:     len(locs),
 				FilePath:     args.Path,
 				IncludeTests: args.IncludeDecl,
@@ -657,10 +669,22 @@ func registerAnalyzeBlastRadius(
 			if marshErr != nil {
 				return errorResult(serr.Wrap(serr.Internal, "marshal envelope", marshErr).Error()), nil, nil
 			}
-			// Phase 66 D-01 GUARD-03: issue receipt on success path ONLY.
+			// Phase 66 D-01 GUARD-03 / CR-04: best-effort SymbolID resolution
+			// even on the LSP-only arm. When a non-Noop lookup is wired but
+			// the cfg gate steered us to tree_sitter/fallback, lookup.SymbolID
+			// can still translate (path,line,col) to the canonical SymbolID
+			// so symbol-anchored receipt validation in destructive tools
+			// succeeds. On miss, fall back to empty (file-anchored validation
+			// paths still match).
+			var lspArmSymID integ.SymbolID
+			if lookup != nil {
+				if id, sErr := lookup.SymbolID(ctx, ws, args.Path, uint32(lspLine), uint32(lspCol)); sErr == nil {
+					lspArmSymID = id
+				}
+			}
 			guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassImpactChecked,
 				guardrails.ImpactCheckedScope{
-					SymbolID:        "",
+					SymbolID:        lspArmSymID,
 					RefCount:        br.TotalImpact,
 					PublicAPI:       false,
 					BlastNodes:      len(br.PerNode),

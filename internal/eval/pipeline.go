@@ -151,12 +151,14 @@ func BuildEvalPhases(state *RunState) []phasegraph.PhaseSpec {
 				daemonLogPath := filepath.Join(state.ModeDir, "daemon.log")
 				ccStdoutPath := filepath.Join(state.ModeDir, "claude.stdout")
 
-				if _, err := os.Stat(daemonLogPath); err == nil {
-					// Pass the real daemon PID so TapDaemonLog's T-67-04 PID gate
-					// accepts log lines from our daemon and rejects foreign processes.
-					// state.DaemonHandle is set by run_agent when wave-2 wires the real
-					// StartDaemon call; Pid() is nil-safe and returns 0 until then.
-					state.DaemonTap, _ = trace.TapDaemonLog(daemonLogPath, state.DaemonHandle.Pid())
+				// Skip daemon tap until wave-2 wires real StartDaemon and sets
+				// state.DaemonHandle. Calling TapDaemonLog with pid==0 (the nil-Pid
+				// fallback) would defeat the T-67-04 PID gate by accepting any line
+				// emitting pid==0 — see 67-SECURITY.md FLAG-1.
+				if state.DaemonHandle != nil {
+					if _, err := os.Stat(daemonLogPath); err == nil {
+						state.DaemonTap, _ = trace.TapDaemonLog(daemonLogPath, state.DaemonHandle.Pid())
+					}
 				}
 				if _, err := os.Stat(ccStdoutPath); err == nil {
 					state.CCTap, _ = trace.TapCCStream(ccStdoutPath)

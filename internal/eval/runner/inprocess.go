@@ -122,88 +122,99 @@ func RunQuick(ctx context.Context, opts QuickOpts) (QuickSummary, error) {
 
 	// Boot one daemon per mode, reuse it across all fixtures for that mode.
 	for _, mode := range opts.Modes {
-		// Build per-mode config.
-		modeCfg, err := buildModeConfig(mode)
-		if err != nil {
-			return summary, fmt.Errorf("RunQuick: build config for mode %q: %w", mode, err)
-		}
-
-		// Initialize skills (idempotent via sync.Once internally).
-		tmpDir, err := os.MkdirTemp("", "helix-eval-quick-"+mode+"-*")
-		if err != nil {
-			return summary, fmt.Errorf("RunQuick: mktemp for mode %q: %w", mode, err)
-		}
-		defer os.RemoveAll(tmpDir)
-
-		skillDeps := skill.SkillDeps{
-			ProjectDir: filepath.Join(tmpDir, ".helix"),
-			GlobalDir:  filepath.Join(tmpDir, ".helix-global"),
-			Logger:     logger,
-		}
-		if err := os.MkdirAll(skillDeps.ProjectDir, 0755); err != nil {
-			return summary, fmt.Errorf("RunQuick: mkdir skill project dir: %w", err)
-		}
-		if err := os.MkdirAll(skillDeps.GlobalDir, 0755); err != nil {
-			return summary, fmt.Errorf("RunQuick: mkdir skill global dir: %w", err)
-		}
-		if err := skill.InitAll(skillDeps); err != nil {
-			return summary, fmt.Errorf("RunQuick: skill.InitAll for mode %q: %w", mode, err)
-		}
-
-		// Boot daemon.
-		d, err := daemon.New(modeCfg, logger)
-		if err != nil {
-			return summary, fmt.Errorf("RunQuick: daemon.New for mode %q: %w", mode, err)
-		}
-		if opts.TrackDaemonBoots {
-			summary.DaemonBoots++
-		}
-
-		daemonCtx, daemonCancel := context.WithCancel(ctx)
-
-		// Start kernel.
-		go func() {
-			_ = d.KernelInstance().Run(daemonCtx)
-		}()
-
-		// Wire in-process MCP transport.
-		serverTransport, clientTransport := mcpsdk.NewInMemoryTransports()
-		if _, err := d.MCPServer().SDK().Connect(daemonCtx, serverTransport, nil); err != nil {
-			daemonCancel()
-			return summary, fmt.Errorf("RunQuick: MCP server connect for mode %q: %w", mode, err)
-		}
-
-		// Create MCP client and session.
-		mcpClient := mcpsdk.NewClient(&mcpsdk.Implementation{
-			Name:    "helix-eval-quick",
-			Version: "0.1",
-		}, nil)
-		session, err := mcpClient.Connect(daemonCtx, clientTransport, nil)
-		if err != nil {
-			daemonCancel()
-			return summary, fmt.Errorf("RunQuick: MCP client connect for mode %q: %w", mode, err)
-		}
-
-		// Run all fixtures against this mode's daemon.
-		for _, fixName := range fixtureDirs {
-			fixDir := filepath.Join(opts.FixturesDir, fixName)
-			result, err := runQuickFixture(ctx, fixDir, fixName, mode, session, opts.RunID, runOutDir, opts.AllowSuccess)
+		// runMode encapsulates per-mode work so that defer inside the closure
+		// fires at end of each iteration, not at end of RunQuick (WR-01 fix).
+		modeResults, modeBoots, err := func(mode string) ([]report.EvalResult, int, error) {
+			// Build per-mode config.
+			modeCfg, err := buildModeConfig(mode)
 			if err != nil {
-				// Non-fatal: log and continue.
-				fmt.Fprintf(os.Stderr, "RunQuick: fixture %s/%s: %v\n", fixName, mode, err)
-				result = report.EvalResult{
-					TaskID:  fixName,
-					Mode:    mode,
-					Outcome: "failed",
-					FailureReason: err.Error(),
-				}
+				return nil, 0, fmt.Errorf("RunQuick: build config for mode %q: %w", mode, err)
 			}
-			allResults = append(allResults, result)
-		}
 
-		// Shutdown daemon for this mode.
-		daemonCancel()
-		_ = session.Close()
+			// Initialize skills (idempotent via sync.Once internally).
+			tmpDir, err := os.MkdirTemp("", "helix-eval-quick-"+mode+"-*")
+			if err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: mktemp for mode %q: %w", mode, err)
+			}
+			defer os.RemoveAll(tmpDir) // scoped to this closure — fires at end of iteration
+
+			skillDeps := skill.SkillDeps{
+				ProjectDir: filepath.Join(tmpDir, ".helix"),
+				GlobalDir:  filepath.Join(tmpDir, ".helix-global"),
+				Logger:     logger,
+			}
+			if err := os.MkdirAll(skillDeps.ProjectDir, 0755); err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: mkdir skill project dir: %w", err)
+			}
+			if err := os.MkdirAll(skillDeps.GlobalDir, 0755); err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: mkdir skill global dir: %w", err)
+			}
+			if err := skill.InitAll(skillDeps); err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: skill.InitAll for mode %q: %w", mode, err)
+			}
+
+			// Boot daemon.
+			d, err := daemon.New(modeCfg, logger)
+			if err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: daemon.New for mode %q: %w", mode, err)
+			}
+			boots := 1 // this boot counts regardless of TrackDaemonBoots flag
+
+			daemonCtx, daemonCancel := context.WithCancel(ctx)
+			defer func() {
+				daemonCancel()
+			}()
+
+			// Start kernel.
+			go func() {
+				_ = d.KernelInstance().Run(daemonCtx)
+			}()
+
+			// Wire in-process MCP transport.
+			serverTransport, clientTransport := mcpsdk.NewInMemoryTransports()
+			if _, err := d.MCPServer().SDK().Connect(daemonCtx, serverTransport, nil); err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: MCP server connect for mode %q: %w", mode, err)
+			}
+
+			// Create MCP client and session.
+			mcpClient := mcpsdk.NewClient(&mcpsdk.Implementation{
+				Name:    "helix-eval-quick",
+				Version: "0.1",
+			}, nil)
+			session, err := mcpClient.Connect(daemonCtx, clientTransport, nil)
+			if err != nil {
+				return nil, 0, fmt.Errorf("RunQuick: MCP client connect for mode %q: %w", mode, err)
+			}
+			defer func() { _ = session.Close() }()
+
+			// Run all fixtures against this mode's daemon.
+			var results []report.EvalResult
+			for _, fixName := range fixtureDirs {
+				fixDir := filepath.Join(opts.FixturesDir, fixName)
+				result, err := runQuickFixture(ctx, fixDir, fixName, mode, session, opts.RunID, runOutDir, opts.AllowSuccess)
+				if err != nil {
+					// Non-fatal: log and continue.
+					fmt.Fprintf(os.Stderr, "RunQuick: fixture %s/%s: %v\n", fixName, mode, err)
+					result = report.EvalResult{
+						TaskID:        fixName,
+						Mode:          mode,
+						Outcome:       "failed",
+						FailureReason: err.Error(),
+					}
+				}
+				results = append(results, result)
+			}
+
+			return results, boots, nil
+		}(mode)
+
+		if err != nil {
+			return summary, err
+		}
+		allResults = append(allResults, modeResults...)
+		if opts.TrackDaemonBoots {
+			summary.DaemonBoots += modeBoots
+		}
 	}
 
 	summary.TotalResults = len(allResults)

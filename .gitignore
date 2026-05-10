@@ -273,8 +273,13 @@ vue-implementation/
 
 # Go
 /helix
+/helix-eval
 /serena
 *.exe
 /bin/
 /api/proto/**/*.pb.go
 test/bench/baselines/local.txt
+
+# Eval harness runtime artifacts
+/eval/reports/
+/cmd/helix-eval/eval/

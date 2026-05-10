@@ -224,7 +224,7 @@
   - [x] 66-05-PLAN.md — Wave 4 (parallel with 66-06) receipt issuance wired into 8 read/diagnostics tools + Receipts field on 6 destructive args [GUARD-02/03/05]
   - [x] 66-06-PLAN.md — Wave 4 (parallel with 66-05) GUARDRAILS.md + DoD.md + 6 get_tool_help topics + GUARD-02 SC-2 forwarder→daemon context-truncation E2E [GUARD-02/06]
 - [ ] Phase 67: Evaluation Harness (0/8 plans)
-  - [ ] 67-01-baseline-profile-and-skeleton-PLAN.md — Wave 0 (TDD) baseline profile YAML + Assumption A1 verification + eval/ tree + internal/eval/* skeleton + cmd/helix-eval cobra + Makefile targets + EVAL.md TOS attestation [EVAL-02/03/04/05/06]
+  - [x] 67-01-baseline-profile-and-skeleton-PLAN.md — Wave 0 (TDD) baseline profile YAML + Assumption A1 verification + eval/ tree + internal/eval/* skeleton + cmd/helix-eval cobra + Makefile targets + EVAL.md TOS attestation [EVAL-02/03/04/05/06]
   - [ ] 67-02-sandbox-and-agent-PLAN.md — Wave 1 (TDD) per-(task,mode) sandbox isolation (HOME/socket/repo/tmpdir) + claude CLI subprocess wrapper (--bare --strict-mcp-config) + budget watchdog (D-08 four-axis) [EVAL-02]
   - [ ] 67-03-trace-tap-and-merge-PLAN.md — Wave 1 (TDD) typed trace schema + daemon JSONL stderr tap (pid-gated, T-67-04) + CC stream-json stdout tap + wall-clock merge (T-67-02 path-prefix invariant) [EVAL-01/02]
   - [ ] 67-04-scorer-dsl-and-seed-corpus-PLAN.md — Wave 2 (TDD) heuristic rule DSL (KnownFields strict) + scorer (sequence/set/receipts) + 10 hand-authored seed tasks (Go+TS+Python; rename/delete/public-API/large-edit/security) [EVAL-01/04/05]

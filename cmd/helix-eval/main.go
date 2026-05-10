@@ -11,7 +11,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/agenthands/helix/internal/eval/score"
 	"github.com/spf13/cobra"
 )
 
@@ -97,12 +99,18 @@ func newValidateRulesCmd() *cobra.Command {
 		Short: "Validate expected_tools.yaml rule files in corpus",
 		Long: `validate-rules parses every expected_tools.yaml in the corpus directory
 and reports schema errors. Use this before committing new corpus tasks to ensure
-the heuristic rule DSL is well-formed.
-
-Real implementation lands in Wave 2+ when the rule DSL ships.`,
+the heuristic rule DSL is well-formed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = corpus
-			return fmt.Errorf("not yet implemented (Phase 67 Wave 2+)")
+			errs := score.ValidateCorpus(corpus)
+			if len(errs) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "All expected_tools.yaml files are valid.")
+				return nil
+			}
+			var msgs []string
+			for _, e := range errs {
+				msgs = append(msgs, e.Error())
+			}
+			return fmt.Errorf("validate-rules found %d error(s):\n  %s", len(errs), strings.Join(msgs, "\n  "))
 		},
 	}
 

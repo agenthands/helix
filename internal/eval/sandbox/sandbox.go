@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -208,6 +209,11 @@ func (h *DaemonHandle) Kill() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
+		// Send SIGKILL to the entire process group to ensure child processes
+		// spawned by the daemon are also reaped (WR-03 fix). Use negative PID
+		// to target the process group rather than just the daemon process.
+		pid := h.cmd.Process.Pid
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
 		return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
 	}
 	return nil

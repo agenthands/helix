@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -350,11 +351,8 @@ func runVerify(ctx context.Context, scriptPath, repoDir string) (int, []byte) {
 	exitCode := 0
 	if err != nil {
 		var exitErr *exec.ExitError
-		if ok := (err != nil); ok {
-			if e, ok2 := err.(*exec.ExitError); ok2 {
-				exitErr = e
-				exitCode = exitErr.ExitCode()
-			}
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
 		}
 	}
 

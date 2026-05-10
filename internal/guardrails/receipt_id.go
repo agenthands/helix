@@ -51,6 +51,16 @@ func NewReceiptID() (ReceiptID, error) {
 //   - Total length must be exactly 31 chars (prefix 5 + body 26)
 //   - Body must be valid base32 alphabet (a-z, 2-7 lowercase or A-Z, 2-7 uppercase)
 func ParseReceiptID(s string) (ReceiptID, error) {
+	// Fast-path: total-length invariant catches almost all malformed inputs
+	// before the prefix scan (IN-01: previously declared-but-unused).
+	if len(s) != receiptIDTotalLen {
+		// Defer to the more specific errors below for inputs that are wrong
+		// in length but identifiable.
+		if !strings.HasPrefix(s, receiptIDPrefix) {
+			return "", ErrInvalidReceiptIDPrefix
+		}
+		return "", ErrInvalidReceiptIDLength
+	}
 	if !strings.HasPrefix(s, receiptIDPrefix) {
 		return "", ErrInvalidReceiptIDPrefix
 	}

@@ -322,17 +322,28 @@ type ToolConfig struct {
 }
 
 // G004Config holds thresholds for the G-004 large-fuzzy-edit rule (D-16).
+//
+// WR-08: zero-or-negative values for the three numeric thresholds
+// (MaxChangedLines, MaxFiles, MaxFileChangeRatio) are treated as "unset" and
+// fall back to defaults (50, 1, 0.30 respectively). This means an operator
+// CANNOT express "trigger on every change" by setting a threshold to 0;
+// to disable the ratio trigger entirely, use EnableRatioTrigger=false. To
+// disable the line/file triggers, raise the threshold to a very high
+// number (e.g. 1000000). This is a known config-shape limitation and may
+// be revisited in a later phase by adding optional `*int` / explicit Set
+// flags.
 type G004Config struct {
 	// MaxChangedLines is the maximum number of inserted+deleted lines before
-	// G-004 triggers. Default 50 (D-16).
+	// G-004 triggers. Default 50 (D-16). 0 / negative → default.
 	MaxChangedLines int `koanf:"max_changed_lines"`
 
 	// MaxFiles is the maximum number of touched files before G-004 triggers.
-	// Default 1 (D-16).
+	// Default 1 (D-16). 0 / negative → default.
 	MaxFiles int `koanf:"max_files"`
 
 	// MaxFileChangeRatio is the maximum ratio of changed_lines/file_line_count
-	// before the ratio trigger fires. Default 0.30 (D-16).
+	// before the ratio trigger fires. Default 0.30 (D-16). 0 / negative →
+	// default; use EnableRatioTrigger=false to disable the trigger.
 	MaxFileChangeRatio float64 `koanf:"max_file_change_ratio"`
 
 	// EnableRatioTrigger enables the file-change-ratio secondary trigger.

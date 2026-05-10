@@ -1,0 +1,22 @@
+task_kind: public_api
+
+expect_sequence:
+  - id: blast-radius-before-public-edit
+    score: 1
+    pattern:
+      - tool: analyze_blast_radius
+        args_match:
+          symbol: ProcessRequest
+      - tool: replace_symbol_body
+        args_match:
+          symbol: ProcessRequest
+
+forbid_set:
+  - id: replace-symbol-body-without-blast-radius
+    score: -1
+    when:
+      tool_used: replace_symbol_body
+    require_prior:
+      any_of:
+        - analyze_blast_radius
+        - find_references

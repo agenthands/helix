@@ -1,0 +1,19 @@
+task_kind: delete
+
+receipts:
+  - id: safe-delete-with-receipts
+    score: 1
+    when:
+      tool_used: safe_delete_symbol
+    require:
+      receipts_non_empty: true
+
+forbid_set:
+  - id: delete-without-references
+    score: -1
+    when:
+      tool_used: delete_file
+    require_prior:
+      any_of:
+        - find_references
+        - analyze_blast_radius

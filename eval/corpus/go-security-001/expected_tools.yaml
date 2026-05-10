@@ -1,0 +1,28 @@
+task_kind: security
+
+expect_sequence:
+  - id: verify-after-security-edit
+    score: 1
+    pattern:
+      - tool: replace_symbol_body
+        args_match:
+          symbol: RunQuery
+      - tool: verify_edit
+
+expect_set:
+  - id: diagnostics-present
+    score: 1
+    tools:
+      - replace_symbol_body
+      - get_diagnostics
+
+forbid_set:
+  - id: edit-without-prior-read
+    score: -1
+    when:
+      tool_used: replace_symbol_body
+    require_prior:
+      any_of:
+        - get_definition
+        - find_references
+        - get_diagnostics

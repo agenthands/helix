@@ -1,0 +1,4 @@
+max_input_tokens: 200000
+max_output_tokens: 32000
+max_seconds: 600
+max_tool_calls: 100

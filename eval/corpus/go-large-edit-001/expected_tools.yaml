@@ -1,0 +1,18 @@
+task_kind: large_edit
+
+expect_sequence:
+  - id: context-before-body-replace
+    score: 1
+    pattern:
+      - tool: get_context
+      - tool: replace_symbol_body
+        args_match:
+          symbol: BuildReport
+
+forbid_sequence:
+  - id: replace-in-file-on-large-region
+    score: -1
+    pattern:
+      - tool: replace_in_file
+        args_match:
+          find_regex: BuildReport

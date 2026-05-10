@@ -28,14 +28,14 @@ func TestStarterRulesRename(t *testing.T) {
 		t.Fatalf("LoadRules go-rename-public-001: %v", err)
 	}
 
-	// Ideal trace: find_references → rename_symbol.
+	// Ideal trace: find_references(AuthMiddleware) → rename_symbol(old_name=AuthMiddleware).
 	idealTrace := trace.MergedTrace{
 		SchemaVersion: "1",
 		TaskID:        "go-rename-public-001",
 		Mode:          "semantic",
 		Events: []trace.Event{
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "find_references", Outcome: "success"},
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "rename_symbol", Outcome: "success"},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "find_references", Outcome: "success", ArgsSummary: `{"symbol":"AuthMiddleware"}`},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "rename_symbol", Outcome: "success", ArgsSummary: `{"old_name":"AuthMiddleware","new_name":"AuthGuard"}`},
 		},
 	}
 	idealScore := score.Apply(idealTrace, rules)
@@ -43,14 +43,14 @@ func TestStarterRulesRename(t *testing.T) {
 		t.Errorf("ideal rename trace: Total = %d; want > 0", idealScore.Total)
 	}
 
-	// Bad trace: search_for_pattern → replace_in_file (grep-based rename).
+	// Bad trace: search_for_pattern → replace_in_file(find_regex=AuthMiddleware).
 	badTrace := trace.MergedTrace{
 		SchemaVersion: "1",
 		TaskID:        "go-rename-public-001",
 		Mode:          "semantic",
 		Events: []trace.Event{
 			{Source: "daemon", Kind: trace.KindToolCall, Tool: "search_for_pattern", Outcome: "success"},
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_in_file", Outcome: "success"},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_in_file", Outcome: "success", ArgsSummary: `{"find_regex":"AuthMiddleware"}`},
 		},
 	}
 	badScore := score.Apply(badTrace, rules)
@@ -68,19 +68,19 @@ func TestStarterRulesDelete(t *testing.T) {
 		t.Fatalf("LoadRules go-delete-symbol-001: %v", err)
 	}
 
-	// Ideal trace: find_references → safe_delete_symbol with receipts.
+	// Ideal trace: find_references → safe_delete_symbol with non-empty receipts.
 	idealTrace := trace.MergedTrace{
 		SchemaVersion: "1",
 		TaskID:        "go-delete-symbol-001",
 		Mode:          "semantic",
 		Events: []trace.Event{
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "find_references", Outcome: "success"},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "find_references", Outcome: "success", ArgsSummary: `{"symbol":"LegacyParser"}`},
 			{
 				Source:      "daemon",
 				Kind:        trace.KindToolCall,
 				Tool:        "safe_delete_symbol",
 				Outcome:     "success",
-				ArgsSummary: `receipts:["rcpt-001","rcpt-002"]`,
+				ArgsSummary: `symbol=LegacyParser receipts:["rcpt-001","rcpt-002"]`,
 			},
 		},
 	}
@@ -113,14 +113,14 @@ func TestStarterRulesPublicAPI(t *testing.T) {
 		t.Fatalf("LoadRules go-public-api-001: %v", err)
 	}
 
-	// Ideal trace: analyze_blast_radius → replace_symbol_body.
+	// Ideal trace: analyze_blast_radius(ProcessRequest) → replace_symbol_body(ProcessRequest).
 	idealTrace := trace.MergedTrace{
 		SchemaVersion: "1",
 		TaskID:        "go-public-api-001",
 		Mode:          "semantic",
 		Events: []trace.Event{
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "analyze_blast_radius", Outcome: "success"},
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_symbol_body", Outcome: "success"},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "analyze_blast_radius", Outcome: "success", ArgsSummary: `{"symbol":"ProcessRequest"}`},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_symbol_body", Outcome: "success", ArgsSummary: `{"symbol":"ProcessRequest"}`},
 		},
 	}
 	idealScore := score.Apply(idealTrace, rules)
@@ -134,7 +134,7 @@ func TestStarterRulesPublicAPI(t *testing.T) {
 		TaskID:        "go-public-api-001",
 		Mode:          "semantic",
 		Events: []trace.Event{
-			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_symbol_body", Outcome: "success"},
+			{Source: "daemon", Kind: trace.KindToolCall, Tool: "replace_symbol_body", Outcome: "success", ArgsSummary: `{"symbol":"ProcessRequest"}`},
 		},
 	}
 	badScore := score.Apply(badTrace, rules)

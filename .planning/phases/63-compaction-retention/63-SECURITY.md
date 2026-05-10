@@ -78,12 +78,19 @@ These items do NOT reopen any threat under `block_on: high`, but are tracked for
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-05-07 | 12 | 12 | 0 | gsd-security-auditor (Phase 63 verification pass) |
+| 2026-05-10 | 12 | 12 | 0 | /gsd-secure-phase 63 (re-audit short-circuit; v1.10 milestone audit follow-up) |
 
 **Audit notes (2026-05-07):**
 - Register origin: authored at plan time (both `63-01-PLAN.md` and `63-02-PLAN.md` contained complete `<threat_model>` blocks with STRIDE category + disposition + mitigation per threat).
 - Mode: verify mitigations exist (no retroactive STRIDE).
 - Outcome: 12/12 structurally CLOSED with file:line evidence per threat. 1 MEDIUM warning (T-63-02-04 missing regression test) tracked as FU-63-01 — does not reopen the threat under the project's `block_on: high` policy because the structural mitigation is verified in code.
 - No high-severity threats open → phase advancement not blocked.
+
+**Audit notes (2026-05-10):**
+- Triggered by v1.10-MILESTONE-AUDIT.md item #2 (Phase 63 missing `63-VERIFICATION.md`). SECURITY.md is intact and was never the gap; the milestone audit conflated SECURITY with VERIFICATION.
+- Workflow short-circuit applied: `threats_open: 0 AND register_authored_at_plan_time: true` → skip auditor spawn, append audit trail (per `secure-phase.md` Step 3 short-circuit rule).
+- Spot-checked mitigation citations: `allowedPkgPrefix` at `internal/lint/noduckdb/analyzer.go:17`, `compactPkgPrefix` at `internal/lint/compactusesstore/analyzer.go:18`, `MaxOverlayRows`/`outcome=partial` branch at `internal/semantic/compact/compactor.go:267-270` — all resolve cleanly. SECURITY.md is not stale.
+- **Procedural gap remains:** `63-VERIFICATION.md` (the goal-backward verification artifact) is still absent. The 5 COMPACT-* requirements remain partial-pending-verification per the milestone audit. To close that, run `/gsd-validate-phase 63` (Nyquist + verification) — distinct from /gsd-secure-phase.
 
 ---
 

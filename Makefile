@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick
 
 BINARY=helix
 GO=go
@@ -189,3 +189,13 @@ update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE s
 	@cp ~/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json internal/upgrade/trusted_root.json
 	@echo "trusted_root.json refreshed from live sigstore TUF; commit and bump per CONTRIBUTING.md"
 	@sha256sum internal/upgrade/trusted_root.json 2>/dev/null || shasum -a 256 internal/upgrade/trusted_root.json
+
+# eval-quick: in-process scripted-agent harness validation. <30s wall.
+# Runs on every PR. NOT real-agent behavior measurement (see eval/EVAL.md).
+eval-quick:
+	go run ./cmd/helix-eval run --quick --corpus eval/fixtures --out eval/reports
+
+# eval: full out-of-process matrix. Local-only; nightly CI only.
+# NEVER add this to PR-gating workflows (project rule: benchmarks local-only).
+eval:
+	go run ./cmd/helix-eval run --corpus eval/corpus --mode baseline --mode native --mode semantic --mode semantic_guarded --out eval/reports

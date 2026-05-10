@@ -315,7 +315,7 @@ func (s *SemanticSkill) handleGetSemanticContext(ctx context.Context, args GetSe
 	for _, s := range args.Symbols {
 		targetSymbols = append(targetSymbols, integ.SymbolID(s))
 	}
-	guardrails.IssueReceiptOnSuccess(context.Background(), guardrails.ClassContextGathered,
+	guardrails.IssueReceiptOnSuccess(ctx, guardrails.ClassContextGathered,
 		guardrails.ContextGatheredScope{
 			FileSet:         args.Files,
 			TargetSymbols:   targetSymbols,

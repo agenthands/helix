@@ -232,20 +232,23 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	}
 	cmd.Env = env
 
-	// Redirect daemon stderr to a log file.
+	// Redirect daemon stderr to a log file. Keep the file open until the daemon
+	// is confirmed up (or killed on failure) so that startup error output is not
+	// lost on platforms where closing the parent fd before the child flushes its
+	// kernel buffer causes silent data loss.
 	logPath := filepath.Join(modeDir, "daemon.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: open daemon log: %w", err)
 	}
+	defer logFile.Close() // closed when StartDaemon returns
+
 	cmd.Stderr = logFile
 	cmd.Stdout = logFile
 
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
 		return nil, fmt.Errorf("sandbox: start daemon %s/%s: %w", taskID, mode, err)
 	}
-	_ = logFile.Close()
 
 	// Poll until socket appears or ctx/deadline expires.
 	if err := waitSocket(ctx, sockPath, 10*time.Second); err != nil {

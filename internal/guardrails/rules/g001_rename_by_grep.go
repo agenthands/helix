@@ -46,8 +46,37 @@ func EvaluateG001(ctx context.Context, args RuleArgs, sc SessionContext) Decisio
 
 	// Condition 2: is args.Find a known symbol in this file?
 	symbols, err := sc.OutlineProvider.SymbolsInFile(ctx, sc.Workspace, args.Path)
-	if err != nil || len(symbols) == 0 {
-		// Cannot determine outline: safe to allow (no false positives).
+	if err != nil {
+		// WR-02: align with G-002/G-003 D-19 conservative-warn invariant.
+		// When the outline source errors and the identifier-shape gate has
+		// already fired, surface a degraded-mode Warn instead of silently
+		// allowing the edit. Block is downgraded to Warn (D-19 conservative,
+		// not punitive).
+		level := resolveLevel(args, sc, "G-001")
+		action := ResolveAction(level)
+		if action == Allow {
+			return Decision{Action: Allow}
+		}
+		if action == Block {
+			action = Warn
+		}
+		return Decision{
+			Action:  action,
+			Rule:    "G-001",
+			Message: "outline provider unavailable; conservatively warning before fuzzy edit of identifier-shaped find=" + args.Find,
+			RequiredReceipts: []RequiredReceipt{
+				{Class: guardrails.ClassReferencesChecked, ScopeHint: "find_references on " + args.Find},
+			},
+			SuggestedTools: []string{"find_references", "analyze_blast_radius"},
+			Warnings:       []string{"degraded mode: outline unavailable; verify symbol scope manually"},
+			SeeAlso: []SeeAlsoRef{
+				{Tool: "get_tool_help", Args: map[string]string{"topic": "workflow:rename"}},
+			},
+		}
+	}
+	if len(symbols) == 0 {
+		// Empty outline (no declared symbols in file): safe to allow — there
+		// is nothing for find to alias against.
 		return Decision{Action: Allow}
 	}
 	var matchedSymbol string

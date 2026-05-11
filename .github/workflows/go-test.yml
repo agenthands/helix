@@ -90,8 +90,11 @@ jobs:
           restore-keys: |
             jdtls-warm-${{ runner.os }}-
 
-      - name: go vet
-        run: go vet ./...
+      - name: go vet (incl. 4 project analyzers via make vet)
+        # Runs go vet ./... plus the 4 project-local analyzers:
+        # vet-noduckdb, vet-nokernel2semantic, vet-nosemantic2kernel,
+        # vet-compact-uses-store. Resolves F-03 from v1.10-MILESTONE-AUDIT.
+        run: make vet
 
       - name: go test
         run: go test ./... -count=1

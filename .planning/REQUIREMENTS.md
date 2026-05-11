@@ -20,12 +20,12 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### STORE — Semantic Fact Store (DuckDB)
 
-- [ ] **STORE-01**: A semantic fact store opens at daemon start when `semantic_index.enabled=true` and persists at `<workspace>/.helix/semantic.duckdb`; daemon refuses to start if the file is corrupt only after auto-quarantining the bad file (`.corrupt.<ts>` rename) and rebuilding fresh.
-- [ ] **STORE-02**: When `semantic_index.enabled=false`, every semantic-dependent tool returns `Kind: Unsupported` with remediation text and the rest of Helix continues to work — verified by an integration test running with `semantic_index.enabled=false`. (Note: the historical "implied false because CGO=0 build has no tree-sitter" alternate path was removed in Phase 59.1; the source tree builds with `CGO_ENABLED=1` unconditionally and tree-sitter is always available. The `semantic_index.enabled=false` knob remains the only documented gate to disable the semantic store.)
-- [ ] **STORE-03**: Schema versioning is enforced: a forward-incompatible schema version triggers a full reindex with a clear log message; a backward-compatible bump migrates in place. Schema version is stamped in every snapshot row.
-- [ ] **STORE-04**: Effective-read API returns `committed snapshot ⊕ live overlay − tombstones` for files, symbols, references, and edges; verified by a per-entity unit test where overlay and snapshot disagree.
-- [ ] **STORE-05**: Configuration is layered through the existing 4-layer precedence (CLI > project `.helix/project.yml` > user `~/.helix/helix_config.yml` > profile defaults) for every `semantic_index.*` key in SPEC §25.
-- [ ] **STORE-06**: A vet/lint rule fails the build if `duckdb-go` is imported from any package other than `internal/semantic/store/`.
+- [x] **STORE-01**: A semantic fact store opens at daemon start when `semantic_index.enabled=true` and persists at `<workspace>/.helix/semantic.duckdb`; daemon refuses to start if the file is corrupt only after auto-quarantining the bad file (`.corrupt.<ts>` rename) and rebuilding fresh.
+- [x] **STORE-02**: When `semantic_index.enabled=false`, every semantic-dependent tool returns `Kind: Unsupported` with remediation text and the rest of Helix continues to work — verified by an integration test running with `semantic_index.enabled=false`. (Note: the historical "implied false because CGO=0 build has no tree-sitter" alternate path was removed in Phase 59.1; the source tree builds with `CGO_ENABLED=1` unconditionally and tree-sitter is always available. The `semantic_index.enabled=false` knob remains the only documented gate to disable the semantic store.)
+- [x] **STORE-03**: Schema versioning is enforced: a forward-incompatible schema version triggers a full reindex with a clear log message; a backward-compatible bump migrates in place. Schema version is stamped in every snapshot row.
+- [x] **STORE-04**: Effective-read API returns `committed snapshot ⊕ live overlay − tombstones` for files, symbols, references, and edges; verified by a per-entity unit test where overlay and snapshot disagree.
+- [x] **STORE-05**: Configuration is layered through the existing 4-layer precedence (CLI > project `.helix/project.yml` > user `~/.helix/helix_config.yml` > profile defaults) for every `semantic_index.*` key in SPEC §25.
+- [x] **STORE-06**: A vet/lint rule fails the build if `duckdb-go` is imported from any package other than `internal/semantic/store/`.
 
 ### EXTRACT — Tree-sitter Extraction & Stable Symbol Identity
 
@@ -66,7 +66,7 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 - [x] **TOOL-01**: `index_semantic_graph` MCP tool (mode `review+` / `admin`) builds or refreshes a committed snapshot; supports `auto`, `full`, `incremental`, `refresh` modes; returns snapshot id, graph version, files indexed/reused, partial state, freshness, duration.
 - [x] **TOOL-02**: `refresh_semantic_graph` MCP tool (mode `read+`) applies pending live source changes without forcing a full reindex; supports `wait_for_lsp` and `paths` filters; returns graph version, files updated, deltas, pending LSP, freshness.
-- [ ] **TOOL-03**: `get_semantic_graph_status` MCP tool (mode `read+`) returns the SPEC §23.3 status object: latest snapshot id, graph version, overlay state, pending LSP count, freshness, per-projection score status, cluster status, last-live-update latency.
+- [x] **TOOL-03**: `get_semantic_graph_status` MCP tool (mode `read+`) returns the SPEC §23.3 status object: latest snapshot id, graph version, overlay state, pending LSP count, freshness, per-projection score status, cluster status, last-live-update latency.
 - [x] **TOOL-04**: `get_semantic_context` MCP tool (mode `read+`) returns ranked, evidence-backed context for a task/symbol/file selection under a token budget; response always includes `freshness_mode`, `graph_version`, `overlay_active`, `freshness`, `pending_lsp_files`, and per-candidate `evidence` + `confidence`.
 - [x] **TOOL-05**: All four tools respect profile/mode gating per SPEC §30.2; `tools/list` filters them out for profiles that don't include them; `get_tool_help` returns parameter docs for each.
 
@@ -74,19 +74,19 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### INTEG — Existing-Tool Integration (Strangler Fig)
 
-- [ ] **INTEG-01**: `get_repo_map` consults `repomapSkill.SetSemanticLookup(lookup)` when available and uses persisted graph scores + clusters; falls back to existing tree-sitter + PageRank path when semantic is disabled, building, or returns an error. Zero source change to `internal/repomap` engine.
-- [ ] **INTEG-02**: `get_context` delegates to the semantic retrieval engine when available with the same fallback contract.
-- [ ] **INTEG-03**: `analyze_blast_radius` uses semantic graph expansion + LSP validation of critical edges when available; returns `confidence` and `evidence` per impacted node; falls back when semantic is disabled.
-- [ ] **INTEG-04**: `get_health` includes a `semantic_index` section with store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error.
-- [ ] **INTEG-05**: Every MCP envelope from a semantic-aware tool returns a `source` field (`semantic | tree_sitter | fallback`) so callers can detect path drift; index-disabled goldens are preserved.
+- [x] **INTEG-01**: `get_repo_map` consults `repomapSkill.SetSemanticLookup(lookup)` when available and uses persisted graph scores + clusters; falls back to existing tree-sitter + PageRank path when semantic is disabled, building, or returns an error. Zero source change to `internal/repomap` engine.
+- [x] **INTEG-02**: `get_context` delegates to the semantic retrieval engine when available with the same fallback contract.
+- [x] **INTEG-03**: `analyze_blast_radius` uses semantic graph expansion + LSP validation of critical edges when available; returns `confidence` and `evidence` per impacted node; falls back when semantic is disabled.
+- [x] **INTEG-04**: `get_health` includes a `semantic_index` section with store kind, latest snapshot status, graph version, overlay active flag, pending LSP count, last live-update latency, and last error.
+- [x] **INTEG-05**: Every MCP envelope from a semantic-aware tool returns a `source` field (`semantic | tree_sitter | fallback`) so callers can detect path drift; index-disabled goldens are preserved.
 
 ### COMPACT — Compaction & Retention
 
-- [ ] **COMPACT-01**: A compaction worker merges the live overlay into a new committed snapshot after `compact_after_idle_ms` (default 5000) when no edit/overlay/LSP transaction is active; previous committed snapshot is preserved on failure.
-- [ ] **COMPACT-02**: Compaction reads the live `overlay_epoch` under CAS; `ClearOverlay` deletes only rows ≤ captured epoch — overlay rows committed during compaction are retained for the next pass. Verified by a property test ("interleave overlay writes with compaction").
-- [ ] **COMPACT-03**: A `CHECKPOINT` runs at compaction commit; a config-gated weekly `VACUUM` reclaims DuckDB on-disk space; long-repo bench fixture confirms growth bounded.
-- [ ] **COMPACT-04**: Snapshot retention keeps the last `snapshot_retention` snapshots (default 5); older snapshots are deleted in a single transaction.
-- [ ] **COMPACT-05**: Compaction crash recovery: a single transaction OR a `compaction_journal` ensures partial commits leave overlay+snapshot consistent. Verified by a kill-mid-compact integration test.
+- [x] **COMPACT-01**: A compaction worker merges the live overlay into a new committed snapshot after `compact_after_idle_ms` (default 5000) when no edit/overlay/LSP transaction is active; previous committed snapshot is preserved on failure.
+- [x] **COMPACT-02**: Compaction reads the live `overlay_epoch` under CAS; `ClearOverlay` deletes only rows ≤ captured epoch — overlay rows committed during compaction are retained for the next pass. Verified by a property test ("interleave overlay writes with compaction").
+- [x] **COMPACT-03**: A `CHECKPOINT` runs at compaction commit; a config-gated weekly `VACUUM` reclaims DuckDB on-disk space; long-repo bench fixture confirms growth bounded.
+- [x] **COMPACT-04**: Snapshot retention keeps the last `snapshot_retention` snapshots (default 5); older snapshots are deleted in a single transaction.
+- [x] **COMPACT-05**: Compaction crash recovery: a single transaction OR a `compaction_journal` ensures partial commits leave overlay+snapshot consistent. Verified by a kill-mid-compact integration test.
 
 ### TYPES — Type Resolution & Access Chains
 
@@ -97,41 +97,41 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### GUARD — Agent Guardrails (G-001..G-005, warn-default)
 
-- [ ] **GUARD-01**: A `GuardrailMiddleware` is installed at daemon step 14b.5 between `SuggestionMiddleware` and `LazyInitMiddleware`; LIFO execution order is `LazyInit → Guardrail → Suggestion → ProfileFilter → Telemetry → handler`. The `LazyInit-last-installed (executes-first)` invariant is preserved.
-- [ ] **GUARD-02**: Five guardrail rules are enforced at warn-default: G-001 no rename-by-grep, G-002 no delete without reference check, G-003 no public API edit without blast-radius analysis, G-004 no large fuzzy edit without prior `read_file`/`get_context`, G-005 no security-sensitive change without diagnostics after edit.
-- [ ] **GUARD-03**: Safety receipts are stored server-side in the daemon (5-min TTL keyed by `graph_version`); destructive tools look up claims by ID — receipts are never persisted client-side. ID-only forwarding survives agent context compaction.
-- [ ] **GUARD-04**: Receipt invalidation is automatic when `graph_version` advances past the receipt's snapshot; a stale receipt fails the guardrail check with a clear "graph drifted" error.
-- [ ] **GUARD-05**: `TelemetryMiddleware` classifies guardrail outcomes as `guardrail_blocked` and `guardrail_warned` (alongside existing `success / timeout / circuit_open / internal`); RED metrics surface them.
-- [ ] **GUARD-06**: `GUARDRAILS.md` and `DoD.md` are committed and explain rule semantics + completion criteria for rename / delete / public-API-change task classes.
-- [ ] **GUARD-07**: Enforcement levels (`off | warn | require_force | enforce`) are configurable per profile; default is `warn` for `read`/`edit` profiles and `require_force` for `review` profile on high-risk pre-checks.
+- [x] **GUARD-01**: A `GuardrailMiddleware` is installed at daemon step 14b.5 between `SuggestionMiddleware` and `LazyInitMiddleware`; LIFO execution order is `LazyInit → Guardrail → Suggestion → ProfileFilter → Telemetry → handler`. The `LazyInit-last-installed (executes-first)` invariant is preserved.
+- [x] **GUARD-02**: Five guardrail rules are enforced at warn-default: G-001 no rename-by-grep, G-002 no delete without reference check, G-003 no public API edit without blast-radius analysis, G-004 no large fuzzy edit without prior `read_file`/`get_context`, G-005 no security-sensitive change without diagnostics after edit.
+- [x] **GUARD-03**: Safety receipts are stored server-side in the daemon (5-min TTL keyed by `graph_version`); destructive tools look up claims by ID — receipts are never persisted client-side. ID-only forwarding survives agent context compaction.
+- [x] **GUARD-04**: Receipt invalidation is automatic when `graph_version` advances past the receipt's snapshot; a stale receipt fails the guardrail check with a clear "graph drifted" error.
+- [x] **GUARD-05**: `TelemetryMiddleware` classifies guardrail outcomes as `guardrail_blocked` and `guardrail_warned` (alongside existing `success / timeout / circuit_open / internal`); RED metrics surface them.
+- [x] **GUARD-06**: `GUARDRAILS.md` and `DoD.md` are committed and explain rule semantics + completion criteria for rename / delete / public-API-change task classes.
+- [x] **GUARD-07**: Enforcement levels (`off | warn | require_force | enforce`) are configurable per profile; default is `warn` for `read`/`edit` profiles and `require_force` for `review` profile on high-risk pre-checks.
 
 > Deferred to v1.10.x: G-006..G-010 (prefer-symbol-edits, no-stale-impact, no-false-certainty, multi-file-verify, generated-files); `enforce` mode hardening.
 
 ### EVAL — Evaluation Harness
 
-- [ ] **EVAL-01**: An evaluation harness runs `baseline / native / semantic / semantic_guarded` modes against the same task and emits per-task `EvalResult` (success, patch applies, tests pass, diagnostics clean, duration, tokens, cost, edit count, guardrail compliance, context precision/recall).
-- [ ] **EVAL-02**: Each mode runs in an out-of-process Helix daemon subprocess with isolated config dir; baseline mode uses a new `--profile=baseline` that strips Helix tools entirely; agent connects via stdio forwarder.
-- [ ] **EVAL-03**: An in-process `make eval-quick` variant runs a small fixture suite without subprocess overhead for fast local CI.
-- [ ] **EVAL-04**: Reports include `eval_report.json`, `eval_report.md` (mode comparison table, success/cost/latency, tool-call distribution, guardrail compliance, failure examples), `cost_summary.json`, `tool_behavior.json`, `safety_compliance.json`, plus per-task traces and patches.
-- [ ] **EVAL-05**: Tool-behavior scoring records whether agents used the right tool for rename/delete/public-API tasks (e.g., `+1` for `rename_symbol` after `find_references`, `-1` for grep-rename).
-- [ ] **EVAL-06**: Eval corpus is synthetic-only by default with the OSS Helix repo as a permissible secondary source; commercial-LLM API calls are configured for retention-zero where the provider supports it. Provider data-retention TOS is verified at planning time and recorded in EVAL.md.
-- [ ] **EVAL-07**: Cross-model judging is informational, never a CI gate; a flaky judge does not block merges.
+- [x] **EVAL-01**: An evaluation harness runs `baseline / native / semantic / semantic_guarded` modes against the same task and emits per-task `EvalResult` (success, patch applies, tests pass, diagnostics clean, duration, tokens, cost, edit count, guardrail compliance, context precision/recall).
+- [x] **EVAL-02**: Each mode runs in an out-of-process Helix daemon subprocess with isolated config dir; baseline mode uses a new `--profile=baseline` that strips Helix tools entirely; agent connects via stdio forwarder.
+- [x] **EVAL-03**: An in-process `make eval-quick` variant runs a small fixture suite without subprocess overhead for fast local CI.
+- [x] **EVAL-04**: Reports include `eval_report.json`, `eval_report.md` (mode comparison table, success/cost/latency, tool-call distribution, guardrail compliance, failure examples), `cost_summary.json`, `tool_behavior.json`, `safety_compliance.json`, plus per-task traces and patches.
+- [x] **EVAL-05**: Tool-behavior scoring records whether agents used the right tool for rename/delete/public-API tasks (e.g., `+1` for `rename_symbol` after `find_references`, `-1` for grep-rename).
+- [x] **EVAL-06**: Eval corpus is synthetic-only by default with the OSS Helix repo as a permissible secondary source; commercial-LLM API calls are configured for retention-zero where the provider supports it. Provider data-retention TOS is verified at planning time and recorded in EVAL.md.
+- [x] **EVAL-07**: Cross-model judging is informational, never a CI gate; a flaky judge does not block merges.
 
 ### DAG — Pipeline DAG Library
 
-- [ ] **DAG-01**: A `internal/phasegraph/` library provides `PhaseSpec`, `PhaseGraph`, `ValidatePhaseGraph`, and `RunPhaseGraph`; uses stdlib only (Kahn topo-sort + cycle/missing-dep detection + reverse-topological shutdown).
-- [ ] **DAG-02**: The semantic-index pipeline (full + incremental snapshot build), the live-update pipeline, and the eval pipeline are each described as a typed phase DAG with declared `Requires`/`Provides`/`Run`/`Validate`/`Shutdown`.
-- [ ] **DAG-03**: A pipeline DAG with a duplicate phase ID, missing dependency, or cycle fails validation before execution; error returns include the offending phase IDs and (when configured) writes a `.helix/debug/phasegraph-*.dot` debug file.
-- [ ] **DAG-04**: Daemon bootstrap remains imperative in v1.10; a `// TODO(v1.11): migrate to phasegraph.RunPhaseGraph(BootstrapPhases)` marker is recorded.
+- [x] **DAG-01**: A `internal/phasegraph/` library provides `PhaseSpec`, `PhaseGraph`, `ValidatePhaseGraph`, and `RunPhaseGraph`; uses stdlib only (Kahn topo-sort + cycle/missing-dep detection + reverse-topological shutdown).
+- [x] **DAG-02**: The semantic-index pipeline (full + incremental snapshot build), the live-update pipeline, and the eval pipeline are each described as a typed phase DAG with declared `Requires`/`Provides`/`Run`/`Validate`/`Shutdown`.
+- [x] **DAG-03**: A pipeline DAG with a duplicate phase ID, missing dependency, or cycle fails validation before execution; error returns include the offending phase IDs and (when configured) writes a `.helix/debug/phasegraph-*.dot` debug file.
+- [x] **DAG-04**: Daemon bootstrap remains imperative in v1.10; a `// TODO(v1.11): migrate to phasegraph.RunPhaseGraph(BootstrapPhases)` marker is recorded.
 
 ### REL — v1.9 Carryover (Release & Distribution)
 
-- [ ] **REL-01** (was PKG-01 SC-3): The first signed Helix release (v1.10.0) is published end-to-end via `goreleaser` with a real maintainer minisign keypair; CI pre-flight rejects PLACEHOLDER pubkey; `helix upgrade` verifies signature and atomically swaps the binary on a real download.
+- [x] **REL-01** (was PKG-01 SC-3): The first signed Helix release (v1.10.0) is published end-to-end via `goreleaser` with a real maintainer minisign keypair; CI pre-flight rejects PLACEHOLDER pubkey; `helix upgrade` verifies signature and atomically swaps the binary on a real download.
 - [~] **REL-02** (was PKG-DEFER-03): A Homebrew tap publishes `helix` via the existing release artifacts; `brew install agenthands/helix/helix` works on darwin/amd64 and darwin/arm64. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
 - [~] **REL-03** (was PKG-DEFER-04): A Scoop bucket publishes `helix` via the existing release artifacts; `scoop install helix` works on windows/amd64. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
 - [~] **REL-04** (was PKG-DEFER-05): A native Linux package (`.deb` and/or `.rpm`) is produced by goreleaser and validated to install + register the daemon on a clean Ubuntu/Fedora image. May be downscoped to one format if upstream signing limitations make both formats blocking. — won't-do (v1.10) — self-contained binary is the only distribution channel; package channels add maintenance burden without reaching the agent-targeted audience
-- [ ] **REL-05** (Phase 51 architectural fix): The reproducibility gate compares against a real release artifact (or, alternatively, `CONTRIBUTING.md` is updated to reflect the documented Pass-3 limitation), closing v1.9's deployment-gated SC-3 caveat.
-- [ ] **REL-06** (Phase 55 follow-up): `forwarder.tools.call` span is unified with the gRPC server span so a single trace covers stdio → forwarder → daemon → kernel; verified by an end-to-end trace assertion.
+- [x] **REL-05** (Phase 51 architectural fix): The reproducibility gate compares against a real release artifact (or, alternatively, `CONTRIBUTING.md` is updated to reflect the documented Pass-3 limitation), closing v1.9's deployment-gated SC-3 caveat.
+- [x] **REL-06** (Phase 55 follow-up): `forwarder.tools.call` span is unified with the gRPC server span so a single trace covers stdio → forwarder → daemon → kernel; verified by an end-to-end trace assertion.
 
 ---
 
@@ -171,22 +171,22 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 | REQ-ID | Phase | Status |
 |---|---|---|
-| STORE-01 | Phase 57 | Pending |
-| STORE-02 | Phase 57 | Pending |
-| STORE-03 | Phase 57 | Pending |
-| STORE-04 | Phase 57 | Pending |
-| STORE-05 | Phase 57 | Pending |
-| STORE-06 | Phase 57 | Pending |
-| DAG-01 | Phase 57 | Pending |
-| DAG-02 | Phase 57 | Pending |
-| DAG-03 | Phase 57 | Pending |
-| DAG-04 | Phase 57 | Pending |
-| REL-01 | Phase 58 | Pending |
-| REL-02 | Phase 58 | Pending |
-| REL-03 | Phase 58 | Pending |
-| REL-04 | Phase 58 | Pending |
-| REL-05 | Phase 58 | Pending |
-| REL-06 | Phase 58 | Pending |
+| STORE-01 | Phase 57 | Satisfied |
+| STORE-02 | Phase 57 | Satisfied |
+| STORE-03 | Phase 57 | Satisfied |
+| STORE-04 | Phase 57 | Satisfied |
+| STORE-05 | Phase 57 | Satisfied |
+| STORE-06 | Phase 57 | Satisfied |
+| DAG-01 | Phase 57 | Satisfied |
+| DAG-02 | Phase 57 | Satisfied |
+| DAG-03 | Phase 57 | Satisfied |
+| DAG-04 | Phase 57 | Satisfied |
+| REL-01 | Phase 58 | Satisfied |
+| REL-02 | Phase 58 | Won't-do (Phase 59.1) |
+| REL-03 | Phase 58 | Won't-do (Phase 59.1) |
+| REL-04 | Phase 58 | Won't-do (Phase 59.1) |
+| REL-05 | Phase 58 | Satisfied |
+| REL-06 | Phase 58 | Satisfied |
 | EXTRACT-01 | Phase 59 | Complete |
 | EXTRACT-02 | Phase 59 | Complete |
 | EXTRACT-03 | Phase 59 | Complete |
@@ -199,47 +199,47 @@ Each requirement is testable from an agent/user perspective and maps to one road
 | LIVE-05 | Phase 60 | Complete |
 | LIVE-06 | Phase 60 | Complete |
 | LIVE-07 | Phase 60 | Complete |
-| ENRICH-01 | Phase 61 | Pending |
-| ENRICH-02 | Phase 61 | Pending |
-| ENRICH-03 | Phase 61 | Pending |
-| ENRICH-04 | Phase 61 | Pending |
-| ENRICH-05 | Phase 61 | Pending |
-| GRAPH-01 | Phase 62 | Pending |
-| GRAPH-02 | Phase 62 | Pending |
-| GRAPH-03 | Phase 62 | Pending |
-| GRAPH-04 | Phase 62 | Pending |
-| GRAPH-05 | Phase 62 | Pending |
-| GRAPH-06 | Phase 62 | Pending |
-| TYPES-01 | Phase 62 | Pending |
-| TYPES-02 | Phase 62 | Pending |
-| TYPES-03 | Phase 62 | Pending |
-| TYPES-04 | Phase 62 | Pending |
-| COMPACT-01 | Phase 63 | Pending |
-| COMPACT-02 | Phase 63 | Pending |
-| COMPACT-03 | Phase 63 | Pending |
-| COMPACT-04 | Phase 63 | Pending |
-| COMPACT-05 | Phase 63 | Pending |
+| ENRICH-01 | Phase 61 | Satisfied |
+| ENRICH-02 | Phase 61 | Satisfied |
+| ENRICH-03 | Phase 61 | Satisfied |
+| ENRICH-04 | Phase 61 | Satisfied |
+| ENRICH-05 | Phase 61 | Satisfied |
+| GRAPH-01 | Phase 62 | Satisfied |
+| GRAPH-02 | Phase 62 | Satisfied |
+| GRAPH-03 | Phase 62 | Satisfied |
+| GRAPH-04 | Phase 62 | Satisfied |
+| GRAPH-05 | Phase 62 | Satisfied |
+| GRAPH-06 | Phase 62 | Satisfied |
+| TYPES-01 | Phase 62 | Satisfied |
+| TYPES-02 | Phase 62 | Satisfied |
+| TYPES-03 | Phase 62 | Satisfied |
+| TYPES-04 | Phase 62 | Satisfied |
+| COMPACT-01 | Phase 63 | Satisfied |
+| COMPACT-02 | Phase 63 | Satisfied |
+| COMPACT-03 | Phase 63 | Satisfied |
+| COMPACT-04 | Phase 63 | Satisfied |
+| COMPACT-05 | Phase 63 | Satisfied |
 | TOOL-01 | Phase 64 | Complete |
 | TOOL-02 | Phase 64 | Complete |
-| TOOL-03 | Phase 64 | In Progress (P64-02 store foundation landed; tool wrapper in P64-06) |
-| TOOL-04 | Phase 64 | In Progress (P64-02 store foundation landed; tool wrapper in P64-07) |
+| TOOL-03 | Phase 64 | Satisfied |
+| TOOL-04 | Phase 64 | Satisfied |
 | TOOL-05 | Phase 64 | Complete |
-| INTEG-01 | Phase 65 | Pending |
-| INTEG-02 | Phase 65 | Pending |
-| INTEG-03 | Phase 65 | Pending |
-| INTEG-04 | Phase 65 | Pending |
-| INTEG-05 | Phase 65 | Pending |
-| GUARD-01 | Phase 66 | Pending |
-| GUARD-02 | Phase 66 | Pending |
-| GUARD-03 | Phase 66 | Pending |
-| GUARD-04 | Phase 66 | Pending |
-| GUARD-05 | Phase 66 | Pending |
-| GUARD-06 | Phase 66 | Pending |
-| GUARD-07 | Phase 66 | Pending |
-| EVAL-01 | Phase 67 | Pending |
-| EVAL-02 | Phase 67 | Pending |
-| EVAL-03 | Phase 67 | Pending |
-| EVAL-04 | Phase 67 | Pending |
-| EVAL-05 | Phase 67 | Pending |
-| EVAL-06 | Phase 67 | Pending |
-| EVAL-07 | Phase 67 | Pending |
+| INTEG-01 | Phase 65 | Satisfied |
+| INTEG-02 | Phase 65 | Satisfied |
+| INTEG-03 | Phase 65 | Satisfied |
+| INTEG-04 | Phase 65 | Satisfied |
+| INTEG-05 | Phase 65 | Satisfied |
+| GUARD-01 | Phase 66 | Satisfied |
+| GUARD-02 | Phase 66 | Satisfied |
+| GUARD-03 | Phase 66 | Satisfied |
+| GUARD-04 | Phase 66 | Satisfied |
+| GUARD-05 | Phase 66 | Satisfied |
+| GUARD-06 | Phase 66 | Satisfied |
+| GUARD-07 | Phase 66 | Satisfied |
+| EVAL-01 | Phase 67 | Satisfied |
+| EVAL-02 | Phase 67 | Satisfied |
+| EVAL-03 | Phase 67 | Satisfied |
+| EVAL-04 | Phase 67 | Satisfied |
+| EVAL-05 | Phase 67 | Satisfied |
+| EVAL-06 | Phase 67 | Satisfied |
+| EVAL-07 | Phase 67 | Satisfied |

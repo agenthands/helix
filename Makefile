@@ -191,7 +191,8 @@ update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE s
 	@sha256sum internal/upgrade/trusted_root.json 2>/dev/null || shasum -a 256 internal/upgrade/trusted_root.json
 
 # eval-quick: in-process scripted-agent harness validation. <30s wall-time for
-# the full 10-fixture set (D-05). Runs on every PR as a CI gate.
+# the full 9-fixture set (D-05 target "~10"; 06a ships 2, 06b adds 7). Runs on
+# every PR as a CI gate. inprocess_fixtures_test.go asserts >= 9.
 #
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  PITFALL 6 — CRITICAL WARNING (T-67-Pitfall-6, four-layer mitigation)   ║
@@ -212,8 +213,8 @@ update-trust-root: ## Refresh internal/upgrade/trusted_root.json from the LIVE s
 # ║  Use 'make eval' for real agent behavior measurements (nightly/release). ║
 # ║  Never report eval-quick results as agent-behavior evidence.             ║
 # ║                                                                          ║
-# ║  D-05 BUDGET: 10-fixture set target <30s wall-time on CI runners.        ║
-# ║  Plan 67-06a ships 2 reference fixtures; Plan 67-06b adds 8 more.        ║
+# ║  D-05 BUDGET: 9-fixture set target <30s wall-time on CI runners          ║
+# ║  (D-05 narrative says "~10"; 06a ships 2 + 06b adds 7 = 9 actual).       ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 eval-quick:
 	go run ./cmd/helix-eval run --quick --corpus eval/fixtures --out eval/reports

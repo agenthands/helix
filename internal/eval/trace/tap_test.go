@@ -357,3 +357,44 @@ func TestTapDaemonLog_TimestampParsing(t *testing.T) {
 		t.Errorf("T = %v, want %v", res.Events[0].T, expected)
 	}
 }
+
+// TestTapDaemonLog_ReceiptIssued verifies F-08 receipt-issued lines parse into
+// KindReceiptIssued events carrying ReceiptClass + TraceID + Pid.
+func TestTapDaemonLog_ReceiptIssued(t *testing.T) {
+	t.Parallel()
+	path := writeLines(t,
+		`{"time":"2026-05-12T10:00:00.000Z","level":"INFO","msg":"receipt issued","receipt_class":"definition","workspace":"/repo","snapshot_id":42,"graph_version":7,"trace_id":"trace-abc","pid":12345}`,
+		`{"time":"2026-05-12T10:00:01.000Z","level":"INFO","msg":"receipt issued","receipt_class":"references","workspace":"/repo","snapshot_id":42,"graph_version":7,"trace_id":"trace-def","pid":99999}`,
+		`{"time":"2026-05-12T10:00:02.000Z","level":"INFO","msg":"tool call","tool":"x","outcome":"success","duration_ms":1,"pid":12345}`,
+	)
+	res, err := trace.TapDaemonLog(path, 12345)
+	if err != nil {
+		t.Fatalf("TapDaemonLog error: %v", err)
+	}
+	// Expect: 1 receipt + 1 tool_call (foreign-pid receipt rejected).
+	if len(res.Events) != 2 {
+		t.Fatalf("want 2 events, got %d (events=%+v)", len(res.Events), res.Events)
+	}
+	if res.RejectedForeignPid != 1 {
+		t.Errorf("RejectedForeignPid = %d, want 1", res.RejectedForeignPid)
+	}
+	var receipt *trace.Event
+	for i := range res.Events {
+		if res.Events[i].Kind == trace.KindReceiptIssued {
+			receipt = &res.Events[i]
+			break
+		}
+	}
+	if receipt == nil {
+		t.Fatalf("no KindReceiptIssued event in result")
+	}
+	if receipt.ReceiptClass != "definition" {
+		t.Errorf("ReceiptClass = %q, want %q", receipt.ReceiptClass, "definition")
+	}
+	if receipt.TraceID != "trace-abc" {
+		t.Errorf("TraceID = %q, want %q", receipt.TraceID, "trace-abc")
+	}
+	if receipt.Pid != 12345 {
+		t.Errorf("Pid = %d, want 12345", receipt.Pid)
+	}
+}

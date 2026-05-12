@@ -21,6 +21,9 @@ const (
 	KindResult EventKind = "result"
 	// KindAPIRetry is emitted by CC on API retry events.
 	KindAPIRetry EventKind = "api_retry"
+	// KindReceiptIssued is emitted by the daemon guardrails store when a
+	// receipt is issued. Carries ReceiptClass + TraceID + Pid. F-08.
+	KindReceiptIssued EventKind = "receipt_issued"
 )
 
 // validEventKinds is the closed enum for event kinds.
@@ -32,6 +35,7 @@ var validEventKinds = map[string]struct{}{
 	string(KindToolResult):   {},
 	string(KindResult):       {},
 	string(KindAPIRetry):     {},
+	string(KindReceiptIssued): {},
 }
 
 // validOutcomes is the closed enum for tool-call outcomes.
@@ -124,6 +128,10 @@ type Event struct {
 
 	// daemon-side trust attestation (T-67-04)
 	Pid int `json:"pid,omitempty"`
+
+	// receipt_issued fields (Source == "daemon", Kind == KindReceiptIssued).
+	// F-08: populated by tap when parsing msg=="receipt issued" daemon lines.
+	ReceiptClass string `json:"receipt_class,omitempty"`
 }
 
 // MergedTrace is the canonical per-(task, mode) artifact produced by Merge.

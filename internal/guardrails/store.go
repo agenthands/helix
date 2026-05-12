@@ -256,6 +256,9 @@ func (s *Store) Issue(ws workspace.WorkspaceKey, class ReceiptClass, scope Recei
 	entry.lruKeys[id] = el
 
 	s.metrics.ReceiptIssuedInc(string(class))
+	// F-08: emit tap-compatible JSONL "receipt issued" line consumed by
+	// internal/eval/trace/tap.go. Nil-safe; see store_jsonl.go.
+	emitReceiptIssued(string(class), ws.RepoRoot, fields.SnapshotID, fields.GraphVersion, fields.TraceID)
 	return id, nil
 }
 

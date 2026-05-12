@@ -20,6 +20,7 @@ type DaemonTapResult struct {
 }
 
 // daemonLogLine is the minimal struct for parsing a daemon JSONL log line.
+// Covers both msg=="tool call" (F-07) and msg=="receipt issued" (F-08).
 type daemonLogLine struct {
 	Time       string         `json:"time"`
 	Level      string         `json:"level"`
@@ -31,6 +32,9 @@ type daemonLogLine struct {
 	TraceID    string         `json:"trace_id"`
 	SessionID  string         `json:"session_id"`
 	Guardrail  *GuardrailInfo `json:"guardrail"`
+
+	// F-08 receipt-issued fields.
+	ReceiptClass string `json:"receipt_class"`
 }
 
 // TapDaemonLog reads a daemon JSONL log file and extracts tool-call events.
@@ -61,32 +65,47 @@ func TapDaemonLog(path string, expectedPid int) (DaemonTapResult, error) {
 			continue
 		}
 
-		// Only process tool call events.
-		if raw.Msg != "tool call" {
+		// Dispatch on msg: "tool call" (F-07) or "receipt issued" (F-08).
+		switch raw.Msg {
+		case "tool call":
+			// PID gate (T-67-04): reject events from foreign processes.
+			if raw.Pid != expectedPid {
+				res.RejectedForeignPid++
+				continue
+			}
+			t := parseTimeDefensively(raw.Time)
+			ev := Event{
+				T:          t,
+				Source:     "daemon",
+				Kind:       KindToolCall,
+				Tool:       raw.Tool,
+				Outcome:    raw.Outcome,
+				DurationMs: raw.DurationMs,
+				TraceID:    raw.TraceID,
+				Pid:        raw.Pid,
+				Guardrail:  raw.Guardrail,
+			}
+			res.Events = append(res.Events, ev)
+		case "receipt issued":
+			// F-08: PID gate also applies — only receipts from the expected
+			// daemon are counted.
+			if raw.Pid != expectedPid {
+				res.RejectedForeignPid++
+				continue
+			}
+			t := parseTimeDefensively(raw.Time)
+			ev := Event{
+				T:            t,
+				Source:       "daemon",
+				Kind:         KindReceiptIssued,
+				ReceiptClass: raw.ReceiptClass,
+				TraceID:      raw.TraceID,
+				Pid:          raw.Pid,
+			}
+			res.Events = append(res.Events, ev)
+		default:
 			continue
 		}
-
-		// PID gate (T-67-04): reject events from foreign processes.
-		if raw.Pid != expectedPid {
-			res.RejectedForeignPid++
-			continue
-		}
-
-		// Parse timestamp; fall back to now on bad timestamps (Pitfall 5).
-		t := parseTimeDefensively(raw.Time)
-
-		ev := Event{
-			T:         t,
-			Source:    "daemon",
-			Kind:      KindToolCall,
-			Tool:      raw.Tool,
-			Outcome:   raw.Outcome,
-			DurationMs: raw.DurationMs,
-			TraceID:   raw.TraceID,
-			Pid:       raw.Pid,
-			Guardrail: raw.Guardrail,
-		}
-		res.Events = append(res.Events, ev)
 	}
 
 	// Check scanner error (real I/O errors) but NOT bufio.ErrFinalToken

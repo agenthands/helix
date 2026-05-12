@@ -720,6 +720,10 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			Metrics: guardrailMetricsSink,
 			Now:     time.Now,
 		})
+		// F-08: wire the JSONL emitter so guardrails.Store.Issue emits a
+		// tap-compatible "receipt issued" line per receipt, consumed by
+		// internal/eval/trace/tap.go in the eval harness.
+		guardrails.SetJSONLLogger(logger)
 		// Wire the issue sink so read-tool issuance (Plan 05) lights up at runtime.
 		// CR-03 fix: thread the active workspace key into the issuance closure so
 		// receipts are stored under the correct workspace identity. The closure

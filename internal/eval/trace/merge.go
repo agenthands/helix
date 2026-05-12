@@ -111,6 +111,10 @@ func Merge(in MergeInput) (MergedTrace, error) {
 				guardrails.Blocked++
 			}
 		}
+		// F-08: receipt-issued events feed ReceiptsIssued counter.
+		if ev.Source == "daemon" && ev.Kind == KindReceiptIssued {
+			guardrails.ReceiptsIssued++
+		}
 	}
 	mt.ToolCallSummary = summary
 	mt.Guardrails = guardrails

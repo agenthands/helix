@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10
-milestone_name: Live Semantic Index
-status: completed
-last_updated: "2026-05-12T10:20:00.000Z"
-last_activity: 2026-05-12 -- v1.10 milestone closed (archive + tag); audit verdict PRODUCTION-READY
+milestone: v1.11
+milestone_name: Semantic Index Completion & P1 MCP Tools
+status: planning
+last_updated: "2026-05-12T10:40:00.000Z"
+last_activity: 2026-05-12 -- v1.11 milestone created (Phases 68-73, 19 requirements across DIFF/STATUS/REFRESH/P1TOOL)
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 79
-  completed_plans: 79
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.10 milestone closed 2026-05-12. Awaiting `/gsd-new-milestone` for next cycle.
+**Current focus:** v1.11 planning. Next: `/gsd-plan-phase 68` (Precise FileFactDiff Populator).
 
 ## Current Position
 

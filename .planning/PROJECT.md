@@ -142,26 +142,29 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.10 progress (2026-05-08):** Phase 65 complete — Existing-Tool Integration (Strangler Fig). INTEG-01..INTEG-05 all validated 4/4 must-haves on re-verification (waves 4-7 closed both prior BLOCKERs from initial `gaps_found` verdict). New types-only `internal/semantic/integ` package owns the read-only `SemanticLookup` seam with closed-enum `Source`/`FallbackReason`, `RankedFile`, `Impact`, `Edge`, `ValidatedEdge`, `SemanticStatus`, `SymbolID`, error sentinels, and `NoopLookup` default. Production `integSemanticLookup` adapter at `internal/daemon/semantic_wiring.go` wraps `*semanticstore.Store`, `*retrieval.Engine`, the rank bundle, and the `wsKeyFn` closure (Phase 64 carryover #2 closed). All 4 strangler-fig tools consult the lookup with v1.9 fallback preserved: `get_repo_map`/`get_context` route through `RepoMapSkill.SetSemanticLookup` (zero source change to `internal/repomap` engine, JSON-wrapped envelope with `source`/`fallback_reason`/`graph_version`/`freshness`); `analyze_blast_radius` uses a two-pass orchestrator (`ExpandFrom` → kernel-side `lspProbeForEdges` via `FindReferences` against the orchestrator-held lease); `get_health` adds the additive `semantic_index` block (Phase 57 SC-1 `semantic_store` block preserved verbatim). Real implementations replace 65-03 stubs: `RankFiles` reads `*Store.QueryRankedFiles`, `RankFromSeeds` performs RRF fusion (k=60) over persisted scores + bleve, `SymbolID`/`ExpandFrom`/`LocateSymbol` traverse the persisted graph via BFS over `QueryEffectiveAdjacency`. Production buildFn empty-Facts placeholder (Phase 64 carryover #1) replaced by per-language extract → classifier walk → `ToStoreFacts` → `WriteSnapshotFacts`. `internal/lint/nokernel2semantic` allowlists `internal/semantic/integ` so kernel-side blast-radius can import the seam. Six production-adapter E2E tests + the BL-1 kernel-side confidence-ladder regression run with no Skipfs. Two REVIEW.md BLOCKERs deferred for follow-up: CR-01 (`lspProbeForEdges` validates inverted edge relation — references edge.From and checks containment in edge.To, answering the wrong direction) and CR-02 (`integ_lookup_export.go` + `integ_lookup_e2e_helpers.go` import `testing` from production package per Rule-3 deviation; linker DCE removes the named test fixtures from the helix binary, residual cost is symbol-table footprint only).
 
-## Current Milestone: v1.10 Live Semantic Index
+## Current Milestone: v1.11 Semantic Index Completion & P1 MCP Tools
 
-**Goal:** Turn Helix's online LSP/tree-sitter capabilities into a durable, live, evidence-backed semantic graph — DuckDB committed snapshots + live overlay + LSP validation — exposed through new MCP context tools, agent guardrails, and a first-class evaluation harness that proves Helix improves agent success/cost/safety.
+**Goal:** Complete the v1.10 semantic-index foundation by closing tier-3-approximation tech debt and shipping the 6 P1 MCP tools (`explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`) that were SPEC'd but deferred. Make `graph_version` advancement precise per-symbol; surface real status from production accessors; make `refresh_semantic_graph` actually incremental.
 
 **Target features:**
 
-- **Semantic fact store (DuckDB)** — snapshots, live overlay, effective-read semantics, schema versioning, compaction
-- **Tree-sitter extraction (Go / TS+JS / Python first-class)** — symbols, references, imports, syntax edges, stable symbol IDs across renames
-- **Live update pipeline** — fsnotify watcher, event coalescing, overlay writes, graph cache repair, LSP revalidation queue, idle compaction
-- **LSP enrichment layer** — hover/definition/references/call-hierarchy/type-hierarchy/implementations/diagnostics with budgets and prioritization
-- **Graph engine** — weighted + personalized PageRank across multiple projections, weak-component + label-propagation clustering, score/cluster freshness states
-- **Type resolution + access-chain resolver** — tiered confidence, fixpoint loop, JSDoc/PHPDoc/YARD/Python comment fallbacks
-- **10 new MCP tools** — `index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`, `explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`
-- **Existing tool integration** — `get_repo_map` / `get_context` / `analyze_blast_radius` / `get_health` / edit tools emit live graph events
-- **Agent guardrails (G-001..G-010)** — policy engine, safety receipts, GUARDRAILS.md + DoD.md, profile/mode-gated enforcement
-- **Evaluation harness** — baseline / native / semantic / semantic_guarded modes with success/cost/latency/tool-behavior/safety reports
-- **Typed pipeline DAG** — phase validation for daemon bootstrap, semantic indexing, live updates, eval; cycle + missing-dep detection
-- **v1.9 carryover** — _resolved at Phase 58 (2026-05-04):_ first signed release cut via sigstore cosign keyless (REL-01 replaces minisign); Phase 51 Pass-3 limitation documented as won't-do (REL-05); Phase 55 `forwarder.tools.call` span unified with gRPC server span (REL-06); REL-02/03/04 (Homebrew/Scoop/Linux pkg) explicitly recorded won't-do per Phase 58 D-01
+- **Precise FileFactDiff populator** — Replace Tier-3 synthetic-marker floor with Tier-1 (full diff old↔new FileFact) and Tier-2 (added-only) populators in the live handler. Pre-edit FileFact accessor in `internal/semantic/live/handler/`. Closes DEF-67-F01-FULL-DIFF.
+- **Production status accessors** — Replace `semantic_wiring.go:408,441,450` placeholders. `ClusterStatus` returns real values from Phase 62 cluster engine; retrieval status accessors return real values from the bleve engine + corpus state. Closes TOOL-03/TOOL-04 placeholder annotations.
+- **Incremental refresh overlay-drain** — `collectCandidatePaths` wired through the overlay-drain seam in `internal/semantic/live/`. `refresh_semantic_graph` becomes truly incremental instead of full-walk fallback.
+- **6 P1 MCP tools** (build on existing v1.10 graph + cluster + integ.SemanticLookup infrastructure):
+  - `explain_symbol_deep` — deep symbol explanation with type chain, callers, edges, freshness
+  - `find_related_symbols` — semantic-graph + cluster-aware sibling discovery
+  - `get_cluster_map` — workspace-level cluster overview with weak-component summaries
+  - `explain_cluster` — per-cluster rationale + member symbols + ranking
+  - `get_change_impact_graph` — pre-edit blast-radius via the semantic graph
+  - `validate_graph_edge` — confidence + evidence for a specific edge claim
 
-**Source of truth:** `SPEC-DRAFT.md` (40 sections, 12 SPEC-internal phases, full schema/algorithms/tool contracts).
+**Out of scope (deferred to v1.11.x point releases or won't-do):**
+
+- Apple Developer ID notarization (DEF-59-NOTARIZE), darwin canary in CI (DEF-59-DARWIN-CANARY), Windows arm64 restore (DEF-59-WIN-ARM64-RESTORE) — handled as v1.11.x patches if/when needed.
+- Package-manager distribution (Homebrew, Scoop, deb/rpm/AUR, etc.) — **hard project rule:** Helix ships signed binary archives only. No package surfaces, ever.
+
+**Source of truth:** `SPEC-DRAFT.md` (40 sections) for the 6 P1 tool contracts; `.planning/milestones/v1.10-ROADMAP.md` for the completion-item anchors.
 
 ## Context
 

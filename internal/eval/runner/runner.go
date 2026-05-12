@@ -241,15 +241,28 @@ func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) 
 	// proves too coarse for downstream consumers.
 	result.DiagnosticsClean = diagnosticsCleanFromTrace(merged, result.TestsPass)
 
-	// Phase 8: score_tool_behavior.
+	// Phase 8: score_tool_behavior + F-10 context metrics.
 	var toolScore score.Score
+	var loadedRules score.Rules
+	var rulesLoaded bool
 	rulesPath := filepath.Join(taskDir, "expected_tools.yaml")
 	if _, err := os.Stat(rulesPath); err == nil {
-		if rules, err := score.LoadRules(rulesPath); err == nil {
-			toolScore = score.Apply(merged, rules)
+		if r, err := score.LoadRules(rulesPath); err == nil {
+			loadedRules = r
+			rulesLoaded = true
+			toolScore = score.Apply(merged, r)
 		}
 	}
 	_ = toolScore // written to tool_behavior.json by aggregate reports
+
+	// F-10: ContextPrecision / ContextRecall. Both nil when expected_tools.yaml
+	// is absent (no ground truth available).
+	if rulesLoaded {
+		expected := loadedRules.ExpectedToolNames()
+		prec, rec := report.ComputeContextMetrics(merged, loadedRules, expected)
+		result.ContextPrecision = prec
+		result.ContextRecall = rec
+	}
 
 	// Phase 9: score_guardrails.
 	result.GuardrailCompliance = merged.Guardrails

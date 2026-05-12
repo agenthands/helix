@@ -228,3 +228,61 @@ func ValidateCorpus(corpusDir string) []error {
 	}
 	return errs
 }
+
+// ExpectedToolNames returns the deduplicated set of tool names referenced by
+// ExpectSequence patterns and ExpectSet rules. Used by F-10 context-recall
+// computation as the ground-truth tool set.
+//
+// Receipt rules' when.tool_used is NOT included — receipts are a downstream
+// effect, not a tool-invocation expectation in the precision/recall sense.
+func (r Rules) ExpectedToolNames() []string {
+	seen := make(map[string]struct{})
+	for _, seq := range r.ExpectSequence {
+		for _, step := range seq.Pattern {
+			if step.Tool != "" {
+				seen[step.Tool] = struct{}{}
+			}
+		}
+	}
+	for _, set := range r.ExpectSet {
+		for _, tool := range set.Tools {
+			if tool != "" {
+				seen[tool] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for t := range seen {
+		out = append(out, t)
+	}
+	return out
+}
+
+// IsRelevant reports whether tool is classified as on-task by the rule set.
+// A tool is on-task iff it appears in ExpectedToolNames(). Used by F-10
+// context-precision computation.
+//
+// Tools not mentioned in the rules are classified as not-relevant. The
+// ForbidSet / ForbidSequence rules describe penalties applied by score.Apply
+// but are not consulted here — Precision is the fraction of calls that match
+// any expected tool, irrespective of separate forbidden-tool penalties.
+func IsRelevant(tool string, rules Rules) bool {
+	if tool == "" {
+		return false
+	}
+	for _, seq := range rules.ExpectSequence {
+		for _, step := range seq.Pattern {
+			if step.Tool == tool {
+				return true
+			}
+		}
+	}
+	for _, set := range rules.ExpectSet {
+		for _, t := range set.Tools {
+			if t == tool {
+				return true
+			}
+		}
+	}
+	return false
+}

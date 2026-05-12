@@ -12,9 +12,12 @@ import (
 // every measurable dimension of a single eval run and is written as
 // result.json under eval/reports/<run-id>/tasks/<task>/<mode>/.
 //
-// context_precision and context_recall are nullable (*float64) until
-// ground-truth labels are available. They serialize as JSON null when unset.
-// TODO(post-phase-67): populate from ground-truth label comparison.
+// context_precision and context_recall are nullable (*float64).
+//   ContextPrecision = relevant_tool_calls / total_tool_calls
+//   ContextRecall    = expected_tools_invoked / expected_tools_total
+// Both null when expected_tools.yaml is absent (no ground truth).
+// Populated by report.ComputeContextMetrics from MergedTrace + score.Rules
+// (F-10 closure).
 type EvalResult struct {
 	TaskID  string `json:"task_id"`
 	Mode    string `json:"mode"`

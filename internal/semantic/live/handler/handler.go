@@ -378,6 +378,14 @@ func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic
 		// Test-only seam (export_test.go SetPopulateRecorderForTest);
 		// production code paths leave the field nil.
 		h.populateRecorderForTest(recorder)
+	} else {
+		// F-01 production populator (best-effort, never errors). Tier 3
+		// synthetic-marker fallback guarantees the recorder is non-empty
+		// so ApplyRepair fires and graph_version advances on every live
+		// edit. See difffacts.go for the tiering rationale and
+		// DEF-67-F01-FULL-DIFF in .planning/deferred-items.md for the
+		// full-precision follow-up.
+		h.populateRecorderForFile(ctx, repoID, path, recorder)
 	}
 
 	if err := tx.Commit(); err != nil {

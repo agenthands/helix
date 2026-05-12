@@ -148,14 +148,23 @@ func TestUpdateChangedFile_PopulatedDiffFiresApplyRepair(t *testing.T) {
 	}
 }
 
-// TestUpdateChangedFile_EmptyDiffShortCircuits_OnceInfo locks today's
-// production behaviour: when no populator runs, the recorder is empty,
+// TestUpdateChangedFile_EmptyDiffShortCircuits_OnceInfo locks the empty-diff
+// short-circuit behaviour: when the populator leaves the recorder empty,
 // ApplyRepair MUST NOT be called, AND the once-INFO log fires exactly once
 // per workspace per Handler instance.
+//
+// Post-F-01: the production populator (populateRecorderForFile) always
+// produces a non-empty recorder via the Tier-3 synthetic-marker fallback,
+// so this test now injects an explicit empty-populator seam to exercise
+// the short-circuit path that used to be the production default.
 func TestUpdateChangedFile_EmptyDiffShortCircuits_OnceInfo(t *testing.T) {
 	applier := &recordingRankApplier{}
 	rec := &recordingSlogHandler{}
 	h := newRecorderTestHandler(t, applier, nil, rec)
+	// Explicit empty populator — preserves the short-circuit intent of this
+	// test now that production populates a synthetic marker by default
+	// (F-01).
+	handler.SetPopulateRecorderForTest(h, func(*handler.FileFactDiffRecorder) {})
 
 	// Drive twice for repo-A — once-INFO must fire ONCE.
 	if err := h.UpdateChangedFile(context.Background(), semantic.RepoID("repo-A"), "/abs/path/foo.go"); err != nil {
@@ -183,5 +192,38 @@ func TestUpdateChangedFile_EmptyDiffShortCircuits_OnceInfo(t *testing.T) {
 	}
 	if infoCount != 2 {
 		t.Fatalf("expected exactly 2 INFO logs (one per workspace, once-gated); got %d", infoCount)
+	}
+}
+
+// TestUpdateChangedFile_ProductionPopulatorFiresApplyRepair locks the F-01
+// contract: when NO populateRecorderForTest seam is installed, the production
+// populator (populateRecorderForFile) MUST leave the recorder non-empty so
+// ApplyRepair fires on every live edit, advancing graph_version.
+//
+// Today the production populator ships only the Tier-3 synthetic-marker
+// fallback active — Tier 1/2 (real diff) are scaffolding for
+// DEF-67-F01-FULL-DIFF. The synthetic marker MUST still fire ApplyRepair,
+// because the load-bearing F-01 requirement is "graph_version advances on
+// every live edit", not "the diff carries precise per-symbol detail".
+func TestUpdateChangedFile_ProductionPopulatorFiresApplyRepair(t *testing.T) {
+	applier := &recordingRankApplier{}
+	rec := &recordingSlogHandler{}
+	// Pass nil populator so populateRecorderForTest is NOT installed; the
+	// production path will use populateRecorderForFile (synthetic marker).
+	h := newRecorderTestHandler(t, applier, nil, rec)
+
+	if err := h.UpdateChangedFile(context.Background(), semantic.RepoID("repo-A"), "/abs/path/foo.go"); err != nil {
+		t.Fatalf("UpdateChangedFile: %v", err)
+	}
+
+	if len(applier.calls) != 1 {
+		t.Fatalf("expected 1 ApplyRepair call (synthetic marker drives non-empty recorder); got %d", len(applier.calls))
+	}
+	// The synthetic marker is a single ChangedSymbol with KindChanged: true,
+	// which ComputeGraphRepair treats as graph-changing — DirtyNodes should
+	// be populated (the marker's zero NodeID is sufficient evidence the path
+	// fired, even if the NodeID itself is not a real graph node).
+	if applier.calls[0].repair.DirtyNodes == nil {
+		t.Fatal("ApplyRepair received GraphRepair with nil DirtyNodes; synthetic marker did not flow")
 	}
 }

@@ -257,3 +257,43 @@ NOT a local snapshot.
 | v1.9 | 51-packaging-goreleaser | `.planning/milestones/v1.9-phases/51-packaging-goreleaser/deferred-items.md` |
 | v1.9 | 51.1-cgo-treesitter-gate | `.planning/milestones/v1.9-phases/51.1-cgo-treesitter-gate-gate-internal-treesitter-behind-go-build/deferred-items.md` |
 | v1.9 | 52-packaging-distribution-channels | `.planning/milestones/v1.9-phases/52-packaging-distribution-channels/deferred-items.md` |
+
+## DEF-67-F01-FULL-DIFF: Full added/removed/changed FileFactDiff population
+
+**Deferred by:** Quick-fix close-out 2026-05-12 (F-01 best-effort closure).
+
+**What was deferred:** Full-precision diff between pre-edit FileFact and
+post-edit FileFact in the live handler post-commit hook. The 2026-05-12
+close-out shipped a tiered populator
+(`internal/semantic/live/handler/difffacts.go`): Tier 1 (full diff) and
+Tier 2 (added-only) fall through to Tier 3 (synthetic marker) when the
+snapshot store / extractor APIs do not yet expose the prior-FileFact
+accessor and per-file extractor.
+
+The synthetic-marker fallback guarantees `graph_version` ADVANCES on every
+live edit (the load-bearing F-01 contract per
+`.planning/v1.10-MILESTONE-AUDIT.md`) but carries no actionable per-symbol
+detail — every edit triggers the full cluster-recompute path.
+
+**Trigger to reconsider:** A rank-aware MCP tool consumer reports stale
+scores after a live edit (would imply the synthetic marker is too coarse
+for the targeted-invalidation path) OR profiling shows the full-cluster
+recompute on every edit is a hot-path cost.
+
+**Implementation sketch:**
+1. Add `GetFileFact(repoID, path) (FileFact, error)` to the snapshot store
+   (`internal/semantic/store/`).
+2. Add a per-file extractor entrypoint in `internal/semantic/extract/`
+   exposing `ExtractFile(repoID, path) (FileFact, error)`.
+3. Wire both into `tryFullDiff` in
+   `internal/semantic/live/handler/difffacts.go`.
+4. Add `tryAddedOnlyDiff` fallback that calls the extractor alone.
+
+**Cost:** ~1-2 engineer-days.
+
+**Code pointers:**
+- `internal/semantic/live/handler/difffacts.go` — three-tier populator
+  (Tier 1/2 are scaffolding stubs that return false; Tier 3 fallback
+  ships active).
+- `internal/semantic/live/handler/handler.go:382-392` — the wiring point
+  where `populateRecorderForFile` is invoked when no test seam is set.

@@ -782,6 +782,21 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			sess.SetLanguage(activeWSLang)
 		}
 		logger.Info("kernel workspace activated (lazy init)", "root", repoPath, "languages", rt.Languages())
+
+		// F-05 parity: lazy-activate MUST also schedule initial extraction so
+		// semantic queries against lazy-activated workspaces are not empty
+		// (mirrors the explicit-activate path in SetActivateCallback below).
+		// Reason string distinguishes the lazy path from the explicit one so
+		// operators can tell which trigger fired extraction.
+		if semanticScheduler != nil {
+			semanticScheduler.ScheduleInitialExtraction(
+				semantic.WorkspaceID(repoPath),
+				scheduler.InitialExtraction{
+					Reason: "workspace_activation_lazy",
+					Mode:   scheduler.ModeAuto,
+				},
+			)
+		}
 		return nil
 	}
 	isActiveFn := func() bool { return activeWSKey.RepoRoot != "" }

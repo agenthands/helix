@@ -229,9 +229,17 @@ func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) 
 	}
 	result.TestsPass = verifyExit == 0
 
-	// Phase 7: run_diagnostics — v1 placeholder per plan spec.
-	// TODO(post-phase-67): wire real LSP diagnostics via helix get_diagnostics.
-	result.DiagnosticsClean = result.TestsPass
+	// Phase 7: run_diagnostics — derive from daemon-tap evidence (F-09).
+	// Logic: if the tap captured any tool calls, diagnostics are "clean" iff
+	// zero ls_crash AND zero internal-error outcomes. If the tap is empty
+	// (e.g. HelixBin=="" path in unit tests, or daemon failed to start), fall
+	// back to TestsPass to preserve the prior signal as a safety net.
+	//
+	// Approach (b) per plan: lower-risk than spawning a fresh MCP roundtrip
+	// to helix get_diagnostics. Future Approach (a) — direct get_diagnostics
+	// call against the live daemon — is a follow-up if the tap-based signal
+	// proves too coarse for downstream consumers.
+	result.DiagnosticsClean = diagnosticsCleanFromTrace(merged, result.TestsPass)
 
 	// Phase 8: score_tool_behavior.
 	var toolScore score.Score
@@ -394,6 +402,19 @@ func runVerify(ctx context.Context, scriptPath, repoDir string) (int, []byte) {
 // writeModeConfig writes helix_config.yml for the given mode. The four modes
 // map to fixed profile/config combinations (T-67-03: hard-coded switch to
 // prevent unknown-mode config injection).
+// diagnosticsCleanFromTrace derives result.DiagnosticsClean from the merged
+// daemon-tap evidence (F-09 closure). Returns testsPass when the tap is
+// empty (no daemon evidence available), otherwise true iff no ls_crash and
+// no internal-error outcomes appeared in the captured tool calls.
+func diagnosticsCleanFromTrace(merged trace.MergedTrace, testsPass bool) bool {
+	if merged.ToolCallSummary.Total == 0 {
+		return testsPass
+	}
+	badOutcomes := merged.ToolCallSummary.ByOutcome["ls_crash"] +
+		merged.ToolCallSummary.ByOutcome["internal"]
+	return badOutcomes == 0
+}
+
 // profileForMode maps an eval mode name to the helix daemon profile that
 // should serve it. baseline → "baseline"; everything else → "full".
 // Used by RunTask when spawning the per-(task, mode) daemon (F-07 leg B).

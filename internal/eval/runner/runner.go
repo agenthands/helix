@@ -161,15 +161,27 @@ func (r *Runner) RunTask(ctx context.Context, sb *sandbox.Sandbox, ts TaskSpec) 
 
 	var daemonTap trace.DaemonTapResult
 	var ccTap trace.CCTapResult
-
-	// daemonHandle is set when wave-2 wires real subprocess orchestration
-	// (StartDaemon call in run_agent). Until then, skip the daemon tap entirely:
-	// calling TapDaemonLog with pid==0 would accept any line that happens to emit
-	// pid==0, defeating the T-67-04 PID gate (67-SECURITY.md FLAG-1).
-	// TODO(wave-2): populate daemonHandle from the real StartDaemon call and
-	// re-enable the tap below.
 	var daemonHandle *sandbox.DaemonHandle
+
+	// F-07 leg B: boot a real daemon for this (task, mode) so the TelemetryMiddleware
+	// "tool call" JSONL events land in daemon.log and the tap PID gate operates
+	// against a real PID. HelixBin=="" preserves the in-process runner_test.go
+	// path (no daemon spawn) so existing unit tests stay green.
+	if r.cfg.HelixBin != "" {
+		profileName := profileForMode(ts.Mode)
+		h, err := sb.StartDaemon(ctx, ts.ID, ts.Mode, profileName, cfgPath)
+		if err != nil {
+			log.Printf("runner: start daemon for %s/%s: %v", ts.ID, ts.Mode, err)
+		} else {
+			daemonHandle = h
+		}
+	}
+
+	// Stop the daemon BEFORE reading its log so buffered slog lines flush.
 	if daemonHandle != nil {
+		if killErr := daemonHandle.Kill(); killErr != nil {
+			log.Printf("runner: kill daemon for %s/%s: %v", ts.ID, ts.Mode, killErr)
+		}
 		if _, err := os.Stat(daemonLogPath); err == nil {
 			daemonTap, _ = trace.TapDaemonLog(daemonLogPath, daemonHandle.Pid())
 		}
@@ -382,6 +394,16 @@ func runVerify(ctx context.Context, scriptPath, repoDir string) (int, []byte) {
 // writeModeConfig writes helix_config.yml for the given mode. The four modes
 // map to fixed profile/config combinations (T-67-03: hard-coded switch to
 // prevent unknown-mode config injection).
+// profileForMode maps an eval mode name to the helix daemon profile that
+// should serve it. baseline → "baseline"; everything else → "full".
+// Used by RunTask when spawning the per-(task, mode) daemon (F-07 leg B).
+func profileForMode(mode string) string {
+	if mode == "baseline" {
+		return "baseline"
+	}
+	return "full"
+}
+
 func writeModeConfig(cfgPath, mode string) error {
 	var content string
 	switch mode {

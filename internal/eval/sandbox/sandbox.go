@@ -233,7 +233,7 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	homePath := s.HomeFor(taskID, mode)
 	modeDir := s.ModeDir(taskID, mode)
 
-	args := []string{"--serve", "--socket=" + sockPath}
+	args := []string{"--serve", "--socket=" + sockPath, "--http-addr=", "--json"}
 	if profileName != "" {
 		args = append(args, "--profile="+profileName)
 	}

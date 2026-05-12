@@ -112,6 +112,24 @@ jobs:
         continue-on-error: true
         run: make eval-attestation-check
 
+      - name: F-06 smoke — upgrade daemon-detect short-circuit
+        # Warn-only smoke per project rule "benchmarks local-only" / warn-only
+        # CI hygiene (continue-on-error: true). Builds helix, exercises the
+        # daemon-detect short-circuit on `helix upgrade --check` by setting
+        # HELIX_RUNNING_AS_DAEMON=1 in the env (the signal internal/upgrade/
+        # daemon_detect.go inspects), and asserts the exact short-circuit
+        # message from internal/upgrade/upgrade.go:119 appears on stdout.
+        # Closes F-06 from .planning/v1.10-MILESTONE-AUDIT.md.
+        continue-on-error: true
+        run: |
+          set -eo pipefail
+          go build -o /tmp/helix ./cmd/helix
+          OUTPUT=$(HELIX_RUNNING_AS_DAEMON=1 /tmp/helix upgrade --check 2>&1 || true)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "helix is running as a daemon child process" \
+            || (echo "F-06 smoke: daemon-detect short-circuit DID NOT fire" && exit 1)
+          echo "F-06 smoke: daemon-detect short-circuit OK"
+
       - name: forbid judge in CI
         # Grep gate: fail the build if tool_behavior_judge.json is referenced
         # in any workflow file. The LLM judge must NEVER gate merges (EVAL-07).

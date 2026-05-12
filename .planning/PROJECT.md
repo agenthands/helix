@@ -126,7 +126,9 @@ Carry-over follow-ups (resolved at v1.10 Phase 58):
 
 ## Current State
 
-**Shipped:** v1.9 Polish & Infra (2026-05-03) — 12 phases (46–56, including emergent 51.1), 51 plans, 14/14 in-scope REQs satisfied (PKG-01 SC-3 deployment-gated), +2 emergent (Phase 51.1 CGO gate, Phase 56 LS dispatch), 3 deferred (PKG-DEFER-03/04/05; ALL three subsequently retired as won't-do at Phase 58 D-01). 25/25 cross-phase integration wires verified. Audit status: `tech_debt`.
+**Shipped:** v1.10 Live Semantic Index (2026-05-12) — 12 phases (57–67, including emergent 59.1), 79 plans, 64/64 in-scope REQs satisfied (3 won't-do: REL-02/03/04 superseded by Phase 59.1). 11/11 cross-phase flows wired. Audit status: `resolved`, verdict `PRODUCTION-READY`. See `.planning/milestones/v1.10-ROADMAP.md` and `.planning/v1.10-MILESTONE-AUDIT.md`.
+
+**Previously shipped:** v1.9 Polish & Infra (2026-05-03) — 12 phases (46–56, including emergent 51.1), 51 plans, 14/14 in-scope REQs satisfied.
 
 > **Last hygiene sweep:** 2026-05-12 (F-58 close-out). All minisign and PKG-DEFER-03/04/05 references in this document are historical context; no open deferrals remain. See lines 112 / 115 / 171 / 174 for the explicit won't-do dispositions citing Phase 58 D-01 (single-binary distribution) and Phase 58 D-02 (cosign hard-cut).
 

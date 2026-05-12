@@ -4,16 +4,30 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"sync/atomic"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/obs"
 )
+
+// traceIDFromCtx extracts the OpenTelemetry trace ID from ctx as a hex string,
+// or returns the empty string when no valid span context is attached. Used by
+// TelemetryMiddleware to populate the trace_id field on the tap-compatible
+// "tool call" JSONL line (F-07 leg A).
+func traceIDFromCtx(ctx context.Context) string {
+	sc := oteltrace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return ""
+	}
+	return sc.TraceID().String()
+}
 
 // renameStrategySink is the package-level recorder wired by InstallMiddleware.
 // It accepts the closed-enum strategy string and increments the corresponding
@@ -374,13 +388,13 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 
 			outcome := classifyOutcome(result, err)
 
-			var profile, mode, language string
+			var profile, mode, language, sessionID string
 			if sess := getSession(ctx); sess != nil {
 				// Snapshot holds RLock over all field reads so profile/mode/
 				// language come from one point in time even under concurrent
 				// SetLanguage / switch_mode (T-11-07 mitigation).
 				snap := sess.Snapshot()
-				profile, mode, language = snap.Profile, snap.Mode, snap.Language
+				profile, mode, language, sessionID = snap.Profile, snap.Mode, snap.Language, snap.SessionID
 			}
 
 			// Gate attribute setting behind IsRecording — avoids attribute
@@ -402,6 +416,21 @@ func TelemetryMiddleware(provider *obs.Provider, getSession func(ctx context.Con
 			// Metrics emission byte-for-byte identical to Phase 11.
 			m.ToolCalls.WithLabelValues(toolName, profile, mode, language, outcome).Inc()
 			m.ToolDuration.WithLabelValues(toolName, profile, mode, language).Observe(duration.Seconds())
+
+			// F-07 leg A: emit tap-compatible JSONL "tool call" line for the
+			// subprocess eval daemon-tap consumer (internal/eval/trace/tap.go).
+			// MUST match the daemonLogLine schema: msg="tool call",
+			// duration_ms as int64 milliseconds, pid matching expectedPid,
+			// guardrail nil (populated by F-08 emission path elsewhere).
+			logger.Info("tool call",
+				"tool", toolName,
+				"outcome", outcome,
+				"duration_ms", duration.Milliseconds(),
+				"pid", os.Getpid(),
+				"trace_id", traceIDFromCtx(ctx),
+				"session_id", sessionID,
+				"guardrail", nil,
+			)
 
 			return result, err
 		}

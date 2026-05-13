@@ -216,3 +216,136 @@ func TestSemanticLiveUpdatesInc_AcceptsAllValid(t *testing.T) {
 	}
 	t.Fatal("helix_semantic_live_updates_total family not found in Gather() output")
 }
+
+// --- Phase 68 D-07/D-08 tests for LiveFileFactDiff helpers ---
+//
+// Pattern mirrors the SemanticLiveUpdatesInc tests above: closed-enum
+// drop-on-unknown for "tier" and "reason"; cardinality bound enforced at
+// the emission boundary (T-68-09 mitigation).
+
+// countSamples returns the number of metric lines for the given family,
+// or -1 if the family is absent from Gather().
+func countSamples(t *testing.T, m *Metrics, family string) int {
+	t.Helper()
+	mfs, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == family {
+			return len(mf.GetMetric())
+		}
+	}
+	return -1
+}
+
+// sampleValue returns the counter value for the given family + label set,
+// or -1 if no matching sample exists.
+func sampleValue(t *testing.T, m *Metrics, family string, want map[string]string) float64 {
+	t.Helper()
+	mfs, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() != family {
+			continue
+		}
+		for _, sample := range mf.GetMetric() {
+			labels := map[string]string{}
+			for _, lp := range sample.GetLabel() {
+				labels[lp.GetName()] = lp.GetValue()
+			}
+			match := true
+			for k, v := range want {
+				if labels[k] != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				return sample.GetCounter().GetValue()
+			}
+		}
+	}
+	return -1
+}
+
+// TestLiveFileFactDiffInc_KnownTiers exercises every value of the closed
+// "tier" enum and asserts each produces exactly one metric sample with
+// value 1.
+func TestLiveFileFactDiffInc_KnownTiers(t *testing.T) {
+	for _, tier := range []string{"full", "added-only", "synthetic"} {
+		t.Run(tier, func(t *testing.T) {
+			m := newMetrics()
+			m.LiveFileFactDiffInc(tier, "repo-a")
+			got := sampleValue(t, m, "helix_live_filefactdiff_total",
+				map[string]string{"tier": tier, "repo": "repo-a"})
+			if got != 1 {
+				t.Fatalf("expected counter == 1 for tier=%q, got %v", tier, got)
+			}
+		})
+	}
+}
+
+// TestLiveFileFactDiffInc_UnknownTierDropped confirms unknown tier values
+// DROP the emission (closed-enum discipline, T-68-09 mitigation).
+func TestLiveFileFactDiffInc_UnknownTierDropped(t *testing.T) {
+	m := newMetrics()
+	m.LiveFileFactDiffInc("nonsense", "repo-a")
+	// Family should be absent (no emissions yet).
+	if got := countSamples(t, m, "helix_live_filefactdiff_total"); got > 0 {
+		t.Fatalf("unknown tier leaked into metric family: %d samples", got)
+	}
+}
+
+// TestLiveFileFactDiffInc_NilSafe proves the helper is a no-op on a nil
+// receiver (matches the SemanticLiveUpdatesInc safety contract).
+func TestLiveFileFactDiffInc_NilSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LiveFileFactDiffInc panicked on nil receiver: %v", r)
+		}
+	}()
+	var m *Metrics
+	m.LiveFileFactDiffInc("full", "repo-a")
+}
+
+// TestLiveFileFactDiffSyntheticReasonInc_KnownReasons exercises every
+// value of the closed "reason" enum.
+func TestLiveFileFactDiffSyntheticReasonInc_KnownReasons(t *testing.T) {
+	for _, reason := range []string{"cold_start", "extract_failed", "extract_unsupported"} {
+		t.Run(reason, func(t *testing.T) {
+			m := newMetrics()
+			m.LiveFileFactDiffSyntheticReasonInc(reason)
+			got := sampleValue(t, m,
+				"helix_live_filefactdiff_synthetic_reason_total",
+				map[string]string{"reason": reason})
+			if got != 1 {
+				t.Fatalf("expected counter == 1 for reason=%q, got %v", reason, got)
+			}
+		})
+	}
+}
+
+// TestLiveFileFactDiffSyntheticReasonInc_UnknownReasonDropped confirms
+// unknown reason values DROP the emission.
+func TestLiveFileFactDiffSyntheticReasonInc_UnknownReasonDropped(t *testing.T) {
+	m := newMetrics()
+	m.LiveFileFactDiffSyntheticReasonInc("bogus")
+	if got := countSamples(t, m, "helix_live_filefactdiff_synthetic_reason_total"); got > 0 {
+		t.Fatalf("unknown reason leaked into metric family: %d samples", got)
+	}
+}
+
+// TestLiveFileFactDiffSyntheticReasonInc_NilSafe is the nil-receiver
+// safety contract for the second helper.
+func TestLiveFileFactDiffSyntheticReasonInc_NilSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LiveFileFactDiffSyntheticReasonInc panicked on nil receiver: %v", r)
+		}
+	}()
+	var m *Metrics
+	m.LiveFileFactDiffSyntheticReasonInc("cold_start")
+}

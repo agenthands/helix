@@ -88,7 +88,7 @@ func visibilityFromExported(exported bool) string {
 // TestGetLatestFileFact_OverlayHit: overlay row + symbol rows present →
 // returns PriorFileFact{Symbols: len==2}, true, nil.
 func TestGetLatestFileFact_OverlayHit(t *testing.T) {
-	t.Parallel()
+
 	s, ctx, _ := openStoreForOverlayTest(t)
 
 	repoID := "r-overlay-hit"
@@ -144,7 +144,7 @@ func TestGetLatestFileFact_OverlayHit(t *testing.T) {
 // TestGetLatestFileFact_SnapshotFallback: no overlay row → snapshot
 // path hydrates PriorSymbol from semantic_symbols rows.
 func TestGetLatestFileFact_SnapshotFallback(t *testing.T) {
-	t.Parallel()
+
 	s, ctx, _ := openStoreForOverlayTest(t)
 
 	repoID := "r-snap-fallback"
@@ -198,7 +198,7 @@ func TestGetLatestFileFact_SnapshotFallback(t *testing.T) {
 // TestGetLatestFileFact_ColdStart: empty store, neither overlay nor
 // snapshot row exists → (zero, false, nil).
 func TestGetLatestFileFact_ColdStart(t *testing.T) {
-	t.Parallel()
+
 	s, ctx, _ := openStoreForOverlayTest(t)
 
 	got, ok, err := s.GetLatestFileFact(ctx, "r-cold", "pkg/missing.go")
@@ -217,7 +217,7 @@ func TestGetLatestFileFact_ColdStart(t *testing.T) {
 // file_id==0 (Phase 60 P02 placeholder); accessor must fall through to
 // the snapshot branch and return the snapshot result.
 func TestGetLatestFileFact_OverlayPlaceholder(t *testing.T) {
-	t.Parallel()
+
 	s, ctx, _ := openStoreForOverlayTest(t)
 
 	repoID := "r-placeholder"
@@ -249,7 +249,7 @@ func TestGetLatestFileFact_OverlayPlaceholder(t *testing.T) {
 
 // TestGetLatestFileFact_NilStore: nil-receiver guard.
 func TestGetLatestFileFact_NilStore(t *testing.T) {
-	t.Parallel()
+
 	var s *Store
 	_, _, err := s.GetLatestFileFact(context.Background(), "r", "p")
 	if err == nil {
@@ -262,7 +262,7 @@ func TestGetLatestFileFact_NilStore(t *testing.T) {
 
 // TestGetLatestFileFact_EmptyRepoID: empty-repoID guard.
 func TestGetLatestFileFact_EmptyRepoID(t *testing.T) {
-	t.Parallel()
+
 	s, ctx, _ := openStoreForOverlayTest(t)
 	_, _, err := s.GetLatestFileFact(ctx, "", "p")
 	if err == nil {

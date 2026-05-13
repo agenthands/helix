@@ -151,7 +151,7 @@
 
 ### v1.11 Semantic Index Completion & P1 MCP Tools (Planning) -- Phases 68-73
 
-- [ ] **Phase 68: Precise FileFactDiff Populator** -- Replace Tier-3 synthetic-marker floor with Tier-1 (full diff) / Tier-2 (added-only) populators; pre-edit FileFact accessor; close DEF-67-F01-FULL-DIFF
+- [x] **Phase 68: Precise FileFactDiff Populator** -- Replace Tier-3 synthetic-marker floor with Tier-1 (full diff) / Tier-2 (added-only) populators; pre-edit FileFact accessor; close DEF-67-F01-FULL-DIFF (completed 2026-05-13)
 - [ ] **Phase 69: Production Status Accessors** -- Real ClusterStatus from Phase 62 cluster engine; real retrieval status from bleve + corpus; close TOOL-03/04 placeholders
 - [ ] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental
 - [ ] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed)
@@ -175,7 +175,7 @@
 - [x] 68-02-PLAN.md — extract.ExtractionPipeline.ExtractFile shim for Go + TS (DIFF-01 enabler)
 - [x] 68-03-PLAN.md — obs.Metrics LiveFileFactDiff + synthetic-reason counters (DIFF-04 enabler)
 - [x] 68-04-PLAN.md — Tier-1/Tier-2 populators, diffSymbols (Pitfall-3 guard), Tier-3 reason routing, Handler DI (DIFF-01, DIFF-04)
-- [ ] 68-05-PLAN.md — handler_diff_e2e_test.go end-to-end + DEF-67-F01-FULL-DIFF closure (DIFF-03)
+- [x] 68-05-PLAN.md — handler_diff_e2e_test.go end-to-end + DEF-67-F01-FULL-DIFF closure (DIFF-03)
 
 ### Phase 69: Production Status Accessors
 **Goal**: `get_semantic_graph_status` returns real cluster and retrieval status from production engines instead of `{state:"unknown"}` placeholders.

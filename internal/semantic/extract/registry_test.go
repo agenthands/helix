@@ -26,6 +26,9 @@ func (f *fakeProvider) SupportsLSPEnrichment() bool               { return false
 func (f *fakeProvider) Extract(ctx context.Context, source []byte, file SourceFile) (*ExtractedFile, error) {
 	return nil, nil
 }
+func (f *fakeProvider) ExtractFile(ctx context.Context, repoID, path string) (*ExtractedFile, error) {
+	return nil, nil
+}
 
 // TestRegistry_NilGrammarPanics asserts NewExtractorRegistry panics when
 // passed a nil GrammarRegistry — wiring bugs must surface at daemon start,

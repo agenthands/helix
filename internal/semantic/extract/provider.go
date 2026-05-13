@@ -46,6 +46,19 @@ type ExtractionPipeline interface {
 	// Phase 65's production buildFn can record file-level partials
 	// without losing the rest of the workspace walk.
 	Extract(ctx context.Context, source []byte, file SourceFile) (*ExtractedFile, error)
+
+	// ExtractFile reads `path` from disk and returns the per-file
+	// *ExtractedFile. Phase 68 D-03 contract: synchronous in-tx
+	// invocation from the live event handler — called AFTER
+	// UpsertOverlayFile and BEFORE tx.Commit so the precise
+	// FileFactDiff is populated against the same connection-bound
+	// transaction that holds the overlay snapshot.
+	//
+	// Per-file I/O and partial conditions surface via
+	// ExtractedFile.File.ExtractionStatus / PartialReason, mirroring
+	// Extract's existing contract — the returned error is reserved
+	// for unrecoverable extraction-engine failures.
+	ExtractFile(ctx context.Context, repoID, path string) (*ExtractedFile, error)
 }
 
 // Provider mirrors SPEC §13.3 LanguageProvider — the surface a

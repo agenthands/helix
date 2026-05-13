@@ -102,6 +102,20 @@ type Metrics struct {
 	// SemanticLiveUpdatesInc (drop-on-unknown).
 	SemanticLiveUpdates *prometheus.CounterVec
 
+	// Phase 68 D-07: precise FileFactDiff populator outcome counter.
+	// Closed-enum "tier" ∈ {"full","added-only","synthetic"}; "repo" is
+	// a bounded per-workspace identifier. Cardinality bound: 3 × N repos.
+	// Carved out in metrics_labels_test.go and enforced at emission via
+	// LiveFileFactDiffInc (drop-on-unknown).
+	LiveFileFactDiff *prometheus.CounterVec
+
+	// Phase 68 D-08: Tier-3 synthetic-marker fall-through reason breakdown.
+	// Closed-enum "reason" ∈ {"cold_start","extract_failed",
+	// "extract_unsupported"}. Carved out in metrics_labels_test.go and
+	// enforced at emission via LiveFileFactDiffSyntheticReasonInc
+	// (drop-on-unknown).
+	LiveFileFactDiffSynRsn *prometheus.CounterVec
+
 	// Phase 61 P03: LSP enrichment-worker outcome counter (vector).
 	// Closed-enum "language" ∈ AllowedLabels (already a member);
 	// "outcome" ∈ {"applied","partial_budget","partial_preempted",
@@ -329,6 +343,27 @@ func newMetrics() *Metrics {
 			// helper SemanticLiveUpdatesInc drops unknowns.
 			[]string{"kind", "outcome"},
 		),
+		LiveFileFactDiff: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_live_filefactdiff_total",
+				Help: "Live FileFactDiff populator outcomes by tier (full/added-only/synthetic) and repo. Phase 68.",
+			},
+			// Phase 68 D-07: closed-enum "tier" + per-repo bounded label.
+			// Carved out in metrics_labels_test.go; helper
+			// LiveFileFactDiffInc drops unknowns.
+			[]string{"tier", "repo"},
+		),
+		LiveFileFactDiffSynRsn: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_live_filefactdiff_synthetic_reason_total",
+				Help: "Tier-3 synthetic-marker reason breakdown. Phase 68 D-08.",
+			},
+			// Phase 68 D-08: closed-enum "reason" (cold_start /
+			// extract_failed / extract_unsupported). Carved out in
+			// metrics_labels_test.go; helper
+			// LiveFileFactDiffSyntheticReasonInc drops unknowns.
+			[]string{"reason"},
+		),
 		LSPEnrichmentTotalVec: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "helix_semantic_lsp_enrichment_total",
@@ -488,6 +523,8 @@ func newMetrics() *Metrics {
 		m.SemanticStoreOpen,
 		m.SemanticExtraction,
 		m.SemanticLiveUpdates,
+		m.LiveFileFactDiff,
+		m.LiveFileFactDiffSynRsn,
 		m.LSPEnrichmentTotalVec,
 		m.LSPEnrichmentDurationVec,
 		m.LSPEnrichmentErrorsVec,
@@ -714,6 +751,48 @@ func (m *Metrics) SemanticLiveUpdatesInc(kind, outcome string) {
 		return
 	}
 	m.SemanticLiveUpdates.WithLabelValues(kind, outcome).Inc()
+}
+
+// --- Phase 68 helpers (drop-on-unknown closed-enum discipline) ---
+//
+// Mirrors SemanticLiveUpdatesInc: closed enums enforced at the emission
+// boundary, unknowns dropped to keep cardinality bounded (T-68-09 mitigation).
+
+// LiveFileFactDiffInc increments helix_live_filefactdiff_total.
+// Phase 68 D-07 closed-enum bound:
+//   - tier ∈ {"full","added-only","synthetic"}
+//   - repo is a bounded per-workspace identifier.
+//
+// Unknown tier values DROP the emission (matches the SemanticLiveUpdatesInc
+// pattern). Cardinality bound: 3 × N repos.
+func (m *Metrics) LiveFileFactDiffInc(tier, repo string) {
+	if m == nil || m.LiveFileFactDiff == nil {
+		return
+	}
+	switch tier {
+	case "full", "added-only", "synthetic":
+	default:
+		return
+	}
+	m.LiveFileFactDiff.WithLabelValues(tier, repo).Inc()
+}
+
+// LiveFileFactDiffSyntheticReasonInc increments
+// helix_live_filefactdiff_synthetic_reason_total.
+// Phase 68 D-08 closed-enum bound:
+//   - reason ∈ {"cold_start","extract_failed","extract_unsupported"}.
+//
+// Unknown reason values DROP the emission.
+func (m *Metrics) LiveFileFactDiffSyntheticReasonInc(reason string) {
+	if m == nil || m.LiveFileFactDiffSynRsn == nil {
+		return
+	}
+	switch reason {
+	case "cold_start", "extract_failed", "extract_unsupported":
+	default:
+		return
+	}
+	m.LiveFileFactDiffSynRsn.WithLabelValues(reason).Inc()
 }
 
 // --- Phase 61 P03 helpers (drop-on-unknown closed-enum discipline) ---

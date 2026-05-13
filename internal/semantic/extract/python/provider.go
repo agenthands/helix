@@ -7,6 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -255,6 +256,21 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 	}
 
 	return out, nil
+}
+
+// ExtractFile is the Phase 68 D-03 per-file extractor shim: reads `path`
+// from disk and delegates to Extract. The repoID argument is part of the
+// stable Phase 68 contract for the live handler call site but is not
+// consumed by the Python provider. I/O failures surface as partial-status
+// ExtractedFile (NOT error) per the partialFile convention.
+func (p *Provider) ExtractFile(ctx context.Context, _repoID, path string) (*extract.ExtractedFile, error) {
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return partialFile(
+			extract.SourceFile{Path: path, Language: "python"},
+			extract.PartialReasonPermissionDenied, err), nil
+	}
+	return p.Extract(ctx, source, extract.SourceFile{Path: path, Language: "python"})
 }
 
 func partialFile(file extract.SourceFile, reason extract.PartialReason, err error) *extract.ExtractedFile {

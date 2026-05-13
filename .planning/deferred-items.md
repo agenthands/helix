@@ -260,6 +260,12 @@ NOT a local snapshot.
 
 ## DEF-67-F01-FULL-DIFF: Full added/removed/changed FileFactDiff population
 
+**Status:** resolved (2026-05-13). Resolved by Phase 68 (precise FileFactDiff
+populator) — DIFF-01..04 closed. See
+`.planning/phases/68-precise-filefactdiff-populator/68-05-SUMMARY.md` for
+the end-to-end test (`TestE2E_LiveEditFiresPreciseDiff`) that proves the
+Tier-1 full-diff path is now active in production.
+
 **Deferred by:** Quick-fix close-out 2026-05-12 (F-01 best-effort closure).
 
 **What was deferred:** Full-precision diff between pre-edit FileFact and

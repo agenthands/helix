@@ -368,6 +368,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// shutdown is preserved because the bundle returns on ctx.Done.
 	var rank *rankBundle
 	if semanticStore != nil && live != nil && live.handler != nil {
+		// Phase 68 Plan 04: wire FileFactStore + ExtractRegistry +
+		// metrics sink so the Tier-1 / Tier-2 populator in
+		// internal/semantic/live/handler/difffacts.go has the real
+		// dependencies it needs. nil-safe setters (Phase 60 pattern).
+		// *semanticstore.Store satisfies handler.FileFactStore via the
+		// Phase 68 Plan 01 accessor (GetLatestFileFact); *extract.Registry
+		// satisfies handler.ExtractRegistry via Provider(lang).
+		live.handler.SetFileFactStore(semanticStore)
+		if semanticExtractRegistry != nil {
+			live.handler.SetExtractRegistry(semanticExtractRegistry)
+		}
+		live.handler.FileFactDiffMetrics = observability.Metrics()
 		rankAdapter := newRankStoreAdapter(semanticStore, observability.Metrics(), logger)
 		rank = newRankBundle(
 			cfg.SemanticIndex.PageRank,

@@ -1,5 +1,27 @@
 package handler
 
+import (
+	"github.com/agenthands/helix/internal/semantic/extract"
+	graphpkg "github.com/agenthands/helix/internal/semantic/graph"
+	"github.com/agenthands/helix/internal/semantic/store"
+)
+
+// LastRecorderSnapshotForTest returns the most recent pre-Compute recorder
+// snapshot the Handler captured during populateRecorderForFile. Plan 68-04
+// Open Question Q4 test seam.
+func LastRecorderSnapshotForTest(h *Handler) graphpkg.FileFactDiff {
+	if h == nil {
+		return graphpkg.FileFactDiff{}
+	}
+	return h.lastRecorderSnapshot
+}
+
+// DiffSymbolsForTest exposes the unexported diffSymbols package-internal
+// helper for direct unit testing.
+func DiffSymbolsForTest(prior []store.PriorSymbol, curr []extract.SymbolFact, rec *FileFactDiffRecorder) {
+	diffSymbols(prior, curr, rec)
+}
+
 // SetPopulateRecorderForTest installs a recorder populator on h. The
 // populator is invoked AFTER UpsertOverlayFile and BEFORE Commit, on the
 // recorder threaded through the tx span. Production code paths leave the

@@ -100,6 +100,16 @@ var carveOuts = map[string]map[string]bool{
 	"helix_semantic_compaction_blocked_total":     {"reason": true},
 	"helix_semantic_compaction_duration_seconds":  {},
 	"helix_semantic_vacuum_duration_seconds":      {},
+	// Phase 68 D-07: closed-enum "tier" ∈ {full, added-only, synthetic}
+	// + bounded "repo" identifier on the precise FileFactDiff outcome
+	// counter. Neither label is in AllowedLabels; both are carved out
+	// here. Helper LiveFileFactDiffInc is the single emission site and
+	// drops unknown tier values.
+	"helix_live_filefactdiff_total": {"tier": true, "repo": true},
+	// Phase 68 D-08: closed-enum "reason" ∈ {cold_start, extract_failed,
+	// extract_unsupported} on the Tier-3 synthetic-reason counter. Helper
+	// LiveFileFactDiffSyntheticReasonInc drops unknown reason values.
+	"helix_live_filefactdiff_synthetic_reason_total": {"reason": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -215,6 +225,10 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	m.SemanticCompactionObserve("success", 0.1)
 	m.SemanticCompactionBlocked("overlay_empty")
 	m.SemanticVacuumObserve("success", 0.1)
+	// Phase 68: prime the LiveFileFactDiff vectors so TestMetricsLabelsAllowlist
+	// scans their labels (Pitfall #3 — empty families are dropped by Gather()).
+	m.LiveFileFactDiffInc("full", "repo-a")
+	m.LiveFileFactDiffSyntheticReasonInc("cold_start")
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

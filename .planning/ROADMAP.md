@@ -174,7 +174,7 @@
 - [x] 68-01-PLAN.md — *Store.GetLatestFileFact accessor + PriorFileFact (DIFF-02)
 - [x] 68-02-PLAN.md — extract.ExtractionPipeline.ExtractFile shim for Go + TS (DIFF-01 enabler)
 - [x] 68-03-PLAN.md — obs.Metrics LiveFileFactDiff + synthetic-reason counters (DIFF-04 enabler)
-- [ ] 68-04-PLAN.md — Tier-1/Tier-2 populators, diffSymbols (Pitfall-3 guard), Tier-3 reason routing, Handler DI (DIFF-01, DIFF-04)
+- [x] 68-04-PLAN.md — Tier-1/Tier-2 populators, diffSymbols (Pitfall-3 guard), Tier-3 reason routing, Handler DI (DIFF-01, DIFF-04)
 - [ ] 68-05-PLAN.md — handler_diff_e2e_test.go end-to-end + DEF-67-F01-FULL-DIFF closure (DIFF-03)
 
 ### Phase 69: Production Status Accessors

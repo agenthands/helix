@@ -23,12 +23,35 @@ import (
 	"sync"
 
 	"github.com/agenthands/helix/internal/semantic"
+	"github.com/agenthands/helix/internal/semantic/extract"
 	graphpkg "github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/live"
 	"github.com/agenthands/helix/internal/semantic/live/lspqueue"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
+	semstore "github.com/agenthands/helix/internal/semantic/store"
 )
+
+// FileFactStore is the narrow store-side surface the Phase 68 Tier-1
+// populator consumes. Satisfied by *semstore.Store; daemon wires post-init.
+type FileFactStore interface {
+	GetLatestFileFact(ctx context.Context, repoID, path string) (semstore.PriorFileFact, bool, error)
+}
+
+// ExtractRegistry is the narrow extract-registry surface the Phase 68
+// Tier-1/Tier-2 populators consume. Satisfied by *extract.Registry.
+type ExtractRegistry interface {
+	Provider(lang string) (extract.Provider, bool)
+}
+
+// FileFactDiffMetricsSink is the narrow metrics surface the Phase 68
+// populator emits to. Satisfied by *obs.Metrics. Kept narrow so the
+// handler package does not pull in the full *obs.Metrics surface (D-02
+// kernel↔semantic boundary intact).
+type FileFactDiffMetricsSink interface {
+	LiveFileFactDiffInc(tier, repo string)
+	LiveFileFactDiffSyntheticReasonInc(reason string)
+}
 
 // FileFactDiffRecorder is the tx-scoped recorder that future populators
 // (Phase 60 P04 full FileFact upsert; future type-resolver live-edge
@@ -229,6 +252,24 @@ type Handler struct {
 	// engine is constructed (CR-04 nil-safety invariant).
 	rankApplier RankApplier
 
+	// factStore is the pre-edit FileFact accessor consumed by the Phase 68
+	// Tier-1 populator. Nil-safe; daemon wires via SetFileFactStore.
+	factStore FileFactStore
+	// extractRegistry resolves the per-language extract.Provider for
+	// Tier-1/Tier-2 ExtractFile calls. Nil-safe; daemon wires via
+	// SetExtractRegistry.
+	extractRegistry ExtractRegistry
+	// FileFactDiffMetrics is the Phase 68 D-07 / D-08 outcome + synthetic-
+	// reason metric sink. Public field for test injection; production wires
+	// via direct assignment in the daemon bootstrap. Nil-safe.
+	FileFactDiffMetrics FileFactDiffMetricsSink
+
+	// lastRecorderSnapshot captures the recorder.Snapshot() value taken
+	// before ComputeGraphRepair, for Plan 68-04 E2E test inspection (Q4).
+	// Single-goroutine tx ownership invariant from 62-09 guarantees no
+	// concurrent population per Handler.
+	lastRecorderSnapshot graphpkg.FileFactDiff
+
 	// emptyDiffOnces gates the empty-diff INFO log per workspace per
 	// process. 62-09 closure (truth #22): production callers see exactly
 	// one log per (workspace, Handler instance) until Phase 60 P04 /
@@ -251,6 +292,25 @@ type Handler struct {
 func (h *Handler) emptyDiffOnce(repoID string, fn func()) {
 	v, _ := h.emptyDiffOnces.LoadOrStore(repoID, &sync.Once{})
 	v.(*sync.Once).Do(fn)
+}
+
+// SetFileFactStore installs (or replaces) the Phase 68 FileFactStore
+// surface consumed by the Tier-1 populator. Nil-safe (Phase 60 pattern).
+// Production wires *semstore.Store via the daemon post-init step.
+func (h *Handler) SetFileFactStore(s FileFactStore) {
+	if h == nil {
+		return
+	}
+	h.factStore = s
+}
+
+// SetExtractRegistry installs (or replaces) the Phase 68 ExtractRegistry
+// surface consumed by the Tier-1/Tier-2 populators. Nil-safe.
+func (h *Handler) SetExtractRegistry(r ExtractRegistry) {
+	if h == nil {
+		return
+	}
+	h.extractRegistry = r
 }
 
 // SetRankApplier installs (or replaces) the Phase 62 RankApplier hook.
@@ -392,6 +452,11 @@ func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic
 		return err
 	}
 
+	// Capture the recorder snapshot for the Plan 68-04 E2E test seam
+	// (LastRecorderSnapshotForTest). Single-goroutine tx ownership keeps
+	// this safe without a mutex (62-09).
+	h.lastRecorderSnapshot = recorder.Snapshot()
+
 	// === Phase 62 P02 post-commit hook ===
 	// Fires AFTER tx.Commit() succeeds and BEFORE EnqueueLane. Empty
 	// recorder (today's production state) emits a once-INFO log per
@@ -413,7 +478,7 @@ func (h *Handler) updateChangedFileWithKind(ctx context.Context, repoID semantic
 				)
 			})
 		} else {
-			diff := recorder.Snapshot()
+			diff := h.lastRecorderSnapshot
 			repair := graphpkg.ComputeGraphRepair(diff)
 			if !repair.IsEmpty() {
 				if _, _, err := h.rankApplier.ApplyRepair(ctx, string(repoID), repair); err != nil {

@@ -735,32 +735,24 @@ func TestE2E_LiveEditFiresPreciseDiff(t *testing.T) {
 
 **Mitigation strategy:** A1 and A2 are testable in Wave 0 by querying a dev DB. A3, A4, A5 are mechanical. A6 is enforced by the existing test (`internal/lint/nokernel2semantic/realtree_integration_test.go`).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five questions resolved during planning (2026-05-13). Each resolution is reflected in the named plan.
 
 1. **Should `GetLatestFileFact` return `extract.FileFact`, `store.FileFact`, or a new `store.PriorFileFact`?**
-   - What we know: Both existing `*FileFact` types are insufficient (one has status only, one has identity only — neither carries `Symbols`).
-   - What's unclear: Whether the planner prefers a new type vs. extending an existing one.
-   - Recommendation: New `store.PriorFileFact` (Pattern 3 shape). The CONTEXT.md signature `(extract.FileFact, ...)` SHOULD be revised in the plan because it doesn't satisfy DIFF-01's data requirements.
+   - RESOLVED: New `store.PriorFileFact` carrying `Symbols []extract.SymbolFact` (Pattern 3 shape). The CONTEXT.md D-01 signature is revised in plan **68-01** accordingly — D-01 already grants this under "Claude's Discretion".
 
 2. **How does `store.SymbolFact` (snapshot row) convert to `extract.SymbolFact` (extraction in-memory)?**
-   - What we know: Field sets are similar but not identical (snapshot has `FileID`, `NodeID`, `Exported bool`; extract has `Visibility string`, `Confidence float32`, `Partial bool`). No conversion helper exists.
-   - What's unclear: Whether a one-way `storeSymbolToExtractSymbol(store.SymbolFact) extract.SymbolFact` helper belongs in `store` or `extract`.
-   - Recommendation: Helper in `store` (snapshot-side) since the snapshot row is what's being adapted to the diff's expected shape. Map `Exported bool` → `Visibility` (`"exported"` if true else `"private"`). Set `Confidence: 0` / `Partial: false` since they're not used by the diff.
+   - RESOLVED: Conversion helper lives on the `store` side. Map `Exported bool` → `Visibility` (`"exported"` if true else `"private"`); set `Confidence: 0`, `Partial: false`. Adopted in plan **68-01** Task 2.
 
 3. **Is the overlay symbol-write path actually populated in production?**
-   - What we know: Schema column exists; writer not confirmed (Pitfall 2).
-   - What's unclear: Whether Phase 60 P04 (full FileFact upsert) lands before, with, or after Phase 68.
-   - Recommendation: Wave 0 verification step — grep for INSERT statements into `semantic_live_overlay_symbols` in production paths. If absent, Phase 68 ships **snapshot-fallback-only** for Tier-1 (the overlay branch becomes dead code until Phase 60 P04 lands), and the SUMMARY documents this. The phase still closes DEF-67-F01-FULL-DIFF because Tier-1 against snapshot is a real (non-synthetic) diff.
+   - RESOLVED: Plan **68-01** runs a Wave-0 verification (grep for INSERT into `semantic_live_overlay_symbols` in production paths). If absent, Phase 68 ships **snapshot-fallback-only** Tier-1 (overlay branch is dead code until Phase 60 P04 lands), and the phase SUMMARY documents this. DEF-67-F01-FULL-DIFF still closes because snapshot-based Tier-1 is a real non-synthetic diff.
 
 4. **How does the E2E test inspect the recorder snapshot to assert `SignatureChanged: true`?**
-   - What we know: `FileFactDiffRecorder.Snapshot()` is exported (handler.go:112) and returns `graphpkg.FileFactDiff`. The recording RankApplier (recorder_test.go:23) receives `GraphRepair` (post-`ComputeGraphRepair`), which drops flag detail (only NodeIDs survive).
-   - What's unclear: Whether to add a new test seam exposing the pre-Compute snapshot, OR verify the SymbolDiff payload indirectly via `DirtyNodes` containing the expected NodeID.
-   - Recommendation: Indirect verification — assert that `recorder.Snapshot().ChangedSymbols` contains exactly one entry with the expected `NodeID` and `SignatureChanged: true`. Reaching this requires hoisting the snapshot capture before `ComputeGraphRepair` — add a test-only export `LastRecorderSnapshotForTest(*Handler) graphpkg.FileFactDiff` mirroring the existing `SetPopulateRecorderForTest` pattern.
+   - RESOLVED: Indirect verification via a new `LastRecorderSnapshotForTest(*Handler) graphpkg.FileFactDiff` export mirroring the existing `SetPopulateRecorderForTest` pattern. Adopted in plan **68-04** Tasks 1 + 2 (`export_test.go` extension) and consumed by plan **68-05**.
 
 5. **Should `ExtractFile` take `repoID` or omit it?**
-   - What we know: D-03 signature is `ExtractFile(ctx, repoID, path)`. Current Go/TS providers don't need it.
-   - What's unclear: Whether plumbing an unused argument is worse than a future API break.
-   - Recommendation: Keep `repoID` (per D-03) — costs nothing, future-proofs the interface, and matches the symmetric `GetLatestFileFact(ctx, repoID, path)` call site.
+   - RESOLVED: Keep `repoID` (per D-03). Adopted in plan **68-02** — matches the symmetric `GetLatestFileFact(ctx, repoID, path)` call site and future-proofs the provider interface at zero cost.
 
 ## Environment Availability
 

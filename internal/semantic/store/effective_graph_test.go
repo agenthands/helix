@@ -984,3 +984,324 @@ func TestStore_QuerySymbolLocationByStableKey_NoCommittedSnapshot(t *testing.T) 
 			path, line, col, ok)
 	}
 }
+
+// --- Phase 69 69-01: ClusterStatusForGraphVersion ---
+//
+// STATUS-01 read seam — returns counts + computed_at + IsCurrent/ActualGraphVersion
+// discriminators for the requested (repoID, graphVersion) over semantic_clusters
+// + semantic_cluster_members. Lock-free per D-09 (no Begin/Commit/Abort/Write on
+// the read path); MemberCount is COUNT(*) over semantic_cluster_members, NOT the
+// overloaded semantic_clusters.score column.
+//
+// Stale-fallback semantics (Approach A from 69-CONTEXT D1): when no rows exist at
+// the requested gv but rows exist at a strictly-lower gv for the same repo, the
+// accessor returns IsCurrent=false, ActualGraphVersion=<highest prior gv>, and
+// counts/timestamp for THAT prior gv. The adapter (Plan 69-05) uses the
+// discriminators to emit `"current"` / `"stale"` / `"unknown"`.
+
+// clusterSeed is one (cluster_id, memberCount) tuple consumed by
+// seedClusterRows. memberCount writes into ClusterSummary.MemberCount (which
+// the production UpsertClusters then writes into semantic_clusters.score —
+// this is the overloaded column the accessor MUST NOT trust). For the actual
+// row count over semantic_cluster_members, the helper generates `actualMembers`
+// distinct node_ids; if actualMembers == 0 it defaults to memberCount.
+type clusterSeed struct {
+	id            uint64
+	memberCount   int // → semantic_clusters.score (DO NOT TRUST in accessor)
+	actualMembers int // → number of semantic_cluster_members rows; 0 means use memberCount
+}
+
+// seedClusterRows opens an OverlayTx, writes the cluster summaries +
+// per-member rows for (repoID, gv) via the production UpsertClusters /
+// UpsertClusterMembers, and commits. Exported (lowercase, package-local) so
+// Plan 69-06's integration test can reuse it.
+func seedClusterRows(t *testing.T, ctx context.Context, s *Store, repoID string, gv uint64, seeds []clusterSeed) {
+	t.Helper()
+	tx, err := s.BeginOverlayTx(ctx, repoID)
+	if err != nil {
+		t.Fatalf("seedClusterRows: BeginOverlayTx(%q): %v", repoID, err)
+	}
+	summaries := make([]ClusterSummary, 0, len(seeds))
+	var members []ClusterMemberRow
+	var nodeCounter uint64 = 1_000_000 * gv // gv-disjoint node-id space across calls.
+	for _, sd := range seeds {
+		summaries = append(summaries, ClusterSummary{ID: sd.id, MemberCount: sd.memberCount})
+		n := sd.actualMembers
+		if n == 0 {
+			n = sd.memberCount
+		}
+		for i := 0; i < n; i++ {
+			nodeCounter++
+			members = append(members, ClusterMemberRow{ClusterID: sd.id, NodeID: nodeCounter})
+		}
+	}
+	const projection = "call_graph"
+	if err := tx.UpsertClusters(ctx, projection, gv, summaries); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("seedClusterRows: UpsertClusters(%q, gv=%d): %v", repoID, gv, err)
+	}
+	if err := tx.UpsertClusterMembers(ctx, projection, gv, members); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("seedClusterRows: UpsertClusterMembers(%q, gv=%d): %v", repoID, gv, err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("seedClusterRows: Commit(%q, gv=%d): %v", repoID, gv, err)
+	}
+}
+
+// Test 1 / 4 / 5 / 7: basic-current, truly-empty, future-only, and
+// member-count-derivation cases for ClusterStatusForGraphVersion.
+func TestClusterStatusForGraphVersion_Basic(t *testing.T) {
+	type wantRow struct {
+		graphVersion       uint64
+		actualGraphVersion uint64
+		isCurrent          bool
+		memberCount        int
+		clusterCount       int
+		computedAtPositive bool // require ComputedAt > 0 when populated
+	}
+	tests := []struct {
+		name   string
+		seed   func(t *testing.T, ctx context.Context, s *Store, repoID string)
+		query  uint64
+		expect wantRow
+	}{
+		{
+			name: "Test1_BasicPopulatedCurrent_gv5_two_clusters_3plus2_members",
+			seed: func(t *testing.T, ctx context.Context, s *Store, repoID string) {
+				seedClusterRows(t, ctx, s, repoID, 5, []clusterSeed{
+					{id: 1, memberCount: 3},
+					{id: 2, memberCount: 2},
+				})
+			},
+			query: 5,
+			expect: wantRow{
+				graphVersion:       5,
+				actualGraphVersion: 5,
+				isCurrent:          true,
+				memberCount:        5,
+				clusterCount:       2,
+				computedAtPositive: true,
+			},
+		},
+		{
+			name:  "Test4_TrulyEmpty_no_rows_at_any_gv_returns_zero_value",
+			seed:  func(t *testing.T, ctx context.Context, s *Store, repoID string) {},
+			query: 5,
+			expect: wantRow{
+				graphVersion:       5,
+				actualGraphVersion: 0,
+				isCurrent:          false,
+				memberCount:        0,
+				clusterCount:       0,
+				computedAtPositive: false,
+			},
+		},
+		{
+			name: "Test5_WrongGv_only_future_gv10_rows_query_gv5_no_fallback_to_future",
+			seed: func(t *testing.T, ctx context.Context, s *Store, repoID string) {
+				seedClusterRows(t, ctx, s, repoID, 10, []clusterSeed{
+					{id: 1, memberCount: 2},
+				})
+			},
+			query: 5,
+			expect: wantRow{
+				graphVersion:       5,
+				actualGraphVersion: 0,
+				isCurrent:          false,
+				memberCount:        0,
+				clusterCount:       0,
+				computedAtPositive: false,
+			},
+		},
+		{
+			name: "Test7_MemberCount_from_COUNT_not_score_column",
+			// ClusterSummary.MemberCount=99 writes 99.0 into the
+			// semantic_clusters.score column (overlay.go:835 quirk) but
+			// only 3 actual semantic_cluster_members rows exist. The
+			// accessor MUST return 3.
+			seed: func(t *testing.T, ctx context.Context, s *Store, repoID string) {
+				seedClusterRows(t, ctx, s, repoID, 5, []clusterSeed{
+					{id: 1, memberCount: 99, actualMembers: 3},
+				})
+			},
+			query: 5,
+			expect: wantRow{
+				graphVersion:       5,
+				actualGraphVersion: 5,
+				isCurrent:          true,
+				memberCount:        3, // NOT 99 — proves COUNT(*) wins over score
+				clusterCount:       1,
+				computedAtPositive: true,
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ctx, _ := openStoreForOverlayTest(t)
+			repoID := "r-69-01-" + tc.name
+			tc.seed(t, ctx, s, repoID)
+
+			got, err := s.ClusterStatusForGraphVersion(ctx, repoID, tc.query)
+			if err != nil {
+				t.Fatalf("ClusterStatusForGraphVersion: %v", err)
+			}
+			if got.GraphVersion != tc.expect.graphVersion {
+				t.Errorf("GraphVersion = %d, want %d", got.GraphVersion, tc.expect.graphVersion)
+			}
+			if got.ActualGraphVersion != tc.expect.actualGraphVersion {
+				t.Errorf("ActualGraphVersion = %d, want %d", got.ActualGraphVersion, tc.expect.actualGraphVersion)
+			}
+			if got.IsCurrent != tc.expect.isCurrent {
+				t.Errorf("IsCurrent = %v, want %v", got.IsCurrent, tc.expect.isCurrent)
+			}
+			if got.MemberCount != tc.expect.memberCount {
+				t.Errorf("MemberCount = %d, want %d", got.MemberCount, tc.expect.memberCount)
+			}
+			if got.ClusterCount != tc.expect.clusterCount {
+				t.Errorf("ClusterCount = %d, want %d", got.ClusterCount, tc.expect.clusterCount)
+			}
+			if tc.expect.computedAtPositive && got.ComputedAt <= 0 {
+				t.Errorf("ComputedAt = %d, want > 0 (populated case)", got.ComputedAt)
+			}
+			if !tc.expect.computedAtPositive && got.ComputedAt != 0 {
+				t.Errorf("ComputedAt = %d, want 0 (empty/zero-value case)", got.ComputedAt)
+			}
+		})
+	}
+}
+
+// Test 2 / 3: stale-fallback picks HIGHEST prior gv with rows for the repo.
+func TestClusterStatusForGraphVersion_StaleFallback(t *testing.T) {
+	type wantRow struct {
+		actualGraphVersion uint64
+		isCurrent          bool
+		memberCount        int
+		clusterCount       int
+	}
+	tests := []struct {
+		name   string
+		seed   func(t *testing.T, ctx context.Context, s *Store, repoID string)
+		query  uint64
+		expect wantRow
+	}{
+		{
+			name: "Test2_StaleFallback_only_gv4_query_gv5",
+			seed: func(t *testing.T, ctx context.Context, s *Store, repoID string) {
+				seedClusterRows(t, ctx, s, repoID, 4, []clusterSeed{
+					{id: 1, memberCount: 3},
+					{id: 2, memberCount: 2},
+				})
+			},
+			query: 5,
+			expect: wantRow{
+				actualGraphVersion: 4,
+				isCurrent:          false,
+				memberCount:        5,
+				clusterCount:       2,
+			},
+		},
+		{
+			name: "Test3_StaleFallback_picks_highest_prior_gv2_and_gv4_query_gv5",
+			seed: func(t *testing.T, ctx context.Context, s *Store, repoID string) {
+				seedClusterRows(t, ctx, s, repoID, 2, []clusterSeed{
+					{id: 10, memberCount: 7},
+				})
+				seedClusterRows(t, ctx, s, repoID, 4, []clusterSeed{
+					{id: 1, memberCount: 3},
+					{id: 2, memberCount: 2},
+				})
+			},
+			query: 5,
+			expect: wantRow{
+				actualGraphVersion: 4, // NOT 2 — must pick highest prior
+				isCurrent:          false,
+				memberCount:        5, // counts for gv=4 only
+				clusterCount:       2,
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ctx, _ := openStoreForOverlayTest(t)
+			repoID := "r-69-01-stale-" + tc.name
+			tc.seed(t, ctx, s, repoID)
+
+			got, err := s.ClusterStatusForGraphVersion(ctx, repoID, tc.query)
+			if err != nil {
+				t.Fatalf("ClusterStatusForGraphVersion: %v", err)
+			}
+			if got.GraphVersion != tc.query {
+				t.Errorf("GraphVersion = %d, want %d (caller's requested gv echoed back)", got.GraphVersion, tc.query)
+			}
+			if got.ActualGraphVersion != tc.expect.actualGraphVersion {
+				t.Errorf("ActualGraphVersion = %d, want %d", got.ActualGraphVersion, tc.expect.actualGraphVersion)
+			}
+			if got.IsCurrent != tc.expect.isCurrent {
+				t.Errorf("IsCurrent = %v, want %v", got.IsCurrent, tc.expect.isCurrent)
+			}
+			if got.MemberCount != tc.expect.memberCount {
+				t.Errorf("MemberCount = %d, want %d", got.MemberCount, tc.expect.memberCount)
+			}
+			if got.ClusterCount != tc.expect.clusterCount {
+				t.Errorf("ClusterCount = %d, want %d", got.ClusterCount, tc.expect.clusterCount)
+			}
+			if got.ComputedAt <= 0 {
+				t.Errorf("ComputedAt = %d, want > 0 (rows from prior gv carry a timestamp)", got.ComputedAt)
+			}
+		})
+	}
+}
+
+// Test 6: 100 concurrent reader probes alongside a background BeginOverlayTx
+// writer must not deadlock and must not return error. Mirrors
+// TestCountStaleScoreRows_LockFree_RaceSafe.
+func TestClusterStatusForGraphVersion_LockFree_RaceSafe(t *testing.T) {
+	if testing.Short() {
+		t.Skip("race-safety stress; skipped under -short")
+	}
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-69-01-race"
+	seedClusterRows(t, ctx, s, repoID, 1, []clusterSeed{
+		{id: 1, memberCount: 3},
+		{id: 2, memberCount: 2},
+	})
+
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for !stop.Load() {
+			tx, err := s.BeginOverlayTx(ctx, repoID)
+			if err != nil {
+				return
+			}
+			_ = tx.Commit()
+		}
+	}()
+
+	var readers sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			done := make(chan error, 1)
+			go func() {
+				_, e := s.ClusterStatusForGraphVersion(ctx, repoID, 1)
+				done <- e
+			}()
+			select {
+			case e := <-done:
+				if e != nil {
+					t.Errorf("ClusterStatusForGraphVersion under contention: %v", e)
+				}
+			case <-time.After(5 * time.Second):
+				t.Errorf("ClusterStatusForGraphVersion deadlocked (>5s under contention)")
+			}
+		}()
+	}
+	readers.Wait()
+	stop.Store(true)
+	wg.Wait()
+}

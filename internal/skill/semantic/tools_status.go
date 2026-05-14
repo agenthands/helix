@@ -198,8 +198,13 @@ func (s *SemanticSkill) handleGetSemanticGraphStatus(ctx context.Context, _ GetS
 	}
 
 	// retrieval_pending: bleve recovery in progress.
+	// retrieval_status: nested bleve corpus-state envelope (Phase 69-04
+	// STATUS-01; populated by Plan 69-05 factory through the production
+	// RetrievalAccessor adapter; consumed by Plan 69-06 E2E test).
+	var retrievalStatus RetrievalStatus
 	if s.retrieval != nil {
 		retrievalPending = s.retrieval.RetrievalPending(ws)
+		retrievalStatus = s.retrieval.RetrievalStatus(ws)
 	}
 
 	// 4. Closed-enum freshness selection (SPEC §26.2).
@@ -239,6 +244,7 @@ func (s *SemanticSkill) handleGetSemanticGraphStatus(ctx context.Context, _ GetS
 		LastLiveUpdateMs: lastLiveUpdateMs,
 		PendingLSPFiles:  pendingLSPFiles,
 		RetrievalPending: retrievalPending,
+		RetrievalStatus:  retrievalStatus,
 	})
 }
 

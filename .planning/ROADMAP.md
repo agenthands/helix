@@ -187,7 +187,13 @@
   3. New `*Store.ClusterStatusForGraphVersion` (or equivalent) accessor lands with race-clean read-path tests; no `Begin/Commit/Abort/Write` on the read path (D-09 invariant preserved).
   4. E2E test asserts non-placeholder values across both status blocks on a populated workspace.
   5. The two existing `semantic_wiring.go:408,441,450` placeholder comments are removed and the surrounding code routes through the real accessors.
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 69-01-PLAN.md — *Store.ClusterStatusForGraphVersion accessor + race-clean tests (STATUS-01)
+- [ ] 69-02-PLAN.md — Bleve corpus_version + indexed_files meta in Recoverer; DocCount on Engine (STATUS-02)
+- [ ] 69-03-PLAN.md — Compactor last_compact_at write + BleveMeta dep injection (STATUS-02)
+- [ ] 69-04-PLAN.md — Envelope additive fields + closed-enum RetrievalStatus.Reason (STATUS-01, STATUS-02)
+- [ ] 69-05-PLAN.md — Adapter wiring + placeholder removal in semantic_wiring.go (STATUS-01, STATUS-02)
+- [ ] 69-06-PLAN.md — E2E TestE2E_IndexThenStatus_NonPlaceholderClusterAndRetrieval (STATUS-03)
 
 ### Phase 70: Incremental Refresh Overlay-Drain
 **Goal**: `refresh_semantic_graph` with `mode:"incremental"` consults the overlay-drain seam to refresh only changed files; full-walk becomes a verified fallback, not the default.

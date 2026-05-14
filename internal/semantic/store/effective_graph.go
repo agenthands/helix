@@ -175,6 +175,183 @@ func (s *Store) CountStaleScoreRows(ctx context.Context, repoID, projection stri
 	return stale, total, nil
 }
 
+// ClusterStatusRow is the read-side payload returned by
+// ClusterStatusForGraphVersion. It captures everything the Plan 69-05
+// adapter needs to derive `"current"` / `"stale"` / `"unknown"` status:
+//
+//   - GraphVersion       — the graph_version the caller asked about.
+//   - ActualGraphVersion — the graph_version whose rows we actually
+//     returned (== GraphVersion when IsCurrent, else the highest prior
+//     graph_version with rows for the repo).
+//   - IsCurrent          — true when rows for the requested graph_version
+//     were found at the primary lookup; false when the accessor fell
+//     back to a prior graph_version OR returned zero-value (no rows).
+//   - ComputedAt         — unix milliseconds derived from
+//     MAX(computed_at) of the returned rows; 0 when zero-value.
+//   - MemberCount        — COUNT(*) over semantic_cluster_members at
+//     ActualGraphVersion. Deliberately NOT read from
+//     semantic_clusters.score (which UpsertClusters overloads with the
+//     planning-time MemberCount — see overlay.go:835 + 69-PATTERNS).
+//   - ClusterCount       — COUNT(DISTINCT cluster_id) at
+//     ActualGraphVersion.
+//
+// Zero value (IsCurrent=false, ActualGraphVersion=0, ComputedAt=0,
+// MemberCount=0, ClusterCount=0) with GraphVersion = requested
+// graph_version signals "no cluster rows for this repo at any
+// graph_version". The adapter maps this to `"unknown"`.
+type ClusterStatusRow struct {
+	GraphVersion       uint64
+	ActualGraphVersion uint64
+	IsCurrent          bool
+	ComputedAt         int64
+	MemberCount        int
+	ClusterCount       int
+}
+
+// ClusterStatusForGraphVersion returns the cluster summary state for
+// (repoID, graphVersion). When rows exist at the requested graph_version,
+// returns IsCurrent=true with ActualGraphVersion = graphVersion. When no
+// rows exist at the requested gv but rows exist at a strictly-lower gv
+// for the same repo, returns IsCurrent=false with ActualGraphVersion set
+// to the highest such prior gv and counts/timestamp drawn from THAT prior
+// gv (Approach A — closes 69-CONTEXT D1 "stale" semantics).
+//
+// When NO cluster rows exist at any graph_version for repoID, returns
+// the zero value of ClusterStatusRow with GraphVersion = graphVersion and
+// nil error. The Plan 69-05 adapter discriminates the three states:
+//
+//   - ClusterCount > 0 && IsCurrent  → "current"
+//   - ClusterCount > 0 && !IsCurrent → "stale" (graph_version-lag)
+//   - ClusterCount == 0              → "unknown" (no-cluster-rows)
+//
+// Lock-free per D-09: receiver is *Store (NOT *OverlayTx); both queries
+// are pure SELECTs on s.db — no Begin/Commit/Abort/Write on the read
+// path. Two queries on the fallback path is acceptable since fallback is
+// the cold path; current-gv hits return in one round trip.
+//
+// MemberCount derivation: COUNT(*) over semantic_cluster_members at the
+// resolved graph_version. MUST NOT be read from semantic_clusters.score
+// (which UpsertClusters overloads at overlay.go:835 with the planning-time
+// cardinality — that value can desync from the persisted member rows when
+// UpsertClusterMembers is partially applied or the cluster's membership
+// edits across runs).
+func (s *Store) ClusterStatusForGraphVersion(ctx context.Context, repoID string, graphVersion uint64) (ClusterStatusRow, error) {
+	if s == nil || s.db == nil {
+		return ClusterStatusRow{}, errors.New("ClusterStatusForGraphVersion: nil store")
+	}
+
+	// Step 1 — primary aggregation at the requested graph_version.
+	row, found, err := s.aggregateClusterStatus(ctx, repoID, graphVersion)
+	if err != nil {
+		return ClusterStatusRow{}, fmt.Errorf("ClusterStatusForGraphVersion(%q, %d): %w", repoID, graphVersion, err)
+	}
+	if found {
+		return ClusterStatusRow{
+			GraphVersion:       graphVersion,
+			ActualGraphVersion: graphVersion,
+			IsCurrent:          true,
+			ComputedAt:         row.ComputedAt,
+			MemberCount:        row.MemberCount,
+			ClusterCount:       row.ClusterCount,
+		}, nil
+	}
+
+	// Step 2 — fallback: highest prior graph_version (strict <) with
+	// rows for this repo. DuckDB MAX over an empty set returns NULL, so
+	// scan into sql.NullInt64 and treat null as "no prior gv exists".
+	const priorQ = `
+		SELECT MAX(graph_version)
+		  FROM semantic_clusters
+		 WHERE repo_id       = ?
+		   AND graph_version < ?
+	`
+	var prior sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, priorQ, repoID, graphVersion).Scan(&prior); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ClusterStatusRow{GraphVersion: graphVersion}, nil
+		}
+		return ClusterStatusRow{}, fmt.Errorf("ClusterStatusForGraphVersion(%q, %d) prior lookup: %w", repoID, graphVersion, err)
+	}
+	if !prior.Valid {
+		// No rows at requested gv AND no rows at any strictly-lower gv
+		// for this repo → genuinely empty. The adapter sees ClusterCount=0
+		// and emits "unknown".
+		return ClusterStatusRow{GraphVersion: graphVersion}, nil
+	}
+	priorGV := uint64(prior.Int64)
+
+	priorRow, priorFound, err := s.aggregateClusterStatus(ctx, repoID, priorGV)
+	if err != nil {
+		return ClusterStatusRow{}, fmt.Errorf("ClusterStatusForGraphVersion(%q, %d) fallback at gv=%d: %w", repoID, graphVersion, priorGV, err)
+	}
+	if !priorFound {
+		// Defensive: MAX(graph_version) said there's a row at priorGV but
+		// the aggregation returned zero clusters. Cannot happen with the
+		// current schema (semantic_clusters MAX over its own table) but
+		// guard anyway — surface as no-data rather than misreport stale.
+		return ClusterStatusRow{GraphVersion: graphVersion}, nil
+	}
+	return ClusterStatusRow{
+		GraphVersion:       graphVersion,
+		ActualGraphVersion: priorGV,
+		IsCurrent:          false,
+		ComputedAt:         priorRow.ComputedAt,
+		MemberCount:        priorRow.MemberCount,
+		ClusterCount:       priorRow.ClusterCount,
+	}, nil
+}
+
+// clusterAggResult is the internal counts payload of aggregateClusterStatus.
+type clusterAggResult struct {
+	ComputedAt   int64
+	ClusterCount int
+	MemberCount  int
+}
+
+// aggregateClusterStatus runs the single read-only aggregation query for
+// (repoID, gv) and returns (result, found, err). `found` is true iff at
+// least one row in semantic_clusters matched — equivalent to ClusterCount > 0.
+//
+// SQL strategy:
+//   - MAX(computed_at) cast to unix milliseconds via DuckDB
+//     EXTRACT(EPOCH FROM ts) * 1000, COALESCE'd to 0 over the empty set.
+//   - COUNT(DISTINCT cluster_id) over semantic_clusters for the cluster count.
+//   - Correlated subquery on semantic_cluster_members for the authoritative
+//     member count (NOT semantic_clusters.score — see ClusterStatusRow
+//     doc-comment).
+func (s *Store) aggregateClusterStatus(ctx context.Context, repoID string, gv uint64) (clusterAggResult, bool, error) {
+	const q = `
+		SELECT
+		  COALESCE(MAX(EXTRACT(EPOCH FROM c.computed_at) * 1000), 0)::BIGINT AS computed_at_ms,
+		  COUNT(DISTINCT c.cluster_id)                                       AS cluster_count,
+		  (SELECT COUNT(*)
+		     FROM semantic_cluster_members m
+		    WHERE m.repo_id = ? AND m.graph_version = ?)                     AS member_count
+		FROM semantic_clusters AS c
+		WHERE c.repo_id       = ?
+		  AND c.graph_version = ?
+	`
+	var (
+		computedAtMs int64
+		clusterCount int
+		memberCount  int
+	)
+	if err := s.db.QueryRowContext(ctx, q, repoID, gv, repoID, gv).Scan(&computedAtMs, &clusterCount, &memberCount); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return clusterAggResult{}, false, nil
+		}
+		return clusterAggResult{}, false, err
+	}
+	if clusterCount == 0 {
+		return clusterAggResult{}, false, nil
+	}
+	return clusterAggResult{
+		ComputedAt:   computedAtMs,
+		ClusterCount: clusterCount,
+		MemberCount:  memberCount,
+	}, true, nil
+}
+
 // MarkAllScoreRowsStale flips every score row for (repo, projection) to
 // status='stale'. Idempotent (re-running on already-stale rows is a no-op
 // at the DuckDB tx level — the UPDATE simply rewrites the same value).

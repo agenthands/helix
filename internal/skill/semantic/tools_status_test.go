@@ -24,11 +24,12 @@ import (
 
 // statusMockScheduler implements SchedulerAccessor for status tests.
 //
-// Production behavior reminder: until Phase 65/67 wires a real cluster-status
-// source, the daemon adapter returns
-// ClusterStatus{State:"unknown", Reason:"phase-62-clustering-no-status-accessor"}.
-// The default zero-value clusterStatus on this mock mirrors that contract so
-// tests reflect what agents will actually see in production (W1 closure).
+// Production behavior reminder: Phase 69-05 wires the real adapter via
+// NewSchedulerAccessorForStore. The factory emits closed-enum reasons
+// ("no-store", "no-graph-version", "accessor-error", "no-cluster-rows",
+// "graph_version-lag"). The productionDefaultClusterStatus() helper
+// below mirrors the no-store branch so tests reflect what agents see
+// in production when the store has no committed rows.
 type statusMockScheduler struct {
 	isQuiescent   bool
 	scoreStatuses map[string]graph.ScoreStatus // projection -> status
@@ -76,12 +77,15 @@ func (m *statusMockRetrieval) RetrievalStatus(ws workspace.WorkspaceKey) Retriev
 	return RetrievalStatus{}
 }
 
-// productionDefaultClusterStatus mirrors what the real daemon adapter
-// returns until Phase 65/67 wires a live cluster source (W1 closure).
+// productionDefaultClusterStatus mirrors what the Phase 69-05 daemon
+// adapter (NewSchedulerAccessorForStore) returns for the nil-store branch
+// — i.e., the closed-enum default agents see before any cluster rows
+// land. Other valid closed-enum reasons: "no-graph-version",
+// "accessor-error", "no-cluster-rows", "graph_version-lag".
 func productionDefaultClusterStatus() ClusterStatus {
 	return ClusterStatus{
 		State:  "unknown",
-		Reason: "phase-62-clustering-no-status-accessor",
+		Reason: "no-store",
 	}
 }
 
@@ -185,13 +189,13 @@ func TestStatusHandler_EmptyStore(t *testing.T) {
 		}
 	}
 
-	// cluster_status: production-adapter default (W1).
+	// cluster_status: production-adapter default (no-store branch).
 	if out.ClusterStatus.State != "unknown" {
 		t.Errorf("cluster_status.state: got %q, want %q", out.ClusterStatus.State, "unknown")
 	}
-	if out.ClusterStatus.Reason != "phase-62-clustering-no-status-accessor" {
+	if out.ClusterStatus.Reason != "no-store" {
 		t.Errorf("cluster_status.reason: got %q, want %q",
-			out.ClusterStatus.Reason, "phase-62-clustering-no-status-accessor")
+			out.ClusterStatus.Reason, "no-store")
 	}
 }
 
@@ -276,14 +280,13 @@ func TestStatusHandler_PopulatedStore(t *testing.T) {
 
 // ---------- Test 3: cluster_status default-unknown JSON shape (W1 closure) ----------
 
-// TestStatusHandler_ClusterStatus_DefaultUnknown_ReasonPopulated proves W1 is
-// closed at the wire-format level: cluster_status marshals to
+// TestStatusHandler_ClusterStatus_DefaultUnknown_ReasonPopulated proves the
+// Phase 69-05 closed-enum wire-format: cluster_status marshals to
 //
-//	{"state":"unknown","reason":"phase-62-clustering-no-status-accessor"}
+//	{"state":"unknown","reason":"no-store"}
 //
-// Until Phase 65/67 wires a live cluster source, this is the response shape
-// every agent will see. The structured Reason field gives observability the
-// gap-tracking signal it needs.
+// for the no-store branch. The structured Reason field gives observability
+// the gap-tracking signal it needs across all closed-enum reasons.
 func TestStatusHandler_ClusterStatus_DefaultUnknown_ReasonPopulated(t *testing.T) {
 	store := &recorderStoreAccessor{t: t}
 	scheduler := &statusMockScheduler{
@@ -308,19 +311,19 @@ func TestStatusHandler_ClusterStatus_DefaultUnknown_ReasonPopulated(t *testing.T
 	if out.ClusterStatus.State != "unknown" {
 		t.Errorf("cluster_status.state: got %q, want %q", out.ClusterStatus.State, "unknown")
 	}
-	if out.ClusterStatus.Reason != "phase-62-clustering-no-status-accessor" {
+	if out.ClusterStatus.Reason != "no-store" {
 		t.Errorf("cluster_status.reason: got %q, want %q",
-			out.ClusterStatus.Reason, "phase-62-clustering-no-status-accessor")
+			out.ClusterStatus.Reason, "no-store")
 	}
 
 	// Assert wire-format shape: marshal the ClusterStatus alone and verify the
 	// canonical JSON form. Doing this on the field (not the whole envelope)
-	// keeps the assertion focused on the W1-closure-relevant bytes.
+	// keeps the assertion focused on the Phase 69-05 closed-enum bytes.
 	b, err := json.Marshal(out.ClusterStatus)
 	if err != nil {
 		t.Fatalf("marshal cluster_status: %v", err)
 	}
-	wantJSON := `{"state":"unknown","reason":"phase-62-clustering-no-status-accessor"}`
+	wantJSON := `{"state":"unknown","reason":"no-store"}`
 	if string(b) != wantJSON {
 		t.Errorf("cluster_status JSON: got %s, want %s", string(b), wantJSON)
 	}

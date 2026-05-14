@@ -10,6 +10,18 @@ import (
 	"github.com/blevesearch/bleve/v2/mapping"
 )
 
+// Exported bleve-meta keys (Phase 69-02). The retrieval package owns the
+// canonical names so cross-package readers — internal/semantic/compact (Plan
+// 69-03) and internal/daemon (Plan 69-05) — share one set of constants with
+// no string-literal drift. The pre-existing unexported metaKeyLastIndexed
+// (recovery.go) is intentionally not exported: only the retrieval package
+// ever writes it.
+const (
+	MetaKeyCorpusVersion = "corpus_version"
+	MetaKeyIndexedFiles  = "indexed_files"
+	MetaKeyLastCompactAt = "last_compact_at"
+)
+
 // SymbolDoc is the per-symbol document indexed by bleve. Field shape mirrors
 // CONTEXT.md D-06: name + path + docstring + a 5-line comment window are the
 // indexed text fields; ID is a keyword field for exact lookup.
@@ -173,6 +185,20 @@ func (e *Engine) QueryBleve(task string, anchors []string) ([]TextRank, error) {
 		out = append(out, TextRank{SymbolID: h.ID, Score: h.Score})
 	}
 	return out, nil
+}
+
+// DocCount returns the number of documents currently indexed in the bleve
+// segment. Wraps bleve.Index.DocCount; used by Plan 69-05's
+// semRetrievalAdapter.RetrievalStatus to populate indexed_symbols.
+func (e *Engine) DocCount() (uint64, error) {
+	if e == nil || e.idx == nil {
+		return 0, fmt.Errorf("retrieval.DocCount: engine closed")
+	}
+	n, err := e.idx.DocCount()
+	if err != nil {
+		return 0, fmt.Errorf("idx.DocCount: %w", err)
+	}
+	return n, nil
 }
 
 // GetMeta reads an internal metadata key from the bleve index. Used by the

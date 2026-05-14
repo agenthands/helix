@@ -44,6 +44,23 @@ type StoreReader interface {
 	// IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 	// invoking fn(row). Returning false from fn aborts iteration cleanly.
 	IterateCommittedSymbols(ctx context.Context, snapshotID uint64, fn func(store.SymbolRow) bool) error
+	// CurrentGraphVersion returns the live overlay graph_version for repoID,
+	// or 0 if the overlay has never been initialized. Used by Plan 69-02 to
+	// stamp the bleve corpus_version meta after a successful rebuild. *Store
+	// already implements this natively (overlay.go).
+	CurrentGraphVersion(ctx context.Context, repoID string) (uint64, error)
+}
+
+// bleveMetaWriter is a narrow seam over the subset of *Engine that the
+// Recoverer needs at the rebuild commit point. The production wiring passes
+// the *Engine directly (which satisfies this interface); tests inject a
+// failing-SetMeta shim to assert the non-fatal Warn policy (Plan 69-02). The
+// upsert/get path is included so the same value drives both the rebuild
+// walk-loop write and the post-flush meta-read assertions in tests.
+type bleveMetaWriter interface {
+	UpsertBatch(ctx context.Context, docs []SymbolDoc) error
+	GetMeta(key string) ([]byte, error)
+	SetMeta(key string, val []byte) error
 }
 
 // RecoveryStatus tracks an in-flight rebuild for a single workspace. Used
@@ -58,8 +75,15 @@ type RecoveryStatus struct {
 // Recoverer reconciles a single bleve Engine against a StoreReader (the
 // committed snapshot history). One Recoverer is constructed per daemon;
 // Probe is invoked per workspace activation.
+//
+// The engine field holds the concrete *Engine so the rest of the daemon
+// retains a typed handle; the writer field (which usually points at the same
+// *Engine) is the narrow bleveMetaWriter seam used inside Probe/rebuildBlocking
+// so Phase 69-02 tests can inject a failing-SetMeta shim. In production both
+// fields reference the same *Engine value.
 type Recoverer struct {
 	engine *Engine
+	writer bleveMetaWriter
 	store  StoreReader
 	logger *slog.Logger
 
@@ -75,6 +99,24 @@ func NewRecoverer(engine *Engine, reader StoreReader, logger *slog.Logger) *Reco
 	}
 	return &Recoverer{
 		engine:   engine,
+		writer:   engine, // production: writer is the *Engine itself
+		store:    reader,
+		logger:   logger,
+		statuses: make(map[string]*RecoveryStatus),
+	}
+}
+
+// newRecovererWithMetaWriter is a test-only constructor that splits the
+// engine handle from the bleveMetaWriter seam: the engine value is retained
+// for nil-safety / lifecycle assertions while writer drives Probe + rebuild
+// meta calls. Used by Phase 69-02 tests to inject SetMeta failure shims.
+func newRecovererWithMetaWriter(engine *Engine, writer bleveMetaWriter, reader StoreReader, logger *slog.Logger) *Recoverer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Recoverer{
+		engine:   engine,
+		writer:   writer,
 		store:    reader,
 		logger:   logger,
 		statuses: make(map[string]*RecoveryStatus),
@@ -97,7 +139,7 @@ func NewRecoverer(engine *Engine, reader StoreReader, logger *slog.Logger) *Reco
 //  5. raw > latest → post-rollback case; log WARN + treat as missing.
 //  6. raw < latest (or unset/parse-fail) → spawn background rebuild.
 func (r *Recoverer) Probe(ctx context.Context, ws workspace.WorkspaceKey) error {
-	if r == nil || r.engine == nil || r.store == nil {
+	if r == nil || r.engine == nil || r.writer == nil || r.store == nil {
 		return fmt.Errorf("retrieval.Probe: recoverer not fully constructed")
 	}
 	repoID := ws.Hash()
@@ -113,7 +155,7 @@ func (r *Recoverer) Probe(ctx context.Context, ws workspace.WorkspaceKey) error 
 		return nil
 	}
 
-	rawBytes, err := r.engine.GetMeta(metaKeyLastIndexed)
+	rawBytes, err := r.writer.GetMeta(metaKeyLastIndexed)
 	if err != nil {
 		r.logger.Warn("retrieval.Probe: GetMeta failed; treating as missing",
 			"repo_id", repoID, "err", err)
@@ -216,12 +258,16 @@ func (r *Recoverer) spawnRebuild(ws workspace.WorkspaceKey, snapshotID uint64) {
 // SymbolRow to include file bytes.
 func (r *Recoverer) rebuildBlocking(ctx context.Context, ws workspace.WorkspaceKey, snapshotID uint64, st *RecoveryStatus) error {
 	batch := make([]SymbolDoc, 0, rebuildBatchSize)
+	// Phase 69-02: accumulate distinct FileIDs across the walk so we can
+	// stamp MetaKeyIndexedFiles at the commit point. SymbolRow.FileID is
+	// string (decimal-encoded uint64 today; we treat it as opaque).
+	distinctFiles := make(map[string]struct{})
 
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
 		}
-		if err := r.engine.UpsertBatch(ctx, batch); err != nil {
+		if err := r.writer.UpsertBatch(ctx, batch); err != nil {
 			return fmt.Errorf("UpsertBatch (size=%d): %w", len(batch), err)
 		}
 		st.Indexed.Add(int64(len(batch)))
@@ -234,6 +280,9 @@ func (r *Recoverer) rebuildBlocking(ctx context.Context, ws workspace.WorkspaceK
 		// Recovery does not load file source for the comment window — see
 		// docstring above for rationale.
 		batch = append(batch, MapSymbolToDoc(row, nil))
+		if row.FileID != "" {
+			distinctFiles[row.FileID] = struct{}{}
+		}
 		if len(batch) >= rebuildBatchSize {
 			if err := flush(); err != nil {
 				iterErr = err
@@ -252,10 +301,37 @@ func (r *Recoverer) rebuildBlocking(ctx context.Context, ws workspace.WorkspaceK
 		return err
 	}
 
+	repoID := ws.Hash()
+
+	// Phase 69-02 corpus_version meta: best-effort, non-fatal. A failure
+	// here must NOT undo the rebuild — the bleve segment is already in a
+	// consistent state. Skip the write entirely when gv == 0 (overlay
+	// uninitialized) to avoid stamping a misleading zero.
+	gv, gvErr := r.store.CurrentGraphVersion(ctx, repoID)
+	if gvErr != nil {
+		r.logger.Warn("retrieval.rebuild: CurrentGraphVersion failed (non-fatal)",
+			"repo_id", repoID, "err", gvErr)
+	} else if gv > 0 {
+		if err := r.writer.SetMeta(MetaKeyCorpusVersion, []byte(strconv.FormatUint(gv, 10))); err != nil {
+			r.logger.Warn("retrieval.rebuild: SetMeta(corpus_version) failed (non-fatal)",
+				"repo_id", repoID, "graph_version", gv, "err", err)
+		}
+	}
+
+	// Phase 69-02 indexed_files meta: best-effort, non-fatal. Encoded as a
+	// signed decimal int64 so future deltas (e.g. negative for shrinkage)
+	// would remain compatible with the same reader.
+	indexedFiles := int64(len(distinctFiles))
+	if err := r.writer.SetMeta(MetaKeyIndexedFiles, []byte(strconv.FormatInt(indexedFiles, 10))); err != nil {
+		r.logger.Warn("retrieval.rebuild: SetMeta(indexed_files) failed (non-fatal)",
+			"repo_id", repoID, "indexed_files", indexedFiles, "err", err)
+	}
+
 	// Persist the new last_indexed marker. This is the recovery's commit
 	// point: subsequent Probe calls will see raw == latest and short-
-	// circuit until the next snapshot commit.
-	if err := r.engine.SetMeta(metaKeyLastIndexed, []byte(strconv.FormatUint(snapshotID, 10))); err != nil {
+	// circuit until the next snapshot commit. FATAL on error (single-writer
+	// invariant preserved).
+	if err := r.writer.SetMeta(metaKeyLastIndexed, []byte(strconv.FormatUint(snapshotID, 10))); err != nil {
 		return fmt.Errorf("SetMeta(last_indexed=%d): %w", snapshotID, err)
 	}
 	return nil

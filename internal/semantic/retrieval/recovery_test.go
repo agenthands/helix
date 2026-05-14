@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -277,10 +278,31 @@ func makeSymbolsAcrossFiles(nSymbols, nFiles int) []semstore.SymbolRow {
 	return out
 }
 
+// syncBuffer is a mutex-guarded bytes.Buffer satisfying io.Writer + a
+// thread-safe String accessor. The recovery goroutine writes log records
+// concurrently with the test goroutine's assertion read; without the lock
+// the -race detector trips.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
 // captureLogger returns an slog.Logger writing to buf at LevelDebug so Warn
 // records are observable. The buffer is the assertion surface for tests that
 // require the non-fatal Warn message format.
-func captureLogger(buf *bytes.Buffer) *slog.Logger {
+func captureLogger(buf *syncBuffer) *slog.Logger {
 	h := slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	return slog.New(h)
 }
@@ -392,7 +414,7 @@ func TestRebuild_WritesCorpusVersionAndFileCount(t *testing.T) {
 		// failing meta writer; assert the rebuild's RetrievalPending flips to
 		// false (success path) and that the Warn record was emitted.
 		eng := makeRecoveryEngine(t, "meta-warn.bleve")
-		var logBuf bytes.Buffer
+		var logBuf syncBuffer
 		store := &fakeStoreReader{
 			latest:       42,
 			symbols:      makeSymbolsAcrossFiles(3, 3),
@@ -427,7 +449,7 @@ func TestRebuild_WritesCorpusVersionAndFileCount(t *testing.T) {
 
 	t.Run("metaKeyLastIndexed_failure_remains_fatal", func(t *testing.T) {
 		eng := makeRecoveryEngine(t, "meta-fatal.bleve")
-		var logBuf bytes.Buffer
+		var logBuf syncBuffer
 		store := &fakeStoreReader{
 			latest:       42,
 			symbols:      makeSymbolsAcrossFiles(3, 3),

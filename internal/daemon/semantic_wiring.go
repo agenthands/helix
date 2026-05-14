@@ -21,9 +21,11 @@
 //     → CommitSnapshot. Phase 65 (65-01) replaced the Phase 64 empty-Facts
 //     placeholder with this pipeline (D-09 carryover #1).
 //
-// Closes W1 (production layer): semSchedulerAdapter.ClusterStatus returns
-// ClusterStatus{State:"unknown", Reason:"phase-62-clustering-no-status-accessor"}
-// until Phase 65/67 wires a live source.
+// Closes W1 (production layer): semSchedulerAdapter.ClusterStatus
+// delegates to NewSchedulerAccessorForStore (Plan 69-05) which derives
+// the closed-enum state from *Store.ClusterStatusForGraphVersion +
+// CurrentGraphVersion; semRetrievalAdapter.RetrievalStatus delegates to
+// NewRetrievalAccessorForStore which reads bleve corpus-state meta.
 //
 // Closes W2 (production layer): semSessionAdapter wraps the daemon-side
 // getSession closure (the SAME closure passed to InstallMiddleware at
@@ -349,7 +351,7 @@ func (b *semanticBundle) storeAccessor() semantic.StoreAccessor {
 	return &semStoreAdapter{store: b.store}
 }
 func (b *semanticBundle) schedulerAccessor() semantic.SchedulerAccessor {
-	return &semSchedulerAdapter{rb: b.scheduler}
+	return &semSchedulerAdapter{rb: b.scheduler, store: b.store}
 }
 func (b *semanticBundle) queueAccessor() semantic.QueueAccessor {
 	return &semQueueAdapter{q: b.queue}
@@ -404,11 +406,13 @@ func (a *semStoreAdapter) QueryEffectiveAdjacency(ctx context.Context, repoID, p
 	return a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
 }
 
-// semSchedulerAdapter wraps the rank bundle. ScoreStatus + ClusterStatus
-// production accessors are W1 placeholders today — Phase 65/67 wires real
-// sources.
+// semSchedulerAdapter wraps the rank bundle plus the semantic store.
+// IsQuiescent reads from the rank bundle directly; ClusterStatus
+// delegates to NewSchedulerAccessorForStore (Plan 69-05) so the daemon
+// and the Plan 69-06 E2E test share a single derivation code path.
 type semSchedulerAdapter struct {
-	rb *rankBundle
+	rb    *rankBundle
+	store *semanticstore.Store
 }
 
 func (a *semSchedulerAdapter) IsQuiescent(repoID string) bool {
@@ -431,34 +435,20 @@ func (a *semSchedulerAdapter) IsQuiescent(repoID string) bool {
 }
 
 // ScoreStatus returns the closed-enum score status for (repoID, projection).
-// Phase 62 RankScheduler does not expose a per-(workspace, projection)
-// accessor today — the closest is the per-row state surfaced inside
-// computeScoreStatus, which the scheduler consumes when reading scores. Until
-// Phase 65/67 wires a public accessor, the adapter returns
-// graph.ScoreStatusMissing as the closed-enum default; downstream consumers
-// (tools_status.go) treat "missing" as the safe pre-data state.
-//
-// This is a deliberate companion to the W1 ClusterStatus placeholder — both
-// surface a stable closed-enum value under the SPEC §23.3 envelope until the
-// real source ships.
+// ScoreStatus pending Phase 65/67 per-projection accessor (RESEARCH Q9);
+// returns graph.ScoreStatusMissing as the closed-enum default — downstream
+// consumers (tools_status.go) treat "missing" as the safe pre-data state.
 func (a *semSchedulerAdapter) ScoreStatus(repoID, projection string) graph.ScoreStatus {
 	_ = repoID
 	_ = projection
 	return graph.ScoreStatusMissing
 }
 
-// ClusterStatus is the W1 production-layer placeholder. Returns
-// {State: "unknown", Reason: "phase-62-clustering-no-status-accessor"} until
-// Phase 65/67 wires a live cluster source. Downstream consumers
-// (tools_status.go) see the structured "unknown"+reason envelope unchanged.
-//
-// Closes checker W1 at the production layer.
+// ClusterStatus delegates to the factory-produced accessor so the daemon
+// and the Plan 69-06 E2E test share a single derivation code path. See
+// semantic_accessor_factories.go for the full state-derivation logic.
 func (a *semSchedulerAdapter) ClusterStatus(repoID string) semantic.ClusterStatus {
-	_ = repoID
-	return semantic.ClusterStatus{
-		State:  "unknown",
-		Reason: "phase-62-clustering-no-status-accessor",
-	}
+	return NewSchedulerAccessorForStore(a.store).ClusterStatus(repoID)
 }
 
 // semQueueAdapter wraps *lspenrich.LaneQueue with the QueueAccessor surface.
@@ -670,6 +660,20 @@ func (a *semRetrievalAdapter) TopEdgesFor(_ context.Context, repoID, symbolID st
 	_ = repoID
 	_ = symbolID
 	return nil, nil
+}
+
+// RetrievalStatus delegates to the factory-produced accessor (Plan
+// 69-05) so the daemon and the Plan 69-06 E2E test share a single
+// derivation code path. The factory reads bleve corpus-state meta using
+// the exported retrieval.MetaKey* constants and applies the closed-enum
+// priority order (bleve-unavailable > corpus_version-uninitialized >
+// corpus_version-lag > compactor-never-ran). See
+// semantic_accessor_factories.go.
+func (a *semRetrievalAdapter) RetrievalStatus(ws workspace.WorkspaceKey) semantic.RetrievalStatus {
+	if a == nil || a.bundle == nil {
+		return NewRetrievalAccessorForStore(nil, nil).RetrievalStatus(ws)
+	}
+	return NewRetrievalAccessorForStore(a.bundle.store, a.engineFor(ws)).RetrievalStatus(ws)
 }
 
 // ----- integ.SemanticLookup production adapter (Phase 65 65-03) -----

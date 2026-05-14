@@ -60,16 +60,69 @@ const (
 )
 
 // ClusterStatus is the structured cluster_status surfaced by
-// get_semantic_graph_status. Production adapter returns
-// {State: "unknown", Reason: "phase-62-clustering-no-status-accessor"} until
-// Phase 65/67 wires a live source (closes checker W1). The Reason field gives
-// observability the gap-tracking signal it needs.
+// get_semantic_graph_status. Phase 69-04 grows the struct additively with
+// ComputedAt + MemberCount; both are omitempty so the pre-Phase-69 JSON shape
+// (state + optional reason) is preserved for callers that have not yet adopted
+// the new fields. Phase 69-05 wires a real source via the new
+// SchedulerAccessor.ClusterStatus path; Phase 69-06 wires a sql adapter.
 type ClusterStatus struct {
 	// State is the closed-enum cluster status:
 	// "unknown" | "current" | "stale" | "building".
+	//
+	// NOTE: "building" is reserved for a future phase. Phase 69 emits only
+	// "unknown" | "current" | "stale".
 	State string `json:"state"`
 	// Reason is a free-form human reason; only populated when State !=
 	// "current".
+	Reason string `json:"reason,omitempty"`
+	// ComputedAt is the unix-millis timestamp when the cluster bucket was
+	// materialized (sourced from semantic_clusters.computed_at; CONTEXT.md
+	// D4). Omitted when zero.
+	ComputedAt int64 `json:"computed_at,omitempty"`
+	// MemberCount is the COUNT(*) of rows in semantic_cluster_members for
+	// the bucket. Omitted when zero.
+	MemberCount int `json:"member_count,omitempty"`
+}
+
+// RetrievalStatus is the structured retrieval_status nested inside
+// StatusResult (Phase 69-04 STATUS-01). It exposes bleve corpus state +
+// indexed cardinalities + last-compact timestamp for the get_semantic_graph_status
+// envelope.
+//
+// Reason is a closed enum. When the retrieval engine is healthy the field is
+// the empty string (omitted via omitempty); when degraded, Reason carries the
+// highest-priority degradation cause, in this priority order (highest →
+// lowest):
+//
+//  1. "bleve-unavailable"             — engine missing entirely (no bleve handle)
+//  2. "corpus_version-uninitialized"  — Recoverer never ran successfully
+//  3. "corpus_version-lag"            — bleve.corpus_version < store.CurrentGraphVersion
+//  4. "compactor-never-ran"           — last_compact_at meta absent
+//  5. ""                              — no degradation; all fields consistent
+//
+// Producers (Plan 69-05's RetrievalAccessor.RetrievalStatus implementation)
+// MUST select the highest-priority reason that applies; lower-priority causes
+// are not surfaced when a higher-priority one is active.
+//
+// Privacy: only cardinalities (file/symbol counts) and a monotonic version
+// are reported. No file paths, no symbol identifiers (T-69-01 mitigation).
+type RetrievalStatus struct {
+	// CorpusVersion is bleve.corpus_version meta (monotonic uint64).
+	CorpusVersion uint64 `json:"corpus_version"`
+	// IndexedFiles is the count of distinct source files reflected in the
+	// bleve corpus.
+	IndexedFiles int64 `json:"indexed_files"`
+	// IndexedSymbols is the count of symbols reflected in the bleve corpus.
+	IndexedSymbols int64 `json:"indexed_symbols"`
+	// LastCompactAt is the unix-millis timestamp of the most-recent
+	// compactor flush, or zero if the compactor has never run.
+	//
+	// Note: zero is a meaningful "never-ran" signal (mapped to Reason
+	// "compactor-never-ran"); tests assert non-zero rather than presence-only
+	// (Pitfall 4 of RESEARCH.md).
+	LastCompactAt int64 `json:"last_compact_at"`
+	// Reason is the highest-priority degradation reason; see priority order
+	// in the struct doc-comment. Omitted when empty.
 	Reason string `json:"reason,omitempty"`
 }
 
@@ -101,6 +154,11 @@ type RefreshResult struct {
 }
 
 // StatusResult is the get_semantic_graph_status response (SPEC §23.3).
+//
+// Phase 69-04 (STATUS-01) adds the nested RetrievalStatus field. The
+// top-level RetrievalPending bool is intentionally retained — Phase 64
+// consumers (get_semantic_context handler chain) depend on the flat shape, so
+// the new nested field is purely additive.
 type StatusResult struct {
 	CommonEnvelope
 	LatestSnapshotID uint64            `json:"latest_snapshot_id"`
@@ -108,7 +166,11 @@ type StatusResult struct {
 	ClusterStatus    ClusterStatus     `json:"cluster_status"`
 	LastLiveUpdateMs int64             `json:"last_live_update_ms"`
 	PendingLSPFiles  int               `json:"pending_lsp_files"`
-	RetrievalPending bool              `json:"retrieval_pending"`
+	// RetrievalPending is the Phase 64 retrieval-pending flag. KEPT AT TOP
+	// LEVEL — do not move into RetrievalStatus.
+	RetrievalPending bool `json:"retrieval_pending"`
+	// RetrievalStatus is the Phase 69-04 nested retrieval state.
+	RetrievalStatus RetrievalStatus `json:"retrieval_status"`
 }
 
 // ContextResult is the get_semantic_context response (SPEC §23.4).

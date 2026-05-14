@@ -65,6 +65,13 @@ func (m *mockRetrievalAccessor) RetrievalPending(ws workspace.WorkspaceKey) bool
 	return m.pendingReturn
 }
 
+// RetrievalStatus is a zero-value stub. The get_semantic_context handler
+// does not consume RetrievalStatus(ws); it only consumes RetrievalPending(ws).
+// Plan 69-05 wires the production adapter that returns a meaningful value.
+func (m *mockRetrievalAccessor) RetrievalStatus(ws workspace.WorkspaceKey) RetrievalStatus {
+	return RetrievalStatus{}
+}
+
 func (m *mockRetrievalAccessor) TopEdgesFor(ctx context.Context, repoID, symbolID string) ([]string, error) {
 	m.topEdgesCalls.Add(1)
 	if m.topEdgesByID != nil {

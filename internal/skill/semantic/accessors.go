@@ -108,6 +108,16 @@ type RetrievalAccessor interface {
 	// TopEdgesFor returns up to 5 top-weighted graph edges incident to
 	// symbolID, formatted as descriptive strings for ContextEvidence.TopEdges.
 	TopEdgesFor(ctx context.Context, repoID, symbolID string) ([]string, error)
+	// RetrievalStatus returns the bleve-corpus state for the given workspace
+	// (Phase 69-04 STATUS-01). The Reason field follows the closed-enum
+	// priority order documented on the RetrievalStatus type:
+	//
+	//   bleve-unavailable > corpus_version-uninitialized > corpus_version-lag
+	//     > compactor-never-ran > "".
+	//
+	// Phase 69-05 wires the production adapter (semRetrievalAdapter); this
+	// interface method is the seam they share.
+	RetrievalStatus(ws workspace.WorkspaceKey) RetrievalStatus
 }
 
 // CompactorAccessor is the narrow seam to Phase 63's per-workspace compactor.

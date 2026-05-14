@@ -304,6 +304,14 @@ func (a *e2eRetrievalAcc) TopEdgesFor(_ context.Context, _, _ string) ([]string,
 	return nil, nil
 }
 
+// TODO(plan-69-05): replace this zero-value stub with a real status drawn
+// from the recoverer/engine once Plan 69-05 lands the daemon adapter. Touched
+// here only to keep the in-package compile green after Plan 69-04's interface
+// extension.
+func (a *e2eRetrievalAcc) RetrievalStatus(_ workspace.WorkspaceKey) RetrievalStatus {
+	return RetrievalStatus{}
+}
+
 type e2eCompactAcc struct {
 	mu     sync.Mutex
 	called int

@@ -69,6 +69,13 @@ func (m *statusMockRetrieval) TopEdgesFor(ctx context.Context, repoID, symbolID 
 	return nil, nil
 }
 
+// RetrievalStatus is a zero-value stub for Phase 69-04 RED/GREEN. Plan 69-06
+// will replace this with status-bearing test fixtures once the retrieval
+// status surface lands in tools_status.go.
+func (m *statusMockRetrieval) RetrievalStatus(ws workspace.WorkspaceKey) RetrievalStatus {
+	return RetrievalStatus{}
+}
+
 // productionDefaultClusterStatus mirrors what the real daemon adapter
 // returns until Phase 65/67 wires a live cluster source (W1 closure).
 func productionDefaultClusterStatus() ClusterStatus {

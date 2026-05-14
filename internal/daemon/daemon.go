@@ -38,6 +38,7 @@ import (
 	"github.com/agenthands/helix/internal/profile"
 	repomapPkg "github.com/agenthands/helix/internal/repomap"
 	"github.com/agenthands/helix/internal/semantic"
+	"github.com/agenthands/helix/internal/semantic/compact"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/integ"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
@@ -481,6 +482,25 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
 			wsKeyFn,
 		)
+		// Phase 69-05 / STATUS-02: bind the compactBundle bleveMetaFn so
+		// every per-workspace compactor receives the matching bleve
+		// engine as its BleveMeta writer at ensureCompactor time. MUST
+		// happen BEFORE the first SetActivateCallback fires (the
+		// callback invokes compactBndl.ensureCompactor which captures
+		// the resolved BleveMeta at construction; bindings after that
+		// point do NOT retroactively rewire). compactBndl is nil-safe
+		// when semantic is disabled.
+		if compactBndl != nil && sBndl != nil {
+			compactBndl.SetBleveMetaFn(func(ws workspace.WorkspaceKey) compact.BleveMeta {
+				sBndl.mu.Lock()
+				defer sBndl.mu.Unlock()
+				eng, ok := sBndl.engines[ws.RepoRoot]
+				if !ok || eng == nil {
+					return nil
+				}
+				return eng
+			})
+		}
 	}
 
 	// 6g. Phase 62 P05: type-resolver dispatcher.

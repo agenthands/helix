@@ -48,19 +48,19 @@ func TestIndexStatusEnum_ClosedSet(t *testing.T) {
 	}
 }
 
-// TestClusterStatus_DefaultUnknownShape asserts that the documented W1 shape
-// (State="unknown", Reason="phase-62-clustering-no-status-accessor")
+// TestClusterStatus_DefaultUnknownShape asserts that the documented
+// Phase 69-05 closed-enum shape (State="unknown", Reason="no-store")
 // JSON-marshals to the documented field tags.
 func TestClusterStatus_DefaultUnknownShape(t *testing.T) {
 	cs := ClusterStatus{
 		State:  "unknown",
-		Reason: "phase-62-clustering-no-status-accessor",
+		Reason: "no-store",
 	}
 	got, err := json.Marshal(cs)
 	if err != nil {
 		t.Fatalf("json.Marshal returned error: %v", err)
 	}
-	want := `{"state":"unknown","reason":"phase-62-clustering-no-status-accessor"}`
+	want := `{"state":"unknown","reason":"no-store"}`
 	if string(got) != want {
 		t.Fatalf("ClusterStatus JSON mismatch:\n got  = %s\n want = %s", got, want)
 	}

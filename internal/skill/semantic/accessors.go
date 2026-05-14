@@ -33,11 +33,9 @@ type StoreAccessor interface {
 }
 
 // SchedulerAccessor surfaces RankScheduler state. ClusterStatus is consumed by
-// tools_status.go (P64-06); it returns a structured value so the response shape
-// is correct even when Phase 62 has no live cluster-status accessor (in which
-// case the production adapter returns
-// ClusterStatus{State: "unknown", Reason: "phase-62-clustering-no-status-accessor"}
-// until Phase 65/67 wires a real source). Closes checker W1.
+// tools_status.go (P64-06); it returns a structured value so the response
+// shape is correct from day one. Phase 69-05 wires the production derivation
+// via NewSchedulerAccessorForStore (internal/daemon/semantic_accessor_factories.go).
 type SchedulerAccessor interface {
 	// IsQuiescent reports whether the rank scheduler has no in-flight work
 	// for the given repo (Phase 62 RankScheduler.IsQuiescent).
@@ -45,10 +43,10 @@ type SchedulerAccessor interface {
 	// ScoreStatus returns the closed-enum score status for the given (repo,
 	// projection) pair (Phase 62 graph.ScoreStatus).
 	ScoreStatus(repoID, projection string) graph.ScoreStatus
-	// ClusterStatus returns the structured cluster status. Production
-	// adapter returns
-	// {State: "unknown", Reason: "phase-62-clustering-no-status-accessor"}
-	// until Phase 65/67 wires a real source.
+	// ClusterStatus returns the structured cluster status. Phase 69-05
+	// wires the production derivation; states are "current" | "stale" |
+	// "unknown" with closed-enum reasons (see RetrievalStatus for the
+	// reason-priority pattern).
 	ClusterStatus(repoID string) ClusterStatus
 }
 

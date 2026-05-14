@@ -47,9 +47,12 @@ None — this tool takes no arguments.
   Projections surfaced: CALL_GRAPH_PAGERANK, REFERENCE_PAGERANK,
   FILE_DEPENDENCY_PAGERANK.
 - cluster_status (object): Structured cluster status. Closed-enum state
-  values: "unknown" | "current" | "stale" | "building". Until Phase 65/67
-  wires a live cluster source, the production adapter returns
-  state="unknown" with reason="phase-62-clustering-no-status-accessor".
+  values: "unknown" | "current" | "stale" | "building" (the "building"
+  variant is reserved for a future phase). Reason is populated when
+  state != "current"; closed-enum values include "no-store",
+  "no-graph-version", "accessor-error", "no-cluster-rows", and
+  "graph_version-lag" (state="stale"). Phase 69-05 wires the production
+  derivation via NewSchedulerAccessorForStore.
 - last_live_update_ms (int64): Unix-millis timestamp of the most-recent
   overlay flush, or 0 if no flush has occurred.
 - retrieval_pending (bool): True when the retrieval engine (bleve) is still
@@ -178,20 +181,19 @@ func (s *SemanticSkill) handleGetSemanticGraphStatus(ctx context.Context, _ GetS
 		}
 	}
 
-	// cluster_status: production adapter returns
-	// {State:"unknown", Reason:"phase-62-clustering-no-status-accessor"}
-	// until Phase 65/67 wires a live source (closes checker W1). The
-	// SchedulerAccessor.ClusterStatus method declared in accessors.go
-	// guarantees the response shape is correct from day one.
+	// cluster_status: production adapter is wired by Plan 69-05
+	// (NewSchedulerAccessorForStore). The SchedulerAccessor.ClusterStatus
+	// method declared in accessors.go guarantees the response shape is
+	// correct from day one.
 	var clusterStatus ClusterStatus
 	if s.scheduler != nil {
 		clusterStatus = s.scheduler.ClusterStatus(repoID)
 	} else {
-		// No scheduler wired (test path) — mirror the production-adapter
-		// default so callers see a stable shape.
+		// No scheduler wired (test path) — return a stable closed-enum
+		// shape with a scoped reason.
 		clusterStatus = ClusterStatus{
 			State:  "unknown",
-			Reason: "phase-62-clustering-no-status-accessor",
+			Reason: "no-scheduler",
 		}
 	}
 

@@ -243,7 +243,10 @@ type e2eSchedAcc struct{}
 func (a *e2eSchedAcc) IsQuiescent(_ string) bool                 { return true }
 func (a *e2eSchedAcc) ScoreStatus(_, _ string) graph.ScoreStatus { return graph.ScoreStatusMissing }
 func (a *e2eSchedAcc) ClusterStatus(_ string) ClusterStatus {
-	return ClusterStatus{State: "unknown", Reason: "phase-62-clustering-no-status-accessor"}
+	// Plan 69-06 will swap this fake for daemon.NewSchedulerAccessorForStore
+	// so the E2E test exercises the real factory; for now mirror the
+	// closed-enum default the factory emits when no store is wired.
+	return ClusterStatus{State: "unknown", Reason: "no-store"}
 }
 
 type e2eQueueAcc struct{}

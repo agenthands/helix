@@ -10,14 +10,48 @@ package compact_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/agenthands/helix/internal/semantic/compact"
+	"github.com/agenthands/helix/internal/semantic/retrieval"
 	"github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/workspace"
 )
+
+// fakeBleveMeta is a in-memory BleveMeta implementation. Used by the
+// Phase 69-03 last_compact_at write tests.
+type fakeBleveMeta struct {
+	mu       sync.Mutex
+	data     map[string][]byte
+	failKeys map[string]error
+	calls    int
+}
+
+func newFakeBleveMeta() *fakeBleveMeta {
+	return &fakeBleveMeta{data: map[string][]byte{}, failKeys: map[string]error{}}
+}
+
+func (f *fakeBleveMeta) SetMeta(key string, val []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if err, ok := f.failKeys[key]; ok && err != nil {
+		return err
+	}
+	cp := make([]byte, len(val))
+	copy(cp, val)
+	f.data[key] = cp
+	return nil
+}
+
+func (f *fakeBleveMeta) get(key string) ([]byte, int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.data[key], f.calls
+}
 
 // fakeMetrics records every observation so tests can assert outcomes.
 type fakeMetrics struct {
@@ -264,6 +298,89 @@ func TestCompactor_RunCompaction_SkippedBlockedWhenGateNotReady(t *testing.T) {
 	if o.rowCountCalls != 0 {
 		t.Errorf("OverlayRowCount on skipped: got %d calls, want 0", o.rowCountCalls)
 	}
+}
+
+// TestRunCompaction_WritesLastCompactAt — Phase 69-03 RED.
+//
+// Asserts:
+//   - Test 1 (writes): a successful "stamp" via the exported test seam
+//     PublicStampLastCompactAtForTest writes a unix-ms int64 string under
+//     retrieval.MetaKeyLastCompactAt within [start, end].
+//   - Test 2 (nil-safe): Deps{BleveMeta: nil} stamp is a no-op (no panic).
+//   - Test 3 (non-fatal): a SetMeta error is swallowed (`_ =` at the call
+//     site) — stamp returns no error and outcome is unaffected.
+//   - Test 4 (failure path not stamped): when BeginSnapshot fails, the
+//     compactor never reaches the success-path stamp, so SetMeta is
+//     never called. Exercised via the existing fakeStore (BeginSnapshot
+//     returns an error today) + a full PublicTriggerForTest invocation.
+func TestRunCompaction_WritesLastCompactAt(t *testing.T) {
+	t.Run("writes_unix_ms_under_MetaKeyLastCompactAt", func(t *testing.T) {
+		bm := newFakeBleveMeta()
+		fixedNow := time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC)
+		c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{}, compact.Deps{
+			BleveMeta: bm,
+		})
+		c.SetNow(func() time.Time { return fixedNow })
+
+		c.PublicStampLastCompactAtForTest()
+
+		raw, calls := bm.get(retrieval.MetaKeyLastCompactAt)
+		if calls != 1 {
+			t.Fatalf("SetMeta call count: got %d, want 1", calls)
+		}
+		got, err := strconv.ParseInt(string(raw), 10, 64)
+		if err != nil {
+			t.Fatalf("parse last_compact_at: %v (raw=%q)", err, string(raw))
+		}
+		if want := fixedNow.UnixMilli(); got != want {
+			t.Errorf("last_compact_at unix-ms: got %d, want %d", got, want)
+		}
+	})
+
+	t.Run("nil_bleve_meta_no_panic", func(t *testing.T) {
+		c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{}, compact.Deps{
+			BleveMeta: nil,
+		})
+		// Must not panic.
+		c.PublicStampLastCompactAtForTest()
+	})
+
+	t.Run("set_meta_error_is_non_fatal", func(t *testing.T) {
+		bm := newFakeBleveMeta()
+		bm.failKeys[retrieval.MetaKeyLastCompactAt] = errors.New("bleve full")
+		c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{}, compact.Deps{
+			BleveMeta: bm,
+		})
+		// Must not panic and must not return an error.
+		c.PublicStampLastCompactAtForTest()
+		_, calls := bm.get(retrieval.MetaKeyLastCompactAt)
+		if calls != 1 {
+			t.Errorf("SetMeta call count on error path: got %d, want 1", calls)
+		}
+	})
+
+	t.Run("failure_path_not_stamped", func(t *testing.T) {
+		// BeginSnapshot in fakeStore always errors → outcome=error, never
+		// reach the stamp. Assert SetMeta was never called.
+		bm := newFakeBleveMeta()
+		m := &fakeMetrics{}
+		o := &fakeOverlay{rows: 0}
+		s := &fakeStore{} // BeginSnapshot fails by construction
+		c := compact.NewCompactor(workspace.WorkspaceKey{RepoRoot: "/r"}, "repo", compact.Config{}, compact.Deps{
+			Gate:       gateAlwaysReady(),
+			Store:      s,
+			OverlayOps: o,
+			Metrics:    m,
+			BleveMeta:  bm,
+		})
+		c.PublicTriggerForTest()
+		if got := m.lastCompaction(); got != "error" {
+			t.Errorf("outcome on BeginSnapshot fail: got %q, want error", got)
+		}
+		if _, calls := bm.get(retrieval.MetaKeyLastCompactAt); calls != 0 {
+			t.Errorf("SetMeta should not be called on failure path: got %d calls, want 0", calls)
+		}
+	})
 }
 
 func TestCompactor_OnFlush_ResetsTimer(t *testing.T) {

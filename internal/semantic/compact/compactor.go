@@ -14,9 +14,11 @@ package compact
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/agenthands/helix/internal/semantic/retrieval"
 	"github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/workspace"
 )
@@ -67,6 +69,13 @@ type Deps struct {
 	OverlayOps OverlayOps
 	Metrics    MetricsSink
 	Logger     *slog.Logger
+
+	// BleveMeta (Phase 69-03 / STATUS-02) is the single-writer seam for
+	// stamping last_compact_at on the bleve corpus-state meta. Optional:
+	// nil disables the stamp (no-op) without affecting the compaction
+	// outcome. Production wiring binds this from the per-workspace
+	// *retrieval.Engine in Plan 69-05.
+	BleveMeta BleveMeta
 }
 
 // Compactor is the per-workspace compaction worker. One goroutine per
@@ -331,11 +340,45 @@ func (c *Compactor) runCompaction(ctx context.Context) (outcome string) {
 
 	c.lastBaseID = snap.ID
 
+	// Phase 69-03 / STATUS-02: stamp last_compact_at on the bleve
+	// corpus-state meta. Nil-safe (Deps.BleveMeta == nil → no-op);
+	// SetMeta errors are non-fatal — compaction outcome stays "success".
+	c.stampLastCompactAt()
+
 	// VACUUM piggyback. Outcome on the parent compaction stays "success"
 	// regardless — VACUUM has its own metric outcome label.
 	c.maybeVacuum(ctx)
 
 	return
+}
+
+// stampLastCompactAt writes the current wall-clock (unix-ms, int64
+// formatted as a decimal string) under retrieval.MetaKeyLastCompactAt
+// on the injected BleveMeta seam. Nil-safe and error-non-fatal: a nil
+// BleveMeta is a no-op; a SetMeta error is logged at debug level (if a
+// logger is configured) and swallowed — the compaction outcome is
+// unchanged.
+//
+// Phase 69-03 — single-writer entry point for STATUS-02's
+// last_compact_at meta key. Reader lives in Plan 69-05.
+func (c *Compactor) stampLastCompactAt() {
+	if c == nil || c.deps.BleveMeta == nil {
+		return
+	}
+	val := []byte(strconv.FormatInt(c.now().UnixMilli(), 10))
+	if err := c.deps.BleveMeta.SetMeta(retrieval.MetaKeyLastCompactAt, val); err != nil {
+		if c.deps.Logger != nil {
+			c.deps.Logger.Debug("compact.stampLastCompactAt: SetMeta failed (non-fatal)",
+				"repo_id", c.repoID, "err", err)
+		}
+	}
+}
+
+// PublicStampLastCompactAtForTest synchronously invokes the
+// success-path stamp helper. Test seam (Phase 69-03) — production
+// callers rely on the runCompaction success path.
+func (c *Compactor) PublicStampLastCompactAtForTest() {
+	c.stampLastCompactAt()
 }
 
 // Run is callable from a goroutine. Compile-time guard ensures Compactor

@@ -46,6 +46,14 @@ type compactBundle struct {
 	lspQueue   *lspenrich.LaneQueue
 	rankBundle *rankBundle
 
+	// bleveMetaFn (Phase 69-03 / STATUS-02) resolves the per-workspace
+	// bleve engine as a compact.BleveMeta writer. Bound by Plan 69-05
+	// from semantic_wiring.go (closure over semanticBundle.engines).
+	// Nil-safe: when unbound, ensureCompactor threads a nil BleveMeta
+	// into compact.Deps, which is itself a no-op on the writer side.
+	bleveMetaFnMu sync.Mutex
+	bleveMetaFn   func(ws workspace.WorkspaceKey) compact.BleveMeta
+
 	runCtxMu sync.Mutex
 	runCtx   context.Context
 
@@ -169,12 +177,26 @@ func (b *compactBundle) ensureCompactor(_ context.Context, repoID string, ws wor
 		LSPCompactionMaxWait: b.cfg.LSPCompactionMaxWait,
 	}, nil)
 
+	// Resolve the per-workspace BleveMeta writer at construction time.
+	// The engine handle for a workspace is stable for the compactor's
+	// lifetime (same pattern as b.live, b.store), so a single resolution
+	// here matches how every other dep is threaded. nil until Plan 69-05
+	// binds bleveMetaFn — nil-safe on the compactor side.
+	b.bleveMetaFnMu.Lock()
+	resolveBleveMeta := b.bleveMetaFn
+	b.bleveMetaFnMu.Unlock()
+	var bleveMeta compact.BleveMeta
+	if resolveBleveMeta != nil {
+		bleveMeta = resolveBleveMeta(ws)
+	}
+
 	c := compact.NewCompactor(ws, repoID, b.cfg, compact.Deps{
 		Gate:       gate,
 		Store:      b.store,
 		OverlayOps: b.store,
 		Metrics:    b.metrics,
 		Logger:     b.logger,
+		BleveMeta:  bleveMeta,
 	})
 	b.subs[repoID] = c
 	go func() {
@@ -196,6 +218,23 @@ func (b *compactBundle) OnCoalescerFlush(ws workspace.WorkspaceKey) {
 	if c != nil {
 		c.OnFlush()
 	}
+}
+
+// SetBleveMetaFn binds the per-workspace BleveMeta resolver — the
+// closure that maps a workspace key to its bleve engine handle.
+// Called from daemon post-init (Plan 69-05) once the semantic engines
+// map is populated. nil-safe (clears the binding); idempotent — calling
+// SetBleveMetaFn after compactors have already been constructed does
+// NOT retroactively rewire them (each compactor captured its BleveMeta
+// at NewCompactor time). For ordering, post-init wiring MUST call
+// SetBleveMetaFn before the first workspace activates a compactor.
+func (b *compactBundle) SetBleveMetaFn(fn func(workspace.WorkspaceKey) compact.BleveMeta) {
+	if b == nil {
+		return
+	}
+	b.bleveMetaFnMu.Lock()
+	b.bleveMetaFn = fn
+	b.bleveMetaFnMu.Unlock()
 }
 
 // coalescerAccessor adapts a liveBundle's per-workspace coalescer to

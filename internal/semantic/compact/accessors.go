@@ -72,3 +72,18 @@ type SchedulerAccessor interface {
 type KernelEditAccessor interface {
 	ActiveEditTxCount(ws workspace.WorkspaceKey) int
 }
+
+// BleveMeta is the single-writer seam used by the compactor to stamp
+// last_compact_at (and only last_compact_at) onto the bleve corpus-state
+// meta surface introduced in Phase 69-02. Production wiring binds this
+// to *retrieval.Engine (Plan 69-05); tests pass an in-memory fake.
+//
+// Nil is a valid no-op: Deps.BleveMeta == nil disables the stamp without
+// affecting the compaction outcome, so existing compactor_test.go Deps
+// literals continue to compile and pass unchanged (Pitfall 5 guard).
+//
+// The constant key for the stamp lives at
+// retrieval.MetaKeyLastCompactAt — never use a string literal here.
+type BleveMeta interface {
+	SetMeta(key string, val []byte) error
+}

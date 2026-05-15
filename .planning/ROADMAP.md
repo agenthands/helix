@@ -152,7 +152,7 @@
 ### v1.11 Semantic Index Completion & P1 MCP Tools (Planning) -- Phases 68-73
 
 - [x] **Phase 68: Precise FileFactDiff Populator** -- Replace Tier-3 synthetic-marker floor with Tier-1 (full diff) / Tier-2 (added-only) populators; pre-edit FileFact accessor; close DEF-67-F01-FULL-DIFF (completed 2026-05-13)
-- [ ] **Phase 69: Production Status Accessors** -- Real ClusterStatus from Phase 62 cluster engine; real retrieval status from bleve + corpus; close TOOL-03/04 placeholders
+- [x] **Phase 69: Production Status Accessors** -- Real ClusterStatus from Phase 62 cluster engine; real retrieval status from bleve + corpus; close TOOL-03/04 placeholders
 - [ ] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental
 - [ ] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed)
 - [ ] **Phase 72: P1 Cluster & Impact Tools** -- `get_cluster_map`, `explain_cluster`, `get_change_impact_graph` (cluster-aware; mixed read+/review+ tier)
@@ -188,12 +188,12 @@
   4. E2E test asserts non-placeholder values across both status blocks on a populated workspace.
   5. The two existing `semantic_wiring.go:408,441,450` placeholder comments are removed and the surrounding code routes through the real accessors.
 **Plans**: 6 plans
-- [ ] 69-01-PLAN.md — *Store.ClusterStatusForGraphVersion accessor + race-clean tests (STATUS-01)
-- [ ] 69-02-PLAN.md — Bleve corpus_version + indexed_files meta in Recoverer; DocCount on Engine (STATUS-02)
-- [ ] 69-03-PLAN.md — Compactor last_compact_at write + BleveMeta dep injection (STATUS-02)
-- [ ] 69-04-PLAN.md — Envelope additive fields + closed-enum RetrievalStatus.Reason (STATUS-01, STATUS-02)
-- [ ] 69-05-PLAN.md — Adapter wiring + placeholder removal in semantic_wiring.go (STATUS-01, STATUS-02)
-- [ ] 69-06-PLAN.md — E2E TestE2E_IndexThenStatus_NonPlaceholderClusterAndRetrieval (STATUS-03)
+- [x] 69-01-PLAN.md — *Store.ClusterStatusForGraphVersion accessor + race-clean tests (STATUS-01)
+- [x] 69-02-PLAN.md — Bleve corpus_version + indexed_files meta in Recoverer; DocCount on Engine (STATUS-02)
+- [x] 69-03-PLAN.md — Compactor last_compact_at write + BleveMeta dep injection (STATUS-02)
+- [x] 69-04-PLAN.md — Envelope additive fields + closed-enum RetrievalStatus.Reason (STATUS-01, STATUS-02)
+- [x] 69-05-PLAN.md — Adapter wiring + placeholder removal in semantic_wiring.go (STATUS-01, STATUS-02)
+- [x] 69-06-PLAN.md — E2E TestE2E_IndexThenStatus_NonPlaceholderClusterAndRetrieval (STATUS-03)
 
 ### Phase 70: Incremental Refresh Overlay-Drain
 **Goal**: `refresh_semantic_graph` with `mode:"incremental"` consults the overlay-drain seam to refresh only changed files; full-walk becomes a verified fallback, not the default.
@@ -205,7 +205,14 @@
   3. When overlay-drain returns empty (e.g., overlay rotated), refresh falls back to full-walk and emits a bounded-label log with the fallback reason.
   4. `internal/eval/runner/refresh_incremental_test.go` (or eval-side equivalent) verifies both incremental and fallback paths.
   5. The `refresh-degraded` annotation in `semantic_wiring.go` is removed; the function exits the incremental path through the overlay-drain seam.
-**Plans**: TBD
+**Plans**: 7 plans
+- [ ] 70-01-PLAN.md — *Store.OverlayChangedPathsSince accessor + tests (REFRESH-01)
+- [ ] 70-02-PLAN.md — Schema migration 5→6 + base_overlay_epoch on snapshots (REFRESH-01)
+- [ ] 70-03-PLAN.md — Coalescer.FlushNow + IncrementalRefreshFallback metric + carve-out (REFRESH-01, REFRESH-03)
+- [ ] 70-04-PLAN.md — collectCandidatePaths rewrite + buildFn baseline capture + annotation removal (REFRESH-01, REFRESH-03)
+- [ ] 70-05-PLAN.md — refresh_semantic_graph files_updated honest derivation from seam (REFRESH-01)
+- [ ] 70-06-PLAN.md — refresh_incremental_test.go: 4 sub-tests (hot path + 3 fallback reasons) (REFRESH-03)
+- [ ] 70-07-PLAN.md — bench_refresh_incremental_test.go: 10k symbols, p95 ≤ 200ms, t.Skip on CI (REFRESH-02)
 
 ### Phase 71: P1 Single-Symbol Read Tools
 **Goal**: Three new `read+` MCP tools answer agent questions about a single seed symbol — deep explanation, related symbols, and edge validation — backed by the v1.10 semantic graph + integ.SemanticLookup.

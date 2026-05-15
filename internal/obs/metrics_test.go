@@ -349,3 +349,58 @@ func TestLiveFileFactDiffSyntheticReasonInc_NilSafe(t *testing.T) {
 	var m *Metrics
 	m.LiveFileFactDiffSyntheticReasonInc("cold_start")
 }
+
+// --- Phase 70 D-04: IncrementalRefreshFallback helper tests ---
+
+// TestMetrics_IncrementalRefreshFallbackInc_DropsUnknownReason exercises
+// the closed-enum drop-on-unknown discipline: a bogus reason value MUST NOT
+// emit, and a valid reason MUST emit exactly one sample.
+func TestMetrics_IncrementalRefreshFallbackInc_DropsUnknownReason(t *testing.T) {
+	m := newMetrics()
+	// Unknown reason drops.
+	m.IncrementalRefreshFallbackInc("bogus", "repo-a")
+	if got := countSamples(t, m, "helix_incremental_refresh_fallback_total"); got > 0 {
+		t.Fatalf("unknown reason leaked into metric family: %d samples", got)
+	}
+	// Valid reason emits.
+	m.IncrementalRefreshFallbackInc(IncrementalRefreshFallbackReasonColdStart, "repo-a")
+	got := sampleValue(t, m, "helix_incremental_refresh_fallback_total",
+		map[string]string{"reason": "cold_start", "repo": "repo-a"})
+	if got != 1 {
+		t.Fatalf("expected counter == 1 for reason=cold_start, got %v", got)
+	}
+}
+
+// TestMetrics_IncrementalRefreshFallbackInc_KnownReasons exercises every
+// value of the closed-enum reason set.
+func TestMetrics_IncrementalRefreshFallbackInc_KnownReasons(t *testing.T) {
+	cases := []string{
+		IncrementalRefreshFallbackReasonColdStart,
+		IncrementalRefreshFallbackReasonOverlayRotated,
+		IncrementalRefreshFallbackReasonEmptyOverlay,
+		IncrementalRefreshFallbackReasonError,
+	}
+	for _, reason := range cases {
+		t.Run(reason, func(t *testing.T) {
+			m := newMetrics()
+			m.IncrementalRefreshFallbackInc(reason, "repo-a")
+			got := sampleValue(t, m, "helix_incremental_refresh_fallback_total",
+				map[string]string{"reason": reason, "repo": "repo-a"})
+			if got != 1 {
+				t.Fatalf("expected counter == 1 for reason=%q, got %v", reason, got)
+			}
+		})
+	}
+}
+
+// TestMetrics_IncrementalRefreshFallbackInc_NilSafe is the nil-receiver
+// safety contract.
+func TestMetrics_IncrementalRefreshFallbackInc_NilSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("IncrementalRefreshFallbackInc panicked on nil receiver: %v", r)
+		}
+	}()
+	var m *Metrics
+	m.IncrementalRefreshFallbackInc("cold_start", "repo-a")
+}

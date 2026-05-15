@@ -22,6 +22,18 @@ package obs
 import "github.com/prometheus/client_golang/prometheus"
 import "github.com/prometheus/client_golang/prometheus/collectors"
 
+// Phase 70 D-04: closed-enum "reason" values for the incremental-refresh
+// fallback counter. Declared as package-level constants so call sites in
+// the refresh tool import a single source of truth (mirrors the Phase 68
+// D-08 placement pattern). Any change here MUST be matched in
+// IncrementalRefreshFallbackInc and the metrics_labels_test.go carve-out.
+const (
+	IncrementalRefreshFallbackReasonColdStart      = "cold_start"
+	IncrementalRefreshFallbackReasonOverlayRotated = "overlay_rotated"
+	IncrementalRefreshFallbackReasonEmptyOverlay   = "empty_overlay"
+	IncrementalRefreshFallbackReasonError          = "error"
+)
+
 // AllowedLabels is the bounded-label allowlist enforced at CI time by
 // TestMetricsLabelsAllowlist (D-03..D-05). Changing this list requires a
 // matching change to metrics_labels_test.go and a plan-level decision.
@@ -115,6 +127,15 @@ type Metrics struct {
 	// enforced at emission via LiveFileFactDiffSyntheticReasonInc
 	// (drop-on-unknown).
 	LiveFileFactDiffSynRsn *prometheus.CounterVec
+
+	// Phase 70 D-04: incremental refresh fallback counter. Bumped when
+	// the refresh tool falls back to a full overlay walk instead of the
+	// incremental drain path. Closed-enum "reason" ∈ {"cold_start",
+	// "overlay_rotated","empty_overlay","error"} + bounded "repo"
+	// identifier. Neither label is in AllowedLabels; both are carved out
+	// in metrics_labels_test.go. Helper IncrementalRefreshFallbackInc is
+	// the single emission site and drops unknown reason values.
+	IncrementalRefreshFallback *prometheus.CounterVec
 
 	// Phase 61 P03: LSP enrichment-worker outcome counter (vector).
 	// Closed-enum "language" ∈ AllowedLabels (already a member);
@@ -364,6 +385,16 @@ func newMetrics() *Metrics {
 			// LiveFileFactDiffSyntheticReasonInc drops unknowns.
 			[]string{"reason"},
 		),
+		IncrementalRefreshFallback: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "helix_incremental_refresh_fallback_total",
+				Help: "Incremental refresh fell back to full-walk; reason is one of cold_start|overlay_rotated|empty_overlay|error. Phase 70.",
+			},
+			// Phase 70 D-04: closed-enum "reason" + bounded "repo".
+			// Carved out in metrics_labels_test.go; helper
+			// IncrementalRefreshFallbackInc drops unknown reason values.
+			[]string{"reason", "repo"},
+		),
 		LSPEnrichmentTotalVec: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "helix_semantic_lsp_enrichment_total",
@@ -525,6 +556,8 @@ func newMetrics() *Metrics {
 		m.SemanticLiveUpdates,
 		m.LiveFileFactDiff,
 		m.LiveFileFactDiffSynRsn,
+		// Phase 70 D-04: incremental refresh fallback counter.
+		m.IncrementalRefreshFallback,
 		m.LSPEnrichmentTotalVec,
 		m.LSPEnrichmentDurationVec,
 		m.LSPEnrichmentErrorsVec,
@@ -793,6 +826,33 @@ func (m *Metrics) LiveFileFactDiffSyntheticReasonInc(reason string) {
 		return
 	}
 	m.LiveFileFactDiffSynRsn.WithLabelValues(reason).Inc()
+}
+
+// --- Phase 70 D-04 helper (drop-on-unknown closed-enum discipline) ---
+
+// IncrementalRefreshFallbackInc increments helix_incremental_refresh_fallback_total.
+// Phase 70 D-04 closed-enum bound:
+//   - reason ∈ {cold_start, overlay_rotated, empty_overlay, error} — the
+//     four scenarios under which the refresh tool falls back to a
+//     full-walk instead of the incremental drain path.
+//   - repo is a bounded per-workspace identifier (caller responsibility
+//     to keep cardinality reasonable; mirrors LiveFileFactDiffInc).
+//
+// Unknown reason values DROP the emission (matches the
+// LiveFileFactDiffInc / SemanticLiveUpdatesInc pattern). Nil-safe.
+func (m *Metrics) IncrementalRefreshFallbackInc(reason, repo string) {
+	if m == nil || m.IncrementalRefreshFallback == nil {
+		return
+	}
+	switch reason {
+	case IncrementalRefreshFallbackReasonColdStart,
+		IncrementalRefreshFallbackReasonOverlayRotated,
+		IncrementalRefreshFallbackReasonEmptyOverlay,
+		IncrementalRefreshFallbackReasonError:
+	default:
+		return
+	}
+	m.IncrementalRefreshFallback.WithLabelValues(reason, repo).Inc()
 }
 
 // --- Phase 61 P03 helpers (drop-on-unknown closed-enum discipline) ---

@@ -629,6 +629,61 @@ func schema5Statements(startAt int64) []string {
 	}
 }
 
+// applyMigration006 lights up Phase 70 P70-02: adds the persistent
+// `base_overlay_epoch UBIGINT DEFAULT 0` column on semantic_snapshots so
+// CommitSnapshot can record the baseline overlay epoch captured at
+// compaction time. The next incremental build calls
+// LatestCommittedSnapshotBaseEpoch(repoID) and feeds the result to
+// OverlayChangedPathsSince(repoID, baseEpoch) to enumerate paths whose
+// overlay rows arrived after the baseline (70-CONTEXT.md D3).
+//
+// Existing rows take DEFAULT 0 (cold-start signal — the next incremental
+// build with epoch=0 effectively asks "everything since the beginning"
+// which matches the pre-Phase-70 full-rebuild behavior for the first
+// post-migration cycle).
+//
+// DuckDB ALTER TABLE constraint limitation (carried over from
+// applyMigration002 / 003): DuckDB rejects `ALTER TABLE ... ADD COLUMN
+// ... NOT NULL DEFAULT <expr>` ("Adding columns with constraints not yet
+// supported"). We use DEFAULT 0 alone — the application layer
+// (CommitSnapshot) explicitly stamps base_overlay_epoch on every commit,
+// so the runtime invariant (no NULL epochs on writer-touched rows) is
+// enforced in code rather than schema.
+//
+// MigrationKind=InPlace per Phase 57 D-02 — runs at Open time, no
+// reindex, no data backfill.
+//
+// Rollback follows the same model as Phase 60 applyMigration003: DuckDB's
+// ALTER TABLE DROP COLUMN support is incomplete; downgrade requires the
+// quarantine-and-rebuild path documented in Phase 57 D-04.
+func applyMigration006(ctx context.Context, db *sql.DB) error {
+	stmts := schema6Statements()
+	for i, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("applyMigration006: stmt %d (%s): %w", i+1, firstLine(stmt), err)
+		}
+	}
+	return nil
+}
+
+// schema6Statements returns the v5→v6 DDL: one ALTER TABLE adding the
+// base_overlay_epoch column, then the schema_version stamp.
+//
+// Acceptance grep gates in 70-02-PLAN.md scan THIS function — keep the
+// `base_overlay_epoch UBIGINT DEFAULT 0` literal on its own logical line
+// so per-column presence regexes match.
+func schema6Statements() []string {
+	return []string{
+		// Baseline overlay epoch (Phase 70 D3) — captured at
+		// CommitSnapshot time, consumed by the next incremental build's
+		// OverlayChangedPathsSince(repoID, baseEpoch) query.
+		`ALTER TABLE semantic_snapshots ADD COLUMN base_overlay_epoch UBIGINT DEFAULT 0`,
+
+		// Stamp the new schema version.
+		`INSERT INTO semantic_schema_version (version, applied_at) VALUES (6, now())`,
+	}
+}
+
 // firstLine returns the first non-empty trimmed line of stmt for use in
 // error messages (avoids dumping multi-hundred-byte SQL on every failure).
 func firstLine(stmt string) string {

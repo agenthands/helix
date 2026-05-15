@@ -16,9 +16,12 @@ import (
 // adds v3→v4 (semantic_live_overlay_meta.last_vacuum_at column for the
 // VACUUM-cadence storage; 63-CONTEXT.md D-05). Phase 63 review CR-03 adds
 // v4→v5 (semantic_snapshot_id_seq SEQUENCE: replaces the racy MAX+1
-// allocation in BeginSnapshot). Future versions append entries to the
-// migrations slice (see migrations_registry.go).
-const CurrentSchemaVersion = 5
+// allocation in BeginSnapshot). Phase 70 P70-02 adds v5→v6
+// (semantic_snapshots.base_overlay_epoch UBIGINT DEFAULT 0: persistent
+// baseline overlay epoch consumed by the next incremental build via
+// OverlayChangedPathsSince; 70-CONTEXT.md D3). Future versions append
+// entries to the migrations slice (see migrations_registry.go).
+const CurrentSchemaVersion = 6
 
 // MigrationKind classifies a Migration entry's effect.
 //

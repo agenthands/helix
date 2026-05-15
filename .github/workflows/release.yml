@@ -508,6 +508,14 @@ jobs:
             archive_name="${archive_base}.tar.gz"
             staging_dir="$(mktemp -d)"
             cp "$bin" "${staging_dir}/$(basename "$bin")"
+            # v1.10 hot-fix (Phase 59.1 re-audit, 2026-05-15): actions/upload-artifact@v4
+            # strips the exec bit during transit, so the partial-dist artifact lands
+            # at 0644. cp preserves that; without this chmod the tar entry is 0644 and
+            # users hit `permission denied: ./helix` after `tar -xzf`. Verified against
+            # v1.10 release archives. The .goreleaser.yaml `builds_info.mode: 0755`
+            # knob is bypassed because OSS goreleaser does not support --skip=build
+            # and the archive pipe is hand-rolled below.
+            chmod 0755 "${staging_dir}/$(basename "$bin")"
             tar --sort=name --owner=0 --group=0 --numeric-owner \
                 --mtime="$MTIME" \
                 --transform "s|^\\./|${archive_base}/|" \

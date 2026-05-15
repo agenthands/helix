@@ -135,12 +135,16 @@ archives:
     # keeps the INSTALL.md verification recipe (which sets VERSION=v1.9.0) working
     # end-to-end. See REVIEW CR-02.
     name_template: "helix_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    # Phase 59.1 re-audit (2026-05-06): without this, goreleaser packs the
-    # main binary at mode 0644 inside the tar.gz, so users hit
-    # `permission denied: ./helix` straight after `tar -xzf …`.
-    # The 0755 override forces the binary to ship executable. Verified
-    # against v1.10.7 archives (both darwin/arm64 and linux/amd64
-    # contained the binary at 0644).
+    # Phase 59.1 re-audit (2026-05-06 → re-validated 2026-05-15):
+    # `builds_info.mode: 0755` is the goreleaser knob that forces 0755 on the
+    # main binary inside the archive. NOTE: in the current OSS-only split-runner
+    # pipeline this field is DEAD CODE — the merge job in release.yml
+    # hand-rolls the tar archive (OSS goreleaser does not support
+    # `release --skip=build`), bypassing this archive pipe entirely. The actual
+    # 0755 enforcement lives in `.github/workflows/release.yml` as a `chmod 0755`
+    # right before the manual `tar -czf`. This field is kept as a safety net for
+    # any future migration back to goreleaser's archive pipe (e.g., GoReleaser
+    # Pro adoption that re-enables `--skip=build`).
     builds_info:
       mode: 0755
     files:

@@ -406,6 +406,37 @@ func (a *semStoreAdapter) QueryEffectiveAdjacency(ctx context.Context, repoID, p
 	return a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
 }
 
+// CurrentOverlayEpoch delegates to *Store.CurrentOverlayEpoch (Phase 63
+// pattern; Phase 70-04 seam). Returns (0, nil) on nil-adapter / nil-store
+// to mirror the cold-start signal the upstream accessor uses.
+func (a *semStoreAdapter) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	if a == nil || a.store == nil {
+		return 0, nil
+	}
+	return a.store.CurrentOverlayEpoch(ctx, repoID)
+}
+
+// OverlayChangedPathsSince delegates to *Store.OverlayChangedPathsSince
+// (Plan 70-01). Returns (nil, 0, nil) on nil-adapter / nil-store — the
+// caller treats that as cold-start + empty drain (full-walk fallback).
+func (a *semStoreAdapter) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) (paths []string, currentEpoch uint64, err error) {
+	if a == nil || a.store == nil {
+		return nil, 0, nil
+	}
+	return a.store.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+}
+
+// LatestCommittedSnapshotBaseEpoch delegates to
+// *Store.LatestCommittedSnapshotBaseEpoch (Plan 70-02). Returns
+// (0, false, nil) on nil-adapter / nil-store — same cold-start signal the
+// upstream accessor returns when no committed snapshot exists.
+func (a *semStoreAdapter) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (epoch uint64, ok bool, err error) {
+	if a == nil || a.store == nil {
+		return 0, false, nil
+	}
+	return a.store.LatestCommittedSnapshotBaseEpoch(ctx, repoID)
+}
+
 // semSchedulerAdapter wraps the rank bundle plus the semantic store.
 // IsQuiescent reads from the rank bundle directly; ClusterStatus
 // delegates to NewSchedulerAccessorForStore (Plan 69-05) so the daemon
@@ -511,6 +542,18 @@ func (a *semLiveAdapter) LastFlushAt(ws workspace.WorkspaceKey) int64 {
 		return 0
 	}
 	return t.UnixMilli()
+}
+
+// FlushNow synchronously drains the coalescer's pending batch for ws,
+// delegating to live.Service.FlushNow (Plan 70-03). Returns nil for
+// nil-adapter / nil-live-service / unregistered workspace (the upstream
+// service returns nil for unregistered workspaces; we just guard the
+// pointer chain). Phase 70-04 seam.
+func (a *semLiveAdapter) FlushNow(ctx context.Context, ws workspace.WorkspaceKey) error {
+	if a == nil || a.live == nil || a.live.service == nil {
+		return nil
+	}
+	return a.live.service.FlushNow(ctx, ws)
 }
 
 // semCompactorAdapter wraps *compactBundle. OnFlush dispatches to the

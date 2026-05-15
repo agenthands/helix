@@ -237,6 +237,15 @@ func (a *e2eStoreAcc) QueryEffectiveAdjacency(ctx context.Context, repoID, proje
 ) {
 	return a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
 }
+func (a *e2eStoreAcc) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return a.store.CurrentOverlayEpoch(ctx, repoID)
+}
+func (a *e2eStoreAcc) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return a.store.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+}
+func (a *e2eStoreAcc) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return a.store.LatestCommittedSnapshotBaseEpoch(ctx, repoID)
+}
 
 type e2eSchedAcc struct{}
 
@@ -274,6 +283,7 @@ func (a *e2eLiveAcc) LastFlushAt(_ workspace.WorkspaceKey) int64 {
 	defer a.mu.Unlock()
 	return a.flushUnixMillis
 }
+func (a *e2eLiveAcc) FlushNow(_ context.Context, _ workspace.WorkspaceKey) error { return nil }
 
 type e2eRetrievalAcc struct {
 	engine    *retrieval.Engine
@@ -532,6 +542,15 @@ func (a *overlayActiveStoreAcc) QueryEffectiveAdjacency(ctx context.Context, rep
 	map[graph.NodeID]map[graph.NodeID]float64, map[graph.NodeID]map[graph.NodeID]float64, error,
 ) {
 	return a.inner.QueryEffectiveAdjacency(ctx, repoID, projection)
+}
+func (a *overlayActiveStoreAcc) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return a.inner.CurrentOverlayEpoch(ctx, repoID)
+}
+func (a *overlayActiveStoreAcc) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return a.inner.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+}
+func (a *overlayActiveStoreAcc) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return a.inner.LatestCommittedSnapshotBaseEpoch(ctx, repoID)
 }
 
 // TestE2E_ConcurrentIndexFull_SameSnapshotID closes acceptance #1: two

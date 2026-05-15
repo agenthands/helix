@@ -114,6 +114,15 @@ func (m *mockStoreAccessorForContext) QueryEffectiveAdjacency(ctx context.Contex
 ) {
 	return m.queryAdjOut, m.queryAdjIn, m.queryAdjErr
 }
+func (m *mockStoreAccessorForContext) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return 0, nil
+}
+func (m *mockStoreAccessorForContext) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return nil, 0, nil
+}
+func (m *mockStoreAccessorForContext) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return 0, false, nil
+}
 
 // mockQueueAccessorForContext implements QueueAccessor with depth injection.
 type mockQueueAccessorForContext struct {

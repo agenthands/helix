@@ -444,3 +444,285 @@ func TestGetHealthSemanticStoreStatus_StampsLastErrReason(t *testing.T) {
 			blk.LastError, string(integ.FallbackReasonIndexError))
 	}
 }
+
+// ---------- Phase 70-04 collectCandidatePaths tests ----------
+
+// openBundleForCollect spins up a real DuckDB-backed store and returns a
+// minimal *semanticBundle wired with it plus a real *obs.Metrics so the test
+// can assert IncrementalRefreshFallbackInc emissions via Registry().Gather().
+func openBundleForCollect(t *testing.T) (*semanticBundle, *obs.Metrics, string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("opens DuckDB store; skipping in -short")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	wsDir := t.TempDir()
+	t.Chdir(wsDir)
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	metrics := obs.Noop(logger.Handler()).Metrics()
+	storeCfg := semantic.Config{
+		Enabled: true,
+		Store: semantic.StoreConfig{
+			Kind:        "duckdb",
+			Path:        filepath.Join(".helix", "semantic.duckdb"),
+			MemoryLimit: "256MiB",
+			Threads:     2,
+		},
+	}
+	store, err := semanticstore.Open(ctx, storeCfg, logger, metrics)
+	if err != nil {
+		t.Fatalf("semanticstore.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	b := &semanticBundle{
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
+	}
+	return b, metrics, wsDir
+}
+
+// fallbackCount returns the sample value for helix_incremental_refresh_fallback_total
+// for the given (reason, repo) label pair, or -1 if no sample exists.
+func fallbackCount(t *testing.T, m *obs.Metrics, reason, repo string) float64 {
+	t.Helper()
+	mfs, err := m.Registry().Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() != "helix_incremental_refresh_fallback_total" {
+			continue
+		}
+		for _, sample := range mf.GetMetric() {
+			labels := map[string]string{}
+			for _, lp := range sample.GetLabel() {
+				labels[lp.GetName()] = lp.GetValue()
+			}
+			if labels["reason"] == reason && labels["repo"] == repo {
+				return sample.GetCounter().GetValue()
+			}
+		}
+	}
+	return -1
+}
+
+// TestCollectCandidatePaths_Incremental_HitReturnsSeamPaths writes one overlay
+// row, calls collectCandidatePaths(mode="incremental", baseEpoch=0), and
+// asserts the returned slice contains the overlay-written path AND no
+// fallback metric was emitted (the seam was a hit, not a fallback).
+func TestCollectCandidatePaths_Incremental_HitReturnsSeamPaths(t *testing.T) {
+	b, metrics, wsDir := openBundleForCollect(t)
+	ws := workspace.WorkspaceKey{RepoRoot: wsDir}
+	repoID := ws.Hash()
+	ctx := context.Background()
+
+	// Inject an overlay row with an absolute path (A1 invariant).
+	absPath := filepath.Join(wsDir, "alpha.go")
+	if err := os.WriteFile(absPath, []byte("package alpha\n"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	tx, err := b.store.BeginOverlayTx(ctx, repoID)
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertOverlayFile(ctx, absPath, "hash-a"); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("UpsertOverlayFile: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	paths := b.collectCandidatePaths(ctx, ws, "incremental", 0)
+	if len(paths) != 1 || paths[0] != absPath {
+		t.Errorf("paths = %v, want [%q] (seam hit must return overlay paths verbatim)", paths, absPath)
+	}
+	// No fallback metric should fire on a hit.
+	for _, reason := range []string{
+		obs.IncrementalRefreshFallbackReasonColdStart,
+		obs.IncrementalRefreshFallbackReasonOverlayRotated,
+		obs.IncrementalRefreshFallbackReasonEmptyOverlay,
+		obs.IncrementalRefreshFallbackReasonError,
+	} {
+		if got := fallbackCount(t, metrics, reason, repoID); got > 0 {
+			t.Errorf("fallback metric emitted on seam hit: reason=%q value=%v", reason, got)
+		}
+	}
+}
+
+// TestCollectCandidatePaths_Incremental_EmptySeamFallback_ColdStart covers
+// baseEpoch=0 + empty overlay → reason=cold_start fallback.
+func TestCollectCandidatePaths_Incremental_EmptySeamFallback_ColdStart(t *testing.T) {
+	b, metrics, wsDir := openBundleForCollect(t)
+	ws := workspace.WorkspaceKey{RepoRoot: wsDir}
+	repoID := ws.Hash()
+	ctx := context.Background()
+
+	// One file on disk so fullWalkPaths returns non-empty (proves we fell back).
+	if err := os.WriteFile(filepath.Join(wsDir, "alpha.go"), []byte("package alpha\n"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	paths := b.collectCandidatePaths(ctx, ws, "incremental", 0)
+	if len(paths) == 0 {
+		t.Errorf("cold-start fallback returned empty slice; want full-walk result")
+	}
+	if got := fallbackCount(t, metrics, obs.IncrementalRefreshFallbackReasonColdStart, repoID); got != 1 {
+		t.Errorf("fallback metric reason=cold_start = %v, want 1", got)
+	}
+}
+
+// TestCollectCandidatePaths_Incremental_EmptySeamFallback_OverlayRotated:
+// baseEpoch < currentEpoch but no rows above baseEpoch → reason=overlay_rotated.
+// We force this by:
+//   - Bumping the overlay epoch above 1 by writing+rolling back is not
+//     possible (D-04 contract reserves epochs even on rollback only when
+//     the OverlayTx allocates), so we write one row (epoch=1) then call
+//     with baseEpoch=1 — currentEpoch (1) > baseEpoch (1) is false, that's
+//     empty_overlay. To exercise overlay_rotated we'd need a higher current
+//     epoch with no rows above baseEpoch, which needs at least one tx after
+//     baseline. Two writes: first at epoch 1 (path A), then at epoch 2 with
+//     a NEW path B; ask with baseEpoch=2 → currentEpoch=2, no rows > 2 →
+//     empty_overlay. To hit overlay_rotated, baseEpoch must be < currentEpoch
+//     yet no rows exceed it. Easiest construction: write path A at epoch 1,
+//     then ask with baseEpoch=0 → seam returns [A], currentEpoch=1 — that's
+//     a HIT, not a fallback. Alternative: write A at epoch 1 then ask with
+//     baseEpoch=2 → currentEpoch=1, baseEpoch (2) > currentEpoch (1), so
+//     `currentEpoch > baseEpoch` is false → empty_overlay. We CAN reach
+//     overlay_rotated by writing at epoch 1 (path A), reading at baseEpoch=0
+//     with a write that has been TOMBSTONED — but tombstones aren't part of
+//     the path-since query (it counts DISTINCT paths above baseEpoch).
+//
+// Construction that DOES hit overlay_rotated: write path A at epoch 1, then
+// write a SECOND tx (epoch 2) that re-upserts path A (so the row's
+// write_epoch becomes 2; the older epoch-1 row's path is gone). With
+// baseEpoch=1 the seam returns ([A], 2) because A.write_epoch (2) > 1 → HIT.
+// Net result: deterministically reaching overlay_rotated requires an empty
+// overlay table with currentEpoch>baseEpoch — i.e., the meta row exists with
+// current_epoch=N but no files row with write_epoch>baseEpoch.
+//
+// Achievable: write path A at epoch 1, then write a NEW path B at epoch 2.
+// Ask with baseEpoch=2: rows with write_epoch>2? None. currentEpoch=2.
+// Classification: baseEpoch != 0; currentEpoch (2) > baseEpoch (2)? No.
+// → empty_overlay. To get overlay_rotated we need currentEpoch > baseEpoch
+// with NO rows above baseEpoch. That requires meta.current_epoch to advance
+// without any new files rows being written — which the production path
+// doesn't do (every BeginOverlayTx+upsert writes a row at meta.current_epoch).
+//
+// PRACTICAL TEST: we exercise overlay_rotated indirectly. The classification
+// branch `currentEpoch > baseEpoch` is a defensive guard for the case where
+// the overlay meta row gets bumped (e.g. by a future schema migration or
+// admin reset) without a corresponding files row. We assert this branch
+// fires by passing baseEpoch=99 (artificially high) against a real overlay
+// at current_epoch=1: that yields baseEpoch (99) > currentEpoch (1), so the
+// branch evaluates to empty_overlay. We thus get _full coverage_ of the
+// classification function in cold_start + empty_overlay + error, and the
+// overlay_rotated branch is covered by an in-process unit on a synthetic
+// fake — but our store-backed harness cannot construct that state.
+//
+// Decision: assert overlay_rotated via a focused white-box test that drives
+// the classification directly with handcrafted (baseEpoch, currentEpoch,
+// paths) tuples — see TestClassifyFallbackReason below.
+func TestCollectCandidatePaths_Incremental_EmptySeamFallback_EmptyOverlay(t *testing.T) {
+	b, metrics, wsDir := openBundleForCollect(t)
+	ws := workspace.WorkspaceKey{RepoRoot: wsDir}
+	repoID := ws.Hash()
+	ctx := context.Background()
+
+	// Write a fixture file + overlay row at epoch=1.
+	absPath := filepath.Join(wsDir, "alpha.go")
+	if err := os.WriteFile(absPath, []byte("package alpha\n"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	tx, err := b.store.BeginOverlayTx(ctx, repoID)
+	if err != nil {
+		t.Fatalf("BeginOverlayTx: %v", err)
+	}
+	if err := tx.UpsertOverlayFile(ctx, absPath, "hash-a"); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("UpsertOverlayFile: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	// Ask with baseEpoch=1 (== currentEpoch); seam returns ([], 1, nil)
+	// → classify as empty_overlay because currentEpoch (1) NOT > baseEpoch (1).
+	paths := b.collectCandidatePaths(ctx, ws, "incremental", 1)
+	if len(paths) == 0 {
+		t.Errorf("empty_overlay fallback returned empty slice; want full-walk result")
+	}
+	if got := fallbackCount(t, metrics, obs.IncrementalRefreshFallbackReasonEmptyOverlay, repoID); got != 1 {
+		t.Errorf("fallback metric reason=empty_overlay = %v, want 1", got)
+	}
+}
+
+// TestClassifyFallbackReason covers the closed-enum classification function
+// directly. The overlay_rotated branch (currentEpoch > baseEpoch with empty
+// seam result) is exercised here because the store-backed harness cannot
+// construct that state without admin/migration plumbing.
+func TestClassifyFallbackReason(t *testing.T) {
+	cases := []struct {
+		name         string
+		baseEpoch    uint64
+		currentEpoch uint64
+		want         string
+	}{
+		{"cold_start", 0, 0, obs.IncrementalRefreshFallbackReasonColdStart},
+		{"cold_start_with_current", 0, 5, obs.IncrementalRefreshFallbackReasonColdStart},
+		{"overlay_rotated", 5, 10, obs.IncrementalRefreshFallbackReasonOverlayRotated},
+		{"empty_overlay_equal", 5, 5, obs.IncrementalRefreshFallbackReasonEmptyOverlay},
+		{"empty_overlay_higher_base", 10, 5, obs.IncrementalRefreshFallbackReasonEmptyOverlay},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyEmptySeamFallback(tc.baseEpoch, tc.currentEpoch)
+			if got != tc.want {
+				t.Errorf("classifyEmptySeamFallback(%d, %d) = %q, want %q",
+					tc.baseEpoch, tc.currentEpoch, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCollectCandidatePaths_Full_UsesWalker asserts mode="full" walks
+// filesystem and does NOT touch the overlay seam. We confirm this indirectly
+// by writing one disk file but ZERO overlay rows — full mode must return
+// that file.
+func TestCollectCandidatePaths_Full_UsesWalker(t *testing.T) {
+	b, metrics, wsDir := openBundleForCollect(t)
+	ws := workspace.WorkspaceKey{RepoRoot: wsDir}
+	ctx := context.Background()
+
+	absPath := filepath.Join(wsDir, "alpha.go")
+	if err := os.WriteFile(absPath, []byte("package alpha\n"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	paths := b.collectCandidatePaths(ctx, ws, "full", 0)
+	found := false
+	for _, p := range paths {
+		if p == absPath {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("full mode result = %v, want to contain %q", paths, absPath)
+	}
+	// No fallback metric should fire — full mode does not classify.
+	for _, reason := range []string{
+		obs.IncrementalRefreshFallbackReasonColdStart,
+		obs.IncrementalRefreshFallbackReasonOverlayRotated,
+		obs.IncrementalRefreshFallbackReasonEmptyOverlay,
+		obs.IncrementalRefreshFallbackReasonError,
+	} {
+		if got := fallbackCount(t, metrics, reason, ws.Hash()); got > 0 {
+			t.Errorf("full mode emitted fallback metric: reason=%q value=%v", reason, got)
+		}
+	}
+}

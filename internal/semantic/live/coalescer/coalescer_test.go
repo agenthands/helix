@@ -260,6 +260,135 @@ type sentinelErr string
 
 func (s sentinelErr) Error() string { return string(s) }
 
+// TestCoalescer_FlushNow_DrainsPendingBatch: enqueue an event with a slow
+// max-batch-delay; FlushNow synchronously drains the pending batch and the
+// OnFlush hook fires exactly once.
+func TestCoalescer_FlushNow_DrainsPendingBatch(t *testing.T) {
+	h := newRecordingHandler()
+	c := coalescer.New(workspace.WorkspaceKey{RepoRoot: "ws1"},
+		coalescer.Config{
+			Debounce:            10 * time.Second, // never fire on its own
+			MaxBatchDelay:       10 * time.Second,
+			BulkChangeThreshold: 200,
+			QueueSize:           16,
+		}, h, nil)
+	var flushHookCount atomic.Int32
+	c.SetOnFlush(func() { flushHookCount.Add(1) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	c.Enqueue(live.SourceChangeEvent{Path: "a.go", Kind: live.ChangeFileModified})
+
+	// Give Run goroutine a moment to receive the event from the channel
+	// and set up pending state.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		// Use a peek by acquiring the lock indirectly via FlushNow? We
+		// just wait briefly. The accept path is fast.
+		time.Sleep(20 * time.Millisecond)
+		break
+	}
+
+	if err := c.FlushNow(context.Background()); err != nil {
+		t.Fatalf("FlushNow: %v", err)
+	}
+
+	if got := h.Count(); got != 1 {
+		t.Fatalf("FlushNow: expected 1 dispatched event, got %d", got)
+	}
+	if got := flushHookCount.Load(); got != 1 {
+		t.Fatalf("FlushNow: expected OnFlush to fire exactly once, got %d", got)
+	}
+}
+
+// TestCoalescer_FlushNow_EmptyIsNoop: FlushNow on a brand-new coalescer
+// with no pending events is a no-op (still fires the OnFlush hook per the
+// existing empty-flush short-circuit pattern in makeFlush). Acceptance:
+// returns nil immediately, no Dispatch is called.
+func TestCoalescer_FlushNow_EmptyIsNoop(t *testing.T) {
+	h := newRecordingHandler()
+	c := coalescer.New(workspace.WorkspaceKey{RepoRoot: "ws1"},
+		coalescer.Config{
+			Debounce:            10 * time.Second,
+			MaxBatchDelay:       10 * time.Second,
+			BulkChangeThreshold: 200,
+			QueueSize:           16,
+		}, h, nil)
+
+	// Note: NOT calling Run — confirms FlushNow does not depend on the
+	// loop being active for the empty case.
+	if err := c.FlushNow(context.Background()); err != nil {
+		t.Fatalf("FlushNow on empty: %v", err)
+	}
+	if got := h.Count(); got != 0 {
+		t.Fatalf("FlushNow on empty: expected 0 dispatches, got %d", got)
+	}
+}
+
+// TestCoalescer_FlushNow_ConcurrentEnqueueSafe: 8 goroutines Enqueue
+// concurrently with a single FlushNow call. Must not deadlock; test
+// completes well under the 2s ceiling. All enqueued events eventually
+// flush (either in this FlushNow or via a subsequent FlushNow).
+func TestCoalescer_FlushNow_ConcurrentEnqueueSafe(t *testing.T) {
+	h := newRecordingHandler()
+	c := coalescer.New(workspace.WorkspaceKey{RepoRoot: "ws1"},
+		coalescer.Config{
+			Debounce:            10 * time.Second,
+			MaxBatchDelay:       10 * time.Second,
+			BulkChangeThreshold: 200,
+			QueueSize:           1024,
+		}, h, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	const N = 8
+	var wg sync.WaitGroup
+	wg.Add(N)
+	paths := []string{"a.go", "b.go", "c.go", "d.go", "e.go", "f.go", "g.go", "h.go"}
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			c.Enqueue(live.SourceChangeEvent{Path: paths[i], Kind: live.ChangeFileModified})
+		}()
+	}
+	// Concurrent FlushNow.
+	done := make(chan error, 1)
+	go func() {
+		done <- c.FlushNow(context.Background())
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("FlushNow: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("FlushNow deadlocked under concurrent Enqueue")
+	}
+	wg.Wait()
+
+	// Issue trailing FlushNow calls until all events have drained or the
+	// retry budget expires. Per plan 70-03 acceptance: events on c.in
+	// that haven't yet moved to pending may need a subsequent flush.
+	deadline2 := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline2) {
+		if err := c.FlushNow(context.Background()); err != nil {
+			t.Fatalf("trailing FlushNow: %v", err)
+		}
+		if h.Count() == N {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := h.Count(); got != N {
+		t.Fatalf("FlushNow concurrent: expected %d dispatches, got %d", N, got)
+	}
+}
+
 // TestCoalescer_PerEventErrorDoesNotAbortBatch: 3 events flush together;
 // first dispatch returns an error.  All 3 must still be attempted.
 func TestCoalescer_PerEventErrorDoesNotAbortBatch(t *testing.T) {

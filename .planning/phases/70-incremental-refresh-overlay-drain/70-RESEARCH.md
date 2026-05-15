@@ -923,3 +923,152 @@ boundary.
 
 **Research date:** 2026-05-15
 **Valid until:** 2026-06-14 (30 days; stable subsystem)
+
+## Open Questions (RESOLVED 2026-05-15)
+
+### A1 — Overlay path form (RESOLVED: ABSOLUTE)
+
+**Question:** Are overlay rows written with absolute or workspace-relative paths?
+
+**Resolution:** **Absolute paths.** The fsnotify watcher receives `ev.Name` as the
+absolute path that was passed to `fsnotify.Watcher.Add(absRoot)`; this value is
+recorded into the pending set verbatim
+(`internal/semantic/live/watcher/watcher.go:225` — `w.pending[ev.Name] = struct{}{}`)
+and emitted via `live.WorkspaceChangeSignal.Paths` at watcher.go:289. The producer
+(`Service.OnWorkspaceChanged` at `internal/semantic/live/service/service.go:184`)
+passes the slice through unchanged into the per-workspace coalescer. The handler's
+`UpdateChangedFile` consumes the same string and writes it directly into the
+overlay row via `tx.UpsertOverlayFile(ctx, path, hash)`
+(`internal/semantic/live/handler/handler.go:417`). No normalization step exists on
+the producer or consumer side. **Citation chain:** watcher.go:225 → service.go:184
+→ handler.go:392-417.
+
+**Consequence for Plan 04:** `OverlayChangedPathsSince` returns absolute paths.
+`collectCandidatePaths` for `mode="incremental"` may return them as-is; the
+existing classifier (`fullWalkPaths`'s consumers in buildFn, semantic_wiring.go)
+already operates on the absolute paths that `filepath.WalkDir(ws.RepoRoot, …)`
+produces, so the two code paths agree on shape. No `filepath.Join` translation
+is needed. Plan 04 Task 2's `<read_first>` MUST include `handler.go` so the
+implementer confirms this invariant before committing.
+
+**Consequence for the test surface (Plan 06):** `editFile` in the harness must
+fire `OnWorkspaceChanged` with absolute paths (constructed via
+`filepath.Join(h.tempdir, "src/file_N.go")`) so the overlay row's PK matches what
+the seam later returns.
+
+### A2 — Coalescer.FlushNow re-entrancy (RESOLVED: SAFE)
+
+**Question:** Can `Coalescer.FlushNow(ctx)` be implemented synchronously without
+deadlocking against the coalescer's own mutex/queue under concurrent `Enqueue`?
+
+**Resolution:** **Yes, safely.** Three observations from a full read of
+`internal/semantic/live/coalescer/coalescer.go` (316 lines):
+
+1. **`makeFlush` releases `c.mu` before dispatching** (lines 248-273): it locks,
+   snapshots `c.pending` into a local slice, resets state, stops `c.maxTimer`,
+   then `c.mu.Unlock()` BEFORE the `CoalesceEvents` + dispatch loop. The post-flush
+   hook (`fireOnFlush`, lines 299-306) takes only `c.onFlushMu`, never `c.mu`.
+
+2. **`Enqueue` does not take `c.mu`** (lines 174-183): it is a non-blocking
+   channel send (`c.in <- ev`). Concurrent producers cannot deadlock against a
+   FlushNow caller that briefly holds `c.mu` for the snapshot step.
+
+3. **`accept` takes `c.mu`** (lines 214-244) but runs only on the `Run` goroutine
+   (channel receive at line 209). Run is serialized with FlushNow only insofar as
+   both can attempt to acquire `c.mu`; standard mutex semantics apply — no
+   deadlock. The risk surface is "FlushNow runs while Run is in the middle of
+   `accept`" → FlushNow blocks briefly, then proceeds.
+
+**Implementation pattern for Plan 03 Task 1 (LOCKED):**
+
+```go
+func (c *Coalescer) FlushNow(ctx context.Context) error {
+    if c == nil {
+        return nil
+    }
+    if err := ctx.Err(); err != nil {
+        return err
+    }
+    c.mu.Lock()
+    // Cancel both timers so they do not double-fire on the same batch.
+    if c.timer != nil { c.timer.Stop(); c.timer = nil }
+    if c.maxTimer != nil { c.maxTimer.Stop(); c.maxTimer = nil }
+    if len(c.pending) == 0 {
+        c.mu.Unlock()
+        c.lastFlushNanos.Store(time.Now().UnixNano())
+        c.fireOnFlush()
+        return nil
+    }
+    c.lastFlushNanos.Store(time.Now().UnixNano())
+    snapshot := make([]live.SourceChangeEvent, 0, len(c.pending))
+    for _, v := range c.pending { snapshot = append(snapshot, v) }
+    c.pending = make(map[string]live.SourceChangeEvent)
+    c.mu.Unlock()
+
+    merged := CoalesceEvents(snapshot, c.cfg.BulkChangeThreshold)
+    for _, ev := range merged {
+        if err := c.handler.Dispatch(ctx, ev); err != nil {
+            c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "error")
+            c.logger.Warn("coalescer FlushNow: dispatch error",
+                "workspace", c.workspaceID, "path", ev.Path, "err", err)
+        } else {
+            c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "applied")
+        }
+    }
+    c.fireOnFlush()
+    return nil
+}
+```
+
+This duplicates `makeFlush`'s body verbatim with two differences: (a) takes `ctx`
+as an argument rather than capturing one at closure-construction time, (b) cancels
+timers up-front to prevent the closure-captured `flush` from re-firing on the same
+batch. The duplication is acceptable; a follow-up refactor can extract `flushLocked`
+if desired (Plan 03 Task 1 action step 2 notes "reuse if already present").
+
+**Citations:** coalescer.go:174-183 (Enqueue non-blocking), coalescer.go:214-244
+(accept under mu), coalescer.go:246-294 (makeFlush mu-release-before-dispatch),
+coalescer.go:299-306 (fireOnFlush separate mutex).
+
+### A3 — `repo` label form (RESOLVED: `string(repoID)` == `ws.Hash()`)
+
+**Question:** Should the `repo` label on `helix_incremental_refresh_fallback_total`
+use `ws.Hash()`, raw workspace path, or some shortened/`workspace_label` form?
+
+**Resolution:** **Use `string(repoID)`, which IS `ws.Hash()`.** Trace:
+
+1. `LiveFileFactDiffInc(tier, repo string)` declares the label as `"repo"` and the
+   parameter name is `repo` (`internal/obs/metrics.go:768`, `metrics.go:109` doc
+   comment confirms "repo is a bounded per-workspace identifier").
+2. The single production call site is
+   `internal/semantic/live/handler/difffacts.go:260`:
+   `h.FileFactDiffMetrics.LiveFileFactDiffInc(tier, string(repoID))`.
+3. `repoID` is `semantic.RepoID` (an alias for `string`), and its value is the
+   workspace hash — every entrypoint into the handler converts a
+   `workspace.WorkspaceKey` to `semantic.RepoID(ws.Hash())` before calling
+   handler methods (see semantic_wiring.go's `semLiveAdapter.OnWorkspaceChanged`
+   for the conversion pattern at line ~490).
+4. **`repo` is NOT the same as `workspace_label`** (metrics.go:79-81): the latter
+   is a separate bounded identifier used by `helix_lspool_*` and
+   `SemanticStoreQuarantine` (lines 317, 446); they happen to be derived from the
+   same workspace key but live in different label-namespace conventions.
+   `LiveFileFactDiff` (Phase 68 D-07) deliberately chose `repo` (shorter, mirrors
+   the row's `repo_id` column) over `workspace_label`. Phase 70 follows Phase 68
+   verbatim per CONTEXT.md "Implementation Notes" (closed-enum reason values
+   mirror Phase 68 D-08 pattern).
+
+**Consequence for Plan 04:** `b.metrics.IncrementalRefreshFallbackInc(reason,
+ws.Hash())` (Plan 04 Task 2 action step 2 already names `repoID := ws.Hash()`,
+then passes `repoID` to `IncrementalRefreshFallbackInc`). The repo value is
+`ws.Hash()` (string), bounded by the workspace-hash space (N workspaces, not
+N × paths). No additional hashing or truncation is needed.
+
+**Consequence for the labels allowlist test (Plan 03 Task 2):** the carve-out
+entry mirrors the `LiveFileFactDiff` carve-out: `{"reason": true, "repo": true}`
+under the key `"helix_incremental_refresh_fallback_total"`. The carve-out test
+verifies bounded cardinality; no per-call cardinality bound is enforced (same as
+Phase 68).
+
+**Citations:** metrics.go:80-81 (workspace_label doc), metrics.go:105-110
+(LiveFileFactDiff repo label doc), metrics.go:768-778 (LiveFileFactDiffInc
+signature + emission), handler/difffacts.go:260 (production call site).

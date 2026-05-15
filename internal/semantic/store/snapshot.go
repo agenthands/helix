@@ -55,6 +55,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -95,6 +96,19 @@ type SnapshotMeta struct {
 	// handle (not persisted to semantic_snapshots in Schema 3) and consumed
 	// by ClearOverlayLE to bound the post-merge DELETE.
 	CapturedEpoch uint64
+	// BaseOverlayEpoch is the persistent baseline overlay epoch stamped
+	// onto semantic_snapshots.base_overlay_epoch at CommitSnapshot time
+	// (Phase 70 CONTEXT.md D3 / schema v6). The next incremental build
+	// reads this via Store.LatestCommittedSnapshotBaseEpoch and feeds the
+	// result to OverlayChangedPathsSince(repoID, baseEpoch) to enumerate
+	// paths whose overlay rows arrived after the baseline.
+	//
+	// Plumbing: callers typically construct SnapshotMeta with this field
+	// zero, then call (*Snapshot).SetBaseOverlayEpoch(epoch) after the
+	// compactor has computed the post-merge epoch but BEFORE
+	// CommitSnapshot. Both paths (Meta at Begin-time, or setter
+	// post-Begin) write the same value through to the row.
+	BaseOverlayEpoch uint64
 }
 
 // Snapshot is the per-tx handle returned by BeginSnapshot. The *sql.Tx is
@@ -423,11 +437,20 @@ func (s *Store) CommitSnapshot(ctx context.Context, snap *Snapshot, summary Snap
 	// keep timestamp clocks consistent with BeginSnapshot's `now()`
 	// stamp (and the seed-helper's monotone fixture clocks). See
 	// BeginSnapshot for the rationale.
+	//
+	// Phase 70 P70-02 (CONTEXT.md D3): also stamp base_overlay_epoch
+	// atomically with the status flip — the column is the persistent
+	// baseline the next incremental build queries via
+	// OverlayChangedPathsSince. Callers seed snap.Meta.BaseOverlayEpoch
+	// either at BeginSnapshot time (Meta field) or post-Begin via
+	// (*Snapshot).SetBaseOverlayEpoch. Unset (zero) is the cold-start
+	// signal — the next build with epoch=0 enumerates everything since
+	// the beginning, matching pre-Phase-70 full-rebuild behavior.
 	if _, err := snap.tx.ExecContext(ctx, `
 		UPDATE semantic_snapshots
-		   SET status='committed', committed_at=now()
+		   SET status='committed', committed_at=now(), base_overlay_epoch=?
 		 WHERE snapshot_id=?
-	`, snap.ID); err != nil {
+	`, snap.Meta.BaseOverlayEpoch, snap.ID); err != nil {
 		return fmt.Errorf("CommitSnapshot: flip status: %w", err)
 	}
 
@@ -718,6 +741,73 @@ func subtractOverlayPendingRowsIfPresent(s *Store, repoID string, n int64) {
 			return
 		}
 	}
+}
+
+// SetBaseOverlayEpoch records the baseline overlay epoch the compactor
+// has just computed (post-merge `current_epoch`) on the in-memory
+// *Snapshot handle. CommitSnapshot consumes this value and writes it to
+// `semantic_snapshots.base_overlay_epoch` in the same tx as the status
+// flip (Phase 70 CONTEXT.md D3). Idempotent — repeated calls with the
+// same or different values are allowed up until CommitSnapshot reads
+// the field.
+//
+// Plumbing intent (per 70-02-PLAN.md action step 2a): callers
+// (Plan 04's buildFn) BeginSnapshot → run the merge → SetBaseOverlayEpoch
+// with the post-merge epoch → CommitSnapshot. Setting after a Commit /
+// Abort is a no-op on the persisted row but mutates the in-memory
+// field; callers should not rely on this and the order is enforced by
+// the existing committed/aborted guards in CommitSnapshot.
+func (snap *Snapshot) SetBaseOverlayEpoch(epoch uint64) {
+	if snap == nil {
+		return
+	}
+	snap.Meta.BaseOverlayEpoch = epoch
+}
+
+// LatestCommittedSnapshotBaseEpoch returns the `base_overlay_epoch`
+// value of the most-recent committed snapshot for repoID — the
+// persistent baseline Phase 70 Plan 04's incremental buildFn feeds to
+// OverlayChangedPathsSince(repoID, baseEpoch) to enumerate paths whose
+// overlay rows arrived after the baseline.
+//
+// Returns:
+//   - (epoch, true, nil)  on hit (at least one committed snapshot exists)
+//   - (0, false, nil)     on cold-start (no committed snapshot for repoID)
+//   - (0, false, err)     on any other DB failure (wrapped)
+//
+// The query orders by snapshot_id DESC (the SEQUENCE-allocated id is
+// monotone across BeginSnapshot calls per Phase 63 CR-03, so the
+// highest id is the most recently created committed snapshot) and
+// filters on status='committed' so pending or aborted snapshots never
+// shadow a committed reading.
+//
+// Receiver-on-*Store (not on *Snapshot) so the daemon's StoreAccessor
+// wrapper can route to this accessor without holding a snapshot handle.
+// Nil-store and empty-repoID are rejected to mirror the
+// OverlayChangedPathsSince discipline (Plan 01).
+func (s *Store) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (epoch uint64, ok bool, err error) {
+	if s == nil || s.db == nil {
+		return 0, false, fmt.Errorf("LatestCommittedSnapshotBaseEpoch: nil store")
+	}
+	if repoID == "" {
+		return 0, false, fmt.Errorf("LatestCommittedSnapshotBaseEpoch: empty repoID")
+	}
+	row := s.db.QueryRowContext(ctx, `
+		SELECT base_overlay_epoch
+		  FROM semantic_snapshots
+		 WHERE repo_id = ? AND status = 'committed'
+		 ORDER BY snapshot_id DESC
+		 LIMIT 1
+	`, repoID)
+	var got uint64
+	if scanErr := row.Scan(&got); scanErr != nil {
+		// sql.ErrNoRows → cold-start; any other error is wrapped.
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("LatestCommittedSnapshotBaseEpoch(%q): %w", repoID, scanErr)
+	}
+	return got, true, nil
 }
 
 // nullIfEmpty maps "" → nil (so the database/sql driver writes SQL NULL)

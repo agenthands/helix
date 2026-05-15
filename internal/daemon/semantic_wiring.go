@@ -1425,19 +1425,34 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 
 		// 1. Resolve base snapshot for incremental mode.
 		var baseSnapshotID uint64
+		var baseEpoch uint64
 		if mode == "incremental" {
 			latest, err := b.store.LatestCommittedSnapshot(ctx, repoID)
 			if err != nil {
 				return semantic.IndexResult{}, fmt.Errorf("buildFn: LatestCommittedSnapshot: %w", err)
 			}
 			baseSnapshotID = latest
+			// Phase 70-04: pull the baseline overlay epoch the latest
+			// committed snapshot persisted (Plan 02). (0, false) signals
+			// cold-start; collectCandidatePaths classifies that as
+			// fallback_reason=cold_start and falls back to full-walk.
+			epoch, _, epochErr := b.store.LatestCommittedSnapshotBaseEpoch(ctx, repoID)
+			if epochErr != nil {
+				if b.logger != nil {
+					b.logger.Warn("buildFn: LatestCommittedSnapshotBaseEpoch failed; treating as cold-start",
+						"repo", repoID, "err", epochErr)
+				}
+				baseEpoch = 0
+			} else {
+				baseEpoch = epoch
+			}
 		}
 
 		// 2. Walk (full mode) or drain overlay (incremental mode) to build
 		//    the candidate path set, then run the per-path classify + extract
 		//    loop. Per-file errors are non-fatal (research §Pattern 4
 		//    acceptable error behavior).
-		paths := b.collectCandidatePaths(ws, mode)
+		paths := b.collectCandidatePaths(ctx, ws, mode, baseEpoch)
 		extracted := b.classifyAndExtract(ctx, repoID, paths)
 
 		// 4. Convert per-language facts to the locked store wire format.
@@ -1486,6 +1501,25 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			ReferenceCount: len(facts.References),
 			DurationMs:     time.Since(startedAt).Milliseconds(),
 		}
+
+		// Phase 70-04: capture the current overlay epoch IMMEDIATELY before
+		// CommitSnapshot and stamp it on the snapshot (Pitfall 3 mitigation).
+		// The next incremental refresh reads this via
+		// LatestCommittedSnapshotBaseEpoch and feeds it to
+		// OverlayChangedPathsSince so the drain set is "everything written
+		// after this commit". Capture failure → baseEpoch=0 signals
+		// cold-start to the next refresh (full-walk fallback).
+		baseOverlayEpoch, epochErr := b.store.CurrentOverlayEpoch(ctx, repoID)
+		if epochErr != nil {
+			if b.logger != nil {
+				b.logger.Warn("buildFn: capture base_overlay_epoch failed; persisting 0",
+					"event", "capture_base_overlay_epoch_failed",
+					"repo", repoID, "err", epochErr)
+			}
+			baseOverlayEpoch = 0
+		}
+		snap.SetBaseOverlayEpoch(baseOverlayEpoch)
+
 		if err := b.store.CommitSnapshot(ctx, snap, summary); err != nil {
 			// WR-2 / IN-04: stamp index_error on CommitSnapshot failure.
 			b.SetLastErrorReason(integ.FallbackReasonIndexError)
@@ -1507,19 +1541,72 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 }
 
 // collectCandidatePaths builds the candidate path set the production buildFn
-// classifies + extracts:
+// classifies + extracts.
+//   - mode=full: walk ws.RepoRoot via filepath.WalkDir (.helix, .git, dot-dirs excluded).
+//   - mode=incremental: query OverlayChangedPathsSince(baseEpoch); on empty
+//     result, fall back to full-walk and emit the bounded-label fallback metric.
+func (b *semanticBundle) collectCandidatePaths(ctx context.Context, ws workspace.WorkspaceKey, mode string, baseEpoch uint64) []string {
+	if ws.RepoRoot == "" {
+		return nil
+	}
+	if mode != "incremental" {
+		return b.fullWalkPaths(ws)
+	}
+	repoID := ws.Hash()
+	paths, currentEpoch, err := b.store.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+	if err != nil {
+		if b.logger != nil {
+			b.logger.Warn("collectCandidatePaths: overlay seam error; falling back to full-walk",
+				"repo", repoID, "err", err)
+		}
+		if b.metrics != nil {
+			b.metrics.IncrementalRefreshFallbackInc(obs.IncrementalRefreshFallbackReasonError, repoID)
+		}
+		return b.fullWalkPaths(ws)
+	}
+	if len(paths) > 0 {
+		// A1: paths are absolute per RESEARCH.md §Open Questions RESOLVED —
+		// overlay producer (handler.go:417) writes the verbatim caller-supplied
+		// absolute path; no filepath.Join translation needed. If a future
+		// producer is added that writes relative paths, this assumption MUST
+		// be revisited.
+		return paths
+	}
+	reason := classifyEmptySeamFallback(baseEpoch, currentEpoch)
+	if b.logger != nil {
+		b.logger.Warn("collectCandidatePaths: incremental fell back to full-walk",
+			"repo", repoID, "reason", reason,
+			"base_epoch", baseEpoch, "current_epoch", currentEpoch)
+	}
+	if b.metrics != nil {
+		b.metrics.IncrementalRefreshFallbackInc(reason, repoID)
+	}
+	return b.fullWalkPaths(ws)
+}
+
+// classifyEmptySeamFallback maps (baseEpoch, currentEpoch) to a closed-enum
+// fallback reason for the empty-OverlayChangedPathsSince case.
 //
-//   - mode=full: walk ws.RepoRoot via filepath.WalkDir, skipping the
-//     `.helix/` and `.git/` subtrees plus all dot-directories. Returns
-//     absolute paths to regular files only (no directories, no symlinks).
-//   - mode=incremental: today the live overlay does not expose an
-//     enumerable per-path drain surface (Phase 60 bumped pending counters
-//     but kept the per-path set internal to the coalescer). Until that
-//     surface lands, fall back to the same full-walk path so an
-//     incremental request still produces a non-empty Facts commit when
-//     the workspace has source files. The overlay-drain optimization is
-//     a follow-up.
-func (b *semanticBundle) collectCandidatePaths(ws workspace.WorkspaceKey, _ string) []string {
+//	baseEpoch == 0                     → cold_start    (caller never observed an epoch)
+//	currentEpoch > baseEpoch           → overlay_rotated (overlay advanced with no per-path
+//	                                                       rows above baseEpoch)
+//	otherwise                          → empty_overlay (overlay quiet since baseline)
+func classifyEmptySeamFallback(baseEpoch, currentEpoch uint64) string {
+	switch {
+	case baseEpoch == 0:
+		return obs.IncrementalRefreshFallbackReasonColdStart
+	case currentEpoch > baseEpoch:
+		return obs.IncrementalRefreshFallbackReasonOverlayRotated
+	default:
+		return obs.IncrementalRefreshFallbackReasonEmptyOverlay
+	}
+}
+
+// fullWalkPaths walks ws.RepoRoot and returns absolute paths to all regular
+// files outside dot-directories (.helix, .git, etc.). Extracted from the
+// pre-Phase-70 collectCandidatePaths body verbatim — mode="full" behavior
+// is byte-identical.
+func (b *semanticBundle) fullWalkPaths(ws workspace.WorkspaceKey) []string {
 	if ws.RepoRoot == "" {
 		return nil
 	}

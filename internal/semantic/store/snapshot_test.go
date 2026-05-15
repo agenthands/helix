@@ -421,6 +421,167 @@ func TestSnapshot_TxAccessor_Absent(t *testing.T) {
 	}
 }
 
+// TestCommitSnapshot_PersistsBaseOverlayEpoch asserts that a baseline
+// overlay epoch set on the *Snapshot handle BEFORE CommitSnapshot is
+// written to semantic_snapshots.base_overlay_epoch atomically with the
+// status='committed' flip (Phase 70 CONTEXT.md D3).
+func TestCommitSnapshot_PersistsBaseOverlayEpoch(t *testing.T) {
+	t.Run("explicit_epoch_round_trips", func(t *testing.T) {
+		s, ctx := openStoreForSnapshotTest(t)
+		snap, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r1", CapturedEpoch: 1})
+		if err != nil {
+			t.Fatalf("BeginSnapshot: %v", err)
+		}
+		snap.SetBaseOverlayEpoch(42)
+		if err := s.CommitSnapshot(ctx, snap, SnapshotSummary{}); err != nil {
+			t.Fatalf("CommitSnapshot: %v", err)
+		}
+		var epoch uint64
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT base_overlay_epoch FROM semantic_snapshots WHERE snapshot_id=?`,
+			snap.ID).Scan(&epoch); err != nil {
+			t.Fatalf("read base_overlay_epoch: %v", err)
+		}
+		if epoch != 42 {
+			t.Errorf("post-commit base_overlay_epoch: got %d, want 42", epoch)
+		}
+	})
+
+	t.Run("unset_defaults_to_zero", func(t *testing.T) {
+		s, ctx := openStoreForSnapshotTest(t)
+		snap, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r2"})
+		if err != nil {
+			t.Fatalf("BeginSnapshot: %v", err)
+		}
+		// No SetBaseOverlayEpoch — cold-start path.
+		if err := s.CommitSnapshot(ctx, snap, SnapshotSummary{}); err != nil {
+			t.Fatalf("CommitSnapshot: %v", err)
+		}
+		var epoch uint64
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT base_overlay_epoch FROM semantic_snapshots WHERE snapshot_id=?`,
+			snap.ID).Scan(&epoch); err != nil {
+			t.Fatalf("read base_overlay_epoch: %v", err)
+		}
+		if epoch != 0 {
+			t.Errorf("unset base_overlay_epoch: got %d, want 0", epoch)
+		}
+	})
+}
+
+// TestLatestCommittedSnapshotBaseEpoch_RoundTrip seeds two committed
+// snapshots (epochs 7 and 11 in BeginSnapshot order) and asserts the
+// accessor returns the MOST RECENT one — (11, true, nil).
+func TestLatestCommittedSnapshotBaseEpoch_RoundTrip(t *testing.T) {
+	s, ctx := openStoreForSnapshotTest(t)
+
+	// Snapshot 1: epoch=7
+	snap1, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r1"})
+	if err != nil {
+		t.Fatalf("BeginSnapshot #1: %v", err)
+	}
+	snap1.SetBaseOverlayEpoch(7)
+	if err := s.CommitSnapshot(ctx, snap1, SnapshotSummary{}); err != nil {
+		t.Fatalf("CommitSnapshot #1: %v", err)
+	}
+
+	// Snapshot 2: epoch=11 (allocated AFTER snap1 from same SEQUENCE so
+	// snap2.ID > snap1.ID — the accessor's ORDER BY snapshot_id DESC
+	// picks this one).
+	snap2, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r1"})
+	if err != nil {
+		t.Fatalf("BeginSnapshot #2: %v", err)
+	}
+	snap2.SetBaseOverlayEpoch(11)
+	if err := s.CommitSnapshot(ctx, snap2, SnapshotSummary{}); err != nil {
+		t.Fatalf("CommitSnapshot #2: %v", err)
+	}
+
+	epoch, ok, err := s.LatestCommittedSnapshotBaseEpoch(ctx, "r1")
+	if err != nil {
+		t.Fatalf("LatestCommittedSnapshotBaseEpoch: %v", err)
+	}
+	if !ok {
+		t.Fatal("LatestCommittedSnapshotBaseEpoch: ok=false, want true")
+	}
+	if epoch != 11 {
+		t.Errorf("LatestCommittedSnapshotBaseEpoch: got %d, want 11 (latest)", epoch)
+	}
+}
+
+// TestLatestCommittedSnapshotBaseEpoch_NoSnapshot asserts the accessor
+// returns (0, false, nil) when no committed snapshot exists for the
+// repoID (cold-start signal — Plan 04's buildFn treats this as "rebuild
+// from scratch").
+func TestLatestCommittedSnapshotBaseEpoch_NoSnapshot(t *testing.T) {
+	s, ctx := openStoreForSnapshotTest(t)
+
+	epoch, ok, err := s.LatestCommittedSnapshotBaseEpoch(ctx, "never-committed")
+	if err != nil {
+		t.Fatalf("LatestCommittedSnapshotBaseEpoch: %v", err)
+	}
+	if ok {
+		t.Errorf("LatestCommittedSnapshotBaseEpoch on empty: got ok=true, want false")
+	}
+	if epoch != 0 {
+		t.Errorf("LatestCommittedSnapshotBaseEpoch on empty: got epoch=%d, want 0", epoch)
+	}
+}
+
+// TestLatestCommittedSnapshotBaseEpoch_NilStore: nil-receiver guard
+// mirrors the OverlayChangedPathsSince discipline (Plan 01).
+func TestLatestCommittedSnapshotBaseEpoch_NilStore(t *testing.T) {
+	var s *Store
+	_, _, err := s.LatestCommittedSnapshotBaseEpoch(context.Background(), "r1")
+	if err == nil {
+		t.Fatal("LatestCommittedSnapshotBaseEpoch on nil *Store: want error, got nil")
+	}
+}
+
+// TestLatestCommittedSnapshotBaseEpoch_EmptyRepoID: empty-repoID guard.
+func TestLatestCommittedSnapshotBaseEpoch_EmptyRepoID(t *testing.T) {
+	s, ctx := openStoreForSnapshotTest(t)
+	_, _, err := s.LatestCommittedSnapshotBaseEpoch(ctx, "")
+	if err == nil {
+		t.Fatal("LatestCommittedSnapshotBaseEpoch empty repoID: want error, got nil")
+	}
+}
+
+// TestLatestCommittedSnapshotBaseEpoch_IgnoresPendingAndAborted asserts
+// that a pending snapshot (no commit yet) and an aborted one do not
+// shadow an older committed snapshot for the accessor.
+func TestLatestCommittedSnapshotBaseEpoch_IgnoresPendingAndAborted(t *testing.T) {
+	s, ctx := openStoreForSnapshotTest(t)
+
+	// Older committed snapshot with epoch=5.
+	committed, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r1"})
+	if err != nil {
+		t.Fatalf("BeginSnapshot(committed): %v", err)
+	}
+	committed.SetBaseOverlayEpoch(5)
+	if err := s.CommitSnapshot(ctx, committed, SnapshotSummary{}); err != nil {
+		t.Fatalf("CommitSnapshot: %v", err)
+	}
+
+	// A later pending snapshot (never committed) MUST NOT mask the
+	// committed=5 reading.
+	pending, err := s.BeginSnapshot(ctx, SnapshotMeta{RepoID: "r1"})
+	if err != nil {
+		t.Fatalf("BeginSnapshot(pending): %v", err)
+	}
+	pending.SetBaseOverlayEpoch(99)
+	// Intentionally do NOT CommitSnapshot — leave pending.
+	defer func() { _ = s.AbortSnapshot(ctx, pending, "test cleanup") }()
+
+	epoch, ok, err := s.LatestCommittedSnapshotBaseEpoch(ctx, "r1")
+	if err != nil {
+		t.Fatalf("LatestCommittedSnapshotBaseEpoch: %v", err)
+	}
+	if !ok || epoch != 5 {
+		t.Errorf("LatestCommittedSnapshotBaseEpoch (committed=5, pending=99): got (%d, %v), want (5, true)", epoch, ok)
+	}
+}
+
 // --- Helpers ---
 
 // sampleFilePath returns a deterministic path used to populate test fixtures.

@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -147,6 +148,16 @@ func (s *SemanticSkill) handleRefreshSemanticGraph(ctx context.Context, args Ref
 		maxWaitMs = 3000
 	}
 
+	// Phase 70 D1: capture pre-drain overlay epoch so we can ask the seam
+	// "what landed since I started this call?" after FlushNow returns. Both
+	// the live drain (next step) and the seam read (after) are bracketed by
+	// this baseline. Cold-start safe: nil store or never-touched overlay
+	// returns 0, which OverlayChangedPathsSince treats as "match all rows".
+	var preEpoch uint64
+	if s.store != nil {
+		preEpoch, _ = s.store.CurrentOverlayEpoch(ctx, ws.Hash())
+	}
+
 	// 4. Drain pending live changes via LiveAccessor (D-11).
 	//
 	//    The accessor signature accepts the request paths verbatim. Daemon
@@ -156,6 +167,14 @@ func (s *SemanticSkill) handleRefreshSemanticGraph(ctx context.Context, args Ref
 	if s.live != nil {
 		if err := s.live.OnWorkspaceChanged(ws, args.Paths); err != nil {
 			return errorResult(err.Error())
+		}
+		// Phase 70 Pitfall-1 mitigation: synchronously drain the coalescer
+		// so the subsequent seam read sees the post-drain state. Non-fatal:
+		// if flush errors, we still surface whatever the seam reports,
+		// which is bounded by max_batch_delay_ms in the worst case.
+		if err := s.live.FlushNow(ctx, ws); err != nil {
+			slog.Default().Warn("refresh_semantic_graph: live flush error; files_updated may undercount",
+				"ws", ws.Hash(), "err", err)
 		}
 	}
 
@@ -167,13 +186,18 @@ func (s *SemanticSkill) handleRefreshSemanticGraph(ctx context.Context, args Ref
 		}
 	}
 
-	// files_updated semantics: when args.Paths is supplied, the strict-
-	// subset count is exactly len(args.Paths). When empty, the live drain
-	// processes whatever the coalescer flushes — without a return-value
-	// signal from the accessor we report 0 (the SPEC §23.2 envelope is
-	// best-effort here; consumers asking about specific files supply the
-	// paths argument).
-	filesUpdated := len(args.Paths)
+	// Phase 70 D1: derive files_updated from the seam — the actual set of
+	// paths whose overlay rows landed since preEpoch. Honest envelope:
+	// empty preEpoch read or empty seam result both report 0; non-zero
+	// means real changes hit the overlay during this call. Seam-truth
+	// policy: when args.Paths is a strict subset, files_updated still
+	// reflects the seam (the args.Paths filter governs WHICH paths the
+	// live service drains, not the response count).
+	var filesUpdated int
+	if s.store != nil {
+		changed, _, _ := s.store.OverlayChangedPathsSince(ctx, ws.Hash(), preEpoch)
+		filesUpdated = len(changed)
+	}
 
 	// 6. Optional LSP-wait poll (D-12).
 	pendingLSPFiles := 0

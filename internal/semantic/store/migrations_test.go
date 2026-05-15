@@ -567,3 +567,155 @@ func TestApplyMigration001_RollsBackOnFailure(t *testing.T) {
 		t.Fatalf("after rollback want 0 tables matching {t1,t2,t3}, got %d", count)
 	}
 }
+
+// TestMigration006_BaseOverlayEpochColumn asserts that opening a fresh DB
+// lands at schema_version=6 and that semantic_snapshots carries the
+// `base_overlay_epoch` UBIGINT column DEFAULT 0 prescribed by Phase 70
+// CONTEXT.md D3 (overlay-drain baseline epoch). The column is the
+// persistent baseline the next incremental build queries via
+// OverlayChangedPathsSince(repoID, baseEpoch).
+func TestMigration006_BaseOverlayEpochColumn(t *testing.T) {
+	wsDir := t.TempDir()
+	cfg := configFor(t, wsDir)
+	m := newTestObsMetrics(t)
+
+	s, err := Open(context.Background(), cfg, silentLogger(), m)
+	if err != nil {
+		t.Fatalf("Open(fresh): %v", err)
+	}
+	defer s.Close()
+
+	db := storeUnderlyingDB(s)
+	if db == nil {
+		t.Fatal("Open(fresh) produced a Store with nil db")
+	}
+
+	// CurrentSchemaVersion must be 6 (Phase 70 P70-02 bump).
+	if CurrentSchemaVersion != 6 {
+		t.Errorf("CurrentSchemaVersion: got %d, want 6", CurrentSchemaVersion)
+	}
+
+	// schema_version row max() must equal CurrentSchemaVersion.
+	var version int
+	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
+		t.Fatalf("read schema_version: %v", err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Errorf("fresh schema_version: got %d, want %d (CurrentSchemaVersion)", version, CurrentSchemaVersion)
+	}
+
+	// base_overlay_epoch column must exist on semantic_snapshots.
+	if !columnExists(t, db, "semantic_snapshots", "base_overlay_epoch") {
+		t.Fatal("missing v6 column: semantic_snapshots.base_overlay_epoch")
+	}
+
+	// data_type must be UBIGINT (matching schema 3's current_epoch
+	// convention on semantic_live_overlay_meta).
+	var dataType string
+	if err := db.QueryRow(`SELECT data_type FROM information_schema.columns
+		WHERE table_name = 'semantic_snapshots' AND column_name = 'base_overlay_epoch'`).Scan(&dataType); err != nil {
+		t.Fatalf("info_schema lookup for semantic_snapshots.base_overlay_epoch: %v", err)
+	}
+	if !strings.EqualFold(dataType, "UBIGINT") {
+		t.Errorf("semantic_snapshots.base_overlay_epoch data_type: got %q, want %q", dataType, "UBIGINT")
+	}
+
+	// INSERT a row WITHOUT setting base_overlay_epoch — DEFAULT 0 must
+	// apply. The semantic_snapshots row uses BeginSnapshot's NOT NULL
+	// column set; we mirror it.
+	if _, err := db.Exec(`
+		INSERT INTO semantic_snapshots (
+			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
+			worktree_hash, schema_version, indexer_version, status,
+			partial, created_at
+		) VALUES (
+			9999, 'r-default', '', 0, 'compact', '', 6, 'test', 'pending',
+			false, now()
+		)
+	`); err != nil {
+		t.Fatalf("seed snapshot row: %v", err)
+	}
+	var defaultEpoch uint64
+	if err := db.QueryRow(`SELECT base_overlay_epoch FROM semantic_snapshots
+		WHERE snapshot_id = 9999`).Scan(&defaultEpoch); err != nil {
+		t.Fatalf("read default base_overlay_epoch: %v", err)
+	}
+	if defaultEpoch != 0 {
+		t.Errorf("default base_overlay_epoch on new row: got %d, want 0", defaultEpoch)
+	}
+}
+
+// TestMigration006_UpgradeFromV5_DefaultsExistingRows seeds a v5-shaped DB
+// (running migrations 001..005), inserts a snapshot row that pre-dates the
+// v6 column add, then reopens via Open. The pre-existing row must take
+// base_overlay_epoch = 0 (DEFAULT 0 backfill); the new column must exist.
+func TestMigration006_UpgradeFromV5_DefaultsExistingRows(t *testing.T) {
+	wsDir := t.TempDir()
+	dbPath := filepath.Join(wsDir, ".helix", "semantic.duckdb")
+	if err := mkdirAllForTest(t, filepath.Dir(dbPath)); err != nil {
+		t.Fatal(err)
+	}
+
+	rawDB, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(v5 seed): %v", err)
+	}
+	if err := applyMigration001(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration001 (seed): %v", err)
+	}
+	if err := applyMigration002(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration002 (seed): %v", err)
+	}
+	if err := applyMigration003(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration003 (seed): %v", err)
+	}
+	if err := applyMigration004(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration004 (seed): %v", err)
+	}
+	if err := applyMigration005(context.Background(), rawDB); err != nil {
+		t.Fatalf("applyMigration005 (seed): %v", err)
+	}
+	// Seed a snapshot row that pre-dates the v6 column add.
+	if _, err := rawDB.Exec(`
+		INSERT INTO semantic_snapshots (
+			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
+			worktree_hash, schema_version, indexer_version, status,
+			partial, created_at
+		) VALUES (
+			42, 'seeded-ws', '', 0, 'compact', '', 5, 'seed', 'committed',
+			false, now()
+		)
+	`); err != nil {
+		t.Fatalf("seed pre-v6 snapshot: %v", err)
+	}
+	if err := rawDB.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	cfg := configFor(t, wsDir)
+	m := newTestObsMetrics(t)
+	s, err := Open(context.Background(), cfg, silentLogger(), m)
+	if err != nil {
+		t.Fatalf("Open(existing v5): %v", err)
+	}
+	defer s.Close()
+
+	db := storeUnderlyingDB(s)
+	var version int
+	if err := db.QueryRow("SELECT max(version) FROM semantic_schema_version").Scan(&version); err != nil {
+		t.Fatalf("read schema_version after upgrade: %v", err)
+	}
+	if version != 6 {
+		t.Errorf("upgraded schema_version: got %d, want 6", version)
+	}
+
+	// Pre-existing row's base_overlay_epoch took the DEFAULT 0 backfill.
+	var epoch uint64
+	if err := db.QueryRow(`SELECT base_overlay_epoch FROM semantic_snapshots
+		WHERE snapshot_id = 42`).Scan(&epoch); err != nil {
+		t.Fatalf("read base_overlay_epoch on seeded row: %v", err)
+	}
+	if epoch != 0 {
+		t.Errorf("pre-existing snapshot row base_overlay_epoch: got %d, want 0 (DEFAULT)", epoch)
+	}
+}

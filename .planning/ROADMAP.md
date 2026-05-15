@@ -153,7 +153,7 @@
 
 - [x] **Phase 68: Precise FileFactDiff Populator** -- Replace Tier-3 synthetic-marker floor with Tier-1 (full diff) / Tier-2 (added-only) populators; pre-edit FileFact accessor; close DEF-67-F01-FULL-DIFF (completed 2026-05-13)
 - [x] **Phase 69: Production Status Accessors** -- Real ClusterStatus from Phase 62 cluster engine; real retrieval status from bleve + corpus; close TOOL-03/04 placeholders
-- [ ] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental
+- [x] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental (completed 2026-05-15)
 - [ ] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed)
 - [ ] **Phase 72: P1 Cluster & Impact Tools** -- `get_cluster_map`, `explain_cluster`, `get_change_impact_graph` (cluster-aware; mixed read+/review+ tier)
 - [ ] **Phase 73: P1 Tools Integration & E2E Verification** -- Profile/mode gating across the 6 tools; skill-wrapper consistency audit; full E2E test coverage with closed-enum envelopes
@@ -212,7 +212,7 @@
 - [x] 70-04-PLAN.md — collectCandidatePaths rewrite + buildFn baseline capture + annotation removal (REFRESH-01, REFRESH-03)
 - [x] 70-05-PLAN.md — refresh_semantic_graph files_updated honest derivation from seam (REFRESH-01)
 - [x] 70-06-PLAN.md — refresh_incremental_test.go: 4 sub-tests (hot path + 3 fallback reasons) (REFRESH-03)
-- [ ] 70-07-PLAN.md — bench_refresh_incremental_test.go: 10k symbols, p95 ≤ 200ms, t.Skip on CI (REFRESH-02)
+- [x] 70-07-PLAN.md — bench_refresh_incremental_test.go: 10k symbols, p95 ≤ 200ms, t.Skip on CI (REFRESH-02)
 
 ### Phase 71: P1 Single-Symbol Read Tools
 **Goal**: Three new `read+` MCP tools answer agent questions about a single seed symbol — deep explanation, related symbols, and edge validation — backed by the v1.10 semantic graph + integ.SemanticLookup.

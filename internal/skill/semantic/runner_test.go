@@ -35,6 +35,20 @@ func (m *mockStoreAccessor) QueryEffectiveAdjacency(ctx context.Context, repoID,
 	return nil, nil, nil
 }
 
+// Phase 70-04 seam stubs — runner_test.go does not exercise the
+// incremental drain path; return cold-start zero values.
+func (m *mockStoreAccessor) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return 0, nil
+}
+
+func (m *mockStoreAccessor) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return nil, 0, nil
+}
+
+func (m *mockStoreAccessor) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
 // mockBuildFn lets tests inject buildFn behavior. The "delay" simulates a slow
 // build for timeout-partial tests. The atomic "calls" counter proves
 // singleflight join (build invoked exactly once across N concurrent callers).

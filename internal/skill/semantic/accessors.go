@@ -15,6 +15,11 @@ import (
 
 // StoreAccessor is the narrow seam between SemanticSkill and *internal/semantic/store.Store.
 // Daemon wires a concrete adapter in internal/daemon/semantic_wiring.go (P64-08).
+//
+// Phase 70-04 extensions (CurrentOverlayEpoch, OverlayChangedPathsSince,
+// LatestCommittedSnapshotBaseEpoch) are pure read accessors over the semantic
+// store; they do NOT mutate state and may be called concurrently with the
+// existing accessors.
 type StoreAccessor interface {
 	// LatestCommittedSnapshot returns the most-recent committed snapshot id
 	// for the given repo, or 0 if no committed snapshot exists yet.
@@ -30,6 +35,19 @@ type StoreAccessor interface {
 	QueryEffectiveAdjacency(ctx context.Context, repoID, projection string) (
 		out, in map[graph.NodeID]map[graph.NodeID]float64, err error,
 	)
+	// CurrentOverlayEpoch returns the current overlay write_epoch for repoID,
+	// or 0 if the repo has never had overlay activity. Phase 70-04 seam.
+	CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error)
+	// OverlayChangedPathsSince returns the set of distinct overlay paths whose
+	// write_epoch is strictly greater than baseEpoch, together with the
+	// current overlay write_epoch. Phase 70-04 seam — feeds the incremental
+	// drain path in collectCandidatePaths.
+	OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) (paths []string, currentEpoch uint64, err error)
+	// LatestCommittedSnapshotBaseEpoch returns the base_overlay_epoch stamped
+	// on the most-recent committed snapshot for repoID. (0, false, nil)
+	// signals cold-start (no committed snapshot exists yet). Phase 70-04
+	// seam — supplies the baseline for OverlayChangedPathsSince.
+	LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (epoch uint64, ok bool, err error)
 }
 
 // SchedulerAccessor surfaces RankScheduler state. ClusterStatus is consumed by
@@ -61,6 +79,13 @@ type QueueAccessor interface {
 }
 
 // LiveAccessor is the narrow seam to Phase 60's live update service.
+//
+// Phase 70-04 extension: FlushNow is a SYNCHRONOUS flush of the coalescer's
+// pending batch for the workspace. It is NOT a snapshot write — it just
+// drains queued OnWorkspaceChanged events into the overlay so a subsequent
+// OverlayChangedPathsSince query observes them. Refresh-tool callers (Plan
+// 70-05) invoke this before OverlayChangedPathsSince to close the
+// fire-and-forget race documented in RESEARCH.md Pitfall 1.
 type LiveAccessor interface {
 	// OnWorkspaceChanged drains the live queue for the given workspace,
 	// applying overlay updates for the requested paths (or all queued paths
@@ -69,6 +94,9 @@ type LiveAccessor interface {
 	// LastFlushAt returns the unix-millis timestamp of the most-recent
 	// overlay flush for the given workspace, or 0 if no flush has occurred.
 	LastFlushAt(ws workspace.WorkspaceKey) int64
+	// FlushNow synchronously drains the coalescer's pending batch for ws.
+	// Returns nil for unregistered workspaces (no-op). Phase 70-04 seam.
+	FlushNow(ctx context.Context, ws workspace.WorkspaceKey) error
 }
 
 // RunnerAccessor is implemented by *IndexRunner (P64-04 owns the type).

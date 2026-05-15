@@ -74,6 +74,20 @@ func (r *recorderStoreAccessor) QueryEffectiveAdjacency(ctx context.Context, rep
 	return r.queryAdjOut, r.queryAdjIn, r.queryAdjErr
 }
 
+// Phase 70-04 seam stubs — tools_refresh_test does not yet exercise the
+// incremental drain path; return cold-start zero values. Plan 70-05 will
+// extend these with injection points + counters when it wires the refresh
+// tool to FlushNow + OverlayChangedPathsSince.
+func (r *recorderStoreAccessor) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return 0, nil
+}
+func (r *recorderStoreAccessor) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return nil, 0, nil
+}
+func (r *recorderStoreAccessor) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
 // Forbidden methods — D-09 / D-13 invariants. These methods are NOT part of
 // the StoreAccessor interface; they only exist on this recorder type so we
 // can fail loudly if a future regression ever reaches them via type assertion.
@@ -138,6 +152,7 @@ func (m *mockLiveAccessor) OnWorkspaceChanged(ws workspace.WorkspaceKey, paths [
 func (m *mockLiveAccessor) LastFlushAt(ws workspace.WorkspaceKey) int64 {
 	return m.lastFlushAt
 }
+func (m *mockLiveAccessor) FlushNow(_ context.Context, _ workspace.WorkspaceKey) error { return nil }
 func (m *mockLiveAccessor) callCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

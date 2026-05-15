@@ -190,6 +190,15 @@ func (a *plainStoreAcc) QueryEffectiveAdjacency(ctx context.Context, repoID, pro
 ) {
 	return a.store.QueryEffectiveAdjacency(ctx, repoID, projection)
 }
+func (a *plainStoreAcc) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
+	return a.store.CurrentOverlayEpoch(ctx, repoID)
+}
+func (a *plainStoreAcc) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
+	return a.store.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+}
+func (a *plainStoreAcc) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
+	return a.store.LatestCommittedSnapshotBaseEpoch(ctx, repoID)
+}
 
 type placeholderSchedAcc struct{}
 
@@ -210,6 +219,7 @@ type zeroLiveAcc struct{}
 
 func (zeroLiveAcc) OnWorkspaceChanged(_ workspace.WorkspaceKey, _ []string) error { return nil }
 func (zeroLiveAcc) LastFlushAt(_ workspace.WorkspaceKey) int64                    { return 0 }
+func (zeroLiveAcc) FlushNow(_ context.Context, _ workspace.WorkspaceKey) error    { return nil }
 
 type placeholderRetrievalAcc struct{}
 

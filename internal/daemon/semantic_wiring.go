@@ -144,6 +144,41 @@ type semanticBundle struct {
 	// bundle.mu so kernel/health surfaces the closed-enum reason on
 	// get_health.semantic_index.last_error.
 	lastErrReason integ.FallbackReason
+
+	// collectCandidatePathsHook is a test-only seam (Phase 70-06) fired
+	// once per collectCandidatePaths return with the final candidate slice.
+	// nil in production. Read under mu so concurrent reset-during-collect
+	// races stay benign. Setting via SetCollectCandidatePathsHook.
+	collectCandidatePathsHook func(paths []string)
+}
+
+// SetCollectCandidatePathsHook installs a test-only observer fired once per
+// collectCandidatePaths return with the final candidate slice. Nil-safe;
+// production callers never set it. Phase 70-06: integration tests use this
+// seam to assert "1 file edited → exactly 1 candidate path returned" end-
+// to-end through the dispatcher.
+func (b *semanticBundle) SetCollectCandidatePathsHook(fn func(paths []string)) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	b.collectCandidatePathsHook = fn
+	b.mu.Unlock()
+}
+
+// fireCollectCandidatePathsHook fires the registered test hook (if any) with
+// the slice the dispatcher is about to return. Reads the hook under b.mu so
+// SetCollectCandidatePathsHook races stay benign.
+func (b *semanticBundle) fireCollectCandidatePathsHook(paths []string) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	fn := b.collectCandidatePathsHook
+	b.mu.Unlock()
+	if fn != nil {
+		fn(paths)
+	}
 }
 
 // SetLastErrorReason stamps the bundle's lastErrReason field with a closed-enum
@@ -1547,10 +1582,13 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 //     result, fall back to full-walk and emit the bounded-label fallback metric.
 func (b *semanticBundle) collectCandidatePaths(ctx context.Context, ws workspace.WorkspaceKey, mode string, baseEpoch uint64) []string {
 	if ws.RepoRoot == "" {
+		b.fireCollectCandidatePathsHook(nil)
 		return nil
 	}
 	if mode != "incremental" {
-		return b.fullWalkPaths(ws)
+		out := b.fullWalkPaths(ws)
+		b.fireCollectCandidatePathsHook(out)
+		return out
 	}
 	repoID := ws.Hash()
 	paths, currentEpoch, err := b.store.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
@@ -1562,7 +1600,9 @@ func (b *semanticBundle) collectCandidatePaths(ctx context.Context, ws workspace
 		if b.metrics != nil {
 			b.metrics.IncrementalRefreshFallbackInc(obs.IncrementalRefreshFallbackReasonError, repoID)
 		}
-		return b.fullWalkPaths(ws)
+		out := b.fullWalkPaths(ws)
+		b.fireCollectCandidatePathsHook(out)
+		return out
 	}
 	if len(paths) > 0 {
 		// A1: paths are absolute per RESEARCH.md §Open Questions RESOLVED —
@@ -1570,6 +1610,7 @@ func (b *semanticBundle) collectCandidatePaths(ctx context.Context, ws workspace
 		// absolute path; no filepath.Join translation needed. If a future
 		// producer is added that writes relative paths, this assumption MUST
 		// be revisited.
+		b.fireCollectCandidatePathsHook(paths)
 		return paths
 	}
 	reason := classifyEmptySeamFallback(baseEpoch, currentEpoch)
@@ -1581,7 +1622,9 @@ func (b *semanticBundle) collectCandidatePaths(ctx context.Context, ws workspace
 	if b.metrics != nil {
 		b.metrics.IncrementalRefreshFallbackInc(reason, repoID)
 	}
-	return b.fullWalkPaths(ws)
+	out := b.fullWalkPaths(ws)
+	b.fireCollectCandidatePathsHook(out)
+	return out
 }
 
 // classifyEmptySeamFallback maps (baseEpoch, currentEpoch) to a closed-enum

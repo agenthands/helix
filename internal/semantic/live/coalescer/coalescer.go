@@ -293,6 +293,85 @@ func (c *Coalescer) makeFlush(ctx context.Context) func() {
 	}
 }
 
+// FlushNow synchronously drains any pending batch and returns after the
+// registered OnFlush hook has fired. Returns nil on success, ctx.Err() if
+// ctx is cancelled before the flush body runs.
+//
+// Phase 70 plan 03: the incremental refresh tool calls this BEFORE
+// consulting the overlay so the fire-and-forget race (RESEARCH.md
+// Pitfall 1) is closed — any signal already on the input channel is
+// either drained into pending by Run before we acquire the mutex, or
+// remains on the channel for the next iteration. Either way the
+// post-flush state of the overlay is well-defined.
+//
+// Concurrent Enqueue is safe: producer goroutines push to c.in without
+// taking c.mu, and Run drains c.in while holding c.mu only briefly in
+// accept(). FlushNow may snapshot pending while Run is between iterations
+// without deadlock; events on c.in that have not yet been moved into
+// pending will be flushed by the next FlushNow call or the next timer
+// fire.
+//
+// Empty pending → no-op (no Dispatch call), still fires OnFlush so the
+// hook's idle clock advances (mirrors makeFlush's empty-flush
+// short-circuit behavior).
+func (c *Coalescer) FlushNow(ctx context.Context) error {
+	if c == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	// Stop both timers so an in-flight makeFlush closure cannot race
+	// with this flush. AfterFunc.Stop returns false if the function has
+	// already fired or is in flight; that's fine — the makeFlush body
+	// re-acquires c.mu before reading pending, so it will see the empty
+	// map we leave behind and short-circuit.
+	if c.timer != nil {
+		c.timer.Stop()
+		c.timer = nil
+	}
+	if c.maxTimer != nil {
+		c.maxTimer.Stop()
+		c.maxTimer = nil
+	}
+	if len(c.pending) == 0 {
+		c.mu.Unlock()
+		// Stamp + fire hook even on empty flush, mirroring makeFlush.
+		c.lastFlushNanos.Store(time.Now().UnixNano())
+		c.fireOnFlush()
+		return nil
+	}
+	// Stamp the flush-start timestamp under the lock so the gate's
+	// "idle since last flush" clock advances atomically with the drain.
+	c.lastFlushNanos.Store(time.Now().UnixNano())
+	snapshot := make([]live.SourceChangeEvent, 0, len(c.pending))
+	for _, v := range c.pending {
+		snapshot = append(snapshot, v)
+	}
+	c.pending = make(map[string]live.SourceChangeEvent)
+	c.mu.Unlock()
+
+	merged := CoalesceEvents(snapshot, c.cfg.BulkChangeThreshold)
+	if len(merged) == 0 {
+		c.fireOnFlush()
+		return nil
+	}
+	for _, ev := range merged {
+		if err := c.handler.Dispatch(ctx, ev); err != nil {
+			c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "error")
+			c.logger.Warn("coalescer: dispatch error",
+				"workspace", c.workspaceID, "path", ev.Path, "err", err)
+			// continue — D-02 invariant: per-event errors do not abort batch
+		} else {
+			c.metrics.SemanticLiveUpdatesInc(string(ev.Kind), "applied")
+		}
+	}
+	c.fireOnFlush()
+	return nil
+}
+
 // fireOnFlush invokes the post-flush hook if one is registered. Failures
 // in the hook are caller responsibility (the hook is a fire-and-forget
 // signal — no return value, no error propagation back to the coalescer).

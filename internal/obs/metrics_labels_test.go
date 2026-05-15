@@ -110,6 +110,13 @@ var carveOuts = map[string]map[string]bool{
 	// extract_unsupported} on the Tier-3 synthetic-reason counter. Helper
 	// LiveFileFactDiffSyntheticReasonInc drops unknown reason values.
 	"helix_live_filefactdiff_synthetic_reason_total": {"reason": true},
+	// Phase 70 D-04: closed-enum "reason" ∈ {cold_start, overlay_rotated,
+	// empty_overlay, error} + bounded "repo" identifier on the
+	// incremental-refresh fallback counter. Neither label is in
+	// AllowedLabels; both are carved out here. Helper
+	// IncrementalRefreshFallbackInc is the single emission site and drops
+	// unknown reason values.
+	"helix_incremental_refresh_fallback_total": {"reason": true, "repo": true},
 }
 
 // runtimeFamilyPrefixes names metric families contributed by
@@ -229,6 +236,9 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	// scans their labels (Pitfall #3 — empty families are dropped by Gather()).
 	m.LiveFileFactDiffInc("full", "repo-a")
 	m.LiveFileFactDiffSyntheticReasonInc("cold_start")
+	// Phase 70 D-04: prime the IncrementalRefreshFallback vector so the lint
+	// scans its labels (Pitfall #3 — empty families are dropped by Gather()).
+	m.IncrementalRefreshFallbackInc(IncrementalRefreshFallbackReasonColdStart, "repo-a")
 
 	problems := lintLabels(t, m.Registry())
 	if len(problems) > 0 {

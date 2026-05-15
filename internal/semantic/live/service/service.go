@@ -158,6 +158,27 @@ func (s *Service) Stop(ws workspace.WorkspaceKey) {
 	}
 }
 
+// FlushNow synchronously drains the per-workspace coalescer's pending
+// batch. Returns nil if no coalescer is registered for ws (the workspace
+// was never Start'd, or has been Stop'd). Otherwise delegates to
+// Coalescer.FlushNow and propagates its result.
+//
+// Phase 70 plan 03: the incremental refresh tool calls this before
+// reading the overlay so any pending live-update signal lands first
+// (RESEARCH.md Pitfall 1; CONTEXT.md flush-timing). nil-safe.
+func (s *Service) FlushNow(ctx context.Context, ws workspace.WorkspaceKey) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	c := s.coalescers[ws]
+	s.mu.RUnlock()
+	if c == nil {
+		return nil
+	}
+	return c.FlushNow(ctx)
+}
+
 // OnEdit implements kernel.EditNotifier.  Fire-and-forget:
 //
 //   - Classifies each path (helix_edit short-circuits without I/O —

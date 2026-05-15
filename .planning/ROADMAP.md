@@ -206,9 +206,9 @@
   4. `internal/eval/runner/refresh_incremental_test.go` (or eval-side equivalent) verifies both incremental and fallback paths.
   5. The `refresh-degraded` annotation in `semantic_wiring.go` is removed; the function exits the incremental path through the overlay-drain seam.
 **Plans**: 7 plans
-- [ ] 70-01-PLAN.md — *Store.OverlayChangedPathsSince accessor + tests (REFRESH-01)
-- [ ] 70-02-PLAN.md — Schema migration 5→6 + base_overlay_epoch on snapshots (REFRESH-01)
-- [ ] 70-03-PLAN.md — Coalescer.FlushNow + IncrementalRefreshFallback metric + carve-out (REFRESH-01, REFRESH-03)
+- [x] 70-01-PLAN.md — *Store.OverlayChangedPathsSince accessor + tests (REFRESH-01)
+- [x] 70-02-PLAN.md — Schema migration 5→6 + base_overlay_epoch on snapshots (REFRESH-01)
+- [x] 70-03-PLAN.md — Coalescer.FlushNow + IncrementalRefreshFallback metric + carve-out (REFRESH-01, REFRESH-03)
 - [ ] 70-04-PLAN.md — collectCandidatePaths rewrite + buildFn baseline capture + annotation removal (REFRESH-01, REFRESH-03)
 - [ ] 70-05-PLAN.md — refresh_semantic_graph files_updated honest derivation from seam (REFRESH-01)
 - [ ] 70-06-PLAN.md — refresh_incremental_test.go: 4 sub-tests (hot path + 3 fallback reasons) (REFRESH-03)

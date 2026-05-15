@@ -29,6 +29,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -1035,6 +1036,70 @@ func (s *Store) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64,
 		return 0, fmt.Errorf("CurrentOverlayEpoch(%q): %w", repoID, err)
 	}
 	return ep, nil
+}
+
+// OverlayChangedPathsSince returns the set of distinct overlay paths whose
+// write_epoch is strictly greater than baseEpoch, plus the current overlay
+// epoch for repoID. This is the read seam shared by
+// index_semantic_graph(mode=incremental) and refresh_semantic_graph per
+// Phase 70 CONTEXT.md D1 + D2.
+//
+// Semantics:
+//   - baseEpoch == 0 returns ALL current overlay paths for repoID
+//     (cold-start signal: caller has not yet observed any epoch).
+//   - When no semantic_live_overlay_meta row exists (fresh workspace, no
+//     overlay activity), returns (nil, 0, nil) — mirrors CurrentOverlayEpoch.
+//   - An empty paths slice with non-zero currentEpoch means "workspace quiet
+//     since baseline"; callers MUST treat this as contract-preserving (no
+//     fallback to full-walk).
+//
+// D-09 invariant: pure read path. No Begin/Commit/Abort/Write/Tx tokens —
+// uses the no-tx index idx_overlay_files_write_epoch on
+// (repo_id, write_epoch) from migrations.go:527.
+func (s *Store) OverlayChangedPathsSince(
+	ctx context.Context,
+	repoID string,
+	baseEpoch uint64,
+) (paths []string, currentEpoch uint64, err error) {
+	if s == nil || s.db == nil {
+		return nil, 0, fmt.Errorf("OverlayChangedPathsSince: nil store")
+	}
+	if repoID == "" {
+		return nil, 0, fmt.Errorf("OverlayChangedPathsSince: empty repoID")
+	}
+
+	err = s.db.QueryRowContext(ctx, `
+		SELECT current_epoch FROM semantic_live_overlay_meta
+		 WHERE repo_id = ?
+	`, repoID).Scan(&currentEpoch)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("OverlayChangedPathsSince(%q): epoch read: %w", repoID, err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT path FROM semantic_live_overlay_files
+		 WHERE repo_id = ? AND write_epoch > ?
+	`, repoID, baseEpoch)
+	if err != nil {
+		return nil, 0, fmt.Errorf("OverlayChangedPathsSince(%q): path query: %w", repoID, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, 0, fmt.Errorf("OverlayChangedPathsSince(%q): path scan: %w", repoID, err)
+		}
+		paths = append(paths, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("OverlayChangedPathsSince(%q): path rows: %w", repoID, err)
+	}
+
+	return paths, currentEpoch, nil
 }
 
 // LockOverlayWorkspace acquires the per-workspace overlay mutex for repoID

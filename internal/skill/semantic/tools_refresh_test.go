@@ -57,6 +57,16 @@ type recorderStoreAccessor struct {
 	commitSnapshotCalls     atomic.Int64
 	abortSnapshotCalls      atomic.Int64
 	writeSnapshotFactsCalls atomic.Int64
+
+	// Phase 70-05 seam injection + counters.
+	currentOverlayEpoch      uint64
+	currentOverlayEpochErr   error
+	currentOverlayEpochCalls atomic.Int64
+	overlayChangedPaths      []string
+	overlayChangedEpoch      uint64
+	overlayChangedErr        error
+	mu                       sync.Mutex
+	seamBaseEpochCalls       []uint64
 }
 
 func (r *recorderStoreAccessor) LatestCommittedSnapshot(ctx context.Context, repoID string) (uint64, error) {
@@ -74,15 +84,27 @@ func (r *recorderStoreAccessor) QueryEffectiveAdjacency(ctx context.Context, rep
 	return r.queryAdjOut, r.queryAdjIn, r.queryAdjErr
 }
 
-// Phase 70-04 seam stubs — tools_refresh_test does not yet exercise the
-// incremental drain path; return cold-start zero values. Plan 70-05 will
-// extend these with injection points + counters when it wires the refresh
-// tool to FlushNow + OverlayChangedPathsSince.
+// Phase 70-05 seam injection points + counters. The refresh handler now
+// reads CurrentOverlayEpoch (preEpoch capture) and OverlayChangedPathsSince
+// (post-FlushNow seam) to derive an honest files_updated count. Tests inject
+// canned values per sub-test and assert on recorded baseEpoch values.
+//
+// currentOverlayEpoch is the value returned from CurrentOverlayEpoch (used
+// as preEpoch by the handler). overlayChangedPaths/Epoch/Err are the canned
+// return tuple from OverlayChangedPathsSince. seamBaseEpochCalls records the
+// baseEpoch arg the handler passed (so tests can assert the preEpoch value
+// flowed through correctly).
 func (r *recorderStoreAccessor) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64, error) {
-	return 0, nil
+	r.currentOverlayEpochCalls.Add(1)
+	return r.currentOverlayEpoch, r.currentOverlayEpochErr
 }
 func (r *recorderStoreAccessor) OverlayChangedPathsSince(ctx context.Context, repoID string, baseEpoch uint64) ([]string, uint64, error) {
-	return nil, 0, nil
+	r.mu.Lock()
+	r.seamBaseEpochCalls = append(r.seamBaseEpochCalls, baseEpoch)
+	r.mu.Unlock()
+	// Copy slice to defeat aliasing from internal handler mutations.
+	cp := append([]string(nil), r.overlayChangedPaths...)
+	return cp, r.overlayChangedEpoch, r.overlayChangedErr
 }
 func (r *recorderStoreAccessor) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID string) (uint64, bool, error) {
 	return 0, false, nil
@@ -136,6 +158,10 @@ type mockLiveAccessor struct {
 	onWorkspaceChangedErr error
 	lastFlushAt           int64
 
+	// Phase 70-05: FlushNow injection + recorder.
+	flushNowErr   error
+	flushNowCalls atomic.Int64
+
 	mu    sync.Mutex
 	calls []recordedLiveCall
 }
@@ -152,7 +178,10 @@ func (m *mockLiveAccessor) OnWorkspaceChanged(ws workspace.WorkspaceKey, paths [
 func (m *mockLiveAccessor) LastFlushAt(ws workspace.WorkspaceKey) int64 {
 	return m.lastFlushAt
 }
-func (m *mockLiveAccessor) FlushNow(_ context.Context, _ workspace.WorkspaceKey) error { return nil }
+func (m *mockLiveAccessor) FlushNow(_ context.Context, _ workspace.WorkspaceKey) error {
+	m.flushNowCalls.Add(1)
+	return m.flushNowErr
+}
 func (m *mockLiveAccessor) callCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -223,7 +252,12 @@ func newSkillForRefreshTest(
 	}
 	ws := workspace.WorkspaceKey{RepoRoot: "/tmp/repo-refresh-test", Language: "go", Toolchain: "go1.22"}
 	s.SetSessionAccessor(&mockSessionAccessor{ws: ws, sess: sess})
-	s.SetLive(live)
+	// Skip SetLive when live==nil so s.live stays as a true nil interface
+	// (typed-nil pointer wrapped in an interface would defeat the s.live != nil
+	// guard in the handler). Phase 70-05 NoLive test relies on this.
+	if live != nil {
+		s.SetLive(live)
+	}
 	s.SetQueue(queue)
 	s.SetStore(store)
 	s.SetCompactor(compactor)
@@ -233,7 +267,15 @@ func newSkillForRefreshTest(
 // ---------- happy path ----------
 
 func TestRefreshHandler_HappyPath_DrainsLive(t *testing.T) {
-	store := &recorderStoreAccessor{t: t, graphVersion: 42}
+	// Phase 70-05: files_updated derives from the post-FlushNow seam, NOT
+	// len(args.Paths). Inject a seam result matching the request so this
+	// happy-path test stays asserting FilesUpdated == 3.
+	store := &recorderStoreAccessor{
+		t:                   t,
+		graphVersion:        42,
+		overlayChangedPaths: []string{"a.go", "b.go", "c.go"},
+		overlayChangedEpoch: 7,
+	}
 	live := &mockLiveAccessor{}
 	queue := &mockQueueAccessor{depthFn: constDepth(0)}
 	compactor := &recorderCompactorAccessor{t: t}
@@ -456,3 +498,165 @@ func TestRefreshHandler_ModeReadAccepted(t *testing.T) {
 		t.Fatalf("read mode is the floor for refresh; got error: %s", textOf(res))
 	}
 }
+
+// ---------- Phase 70-05 D1: files_updated derives from the overlay seam ----------
+
+// TestRefreshHandler_FilesUpdated_FromSeam_UnfilteredDrain verifies that with
+// no args.Paths filter, files_updated reports the count returned by the seam
+// (NOT len(args.Paths) == 0).
+func TestRefreshHandler_FilesUpdated_FromSeam_UnfilteredDrain(t *testing.T) {
+	store := &recorderStoreAccessor{
+		t:                   t,
+		graphVersion:        42,
+		currentOverlayEpoch: 5, // preEpoch captured before drain
+		overlayChangedPaths: []string{"a.go", "b.go"},
+		overlayChangedEpoch: 7,
+	}
+	live := &mockLiveAccessor{}
+	queue := &mockQueueAccessor{depthFn: constDepth(0)}
+	compactor := &recorderCompactorAccessor{t: t}
+	s := newSkillForRefreshTest(t, "read", live, queue, store, compactor)
+
+	res := s.handleRefreshSemanticGraph(context.Background(), RefreshSemanticGraphArgs{
+		Paths: nil,
+	})
+	if res.IsError {
+		t.Fatalf("expected success, got error: %s", textOf(res))
+	}
+	var out RefreshResult
+	if err := json.Unmarshal([]byte(textOf(res)), &out); err != nil {
+		t.Fatalf("unmarshal: %v (raw=%s)", err, textOf(res))
+	}
+	// Phase 70-05 D1: files_updated reflects the SEAM (post-FlushNow overlay
+	// landings since preEpoch), NOT len(args.Paths).
+	if out.FilesUpdated != 2 {
+		t.Fatalf("files_updated: got %d, want 2 (seam returned 2 paths)", out.FilesUpdated)
+	}
+	if store.currentOverlayEpochCalls.Load() != 1 {
+		t.Fatalf("CurrentOverlayEpoch: got %d calls, want 1", store.currentOverlayEpochCalls.Load())
+	}
+	if live.flushNowCalls.Load() != 1 {
+		t.Fatalf("FlushNow: got %d calls, want 1", live.flushNowCalls.Load())
+	}
+	// The handler must pass preEpoch=5 to OverlayChangedPathsSince.
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.seamBaseEpochCalls) != 1 || store.seamBaseEpochCalls[0] != 5 {
+		t.Fatalf("OverlayChangedPathsSince(baseEpoch): got %v, want [5]", store.seamBaseEpochCalls)
+	}
+}
+
+// TestRefreshHandler_FilesUpdated_FromSeam_FilteredSubset verifies the locked
+// policy decision: even when args.Paths is a strict subset, files_updated
+// reflects seam truth (overlay landings since preEpoch), NOT len(args.Paths).
+//
+// Policy: files_updated reflects seam truth (overlay landings since
+// preEpoch); the args.Paths filter governs WHICH paths are driven into the
+// live service, not the response count. The seam can legitimately surface
+// fewer or more paths than args.Paths depending on coalescer behavior.
+func TestRefreshHandler_FilesUpdated_FromSeam_FilteredSubset(t *testing.T) {
+	store := &recorderStoreAccessor{
+		t:                   t,
+		graphVersion:        42,
+		currentOverlayEpoch: 5,
+		overlayChangedPaths: []string{"a.go", "b.go"}, // seam reports two even though caller asked for one
+		overlayChangedEpoch: 7,
+	}
+	live := &mockLiveAccessor{}
+	queue := &mockQueueAccessor{depthFn: constDepth(0)}
+	compactor := &recorderCompactorAccessor{t: t}
+	s := newSkillForRefreshTest(t, "read", live, queue, store, compactor)
+
+	res := s.handleRefreshSemanticGraph(context.Background(), RefreshSemanticGraphArgs{
+		Paths: []string{"a.go"},
+	})
+	if res.IsError {
+		t.Fatalf("expected success, got error: %s", textOf(res))
+	}
+	var out RefreshResult
+	if err := json.Unmarshal([]byte(textOf(res)), &out); err != nil {
+		t.Fatalf("unmarshal: %v (raw=%s)", err, textOf(res))
+	}
+	// files_updated reflects seam truth, NOT len(args.Paths).
+	if out.FilesUpdated != 2 {
+		t.Fatalf("files_updated: got %d, want 2 (seam-truth policy; args.Paths filter governs WHICH paths drive, not the response count)", out.FilesUpdated)
+	}
+}
+
+// TestRefreshHandler_FilesUpdated_Seam_FlushNowErrorIsNonFatal verifies that
+// a FlushNow error does not abort the request — the handler still proceeds
+// to read the seam and report whatever landed (may undercount, which is
+// acceptable per CONTEXT.md D1 bounded-by-max_batch_delay_ms).
+func TestRefreshHandler_FilesUpdated_Seam_FlushNowErrorIsNonFatal(t *testing.T) {
+	store := &recorderStoreAccessor{
+		t:                   t,
+		graphVersion:        1,
+		currentOverlayEpoch: 3,
+		overlayChangedPaths: []string{"x.go"},
+		overlayChangedEpoch: 4,
+	}
+	live := &mockLiveAccessor{flushNowErr: errFlushNow}
+	queue := &mockQueueAccessor{depthFn: constDepth(0)}
+	compactor := &recorderCompactorAccessor{t: t}
+	s := newSkillForRefreshTest(t, "read", live, queue, store, compactor)
+
+	res := s.handleRefreshSemanticGraph(context.Background(), RefreshSemanticGraphArgs{})
+	if res.IsError {
+		t.Fatalf("FlushNow error must be non-fatal; got error: %s", textOf(res))
+	}
+	var out RefreshResult
+	if err := json.Unmarshal([]byte(textOf(res)), &out); err != nil {
+		t.Fatalf("unmarshal: %v (raw=%s)", err, textOf(res))
+	}
+	if out.FilesUpdated != 1 {
+		t.Fatalf("files_updated: got %d, want 1 (seam still read after FlushNow error)", out.FilesUpdated)
+	}
+	if live.flushNowCalls.Load() != 1 {
+		t.Fatalf("FlushNow: got %d calls, want 1", live.flushNowCalls.Load())
+	}
+}
+
+// TestRefreshHandler_FilesUpdated_NoLive_StillReadsSeam verifies that when
+// s.live == nil (no live accessor wired), preEpoch is still captured and the
+// seam is still read; result reflects the seam (typically 0 since no drain).
+func TestRefreshHandler_FilesUpdated_NoLive_StillReadsSeam(t *testing.T) {
+	store := &recorderStoreAccessor{
+		t:                   t,
+		graphVersion:        1,
+		currentOverlayEpoch: 2,
+		// Seam returns 0 paths — no live drain means nothing new landed.
+		overlayChangedPaths: nil,
+		overlayChangedEpoch: 2,
+	}
+	queue := &mockQueueAccessor{depthFn: constDepth(0)}
+	compactor := &recorderCompactorAccessor{t: t}
+	// Skip s.SetLive — leave s.live == nil.
+	s := newSkillForRefreshTest(t, "read", nil, queue, store, compactor)
+
+	res := s.handleRefreshSemanticGraph(context.Background(), RefreshSemanticGraphArgs{})
+	if res.IsError {
+		t.Fatalf("expected success, got error: %s", textOf(res))
+	}
+	var out RefreshResult
+	if err := json.Unmarshal([]byte(textOf(res)), &out); err != nil {
+		t.Fatalf("unmarshal: %v (raw=%s)", err, textOf(res))
+	}
+	if out.FilesUpdated != 0 {
+		t.Fatalf("files_updated: got %d, want 0 (no live drain; seam returns empty)", out.FilesUpdated)
+	}
+	if store.currentOverlayEpochCalls.Load() != 1 {
+		t.Fatalf("CurrentOverlayEpoch: got %d calls, want 1 (preEpoch capture must happen even without live)", store.currentOverlayEpochCalls.Load())
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.seamBaseEpochCalls) != 1 || store.seamBaseEpochCalls[0] != 2 {
+		t.Fatalf("OverlayChangedPathsSince(baseEpoch): got %v, want [2]", store.seamBaseEpochCalls)
+	}
+}
+
+// errFlushNow is the sentinel error injected for the FlushNow non-fatal test.
+var errFlushNow = flushNowError("flush failed")
+
+type flushNowError string
+
+func (e flushNowError) Error() string { return string(e) }

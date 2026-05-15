@@ -33,9 +33,9 @@ Each requirement is testable from an agent/user perspective and maps to one road
 
 ### REFRESH — Incremental refresh_semantic_graph (closes refresh-degraded annotation)
 
-- [ ] **REFRESH-01**: `collectCandidatePaths` in `internal/daemon/semantic_wiring.go:1466-1475` (or the path it migrates to) consults the overlay-drain seam in `internal/semantic/live/` for incremental mode instead of full-walk. Full-walk remains as fallback when overlay-drain returns empty (e.g., overlay was rotated).
-- [ ] **REFRESH-02**: Performance: `refresh_semantic_graph` with `mode:"incremental"` against a 10k-symbol workspace where exactly 1 file changed completes in ≤ 200ms p95 on the project bench harness. (Benchmark is local-only per project rule.)
-- [ ] **REFRESH-03**: Incremental fallback behavior verified by `internal/eval/runner/refresh_incremental_test.go` (or eval-side) — when overlay-drain is empty, refresh falls back to full-walk and logs the reason with bounded label.
+- [x] **REFRESH-01**: `collectCandidatePaths` in `internal/daemon/semantic_wiring.go:1466-1475` (or the path it migrates to) consults the overlay-drain seam in `internal/semantic/live/` for incremental mode instead of full-walk. Full-walk remains as fallback when overlay-drain returns empty (e.g., overlay was rotated).
+- [x] **REFRESH-02**: Performance: `refresh_semantic_graph` with `mode:"incremental"` against a 10k-symbol workspace where exactly 1 file changed completes in ≤ 200ms p95 on the project bench harness. (Benchmark is local-only per project rule.)
+- [x] **REFRESH-03**: Incremental fallback behavior verified by `internal/eval/runner/refresh_incremental_test.go` (or eval-side) — when overlay-drain is empty, refresh falls back to full-walk and logs the reason with bounded label.
 
 ### P1TOOL — P1 MCP Tools (6 new tools)
 
@@ -93,9 +93,9 @@ Which phases cover which requirements. Updated during roadmap creation. Phase nu
 | STATUS-01 | Phase 69 | Pending |
 | STATUS-02 | Phase 69 | Pending |
 | STATUS-03 | Phase 69 | Pending |
-| REFRESH-01 | Phase 70 | Pending |
-| REFRESH-02 | Phase 70 | Pending |
-| REFRESH-03 | Phase 70 | Pending |
+| REFRESH-01 | Phase 70 | Complete |
+| REFRESH-02 | Phase 70 | Complete |
+| REFRESH-03 | Phase 70 | Complete |
 | P1TOOL-01 | Phase 71 | Pending |
 | P1TOOL-02 | Phase 71 | Pending |
 | P1TOOL-03 | Phase 72 | Pending |

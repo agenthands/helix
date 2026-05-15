@@ -211,7 +211,7 @@
 - [x] 70-03-PLAN.md — Coalescer.FlushNow + IncrementalRefreshFallback metric + carve-out (REFRESH-01, REFRESH-03)
 - [x] 70-04-PLAN.md — collectCandidatePaths rewrite + buildFn baseline capture + annotation removal (REFRESH-01, REFRESH-03)
 - [x] 70-05-PLAN.md — refresh_semantic_graph files_updated honest derivation from seam (REFRESH-01)
-- [ ] 70-06-PLAN.md — refresh_incremental_test.go: 4 sub-tests (hot path + 3 fallback reasons) (REFRESH-03)
+- [x] 70-06-PLAN.md — refresh_incremental_test.go: 4 sub-tests (hot path + 3 fallback reasons) (REFRESH-03)
 - [ ] 70-07-PLAN.md — bench_refresh_incremental_test.go: 10k symbols, p95 ≤ 200ms, t.Skip on CI (REFRESH-02)
 
 ### Phase 71: P1 Single-Symbol Read Tools

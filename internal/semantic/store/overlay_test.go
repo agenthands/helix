@@ -904,6 +904,219 @@ func TestUpsertClusters_PrimaryKeyComposite(t *testing.T) {
 	}
 }
 
+// TestOverlayChangedPathsSince covers the Phase 70-01 accessor that returns
+// the set of distinct overlay paths whose write_epoch > baseEpoch, plus the
+// current overlay epoch. The accessor is the seam shared by
+// index_semantic_graph(mode=incremental) and refresh_semantic_graph
+// (CONTEXT.md D1 + D2).
+func TestOverlayChangedPathsSince(t *testing.T) {
+	t.Run("cold_start", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		repoID := "test-repo-70-01-cold"
+
+		tx, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx: %v", err)
+		}
+		if err := tx.UpsertOverlayFile(ctx, "a.go", "h-a"); err != nil {
+			t.Fatalf("UpsertOverlayFile a.go: %v", err)
+		}
+		if err := tx.UpsertOverlayFile(ctx, "b.go", "h-b"); err != nil {
+			t.Fatalf("UpsertOverlayFile b.go: %v", err)
+		}
+		wantEpoch := tx.Epoch()
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+
+		paths, currentEpoch, err := s.OverlayChangedPathsSince(ctx, repoID, 0)
+		if err != nil {
+			t.Fatalf("OverlayChangedPathsSince: %v", err)
+		}
+		if currentEpoch != wantEpoch {
+			t.Errorf("currentEpoch: got %d, want %d", currentEpoch, wantEpoch)
+		}
+		got := map[string]bool{}
+		for _, p := range paths {
+			got[p] = true
+		}
+		if !got["a.go"] || !got["b.go"] || len(got) != 2 {
+			t.Errorf("paths: got %v, want exactly {a.go, b.go}", paths)
+		}
+	})
+
+	t.Run("single_change", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		repoID := "test-repo-70-01-single"
+
+		// Burn epochs 1..4 with unrelated touches on "old.go" so baseline > 0.
+		for i := 0; i < 4; i++ {
+			tx, err := s.BeginOverlayTx(ctx, repoID)
+			if err != nil {
+				t.Fatalf("BeginOverlayTx warmup %d: %v", i, err)
+			}
+			if err := tx.UpsertOverlayFile(ctx, "old.go", "h-old"); err != nil {
+				t.Fatalf("UpsertOverlayFile old.go: %v", err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatalf("Commit warmup %d: %v", i, err)
+			}
+		}
+		baseEpoch, err := s.CurrentOverlayEpoch(ctx, repoID)
+		if err != nil {
+			t.Fatalf("CurrentOverlayEpoch: %v", err)
+		}
+		// Now bump again with a new file at epoch baseEpoch+1.
+		tx, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx: %v", err)
+		}
+		if err := tx.UpsertOverlayFile(ctx, "a.go", "h-a"); err != nil {
+			t.Fatalf("UpsertOverlayFile a.go: %v", err)
+		}
+		wantEpoch := tx.Epoch()
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+
+		// Use baseEpoch-1 as "since" so only the latest tx shows up for "a.go",
+		// but "old.go" (which was last touched at baseEpoch) will also fire.
+		// To isolate "a.go", we must use baseEpoch as the since boundary.
+		paths, currentEpoch, err := s.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+		if err != nil {
+			t.Fatalf("OverlayChangedPathsSince: %v", err)
+		}
+		if currentEpoch != wantEpoch {
+			t.Errorf("currentEpoch: got %d, want %d", currentEpoch, wantEpoch)
+		}
+		if len(paths) != 1 || paths[0] != "a.go" {
+			t.Errorf("paths: got %v, want [a.go]", paths)
+		}
+	})
+
+	t.Run("multi_epoch", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		repoID := "test-repo-70-01-multi"
+
+		// Establish baseline at some epoch with an unrelated file.
+		tx0, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx baseline: %v", err)
+		}
+		if err := tx0.UpsertOverlayFile(ctx, "baseline.go", "h-base"); err != nil {
+			t.Fatalf("UpsertOverlayFile baseline.go: %v", err)
+		}
+		if err := tx0.Commit(); err != nil {
+			t.Fatalf("Commit baseline: %v", err)
+		}
+		baseEpoch, err := s.CurrentOverlayEpoch(ctx, repoID)
+		if err != nil {
+			t.Fatalf("CurrentOverlayEpoch: %v", err)
+		}
+
+		// Tx 1: write b.go at epoch baseEpoch+1.
+		tx1, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx tx1: %v", err)
+		}
+		if err := tx1.UpsertOverlayFile(ctx, "b.go", "h-b"); err != nil {
+			t.Fatalf("UpsertOverlayFile b.go: %v", err)
+		}
+		if err := tx1.Commit(); err != nil {
+			t.Fatalf("Commit tx1: %v", err)
+		}
+
+		// Tx 2: write c.go at epoch baseEpoch+2.
+		tx2, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx tx2: %v", err)
+		}
+		if err := tx2.UpsertOverlayFile(ctx, "c.go", "h-c"); err != nil {
+			t.Fatalf("UpsertOverlayFile c.go: %v", err)
+		}
+		wantEpoch := tx2.Epoch()
+		if err := tx2.Commit(); err != nil {
+			t.Fatalf("Commit tx2: %v", err)
+		}
+
+		paths, currentEpoch, err := s.OverlayChangedPathsSince(ctx, repoID, baseEpoch)
+		if err != nil {
+			t.Fatalf("OverlayChangedPathsSince: %v", err)
+		}
+		if currentEpoch != wantEpoch {
+			t.Errorf("currentEpoch: got %d, want %d", currentEpoch, wantEpoch)
+		}
+		got := map[string]bool{}
+		for _, p := range paths {
+			got[p] = true
+		}
+		if !got["b.go"] || !got["c.go"] || len(got) != 2 {
+			t.Errorf("paths: got %v, want exactly {b.go, c.go} order-insensitive", paths)
+		}
+	})
+
+	t.Run("empty_since", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		repoID := "test-repo-70-01-empty"
+
+		tx, err := s.BeginOverlayTx(ctx, repoID)
+		if err != nil {
+			t.Fatalf("BeginOverlayTx: %v", err)
+		}
+		if err := tx.UpsertOverlayFile(ctx, "a.go", "h-a"); err != nil {
+			t.Fatalf("UpsertOverlayFile: %v", err)
+		}
+		wantEpoch := tx.Epoch()
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+
+		paths, currentEpoch, err := s.OverlayChangedPathsSince(ctx, repoID, wantEpoch)
+		if err != nil {
+			t.Fatalf("OverlayChangedPathsSince: %v", err)
+		}
+		if currentEpoch != wantEpoch {
+			t.Errorf("currentEpoch: got %d, want %d", currentEpoch, wantEpoch)
+		}
+		if len(paths) != 0 {
+			t.Errorf("paths: got %v, want empty (workspace quiet since baseline)", paths)
+		}
+	})
+
+	t.Run("no_meta_row", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		repoID := "test-repo-70-01-nometa"
+
+		paths, currentEpoch, err := s.OverlayChangedPathsSince(ctx, repoID, 0)
+		if err != nil {
+			t.Fatalf("OverlayChangedPathsSince: %v", err)
+		}
+		if currentEpoch != 0 {
+			t.Errorf("currentEpoch: got %d, want 0 on fresh store", currentEpoch)
+		}
+		if paths != nil {
+			t.Errorf("paths: got %v, want nil on fresh store", paths)
+		}
+	})
+
+	// Negative guards.
+	t.Run("nil_store_errors", func(t *testing.T) {
+		var s *Store
+		_, _, err := s.OverlayChangedPathsSince(context.Background(), "any", 0)
+		if err == nil {
+			t.Errorf("nil store: want error, got nil")
+		}
+	})
+
+	t.Run("empty_repoID_errors", func(t *testing.T) {
+		s, ctx, _ := openStoreForOverlayTest(t)
+		_, _, err := s.OverlayChangedPathsSince(ctx, "", 0)
+		if err == nil {
+			t.Errorf("empty repoID: want error, got nil")
+		}
+	})
+}
+
 // --- Helpers ---
 
 // openStoreForOverlayTest opens a fresh store (lands at v3 via the migration

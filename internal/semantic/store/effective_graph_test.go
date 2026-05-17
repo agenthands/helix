@@ -29,6 +29,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1304,4 +1305,153 @@ func TestClusterStatusForGraphVersion_LockFree_RaceSafe(t *testing.T) {
 	readers.Wait()
 	stop.Store(true)
 	wg.Wait()
+}
+
+// --- Phase 71-01 Task 1: QuerySymbolByName + LatestExtractorRunID ---
+
+// TestQuerySymbolByName_Exact: a single (path, name) match returns 1 row.
+func TestQuerySymbolByName_Exact(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qsbn-exact"
+	const snap uint64 = 9101
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "src/a.go::Alpha",
+		10, 0, 20, 0)
+
+	got, err := s.QuerySymbolByName(ctx, repoID, "src/a.go", "Alpha")
+	if err != nil {
+		t.Fatalf("QuerySymbolByName: %v", err)
+	}
+	if len(got) != 1 || got[0] != "src/a.go::Alpha" {
+		t.Errorf("got = %v, want [src/a.go::Alpha]", got)
+	}
+}
+
+// TestQuerySymbolByName_Ambiguous: multiple matches return all rows
+// (capped at 6) in deterministic stable_key ASC order.
+func TestQuerySymbolByName_Ambiguous(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qsbn-amb"
+	const snap uint64 = 9102
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	// Seed three overloads sharing (path, name) but distinct stable_keys.
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 10, 1001, repoID,
+		"src/a.go", "Foo", "src/a.go::Foo#a", 1, 0, 5, 0)
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 10, 1002, repoID,
+		"src/a.go", "Foo", "src/a.go::Foo#b", 10, 0, 15, 0)
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 10, 1003, repoID,
+		"src/a.go", "Foo", "src/a.go::Foo#c", 20, 0, 25, 0)
+
+	got, err := s.QuerySymbolByName(ctx, repoID, "src/a.go", "Foo")
+	if err != nil {
+		t.Fatalf("QuerySymbolByName: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3", len(got))
+	}
+	want := []string{"src/a.go::Foo#a", "src/a.go::Foo#b", "src/a.go::Foo#c"}
+	for i, sk := range want {
+		if got[i] != sk {
+			t.Errorf("got[%d]=%q, want %q (order)", i, got[i], sk)
+		}
+	}
+}
+
+// TestQuerySymbolByName_CapsAtSix: 8 overloads return only 6 rows.
+// Allows the seed resolver to detect ">5 candidates" before truncating to 5.
+func TestQuerySymbolByName_CapsAtSix(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qsbn-cap"
+	const snap uint64 = 9103
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	for i := 0; i < 8; i++ {
+		seedSnapshotSymbolWithRange(t, ctx, s, snap, uint64(20+i), uint64(2000+i), repoID,
+			"src/a.go", "Many", fmt.Sprintf("src/a.go::Many#%02d", i),
+			i*10+1, 0, i*10+5, 0)
+	}
+	got, err := s.QuerySymbolByName(ctx, repoID, "src/a.go", "Many")
+	if err != nil {
+		t.Fatalf("QuerySymbolByName: %v", err)
+	}
+	if len(got) != 6 {
+		t.Errorf("got %d rows, want 6 (LIMIT cap)", len(got))
+	}
+}
+
+// TestQuerySymbolByName_NotFound: unknown name returns nil slice, nil error.
+func TestQuerySymbolByName_NotFound(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qsbn-miss"
+	const snap uint64 = 9104
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	seedSnapshotSymbolWithRange(t, ctx, s, snap, 1, 100, repoID,
+		"src/a.go", "Alpha", "src/a.go::Alpha", 1, 0, 5, 0)
+
+	got, err := s.QuerySymbolByName(ctx, repoID, "src/a.go", "DoesNotExist")
+	if err != nil {
+		t.Fatalf("QuerySymbolByName: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+}
+
+// TestQuerySymbolByName_NoCommittedSnapshot: empty repo returns nil/nil.
+func TestQuerySymbolByName_NoCommittedSnapshot(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	got, err := s.QuerySymbolByName(ctx, "r-empty", "src/a.go", "Anything")
+	if err != nil {
+		t.Fatalf("QuerySymbolByName: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got = %v, want nil for empty repo", got)
+	}
+}
+
+// TestQuerySymbolByName_NilStore: nil receiver returns error.
+func TestQuerySymbolByName_NilStore(t *testing.T) {
+	var s *Store
+	_, err := s.QuerySymbolByName(context.Background(), "r", "p", "n")
+	if err == nil {
+		t.Fatalf("got nil error, want nil-store error")
+	}
+}
+
+// TestLatestExtractorRunID_PopulatedSnapshot: returns non-empty id derived
+// from the latest committed snapshot id.
+func TestLatestExtractorRunID_PopulatedSnapshot(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-extrun-pop"
+	const snap uint64 = 9201
+	seedCommittedSnapshot(t, ctx, s, repoID, snap, "committed")
+	got, err := s.LatestExtractorRunID(ctx, repoID)
+	if err != nil {
+		t.Fatalf("LatestExtractorRunID: %v", err)
+	}
+	want := "snap-9201"
+	if got != want {
+		t.Errorf("got=%q, want %q", got, want)
+	}
+}
+
+// TestLatestExtractorRunID_EmptyRepo: empty repo returns "" with nil error.
+func TestLatestExtractorRunID_EmptyRepo(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	got, err := s.LatestExtractorRunID(ctx, "r-empty")
+	if err != nil {
+		t.Fatalf("LatestExtractorRunID: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got=%q, want empty for empty repo", got)
+	}
+}
+
+// TestLatestExtractorRunID_NilStore: nil receiver returns error.
+func TestLatestExtractorRunID_NilStore(t *testing.T) {
+	var s *Store
+	_, err := s.LatestExtractorRunID(context.Background(), "r")
+	if err == nil {
+		t.Fatalf("got nil error, want nil-store error")
+	}
 }

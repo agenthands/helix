@@ -581,6 +581,86 @@ func (s *Store) QuerySymbolByLocation(
 	return stableKey, true, nil
 }
 
+// QuerySymbolByName returns up to 6 stable_keys for symbols matching
+// (path, name) at the latest committed snapshot for repoID. Results are
+// ordered deterministically (stable_key ASC). The LIMIT 6 cap allows the
+// caller (Phase 71-01 seed resolver) to detect "> 5 matches" and apply the
+// D1 ambiguity truncation policy (cap 5).
+//
+// Returns (nil, nil) on clean miss (unknown name, or no committed snapshot
+// exists). Empty repoID or path is treated as a miss, not an error.
+//
+// Phase 71-01 Task 1. Mirrors QuerySymbolByLocation's read-only lock-free
+// shape; reads via s.db with no overlay tx.
+func (s *Store) QuerySymbolByName(
+	ctx context.Context, repoID, path, name string,
+) ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("QuerySymbolByName: nil store")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("QuerySymbolByName(%q,%q): %w", path, name, err)
+	}
+	if latest == 0 {
+		return nil, nil
+	}
+	const q = `
+		SELECT sym.stable_key
+		  FROM semantic_symbols AS sym
+		  JOIN semantic_files AS f
+		    ON f.snapshot_id = sym.snapshot_id AND f.file_id = sym.file_id
+		 WHERE sym.snapshot_id = ?
+		   AND f.path          = ?
+		   AND sym.name        = ?
+		 ORDER BY sym.stable_key ASC
+		 LIMIT 6
+	`
+	rows, err := s.db.QueryContext(ctx, q, latest, path, name)
+	if err != nil {
+		return nil, fmt.Errorf("QuerySymbolByName(%q,%q): %w", path, name, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var sk string
+		if err := rows.Scan(&sk); err != nil {
+			return nil, fmt.Errorf("QuerySymbolByName(%q,%q) scan: %w", path, name, err)
+		}
+		out = append(out, sk)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QuerySymbolByName(%q,%q) rows.Err: %w", path, name, err)
+	}
+	return out, nil
+}
+
+// LatestExtractorRunID returns a monotonic opaque identifier for the most
+// recent extractor pass against repoID. Phase 71-01 Task 1.
+//
+// Resolution policy (per RESEARCH A4): no dedicated extractor_run_id
+// column or semantic_extractor_runs table exists in Schema 5. The id is
+// derived from LatestCommittedSnapshot as `snap-<snapshot_id>`, which
+// satisfies the contract that the id advances monotonically every time
+// the extractor commits new state. A dedicated column can replace this
+// derivation later without changing the accessor signature.
+//
+// Returns ("", nil) when no committed snapshot exists for repoID
+// (matches the empty-repo / cold-start case).
+func (s *Store) LatestExtractorRunID(ctx context.Context, repoID string) (string, error) {
+	if s == nil || s.db == nil {
+		return "", errors.New("LatestExtractorRunID: nil store")
+	}
+	latest, err := s.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return "", fmt.Errorf("LatestExtractorRunID(%q): %w", repoID, err)
+	}
+	if latest == 0 {
+		return "", nil
+	}
+	return fmt.Sprintf("snap-%d", latest), nil
+}
+
 // QueryNodeIDByStableKey resolves stable_key → graph.NodeID (=symbol_id) at
 // the latest committed snapshot for repoID. Returns (0, false, nil) on miss
 // (or when no committed snapshot exists).

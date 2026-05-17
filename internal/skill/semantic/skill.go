@@ -33,6 +33,14 @@ type SemanticSkill struct {
 	retrieval RetrievalAccessor
 	compactor CompactorAccessor
 	session   SessionAccessor // injected: ctx -> *mcp.SessionInfo (closes checker W2)
+
+	// Phase 71-01 additions: read-only seams for the P1 single-symbol tools
+	// (71-03 explain_symbol_deep, 71-04 find_related_symbols,
+	// 71-05 validate_graph_edge). All three are post-init wired by the
+	// daemon adapter; nil means the seam is unwired (handler MUST guard).
+	symbolByName      SymbolByNameAccessor
+	extractorRun      ExtractorRunAccessor
+	clusterMembership ClusterMembershipAccessor
 }
 
 func init() { skill.Register(&SemanticSkill{}) }
@@ -112,6 +120,33 @@ func (s *SemanticSkill) SetSessionAccessor(a SessionAccessor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.session = a
+}
+
+// SetSymbolByName wires the SymbolByNameAccessor adapter (Phase 71-01 seam).
+// Used by 71-03/04/05 handler plans via the shared resolveSeed helper.
+func (s *SemanticSkill) SetSymbolByName(a SymbolByNameAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.symbolByName = a
+}
+
+// SetExtractorRun wires the ExtractorRunAccessor adapter (Phase 71-01 seam).
+// Drives the v1.10 FreshnessV2 envelope's extractor_run_id field.
+func (s *SemanticSkill) SetExtractorRun(a ExtractorRunAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.extractorRun = a
+}
+
+// SetClusterMembership wires the ClusterMembershipAccessor adapter
+// (Phase 71-01 seam). Drives the optional cluster co-membership boost in
+// 71-04 find_related_symbols. Production binding may return (0, 0, nil)
+// to disable the boost, in which case 71-04 emits fallback_reason:
+// "cluster_boost_unavailable".
+func (s *SemanticSkill) SetClusterMembership(a ClusterMembershipAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterMembership = a
 }
 
 // sessionSnapshot returns the SessionSnapshot for the current request, or a

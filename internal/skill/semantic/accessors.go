@@ -5,6 +5,7 @@ import (
 
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/semantic/graph"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/workspace"
 )
 
@@ -176,4 +177,45 @@ type SessionAccessor interface {
 	// Workspace returns the WorkspaceKey for the request's active workspace,
 	// or the zero value if no workspace is bound.
 	Workspace(ctx context.Context) workspace.WorkspaceKey
+}
+
+// ----- Phase 71-01 additions: read-only seams for the P1 single-symbol tools. -----
+//
+// These three narrow interfaces are declared in this plan (71-01) so wave-2
+// handler plans (71-03/04/05) can compile against the seam before the
+// production daemon wiring lands. Each interface is independent and exposes
+// exactly one method (Pattern F: narrow-interface convention).
+
+// SymbolByNameAccessor resolves (file_path, symbol_name) tuples to one or
+// more graph SymbolIDs at the latest committed snapshot. Production binding
+// wraps *Store.QuerySymbolByName and casts []string → []integ.SymbolID.
+//
+// Returned slice is ordered deterministically (stable_key ASC) and capped
+// at 6 entries so the seed resolver can detect "> 5 candidates" and apply
+// the D1 ambiguous-truncation policy (cap 5).
+type SymbolByNameAccessor interface {
+	QuerySymbolByName(ctx context.Context, repoID, path, name string) ([]integ.SymbolID, error)
+}
+
+// ExtractorRunAccessor surfaces a monotonic opaque identifier for the most
+// recent extractor pass against repoID. Drives the v1.10 FreshnessV2
+// envelope's extractor_run_id field (D5).
+//
+// Returns ("", nil) when no committed snapshot exists for the repo
+// (cold-start case).
+type ExtractorRunAccessor interface {
+	LatestExtractorRunID(ctx context.Context, repoID string) (string, error)
+}
+
+// ClusterMembershipAccessor returns the cluster_id and member-count for the
+// cluster that contains symbolID at the latest committed graph_version.
+// Drives the optional cluster co-membership boost in 71-04
+// find_related_symbols.
+//
+// If the production binding chooses to disable the boost (e.g., cluster
+// engine not wired or accessor cost is non-trivial), the binding returns
+// (0, 0, nil) and the handler emits fallback_reason:
+// "cluster_boost_unavailable".
+type ClusterMembershipAccessor interface {
+	ClusterIDOf(ctx context.Context, repoID string, symbolID integ.SymbolID) (clusterID uint64, size int, err error)
 }

@@ -28,4 +28,5 @@ func RegisterAll(server *mcp.SerenaMCPServer, s *SemanticSkill, tracer trace.Tra
 	registerFindRelatedSymbols(server, s, tracer)
 	registerValidateGraphEdge(server, s, tracer)
 	registerGetClusterMap(server, s, tracer)
+	registerExplainCluster(server, s, tracer)
 }

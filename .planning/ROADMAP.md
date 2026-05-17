@@ -241,7 +241,12 @@
   3. `get_change_impact_graph` returns a graph subgraph (not file-level summary) for a pre-edit blast-radius query; differs in shape from existing `analyze_blast_radius`.
   4. `get_change_impact_graph` enforces `review+` mode tier; `get_cluster_map` / `explain_cluster` enforce `read+`; profile filtering applies.
   5. All three tools apply a confidence cap when results fall back to a degraded path (e.g., type-resolver tier 3 → cap at 0.6); freshness envelope present on all responses.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 72-01-PLAN.md — cluster_id codec + 4 accessor interfaces + 3 Store read methods (P1TOOL-03, P1TOOL-04)
+- [ ] 72-02-PLAN.md — get_cluster_map handler + TDD tests + register (P1TOOL-03)
+- [ ] 72-03-PLAN.md — explain_cluster handler + stale-id + cohesion/conductance + TDD tests + register (P1TOOL-04)
+- [ ] 72-04-PLAN.md — get_change_impact_graph handler + review+ + confidence_cap + TDD tests + register (P1TOOL-05)
+- [ ] 72-05-PLAN.md — TestFourTools_ClusterToImpact integration + readonly_gate extension + phase gate (P1TOOL-03,04,05)
 
 ### Phase 73: P1 Tools Integration & E2E Verification
 **Goal**: All 6 P1 tools are profile/mode gated correctly across the 5 profiles × 4 modes matrix, wrapped uniformly in the semantic skill, and verified end-to-end against a real populated workspace.
@@ -253,7 +258,12 @@
   3. All 6 tools wrap via `internal/skill/semantic/` following the v1.10 pattern (envelope.go + mode_check.go + accessors.go); zero new daemon-bootstrap special-casing.
   4. E2E integration suite runs each tool against a real `*Store` + bleve + populated graph in a tempdir and asserts closed-enum envelope fields (`freshness`, `source`, `fallback_reason`, `confidence`) are present and within their declared enums.
   5. `vet-nokernel2semantic` and `vet-noduckdb` stay green; race-clean under `go test -race -count=1`.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 72-01-PLAN.md — cluster_id codec + 4 accessor interfaces + 3 Store read methods (P1TOOL-03, P1TOOL-04)
+- [ ] 72-02-PLAN.md — get_cluster_map handler + TDD tests + register (P1TOOL-03)
+- [ ] 72-03-PLAN.md — explain_cluster handler + stale-id + cohesion/conductance + TDD tests + register (P1TOOL-04)
+- [ ] 72-04-PLAN.md — get_change_impact_graph handler + review+ + confidence_cap + TDD tests + register (P1TOOL-05)
+- [ ] 72-05-PLAN.md — TestFourTools_ClusterToImpact integration + readonly_gate extension + phase gate (P1TOOL-03,04,05)
 
 ## Progress
 

@@ -1455,3 +1455,224 @@ func TestLatestExtractorRunID_NilStore(t *testing.T) {
 		t.Fatalf("got nil error, want nil-store error")
 	}
 }
+
+// ----- Phase 72-01: QueryClusterSummaries, QueryClusterMembers, QueryNodePageRanks -----
+
+// seedClusterRow inserts a row into semantic_clusters for testing.
+func seedClusterRow(t *testing.T, ctx context.Context, s *Store, repoID string, gv, clusterID uint64, memberCount int) {
+	t.Helper()
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO semantic_clusters (
+			repo_id, snapshot_id, graph_version, cluster_id,
+			algorithm, label, summary, score, status, computed_at
+		) VALUES (?, 0, ?, ?, 'weak_components', NULL, NULL, ?, 'current', now())
+	`, repoID, gv, clusterID, float64(memberCount)); err != nil {
+		t.Fatalf("seedClusterRow(%q, gv=%d, cluster=%d): %v", repoID, gv, clusterID, err)
+	}
+}
+
+// seedClusterMemberRow inserts a row into semantic_cluster_members and the
+// corresponding semantic_symbols row so the stable_key JOIN resolves.
+func seedClusterMemberRow(t *testing.T, ctx context.Context, s *Store, repoID string, gv, clusterID, nodeID uint64, stableKey string, snapID uint64, fileID uint64) {
+	t.Helper()
+	// Insert snapshot if it does not exist yet.
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_snapshots (
+			snapshot_id, repo_id, repo_root, base_snapshot_id, kind,
+			worktree_hash, schema_version, indexer_version, status,
+			partial, created_at, committed_at
+		) VALUES (?, ?, '', 0, 'compact', '', 5, 'test', 'committed', false, now(), now())
+	`, snapID, repoID); err != nil {
+		t.Fatalf("seedClusterMemberRow: insert snapshot(%d): %v", snapID, err)
+	}
+	// Insert file if it does not exist.
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_files (
+			snapshot_id, file_id, repo_id, path, language, content_hash,
+			size_bytes, line_count, generated, ignored, indexed_at
+		) VALUES (?, ?, ?, 'f.go', 'go', 'h', 100, 10, false, false, now())
+	`, snapID, fileID, repoID); err != nil {
+		t.Fatalf("seedClusterMemberRow: insert file(%d): %v", fileID, err)
+	}
+	// Insert symbol row with the stable_key.
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_symbols (
+			snapshot_id, symbol_id, node_id, file_id, language, kind, name,
+			qualified_name, stable_key, start_byte, end_byte, start_line,
+			start_col, end_line, end_col, extraction_source, confidence
+		) VALUES (?, ?, ?, ?, 'go', 'func', ?, ?, ?, 0, 100, 1, 0, 2, 0, 'tree-sitter', 1.0)
+	`, snapID, nodeID, nodeID, fileID, stableKey, stableKey, stableKey); err != nil {
+		t.Fatalf("seedClusterMemberRow: insert symbol(node=%d, key=%q): %v", nodeID, stableKey, err)
+	}
+	// Insert cluster member row.
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_cluster_members (
+			repo_id, graph_version, cluster_id, node_id, weight, role
+		) VALUES (?, ?, ?, ?, 1.0, NULL)
+	`, repoID, gv, clusterID, nodeID); err != nil {
+		t.Fatalf("seedClusterMemberRow: insert member(node=%d): %v", nodeID, err)
+	}
+}
+
+// seedGraphScoreRow inserts a row into semantic_graph_scores.
+func seedGraphScoreRow(t *testing.T, ctx context.Context, s *Store, repoID string, gv, nodeID uint64, scoreName string, score float64) {
+	t.Helper()
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO semantic_graph_scores (
+			repo_id, snapshot_id, graph_version, node_id, score_name,
+			score, rank, status, computed_at, algorithm_version
+		) VALUES (?, 0, ?, ?, ?, ?, NULL, 'exact', now(), 'test')
+	`, repoID, gv, nodeID, scoreName, score); err != nil {
+		t.Fatalf("seedGraphScoreRow(%q, gv=%d, node=%d, name=%q): %v", repoID, gv, nodeID, scoreName, err)
+	}
+}
+
+// TestQueryClusterSummaries_Basic verifies top-N ordering by score DESC.
+func TestQueryClusterSummaries_Basic(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qcs-basic"
+	const gv uint64 = 10
+	seedClusterRow(t, ctx, s, repoID, gv, 1, 5)  // cluster 1: 5 members
+	seedClusterRow(t, ctx, s, repoID, gv, 2, 15) // cluster 2: 15 members
+	seedClusterRow(t, ctx, s, repoID, gv, 3, 8)  // cluster 3: 8 members
+
+	rows, err := s.QueryClusterSummaries(ctx, repoID, "weak_components", gv, 10)
+	if err != nil {
+		t.Fatalf("QueryClusterSummaries: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("got %d rows, want 3", len(rows))
+	}
+	// Expect DESC order: 15, 8, 5
+	if rows[0].MemberCount != 15 {
+		t.Errorf("rows[0].MemberCount = %d, want 15", rows[0].MemberCount)
+	}
+	if rows[1].MemberCount != 8 {
+		t.Errorf("rows[1].MemberCount = %d, want 8", rows[1].MemberCount)
+	}
+	if rows[2].MemberCount != 5 {
+		t.Errorf("rows[2].MemberCount = %d, want 5", rows[2].MemberCount)
+	}
+}
+
+// TestQueryClusterSummaries_TopNLimit verifies the topN cap.
+func TestQueryClusterSummaries_TopNLimit(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qcs-limit"
+	const gv uint64 = 11
+	for i := uint64(1); i <= 5; i++ {
+		seedClusterRow(t, ctx, s, repoID, gv, i, int(i*10))
+	}
+	rows, err := s.QueryClusterSummaries(ctx, repoID, "weak_components", gv, 3)
+	if err != nil {
+		t.Fatalf("QueryClusterSummaries: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Errorf("got %d rows, want 3 (topN=3)", len(rows))
+	}
+}
+
+// TestQueryClusterSummaries_NilStore verifies nil-store returns nil,nil.
+func TestQueryClusterSummaries_NilStore(t *testing.T) {
+	var s *Store
+	rows, err := s.QueryClusterSummaries(context.Background(), "r", "proj", 1, 10)
+	if err != nil {
+		t.Errorf("nil store: unexpected error: %v", err)
+	}
+	if rows != nil {
+		t.Errorf("nil store: expected nil rows, got %v", rows)
+	}
+}
+
+// TestQueryClusterMembers_Basic verifies cluster member rows with stable keys.
+func TestQueryClusterMembers_Basic(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qcm-basic"
+	const gv uint64 = 20
+	const snap uint64 = 9001
+	const fileID uint64 = 8001
+
+	seedClusterMemberRow(t, ctx, s, repoID, gv, 42, 101, "sym:pkg.Foo", snap, fileID)
+	seedClusterMemberRow(t, ctx, s, repoID, gv, 42, 102, "sym:pkg.Bar", snap, fileID)
+
+	rows, err := s.QueryClusterMembers(ctx, repoID, "weak_components", gv, 42, 100)
+	if err != nil {
+		t.Fatalf("QueryClusterMembers: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	// Verify SymbolID is populated (stable_key from JOIN).
+	gotKeys := map[string]bool{}
+	for _, r := range rows {
+		gotKeys[r.SymbolID] = true
+		if r.NodeID == 0 {
+			t.Errorf("NodeID is zero for row %+v", r)
+		}
+	}
+	if !gotKeys["sym:pkg.Foo"] || !gotKeys["sym:pkg.Bar"] {
+		t.Errorf("symbol keys mismatch: got %v", gotKeys)
+	}
+}
+
+// TestQueryClusterMembers_NilStore verifies nil-store returns nil,nil.
+func TestQueryClusterMembers_NilStore(t *testing.T) {
+	var s *Store
+	rows, err := s.QueryClusterMembers(context.Background(), "r", "proj", 1, 1, 100)
+	if err != nil {
+		t.Errorf("nil store: unexpected error: %v", err)
+	}
+	if rows != nil {
+		t.Errorf("nil store: expected nil rows, got %v", rows)
+	}
+}
+
+// TestQueryNodePageRanks_Basic verifies map[nodeID]score is returned correctly.
+func TestQueryNodePageRanks_Basic(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	repoID := "r-qnpr-basic"
+	const gv uint64 = 30
+
+	seedGraphScoreRow(t, ctx, s, repoID, gv, 201, "call_graph", 0.85)
+	seedGraphScoreRow(t, ctx, s, repoID, gv, 202, "call_graph", 0.42)
+	seedGraphScoreRow(t, ctx, s, repoID, gv, 203, "call_graph", 0.11)
+	// Node 204 has no row — should not appear in result.
+
+	got, err := s.QueryNodePageRanks(ctx, repoID, "call_graph", gv, []uint64{201, 202, 203, 204})
+	if err != nil {
+		t.Fatalf("QueryNodePageRanks: %v", err)
+	}
+	if len(got) != 3 {
+		t.Errorf("got %d entries, want 3 (node 204 has no row)", len(got))
+	}
+	if v, ok := got[201]; !ok || v != 0.85 {
+		t.Errorf("got[201] = %v, want 0.85", got[201])
+	}
+	if v, ok := got[202]; !ok || v != 0.42 {
+		t.Errorf("got[202] = %v, want 0.42", got[202])
+	}
+}
+
+// TestQueryNodePageRanks_EmptyNodeIDs verifies empty input returns empty map.
+func TestQueryNodePageRanks_EmptyNodeIDs(t *testing.T) {
+	s, ctx, _ := openStoreForOverlayTest(t)
+	got, err := s.QueryNodePageRanks(ctx, "r-empty", "call_graph", 1, nil)
+	if err != nil {
+		t.Fatalf("QueryNodePageRanks: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d entries, want 0 for empty nodeIDs", len(got))
+	}
+}
+
+// TestQueryNodePageRanks_NilStore verifies nil-store returns nil,nil.
+func TestQueryNodePageRanks_NilStore(t *testing.T) {
+	var s *Store
+	got, err := s.QueryNodePageRanks(context.Background(), "r", "proj", 1, []uint64{1, 2})
+	if err != nil {
+		t.Errorf("nil store: unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("nil store: expected nil map, got %v", got)
+	}
+}

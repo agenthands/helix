@@ -348,3 +348,65 @@ type EvidenceRange struct {
 type EdgeEvidenceAccessor interface {
 	EvidenceForEdge(ctx context.Context, repoID string, from, to integ.SymbolID, internalKinds []string) ([]EdgeEvidenceRow, error)
 }
+
+// ----- Phase 72-01 additions: read-only seams for the P1 cluster & impact tools. -----
+//
+// Four narrow interfaces declared here so wave-2 handler plans (72-02, 72-03,
+// 72-04) can compile against the seam before the production daemon wiring
+// lands. Each interface is independent and exposes the minimal surface needed
+// by its consumer handler. Row types are skill-layer types (not store-internal
+// types) to keep the accessor seam free of store-package transitive imports.
+
+// ClusterSummaryRow is one cluster summary entry returned by
+// ClusterMapAccessor.QueryClusterSummaries. ClusterIntID is the raw uint64
+// cluster identifier scoped by (projection, graph_version); MemberCount is
+// the number of symbols in the cluster (from semantic_clusters.score which
+// overlay.go:835 overloads with the planning-time cardinality).
+type ClusterSummaryRow struct {
+	ClusterIntID uint64
+	MemberCount  int
+}
+
+// ClusterMemberRow is one cluster member entry returned by
+// ClusterMemberAccessor.QueryClusterMembers. NodeID is the raw uint64
+// graph node id; SymbolID is the stable_key from semantic_symbols (the
+// opaque identifier for MCP surface consumers).
+type ClusterMemberRow struct {
+	NodeID   uint64
+	SymbolID string
+}
+
+// ClusterMapAccessor returns workspace-level cluster summaries sorted by
+// member count descending. Drives the get_cluster_map handler (Phase 72 D2).
+// Production binding wraps *Store.QueryClusterSummaries.
+type ClusterMapAccessor interface {
+	QueryClusterSummaries(ctx context.Context, repoID, projection string, graphVersion uint64, topN int) ([]ClusterSummaryRow, error)
+}
+
+// ClusterMemberAccessor returns per-cluster member rows with stable symbol ids.
+// Drives the explain_cluster handler (Phase 72). Production binding wraps
+// *Store.QueryClusterMembers.
+type ClusterMemberAccessor interface {
+	QueryClusterMembers(ctx context.Context, repoID, projection string, graphVersion, clusterIntID uint64, limit int) ([]ClusterMemberRow, error)
+}
+
+// ClusterPageRankAccessor returns per-node PageRank scores for the supplied
+// node ids from semantic_graph_scores. Drives per-member ranking in
+// explain_cluster (Phase 72 D2). Production binding wraps
+// *Store.QueryNodePageRanks.
+type ClusterPageRankAccessor interface {
+	QueryNodePageRanks(ctx context.Context, repoID, projection string, graphVersion uint64, nodeIDs []uint64) (map[uint64]float64, error)
+}
+
+// ImpactLookupAccessor is the narrow seam between get_change_impact_graph
+// (Phase 72 D3) and the daemon-resident SemanticLookup. It exposes exactly
+// the two SemanticLookup methods the handler needs — ExpandFrom for graph
+// traversal and Status for envelope/freshness derivation — without injecting
+// the full integ.SemanticLookup interface (OQ-2 resolution).
+//
+// Production binding wraps *integSemanticLookup (internal/daemon/semantic_wiring.go).
+// READ-ONLY: no Begin/Commit/Abort/Write on this path.
+type ImpactLookupAccessor interface {
+	ExpandFrom(ctx context.Context, ws workspace.WorkspaceKey, sym integ.SymbolID, depth int) ([]integ.Impact, error)
+	Status(ctx context.Context, ws workspace.WorkspaceKey) (integ.SemanticStatus, error)
+}

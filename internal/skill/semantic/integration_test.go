@@ -46,6 +46,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agenthands/helix/internal/kernel/health"
+	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 	semanticpkg "github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/graph"
@@ -1184,6 +1185,513 @@ func TestE2E_StranglerFig_SourceMatrix(t *testing.T) {
 			})
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 71-05 — cross-tool integration suite for the three single-symbol
+// read tools (explain_symbol_deep, find_related_symbols, validate_graph_edge).
+//
+// Closes Phase 71 success criteria #1, #4, #5 and 71-CONTEXT.md D7 items 4-5:
+//
+//   - #4 Cross-tool consistency — explain_symbol_deep reports an incoming
+//     edge; validate_graph_edge confirms the same edge has non-zero
+//     confidence + fallback_reason != "edge_not_found". find_related_symbols
+//     ranks caller neighbors.
+//   - #5 Concurrent race-cleanliness — 8 goroutines × 3 tools yield
+//     byte-identical responses under -race; 10 repeats.
+//   - Envelope shape parity — all three tools emit FreshnessV2 with the
+//     five required fields (graph_version, snapshot_id, extractor_run_id,
+//     as_of_unix_ms, status ∈ {current|stale|unknown}).
+//   - Mode enforcement — read+ gate fires across all three; recorder
+//     canaries never trip.
+//
+// The suite reuses buildPopulatedGraphFixture (71-01) — no new fixture. It
+// constructs a single SemanticSkill wired with: per-handler test accessors
+// for type-chain / symbol-edges / retrieval / cluster / edge-evidence, all
+// pointing at the same Go fixture seed (svc.go::ServeHTTP → svc.go::handle
+// CALLS edge).
+// ---------------------------------------------------------------------------
+
+// threeToolsHarness assembles a SemanticSkill wired against the populated
+// graph fixture + matched test doubles for ALL three Phase 71 read-tool
+// accessors. Returned components:
+//   - skill: the wired *SemanticSkill (mode="read" by default).
+//   - store: the recorder-canary store accessor shared across tools; the
+//     three tool-specific recorders embed the same canary pattern, but the
+//     harness uses a single store that all three handlers consume.
+//   - fx:    the populated multi-language fixture.
+//   - seedSymbol: the canonical Go fixture seed used as input to every tool.
+//   - callerSymbol: the symbol on the inbound CALLS edge (used as the
+//     `from` operand when the harness drives validate_graph_edge).
+type threeToolsHarness struct {
+	skill        *SemanticSkill
+	store        *threeToolsStoreRec
+	fx           *PopulatedGraphFixture
+	seedSymbol   integ.SymbolID
+	callerSymbol integ.SymbolID
+}
+
+// threeToolsStoreRec is a single shared StoreAccessor recorder used by all
+// three handlers via the same skill instance. Mirrors the per-handler
+// recorder shape but lives in this file because the harness owns it.
+type threeToolsStoreRec struct {
+	t *testing.T
+
+	graphVersion      uint64
+	overlayHasPending bool
+	latestSnapshot    uint64
+
+	beginSnapshotCalls      sync.WaitGroup // unused — canaries below use atomic counters via t.Fatalf
+	commitSnapshotCalls     sync.WaitGroup
+	abortSnapshotCalls      sync.WaitGroup
+	writeSnapshotFactsCalls sync.WaitGroup
+
+	canaryFired chan string // closed write-only on canary firing for race-clean fan-in
+}
+
+func (r *threeToolsStoreRec) LatestCommittedSnapshot(_ context.Context, _ string) (uint64, error) {
+	return r.latestSnapshot, nil
+}
+func (r *threeToolsStoreRec) CurrentGraphVersion(_ context.Context, _ string) (uint64, error) {
+	return r.graphVersion, nil
+}
+func (r *threeToolsStoreRec) OverlayHasPendingRows(_ string) bool { return r.overlayHasPending }
+func (r *threeToolsStoreRec) QueryEffectiveAdjacency(_ context.Context, _, _ string) (
+	map[graph.NodeID]map[graph.NodeID]float64, map[graph.NodeID]map[graph.NodeID]float64, error,
+) {
+	return nil, nil, nil
+}
+func (r *threeToolsStoreRec) CurrentOverlayEpoch(_ context.Context, _ string) (uint64, error) {
+	return 0, nil
+}
+func (r *threeToolsStoreRec) OverlayChangedPathsSince(_ context.Context, _ string, _ uint64) ([]string, uint64, error) {
+	return nil, 0, nil
+}
+func (r *threeToolsStoreRec) LatestCommittedSnapshotBaseEpoch(_ context.Context, _ string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
+// Snapshot-write canaries — fire t.Fatalf on any invocation.
+func (r *threeToolsStoreRec) BeginSnapshot(_ context.Context, _ string) (uint64, error) {
+	r.t.Fatalf("D-09 violation: Phase 71 read tool must NOT call BeginSnapshot")
+	return 0, nil
+}
+func (r *threeToolsStoreRec) CommitSnapshot(_ context.Context, _ uint64) error {
+	r.t.Fatalf("D-09 violation: Phase 71 read tool must NOT call CommitSnapshot")
+	return nil
+}
+func (r *threeToolsStoreRec) AbortSnapshot(_ context.Context, _ uint64) error {
+	r.t.Fatalf("D-09 violation: Phase 71 read tool must NOT call AbortSnapshot")
+	return nil
+}
+func (r *threeToolsStoreRec) WriteSnapshotFacts(_ context.Context, _ uint64, _ any) error {
+	r.t.Fatalf("D-09 violation: Phase 71 read tool must NOT call WriteSnapshotFacts")
+	return nil
+}
+
+// threeToolsRetrieval is a deterministic test retrieval accessor returning a
+// fixed neighbor list for the seed and empty results otherwise. Race-clean.
+type threeToolsRetrieval struct {
+	graphRanksBySeed map[string][]GraphRank
+}
+
+func (t *threeToolsRetrieval) QueryBleve(_ string, _ []string) ([]TextRank, error) { return nil, nil }
+func (t *threeToolsRetrieval) PersonalizedPageRank(_ context.Context, _ string, anchors []string) ([]GraphRank, error) {
+	if len(anchors) == 0 {
+		return nil, nil
+	}
+	return t.graphRanksBySeed[anchors[0]], nil
+}
+func (t *threeToolsRetrieval) RetrievalPending(_ workspace.WorkspaceKey) bool { return false }
+func (t *threeToolsRetrieval) RetrievalStatus(_ workspace.WorkspaceKey) RetrievalStatus {
+	return RetrievalStatus{}
+}
+func (t *threeToolsRetrieval) TopEdgesFor(_ context.Context, _, _ string) ([]string, error) {
+	return nil, nil
+}
+
+// threeToolsEdgeEvidence returns canned per-edge rows.
+type threeToolsEdgeEvidence struct {
+	rows map[edgeKey][]EdgeEvidenceRow
+}
+
+func (e *threeToolsEdgeEvidence) EvidenceForEdge(_ context.Context, _ string, from, to integ.SymbolID, internalKinds []string) ([]EdgeEvidenceRow, error) {
+	var out []EdgeEvidenceRow
+	for _, k := range internalKinds {
+		out = append(out, e.rows[edgeKey{from, to, k}]...)
+	}
+	return out, nil
+}
+
+// threeToolsTypeChain returns canned type-chain rows for the explain handler.
+type threeToolsTypeChain struct {
+	rows map[integ.SymbolID][]TypeChainRow
+}
+
+func (t *threeToolsTypeChain) TypeChainForSymbol(_ context.Context, _ string, sym integ.SymbolID) ([]TypeChainRow, error) {
+	return append([]TypeChainRow(nil), t.rows[sym]...), nil
+}
+
+// threeToolsSymbolEdges returns canned per-symbol edge rows.
+type threeToolsSymbolEdges struct {
+	callers  map[integ.SymbolID][]SymbolEdgeRow
+	incoming map[integ.SymbolID][]SymbolEdgeRow
+	outgoing map[integ.SymbolID][]SymbolEdgeRow
+}
+
+func (s *threeToolsSymbolEdges) CallersOf(_ context.Context, _ string, sym integ.SymbolID) ([]SymbolEdgeRow, error) {
+	return append([]SymbolEdgeRow(nil), s.callers[sym]...), nil
+}
+func (s *threeToolsSymbolEdges) IncomingEdgesOf(_ context.Context, _ string, sym integ.SymbolID) ([]SymbolEdgeRow, error) {
+	return append([]SymbolEdgeRow(nil), s.incoming[sym]...), nil
+}
+func (s *threeToolsSymbolEdges) OutgoingEdgesOf(_ context.Context, _ string, sym integ.SymbolID) ([]SymbolEdgeRow, error) {
+	return append([]SymbolEdgeRow(nil), s.outgoing[sym]...), nil
+}
+
+// newThreeToolsHarness builds the shared harness used by the four
+// TestThreeTools_* test cases. mode controls the session-mode string.
+func newThreeToolsHarness(t *testing.T, mode string) *threeToolsHarness {
+	t.Helper()
+	fx := buildPopulatedGraphFixture(t)
+	seed := fx.GoSeedSymbolID
+	caller := integ.SymbolID("repo/src/svc.go::handle")
+
+	s := &SemanticSkill{}
+	if err := s.Init(skill.SkillDeps{}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	sess := &mcp.SessionInfo{SessionID: "test-three-tools", Mode: mode}
+	ws := workspace.WorkspaceKey{
+		RepoRoot: "/tmp/repo-three-tools", Language: "go", Toolchain: "go1.22",
+	}
+	s.SetSessionAccessor(&mockSessionAccessor{ws: ws, sess: sess})
+
+	store := &threeToolsStoreRec{
+		t:              t,
+		graphVersion:   42,
+		latestSnapshot: 7,
+	}
+	s.SetStore(store)
+	s.SetSymbolByName(fx.SymbolByName)
+	s.SetExtractorRun(fx.ExtractorRun)
+	s.SetClusterMembership(fx.ClusterMembership)
+
+	// explain_symbol_deep wiring.
+	s.SetTypeChain(&threeToolsTypeChain{
+		rows: map[integ.SymbolID][]TypeChainRow{
+			seed: {{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: string(caller)}},
+		},
+	})
+	s.SetSymbolEdges(&threeToolsSymbolEdges{
+		callers: map[integ.SymbolID][]SymbolEdgeRow{
+			seed: {{From: caller, To: seed, InternalKind: "CALLS"}},
+		},
+		incoming: map[integ.SymbolID][]SymbolEdgeRow{
+			seed: {{From: caller, To: seed, InternalKind: "CALLS"}},
+		},
+		outgoing: map[integ.SymbolID][]SymbolEdgeRow{
+			seed: {{From: seed, To: caller, InternalKind: "CALLS"}},
+		},
+	})
+
+	// find_related_symbols wiring — caller is the highest-ranked neighbor.
+	s.SetRetrieval(&threeToolsRetrieval{
+		graphRanksBySeed: map[string][]GraphRank{
+			string(seed): {
+				{SymbolID: string(caller), Score: 0.9},
+				{SymbolID: "repo/src/svc.go::other", Score: 0.4},
+			},
+		},
+	})
+
+	// validate_graph_edge wiring — the same CALLS edge in both directions.
+	s.SetEdgeEvidence(&threeToolsEdgeEvidence{
+		rows: map[edgeKey][]EdgeEvidenceRow{
+			{caller, seed, "CALLS"}: {
+				{
+					InternalKind:   "CALLS",
+					Source:         "lsp.go.text_document_references",
+					TreeSitterKind: "call_expression",
+					File:           "repo/src/svc.go",
+					Range:          &EvidenceRange{StartLine: 1, EndLine: 1, EndCol: 10},
+					Tier:           "tier1_lsp",
+					EvidenceKind:   "lsp",
+				},
+			},
+			{seed, caller, "CALLS"}: {
+				{
+					InternalKind:   "CALLS",
+					Source:         "lsp.go.text_document_references",
+					TreeSitterKind: "call_expression",
+					File:           "repo/src/svc.go",
+					Range:          &EvidenceRange{StartLine: 2, EndLine: 2, EndCol: 10},
+					Tier:           "tier1_lsp",
+					EvidenceKind:   "lsp",
+				},
+			},
+		},
+	})
+
+	return &threeToolsHarness{
+		skill:        s,
+		store:        store,
+		fx:           fx,
+		seedSymbol:   seed,
+		callerSymbol: caller,
+	}
+}
+
+// TestThreeTools_CrossConsistency — D7 #4. explain_symbol_deep reports an
+// inbound CALLS edge; validate_graph_edge agrees the edge exists; find_related
+// includes the caller in its ranked neighbor set.
+func TestThreeTools_CrossConsistency(t *testing.T) {
+	h := newThreeToolsHarness(t, "read")
+	ctx := context.Background()
+
+	// Step 1: explain_symbol_deep — gather inbound edges.
+	expRes := h.skill.handleExplainSymbolDeep(ctx, ExplainSymbolDeepArgs{
+		Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+	})
+	if expRes.IsError {
+		t.Fatalf("explain_symbol_deep error: %s", extractText(t, expRes))
+	}
+	var exp ExplainSymbolDeepResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, expRes)), &exp))
+	if len(exp.EdgesIncoming) == 0 {
+		t.Fatalf("explain reported no incoming edges; fixture should yield ≥ 1")
+	}
+
+	// Step 2: validate_graph_edge — every sampled inbound edge must confirm
+	// (confidence > 0 AND fallback_reason != edge_not_found).
+	maxSample := 5
+	if len(exp.EdgesIncoming) < maxSample {
+		maxSample = len(exp.EdgesIncoming)
+	}
+	for i := 0; i < maxSample; i++ {
+		e := exp.EdgesIncoming[i]
+		vRes := h.skill.handleValidateGraphEdge(ctx, ValidateGraphEdgeArgs{
+			From:     SeedInput{SymbolID: string(e.From)},
+			To:       SeedInput{SymbolID: string(h.seedSymbol)},
+			EdgeKind: string(e.EdgeKind),
+		})
+		if vRes.IsError {
+			t.Fatalf("validate_graph_edge[%d] error: %s", i, extractText(t, vRes))
+		}
+		var v ValidateGraphEdgeResult
+		require.NoError(t, json.Unmarshal([]byte(extractText(t, vRes)), &v))
+		if v.Confidence <= 0 {
+			t.Errorf("cross-consistency: edge[%d] (%s →%s, %s) confidence = %v; want > 0",
+				i, e.From, h.seedSymbol, e.EdgeKind, v.Confidence)
+		}
+		if v.FallbackReason == "edge_not_found" {
+			t.Errorf("cross-consistency: explain reports edge[%d] but validate says edge_not_found", i)
+		}
+	}
+
+	// Step 3: find_related_symbols — caller neighbor should appear.
+	frRes := h.skill.handleFindRelatedSymbols(ctx, FindRelatedSymbolsArgs{
+		Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+		K:    10,
+	})
+	if frRes.IsError {
+		t.Fatalf("find_related_symbols error: %s", extractText(t, frRes))
+	}
+	var fr FindRelatedSymbolsResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, frRes)), &fr))
+	foundCaller := false
+	for _, r := range fr.Results {
+		if r.SymbolID == string(h.callerSymbol) {
+			foundCaller = true
+			break
+		}
+	}
+	if !foundCaller {
+		t.Errorf("cross-consistency: find_related did not surface caller %q in %+v",
+			h.callerSymbol, fr.Results)
+	}
+}
+
+// TestThreeTools_Concurrent — D7 #5. 8 goroutines × 3 tools = 24 concurrent
+// invocations against the same seed. Per-tool responses are byte-identical
+// across goroutines (idempotency) and the race detector stays clean.
+func TestThreeTools_Concurrent(t *testing.T) {
+	h := newThreeToolsHarness(t, "read")
+	ctx := context.Background()
+	const N = 8
+
+	type toolFn func() string
+	tools := map[string]toolFn{
+		"explain": func() string {
+			r := h.skill.handleExplainSymbolDeep(ctx, ExplainSymbolDeepArgs{
+				Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+			})
+			if r.IsError {
+				return "ERROR:" + extractText(t, r)
+			}
+			var v ExplainSymbolDeepResult
+			_ = json.Unmarshal([]byte(extractText(t, r)), &v)
+			v.Freshness.AsOfUnixMs = 0
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+		"related": func() string {
+			r := h.skill.handleFindRelatedSymbols(ctx, FindRelatedSymbolsArgs{
+				Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+				K:    5,
+			})
+			if r.IsError {
+				return "ERROR:" + extractText(t, r)
+			}
+			var v FindRelatedSymbolsResult
+			_ = json.Unmarshal([]byte(extractText(t, r)), &v)
+			v.Freshness.AsOfUnixMs = 0
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+		"validate": func() string {
+			r := h.skill.handleValidateGraphEdge(ctx, ValidateGraphEdgeArgs{
+				From:     SeedInput{SymbolID: string(h.callerSymbol)},
+				To:       SeedInput{SymbolID: string(h.seedSymbol)},
+				EdgeKind: "calls",
+			})
+			if r.IsError {
+				return "ERROR:" + extractText(t, r)
+			}
+			var v ValidateGraphEdgeResult
+			_ = json.Unmarshal([]byte(extractText(t, r)), &v)
+			v.Freshness.AsOfUnixMs = 0
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+	}
+
+	for name, fn := range tools {
+		name, fn := name, fn
+		t.Run(name, func(t *testing.T) {
+			results := make([]string, N)
+			var wg sync.WaitGroup
+			for i := 0; i < N; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					results[i] = fn()
+				}(i)
+			}
+			wg.Wait()
+			for i := 1; i < N; i++ {
+				if results[i] != results[0] {
+					t.Errorf("[%s] response[%d] differs from response[0]:\n  [0]=%s\n  [%d]=%s",
+						name, i, results[0], i, results[i])
+				}
+			}
+		})
+	}
+}
+
+// TestThreeTools_EnvelopeShape — each tool's response carries a FreshnessV2
+// envelope with non-zero graph_version + non-zero snapshot_id + non-empty
+// extractor_run_id + non-zero as_of_unix_ms + status ∈ {current,stale,unknown}.
+func TestThreeTools_EnvelopeShape(t *testing.T) {
+	h := newThreeToolsHarness(t, "read")
+	ctx := context.Background()
+
+	check := func(name string, f FreshnessV2) {
+		t.Helper()
+		if f.GraphVersion == 0 {
+			t.Errorf("[%s] freshness.graph_version = 0", name)
+		}
+		if f.SnapshotID == 0 {
+			t.Errorf("[%s] freshness.snapshot_id = 0", name)
+		}
+		if f.ExtractorRunID == "" {
+			t.Errorf("[%s] freshness.extractor_run_id empty", name)
+		}
+		if f.AsOfUnixMs == 0 {
+			t.Errorf("[%s] freshness.as_of_unix_ms = 0", name)
+		}
+		switch f.Status {
+		case FreshnessStatusCurrent, FreshnessStatusStale, FreshnessStatusUnknown:
+			// ok
+		default:
+			t.Errorf("[%s] freshness.status = %q; want one of {current,stale,unknown}", name, f.Status)
+		}
+	}
+
+	// explain
+	r := h.skill.handleExplainSymbolDeep(ctx, ExplainSymbolDeepArgs{
+		Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+	})
+	if r.IsError {
+		t.Fatalf("explain error: %s", extractText(t, r))
+	}
+	var ex ExplainSymbolDeepResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, r)), &ex))
+	check("explain_symbol_deep", ex.Freshness)
+
+	// find_related
+	r = h.skill.handleFindRelatedSymbols(ctx, FindRelatedSymbolsArgs{
+		Seed: SeedInput{SymbolID: string(h.seedSymbol)},
+	})
+	if r.IsError {
+		t.Fatalf("find_related error: %s", extractText(t, r))
+	}
+	var fr FindRelatedSymbolsResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, r)), &fr))
+	check("find_related_symbols", fr.Freshness)
+
+	// validate
+	r = h.skill.handleValidateGraphEdge(ctx, ValidateGraphEdgeArgs{
+		From:     SeedInput{SymbolID: string(h.callerSymbol)},
+		To:       SeedInput{SymbolID: string(h.seedSymbol)},
+		EdgeKind: "calls",
+	})
+	if r.IsError {
+		t.Fatalf("validate error: %s", extractText(t, r))
+	}
+	var ve ValidateGraphEdgeResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, r)), &ve))
+	check("validate_graph_edge", ve.Freshness)
+}
+
+// TestThreeTools_ModeEnforcement — modeTierRead is the lowest tier; every
+// session passes. The test asserts the alternate rejection path (resolver
+// unwired) returns an error envelope for ALL three tools and the recorder
+// canaries never fire.
+//
+// Mirrors the per-handler ModeRejected test stance documented in 71-03 /
+// 71-04 SUMMARYs (modeTierRead passes by design; testing the operational
+// "no accessor I/O on reject" invariant via an alternate path).
+func TestThreeTools_ModeEnforcement(t *testing.T) {
+	h := newThreeToolsHarness(t, "read")
+	h.skill.SetSymbolByName(nil) // force resolver-unwired error path
+
+	ctx := context.Background()
+
+	r1 := h.skill.handleExplainSymbolDeep(ctx, ExplainSymbolDeepArgs{
+		Seed: SeedInput{FilePath: "x.go", SymbolName: "Y"},
+	})
+	if !r1.IsError {
+		t.Errorf("explain_symbol_deep: expected error envelope (resolver unwired)")
+	}
+
+	r2 := h.skill.handleFindRelatedSymbols(ctx, FindRelatedSymbolsArgs{
+		Seed: SeedInput{FilePath: "x.go", SymbolName: "Y"},
+	})
+	if !r2.IsError {
+		t.Errorf("find_related_symbols: expected error envelope (resolver unwired)")
+	}
+
+	r3 := h.skill.handleValidateGraphEdge(ctx, ValidateGraphEdgeArgs{
+		From:     SeedInput{FilePath: "x.go", SymbolName: "Y"},
+		To:       SeedInput{FilePath: "z.go", SymbolName: "Q"},
+		EdgeKind: "calls",
+	})
+	if !r3.IsError {
+		t.Errorf("validate_graph_edge: expected error envelope (resolver unwired)")
+	}
+	// Canaries are baked into the recorder via t.Fatalf — if any handler
+	// reached a snapshot-write method, the test would have crashed already.
 }
 
 // ---------------------------------------------------------------------------

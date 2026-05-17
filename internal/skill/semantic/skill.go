@@ -48,6 +48,13 @@ type SemanticSkill struct {
 	// edges) rather than erroring.
 	typeChain   TypeChainAccessor
 	symbolEdges SymbolEdgesAccessor
+
+	// Phase 71-05 addition: per-edge evidence seam driving
+	// validate_graph_edge. Read-only; nil means the seam is unwired and
+	// the handler degrades the response to evidence_status=none with
+	// fallback_reason="evidence_lookup_unavailable" while still answering
+	// edge-presence (D4 lenient stance).
+	edgeEvidence EdgeEvidenceAccessor
 }
 
 func init() { skill.Register(&SemanticSkill{}) }
@@ -174,6 +181,16 @@ func (s *SemanticSkill) SetSymbolEdges(a SymbolEdgesAccessor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.symbolEdges = a
+}
+
+// SetEdgeEvidence wires the EdgeEvidenceAccessor adapter (Phase 71-05 seam).
+// Drives validate_graph_edge's evidence array + confidence computation.
+// Production binding wraps the *Store per-edge evidence reader at the latest
+// committed snapshot.
+func (s *SemanticSkill) SetEdgeEvidence(a EdgeEvidenceAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.edgeEvidence = a
 }
 
 // sessionSnapshot returns the SessionSnapshot for the current request, or a

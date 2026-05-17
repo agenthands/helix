@@ -154,7 +154,7 @@
 - [x] **Phase 68: Precise FileFactDiff Populator** -- Replace Tier-3 synthetic-marker floor with Tier-1 (full diff) / Tier-2 (added-only) populators; pre-edit FileFact accessor; close DEF-67-F01-FULL-DIFF (completed 2026-05-13)
 - [x] **Phase 69: Production Status Accessors** -- Real ClusterStatus from Phase 62 cluster engine; real retrieval status from bleve + corpus; close TOOL-03/04 placeholders
 - [x] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental (completed 2026-05-15)
-- [ ] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed)
+- [x] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed) (completed 2026-05-17)
 - [ ] **Phase 72: P1 Cluster & Impact Tools** -- `get_cluster_map`, `explain_cluster`, `get_change_impact_graph` (cluster-aware; mixed read+/review+ tier)
 - [ ] **Phase 73: P1 Tools Integration & E2E Verification** -- Profile/mode gating across the 6 tools; skill-wrapper consistency audit; full E2E test coverage with closed-enum envelopes
 
@@ -225,11 +225,11 @@
   4. All three tools enforce `read+` mode tier at handler entry; tools/list filters per profile.
   5. Response envelopes carry closed-enum `freshness`, `source`, `fallback_reason` fields mirroring v1.10 conventions; race-clean under concurrent invocation.
 **Plans**: 5 plans
-- [ ] 71-01-PLAN.md — Seam additions: QuerySymbolByName + LatestExtractorRunID + 3 narrow accessor interfaces + resolveSeed helper + multi-language Go/TS/Java fixture (P1TOOL-01/02/06)
-- [ ] 71-02-PLAN.md — Edge-kind surface closed enum + MapInternalKind + FreshnessV2 envelope + FreshnessStatus enum (P1TOOL-01/02/06)
-- [ ] 71-03-PLAN.md — explain_symbol_deep handler + register + tests (P1TOOL-01)
-- [ ] 71-04-PLAN.md — find_related_symbols handler + register + tests (P1TOOL-02)
-- [ ] 71-05-PLAN.md — validate_graph_edge handler + register + tests + cross-tool integration suite + CI read-only gate (P1TOOL-06)
+- [x] 71-01-PLAN.md — Seam additions: QuerySymbolByName + LatestExtractorRunID + 3 narrow accessor interfaces + resolveSeed helper + multi-language Go/TS/Java fixture (P1TOOL-01/02/06)
+- [x] 71-02-PLAN.md — Edge-kind surface closed enum + MapInternalKind + FreshnessV2 envelope + FreshnessStatus enum (P1TOOL-01/02/06)
+- [x] 71-03-PLAN.md — explain_symbol_deep handler + register + tests (P1TOOL-01)
+- [x] 71-04-PLAN.md — find_related_symbols handler + register + tests (P1TOOL-02)
+- [x] 71-05-PLAN.md — validate_graph_edge handler + register + tests + cross-tool integration suite + CI read-only gate (P1TOOL-06)
 
 ### Phase 72: P1 Cluster & Impact Tools
 **Goal**: Three new MCP tools answer workspace-level structural questions — cluster overview, per-cluster detail, and pre-edit blast-radius via the semantic graph.

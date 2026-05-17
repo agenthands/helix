@@ -55,6 +55,15 @@ type SemanticSkill struct {
 	// fallback_reason="evidence_lookup_unavailable" while still answering
 	// edge-presence (D4 lenient stance).
 	edgeEvidence EdgeEvidenceAccessor
+
+	// Phase 72 additions: read-only seams for the P1 cluster & impact tools
+	// (get_cluster_map, explain_cluster, get_change_impact_graph). All four
+	// are post-init wired by the daemon adapter; nil means the seam is
+	// unwired and the handler MUST guard (degrade gracefully).
+	clusterMap      ClusterMapAccessor
+	clusterMember   ClusterMemberAccessor
+	clusterPageRank ClusterPageRankAccessor
+	impactLookup    ImpactLookupAccessor
 }
 
 func init() { skill.Register(&SemanticSkill{}) }
@@ -191,6 +200,74 @@ func (s *SemanticSkill) SetEdgeEvidence(a EdgeEvidenceAccessor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.edgeEvidence = a
+}
+
+// SetClusterMap wires the ClusterMapAccessor adapter (Phase 72 seam).
+// Drives get_cluster_map's top-N cluster list. Production binding wraps
+// *Store.QueryClusterSummaries.
+func (s *SemanticSkill) SetClusterMap(a ClusterMapAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterMap = a
+}
+
+// SetClusterMember wires the ClusterMemberAccessor adapter (Phase 72 seam).
+// Drives explain_cluster's member list. Production binding wraps
+// *Store.QueryClusterMembers.
+func (s *SemanticSkill) SetClusterMember(a ClusterMemberAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterMember = a
+}
+
+// SetClusterPageRank wires the ClusterPageRankAccessor adapter (Phase 72 seam).
+// Drives per-member PageRank ranking in explain_cluster. Production binding
+// wraps *Store.QueryNodePageRanks.
+func (s *SemanticSkill) SetClusterPageRank(a ClusterPageRankAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterPageRank = a
+}
+
+// SetImpactLookup wires the ImpactLookupAccessor adapter (Phase 72 seam).
+// Drives get_change_impact_graph's graph traversal. Production binding wraps
+// *integSemanticLookup.
+func (s *SemanticSkill) SetImpactLookup(a ImpactLookupAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.impactLookup = a
+}
+
+// getClusterMap returns the wired ClusterMapAccessor under the skill mutex.
+// Returns nil when the accessor has not been wired (handler MUST guard).
+func (s *SemanticSkill) getClusterMap() ClusterMapAccessor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clusterMap
+}
+
+// getClusterMember returns the wired ClusterMemberAccessor under the skill mutex.
+// Returns nil when the accessor has not been wired (handler MUST guard).
+func (s *SemanticSkill) getClusterMember() ClusterMemberAccessor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clusterMember
+}
+
+// getClusterPageRank returns the wired ClusterPageRankAccessor under the skill mutex.
+// Returns nil when the accessor has not been wired (handler MUST guard).
+func (s *SemanticSkill) getClusterPageRank() ClusterPageRankAccessor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clusterPageRank
+}
+
+// getImpactLookup returns the wired ImpactLookupAccessor under the skill mutex.
+// Returns nil when the accessor has not been wired (handler MUST guard).
+func (s *SemanticSkill) getImpactLookup() ImpactLookupAccessor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.impactLookup
 }
 
 // sessionSnapshot returns the SessionSnapshot for the current request, or a

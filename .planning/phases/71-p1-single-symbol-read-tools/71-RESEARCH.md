@@ -409,19 +409,25 @@ func (s *SemanticSkill) assembleFreshness(ctx context.Context, ws workspace.Work
 | A6 | The "Phase 64 P07 populated-graph fixture" referenced in CONTEXT.md is NOT a multi-language graph fixture — it is the bleve recovery harness. A new multi-language fixture must be built fresh in Phase 71 | Architecture / D7 | If a fixture is hidden under a different name, planner discovers it during 71-04 |
 | A7 | `vet-nokernel2semantic` build target enforces the kernel↔semantic boundary; Phase 71 stays semantic-side and does not breach it | Architecture / CONTEXT.md | Verified by reading CONTEXT.md; no kernel imports needed for any of the three tools |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where is the CI grep-gate runner config?**
+   **RESOLVED:** 71-01 Task 2 probes for an external runner (`.github/workflows/`, `scripts/`); 71-05 Task 3 branches on the finding — Branch A extends the external runner, Branch B adds an in-tree Go test mirroring `tools_refresh_test.go:116-135` recorder gate.
+   **Original investigation:**
    - What we know: `tools_refresh.go` carries a header comment ("INVARIANT (D-09 / D-13): … no Begin/Commit/Abort/Write …") and `tools_refresh_test.go` installs a recorder accessor that fails on those methods. CONTEXT.md says "CI grep-gate on the three new handler files (mirroring `tools_refresh.go`'s gate)."
    - What's unclear: The actual grep step is not in `internal/skill/semantic/`. It is likely in `.github/workflows/*.yml` or `Makefile`/`scripts/`. Researcher did not exhaustively probe CI configs.
    - Recommendation: Plan 71-01 (seam plan) includes a 30-min "locate grep-gate; document file + line" task before the first new handler lands.
 
 2. **Should cluster co-membership boost be part of Phase 71 or deferred to Phase 72?**
+   **RESOLVED:** 71-01 declares `ClusterMembershipAccessor` narrow interface; 71-04 wires the fusion integration. If accessor cost is non-trivial during execution, 71-04 keeps the boost disabled (returns 0 contribution) with `fallback_reason: "cluster_boost_unavailable"` and the interface still ships in 71-01.
+   **Original investigation:**
    - What we know: ROADMAP succ.crit. #2 lists it; cluster engine (`semantic_cluster_members`) exists in Phase 62/69.
    - What's unclear: Whether reading the cluster_id of a single symbol is a one-row SELECT or requires the cluster engine's runtime accessor. The `SchedulerAccessor.ClusterStatus(repoID)` exists but is bucket-status, not per-symbol membership.
    - Recommendation: Add a new `ClusterMembershipAccessor.ClusterIDOf(repoID, symbolID) (clusterID uint64, size int, err error)` in plan 71-01. If hard, defer the boost and emit `fallback_reason: "cluster_boost_unavailable"` per A3.
 
 3. **How should `validate_graph_edge` derive AST citations?**
+   **RESOLVED:** 71-05 Task 1 first step investigates the extractor surface; if AST metadata is absent (no range/file on edges), the `ast` source contributes only via internal-kind presence and `evidence_status: "partial"` is returned. Outcome documented in plan 71-05 SUMMARY.
+   **Original investigation:**
    - What we know: LSP citations live on `Edge.Source = "lsp.go.text_document_definition"` etc. (verified in `internal/semantic/types/golang/resolver.go:60`). Type-resolver citations come from the ladder (`EvidenceLSP`/`EvidenceAnnotation`/`EvidenceConstructor`/`EvidenceAssignment`/`EvidenceComment`/`EvidenceHeuristic`/`EvidenceUnknown` — that's the 7-tier ladder).
    - What's unclear: AST citations have no dedicated `Source` prefix today. They may need to be synthesized from extractor metadata (the `tree_sitter_kind` and `range` would come from the extractor's per-symbol record).
    - Recommendation: Plan 71-05 (`validate_graph_edge` plan) drafts the AST citation shape and verifies extractor output carries the needed metadata. If it doesn't, AST citations become `evidence_kind: "ast"` with `tree_sitter_kind: ""` and `evidence_status: "partial"`.

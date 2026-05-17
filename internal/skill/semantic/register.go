@@ -24,4 +24,5 @@ func RegisterAll(server *mcp.SerenaMCPServer, s *SemanticSkill, tracer trace.Tra
 	registerRefreshSemanticGraph(server, s, tracer)
 	registerGetSemanticGraphStatus(server, s, tracer)
 	registerGetSemanticContext(server, s, tracer)
+	registerExplainSymbolDeep(server, s, tracer)
 }

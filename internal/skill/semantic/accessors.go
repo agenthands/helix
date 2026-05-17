@@ -219,3 +219,65 @@ type ExtractorRunAccessor interface {
 type ClusterMembershipAccessor interface {
 	ClusterIDOf(ctx context.Context, repoID string, symbolID integ.SymbolID) (clusterID uint64, size int, err error)
 }
+
+// ----- Phase 71-03 additions: per-symbol type-chain + edges seams -----
+//
+// Phase 71-01 declared name-keyed symbol lookup + extractor-run + cluster
+// membership. The 71-03 explain_symbol_deep handler additionally needs (a)
+// per-symbol type-chain rows carrying evidence kind / tier and (b) per-symbol
+// edge rows (callers + incoming + outgoing) carrying the internal_kind label
+// the closed-enum surface mapper consumes. The existing StoreAccessor.
+// QueryEffectiveAdjacency returns whole-graph adjacency keyed on uint64
+// graph.NodeID with edge-weight values only — it cannot surface the
+// internal_kind label the MCP edge surface needs (Pitfall 2: RESOLVES_TO →
+// has_type) and cannot be filtered to one symbol cheaply. These two narrow
+// accessors close that gap.
+//
+// Both interfaces are READ-ONLY (D-09 invariant; no Begin/Commit/Abort/Write
+// methods). Production bindings (future plan) will wrap *Store SQL reads at
+// the latest committed snapshot.
+
+// TypeChainRow is one resolved type-chain entry surfaced to the
+// explain_symbol_deep handler. Tier is the closed-enum SPEC §38.2 tier
+// string ("tier1_lsp" .. "tier7_unknown"); EvidenceKind is the
+// types.EvidenceKind serialization (`lsp` | `annotation` | `constructor` |
+// `assignment` | `comment` | `heuristic` | `unknown`).
+type TypeChainRow struct {
+	Tier           string
+	EvidenceKind   string
+	TargetSymbolID string
+}
+
+// TypeChainAccessor returns the per-symbol type-chain rows used to populate
+// explain_symbol_deep's type_chain response field. Empty slice signals "no
+// chain rows materialized for this symbol" — not an error.
+type TypeChainAccessor interface {
+	TypeChainForSymbol(ctx context.Context, repoID string, sym integ.SymbolID) ([]TypeChainRow, error)
+}
+
+// SymbolEdgeRow is one per-symbol edge surfaced to the explain_symbol_deep
+// handler. InternalKind is the raw extractor / resolver kind string
+// (CALLS / REFERENCES / RESOLVES_TO / USES_TYPE / CONTAINS / IMPLEMENTS /
+// EXTENDS / DEFINED_IN / IMPORTS / ...) — the handler runs MapInternalKind
+// to derive the closed-enum surface EdgeKind in the response. From / To are
+// the endpoint stable IDs; depending on edge direction one of the two may be
+// the seed itself (callers: From=caller, To=seed; outgoing: From=seed,
+// To=target; incoming: From=src, To=seed).
+type SymbolEdgeRow struct {
+	From         integ.SymbolID
+	To           integ.SymbolID
+	InternalKind string
+}
+
+// SymbolEdgesAccessor returns per-symbol edge rows partitioned by direction.
+// All three methods are independent reads — implementations MAY share
+// indexes but MUST NOT cache state between calls (D-09 read-only invariant).
+//
+// CallersOf is a specialization of IncomingEdgesOf filtered to CALLS edges;
+// surfaced separately so the handler can apply the D2 callers≤50 cap before
+// the edges≤100 cap.
+type SymbolEdgesAccessor interface {
+	CallersOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
+	IncomingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
+	OutgoingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
+}

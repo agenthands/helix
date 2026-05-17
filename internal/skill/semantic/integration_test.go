@@ -1695,6 +1695,155 @@ func TestThreeTools_ModeEnforcement(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 72-05 D7 — Four-tool cross-tool chain test.
+//
+// TestFourTools_ClusterToImpact chains all three Phase 72 tools in a
+// deterministic pipeline:
+//   1. get_cluster_map  → captures top cluster's cluster_id + FreshnessV2.
+//   2. explain_cluster  → decodes cluster_id, returns members + FreshnessV2.
+//   3. get_change_impact_graph → takes a representative member symbol_id,
+//      returns subgraph + FreshnessV2.
+//
+// The central invariant (D7 cross-tool consistency) is that all three
+// FreshnessV2.GraphVersion values are IDENTICAL — the three handlers read
+// the same committed snapshot through different accessor seams but all
+// observe graphVersion=42 from the shared store recorder.
+// ---------------------------------------------------------------------------
+
+// fourToolsHarness extends threeToolsHarness with the Phase 72 accessors
+// wired for cluster + impact tools. Mode is "review" because
+// get_change_impact_graph requires review+.
+type fourToolsHarness struct {
+	skill      *SemanticSkill
+	store      *threeToolsStoreRec
+	seedSymbol integ.SymbolID
+}
+
+// newFourToolsHarness constructs a SemanticSkill wired for the four-tool
+// cluster-to-impact integration chain. It reuses threeToolsStoreRec (graph
+// version 42) and wires the Phase 72 shared mock accessors declared in
+// populated_graph_fixture_test.go.
+func newFourToolsHarness(t *testing.T) *fourToolsHarness {
+	t.Helper()
+
+	fx := buildPopulatedGraphFixture(t)
+	seed := fx.GoSeedSymbolID // "repo/src/svc.go::ServeHTTP"
+
+	s := &SemanticSkill{}
+	if err := s.Init(skill.SkillDeps{}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// get_change_impact_graph requires mode >= "review".
+	sess := &mcp.SessionInfo{SessionID: "test-four-tools", Mode: "review"}
+	ws := workspace.WorkspaceKey{
+		RepoRoot: "/tmp/repo-four-tools", Language: "go", Toolchain: "go1.22",
+	}
+	s.SetSessionAccessor(&mockSessionAccessor{ws: ws, sess: sess})
+
+	store := &threeToolsStoreRec{
+		t:              t,
+		graphVersion:   42,
+		latestSnapshot: 7,
+	}
+	s.SetStore(store)
+
+	// Phase 71 accessor seams (needed for resolveSeed + FreshnessV2 assembly).
+	s.SetSymbolByName(fx.SymbolByName)
+	s.SetExtractorRun(fx.ExtractorRun)
+	s.SetClusterMembership(fx.ClusterMembership)
+
+	// Phase 72 accessor seams: cluster map, cluster member, cluster page rank,
+	// impact lookup. All use the shared fixture mocks from populated_graph_fixture_test.go.
+	s.SetClusterMap(&fixClusterMapAccessorShared{})
+	s.SetClusterMember(&fixClusterMemberAccessorShared{})
+	s.SetClusterPageRank(&fixClusterPageRankAccessorShared{})
+	s.SetImpactLookup(&fixImpactLookupAccessorShared{})
+
+	return &fourToolsHarness{
+		skill:      s,
+		store:      store,
+		seedSymbol: seed,
+	}
+}
+
+// TestFourTools_ClusterToImpact — D7 cluster-to-impact chain.
+//
+// Pipeline:
+//   Step 1: get_cluster_map(top_n=1) → assert returns ≥1 cluster; capture
+//           Clusters[0].ClusterID as clusterID and record GraphVersion (cmGV).
+//   Step 2: explain_cluster(cluster_id=clusterID) → assert IsError==false,
+//           len(Members)≥1; capture Members[0].SymbolID as repSymbol and
+//           record GraphVersion (ecGV).
+//   Step 3: get_change_impact_graph(seed.symbol_id=repSymbol) → assert
+//           IsError==false; record GraphVersion (igGV).
+//   Step 4: assert cmGV == ecGV == igGV == 42 (all three read graphVersion=42).
+//   Step 5: assert ec.MemberCount ≥ 1.
+func TestFourTools_ClusterToImpact(t *testing.T) {
+	h := newFourToolsHarness(t)
+	ctx := context.Background()
+
+	// Step 1: get_cluster_map — capture top cluster_id + graph_version.
+	cmRes := h.skill.handleGetClusterMap(ctx, GetClusterMapArgs{TopN: 1})
+	if cmRes.IsError {
+		t.Fatalf("get_cluster_map error: %s", extractText(t, cmRes))
+	}
+	var cm GetClusterMapResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, cmRes)), &cm))
+	if len(cm.Clusters) < 1 {
+		t.Fatalf("get_cluster_map: expected ≥1 cluster, got %d", len(cm.Clusters))
+	}
+	clusterID := cm.Clusters[0].ClusterID
+	cmGV := cm.Freshness.GraphVersion
+
+	// Step 2: explain_cluster — decode cluster_id, verify members, capture GV.
+	ecRes := h.skill.handleExplainCluster(ctx, ExplainClusterArgs{ClusterID: clusterID})
+	if ecRes.IsError {
+		t.Fatalf("explain_cluster error: %s", extractText(t, ecRes))
+	}
+	var ec ExplainClusterResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, ecRes)), &ec))
+	if ec.FallbackReason != "" {
+		t.Fatalf("explain_cluster degraded: fallback_reason=%q (cluster_id=%q, cmGV=%d)",
+			ec.FallbackReason, clusterID, cmGV)
+	}
+	if len(ec.Members) < 1 {
+		t.Fatalf("explain_cluster: expected ≥1 member, got %d", len(ec.Members))
+	}
+	repSymbol := ec.Members[0].SymbolID
+	ecGV := ec.Freshness.GraphVersion
+
+	// Step 3: get_change_impact_graph — seed=repSymbol, capture GV.
+	igRes := h.skill.handleGetChangeImpactGraph(ctx, GetChangeImpactGraphArgs{
+		Seed: SeedInput{SymbolID: repSymbol},
+	})
+	if igRes.IsError {
+		t.Fatalf("get_change_impact_graph error: %s", extractText(t, igRes))
+	}
+	var ig GetChangeImpactGraphResult
+	require.NoError(t, json.Unmarshal([]byte(extractText(t, igRes)), &ig))
+	if ig.FallbackReason != "" {
+		t.Fatalf("get_change_impact_graph degraded: fallback_reason=%q", ig.FallbackReason)
+	}
+	igGV := ig.Freshness.GraphVersion
+
+	// Step 4: assert FreshnessV2.GraphVersion is IDENTICAL across all three tools.
+	if cmGV != ecGV || ecGV != igGV {
+		t.Errorf("FreshnessV2.GraphVersion divergence across tools: "+
+			"get_cluster_map=%d explain_cluster=%d get_change_impact_graph=%d; all must be equal",
+			cmGV, ecGV, igGV)
+	}
+	if cmGV != 42 {
+		t.Errorf("FreshnessV2.GraphVersion = %d; want 42 (fixture value)", cmGV)
+	}
+
+	// Step 5: sanity — explain_cluster MemberCount ≥ 1.
+	if ec.MemberCount < 1 {
+		t.Errorf("explain_cluster MemberCount = %d; want ≥ 1", ec.MemberCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Phase 65 65-09 — production-adapter strangler-fig E2E placeholders.
 //
 // 65-12 Task 4 (Rule 3 deviation) MOVED these two tests out of

@@ -41,6 +41,13 @@ type SemanticSkill struct {
 	symbolByName      SymbolByNameAccessor
 	extractorRun      ExtractorRunAccessor
 	clusterMembership ClusterMembershipAccessor
+
+	// Phase 71-03 additions: per-symbol type-chain + edges seams driving
+	// explain_symbol_deep. Both are read-only; nil means the seam is
+	// unwired and the handler degrades gracefully (empty type_chain / no
+	// edges) rather than erroring.
+	typeChain   TypeChainAccessor
+	symbolEdges SymbolEdgesAccessor
 }
 
 func init() { skill.Register(&SemanticSkill{}) }
@@ -147,6 +154,26 @@ func (s *SemanticSkill) SetClusterMembership(a ClusterMembershipAccessor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clusterMembership = a
+}
+
+// SetTypeChain wires the TypeChainAccessor adapter (Phase 71-03 seam).
+// Drives the explain_symbol_deep type_chain response field. Production
+// binding wraps the *Store type-chain row reader at the latest committed
+// snapshot.
+func (s *SemanticSkill) SetTypeChain(a TypeChainAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.typeChain = a
+}
+
+// SetSymbolEdges wires the SymbolEdgesAccessor adapter (Phase 71-03 seam).
+// Drives the explain_symbol_deep callers / edges_incoming / edges_outgoing
+// response fields. Production binding wraps the *Store per-symbol edge
+// reader at the latest committed snapshot.
+func (s *SemanticSkill) SetSymbolEdges(a SymbolEdgesAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.symbolEdges = a
 }
 
 // sessionSnapshot returns the SessionSnapshot for the current request, or a

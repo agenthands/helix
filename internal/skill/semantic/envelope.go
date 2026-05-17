@@ -197,6 +197,70 @@ type ContextEvidence struct {
 	TopEdges     []string `json:"top_edges"` // capped at 5
 }
 
+// ----------------------------------------------------------------------------
+// Phase 71-02 — FreshnessV2 envelope (D5) + FreshnessStatus / FreshnessSource
+// closed enums. Strictly additive: the existing Phase 64 Freshness type,
+// ClusterStatus, RetrievalStatus, and CommonEnvelope shapes are NOT touched.
+//
+// Lineage:
+//   - D5 (71-CONTEXT.md) — three-identifier freshness envelope
+//     (graph_version, snapshot_id, extractor_run_id) plus closed-enum status
+//     and source fields.
+//   - Phase 69 D1 — three-state status closed enum {current, stale, unknown}
+//     reused verbatim here as FreshnessStatus (a NEW named type distinct
+//     from the Phase 64 four-state Freshness type so the two contracts can
+//     coexist without aliasing).
+// ----------------------------------------------------------------------------
+
+// FreshnessStatus is the closed three-state status enum embedded in
+// FreshnessV2. Distinct named type from Freshness so the Phase 64 envelope
+// contract is preserved unchanged.
+type FreshnessStatus string
+
+const (
+	// FreshnessStatusCurrent: the read reflects the latest committed snapshot
+	// with no pending overlay or LSP work.
+	FreshnessStatusCurrent FreshnessStatus = "current"
+	// FreshnessStatusStale: the read reflects a snapshot older than the
+	// current graph version, OR overlay/LSP work is pending.
+	FreshnessStatusStale FreshnessStatus = "stale"
+	// FreshnessStatusUnknown: no committed snapshot is available yet (e.g.,
+	// initial index build hasn't completed).
+	FreshnessStatusUnknown FreshnessStatus = "unknown"
+)
+
+// FreshnessSource is the closed enum identifying which subsystem produced the
+// result. Source: D5 — `source ∈ {graph, type_resolver_ladder, ast_fallback}`.
+type FreshnessSource string
+
+const (
+	// FreshnessSourceGraph: result came from the committed semantic graph.
+	FreshnessSourceGraph FreshnessSource = "graph"
+	// FreshnessSourceTypeResolverLadder: result was derived via the type
+	// resolver ladder (Phase 62 TYPES-01..04).
+	FreshnessSourceTypeResolverLadder FreshnessSource = "type_resolver_ladder"
+	// FreshnessSourceASTFallback: result came from tree-sitter AST fallback
+	// because graph/LSP information was unavailable.
+	FreshnessSourceASTFallback FreshnessSource = "ast_fallback"
+)
+
+// FreshnessV2 is the Phase 71 D5 freshness envelope carrying the three
+// freshness identifiers (graph_version, snapshot_id, extractor_run_id), the
+// server-clock as-of timestamp, and the closed-enum status + source fields.
+//
+// All fields are `omitempty` so degraded paths emitting a partial envelope
+// (e.g., source==ast_fallback with no snapshot) do not surface zero-value
+// keys — consistent with Pattern A in 71-PATTERNS.md (additive struct
+// extension via omitempty).
+type FreshnessV2 struct {
+	GraphVersion   uint64          `json:"graph_version,omitempty"`
+	SnapshotID     uint64          `json:"snapshot_id,omitempty"`
+	ExtractorRunID string          `json:"extractor_run_id,omitempty"`
+	AsOfUnixMs     int64           `json:"as_of_unix_ms,omitempty"`
+	Status         FreshnessStatus `json:"status,omitempty"`
+	Source         FreshnessSource `json:"source,omitempty"`
+}
+
 // TextRank is one text-rank entry returned by RetrievalAccessor.QueryBleve.
 type TextRank struct {
 	SymbolID string

@@ -776,6 +776,182 @@ func (s *Store) QuerySymbolLocationByStableKey(
 	return path, uint32(startLine), uint32(startCol), true, nil
 }
 
+// ----- Phase 72-01 additions: cluster & impact read methods -----
+
+// ClusterSummaryResult is the store-internal read payload returned by
+// QueryClusterSummaries. The skill-layer ClusterSummaryRow in accessors.go
+// mirrors this type; the accessor adapter bridges the two.
+type ClusterSummaryResult struct {
+	ClusterIntID uint64
+	MemberCount  int
+}
+
+// ClusterMemberResult is the store-internal read payload returned by
+// QueryClusterMembers. The skill-layer ClusterMemberRow in accessors.go
+// mirrors this type; the accessor adapter bridges the two.
+type ClusterMemberResult struct {
+	NodeID   uint64
+	SymbolID string
+}
+
+// QueryClusterSummaries returns the top-N cluster summaries for
+// (repoID, projection, graphVersion) ordered by score DESC. The `score`
+// column is overloaded by overlay.go:835 to store the planning-time
+// MemberCount, so CAST(score AS INTEGER) retrieves the member count.
+//
+// Returns (nil, nil) when the store is nil or no rows exist for the
+// requested (repoID, graphVersion). The projection parameter is accepted
+// for future multi-projection support but is not yet filtered in the SQL —
+// semantic_clusters does not carry a projection column in Schema 5
+// (projection=algorithm is the identifier used by the caller convention).
+//
+// Lock-free per scheduler_store.go:48-56 (pure SELECT on s.db).
+// Threat T-72-01-02: topN is passed as a bound positional parameter.
+func (s *Store) QueryClusterSummaries(
+	ctx context.Context, repoID, projection string, graphVersion uint64, topN int,
+) ([]ClusterSummaryResult, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	const q = `
+		SELECT cluster_id, CAST(score AS INTEGER) AS member_count
+		  FROM semantic_clusters
+		 WHERE repo_id      = ?
+		   AND graph_version = ?
+		 ORDER BY score DESC
+		 LIMIT ?
+	`
+	rows, err := s.db.QueryContext(ctx, q, repoID, graphVersion, topN)
+	if err != nil {
+		return nil, fmt.Errorf("QueryClusterSummaries(%q, %q, gv=%d): %w", repoID, projection, graphVersion, err)
+	}
+	defer rows.Close()
+
+	var out []ClusterSummaryResult
+	for rows.Next() {
+		var r ClusterSummaryResult
+		if err := rows.Scan(&r.ClusterIntID, &r.MemberCount); err != nil {
+			return nil, fmt.Errorf("QueryClusterSummaries scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryClusterSummaries rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// QueryClusterMembers returns the member rows for the given
+// (repoID, projection, graphVersion, clusterIntID) with a JOIN to
+// semantic_symbols to surface stable_key as SymbolID.
+//
+// Returns (nil, nil) when the store is nil. Empty slice with nil error
+// signals the cluster has no members or does not exist.
+//
+// The projection parameter is accepted for API consistency but not used in
+// the SQL (Schema 5 semantic_cluster_members has no projection column).
+// Lock-free per scheduler_store.go:48-56.
+// Threat T-72-01-01: all parameters are bound positional args.
+func (s *Store) QueryClusterMembers(
+	ctx context.Context, repoID, projection string, graphVersion, clusterIntID uint64, limit int,
+) ([]ClusterMemberResult, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	const q = `
+		SELECT scm.node_id, ss.stable_key AS symbol_id
+		  FROM semantic_cluster_members AS scm
+		  JOIN semantic_symbols AS ss
+		    ON ss.node_id      = scm.node_id
+		   AND ss.snapshot_id  = (
+		         SELECT MAX(snapshot_id)
+		           FROM semantic_snapshots
+		          WHERE repo_id = scm.repo_id
+		            AND status  = 'committed'
+		       )
+		 WHERE scm.repo_id       = ?
+		   AND scm.graph_version = ?
+		   AND scm.cluster_id    = ?
+		 ORDER BY scm.node_id ASC
+		 LIMIT ?
+	`
+	rows, err := s.db.QueryContext(ctx, q, repoID, graphVersion, clusterIntID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("QueryClusterMembers(%q, %q, gv=%d, cluster=%d): %w",
+			repoID, projection, graphVersion, clusterIntID, err)
+	}
+	defer rows.Close()
+
+	var out []ClusterMemberResult
+	for rows.Next() {
+		var r ClusterMemberResult
+		if err := rows.Scan(&r.NodeID, &r.SymbolID); err != nil {
+			return nil, fmt.Errorf("QueryClusterMembers scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryClusterMembers rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// QueryNodePageRanks returns a map[nodeID]score from semantic_graph_scores
+// for the supplied nodeIDs where score_name matches the projection parameter
+// and graph_version matches graphVersion.
+//
+// Returns (nil, nil) when the store is nil or nodeIDs is empty. Missing
+// nodes (those without a score row) are omitted from the result map.
+//
+// Threat T-72-01-02: the IN clause is built with positional bound parameters,
+// never via string concatenation, preventing SQL injection.
+func (s *Store) QueryNodePageRanks(
+	ctx context.Context, repoID, projection string, graphVersion uint64, nodeIDs []uint64,
+) (map[uint64]float64, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if len(nodeIDs) == 0 {
+		return map[uint64]float64{}, nil
+	}
+
+	// Build positional IN clause: one ? per nodeID.
+	placeholders := make([]byte, 0, len(nodeIDs)*3)
+	args := make([]any, 0, 3+len(nodeIDs))
+	args = append(args, repoID, projection, graphVersion)
+	for i, nid := range nodeIDs {
+		if i > 0 {
+			placeholders = append(placeholders, ',')
+		}
+		placeholders = append(placeholders, '?')
+		args = append(args, nid)
+	}
+
+	q := "SELECT node_id, score FROM semantic_graph_scores" +
+		" WHERE repo_id = ? AND score_name = ? AND graph_version = ?" +
+		" AND node_id IN (" + string(placeholders) + ")"
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("QueryNodePageRanks(%q, %q, gv=%d): %w", repoID, projection, graphVersion, err)
+	}
+	defer rows.Close()
+
+	out := make(map[uint64]float64, len(nodeIDs))
+	for rows.Next() {
+		var nodeID uint64
+		var score float64
+		if err := rows.Scan(&nodeID, &score); err != nil {
+			return nil, fmt.Errorf("QueryNodePageRanks scan: %w", err)
+		}
+		out[nodeID] = score
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryNodePageRanks rows.Err: %w", err)
+	}
+	return out, nil
+}
+
 // IterateCommittedSymbols walks every semantic_symbols row at snapshotID
 // in stable symbol_id ASC order, invoking fn(row). If fn returns false,
 // iteration aborts cleanly without error. Honors ctx cancellation via the

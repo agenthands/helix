@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/agenthands/helix/internal/semantic/integ"
+	"github.com/agenthands/helix/internal/workspace"
 )
 
 // PopulatedGraphFixture is a self-contained, in-memory multi-language graph
@@ -156,6 +157,117 @@ func buildPopulatedGraphFixture(t *testing.T) *PopulatedGraphFixture {
 			},
 		},
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 72 shared mock accessor types for the four-tool integration test.
+//
+// These types implement the Phase 72 accessor interfaces and are shared
+// between the per-tool test files and integration_test.go so that
+// TestFourTools_ClusterToImpact can reuse them without re-declaring.
+// ---------------------------------------------------------------------------
+
+// fixClusterMapAccessorShared implements ClusterMapAccessor with a static
+// result set of 3 clusters for integration use. The first cluster has
+// ClusterIntID=10 and MemberCount=5.
+type fixClusterMapAccessorShared struct{}
+
+func (f *fixClusterMapAccessorShared) QueryClusterSummaries(ctx context.Context, repoID, projection string, graphVersion uint64, topN int) ([]ClusterSummaryRow, error) {
+	rows := []ClusterSummaryRow{
+		{ClusterIntID: 10, MemberCount: 5},
+		{ClusterIntID: 20, MemberCount: 3},
+		{ClusterIntID: 30, MemberCount: 2},
+	}
+	if topN > 0 && topN < len(rows) {
+		return rows[:topN], nil
+	}
+	return rows, nil
+}
+
+// fixClusterMemberAccessorShared implements ClusterMemberAccessor returning 4
+// ClusterMemberRow entries for ClusterIntID==10. Other cluster IDs receive an
+// empty slice (valid graceful-degradation path).
+type fixClusterMemberAccessorShared struct{}
+
+func (f *fixClusterMemberAccessorShared) QueryClusterMembers(ctx context.Context, repoID, projection string, graphVersion, clusterIntID uint64, limit int) ([]ClusterMemberRow, error) {
+	if clusterIntID != 10 {
+		return []ClusterMemberRow{}, nil
+	}
+	rows := []ClusterMemberRow{
+		{NodeID: 101, SymbolID: "repo/src/svc.go::ServeHTTP"},
+		{NodeID: 102, SymbolID: "repo/src/svc.go::handle"},
+		{NodeID: 103, SymbolID: "repo/src/types.go::Request"},
+		{NodeID: 104, SymbolID: "repo/src/types.go::Response"},
+	}
+	if limit > 0 && limit < len(rows) {
+		return rows[:limit], nil
+	}
+	return rows, nil
+}
+
+// fixClusterPageRankAccessorShared implements ClusterPageRankAccessor with a
+// static map of known node IDs to PageRank scores. The values are
+// deterministic so tests can assert ranking order is stable.
+type fixClusterPageRankAccessorShared struct{}
+
+func (f *fixClusterPageRankAccessorShared) QueryNodePageRanks(ctx context.Context, repoID, projection string, graphVersion uint64, nodeIDs []uint64) (map[uint64]float64, error) {
+	scores := map[uint64]float64{
+		101: 0.80,
+		102: 0.60,
+		103: 0.40,
+		104: 0.20,
+	}
+	out := make(map[uint64]float64, len(nodeIDs))
+	for _, id := range nodeIDs {
+		if s, ok := scores[id]; ok {
+			out[id] = s
+		}
+	}
+	return out, nil
+}
+
+// fixImpactLookupAccessorShared implements ImpactLookupAccessor returning 3
+// integ.Impact entries with Confidence=0.9 so the OQ-1 predicate (any < 0.8)
+// is NOT triggered. Status returns a zero-value integ.SemanticStatus.
+type fixImpactLookupAccessorShared struct{}
+
+func (f *fixImpactLookupAccessorShared) ExpandFrom(ctx context.Context, ws workspace.WorkspaceKey, sym integ.SymbolID, depth int) ([]integ.Impact, error) {
+	return []integ.Impact{
+		{
+			SymbolID:   "repo/src/svc.go::handle",
+			EdgeKind:   "calls",
+			Confidence: 0.9,
+			Evidence: integ.Evidence{
+				Edges: []integ.Edge{
+					{From: sym, To: "repo/src/svc.go::handle", Kind: "CALLS", Confidence: 0.9},
+				},
+			},
+		},
+		{
+			SymbolID:   "repo/src/types.go::Request",
+			EdgeKind:   "uses_type",
+			Confidence: 0.9,
+			Evidence: integ.Evidence{
+				Edges: []integ.Edge{
+					{From: sym, To: "repo/src/types.go::Request", Kind: "USES_TYPE", Confidence: 0.9},
+				},
+			},
+		},
+		{
+			SymbolID:   "repo/web/api.ts::fetchUser",
+			EdgeKind:   "references",
+			Confidence: 0.9,
+			Evidence: integ.Evidence{
+				Edges: []integ.Edge{
+					{From: sym, To: "repo/web/api.ts::fetchUser", Kind: "REFERENCES", Confidence: 0.9},
+				},
+			},
+		},
+	}, nil
+}
+
+func (f *fixImpactLookupAccessorShared) Status(ctx context.Context, ws workspace.WorkspaceKey) (integ.SemanticStatus, error) {
+	return integ.SemanticStatus{}, nil
 }
 
 // TestPopulatedGraphFixture_MultiLanguage asserts the fixture exposes at

@@ -224,7 +224,12 @@
   3. `validate_graph_edge` answers `(from, to, kind)` claims with a confidence score + evidence path (LSP / AST / type-resolver citations).
   4. All three tools enforce `read+` mode tier at handler entry; tools/list filters per profile.
   5. Response envelopes carry closed-enum `freshness`, `source`, `fallback_reason` fields mirroring v1.10 conventions; race-clean under concurrent invocation.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 71-01-PLAN.md — Seam additions: QuerySymbolByName + LatestExtractorRunID + 3 narrow accessor interfaces + resolveSeed helper + multi-language Go/TS/Java fixture (P1TOOL-01/02/06)
+- [ ] 71-02-PLAN.md — Edge-kind surface closed enum + MapInternalKind + FreshnessV2 envelope + FreshnessStatus enum (P1TOOL-01/02/06)
+- [ ] 71-03-PLAN.md — explain_symbol_deep handler + register + tests (P1TOOL-01)
+- [ ] 71-04-PLAN.md — find_related_symbols handler + register + tests (P1TOOL-02)
+- [ ] 71-05-PLAN.md — validate_graph_edge handler + register + tests + cross-tool integration suite + CI read-only gate (P1TOOL-06)
 
 ### Phase 72: P1 Cluster & Impact Tools
 **Goal**: Three new MCP tools answer workspace-level structural questions — cluster overview, per-cluster detail, and pre-edit blast-radius via the semantic graph.

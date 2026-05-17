@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -285,6 +286,170 @@ var (
 	_ = func() RetrievalAccessor { return (*mockRetrievalAccessor)(nil) }
 	_ = func() RetrievalAccessor { return (*statusMockRetrieval)(nil) }
 )
+
+// ----------------------------------------------------------------------------
+// Phase 71-02 — FreshnessV2 envelope + FreshnessStatus / FreshnessSource closed enums.
+// All additive to the existing Phase 64 envelope contract (D5).
+// ----------------------------------------------------------------------------
+
+// TestFreshnessStatus_ClosedEnum asserts the new three-value closed enum
+// (current / stale / unknown — Phase 69 D1 precedent) declares exactly the
+// documented constants with lowercase string values.
+func TestFreshnessStatus_ClosedEnum(t *testing.T) {
+	cases := []struct {
+		name string
+		val  FreshnessStatus
+		want string
+	}{
+		{"current", FreshnessStatusCurrent, "current"},
+		{"stale", FreshnessStatusStale, "stale"},
+		{"unknown", FreshnessStatusUnknown, "unknown"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if string(tc.val) != tc.want {
+				t.Fatalf("FreshnessStatus mismatch: got %q, want %q", tc.val, tc.want)
+			}
+			if tc.want != strings.ToLower(tc.want) {
+				t.Fatalf("FreshnessStatus value %q is not all-lowercase", tc.want)
+			}
+		})
+	}
+	seen := map[string]struct{}{
+		string(FreshnessStatusCurrent): {},
+		string(FreshnessStatusStale):   {},
+		string(FreshnessStatusUnknown): {},
+	}
+	if len(seen) != 3 {
+		t.Fatalf("FreshnessStatus closed-enum drift: got %d distinct values, want 3", len(seen))
+	}
+}
+
+// TestFreshnessSource_ClosedEnum asserts the new three-value source enum
+// (graph / type_resolver_ladder / ast_fallback — D5) declares exactly the
+// documented constants with lowercase string values, and that the Source
+// field round-trips through JSON marshal/unmarshal.
+func TestFreshnessSource_ClosedEnum(t *testing.T) {
+	cases := []struct {
+		name string
+		val  FreshnessSource
+		want string
+	}{
+		{"graph", FreshnessSourceGraph, "graph"},
+		{"type_resolver_ladder", FreshnessSourceTypeResolverLadder, "type_resolver_ladder"},
+		{"ast_fallback", FreshnessSourceASTFallback, "ast_fallback"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if string(tc.val) != tc.want {
+				t.Fatalf("FreshnessSource mismatch: got %q, want %q", tc.val, tc.want)
+			}
+			if tc.want != strings.ToLower(tc.want) {
+				t.Fatalf("FreshnessSource value %q is not all-lowercase", tc.want)
+			}
+		})
+	}
+	// Round-trip: Source field survives JSON marshal/unmarshal.
+	f := FreshnessV2{Source: FreshnessSourceTypeResolverLadder}
+	raw, err := json.Marshal(f)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	var back FreshnessV2
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if back.Source != FreshnessSourceTypeResolverLadder {
+		t.Fatalf("FreshnessSource round-trip mismatch: got %q, want %q", back.Source, FreshnessSourceTypeResolverLadder)
+	}
+	seen := map[string]struct{}{
+		string(FreshnessSourceGraph):              {},
+		string(FreshnessSourceTypeResolverLadder): {},
+		string(FreshnessSourceASTFallback):        {},
+	}
+	if len(seen) != 3 {
+		t.Fatalf("FreshnessSource closed-enum drift: got %d distinct values, want 3", len(seen))
+	}
+}
+
+// TestFreshnessV2_ShapeMarshal asserts a fully-populated FreshnessV2 marshals
+// to exactly the documented keys/values (D5).
+func TestFreshnessV2_ShapeMarshal(t *testing.T) {
+	f := FreshnessV2{
+		GraphVersion:   7,
+		SnapshotID:     42,
+		ExtractorRunID: "snap-42",
+		AsOfUnixMs:     1715760000000,
+		Status:         FreshnessStatusCurrent,
+	}
+	got, err := json.Marshal(f)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	want := `{"graph_version":7,"snapshot_id":42,"extractor_run_id":"snap-42","as_of_unix_ms":1715760000000,"status":"current"}`
+	if string(got) != want {
+		t.Fatalf("FreshnessV2 JSON mismatch:\n got  = %s\n want = %s", got, want)
+	}
+}
+
+// TestFreshnessV2_OmitEmpty asserts an empty FreshnessV2{} marshals to an
+// empty JSON object — every field carries omitempty so degraded paths emitting
+// a partial envelope do not surface zero-value keys.
+func TestFreshnessV2_OmitEmpty(t *testing.T) {
+	f := FreshnessV2{}
+	got, err := json.Marshal(f)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	want := `{}`
+	if string(got) != want {
+		t.Fatalf("FreshnessV2 omit-empty mismatch:\n got  = %s\n want = %s", got, want)
+	}
+}
+
+// TestFreshnessV2_AdditiveToExisting asserts the existing Phase 64 Freshness
+// const block is byte-identical to the pre-plan state — guards against an
+// accidental rename / value drift of the 4-state Freshness type that Phase 64
+// tools depend on.
+func TestFreshnessV2_AdditiveToExisting(t *testing.T) {
+	cases := []struct {
+		name string
+		val  Freshness
+		want string
+	}{
+		{"fresh", FreshnessFresh, "fresh"},
+		{"stale", FreshnessStale, "stale"},
+		{"structurally_fresh_semantically_pending", FreshnessStructurallyFreshSemanticallyPending, "structurally_fresh_semantically_pending"},
+		{"overlay_active", FreshnessOverlayActive, "overlay_active"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if string(tc.val) != tc.want {
+				t.Fatalf("existing Freshness drift: %q != %q (Phase 64 contract regression)", tc.val, tc.want)
+			}
+		})
+	}
+}
+
+// TestFreshnessStatus_Independent asserts FreshnessStatus is a distinct named
+// type from Phase 64's Freshness — they coexist with potentially overlapping
+// string values (e.g., "stale") because Go's type system treats them as
+// different named types. This test is a runtime guard; the compile-time guard
+// is the separate const block referencing only the new type in envelope.go.
+func TestFreshnessStatus_Independent(t *testing.T) {
+	var f Freshness = FreshnessStale
+	var s FreshnessStatus = FreshnessStatusStale
+	if string(f) != "stale" {
+		t.Fatalf("Freshness sanity: got %q, want %q", f, "stale")
+	}
+	if string(s) != "stale" {
+		t.Fatalf("FreshnessStatus sanity: got %q, want %q", s, "stale")
+	}
+	var typedNew FreshnessStatus = FreshnessStatusCurrent
+	if string(typedNew) != "current" {
+		t.Fatalf("FreshnessStatusCurrent: got %q, want %q", typedNew, "current")
+	}
+}
 
 // containsKey reports whether the given JSON byte slice contains a top-level
 // key. Used by the additive-fields test to assert omitempty behavior.

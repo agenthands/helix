@@ -281,3 +281,70 @@ type SymbolEdgesAccessor interface {
 	IncomingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
 	OutgoingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
 }
+
+// ----- Phase 71-05 additions: per-edge evidence seam for validate_graph_edge -----
+//
+// EdgeEvidenceRow is one piece of citation evidence the validate_graph_edge
+// handler consumes when assembling its evidence array. A single (from, to,
+// internal_kind) edge may have multiple rows (e.g., many LSP citation sites
+// or both an LSP citation and a type-resolver tier annotation).
+//
+// Field interpretation:
+//   - InternalKind: the extractor kind (CALLS / RESOLVES_TO / ...). Always set.
+//   - Source: the edge.Source prefix string (e.g., "lsp.go.text_document_references"
+//     for LSP-backed citations, "" for AST-only / type-resolver-only rows).
+//     The handler parses the `lsp.{lang}.{method}` shape to populate the
+//     EvidenceCitation.LSPMethod field.
+//   - TreeSitterKind: the tree-sitter node kind ("call_expression",
+//     "selector_expression", ...) when AST metadata is available. Empty
+//     string when AST contribution exists but the extractor did not stamp
+//     metadata (Open Q3 partial path → envelope evidence_status drops to
+//     "partial").
+//   - File / Range: optional source location. Range is a per-tool local type
+//     (see EvidenceRange) so the accessor seam does not pull in graph
+//     package internals.
+//   - Tier: SPEC §38.2 ladder string ("tier1_lsp" .. "tier7_unknown") when
+//     the row carries type-resolver evidence; empty otherwise.
+//   - EvidenceKind: types.EvidenceKind serialization ("lsp"|"annotation"|...).
+//     Empty when the row is not a type-resolver row.
+//   - ASTAttested: set to true when the graph attests an AST-derived
+//     contribution but the extractor did not stamp tree_sitter_kind/Range
+//     metadata. The handler emits an AST citation with empty TreeSitterKind
+//     and degrades the envelope's evidence_status to "partial".
+type EdgeEvidenceRow struct {
+	InternalKind   string
+	Source         string
+	TreeSitterKind string
+	File           string
+	Range          *EvidenceRange
+	Tier           string
+	EvidenceKind   string
+	ASTAttested    bool
+}
+
+// EvidenceRange is the optional source-range citation co-located with an
+// EdgeEvidenceRow. Declared in the semantic skill package (not graph) to keep
+// the narrow accessor seam free of graph-package transitive imports.
+type EvidenceRange struct {
+	StartLine uint32 `json:"start_line"`
+	StartCol  uint32 `json:"start_col"`
+	EndLine   uint32 `json:"end_line"`
+	EndCol    uint32 `json:"end_col"`
+}
+
+// EdgeEvidenceAccessor reads the per-edge evidence citations used by the
+// validate_graph_edge handler to compute confidence + evidence_status. The
+// handler passes the set of candidate internal_kinds (the reverse projection
+// of the surface enum, e.g., "has_type" → ["RESOLVES_TO"]) and receives one
+// or more rows per matched edge.
+//
+// Empty slice with nil error signals "no rows for any of the requested
+// internal_kinds" — the handler interprets this as the edge being absent
+// (fallback_reason="edge_not_found").
+//
+// READ-ONLY (D-09 invariant; no Begin/Commit/Abort/Write methods). Production
+// binding (deferred to the daemon adapter wave) wraps *Store SQL reads at the
+// latest committed snapshot.
+type EdgeEvidenceAccessor interface {
+	EvidenceForEdge(ctx context.Context, repoID string, from, to integ.SymbolID, internalKinds []string) ([]EdgeEvidenceRow, error)
+}

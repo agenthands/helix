@@ -97,7 +97,8 @@ type ExplainSymbolDeepResult struct {
 }
 
 // explainSymbolDeepHelp is the verbose help text for explain_symbol_deep.
-const explainSymbolDeepHelp = `## Usage Examples
+const explainSymbolDeepHelp = `
+## Usage Examples
 
 Explain a symbol by stable id:
   explain_symbol_deep(seed={symbol_id: "repo/src/svc.go::ServeHTTP"})

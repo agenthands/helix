@@ -101,7 +101,8 @@ type GetChangeImpactGraphResult struct {
 }
 
 // getChangeImpactGraphHelp is the verbose help text registered in the tool registry.
-const getChangeImpactGraphHelp = `## Usage Examples
+const getChangeImpactGraphHelp = `
+## Usage Examples
 
 Expand impact from a seed by stable id (default depth=2):
   get_change_impact_graph(seed={symbol_id: "repo/src/svc.go::ServeHTTP"})

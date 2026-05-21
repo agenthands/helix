@@ -67,7 +67,8 @@ type FindRelatedSymbolsResult struct {
 }
 
 // findRelatedSymbolsHelp is the verbose help text for find_related_symbols.
-const findRelatedSymbolsHelp = `## Usage Examples
+const findRelatedSymbolsHelp = `
+## Usage Examples
 
 Find related symbols by stable id (default k=20):
   find_related_symbols(seed={symbol_id: "repo/src/svc.go::ServeHTTP"})

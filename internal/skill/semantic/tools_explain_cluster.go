@@ -82,7 +82,8 @@ type ExplainClusterResult struct {
 }
 
 // explainClusterHelp is the verbose help text for explain_cluster.
-var explainClusterHelp = `## Usage Examples
+var explainClusterHelp = `
+## Usage Examples
 
 Get full member list for a cluster:
   explain_cluster(cluster_id="weak_components:42:7")

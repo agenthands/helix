@@ -77,7 +77,8 @@ type GetClusterMapResult struct {
 }
 
 // getClusterMapHelp is the verbose help text for get_cluster_map.
-var getClusterMapHelp = `## Usage Examples
+var getClusterMapHelp = `
+## Usage Examples
 
 Get top-20 clusters (default):
   get_cluster_map()

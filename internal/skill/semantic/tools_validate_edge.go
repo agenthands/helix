@@ -123,7 +123,8 @@ type ValidateGraphEdgeResult struct {
 }
 
 // validateGraphEdgeHelp is the verbose help text for validate_graph_edge.
-const validateGraphEdgeHelp = `## Usage Examples
+const validateGraphEdgeHelp = `
+## Usage Examples
 
 Validate an edge by stable ids:
   validate_graph_edge(

@@ -189,3 +189,90 @@ func TestProfileFilter_EditMode_IndexExcluded(t *testing.T) {
 		hasNone(t, p+"/edit", got, []string{"index_semantic_graph"})
 	}
 }
+
+// ----- Phase 73-02: P1 tool golden tests (5×4 profile×mode matrix) -----
+
+// p1ToolNames is the full set of 6 P1 MCP tools added in Phase 73-01.
+// 5 are read+ (visible in all 4 modes); 1 is review+ (visible in review/admin
+// only). Mirrors the semanticToolNames pattern above.
+var p1ToolNames = []string{
+	"explain_symbol_deep",
+	"find_related_symbols",
+	"validate_graph_edge",
+	"get_cluster_map",
+	"explain_cluster",
+	"get_change_impact_graph",
+}
+
+// p1ReadPlusOnlyTools is the subset of P1 tools visible in ALL 4 modes (read+
+// tier). These 5 tools must be present for every (profile, mode) cell.
+var p1ReadPlusOnlyTools = []string{
+	"explain_symbol_deep",
+	"find_related_symbols",
+	"validate_graph_edge",
+	"get_cluster_map",
+	"explain_cluster",
+}
+
+// p1ReviewPlusOnlyTools is the review+ P1 tool: visible in review and admin
+// only, absent from read and edit modes per
+// internal/profile/modes/{read,edit}.yaml exclude_tools.
+var p1ReviewPlusOnlyTools = []string{
+	"get_change_impact_graph",
+}
+
+// TestProfileFilter_P1ReadPlusTools_AllProfilesAllModes asserts the five
+// read+ P1 tools are present for every (profile, mode) cell in the 5×4
+// matrix. No mode or profile may suppress these tools.
+func TestProfileFilter_P1ReadPlusTools_AllProfilesAllModes(t *testing.T) {
+	store, err := profile.LoadEmbedded()
+	if err != nil {
+		t.Fatalf("LoadEmbedded: %v", err)
+	}
+
+	profiles := []string{"full", "claude-code", "codex", "ide-assistant", "ci-bot"}
+	modes := []string{"read", "edit", "review", "admin"}
+
+	for _, p := range profiles {
+		for _, m := range modes {
+			p, m := p, m
+			t.Run(p+"/"+m, func(t *testing.T) {
+				got := resolveForProfileMode(t, store, p, m)
+				hasAll(t, p+"/"+m, got, p1ReadPlusOnlyTools)
+			})
+		}
+	}
+}
+
+// TestProfileFilter_P1ChangeImpact_ReviewPlusGating asserts that
+// get_change_impact_graph is absent from read and edit modes (review+ tier)
+// and present in review and admin modes — for every profile. Mirrors the
+// existing TestProfileFilter_ReadMode_IndexExcluded pattern (lines 164-175).
+func TestProfileFilter_P1ChangeImpact_ReviewPlusGating(t *testing.T) {
+	store, err := profile.LoadEmbedded()
+	if err != nil {
+		t.Fatalf("LoadEmbedded: %v", err)
+	}
+
+	profiles := []string{"full", "claude-code", "codex", "ide-assistant", "ci-bot"}
+
+	for _, p := range profiles {
+		p := p
+		t.Run(p+"/read", func(t *testing.T) {
+			got := resolveForProfileMode(t, store, p, "read")
+			hasNone(t, p+"/read", got, p1ReviewPlusOnlyTools)
+		})
+		t.Run(p+"/edit", func(t *testing.T) {
+			got := resolveForProfileMode(t, store, p, "edit")
+			hasNone(t, p+"/edit", got, p1ReviewPlusOnlyTools)
+		})
+		t.Run(p+"/review", func(t *testing.T) {
+			got := resolveForProfileMode(t, store, p, "review")
+			hasAll(t, p+"/review", got, p1ReviewPlusOnlyTools)
+		})
+		t.Run(p+"/admin", func(t *testing.T) {
+			got := resolveForProfileMode(t, store, p, "admin")
+			hasAll(t, p+"/admin", got, p1ReviewPlusOnlyTools)
+		})
+	}
+}

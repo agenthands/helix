@@ -156,7 +156,7 @@
 - [x] **Phase 70: Incremental Refresh Overlay-Drain** -- Wire `collectCandidatePaths` through overlay-drain seam so `refresh_semantic_graph mode:"incremental"` is truly incremental (completed 2026-05-15)
 - [x] **Phase 71: P1 Single-Symbol Read Tools** -- `explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge` (all read+ tier, single-symbol seed) (completed 2026-05-17)
 - [ ] **Phase 72: P1 Cluster & Impact Tools** -- `get_cluster_map`, `explain_cluster`, `get_change_impact_graph` (cluster-aware; mixed read+/review+ tier)
-- [ ] **Phase 73: P1 Tools Integration & E2E Verification** -- Profile/mode gating across the 6 tools; skill-wrapper consistency audit; full E2E test coverage with closed-enum envelopes
+- [x] **Phase 73: P1 Tools Integration & E2E Verification** -- Profile/mode gating across the 6 tools; skill-wrapper consistency audit; full E2E test coverage with closed-enum envelopes (completed 2026-05-21)
 
 ## Phase Details
 
@@ -262,7 +262,7 @@
 - [x] 73-01-PLAN.md — Add 6 P1 tools to SemanticSkill.Tools() + exclude get_change_impact_graph from read/edit mode YAMLs (P1TOOL-07)
 - [x] 73-02-PLAN.md — Profile-filter golden tests: 6 P1 tools across the 5x4 matrix (P1TOOL-07)
 - [x] 73-03-PLAN.md — Standardize 6 P1 *Help consts + get_tool_help param-doc coverage tests (P1TOOL-07)
-- [ ] 73-04-PLAN.md — wrapper_consistency_test.go static gate + buildP1E2EFixture real-store E2E suite (P1TOOL-08, P1TOOL-09)
+- [x] 73-04-PLAN.md — wrapper_consistency_test.go static gate + buildP1E2EFixture real-store E2E suite (P1TOOL-08, P1TOOL-09)
 
 ## Progress
 

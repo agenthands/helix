@@ -20,6 +20,7 @@ exclude_tools:
   - insert_at_line
   - delete_lines
   - index_semantic_graph
+  - get_change_impact_graph
 
 prompts: {}
 

@@ -27,6 +27,7 @@ exclude_tools:
   - delete_lines
   - execute_shell_command
   - index_semantic_graph
+  - get_change_impact_graph
 
 prompts: {}
 

@@ -101,7 +101,54 @@ type GetChangeImpactGraphResult struct {
 }
 
 // getChangeImpactGraphHelp is the verbose help text registered in the tool registry.
-var getChangeImpactGraphHelp = "Returns the pre-edit blast-radius subgraph (nodes + edges) for a seed symbol (review+)."
+const getChangeImpactGraphHelp = `## Usage Examples
+
+Expand impact from a seed by stable id (default depth=2):
+  get_change_impact_graph(seed={symbol_id: "repo/src/svc.go::ServeHTTP"})
+
+Expand from a (file_path, symbol_name) tuple:
+  get_change_impact_graph(seed={file_path: "src/svc.go", symbol_name: "ServeHTTP"})
+
+Expand to depth 4 and filter to call edges only:
+  get_change_impact_graph(
+    seed={symbol_id: "repo/src/svc.go::ServeHTTP"},
+    max_depth=4,
+    edge_kinds=["calls"],
+  )
+
+## Parameters
+- seed (object, required): Starting symbol. One of two forms —
+    * { symbol_id: <stable graph id> } — direct lookup, no name resolution.
+    * { file_path, symbol_name } — name-resolved lookup.
+- max_depth (int, optional): BFS expansion depth. Default 2, max 5.
+  Larger depths surface more transitive impact but increase response size.
+- edge_kinds ([]string, optional): Optional filter restricting traversal to the
+  specified closed-enum edge kinds (calls / references / implements / extends /
+  has_type / uses_type / contains / other). When empty all edge kinds are
+  returned.
+
+## Return Shape
+- nodes ([]ImpactNode): List of impacted symbol nodes (capped at 200). Each
+  entry carries: symbol_id (string), qualified_name (string, optional),
+  package (string, optional), pagerank (float64, 0.0 when unavailable).
+- edges ([]ImpactEdge): Directed edges in the subgraph (capped at 500). Each
+  entry carries: from (string), to (string), edge_kind (EdgeKindSurface),
+  internal_kind (string), confidence (float64).
+- truncated (bool): true when nodes or edges were capped at their respective
+  limits (200 nodes / 500 edges).
+- reached_depth (int): Effective BFS depth used (equals the clamped max_depth).
+- nodes_count (int): Pre-cap total impact node count.
+- edges_count (int): Pre-cap total edge count (sum across all evidence edges).
+- confidence_cap (object, optional): Non-nil when the OQ-1 predicate fired
+  (any impact.Confidence < 0.8). Carries: value (float64 = 0.6),
+  reason (string = "type_resolver_tier_3").
+- freshness (FreshnessV2): { graph_version, snapshot_id, extractor_run_id,
+  as_of_unix_ms, status ∈ {current|stale|unknown}, source }.
+- fallback_reason (string, optional): Closed enum — "symbol_not_found" |
+  "impact_lookup_unavailable".
+
+## Mode Tier
+review+ — call switch_mode(target_mode="review") or "admin" to elevate.`
 
 // registerGetChangeImpactGraph wires get_change_impact_graph into the MCP server.
 func registerGetChangeImpactGraph(server *mcp.SerenaMCPServer, s *SemanticSkill, tracer trace.Tracer) {

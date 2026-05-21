@@ -19,9 +19,11 @@ import (
 	"github.com/agenthands/helix/internal/workspace"
 )
 
-// SemanticSkill implements skill.ToolProvider, exposing four MCP tools backed
-// by the Phase 60-63 semantic engine: index_semantic_graph,
-// refresh_semantic_graph, get_semantic_graph_status, get_semantic_context.
+// SemanticSkill implements skill.ToolProvider, exposing 10 MCP tools backed by
+// the Phase 60-63 semantic engine: the 4 P0 tools (index_semantic_graph,
+// refresh_semantic_graph, get_semantic_graph_status, get_semantic_context) and
+// the 6 P1 tools (explain_symbol_deep, find_related_symbols, validate_graph_edge,
+// get_cluster_map, explain_cluster, get_change_impact_graph).
 type SemanticSkill struct {
 	mu        sync.Mutex
 	logger    *slog.Logger

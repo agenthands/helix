@@ -801,6 +801,18 @@ func TestP1E2E_GetChangeImpactGraph(t *testing.T) {
 	require.NotEqual(t, "impact_lookup_unavailable", fallback,
 		"get_change_impact_graph: ImpactLookup is wired; must not report impact_lookup_unavailable")
 
+	// SC#4 non-degeneracy: the fixture seeds a ServeHTTP→handle call chain,
+	// so the impact subgraph must be non-empty — an envelope-only assertion
+	// would pass even on a degenerate (empty) payload.
+	nodes, ok := body["nodes"].([]interface{})
+	require.True(t, ok, "get_change_impact_graph: nodes must be a JSON array")
+	require.NotEmpty(t, nodes,
+		"get_change_impact_graph: seeded ServeHTTP call chain must yield a non-empty node set")
+	edges, ok := body["edges"].([]interface{})
+	require.True(t, ok, "get_change_impact_graph: edges must be a JSON array")
+	require.NotEmpty(t, edges,
+		"get_change_impact_graph: seeded ServeHTTP call chain must yield a non-empty edge set")
+
 	// If ConfidenceCap is non-nil, its reason must be the declared enum value.
 	if rawCap, ok := body["confidence_cap"]; ok && rawCap != nil {
 		capMap, isMap := rawCap.(map[string]interface{})

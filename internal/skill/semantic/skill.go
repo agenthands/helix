@@ -1,4 +1,4 @@
-// Package semantic implements the semantic skill, contributing 4 MCP tools
+// Package semantic implements the semantic skill, contributing 10 MCP tools
 // for indexing, refreshing, inspecting, and querying the live semantic graph
 // (Phase 64).
 //
@@ -73,7 +73,7 @@ func (s *SemanticSkill) Name() string { return "semantic" }
 
 // Description returns a human-readable description.
 func (s *SemanticSkill) Description() string {
-	return "Semantic graph indexing and retrieval (4 tools)"
+	return "Semantic graph indexing and retrieval (10 tools)"
 }
 
 // Init initializes the skill with shared dependencies.
@@ -309,7 +309,7 @@ func (s *SemanticSkill) workspaceKey(ctx context.Context) workspace.WorkspaceKey
 	return a.Workspace(ctx)
 }
 
-// Tools returns the 4 MCP tool definitions for semantic graph operations.
+// Tools returns the 10 MCP tool definitions for semantic graph operations.
 //
 // HelpText constants (indexHelp, refreshHelp, statusHelp, contextHelp) are
 // declared in tool-specific files added by Wave 1/2 plans:
@@ -322,6 +322,10 @@ func (s *SemanticSkill) workspaceKey(ctx context.Context) workspace.WorkspaceKey
 // this file (the "help-text stub block") provide compile-time placeholders.
 // Each W1/W2 tool plan deletes its stub line AND adds the real `const`
 // declaration in its tool file.
+//
+// Phase 73-01: 6 P1 tools appended so skill.ResolveTools sees the full
+// surface (explain_symbol_deep, find_related_symbols, validate_graph_edge,
+// get_cluster_map, explain_cluster, get_change_impact_graph).
 func (s *SemanticSkill) Tools() []*mcp.ToolDef {
 	return []*mcp.ToolDef{
 		{
@@ -347,6 +351,44 @@ func (s *SemanticSkill) Tools() []*mcp.ToolDef {
 			Description:      "Ranked, evidence-backed semantic context (read+).",
 			BriefDescription: "Semantic context retrieval",
 			HelpText:         contextHelp,
+		},
+		// Phase 73-01: P1 tools — ToolDef values copied verbatim from each
+		// tool's server.Registry().Register block (per Phase 73 PATTERNS.md).
+		{
+			Name:             "explain_symbol_deep",
+			Description:      "Deep symbol explanation: type chain, callers, edges, cluster (read+).",
+			BriefDescription: "Deep symbol explanation",
+			HelpText:         explainSymbolDeepHelp,
+		},
+		{
+			Name:             "find_related_symbols",
+			Description:      "Top-k semantically related symbols around a seed (read+).",
+			BriefDescription: "Related symbols around a seed",
+			HelpText:         findRelatedSymbolsHelp,
+		},
+		{
+			Name:             "validate_graph_edge",
+			Description:      "Validate a (from, to, edge_kind) graph claim with confidence + evidence (read+).",
+			BriefDescription: "Validate a graph edge claim",
+			HelpText:         validateGraphEdgeHelp,
+		},
+		{
+			Name:             "get_cluster_map",
+			Description:      "Workspace-level cluster overview: count, top-N clusters, members, representative symbols, dominant edge kinds (read+).",
+			BriefDescription: "Workspace cluster overview",
+			HelpText:         getClusterMapHelp,
+		},
+		{
+			Name:             "explain_cluster",
+			Description:      "Full cluster member list with per-member PageRank, cohesion/conductance metrics, and dominant entry points (read+).",
+			BriefDescription: "Cluster member detail",
+			HelpText:         explainClusterHelp,
+		},
+		{
+			Name:             "get_change_impact_graph",
+			Description:      "Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+).",
+			BriefDescription: "Change impact subgraph",
+			HelpText:         getChangeImpactGraphHelp,
 		},
 	}
 }

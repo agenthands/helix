@@ -258,12 +258,11 @@
   3. All 6 tools wrap via `internal/skill/semantic/` following the v1.10 pattern (envelope.go + mode_check.go + accessors.go); zero new daemon-bootstrap special-casing.
   4. E2E integration suite runs each tool against a real `*Store` + bleve + populated graph in a tempdir and asserts closed-enum envelope fields (`freshness`, `source`, `fallback_reason`, `confidence`) are present and within their declared enums.
   5. `vet-nokernel2semantic` and `vet-noduckdb` stay green; race-clean under `go test -race -count=1`.
-**Plans**: 5 plans
-- [ ] 72-01-PLAN.md — cluster_id codec + 4 accessor interfaces + 3 Store read methods (P1TOOL-03, P1TOOL-04)
-- [ ] 72-02-PLAN.md — get_cluster_map handler + TDD tests + register (P1TOOL-03)
-- [ ] 72-03-PLAN.md — explain_cluster handler + stale-id + cohesion/conductance + TDD tests + register (P1TOOL-04)
-- [ ] 72-04-PLAN.md — get_change_impact_graph handler + review+ + confidence_cap + TDD tests + register (P1TOOL-05)
-- [ ] 72-05-PLAN.md — TestFourTools_ClusterToImpact integration + readonly_gate extension + phase gate (P1TOOL-03,04,05)
+**Plans**: 4 plans
+- [ ] 73-01-PLAN.md — Add 6 P1 tools to SemanticSkill.Tools() + exclude get_change_impact_graph from read/edit mode YAMLs (P1TOOL-07)
+- [ ] 73-02-PLAN.md — Profile-filter golden tests: 6 P1 tools across the 5x4 matrix (P1TOOL-07)
+- [ ] 73-03-PLAN.md — Standardize 6 P1 *Help consts + get_tool_help param-doc coverage tests (P1TOOL-07)
+- [ ] 73-04-PLAN.md — wrapper_consistency_test.go static gate + buildP1E2EFixture real-store E2E suite (P1TOOL-08, P1TOOL-09)
 
 ## Progress
 

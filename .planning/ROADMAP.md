@@ -260,7 +260,7 @@
   5. `vet-nokernel2semantic` and `vet-noduckdb` stay green; race-clean under `go test -race -count=1`.
 **Plans**: 4 plans
 - [x] 73-01-PLAN.md — Add 6 P1 tools to SemanticSkill.Tools() + exclude get_change_impact_graph from read/edit mode YAMLs (P1TOOL-07)
-- [ ] 73-02-PLAN.md — Profile-filter golden tests: 6 P1 tools across the 5x4 matrix (P1TOOL-07)
+- [x] 73-02-PLAN.md — Profile-filter golden tests: 6 P1 tools across the 5x4 matrix (P1TOOL-07)
 - [x] 73-03-PLAN.md — Standardize 6 P1 *Help consts + get_tool_help param-doc coverage tests (P1TOOL-07)
 - [ ] 73-04-PLAN.md — wrapper_consistency_test.go static gate + buildP1E2EFixture real-store E2E suite (P1TOOL-08, P1TOOL-09)
 

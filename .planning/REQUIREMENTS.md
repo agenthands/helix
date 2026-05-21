@@ -45,7 +45,7 @@ Each requirement is testable from an agent/user perspective and maps to one road
 - [ ] **P1TOOL-04**: `explain_cluster` MCP tool — per-cluster (by cluster_id from get_cluster_map) detailed view: full member list, ranking within cluster, cohesion/separation scores, dominant entry-point symbols. Mode tier: `read+`.
 - [ ] **P1TOOL-05**: `get_change_impact_graph` MCP tool — pre-edit blast-radius via the semantic graph (different shape from `analyze_blast_radius`: returns the **graph subgraph** rather than file-level summary). Mode tier: `review+`. Confidence cap on fallback.
 - [ ] **P1TOOL-06**: `validate_graph_edge` MCP tool — given an edge claim `(from_symbol, to_symbol, edge_kind)`, returns confidence + evidence path (LSP citations, AST citations, type-resolver derivation) explaining whether the edge exists. Mode tier: `read+`.
-- [ ] **P1TOOL-07**: All 6 P1 tools profile/mode gated via the existing `internal/profile/` matrix; `tools/list` filters per active profile; `get_tool_help` returns parameter docs for each.
+- [x] **P1TOOL-07**: All 6 P1 tools profile/mode gated via the existing `internal/profile/` matrix; `tools/list` filters per active profile; `get_tool_help` returns parameter docs for each.
 - [ ] **P1TOOL-08**: All 6 P1 tools wrapped in the semantic skill (`internal/skill/semantic/`) following the v1.10 pattern (envelope.go + mode_check.go + accessors.go); zero new daemon-bootstrap special-casing.
 - [ ] **P1TOOL-09**: All 6 P1 tools verified by E2E integration tests against a real workspace + populated graph; closed-enum freshness/source/confidence envelope fields present and correct.
 
@@ -102,6 +102,6 @@ Which phases cover which requirements. Updated during roadmap creation. Phase nu
 | P1TOOL-04 | Phase 72 | Pending |
 | P1TOOL-05 | Phase 72 | Pending |
 | P1TOOL-06 | Phase 71 | Pending |
-| P1TOOL-07 | Phase 73 | Pending |
+| P1TOOL-07 | Phase 73 | Complete |
 | P1TOOL-08 | Phase 73 | Pending |
 | P1TOOL-09 | Phase 73 | Pending |

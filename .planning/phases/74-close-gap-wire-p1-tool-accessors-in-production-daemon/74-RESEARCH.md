@@ -658,7 +658,7 @@ const clusterQ = `
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Bootstrap test construction path**
    - What we know: `TestBootstrapRegistersAllTools` uses `daemon.New(cfg, logger)` which boots

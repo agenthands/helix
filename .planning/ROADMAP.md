@@ -284,3 +284,21 @@
 ## Backlog
 
 _No items in backlog._
+
+### Phase 74: Close gap — wire P1 tool accessors in production daemon
+
+**Goal:** Wire all 8 FOLD P1 accessor setters on the SemanticSkill in the production daemon
+so that the 6 P1 MCP tools return real data instead of degraded fallback_reason envelopes.
+Closes BLOCKER-1 (nil accessor guards fire on every P1 tool call) and BLOCKER-2 (FreshnessV2
+status never reaches 'current') from the v1.11 milestone audit.
+**Requirements**: AUDIT-R-01, AUDIT-R-02, AUDIT-R-03, AUDIT-R-04, AUDIT-R-05
+**Depends on:** Phase 73
+**Plans:** 6 plans
+
+Plans:
+- [ ] 74-01-PLAN.md — Add WiredAccessorsForTest export to export_p1_test.go (test seam prereq)
+- [ ] 74-02-PLAN.md — Five store-backed P1 adapter structs (SymbolByName, ExtractorRun, ClusterMap, ClusterMember, ClusterPageRank)
+- [ ] 74-03-PLAN.md — Two two-hop P1 adapter structs (SymbolEdges, ClusterMembership — D-01a FOLD)
+- [ ] 74-04-PLAN.md — Extend setters block with 8 P1 Set* calls; update log line to 'setters', 14
+- [ ] 74-05-PLAN.md — TDD: runtime bootstrap test asserting 8 wired + 2 deferred accessor fields
+- [ ] 74-06-PLAN.md — TDD: production-path P1 E2E test (D-03a/D-03b) covering all 6 handlers

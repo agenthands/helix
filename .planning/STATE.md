@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: Semantic Index Completion & P1 MCP Tools
-status: milestone_complete
-last_updated: 2026-05-21T13:59:16.793Z
+status: completed
+last_updated: "2026-05-29T15:23:50.717Z"
 last_activity: 2026-05-21
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 6
   total_plans: 32
-  completed_plans: 111
-  percent: 100
-stopped_at: Milestone complete (Phase 73 was final phase)
+  completed_plans: 32
+  percent: 86
 ---
 
 # Project State
@@ -42,3 +41,9 @@ Status: Milestone complete
 - Phase 69: PASSED — Production Status Accessors (6/6 plans; 5/5 ROADMAP success criteria verified). Single-source-of-truth derivation via `daemon.NewSchedulerAccessorForStore` + `daemon.NewRetrievalAccessorForStore`; W1 sentinel `phase-62-clustering-no-status-accessor` removed from `internal/`; CONTEXT D1 three-state `{current, stale, unknown}` envelope live; RetrievalStatus closed-enum reason priority enforced (`bleve-unavailable > corpus_version-uninitialized > corpus_version-lag > compactor-never-ran`); `compactBundle.SetBleveMetaFn` bound to `sBndl.engines[ws.RepoRoot]` (daemon.go:493-503); `tools_status.go:207` invokes `RetrievalStatus` on configured accessor (Plan 69-06 inline fix); E2E `TestE2E_IndexThenStatus_NonPlaceholderClusterAndRetrieval` race-clean PASS (2.58s); requirements STATUS-01/02/03 satisfied.
 
 Last activity: 2026-05-21
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 74 added: Close gap: wire P1 tool accessors in production daemon

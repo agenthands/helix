@@ -2011,6 +2011,172 @@ func (a *semP1ClusterPageRankAdapter) QueryNodePageRanks(ctx context.Context, re
 	return a.store.QueryNodePageRanks(ctx, repoID, projection, graphVersion, nodeIDs)
 }
 
+// ----- Phase 74 P1 two-hop adapter structs (D-01a FOLD) -----
+//
+// semP1SymbolEdgesAdapter and semP1ClusterMembershipAdapter satisfy the
+// two D-01a FOLD accessor interfaces that require inline SQL via the
+// *semanticstore.Store helper methods added to effective_graph.go.
+// Both use QueryNodeIDByStableKey as the first hop for the stable_key →
+// node_id translation.
+
+// semP1SymbolEdgesAdapter satisfies SymbolEdgesAccessor with three
+// direction methods backed by QuerySymbolEdgesIncoming / Outgoing.
+// Threat T-74-03-01: all SQL parameters are positional (no interpolation).
+// Pitfall 1: JOIN uses semantic_symbols.symbol_id (= semantic_edges src/dst node id).
+// Pitfall 2: CallersOf adds edge_kind='CALLS' filter; IncomingEdgesOf does not.
+type semP1SymbolEdgesAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) symbolEdgesAccessor() semantic.SymbolEdgesAccessor {
+	return &semP1SymbolEdgesAdapter{store: b.store}
+}
+
+// resolveSymbolEdgesNodeID is a shared helper for the three direction methods:
+// resolves the latest committed snapshot and translates the stable_key sym
+// into the uint64 node_id used as src/dst in semantic_edges.
+func (a *semP1SymbolEdgesAdapter) resolveSymbolEdgesNodeID(ctx context.Context, repoID string, sym integ.SymbolID) (snapshotID uint64, nodeID uint64, ok bool, err error) {
+	snapshotID, err = a.store.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if snapshotID == 0 {
+		return 0, 0, false, nil
+	}
+	nodeID, ok, err = a.store.QueryNodeIDByStableKey(ctx, repoID, string(sym))
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return snapshotID, nodeID, ok, nil
+}
+
+// assembleEdgeRows converts a []symbolEdgeRaw slice into []semantic.SymbolEdgeRow
+// by resolving each src_node_id and dst_node_id back to their stable_keys.
+func (a *semP1SymbolEdgesAdapter) assembleEdgeRows(ctx context.Context, repoID string, raw []semanticstore.SymbolEdgeRaw) ([]semantic.SymbolEdgeRow, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make([]semantic.SymbolEdgeRow, 0, len(raw))
+	for _, r := range raw {
+		fromKey, fromOK, err := a.store.QueryStableKeyByNodeID(ctx, repoID, r.SrcNodeID)
+		if err != nil {
+			return nil, err
+		}
+		if !fromOK {
+			continue
+		}
+		toKey, toOK, err := a.store.QueryStableKeyByNodeID(ctx, repoID, r.DstNodeID)
+		if err != nil {
+			return nil, err
+		}
+		if !toOK {
+			continue
+		}
+		out = append(out, semantic.SymbolEdgeRow{
+			From:         integ.SymbolID(fromKey),
+			To:           integ.SymbolID(toKey),
+			InternalKind: r.EdgeKind,
+		})
+	}
+	return out, nil
+}
+
+// CallersOf returns CALLS-filtered incoming edges (dst_node_id=sym, edge_kind='CALLS').
+func (a *semP1SymbolEdgesAdapter) CallersOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	snapshotID, nodeID, ok, err := a.resolveSymbolEdgesNodeID(ctx, repoID, sym)
+	if err != nil || !ok {
+		return nil, err
+	}
+	raw, err := a.store.QuerySymbolEdgesIncoming(ctx, snapshotID, nodeID, true /* callsOnly */)
+	if err != nil {
+		return nil, err
+	}
+	return a.assembleEdgeRows(ctx, repoID, raw)
+}
+
+// IncomingEdgesOf returns all incoming edges (dst_node_id=sym, no edge_kind filter).
+func (a *semP1SymbolEdgesAdapter) IncomingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	snapshotID, nodeID, ok, err := a.resolveSymbolEdgesNodeID(ctx, repoID, sym)
+	if err != nil || !ok {
+		return nil, err
+	}
+	raw, err := a.store.QuerySymbolEdgesIncoming(ctx, snapshotID, nodeID, false /* all kinds */)
+	if err != nil {
+		return nil, err
+	}
+	return a.assembleEdgeRows(ctx, repoID, raw)
+}
+
+// OutgoingEdgesOf returns all outgoing edges (src_node_id=sym, no edge_kind filter).
+func (a *semP1SymbolEdgesAdapter) OutgoingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	snapshotID, nodeID, ok, err := a.resolveSymbolEdgesNodeID(ctx, repoID, sym)
+	if err != nil || !ok {
+		return nil, err
+	}
+	raw, err := a.store.QuerySymbolEdgesOutgoing(ctx, snapshotID, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return a.assembleEdgeRows(ctx, repoID, raw)
+}
+
+// semP1ClusterMembershipAdapter satisfies ClusterMembershipAccessor with
+// a two-hop lookup: CurrentGraphVersion + QueryNodeIDByStableKey, then
+// QueryClusterIDOfNode.
+// Pitfall 3: graph_version is resolved internally via CurrentGraphVersion —
+// the interface does not carry it as a parameter.
+// Threat T-74-03-02: all SQL parameters are positional.
+type semP1ClusterMembershipAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) clusterMembershipAccessor() semantic.ClusterMembershipAccessor {
+	return &semP1ClusterMembershipAdapter{store: b.store}
+}
+
+// ClusterIDOf returns the cluster_id and member count for the cluster
+// containing symbolID at the latest committed graph_version for repoID.
+// Returns (0, 0, nil) when not found — handler emits fallback_reason="cluster_boost_unavailable".
+func (a *semP1ClusterMembershipAdapter) ClusterIDOf(ctx context.Context, repoID string, symbolID integ.SymbolID) (uint64, int, error) {
+	if a == nil || a.store == nil {
+		return 0, 0, nil
+	}
+	// Step 1: resolve graph_version internally (Pitfall 3).
+	gv, err := a.store.CurrentGraphVersion(ctx, repoID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if gv == 0 {
+		return 0, 0, nil
+	}
+	// Step 2: stable_key → node_id.
+	nodeID, ok, err := a.store.QueryNodeIDByStableKey(ctx, repoID, string(symbolID))
+	if err != nil {
+		return 0, 0, err
+	}
+	if !ok {
+		return 0, 0, nil
+	}
+	// Step 3: node_id → cluster_id + member_count.
+	clusterID, memberCount, found, err := a.store.QueryClusterIDOfNode(ctx, repoID, gv, nodeID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !found {
+		return 0, 0, nil
+	}
+	return clusterID, memberCount, nil
+}
+
 // ----- Compile-time interface guards -----
 
 var (
@@ -2028,4 +2194,6 @@ var (
 	_ semantic.ClusterMapAccessor     = (*semP1ClusterMapAdapter)(nil)
 	_ semantic.ClusterMemberAccessor  = (*semP1ClusterMemberAdapter)(nil)
 	_ semantic.ClusterPageRankAccessor = (*semP1ClusterPageRankAdapter)(nil)
+	_ semantic.SymbolEdgesAccessor    = (*semP1SymbolEdgesAdapter)(nil)
+	_ semantic.ClusterMembershipAccessor = (*semP1ClusterMembershipAdapter)(nil)
 )

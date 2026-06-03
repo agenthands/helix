@@ -1014,3 +1014,138 @@ func (s *Store) IterateCommittedSymbols(ctx context.Context, snapshotID uint64, 
 	}
 	return rows.Err()
 }
+
+// ----- Phase 74 P1 two-hop accessor helpers (D-01a FOLD) -----
+//
+// These three methods are thin read-only helpers consumed by the two
+// two-hop adapter structs in internal/daemon/semantic_wiring.go.
+// All SQL uses positional parameters (Threats T-74-03-01, T-74-03-02).
+
+// SymbolEdgeRaw is the intermediate row type used by
+// QuerySymbolEdgesIncoming and QuerySymbolEdgesOutgoing.
+// Exported so daemon-package adapters can iterate the results.
+type SymbolEdgeRaw struct {
+	SrcNodeID uint64
+	DstNodeID uint64
+	EdgeKind  string
+}
+
+// QuerySymbolEdgesIncoming returns edge rows whose dst_node_id = dstNodeID
+// at the given snapshotID. When callsOnly is true, adds AND edge_kind='CALLS'
+// (satisfying CallersOf direction — Pitfall 2: CallersOf must filter edge_kind).
+//
+// JOIN on semantic_symbols.symbol_id (NOT node_id — Pitfall 1: symbol_id is
+// the same uint64 as src_node_id/dst_node_id in semantic_edges).
+//
+// Lock-free (pure SELECT on s.db).
+func (s *Store) QuerySymbolEdgesIncoming(ctx context.Context, snapshotID, dstNodeID uint64, callsOnly bool) ([]SymbolEdgeRaw, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var rows *sql.Rows
+	var err error
+	if callsOnly {
+		const q = `
+			SELECT e.src_node_id, e.dst_node_id, e.edge_kind
+			  FROM semantic_edges AS e
+			 WHERE e.snapshot_id = ?
+			   AND e.dst_node_id = ?
+			   AND e.edge_kind   = 'CALLS'
+		`
+		rows, err = s.db.QueryContext(ctx, q, snapshotID, dstNodeID)
+	} else {
+		const q = `
+			SELECT e.src_node_id, e.dst_node_id, e.edge_kind
+			  FROM semantic_edges AS e
+			 WHERE e.snapshot_id = ?
+			   AND e.dst_node_id = ?
+		`
+		rows, err = s.db.QueryContext(ctx, q, snapshotID, dstNodeID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("QuerySymbolEdgesIncoming(snap=%d, dst=%d, callsOnly=%v): %w", snapshotID, dstNodeID, callsOnly, err)
+	}
+	defer rows.Close()
+	var out []SymbolEdgeRaw
+	for rows.Next() {
+		var r SymbolEdgeRaw
+		if err := rows.Scan(&r.SrcNodeID, &r.DstNodeID, &r.EdgeKind); err != nil {
+			return nil, fmt.Errorf("QuerySymbolEdgesIncoming scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QuerySymbolEdgesIncoming rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// QuerySymbolEdgesOutgoing returns edge rows whose src_node_id = srcNodeID
+// at the given snapshotID (no edge_kind filter — OutgoingEdgesOf returns all kinds).
+//
+// Lock-free (pure SELECT on s.db).
+func (s *Store) QuerySymbolEdgesOutgoing(ctx context.Context, snapshotID, srcNodeID uint64) ([]SymbolEdgeRaw, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	const q = `
+		SELECT e.src_node_id, e.dst_node_id, e.edge_kind
+		  FROM semantic_edges AS e
+		 WHERE e.snapshot_id = ?
+		   AND e.src_node_id = ?
+	`
+	rows, err := s.db.QueryContext(ctx, q, snapshotID, srcNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("QuerySymbolEdgesOutgoing(snap=%d, src=%d): %w", snapshotID, srcNodeID, err)
+	}
+	defer rows.Close()
+	var out []SymbolEdgeRaw
+	for rows.Next() {
+		var r SymbolEdgeRaw
+		if err := rows.Scan(&r.SrcNodeID, &r.DstNodeID, &r.EdgeKind); err != nil {
+			return nil, fmt.Errorf("QuerySymbolEdgesOutgoing scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QuerySymbolEdgesOutgoing rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// QueryClusterIDOfNode returns the cluster_id and member count for the
+// cluster that contains nodeID at the given (repoID, graphVersion).
+// member count is derived from CAST(c.score AS INTEGER) (UpsertClusters
+// overloads semantic_clusters.score with the member count per overlay.go).
+//
+// Returns (0, 0, false, nil) when no row is found — caller emits
+// fallback_reason="cluster_boost_unavailable".
+//
+// All three WHERE parameters are positional (Threat T-74-03-02).
+// Lock-free (pure SELECT on s.db).
+func (s *Store) QueryClusterIDOfNode(ctx context.Context, repoID string, graphVersion, nodeID uint64) (clusterID uint64, memberCount int, found bool, err error) {
+	if s == nil || s.db == nil {
+		return 0, 0, false, nil
+	}
+	const q = `
+		SELECT cm.cluster_id, CAST(c.score AS INTEGER) AS member_count
+		  FROM semantic_cluster_members AS cm
+		  JOIN semantic_clusters AS c
+		    ON c.repo_id       = cm.repo_id
+		   AND c.graph_version = cm.graph_version
+		   AND c.cluster_id    = cm.cluster_id
+		 WHERE cm.repo_id       = ?
+		   AND cm.graph_version = ?
+		   AND cm.node_id       = ?
+		 LIMIT 1
+	`
+	var cid uint64
+	var mc int
+	if scanErr := s.db.QueryRowContext(ctx, q, repoID, graphVersion, nodeID).Scan(&cid, &mc); scanErr != nil {
+		if scanErr == sql.ErrNoRows {
+			return 0, 0, false, nil
+		}
+		return 0, 0, false, fmt.Errorf("QueryClusterIDOfNode(%q, gv=%d, node=%d): %w", repoID, graphVersion, nodeID, scanErr)
+	}
+	return cid, mc, true, nil
+}

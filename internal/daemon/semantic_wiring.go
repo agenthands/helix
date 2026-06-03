@@ -258,9 +258,19 @@ func newSemanticBundle(
 		b.skill.SetRetrieval(b.retrievalAdapter)
 		b.skill.SetCompactor(b.compactorAccessor())
 		b.skill.SetSessionAccessor(b.sessionAccessor())
+		b.skill.SetSymbolByName(b.symbolByNameAccessor())
+		b.skill.SetExtractorRun(b.extractorRunAccessor())
+		b.skill.SetClusterMap(b.clusterMapAccessor())
+		b.skill.SetClusterMember(b.clusterMemberAccessor())
+		b.skill.SetClusterPageRank(b.clusterPageRankAccessor())
+		b.skill.SetImpactLookup(b.integLookupAccessor())
+		b.skill.SetSymbolEdges(b.symbolEdgesAccessor())
+		b.skill.SetClusterMembership(b.clusterMembershipAccessor())
+		// TypeChain (SetTypeChain) and EdgeEvidence (SetEdgeEvidence) deferred to Phase 75
+		// — schema columns absent in Schema v6 (no tree_sitter_kind / tier / evidence_kind).
 		if logger != nil {
 			logger.Info("semantic skill setters wired",
-				"setters", 8,
+				"setters", 14,
 				"bleve_subdir", cfg.BleveSubdir,
 				"index_timeout", cfg.IndexTimeout,
 			)

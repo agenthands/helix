@@ -293,11 +293,11 @@ Closes BLOCKER-1 (nil accessor guards fire on every P1 tool call) and BLOCKER-2 
 status never reaches 'current') from the v1.11 milestone audit.
 **Requirements**: AUDIT-R-01, AUDIT-R-02, AUDIT-R-03, AUDIT-R-04, AUDIT-R-05
 **Depends on:** Phase 73
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 - [x] 74-01-PLAN.md — Add WiredAccessorsForTest export to export_p1_test.go (test seam prereq)
-- [ ] 74-02-PLAN.md — Five store-backed P1 adapter structs (SymbolByName, ExtractorRun, ClusterMap, ClusterMember, ClusterPageRank)
+- [x] 74-02-PLAN.md — Five store-backed P1 adapter structs (SymbolByName, ExtractorRun, ClusterMap, ClusterMember, ClusterPageRank)
 - [ ] 74-03-PLAN.md — Two two-hop P1 adapter structs (SymbolEdges, ClusterMembership — D-01a FOLD)
 - [ ] 74-04-PLAN.md — Extend setters block with 8 P1 Set* calls; update log line to 'setters', 14
 - [ ] 74-05-PLAN.md — TDD: runtime bootstrap test asserting 8 wired + 2 deferred accessor fields

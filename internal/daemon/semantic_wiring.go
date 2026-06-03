@@ -1895,16 +1895,137 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string, logge
 	return out
 }
 
+// ----- Phase 74 P1 store-backed accessor adapters (D-01) -----
+//
+// Five thin adapters wrapping *semanticstore.Store methods to satisfy the
+// five D-01 accessor interfaces declared in internal/skill/semantic/accessors.go.
+// Pattern mirrors the existing semStoreAdapter (nil-guard + delegate).
+// All imports (context, semanticstore, semantic, integ) are already present.
+
+// semP1SymbolByNameAdapter wraps *semanticstore.Store to satisfy SymbolByNameAccessor.
+// QuerySymbolByName converts []string (stable keys) → []integ.SymbolID.
+type semP1SymbolByNameAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) symbolByNameAccessor() semantic.SymbolByNameAccessor {
+	return &semP1SymbolByNameAdapter{store: b.store}
+}
+
+func (a *semP1SymbolByNameAdapter) QuerySymbolByName(ctx context.Context, repoID, path, name string) ([]integ.SymbolID, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	raw, err := a.store.QuerySymbolByName(ctx, repoID, path, name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]integ.SymbolID, len(raw))
+	for i, s := range raw {
+		out[i] = integ.SymbolID(s)
+	}
+	return out, nil
+}
+
+// semP1ExtractorRunAdapter wraps *semanticstore.Store to satisfy ExtractorRunAccessor.
+// LatestExtractorRunID delegates directly with no type conversion.
+type semP1ExtractorRunAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) extractorRunAccessor() semantic.ExtractorRunAccessor {
+	return &semP1ExtractorRunAdapter{store: b.store}
+}
+
+func (a *semP1ExtractorRunAdapter) LatestExtractorRunID(ctx context.Context, repoID string) (string, error) {
+	if a == nil || a.store == nil {
+		return "", nil
+	}
+	return a.store.LatestExtractorRunID(ctx, repoID)
+}
+
+// semP1ClusterMapAdapter wraps *semanticstore.Store to satisfy ClusterMapAccessor.
+// QueryClusterSummaries converts []semanticstore.ClusterSummaryResult → []semantic.ClusterSummaryRow.
+type semP1ClusterMapAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) clusterMapAccessor() semantic.ClusterMapAccessor {
+	return &semP1ClusterMapAdapter{store: b.store}
+}
+
+func (a *semP1ClusterMapAdapter) QueryClusterSummaries(ctx context.Context, repoID, projection string, graphVersion uint64, topN int) ([]semantic.ClusterSummaryRow, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	raw, err := a.store.QueryClusterSummaries(ctx, repoID, projection, graphVersion, topN)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]semantic.ClusterSummaryRow, len(raw))
+	for i, r := range raw {
+		out[i] = semantic.ClusterSummaryRow{ClusterIntID: r.ClusterIntID, MemberCount: r.MemberCount}
+	}
+	return out, nil
+}
+
+// semP1ClusterMemberAdapter wraps *semanticstore.Store to satisfy ClusterMemberAccessor.
+// QueryClusterMembers converts []semanticstore.ClusterMemberResult → []semantic.ClusterMemberRow.
+type semP1ClusterMemberAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) clusterMemberAccessor() semantic.ClusterMemberAccessor {
+	return &semP1ClusterMemberAdapter{store: b.store}
+}
+
+func (a *semP1ClusterMemberAdapter) QueryClusterMembers(ctx context.Context, repoID, projection string, graphVersion, clusterIntID uint64, limit int) ([]semantic.ClusterMemberRow, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	raw, err := a.store.QueryClusterMembers(ctx, repoID, projection, graphVersion, clusterIntID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]semantic.ClusterMemberRow, len(raw))
+	for i, r := range raw {
+		out[i] = semantic.ClusterMemberRow{NodeID: r.NodeID, SymbolID: r.SymbolID}
+	}
+	return out, nil
+}
+
+// semP1ClusterPageRankAdapter wraps *semanticstore.Store to satisfy ClusterPageRankAccessor.
+// QueryNodePageRanks returns map[uint64]float64 on both sides — no type conversion needed.
+type semP1ClusterPageRankAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) clusterPageRankAccessor() semantic.ClusterPageRankAccessor {
+	return &semP1ClusterPageRankAdapter{store: b.store}
+}
+
+func (a *semP1ClusterPageRankAdapter) QueryNodePageRanks(ctx context.Context, repoID, projection string, graphVersion uint64, nodeIDs []uint64) (map[uint64]float64, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	return a.store.QueryNodePageRanks(ctx, repoID, projection, graphVersion, nodeIDs)
+}
+
 // ----- Compile-time interface guards -----
 
 var (
-	_ semantic.StoreAccessor     = (*semStoreAdapter)(nil)
-	_ semantic.SchedulerAccessor = (*semSchedulerAdapter)(nil)
-	_ semantic.QueueAccessor     = (*semQueueAdapter)(nil)
-	_ semantic.LiveAccessor      = (*semLiveAdapter)(nil)
-	_ semantic.RetrievalAccessor = (*semRetrievalAdapter)(nil)
-	_ semantic.CompactorAccessor = (*semCompactorAdapter)(nil)
-	_ semantic.SessionAccessor   = (*semSessionAdapter)(nil)
-	_ retrieval.StoreReader      = (*semanticstore.Store)(nil)
-	_ integ.SemanticLookup       = (*integSemanticLookup)(nil)
+	_ semantic.StoreAccessor          = (*semStoreAdapter)(nil)
+	_ semantic.SchedulerAccessor      = (*semSchedulerAdapter)(nil)
+	_ semantic.QueueAccessor          = (*semQueueAdapter)(nil)
+	_ semantic.LiveAccessor           = (*semLiveAdapter)(nil)
+	_ semantic.RetrievalAccessor      = (*semRetrievalAdapter)(nil)
+	_ semantic.CompactorAccessor      = (*semCompactorAdapter)(nil)
+	_ semantic.SessionAccessor        = (*semSessionAdapter)(nil)
+	_ retrieval.StoreReader           = (*semanticstore.Store)(nil)
+	_ integ.SemanticLookup            = (*integSemanticLookup)(nil)
+	_ semantic.SymbolByNameAccessor   = (*semP1SymbolByNameAdapter)(nil)
+	_ semantic.ExtractorRunAccessor   = (*semP1ExtractorRunAdapter)(nil)
+	_ semantic.ClusterMapAccessor     = (*semP1ClusterMapAdapter)(nil)
+	_ semantic.ClusterMemberAccessor  = (*semP1ClusterMemberAdapter)(nil)
+	_ semantic.ClusterPageRankAccessor = (*semP1ClusterPageRankAdapter)(nil)
 )

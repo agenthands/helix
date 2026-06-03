@@ -38,6 +38,10 @@ func newSemanticTestConfig(t *testing.T) *config.SerenaConfig { //nolint:unparam
 // and asserts that all 8 wired P1 accessor fields are non-nil and the 2
 // deferred fields (TypeChain, EdgeEvidence — deferred to Phase 75) are nil.
 //
+// GREEN gate verified: all 10 assertions pass after Plan 74-04 added the 8
+// P1 Set* calls to the setters block in semantic_wiring.go (setters=14).
+// See feat(74-04) commit for the production code change that closes the gap.
+//
 // Accessor wiring is performed inside newSemanticBundle (semantic_wiring.go)
 // when daemon.New runs the bundle-construction step. The test uses the
 // semantic.WiredAccessorsForTest export added in Plan 74-01 / moved to

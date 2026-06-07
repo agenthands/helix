@@ -10,7 +10,8 @@
     "branching_strategy": "none",
     "phase_branch_template": "gsd/phase-{phase}-{slug}",
     "milestone_branch_template": "gsd/{milestone}-{slug}",
-    "quick_branch_template": null
+    "quick_branch_template": null,
+    "create_tag": true
   },
   "workflow": {
     "research": true,
@@ -25,7 +26,7 @@
     "text_mode": false,
     "research_before_questions": true,
     "discuss_mode": "discuss",
-    "skip_discuss": false,
+    "skip_discuss": true,
     "_auto_chain_active": false,
     "tdd_mode": true,
     "pattern_mapper": true,

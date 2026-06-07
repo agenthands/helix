@@ -1,5 +1,41 @@
 # Milestones
 
+## v1.11 Semantic Index Completion & P1 MCP Tools (Shipped: 2026-06-07)
+
+**Phases completed:** 7 phases, 38 plans, 19 tasks
+
+**Key accomplishments:**
+
+- 1. [Rule 1 — Cycle] PriorFileFact.Symbols cannot be []extract.SymbolFact
+- Go
+- [Rule 2 - Missing critical functionality] Added label-allowlist carve-outs + vector priming.
+- Duplicated
+- Test:
+- None significant.
+- One-liner:
+- [Minor] Stamp logic factored into stampLastCompactAt helper + PublicStampLastCompactAtForTest seam.
+- 1. [Rule 2] Wire RetrievalStatus into the get_semantic_graph_status envelope
+- Migration (v5 → v6)
+- `QuerySymbolByName(ctx, repoID, path, name) ([]string, error)`
+- Files:
+- Issue:
+- Production wiring of `RetrievalAccessor` + `ClusterMembershipAccessor` for `find_related_symbols`:
+- Branch B
+- cluster_id.go
+- Types:
+- 1. [Rule 2 - Design clarification] MemberCount uses all-rows pre-cap
+- TestConn_Call race condition in `internal/kernel/jsonrpc/codec_test.go`
+- Task 1:
+- Task 1:
+- Task 1 — Expand getChangeImpactGraphHelp
+- Task 1 — SC#3 Static Wrapper-Consistency Gate (wrapper_consistency_test.go)
+- Added WiredAccessorsBoolMap struct and WiredAccessorsForTest function to export_p1_test.go, providing a reflection-free test seam for all 10 P1 accessor nil-checks callable from daemon-package bootstrap tests.
+- semP1SymbolEdgesAdapter (SymbolEdgesAccessor) and semP1ClusterMembershipAdapter (ClusterMembershipAccessor) added to semantic_wiring.go with supporting Store helper methods in effective_graph.go, closing BLOCKER-1 for the D-01a FOLD accessors.
+- One-liner:
+- One-liner:
+
+---
+
 ## v1.9 Polish & Infra (Shipped: 2026-05-03)
 
 **Phases completed:** 12 phases (46–56, including emergent 51.1), 51 plans

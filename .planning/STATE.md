@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11
-milestone_name: Semantic Index Completion & P1 MCP Tools
-status: Awaiting next milestone
-last_updated: "2026-06-07T15:41:02.016Z"
-last_activity: 2026-06-07 — Milestone v1.11 completed and archived
+milestone: v1.12
+milestone_name: Bench Stack & Tool Evaluation
+status: planning
+last_updated: "2026-06-13T08:42:18.932Z"
+last_activity: 2026-06-13
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 38
-  completed_plans: 38
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: Milestone v1.11 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-07 — Milestone v1.11 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-13 — Milestone v1.12 started
 
 ## Accumulated Context
 

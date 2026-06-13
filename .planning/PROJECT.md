@@ -106,7 +106,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-_v1.10 requirements to be defined via `/gsd-new-milestone`._
+_v1.12 requirements to be defined via `/gsd-new-milestone`._
 
 Carry-over follow-ups (resolved at v1.10 Phase 58):
 - [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
@@ -144,29 +144,47 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.11 progress (2026-05-21):** Phase 73 complete — P1 Tools Integration & E2E Verification, the final phase of milestone v1.11. All 6 P1 MCP tools (`explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`) are now exposed through `SemanticSkill.Tools()` (10-tool ToolProvider surface) and gated across the full 5-profile × 4-mode matrix — `get_change_impact_graph` (review+) excluded from read/edit mode YAMLs, the other five visible at read+. Verified by an inline table-driven profile-filter golden suite (40 subtests). All 6 `*Help` consts standardized to a 4-section template with `get_tool_help` param-doc coverage tests via `jsonschema.For[T]`. SC#3 enforced by a new in-tree static gate (`wrapper_consistency_test.go`) asserting every P1 handler calls `checkMode` + emits `FreshnessV2` + is registered in `RegisterAll`. SC#4 proven by a real-store E2E suite (`buildP1E2EFixture`: real DuckDB `*Store` + bleve in a tempdir) running all 6 tools with closed-enum envelope assertions; `get_change_impact_graph` additionally asserts a non-degenerate subgraph. P1TOOL-07/08/09 all validated; 5/5 must-haves verified; both custom vet gates green; race-clean. Code review: 0 critical, 5 warning (WR-01/04/05 pre-existing Phase 72 code), 6 info.
 
-## Current Milestone: v1.11 Semantic Index Completion & P1 MCP Tools
+## Current Milestone: v1.12 Bench Stack & Tool Evaluation
 
-**Goal:** Complete the v1.10 semantic-index foundation by closing tier-3-approximation tech debt and shipping the 6 P1 MCP tools (`explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`) that were SPEC'd but deferred. Make `graph_version` advancement precise per-symbol; surface real status from production accessors; make `refresh_semantic_graph` actually incremental.
+**Goal:** Prove Helix's semantic / LSP / edit tooling improves agent success, cost, and safety on real public benchmarks across 8 Tier-1 languages — with controlled ablations and an internal ToolBench as the deterministic source of truth. Headline claim to land: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 
 **Target features:**
 
-- **Precise FileFactDiff populator** — Replace Tier-3 synthetic-marker floor with Tier-1 (full diff old↔new FileFact) and Tier-2 (added-only) populators in the live handler. Pre-edit FileFact accessor in `internal/semantic/live/handler/`. Closes DEF-67-F01-FULL-DIFF.
-- **Production status accessors** — Replace `semantic_wiring.go:408,441,450` placeholders. `ClusterStatus` returns real values from Phase 62 cluster engine; retrieval status accessors return real values from the bleve engine + corpus state. Closes TOOL-03/TOOL-04 placeholder annotations.
-- **Incremental refresh overlay-drain** — `collectCandidatePaths` wired through the overlay-drain seam in `internal/semantic/live/`. `refresh_semantic_graph` becomes truly incremental instead of full-walk fallback.
-- **6 P1 MCP tools** (build on existing v1.10 graph + cluster + integ.SemanticLookup infrastructure):
-  - `explain_symbol_deep` — deep symbol explanation with type chain, callers, edges, freshness
-  - `find_related_symbols` — semantic-graph + cluster-aware sibling discovery
-  - `get_cluster_map` — workspace-level cluster overview with weak-component summaries
-  - `explain_cluster` — per-cluster rationale + member symbols + ranking
-  - `get_change_impact_graph` — pre-edit blast-radius via the semantic graph
-  - `validate_graph_edge` — confidence + evidence for a specific edge claim
+*Foundation — Internal ToolBench (Option A):*
 
-**Out of scope (deferred to v1.11.x point releases or won't-do):**
+- **Net-new `bench/` tree** — `datasets/`, `runners/`, `languages/`, `evaluators/`, `reports/`. `eval/` (Phase 67 / v1.10) left as legacy; synthetic corpus may migrate later but is not the source of truth.
+- **Internal ToolBench** — deterministic, per-language tool-contract tests for 10 capabilities: semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling.
+- **8 Tier-1 languages** — Python, TypeScript, JavaScript, Go, Java, C#, C++, Rust.
+- **6-mode ablation matrix** — `baseline_plain` (shell+grep+read+edit+test), `baseline_rag` (grep + embeddings + chunk RAG), `your_agent_full` (semantic + LSP + fuzzy + symbol graph + structured edits + diagnostics), `no_lsp`, `no_semantic`, `no_structured_edit`. Same model + same budget across all modes.
+- **Metrics layer (12+)** — `task_success`, `verified_correctness`, `tokens_input/output`, `tool_calls`, `wall_time_seconds`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`, `semantic_tool_calls`, `edit_distance_patch`, `retry_count`. Normalized per-task result object.
+- **Statistical rigor** — multi-run per task (N ≥ 3 by default), bootstrap confidence intervals, `pass@1` and `pass@k`. Single-run results are not publishable.
+- **Dollar-cost conversion** — static price table per provider × model, computed `cost_per_solved_task` (reopens Phase 67 deferred item).
 
-- Apple Developer ID notarization (DEF-59-NOTARIZE), darwin canary in CI (DEF-59-DARWIN-CANARY), Windows arm64 restore (DEF-59-WIN-ARM64-RESTORE) — handled as v1.11.x patches if/when needed.
-- Package-manager distribution (Homebrew, Scoop, deb/rpm/AUR, etc.) — **hard project rule:** Helix ships signed binary archives only. No package surfaces, ever.
+*Public benchmarks (Option B):*
 
-**Source of truth:** `SPEC-DRAFT.md` (40 sections) for the 6 P1 tool contracts; `.planning/milestones/v1.10-ROADMAP.md` for the completion-item anchors.
+- **Aider Polyglot** — 225 Exercism tasks across C++, Go, Java, JS, Python, Rust.
+- **CrossCodeEval** — cross-file completion across Python, Java, TS, C#.
+- **RepoBench** — retrieval + completion across Python, Java.
+
+*External credibility (Option C):*
+
+- **SWE-bench Verified** — 500 human-validated Python tasks.
+- **Multi-SWE-bench** — 1,632 instances across Java, TS, JS, Go, Rust, C, C++.
+- **Terminal-Bench 2.0** — 89 hard containerized long-horizon tasks.
+
+*Reports:*
+
+- `leaderboard.md`, `per_language.md`, `ablations.md`, `cost_quality.md`.
+
+**Out of scope (deferred or won't-do):**
+
+- HumanEval-style toy benchmarks as primary scoring (smoke-only via MultiPL-E / HumanEval-X / McEval if needed).
+- Tier-2 (PHP, Ruby, Kotlin, Swift, C, Scala) and Tier-3 languages — future milestones.
+- LLM judge as CI gate (per Phase 67 EVAL-07, judge stays informational).
+- Comparing against Claude Code / Cursor as black boxes — controlled baselines using the *same* base model only.
+- Public-benchmark *leaderboard submissions* — generating local results sufficient; submission infra deferred.
+
+**Source of truth:** This PROJECT.md milestone section, the upcoming v1.12 `.planning/REQUIREMENTS.md`, and the user's BENCH-PLAN dump captured in the discuss-milestone transcript (2026-06-13).
 
 ## Context
 
@@ -257,4 +275,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 — v1.11 Phase 73 complete (P1 Tools Integration & E2E Verification; P1TOOL-07/08/09 validated; 5/5 must-haves verified; final phase of milestone v1.11)*
+*Last updated: 2026-06-13 — v1.12 milestone scoped (Bench Stack & Tool Evaluation; A+B+C: internal ToolBench + Aider Polyglot + CrossCodeEval + RepoBench + SWE-bench Verified + Multi-SWE-bench + Terminal-Bench; 8 Tier-1 languages; 6-mode ablation matrix)*

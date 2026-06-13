@@ -1,211 +1,283 @@
-# Project Research Summary — Helix v1.10 Live Semantic Index
+# Project Research Summary
 
-**Domain:** Live, evidence-backed semantic graph layered onto a shipped LSP-backed code intelligence daemon (DuckDB committed snapshots ⊕ live overlay ⊕ LSP validation ⊕ agent-facing context tools ⊕ guardrails ⊕ eval harness)
-**Researched:** 2026-05-03
-**Confidence:** HIGH overall — STACK and ARCHITECTURE anchored in v1.9 source, FEATURES in adjacent-product docs, PITFALLS in shipped Helix bugs and upstream issues. MEDIUM on guardrail-receipt schemas (genuinely novel) and dynamic-language type-resolution conventions.
+**Project:** Helix v1.12 — Bench Stack & Tool Evaluation
+**Domain:** Agentic-coding benchmark harness — public benchmark adapters + internal ToolBench + 6-mode ablation matrix across 8 Tier-1 languages
+**Researched:** 2026-06-13
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Helix v1.10 turns the v1.9 online LSP/tree-sitter capabilities into a durable, live, evidence-backed semantic graph. The decision-defining shape is **DuckDB committed snapshots + fsnotify live overlay + effective-read semantics + LSP revalidation queue**, exposed to agents as 10 new MCP tools, gated by a guardrail/receipt policy engine, and validated end-to-end by an out-of-process eval harness comparing four modes (`baseline / native / semantic / semantic_guarded`). The adjacent-product survey shows this combination is **not** the dominant pattern in any shipping product: SCIP/Glean/Stack-Graphs ship batch graphs without live overlay; Aider/Cursor/Cody ship live retrieval without a durable graph. **Freshness-as-API** (every response carries `freshness` + `score_status` + `pending_lsp_files`) and **semantic safety receipts** (destructive edits gated on prior `find_references`/`analyze_blast_radius` evidence) are genuine differentiators with no published prior art.
+v1.12 ships a net-new `bench/` tree and a sibling `cmd/helix-bench` binary that drives **six controlled ablation modes** (`baseline_plain`, `baseline_rag`, `your_agent_full`, `no_lsp`, `no_semantic`, `no_structured_edit`) against six public benchmarks (Aider Polyglot, CrossCodeEval, RepoBench, SWE-bench Verified, Multi-SWE-bench, Terminal-Bench 2.0) plus an internal 10-capability × 8-language ToolBench that is the *deterministic* source of truth. The load-bearing external claim — *"same model + same budget, with Helix the agent solves more tasks with fewer tokens, fewer files read, fewer destructive edits"* — is only credible if (a) ablations actually hold model + budget + system prompt constant, (b) public-benchmark numbers are statistically sound with N≥3 + BCa bootstrap CI, and (c) the known SWE-bench "tests-pass ≠ correct" hole is addressed via UTBoost-augmented rescoring + multi-oracle `verified_correctness`.
 
-The recommended approach lands in 13 phases under a clean dependency order: store first → tree-sitter extraction + stable symbol IDs → live overlay → LSP enrichment → graph scores → clustering → 10 MCP tools → existing-tool integration via strangler fig → compaction → type resolution → guardrails → eval. New code lives in **Layer 1.5** (`internal/semantic/`, `internal/phasegraph/`, `internal/guardrails/`, `internal/eval/`), between the kernel and skills, with strict acyclic imports. Integration with kernel-edit and repomap is via injected callbacks (`postEditHook`, `SetSemanticLookup`) so the kernel never imports semantic. The DuckDB binding is `github.com/duckdb/duckdb-go v2.10502.0` (CGO=1 required, single-binary preserved via bundled static libs); the v1.9 Phase 51.1 stub policy extends to auto-disable `semantic_index.enabled` on CGO=0 builds.
+The recommended approach is a strict **subprocess-shellout** posture for the heavy upstream Python harnesses (SWE-bench, Multi-SWE-bench, Terminal-Bench) combined with **dataset-loader-only** adapters for completion-style benchmarks (Aider Polyglot, CrossCodeEval, RepoBench), all backed by a thin Go orchestrator. Container runtime is **`os/exec` to the `docker` CLI** (not the Go Docker SDK — see conflict resolution below) so results are bit-for-bit comparable to upstream harnesses and podman is a drop-in. RAG is a **standalone `cmd/helix-bench-rag` stdio MCP server** exporting 4 fixed tools (`rag_search`, `rag_read_chunk`, `grep`, `read_file`) — never a Helix profile — to prevent contamination of the production tool surface. `eval/` (v1.10 Phase 67) is frozen and stays as the PR-gated wiring smoke; `bench/` is the milestone artifact.
 
-Top risks concentrate in **state coherence under concurrency** (overlay × graph-cache × compaction race; fsnotify dropping watches on editor atomic-rename; PageRank score instability while LSP enrichment lands asynchronously) and **agent-shaped failure modes** (receipts lost to context compaction, eval prompt leakage to commercial LLMs). Mitigations are concrete and architectural: epoch-CAS contract between overlay writes and compaction, directory-watching with content-hash scrub, `graph_version` + monotone-frontier rule on tool envelopes, server-side receipt store with ID-only forwarding. **Must-not-regress invariants from v1.9** — `LazyInit`-last middleware order, single canonical `GrammarRegistry`, structured LS readiness gates (rust-analyzer `experimental/serverStatus`, jdtls `WaitUntilJavaReady`), bounded-label metrics with no source content — all carry forward and are explicitly preserved.
+Key risks cluster around four BLOCKER classes: **training-data contamination** (mitigate via Verified-only headlines + canary-emission probe + delta-only reporting), **patch-validation false positives** (mitigate via run-all-tests override + UTBoost-augmented suite + multi-oracle `verified_correctness ≠ tests_pass`), **ablation leakage** (LSP / semantic / structured-edit subsystems have back-channels through `analyze_blast_radius`, RepoMap enrichment, OnEdit hooks — mitigate via hard kernel-level `disable_*_subsystem` flags + `vet-ablation-leakage` analyzer + zero-`lsp.*`-spans trace assertion), and **fairness drift** (temperature, retry, cache, system-prompt, dated model snapshot — mitigate via a single `fairness_contract.go` struct that all modes load from). Secondary HIGH risks: token-counting attribution (provider `usage` block, not Helix's MCP counter), static cost-table drift (hard `valid_until` expiration), bootstrap CI math (BCa not percentile, N≥10,000), per-language toolchain hermeticity (pre-baked images + `--network=none`), Docker disk-explosion (189 GB+ unoptimized → 30 GB via logicstar mirror + cosign-signed GHCR copy).
 
 ## Key Findings
 
-### Recommended Stack (additions only; v1.9 stack fixed)
+### Recommended Stack
 
-- **`github.com/duckdb/duckdb-go` v2.10502.0** (DuckDB 1.5.2): fact-store driver, official post-donation repo, `database/sql` + Appender, bundled static libs cover the 6-archive matrix. **CGO=1 required** — extends Phase 51.1 stub policy.
-- **`gonum.org/v1/gonum` v0.16.0 test-only**: oracle for hand-rolled PageRank/components; never imported from production per ADR-005.
-- **`github.com/tiktoken-go/tokenizer` v0.6.x**: pure-Go embedded vocab; rejected `pkoukk/tiktoken-go` because it network-downloads vocab.
-- **`github.com/bluekeyes/go-gitdiff` v0.8.x**: pure-Go patch parse + apply; rejected `sourcegraph/go-diff` as parser-only.
-- **`fsnotify` v1.9.0** (already vendored): kept; build recursive walker, atomic-rename re-attach, `ENOSPC` degraded-mode in-tree.
-- **Pipeline DAG**: stdlib only (~80 LOC Kahn's algorithm).
-- **Type resolution / fixpoint**: stdlib only; comment parsers regex-tractable.
+The v1.10 stack is fixed; v1.12 adds operator-side runtime requirements (Python 3.11+, Docker Engine, per-language toolchains) for `cmd/helix-bench` *only*. The shipping `helix` daemon binary is unchanged — single-binary distribution survives. See `.planning/research/STACK.md` for the full additions table.
 
-**CGO posture (load-bearing):** `semantic_index.enabled=true` requires CGO=1. CGO=0 builds compile via `//go:build !cgo` stubs that auto-return `Kind: Unsupported`. Daemon must auto-set `cfg.SemanticIndex.Enabled = false` when `treesitter.Available == false`. **What NOT to pull in:** any KG/RDF stack, embedding/vector libs, heavyweight DAG/workflow engines, gonum-in-production, recursive-watch wrappers.
+**Core technologies (new at v1.12):**
+- **Upstream Python harnesses via `subprocess-shellout`** — `swebench` PyPI v4.x, `multi-swe-bench` (main), `terminal-bench` `tb` CLI — reproducing published numbers exactly without reimplementing 6+ months of container infra.
+- **Docker via `os/exec` to the `docker` CLI** (with podman drop-in) — chosen over Go Docker SDK per ARCHITECTURE.md verdict; bit-exact match to upstream harnesses; zero new heavy deps.
+- **`github.com/philippgille/chromem-go` v0.7.x** — zero-deps in-process vector store for `baseline_rag`; no FAISS, no Weaviate, no external service.
+- **OpenAI `text-embedding-3-small` (primary) / Ollama `nomic-embed-text` (offline fallback)** — embedding providers for RAG baseline; document choice in `bench/runners/baseline_rag_agent/EMBED-CHOICE.md`.
+- **`github.com/gomlx/go-huggingface` v0.x + `arrow-go/v18` parquet fallback** — HF dataset fetcher with `$HELIX_CACHE_DIR/bench-datasets/<sha>/` content-hashed cache.
+- **`gonum.org/v1/gonum/stat`** (promoted from test-only to runtime for bench/) — base for bootstrap; ~40 LOC BCa helper on top; pass@k closed-form per HumanEval paper.
+- **Reused from v1.10 Phase 67:** `tiktoken-go/tokenizer` v0.6, `bluekeyes/go-gitdiff` v0.8, `anthropic-sdk-go` v1.35, `openai-go` v1.12, `koanf/v2`, modernc.org/sqlite, OTel + propagation.TraceContext.
+- **Per-language test runners via stdlib `os/exec`** — no per-language Go bindings; `go test`, `pytest --json-report`, `npx jest/vitest`, `mvn test`, `dotnet test`, `cargo test`, `ctest`.
 
 ### Expected Features
 
-**Must have (table stakes):** durable queryable symbol+reference graph with stable IDs across renames; incremental update without full reindex; cross-file find-references / call-hierarchy; token-budgeted ranked context; tree-sitter-first extraction with LSP enrichment; PageRank importance ranking; indexing-progress + status; diagnostics integration after edits.
+See `.planning/research/FEATURES.md`. Helix is the only entry in the surveyed peer set that holds model fixed across a *layered subtractive* ablation while reporting raw + UTBoost-augmented SWE-bench pass-rates side-by-side.
 
-**Should have (differentiators):**
-- Effective-read semantics (snapshot ⊕ overlay) — addresses Cursor's top complaint
-- First-class freshness on every response
-- Tiered confidence on edges with explicit evidence kinds (1.00 LSP / 0.90 annotation / … / 0.20 unknown) + `validation_state`
-- Live LSP revalidation queue with priority boosts on edit
-- Multi-projection PageRank with per-projection freshness
-- Cluster maps + cluster explanations
-- Guardrail policy engine + safety receipts (semantic correlation across tool calls; novel)
-- Eval harness with 4 modes
-- Type resolution with bounded fixpoint for dynamic languages (capped, comment-fallback ≤ 0.60)
-- `validate_graph_edge` (agent challenges the index)
-- Typed pipeline DAG with phase validation at startup
+**Must have (table stakes):**
+- `bench/` tree skeleton + `cmd/helix-bench` + `cmd/helix-bench-rag` sibling binaries
+- Internal ToolBench: 10 capabilities × 8 Tier-1 langs, deterministic, <60s wall, runs in `make bench-quick` + `make test`
+- 6-mode ablation matrix with same-model-same-budget invariant enforced by `fairness_contract.go`
+- Aider Polyglot adapter (cheapest, 6 langs, first external number)
+- CrossCodeEval adapter (only public coverage for C#)
+- SWE-bench Verified adapter (headline external benchmark)
+- Normalized per-task `result.v2.json` with all 12+ PROJECT.md metrics
+- `pass@1` + `pass@k=3` + 95% BCa bootstrap CI (N_resamples ≥ 10,000)
+- `cost_per_solved_task` from `bench/datasets/cost-table.yaml` with hard `valid_until` expiration
+- UTBoost-augmented SWE-bench pass-rate reported alongside raw
+- `leaderboard.md`, `per_language.md`, `ablations.md`, `cost_quality.md` auto-generated
+- `make bench` / `bench-quick` / `bench-<suite>` targets; CI gates on ToolBench only
+- Per-instance Docker image cache with pinned sha256 digests + cosign-signed GHCR mirror
 
-**Defer (v1.10.x / v1.11+):** multi-projection PageRank, clustering tools, P1 retrieval companions (`find_related_symbols` / `get_change_impact_graph` / `explain_symbol_deep` / `validate_graph_edge`), `semantic_guarded` mode + G-006..G-010, type resolution + access chains, comment-based fallback, idle compaction tuning, Java/Rust first-class extraction, cross-repo graphs, v1.9 carry-over (PKG-01 SC-3, distros, Phase 51 reproducibility scope, Phase 55 forwarder span).
+**Should have (Helix-specific differentiators):**
+- Layered subtractive ablations (`no_lsp`, `no_semantic`, `no_structured_edit`) as headline attribution mechanism — no peer publishes this
+- Edit-locality + regression-rate as first-class headline metrics (conditioned on success to prevent gaming)
+- Cost-per-solve broken out per ablation mode
+- Multi-SWE-bench adapter (7 langs, scale story, covers Tier-1 gaps)
+- RepoBench adapter (clean retrieval-only story for RepoMap attribution)
+- Terminal-Bench 2.0 adapter (long-horizon control)
 
-**Anti-features (refusals):** vector/embedding search; RDF/SPARQL KG; "real-time across whole repo" marketing; auto-execute when guardrails pass; in-process LSP servers; soundness-grade type inference; SWE-bench leaderboard chase; LLM-generated edge explanations; persistent receipts detached from `graph_version`; full-rebuild on every Helix start.
+**Defer (v2+):**
+- Public leaderboard submission infra
+- Continuous benchmarking dashboard
+- Tier-2 / Tier-3 language ToolBench fixtures
+- Cross-vendor head-to-head vs Cursor / Cody / Continue
+
+**Anti-features (explicitly NOT to ship):**
+- HumanEval / MBPP as primary scoring (smoke-only via MultiPL-E if at all)
+- LLM-judge as CI gate or `verified_correctness` contributor (EVAL-07 holds; judge stays in `informational_quality_score`)
+- Black-box product comparisons
+- Single-run results in any external report
+- Helix tools exposed to the RAG baseline arm (contamination)
 
 ### Architecture Approach
 
-**Layer 1.5 placement** between kernel and skills. Strict acyclic imports — kernel never depends on semantic; coupling inverted via callbacks.
+See `.planning/research/ARCHITECTURE.md`. Five architectural verdicts drive everything else:
+
+1. **`cmd/helix-bench` is a NEW sibling binary** to `cmd/helix-eval`, not an extension — different SLOs.
+2. **Container runtime is `os/exec` shell-out to `docker` (with podman fallback)** — bit-exact match to public harnesses.
+3. **`baseline_rag` is `cmd/helix-bench-rag` as its own stdio MCP server** — 4 fixed tools, never a Helix profile.
+4. **Five of six ablation modes are profile YAMLs** (`bench-full`, `bench-no-lsp`, `bench-no-semantic`, `bench-no-structured-edit`, plus reused `baseline.yaml` for `baseline_plain`). `no_semantic` also requires `semantic_index.bench_disabled: true` config-key gate at daemon bootstrap to un-wire Phase 65 strangler-fig.
+5. **Per-language test runners live in `bench/languages/<L>/testrunner.go`** — one package per language; `bench/evaluators/test_runner/dispatch.go` is a 30-LOC switch.
 
 **Major components:**
-1. **Semantic Service** owns `*sql.DB` for DuckDB at `<workspace>/.helix/semantic.duckdb`; opens at new daemon bootstrap step **2.5** between language registry and kernel creation; disable path returns `nil`, all callsites guard.
-2. **Live Update Pipeline** — fsnotify directory-watcher with atomic-rename re-attach + content-hash scrub; coalescer (250ms debounce, 200-event bulk threshold); overlay writer with `overlay_epoch`; idle compaction goroutine.
-3. **LSP Enrichment Worker** — single goroutine with `container/heap` priority queue; reuses `kernel.Pool().AcquireLease(...)` via small `LeaseAcquirer` interface (no kernel import); honors v1.9 readiness gates.
-4. **Graph + Rank + Cluster** — in-memory cache loaded from DuckDB; hand-rolled multi-projection weighted PageRank with personalized restart and incremental local repair.
-5. **MCP Tools + Skill** — 10 new tools registered via existing skill adapter pattern (new daemon step 13.5).
-6. **Existing-Tool Integration (strangler fig)** — `repomapSkill.SetSemanticLookup(lookup)` mirrors `SetEnrichFn`; `get_repo_map` / `get_context` / `analyze_blast_radius` / `get_health` consult semantic when available, fall back to v1.9. Zero source change to `internal/repomap` engine.
-7. **Edit-Tool Hook (callback inversion)** — `edit.RegisterTools` gains `postEditHook func(ctx, []string, source)`; daemon wires `d.semantic.LiveQueue().EnqueueChangeEventsFunc()`. Threaded through `fileops.replace_in_file` / `fuzzy_edit` too. `nil`-safe.
-8. **Guardrail Middleware** — installed at new step **14b.5** between Suggestion and LazyInit. Execution order: `LazyInit → Guardrail → Suggestion → ProfileFilter → Telemetry → handler`. **LazyInit MUST remain installed last (executes first).** Telemetry gains `guardrail_blocked` / `guardrail_warned` outcome classes.
-9. **Pipeline DAG** — strangler fig: stdlib library used immediately for new graphs (semantic indexing, live update, eval); imperative `daemon.New` bootstrap stays with `// TODO(v1.11): migrate` marker.
-10. **Eval Harness** — out-of-process by default; subprocess `helix daemon` per task with isolated config; agent (Anthropic / DeepSeek refactored from `test/oracle/llm/`) over stdio forwarder; in-process variant for `make eval-quick`. Each mode is a config preset. New `--profile=baseline` strips Helix tools entirely.
+1. **`cmd/helix-bench`** — orchestrator, matrix expander, work-stealing scheduler, container pool, content-hash result cache
+2. **`cmd/helix-bench-rag`** — standalone stdio MCP server for RAG baseline
+3. **`bench/runtime/{container,subprocess,sandbox}/`** — Docker/podman shellout, daemon+agent+rag subprocess control, per-cell sandbox wrapping `internal/eval/sandbox/`
+4. **`bench/datasets/<X>/adapter.go`** — one adapter per public benchmark + `internal-toolbench/`
+5. **`bench/runners/<mode>/runner.go`** — six mode runners
+6. **`bench/languages/<L>/{contract_test.go,testrunner.go}`** — per-language assertions + native test runner
+7. **`bench/evaluators/{test_runner,patch_validator,semantic_oracle,token_meter,tool_trace_analyzer,regression_checker}/`** — cross-language graders
+8. **`bench/aggregator/`** — N≥3 multi-run rollup, BCa bootstrap CI, pass@k, cost rollup
+9. **`bench/reports/`** — generated markdown
+10. **`internal/profile/profiles/bench-*.yaml`** — four new ablation profile YAMLs
+11. **`semantic_index.bench_disabled` config key** — only new code path inside the daemon
 
-**Shutdown ordering:** semantic.Run under daemon errgroup; on cancel: stop accepting events → drain coalescer → drain LSP queue → flush overlay (no compaction) → close DuckDB → kernel shuts down LS workers (v1.9 ordering preserved last).
+**Conflict resolution (STACK.md vs ARCHITECTURE.md — Docker SDK):** STACK.md proposes `github.com/docker/docker` v27 Go client; ARCHITECTURE.md rejects it in favor of `os/exec` to the `docker` CLI. **ARCHITECTURE.md wins.** Rationale: bench invokes Docker ≤ once per (task,mode,run) so call latency is irrelevant against tens-of-seconds LLM latency; shell-out is the only way to demonstrably match the public harnesses; podman compatibility comes free; the Docker Go SDK pulls a ~8MB compiled / ~500MB-source dep tree. STACK.md's projected `go.mod` diff drops the `docker/docker` line.
 
-**DuckDB cross-process rule:** all store access via daemon. CLI subcommands and eval harness MUST NOT reopen the `.duckdb` file (DuckDB single-writer). Lock with vet rule forbidding `duckdb-go` import outside `internal/semantic/store/`.
+### Critical Pitfalls
 
-### Critical Pitfalls (top 5; full set in PITFALLS.md)
+See `.planning/research/PITFALLS.md`. Top 5 (all BLOCKER except #5):
 
-1. **C1 — Overlay × graph-cache × compaction race.** Three writers, three independent monotonic clocks, no single linearization point; ClearOverlay can drop overlay rows committed after MergeBaseAndOverlay. **Mitigation:** epoch-CAS — compaction snapshots `overlay_epoch`, ClearOverlay deletes rows ≤ captured epoch. Property test in P8.
-2. **C2 — fsnotify silent watcher death on atomic-rename.** Vim/JetBrains/VS Code save patterns kill inode-attached watchers; Linux inotify per-user limit blows up on >8k-dir repos. **Mitigation:** watch directories not files; eager re-attach on RENAME/REMOVE; required (not best-effort) 5-min content-hash scrub; ENOSPC → manifest-poll fallback per workspace; surface in `get_semantic_graph_status`.
-3. **C3 — PageRank score instability while LSP enrichment lands.** Async confidence promotion (0.4 → 1.0) re-ranks the graph between calls. **Mitigation:** every ranked envelope returns `graph_version` + `enrichment_level`; default to last-committed-snapshot scores; bound incremental repair frontier (`max_repair_nodes`, fail-closed); determinism test (NodeID-sorted tiebreak).
-4. **C8 — LSP enrichment death spiral.** Post-`git checkout` flood buries jdtls (just stabilized in Phase 56); interactive p95 climbs as Helix indexes more. **Mitigation:** revalidation queue strictly lower priority via separate token bucket + concurrency cap (default 1 worker); interactive deadline preempts; do NOT flood after `bulk_update` (lazy-on-tool-call drives enrichment); honor v1.9 readiness gates before enqueueing.
-5. **C7 — Stable symbol ID drift on rename / generics / overloads / anonymous symbols.** Breaks `analyze_blast_radius`, `get_change_impact_graph`, `find_related_symbols`. **Mitigation:** key contract `repo_id || package_path || enclosing_chain || name || arity || receiver_type` — explicitly NOT line/column, NOT `signature_hash`, NOT generic type-args. AST-shape hash for anonymous. 30+ before/after test matrix per language. Lock contract in P1.
+1. **Training-data contamination (BLOCKER)** — frontier models have seen public benchmarks. Mitigate via SWE-bench Verified as *only* SWE-family headline; canary-emission probe on every benchmark; **delta-only reporting** (Helix − baseline_plain on same model; contamination affects both arms equally); per-dataset `CANARY.txt`.
+2. **Patch-validation false positives (BLOCKER)** — SWE-bench's per-instance harness only re-runs PR-modified tests; UTBoost shows ~31% of "solved" Verified patches are semantically wrong. Mitigate via **run-all-tests override**; **multi-oracle `verified_correctness`** (tests-pass AND ≥1 of {gold-patch-diff-overlap, no-new-diagnostics, mutation-survival}); never collapse `verified_correctness ≡ tests_pass` (Phase 67 F-09 lesson).
+3. **Ablation-mode leakage (BLOCKER)** — `no_lsp` profile filters `tools/list` (visibility) but doesn't stop `analyze_blast_radius` from calling `lspProbeForEdges`, RepoMap's `SetEnrichFn`, or Phase 60 OnEdit hooks. Mitigate via hard kernel-level `disable_*_subsystem` flags plumbed to `kernel.NewWorkspace`; `vet-ablation-leakage` static analyzer; escape-path audit tests asserting zero LS workers + zero `lsp.*` spans for `no_lsp`.
+4. **Same-model fairness drift (BLOCKER)** — trivial temperature/retry/cache/system-prompt asymmetries invalidate the headline. Mitigate via single `bench/runners/fairness_contract.go` struct pinning dated model snapshot (`claude-sonnet-4-5-20260520`), temperature, max_tokens, system_prompt_hash, retry policy, cache policy; CI gate refuses mode overrides without explicit `WaiverReason`; disable Anthropic prompt caching globally for headline runs; deprecation-calendar gate.
+5. **Token-counting attribution boundary (HIGH)** — Helix's MCP-level counter ≠ what the provider bills; headline must source from provider `usage` block with `tokens_input_uncached`/`tokens_input_cached_read`/`tokens_input_cache_write`/`tokens_output` reported separately.
 
-**Other notable risks:** C5 cross-process DuckDB lock (architectural rule + vet lint); C6 DuckDB JSON growth (CHECKPOINT + weekly VACUUM, evidence size cap); M1 overlay rows lost in compaction crash (single-tx OR `compaction_journal`); M4 receipts lost to context compaction (server-side receipt store, ID-only forwarding); M5 eval prompt leakage (synthetic-only corpora, retention-zero); M6 metrics cardinality (extend v1.2 bounded-label CI lint); M7 fallback path drift (`source` field in every envelope; index-disabled goldens).
-
-### Must-Not-Regress Invariants (v1.9 carryover)
-
-- **Middleware install LIFO order:** `LazyInit` MUST remain installed last (executes first). Guardrail inserts at 14b.5 between Suggestion and LazyInit.
-- **Single canonical `GrammarRegistry`** (BUG-04, Phase 49) injected from daemon bootstrap; semantic extractors consume the same instance.
-- **Structured LS readiness gates** (BUG-02 rust-analyzer `experimental/serverStatus`, Phase 56 jdtls `JdtlsAdapter.WaitUntilJavaReady`, `Worker.Start` `OnNotification` wiring) — semantic LSP enrichment honors these.
-- **Bounded-label metrics with no source content** in metrics or traces — extend v1.2 cardinality allowlist; PromQL validator (registry-driven, fail-closed) covers new families.
-- **Single-binary + CGO=0 stub policy** — daemon refuses semantic with `Kind: Unsupported` and remediation text.
+PITFALLS.md ships 19 pitfalls plus a 24-item "Looks Done But Isn't" checklist and a complete pitfall-to-phase mapping table the roadmapper should consume directly.
 
 ## Implications for Roadmap
 
-13 phases honoring the dependency order from ARCHITECTURE.md "Suggested build order". Deviations from SPEC §32: pipeline DAG library split out as P0.5 so P1/P2/P10 can consume it; type resolution (P11) moved between P8 and P9 (improves edge precision; doesn't gate other phases).
+The architecture's 18-step build order (ARCHITECTURE.md §"Phase Build Order") is the canonical dependency graph; suggestions below collapse into ~15 roadmap phases. Strictly bottom-up.
 
-### Phase P0: Schema & Store + Config + Cardinality
-**Rationale:** Foundation; locks cross-process access rule (C5), JSON-vs-typed-column discipline (C6), cardinality allowlist (M6) before any consumer depends on the store.
-**Delivers:** `internal/semantic/{store,types,config}`; DuckDB schema; schema versioning; `semantic_index.enabled` config + 4-layer precedence; vet rule forbidding `duckdb-go` outside `internal/semantic/store/`; CGO=0 stub.
-**Avoids:** C5, C6, M5, M6.
+### Phase 1: Schema, fairness contract, and tree skeleton
+**Rationale:** Every later phase writes `result.v2.json` or reads `bench.yaml` or loads `fairness_contract.go`. Schema-first lets every subsequent phase be schema-validated; fairness-contract-first means no benchmark adapter ever defines its own model config.
+**Delivers:** `bench/` tree skeleton; `bench/schema/result.v2.schema.json`; `bench/bench.yaml` shape; `bench/runners/fairness_contract.go`; content-hash cache key derivation; `bench/datasets/cost-table.yaml` with `valid_until`; `bench/providers/tos_attestation.yaml` + `make verify-tos` gate; per-dataset `CANARY.txt` slots.
+**Avoids:** Pitfalls 4, 6, 7, 1 (canary infra).
+**Research flag:** None — patterns from Phase 67.
 
-### Phase P0.5: Pipeline DAG Library
-**Rationale:** Consumed by P1/P2/P10 planners. Cheap (~80 LOC stdlib).
-**Delivers:** `internal/phasegraph/`.
-**Avoids:** m1 half-migration (bootstrap stays imperative with TODO(v1.11) marker).
+### Phase 2: Ablation profile YAMLs + kernel-level disable flags
+**Rationale:** The `disable_*_subsystem` kernel flags + `semantic_index.bench_disabled` config gate are the *only* invasive code paths inside the daemon — land them early so they're stable.
+**Delivers:** Four new `bench-*.yaml`; kernel disable flags plumbed to `kernel.NewWorkspace`; LS pool / RepoMap `SetEnrichFn` / `lspProbeForEdges` no-op paths; `vet-ablation-leakage` analyzer; escape-path audit tests.
+**Avoids:** Pitfall 3 (central correctness invariant for the milestone).
+**Research flag:** **NEEDS RESEARCH** — strangler-fig (Phase 65) and OnEdit hooks (Phase 60) have non-obvious back-channels. Roadmapper should add a research pass enumerating every LSP/semantic consumer in the kernel.
 
-### Phase P1: Tree-sitter Extraction + Stable Symbol IDs
-**Rationale:** Symbol identity is the foundational graph contract — must lock before live overlay or any consumer.
-**Delivers:** `internal/semantic/{extract,resolve}`; Go / TS+JS / Python first-class extraction; key contract; 30+ before/after test matrix per language.
-**Avoids:** C7.
-**Research flag:** language-specific edge cases (Go generics, TS overloads, Python decorators).
+### Phase 3: Bench runtime (sandbox + subprocess, no container) + first E2E smoke
+**Rationale:** Reuses `internal/eval/sandbox/` via thin wrapper; subprocess control without containers gets us first E2E smoke (one task, one mode) and forces the orchestrator shape.
+**Delivers:** `bench/runtime/sandbox/`; `bench/runtime/subprocess/{daemon.go,agent.go}`; `cmd/helix-bench run` skeleton + matrix expander; `bench/runners/your_agent_full/runner.go`; first smoke test.
+**Uses:** `internal/eval/sandbox/`, `internal/eval/trace/`, `internal/eval/budget/`.
 
-### Phase P2: Live Overlay + Watcher
-**Rationale:** First daemon integration; introduces `postEditHook`. Must define epoch contract before P8 depends on it.
-**Delivers:** `internal/semantic/live/*`; directory-watcher + atomic-rename re-attach + ENOSPC fallback + scrub; coalescer; overlay writer with `overlay_epoch`; `postEditHook` wired into `edit.RegisterTools` and `fileops.RegisterTools`; daemon bootstrap step 9.5.
-**Avoids:** C1 race, C2 watcher misses, M2 bulk threshold.
-**Research flag:** fsnotify edge cases across editors require concrete fixture validation.
+### Phase 4: Internal ToolBench — Go first
+**Rationale:** Go is Helix's own language; tightest feedback loop; no container; validates per-language test-runner pattern before generalizing.
+**Delivers:** `bench/languages/go/`; `bench/datasets/internal-toolbench/go/` first 3 capability fixtures; `capabilities.yaml` schema.
 
-### Phase P3: LSP Enrichment Worker
-**Rationale:** Depends on lspool lease API; consumes v1.9 readiness gates.
-**Delivers:** `internal/semantic/lspenrich/*`; priority queue; `LeaseAcquirer` interface (no kernel import); concurrency cap; readiness-gate integration.
-**Avoids:** C8 death spiral; preserves BUG-02 / Phase 56 invariants.
+### Phase 5: Evaluators (test_runner dispatch + patch_validator + token_meter + tool_trace_analyzer + regression_checker)
+**Rationale:** Minimum graders to produce meaningful `result.v2.json`. Introduces two-counter `tokens_to_model` + `tokens_through_daemon` schema sourced from provider `usage`.
+**Delivers:** All evaluators; per-language dispatch interface; cost computation from `cost-table.yaml`.
+**Avoids:** Pitfalls 5, 10 (`edit_locality_given_solved` as headline), 16 (judge in `informational_quality_score`).
 
-### Phase P4: Graph Scores (single-projection MVP)
-**Rationale:** Reuses v1.6 RepoMap PageRank; multi-projection deferred.
-**Delivers:** `internal/semantic/{graph,rank}/*`; weighted PageRank with shared `applyDanglingMass`; `graph_version`; bounded incremental repair; determinism test.
-**Avoids:** C3, C4.
+### Phase 6: Remaining ablation runners (baseline_plain + no_lsp + no_structured_edit)
+**Rationale:** No new infra. First three ablation comparisons unlock attribution story on Go ToolBench alone.
+**Delivers:** Three runner packages; first ablation rows in result schema.
+**Decision required:** Native agent edit tools (`Edit`, `Read`) enabled across all modes? Recommendation: yes (matches `claude-code.yaml`). Document in `bench/BENCH.md`.
 
-### Phase P5: Clustering (defer to v1.10.x)
-**Delivers:** `internal/semantic/cluster/*`; cluster snapshot keyed on `graph_version`.
-**Avoids:** C3 (cluster drift mirrors score drift).
+### Phase 7: `no_semantic` mode + E2E config-gate test
+**Rationale:** Trickiest mode — strangler-fig in `get_repo_map`/`get_context` cannot be un-wired by profile YAML alone. Gets a dedicated regression test asserting `get_repo_map` returns v1.9 tree-sitter path (`source == "tree_sitter"`) when `bench_disabled` is set.
+**Delivers:** `bench/runners/your_agent_no_semantic/`; plumbing E2E test; vet-style boundary guard.
+**Avoids:** Pitfall 3 (semantic leakage variant).
 
-### Phase P6: 10 New MCP Tools
-**Rationale:** Existing skill registration pattern; `get_semantic_context` is the headline tool.
-**Delivers:** `internal/semantic/tools/*` + `internal/skill/semantic/*`; P0 set of 4 (`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`, `get_semantic_context`); remaining 6 in v1.10.x; `freshness` field on every response; stable-key tiebreak.
-**Avoids:** M8 non-determinism.
+### Phase 8: Multi-run aggregator + statistical rigor + first leaderboard
+**Rationale:** First externally-publishable artifact. Tests N≥3 multi-run, BCa bootstrap, pass@k, cost rollup. Output is internal-ToolBench-Go-only.
+**Delivers:** `bench/aggregator/`; `cmd/helix-bench aggregate`; first `bench/reports/leaderboard.md`; power-analysis precondition gate.
+**Avoids:** Pitfalls 11 (BCa, N≥10,000), 12 (task randomization, seed pinning).
 
-### Phase P7: Existing-Tool Integration (strangler fig)
-**Rationale:** Lowest-risk integration — zero source change to `internal/repomap` engine.
-**Delivers:** `repomapSkill.SetSemanticLookup(lookup)`; `get_repo_map` / `get_context` / `analyze_blast_radius` / `get_health` consult semantic-when-available with automatic v1.9 fallback; `source` field in result envelopes; index-disabled goldens preserved.
-**Avoids:** M7.
+### Phase 9: `cmd/helix-bench-rag` + baseline_rag runner + embedding-index builder
+**Rationale:** Self-contained; benefits from soaking before public benchmarks land. Embedding choice + index build pipeline + per-corpus cache.
+**Delivers:** `cmd/helix-bench-rag/`; `bench/runners/baseline_rag_agent/`; OpenAI + Ollama embedding providers; chromem-go vector store; `EMBED-CHOICE.md`.
+**Avoids:** Pitfall 4 (RAG isn't a Helix profile — clean separation).
+**Research flag:** **NEEDS RESEARCH** — specific embedder + chunking strategy has direct credibility implications.
 
-### Phase P8: Compaction & Retention
-**Rationale:** Honors P2 epoch contract.
-**Delivers:** idle-debounced compaction; `CHECKPOINT` end-of-compact; weekly `VACUUM` (config-gated); single-tx commit OR `compaction_journal`; long-repo bench fixture.
-**Avoids:** C1 (epoch CAS), M1, C6.
+### Phase 10: Container runtime + warm-pool + cosign-signed GHCR image mirror
+**Rationale:** Container infra needed only for public benchmarks. Internal ToolBench + RAG + Aider Polyglot (subset) run container-free up to here. Adopt logicstar.ai optimized image set; mirror to `ghcr.io/agenthands/helix-bench-*` with cosign keyless via Phase 58 infra; pre-flight disk check.
+**Delivers:** `bench/runtime/container/` with Docker + Podman implementations; image-pull manifest; `make bench-setup` pre-pull; disk-space pre-flight; arch-mismatch refusal.
+**Avoids:** Pitfall 8 (disk explosion + Docker Hub rate limits).
 
-### Phase P11: Type Resolution (out-of-order, between P8 and P9)
-**Rationale:** Improves edge precision; doesn't gate other phases. Comment-fallback work load-bearing for JS/Python eval signal.
-**Delivers:** `internal/semantic/typeresolve/*`; bounded fixpoint with hard iteration cap (`max_fixpoint_iters=8`) + early-exit on no progress; conservative emission on non-convergence; comment-derived evidence capped at 0.7.
-**Avoids:** M3, m3.
-**Research flag:** comment-format grammar subset (JSDoc / PHPDoc / YARD / Python typing comments).
+### Phase 11: Aider Polyglot adapter + 7 remaining per-language test runners
+**Rationale:** Cheapest public benchmark first (225 tasks); drives the order of remaining `bench/languages/` runners by Aider's 6-lang coverage. Per-language toolchain images pre-baked + hermetic `--network=none`.
+**Delivers:** `bench/datasets/aider-polyglot/adapter.go`; 7 per-language testrunners; 2-attempt-with-feedback pattern; pre-baked toolchain images.
+**Avoids:** Pitfalls 9, 14 (per-track Exercism license audit).
+**Research flag:** **NEEDS LICENSE AUDIT** before any mirroring.
 
-### Phase P9: Guardrails + Middleware
-**Rationale:** Depends on graph + receipts; must come after graph scores so policy can read freshness/`score_status`.
-**Delivers:** `internal/guardrails/*`; `internal/mcp/guardrail_middleware.go`; daemon step 14b.5; G-001..G-005 with `warn` default; server-side receipt store (5-min TTL + `graph_version` invalidation); ID-only forwarding; destructive tools look up claims server-side; telemetry outcomes; `DoD.md` + `GUARDRAILS.md`.
-**Avoids:** M4.
-**Research flag:** receipt-schema design has no published prior art.
+### Phase 12: CrossCodeEval + RepoBench adapters
+**Rationale:** Mid-size completion-only public benchmarks; cover C#. Pure `dataset-loader-only`; EM + ES + identifier-match + acc@k metrics.
+**Delivers:** Both adapters; completion-style scorer; HF dataset fetcher.
+**Uses:** `gomlx/go-huggingface` + arrow-go fallback.
 
-### Phase P10: Eval Harness
-**Rationale:** Depends on a working semantic stack + guardrails.
-**Delivers:** `internal/eval/*` + `internal/cli/eval/*`; subprocess daemon orchestration with isolated config dirs; agent over stdio forwarder; 4 modes; cross-model judging (informational, never CI gate); synthetic-only corpora + OSS Helix repo; retention-zero provider config; `make eval-quick` in-process.
-**Avoids:** M5, m4.
-**Research flag:** task-class DoD definitions and tool-behavior scoring rubric calibration; provider data-retention TOS re-verification.
+### Phase 13: SWE-bench Verified adapter + UTBoost rescorer + multi-oracle `verified_correctness`
+**Rationale:** First containerized large-scale benchmark and the *headline* external number. Requires Phase 10 + Python toolchain image (Phase 11). UTBoost-augmented suite consumed; raw + augmented pass-rates reported side-by-side.
+**Delivers:** SWE-bench adapter; `bench/evaluators/swebench/differential.go`; UTBoost ingestion; multi-oracle `verified_correctness`; run-all-tests harness override.
+**Avoids:** Pitfalls 2 (load-bearing mitigation), 1 (canary-probe column).
+**Research flag:** **NEEDS RESEARCH** — UTBoost suite location + format + adapter shape needs concrete validation.
 
-### Phase P12: Pipeline DAG bootstrap migration → v1.11
-v1.10 lands `phasegraph` library at P0.5 and uses it for new graphs only. Migrating imperative `daemon.New` 16-step bootstrap touches every test that constructs a daemon; deferred per strangler fig.
+### Phase 14: Multi-SWE-bench + Terminal-Bench 2.0 adapters
+**Rationale:** Final public coverage. Multi-SWE-bench: 7 langs × ~230 tasks. Terminal-Bench 2.0: long-horizon control with `tb` CLI, some tasks > 1 day wall.
+**Delivers:** Both adapters; long-wall scheduler accommodations; per-language slicing in reporter.
+**Research flag:** **NEEDS LICENSE RESOLUTION** for Multi-SWE-bench — not surfaced on HF card; defer to v1.13 if unresolved.
 
-### v1.9 Carry-over (folded into v1.10)
+### Phase 15: Reports finalize + CI policy + docs + eval↔bench separation note
+**Rationale:** Reports come after every input that feeds them is stable. CI-policy split (`bench-quick` ≤ 5 min on PR; `bench` only on release-tag with maintainer label) protects the $1K–$10K cost ceiling. `eval/EVAL.md` clarification preserves Phase 67 compatibility.
+**Delivers:** Remaining report generators; `make bench` cost-guard (`BENCH_FULL=1` or interactive); `--resume` per-cell checkpointing; smoke-bench daily drift detector ($20/day cap); `bench/BENCH.md`; `eval/EVAL.md` migration note; `PHASE67_CROSSWALK.md`.
+**Avoids:** Pitfalls 15, 17, 18 (F-07 parametric across modes), UX pitfalls.
 
-- **PKG-01 SC-3** — cut first signed release with real minisign keypair (deployment-gated; engineering-side checks already pass).
-- **PKG-DEFER-03/04/05** — Homebrew tap, Scoop bucket, native Linux package; re-scope based on first signed release feedback.
-- **Phase 51 reproducibility-gate architectural fix** — real-release-vs-Pass-3 OR CONTRIBUTING.md wording softening.
-- **Phase 55 `forwarder.tools.call` span unification** with gRPC server span.
+### Phase Ordering Rationale
 
-These four items can land in parallel with the early P0–P3 semantic phases (different files, different reviewers) — schedule before semantic stack is feature-complete to avoid release risk concentration.
+- **Schema and fairness first (Phase 1):** every downstream phase writes a result row or pins a model config.
+- **Profile YAMLs + kernel disable flags second (Phase 2):** only invasive daemon-side change in the milestone; stable target for everything that follows.
+- **Go ToolBench third (Phase 4):** dogfooding our own language for tightest debug loop.
+- **Evaluators before more runners (Phase 5 before 6):** unscored results are useless.
+- **Aggregator before public benchmarks (Phase 8 before 11):** first leaderboard renders against ToolBench-only data; public-benchmark phases write into a stable consumer.
+- **RAG before container (Phase 9 before 10):** soak the cheaper subsystem first.
+- **Container before SWE-bench (Phase 10 before 13):** runtime hardened against Aider Polyglot Python slice first.
+- **SWE-bench before Multi-SWE-bench and Terminal-Bench (Phase 13 before 14):** Verified is the canonical reference.
+- **Reports last (Phase 15):** stabilize only once inputs are stable.
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **P1:** stable symbol ID edge cases per language (overloads, generics, anonymous closures, decorators).
-- **P2:** fsnotify atomic-rename behavior across Vim/JetBrains/VS Code; ENOSPC fallback ergonomics.
-- **P9:** safety-receipt schema is novel; design must hold up against agent context-compaction and `enforce`-mode false-positive rate.
-- **P10:** task-class DoD definitions and scoring rubric; provider data-retention TOS re-verification.
-- **P11:** comment-format grammar subset selection.
+Phases likely needing deeper research during planning:
+- **Phase 2 (ablation kernel flags):** complete LSP/semantic consumer enumeration in kernel
+- **Phase 9 (baseline_rag embedder choice):** 2026 RAG baselines move fast; reviewer-facing
+- **Phase 11 (Aider Polyglot license audit):** per-Exercism-track licensing
+- **Phase 13 (UTBoost integration):** concrete suite + format + adapter shape
+- **Phase 14 (Multi-SWE-bench license):** not surfaced on HF card; resolve or defer
 
-**Standard patterns (skip deep research):** P0, P0.5, P3, P4 (MVP), P6, P7, P8.
+Phases with standard patterns (skip research-phase):
+- Phase 1 (schema/contract — Phase 67 shape proven)
+- Phase 3 (subprocess sandbox — direct extension)
+- Phase 4 (Go ToolBench — Helix owns Go LS + tools)
+- Phase 5 (evaluators — wrappers over existing eval/score + gitdiff + tiktoken)
+- Phase 8 (aggregator + BCa — gonum + 40 LOC well-defined)
+- Phase 10 (Docker shellout — trivial os/exec; cosign mirror reuses Phase 58)
+- Phase 12 (CrossCodeEval + RepoBench — completion-only adapters)
+- Phase 15 (reports + CI — markdown gen + Makefile policy)
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | DuckDB binding, fsnotify gaps, gonum-vs-hand-rolled, eval libs verified at file/issue level. MEDIUM only on `tiktoken-go/tokenizer` and `bluekeyes/go-gitdiff` (READMEs not deep-verified). |
-| Features | HIGH on adjacent products + eval conventions; MEDIUM on Cursor/Cody/Augment freshness behavior (closed source); LOW on guardrail-receipt schema (no prior art). |
-| Architecture | HIGH | Verified against `internal/daemon/daemon.go`, SPEC §5/6/24/36/39, v1.9 callback patterns. MEDIUM on test-harness `:memory:` ergonomics and forwarder gRPC propagation for eval subprocess. |
-| Pitfalls | HIGH for items grounded in shipped Helix bugs (BUG-01..04, Phase 56) and upstream issues (fsnotify #17/#80/#214/#254/#372, DuckDB #77/#4899); MEDIUM on cross-product war stories. |
+| Stack | HIGH | Every addition has documented Go-native equivalent + version pin; only ambiguity is Docker SDK vs CLI (resolved in favor of CLI). One MEDIUM: gomlx/go-huggingface API stability not field-tested in-tree. |
+| Features | HIGH | Public-benchmark mechanics + peer conventions corroborated by multiple sources per benchmark; UTBoost is canonical SWE-bench-correctness citation; ToolBench-style internal contract suites have few public exemplars but Phase 67 patterns extrapolate cleanly (MEDIUM there). |
+| Architecture | HIGH | Five verdicts grounded in concrete v1.10/v1.11 source-code patterns; explicit "new vs modified" table; explicit anti-patterns; explicit build-order DAG. |
+| Pitfalls | HIGH | Every pitfall grounded in Phase 67 audit findings or published evidence from the specific benchmarks v1.12 adopts. |
 
-**Overall confidence:** HIGH. Decision-defining choices (Layer 1.5 placement, DuckDB CGO posture + auto-disable, postEditHook callback, lookup-callback inversion for repomap, guardrail middleware position 14b.5, strangler-fig phasegraph for new graphs only, out-of-process eval harness) all anchored in v1.9 source and SPEC contracts. Unknowns isolated to novel surfaces (guardrail receipts, eval scoring rubric) and dynamic-language type-resolution edges.
+**Overall confidence:** HIGH
 
-### Gaps to Address During Planning
+### Gaps to Address
 
-- **DuckDB driver canonical path.** STACK.md notes `marcboeker/go-duckdb` → `duckdb/duckdb-go` donation; ARCHITECTURE.md still references the legacy path. Lock import path during P0.
-- **Test harness DuckDB strategy.** `test/harness/Runner` constructs daemons in-process; with semantic enabled every test creates a `.duckdb` file unless `:memory:` is used. Confirm at P0.
-- **Forwarder gRPC propagation of semantic config** for eval subprocess (likely `HELIX_CONFIG_PATH`); confirm at P10.
-- **Bootstrap step renumbering convention.** Decimal additions (2.5 / 12e–12i / 14b.5) cross 16+ steps; reviewer ergonomics may justify a one-time renumber.
-- **Receipt TTL × `graph_version` invalidation interplay.** Long-running guardrail-warned operations need P9 prototype.
-- **Eval task corpus.** Synthetic-only is the threat-model rule but has lower discriminating power; OSS Helix repo + permissively-licensed SWE-bench Verified subset are options. Lock at P10.
-- **Provider data-retention shifts.** Re-verify Anthropic/OpenAI/DeepSeek TOS at P10 implementation.
+- **UTBoost adapter shape (Phase 13):** consume published augmented suite as-is vs re-derive — concrete API/format check needed before phase plan.
+- **Multi-SWE-bench license (Phase 14):** not surfaced on HF dataset card. Resolve upstream or defer to v1.13.
+- **`baseline_rag` embedder model pin:** OpenAI `text-embedding-3-small` is industry-default but reviewer-sensitive; consider also reporting against `nomic-embed-text` to pre-empt "weak embedder" critique.
+- **Native agent-CLI tool surface across modes (Phase 6 decision):** Recommendation yes (matches `claude-code.yaml`); needs explicit doc in `bench/BENCH.md`.
+- **`gomlx/go-huggingface` field-test (Phase 12):** API stability not exercised in-tree; have early exploratory check with `arrow-go/v18` fallback ready.
+- **Per-language toolchain CI install matrix (Phase 11):** Maven, .NET SDK, CMake+clang, cargo, pnpm — define version pins before Phase 11 starts.
 
 ## Sources
 
-**Primary (HIGH):** `SPEC-DRAFT.md` (40 sections), `.planning/PROJECT.md`, `internal/daemon/daemon.go` (lines 199-203, 241-255, 296-336, 349-380, 481-525, 765-825), `internal/mcp/lazy_init.go:106-108`, `CLAUDE.md`. [duckdb/duckdb-go](https://github.com/duckdb/duckdb-go), [DuckDB Concurrency](https://duckdb.org/docs/current/connect/concurrency), [fsnotify](https://github.com/fsnotify/fsnotify) issues #17/#80/#214/#254/#372, [gonum graph/network](https://pkg.go.dev/gonum.org/v1/gonum/graph/network), [SCIP](https://sourcegraph.com/blog/announcing-scip), [Glean](https://engineering.fb.com/2024/12/19/developer-tools/glean-open-source-code-indexing/), [Stack graphs](https://github.blog/open-source/introducing-stack-graphs/), [Aider repomap](https://aider.chat/docs/repomap.html), [SWE-bench](https://www.swebench.com/).
+### Primary (HIGH confidence)
 
-**Secondary (MEDIUM):** [tiktoken-go/tokenizer](https://github.com/tiktoken-go/tokenizer), [bluekeyes/go-gitdiff](https://github.com/bluekeyes/go-gitdiff) (READMEs only), [Cursor indexing](https://towardsdatascience.com/how-cursor-actually-indexes-your-codebase/), [Copilot guardrails](https://docs.github.com/en/copilot/tutorials/cloud-agent/build-guardrails), pyright/sorbet/Phan/Psalm tier conventions.
+Internal research files:
+- `.planning/research/STACK.md` — 12 stack additions, alternatives, CGO posture, projected `go.mod` diff
+- `.planning/research/FEATURES.md` — feature landscape, 6 public benchmarks, 6-mode matrix, 12+ metrics, competitor analysis
+- `.planning/research/ARCHITECTURE.md` — four executive verdicts, canonical `bench/` tree, component table, 18-step build order, 6 BLOCKER-level risks
+- `.planning/research/PITFALLS.md` — 19 pitfalls + 24-item completeness checklist + pitfall-to-phase mapping
+- `.planning/PROJECT.md` lines 147–187 — v1.12 milestone scope
 
-**Tertiary (LOW — needs validation):** Sourcegraph zoekt / gopls overlay-correctness post-mortems; Anthropic/OpenAI/DeepSeek TOS (shifting); guardrail-receipt prior art (none found, novel design needs P9 prototype).
+Helix-internal references:
+- `eval/EVAL.md`, `internal/eval/{sandbox,trace,score}/` — Phase 67 v1.10 patterns reused verbatim
+- `cmd/helix-eval/`, `cmd/helix-eval/run_cmd_test.go` — EVAL-07 invariants
+- `internal/profile/profiles/{baseline,claude-code}.yaml` — reference shape for `bench-*.yaml`
+- `.planning/v1.10-MILESTONE-AUDIT.md` F-01/F-05/F-07/F-08/F-09 findings + commits
+
+Public-benchmark research (canonical sources):
+- SWE-bench Verified docs + dataset card + Epoch AI 1-hour guide + UTBoost paper (arxiv 2506.09289)
+- Multi-SWE-bench paper (arxiv 2504.02605) + HF dataset + GitHub
+- Aider Polyglot launch post + leaderboard + polyglot-benchmark repo
+- CrossCodeEval NeurIPS 2023 paper + project site
+- RepoBench paper (arxiv 2306.03091) + Leolty/repobench
+- Terminal-Bench 2.0 (Snorkel announcement, VentureBeat, ICLR 2026 paper)
+- logicstar.ai SWE-bench image-optimization writeup (684 GiB → 67 GiB)
+
+### Secondary (MEDIUM confidence)
+
+- `gomlx/go-huggingface` README — parquet iterator API; not field-tested in-tree
+- `philippgille/chromem-go` README + pkg.go.dev
+- 2026 cost-per-task leaderboard pages (morphllm, SSOJet, costgoat)
+- BCa bootstrap notes (SAS blog, Sebastian Schöner, arch.readthedocs)
+
+### Tertiary (LOW confidence)
+
+- ByteDance-Seed Multi-SWE-bench license clause — not surfaced; needs upstream confirmation
+- UTBoost augmented-suite consumption format for non-Verified splits — integration shape needs validation
+
+---
+*Research completed: 2026-06-13*
+*Ready for roadmap: yes*

@@ -40,6 +40,16 @@
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md`
 
+### Phase 75: Schema, Fairness Contract & Tree Skeleton
+
+**Goal**: Every downstream phase has a versioned `result.v2.json` schema to write into and a single `fairness_contract.go` struct to load model config from — so no benchmark adapter ever defines its own model snapshot, temperature, or cost row.
+
+**Depends on**: v1.10 Phase 67 (`internal/eval/` patterns — sandbox, trace tap, score DSL)
+
+**Requirements**: BENCH-01, BENCH-02, BENCH-03, BENCH-06, FAIR-01, FAIR-02, FAIR-03, COST-01, INFRA-01, INFRA-02, INFRA-03
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 75)
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

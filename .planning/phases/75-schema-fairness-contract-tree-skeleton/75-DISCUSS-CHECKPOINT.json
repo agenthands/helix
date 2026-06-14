@@ -1,0 +1,90 @@
+{
+  "phase": "75",
+  "phase_name": "Schema, Fairness Contract & Tree Skeleton",
+  "timestamp": "2026-06-14T09:47:59.863Z",
+  "areas_completed": ["Result schema version & path", "Existing bench/ Phase 64 artifacts", "Fairness contract shape & waiver mechanism"],
+  "areas_remaining": ["Cost-table & TOS attestation format"],
+  "decisions": {
+    "Result schema version & path": [
+      {
+        "question": "What should the bench-stack per-task result schema be named?",
+        "answer": "result.v2.json (continuing lineage from eval's implicit v1)",
+        "options_presented": ["result.v2.json", "result.v1.json", "result.json"]
+      },
+      {
+        "question": "Where should result.v2.schema.json live in the tree?",
+        "answer": "bench/schema/result.v2.schema.json",
+        "options_presented": ["bench/schema/result.v2.schema.json", "bench/evaluators/result.v2.schema.json", "bench/result.v2.schema.json"]
+      },
+      {
+        "question": "What counts as a backwards-incompatible (major) schema change?",
+        "answer": "Strict additive-only is minor; everything else is major. Adding optional fields / new enum values for forward-compat consumers = v2.x. Renaming, removing, narrowing types, changing nullability, repurposing = v3.",
+        "options_presented": ["Strict additive-only is minor", "Looser (also allow new required fields as minor)", "Defer to Phase 79"]
+      },
+      {
+        "question": "How should the schema version surface inside each result.v2.json file?",
+        "answer": "Single `schema_version: \"v2\"` string field at the top of the JSON",
+        "options_presented": ["Single string field", "Structured {name, major, minor}", "Both string + $schema URL"]
+      }
+    ],
+    "Existing bench/ Phase 64 artifacts": [
+      {
+        "question": "What should happen to the existing bench/ Phase 64 semantic-microbench artifacts (_blevprobe/, fixtures/, semantic_bench_*.go, semantic_bench_REPORT.md)?",
+        "answer": "Move them to internal/semantic/bench/ — frees the top-level bench/ for the v1.12 stack and matches the kernel/semantic boundary.",
+        "options_presented": ["Move to internal/semantic/bench/", "Move to bench-semantic/ at repo root", "Leave in place, document coexistence"]
+      },
+      {
+        "question": "How should the move land mechanically?",
+        "answer": "`git mv` each file preserving filenames, single atomic commit titled e.g. 'refactor(bench): relocate Phase 64 semantic microbench to internal/semantic/bench/ for v1.12 INFRA-03 separation'.",
+        "options_presented": ["git mv preserving filenames, single commit", "git mv + rename to drop 'semantic_' prefix", "Delete REPORT.md, keep tests only"]
+      },
+      {
+        "question": "After the move, what does the BENCH-01 `tree -d -L 2 bench/` acceptance test assert?",
+        "answer": "Six dirs: datasets, runners, languages, evaluators, reports, schema. The schema/ dir is the contract dir; the other five are runtime. BENCH.md documents this distinction.",
+        "options_presented": ["6 dirs (5 runtime + schema)", "5 runtime dirs only, schema/ excluded from assertion", "5 runtime dirs + cmd entrypoints reference"]
+      },
+      {
+        "question": "Where should the eval/ ↔ bench/ separation note live mechanically beyond BENCH.md prose?",
+        "answer": "Prose-only: INFRA-03 note in bench/BENCH.md + reciprocal pointer paragraph in eval/EVAL.md. No vet analyzer this phase — land mechanical enforcement only if a real leakage shows up later.",
+        "options_presented": ["Prose only + reciprocal pointer", "Prose + ship vet-noeval2bench analyzer", "Prose + Makefile grep gate"]
+      }
+    ],
+    "Fairness contract shape & waiver mechanism": [
+      {
+        "question": "How should the fairness contract be defined and loaded?",
+        "answer": "Pure Go literal in bench/runners/fairness_contract.go (`var DefaultContract = FairnessContract{...}`). Compile-time pin of model_id, temperature, max_tokens, system_prompt_hash, retry_policy, cache_policy. Snapshot bumps are a code change + PR + WaiverReason discussion.",
+        "options_presented": ["Pure Go literal", "Go struct + sidecar YAML", "Go literal + env-var debug override"]
+      },
+      {
+        "question": "How should a per-mode override declare its WaiverReason?",
+        "answer": "ModeOverride struct with free-text WaiverReason + ApprovedBy maintainer signoff. Logged into result.v2.json.fairness.overrides[]. Loader fatals on empty WaiverReason.",
+        "options_presented": ["Struct field, free-text + ApprovedBy", "Closed-enum WaiverReason", "No overrides allowed at all"]
+      },
+      {
+        "question": "How should FAIR-02's 30-day deprecation-calendar gate work mechanically?",
+        "answer": "Static deprecation calendar via `deprecation_at: YYYY-MM-DD` field on each (provider, model_id) row of bench/datasets/cost-table.yaml. FAIR-02 gate fires when `deprecation_at - today < 30d`. No live provider-API call — keeps runs reproducible from `--run-id`. Staleness bounded by the existing 90-day cost-table `valid_until` / `last_verified` rotation.",
+        "options_presented": ["Static calendar in cost-table.yaml deprecation_at field", "Live provider-API check at run start", "Separate deprecations.yaml file"]
+      },
+      {
+        "question": "How should FAIR-03's 5% between-run variance warning be wired?",
+        "answer": "Per-task gate: across N≥3 runs of the same (task, mode), flag when `(max(tokens_input) - min(tokens_input)) / mean(tokens_input) > 0.05`. Cached-input fields (`tokens_input_cached_read`, `tokens_input_cache_write`) reported as separate columns so cache-hit-rate variance is visible alongside. Warning flows to cost_quality.md.",
+        "options_presented": ["Per-task max-min/mean on tokens_input", "Per-mode aggregate variance", "Both per-task AND cross-mode"]
+      }
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs": [
+    ".planning/REQUIREMENTS.md",
+    ".planning/PROJECT.md",
+    ".planning/milestones/v1.12-ROADMAP.md",
+    ".planning/research/SUMMARY.md",
+    ".planning/research/ARCHITECTURE.md",
+    ".planning/research/STACK.md",
+    ".planning/research/PITFALLS.md",
+    ".planning/research/FEATURES.md"
+  ],
+  "notes_for_planner": [
+    "REQUIREMENTS.md BENCH-03 currently says schema 'versioned at v1' — needs a one-line fix to 'v2' to align with v1.12-ROADMAP/PROJECT.md.",
+    "bench/schema/ introduces a 6th top-level dir beyond BENCH-01's five (datasets/runners/languages/evaluators/reports/). Acceptance test note: schema/ is a contract dir, not a runtime tree — the `tree -d -L 2 bench/` assertion either lists six dirs or asserts the five runtime dirs separately."
+  ]
+}

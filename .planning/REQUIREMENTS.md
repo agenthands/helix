@@ -141,8 +141,70 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ## Traceability
 
-_Filled by the roadmapper after ROADMAP.md is created._
+Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-ID maps to exactly one phase (no orphans, no overlaps). 63/63 mapped.
 
 | REQ-ID | Phase | Plan(s) | Status |
 |---|---|---|---|
-| _(empty — to be populated)_ | | | |
+| BENCH-01 | Phase 75 | TBD | Pending |
+| BENCH-02 | Phase 75 | TBD | Pending |
+| BENCH-03 | Phase 75 | TBD | Pending |
+| BENCH-04 | Phase 77 | TBD | Pending |
+| BENCH-05 | Phase 77 | TBD | Pending |
+| BENCH-06 | Phase 75 | TBD | Pending |
+| FAIR-01 | Phase 75 | TBD | Pending |
+| FAIR-02 | Phase 75 | TBD | Pending |
+| FAIR-03 | Phase 75 | TBD | Pending |
+| TOOLBENCH-01 | Phase 78 | TBD | Pending |
+| TOOLBENCH-02 | Phase 78 | TBD | Pending |
+| TOOLBENCH-03 | Phase 85 | TBD | Pending |
+| TOOLBENCH-04 | Phase 85 | TBD | Pending |
+| TOOLBENCH-05 | Phase 85 | TBD | Pending |
+| TOOLBENCH-06 | Phase 85 | TBD | Pending |
+| TOOLBENCH-07 | Phase 85 | TBD | Pending |
+| TOOLBENCH-08 | Phase 85 | TBD | Pending |
+| TOOLBENCH-09 | Phase 85 | TBD | Pending |
+| TOOLBENCH-10 | Phase 78 | TBD | Pending |
+| ABLATE-01 | Phase 80 | TBD | Pending |
+| ABLATE-02 | Phase 76 | TBD | Pending |
+| ABLATE-03 | Phase 80 | TBD | Pending |
+| ABLATE-04 | Phase 83 | TBD | Pending |
+| ABLATE-05 | Phase 76 | TBD | Pending |
+| ABLATE-06 | Phase 81 | TBD | Pending |
+| ABLATE-07 | Phase 76 | TBD | Pending |
+| ABLATE-08 | Phase 76 | TBD | Pending |
+| METRIC-01 | Phase 79 | TBD | Pending |
+| METRIC-02 | Phase 79 | TBD | Pending |
+| METRIC-03 | Phase 79 | TBD | Pending |
+| METRIC-04 | Phase 79 | TBD | Pending |
+| METRIC-05 | Phase 79 | TBD | Pending |
+| METRIC-06 | Phase 79 | TBD | Pending |
+| VERIFIED-01 | Phase 87 | TBD | Pending |
+| VERIFIED-02 | Phase 87 | TBD | Pending |
+| VERIFIED-03 | Phase 86 | TBD | Pending |
+| STATS-01 | Phase 82 | TBD | Pending |
+| STATS-02 | Phase 82 | TBD | Pending |
+| STATS-03 | Phase 82 | TBD | Pending |
+| STATS-04 | Phase 82 | TBD | Pending |
+| COST-01 | Phase 75 | TBD | Pending |
+| COST-02 | Phase 82 | TBD | Pending |
+| COST-03 | Phase 82 | TBD | Pending |
+| ADAPTER-AIDER-01 | Phase 85 | TBD | Pending |
+| ADAPTER-CCE-01 | Phase 86 | TBD | Pending |
+| ADAPTER-REPO-01 | Phase 86 | TBD | Pending |
+| ADAPTER-SWE-01 | Phase 87 | TBD | Pending |
+| ADAPTER-MULTI-01 | Phase 88 | TBD | Pending |
+| ADAPTER-TERM-01 | Phase 88 | TBD | Pending |
+| CONTAINER-01 | Phase 84 | TBD | Pending |
+| CONTAINER-02 | Phase 84 | TBD | Pending |
+| CONTAINER-03 | Phase 84 | TBD | Pending |
+| CONTAINER-04 | Phase 84 | TBD | Pending |
+| REPORT-01 | Phase 89 | TBD | Pending |
+| REPORT-02 | Phase 89 | TBD | Pending |
+| REPORT-03 | Phase 89 | TBD | Pending |
+| REPORT-04 | Phase 89 | TBD | Pending |
+| REPORT-05 | Phase 89 | TBD | Pending |
+| INFRA-01 | Phase 75 | TBD | Pending |
+| INFRA-02 | Phase 75 | TBD | Pending |
+| INFRA-03 | Phase 75 | TBD | Pending |
+| INFRA-04 | Phase 89 | TBD | Pending |
+| INFRA-05 | Phase 89 | TBD | Pending |

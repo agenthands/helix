@@ -14,8 +14,31 @@
 - [x] **v1.9 Polish & Infra** -- Phases 46-56 (shipped 2026-05-03)
 - [x] **v1.10 Live Semantic Index** -- Phases 57-67 (shipped 2026-05-12)
 - [x] **v1.11 Semantic Index Completion & P1 MCP Tools** -- Phases 68-74 (shipped 2026-06-07) — see `.planning/milestones/v1.11-ROADMAP.md`
+- [ ] **v1.12 Bench Stack & Tool Evaluation** -- Phases 75-89 (active, started 2026-06-13) — see `.planning/milestones/v1.12-ROADMAP.md`
 
 ## Phases
+
+### 🚧 v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — ACTIVE
+
+15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
+
+- [ ] Phase 75: Schema, Fairness Contract & Tree Skeleton
+- [ ] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags
+- [ ] Phase 77: Bench Runtime & First E2E Smoke
+- [ ] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface
+- [ ] Phase 79: Evaluators & Result-Schema Metrics Layer
+- [ ] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
+- [ ] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
+- [ ] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
+- [ ] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
+- [ ] Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard
+- [ ] Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners
+- [ ] Phase 86: CrossCodeEval + RepoBench Adapters + Multi-Oracle Completion Gate
+- [ ] Phase 87: SWE-bench Verified Adapter + UTBoost Rescorer + Multi-Oracle `verified_correctness`
+- [ ] Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters
+- [ ] Phase 89: Reports, CI Policy & Contamination Canary
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md`
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

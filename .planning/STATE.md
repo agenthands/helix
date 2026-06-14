@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Phase 75 context gathered; ready for plan-phase
-last_updated: "2026-06-14T12:00:00.000Z"
-last_activity: 2026-06-14 — discuss-phase 75 complete (4/4 areas, 16 decisions captured in 75-CONTEXT.md)
+status: Phase 75 planned; ready to execute
+stopped_at: Phase 75 planned (5 plans across 3 waves; plan-checker passed)
+last_updated: "2026-06-14T12:39:51.326Z"
+last_activity: 2026-06-14 — plan-phase 75 complete; 5 plans created, verified (1 revision pass), coverage gates green
 progress:
   total_phases: 1
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -20,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.12 Bench Stack & Tool Evaluation — Phase 75 (Schema, Fairness Contract & Tree Skeleton) ready to plan.
+**Current focus:** v1.12 Bench Stack & Tool Evaluation — Phase 75 (Schema, Fairness Contract & Tree Skeleton) planned; ready to execute.
 
 ## Current Position
 
 Phase: Phase 75 — Schema, Fairness Contract & Tree Skeleton
-Plan: —
-Status: Context gathered (discuss-phase complete); ready to plan
-Last activity: 2026-06-14 — discuss-phase 75 complete; 75-CONTEXT.md written (16 decisions across 4 areas)
+Plan: 5 plans across 3 waves (Wave 0: 75-01 git mv; Wave 1: 75-02/03/04; Wave 2: 75-05)
+Status: Planned — plan-checker passed (1 revision pass); requirements + decision coverage gates green; ready to execute
+Last activity: 2026-06-14 — plan-phase 75 complete; 5 plans created, verified, committed
 
 ### Session Continuity
 
 Last session: 2026-06-14
-Stopped at: Phase 75 context gathered (discuss-phase complete, 4/4 areas)
-Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-CONTEXT.md
+Stopped at: Phase 75 planned (5 plans, 3 waves; checker passed)
+Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-01-PLAN.md
 
 ## Accumulated Context
 
@@ -55,4 +56,4 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-CONTE
 
 ## Operator Next Steps
 
-- Run `/gsd-plan-phase 75` to decompose Phase 75 (Schema, Fairness Contract & Tree Skeleton) into executable plans.
+- Run `/gsd-execute-phase 75` to execute Phase 75's 5 plans (Wave 0 `git mv` relocation runs first, then the contract/skeleton plans).

@@ -2,18 +2,18 @@
 //
 // Measures (1) bleve scorch indexing throughput and (2) DuckDB FTS5 indexing
 // throughput on the deterministic 50k-symbol Go fixture under
-// bench/fixtures/synthetic_50k_go/. The result is fed back into
-// bench/semantic_bench_REPORT.md to PASS or FAIL the bleve dependency under
+// internal/semantic/bench/fixtures/synthetic_50k_go/. The result is fed back into
+// internal/semantic/bench/semantic_bench_REPORT.md to PASS or FAIL the bleve dependency under
 // CONTEXT.md D-08.
 //
 // Both benchmarks require the fixture to be present on disk:
 //
-//	cd bench/fixtures/synthetic_50k_go && go run gen.go
+//	cd internal/semantic/bench/fixtures/synthetic_50k_go && go run gen.go
 //
 // The DuckDB FTS5 benchmark is gated behind the `benchfts` build tag so
 // the noduckdb vet analyzer is satisfied in the default build:
 //
-//	go test -tags=benchfts -bench='BenchmarkBleveIndexThroughput_50k|BenchmarkDuckDBFTSIndexThroughput_50k' -benchtime=1x ./bench/...
+//	go test -tags=benchfts -bench='BenchmarkBleveIndexThroughput_50k|BenchmarkDuckDBFTSIndexThroughput_50k' -benchtime=1x ./internal/semantic/bench/...
 
 package bench
 
@@ -105,8 +105,8 @@ func loadCorpus(tb testing.TB) []SymbolDoc {
 
 func fixtureRoot(tb testing.TB) string {
 	tb.Helper()
-	// bench_test.go runs from bench/, fixture lives at
-	// bench/fixtures/synthetic_50k_go/out.
+	// bench_test.go runs from internal/semantic/bench/, fixture lives at
+	// internal/semantic/bench/fixtures/synthetic_50k_go/out.
 	wd, err := os.Getwd()
 	if err != nil {
 		tb.Fatalf("getwd: %v", err)
@@ -140,7 +140,7 @@ func extractName(line string, isFunc bool) string {
 	return strings.TrimSpace(rest[:i])
 }
 
-// TestNothing exists so `go test ./bench/...` succeeds even when no
+// TestNothing exists so `go test ./internal/semantic/bench/...` succeeds even when no
 // benchmarks are run, satisfying the plan's compile-only sanity check.
 func TestNothing(t *testing.T) {}
 

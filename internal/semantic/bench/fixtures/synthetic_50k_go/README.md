@@ -38,7 +38,7 @@ RNG instance per process so per-symbol naming is reproducible.
 
 ## Intended consumers
 
-- **Phase 64-01 bench (`bench/semantic_bench_test.go`)** — measures bleve vs
+- **Phase 64-01 bench (`internal/semantic/bench/semantic_bench_test.go`)** — measures bleve vs
   DuckDB FTS5 indexing throughput on this corpus.
 - **Phase 67 eval harness** — re-uses the fixture as a stable corpus for
   retrieval-quality measurements.
@@ -46,7 +46,7 @@ RNG instance per process so per-symbol naming is reproducible.
 ## Build tag
 
 `gen.go` carries `//go:build ignore` so it does NOT compile into the
-`./bench/...` test binary. It is invoked manually via `go run gen.go`.
+`./internal/semantic/bench/...` test binary. It is invoked manually via `go run gen.go`.
 
 ## Acceptance markers (per 64-01-PLAN.md task 1)
 

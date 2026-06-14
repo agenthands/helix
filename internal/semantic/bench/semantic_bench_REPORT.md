@@ -8,7 +8,7 @@ Host: Darwin arm64 (Apple M4 Pro, 14 logical CPUs)
 
 Method: built two minimal Go programs with identical surrounding flags. The
 control is `package main; func main(){}` to capture the unavoidable Go
-runtime cost; the probe at `bench/_blevprobe/probe.go` adds a single blank
+runtime cost; the probe at `internal/semantic/bench/_blevprobe/probe.go` adds a single blank
 import of `github.com/blevesearch/bleve/v2` and nothing else. The
 *incremental* cost of bringing bleve into a binary's reachable graph is the
 delta between the two. (Building `./cmd/helix` itself with bleve added to
@@ -27,7 +27,7 @@ Threshold: < 50 MiB. Result: **PASS**.
 ## Indexing throughput (50k symbols)
 
 Both benchmarks run on the same 50,000-row deterministic corpus walked from
-`bench/fixtures/synthetic_50k_go/out/` (500 .go files × 100 declarations,
+`internal/semantic/bench/fixtures/synthetic_50k_go/out/` (500 .go files × 100 declarations,
 seed=42). The bench measures the full ingest envelope: bleve scorch index
 build with batches of 1,000 + close; DuckDB FTS5 single-tx insert + FTS
 index build. Run via:
@@ -35,7 +35,7 @@ index build. Run via:
 ```
 go test -tags=benchfts -run=^$ \
   -bench='BenchmarkBleveIndexThroughput_50k|BenchmarkDuckDBFTSIndexThroughput_50k' \
-  -benchtime=1x -timeout=15m ./bench/...
+  -benchtime=1x -timeout=15m ./internal/semantic/bench/...
 ```
 
 | Backend       |        ns/op | Time (s) | Symbols/s |
@@ -61,7 +61,7 @@ FTS5 inside `*Store` is required.
 ## Reproduction notes
 
 - The fixture must be generated before the benchmarks run:
-  `cd bench/fixtures/synthetic_50k_go && go run gen.go`. The generator is
+  `cd internal/semantic/bench/fixtures/synthetic_50k_go && go run gen.go`. The generator is
   deterministic (seed=42) so the corpus is byte-stable across machines.
 - The DuckDB FTS5 baseline benchmark is gated behind the `benchfts` build
   tag because the `cmd/vet-noduckdb` analyzer forbids `duckdb-go` imports

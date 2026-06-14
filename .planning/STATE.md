@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: planning
-last_updated: "2026-06-13T09:30:00.000Z"
-last_activity: 2026-06-13
+status: Roadmap created; awaiting plan-phase invocation for Phase 75
+last_updated: "2026-06-14T11:53:05.478Z"
+last_activity: 2026-06-13 — v1.12 roadmap created (15 phases, 75–89, 63/63 REQs mapped)
 progress:
-  total_phases: 15
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0

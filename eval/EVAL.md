@@ -2,6 +2,8 @@
 
 Helix eval harness — synthetic corpus only by default; commercial-LLM API calls run with retention-zero where the provider supports it.
 
+> **eval ↔ bench separation (INFRA-03).** The v1.12 milestone benchmark stack lives independently under `bench/` (see `bench/BENCH.md`) and is a separate sibling tree from this `eval/` harness. `eval/` stays the in-process PR-gate wiring smoke; `bench/` is the milestone artifact for headline, publishable claims. The two trees share **no code and no pricing file**, and the boundary is **prose-enforced** for this milestone (no analyzer; D-08). This paragraph is the reciprocal cross-link required by INFRA-03 and is the single permitted change to `eval/` under BENCH-01.
+
 ## Provider Retention Attestation
 
 **Verified at:** 2026-05-10 (Phase 67 planning)

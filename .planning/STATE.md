@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Phase 75 planned; ready to execute
-stopped_at: Phase 75 planned (5 plans across 3 waves; plan-checker passed)
-last_updated: "2026-06-14T12:39:51.326Z"
-last_activity: 2026-06-14 — plan-phase 75 complete; 5 plans created, verified (1 revision pass), coverage gates green
+status: executing
+stopped_at: Phase 75 planned (5 plans, 3 waves; checker passed)
+last_updated: "2026-06-14T14:06:52.030Z"
+last_activity: 2026-06-14 -- Phase 75 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.12 Bench Stack & Tool Evaluation — Phase 75 (Schema, Fairness Contract & Tree Skeleton) planned; ready to execute.
+**Current focus:** Phase 75 — schema-fairness-contract-tree-skeleton
 
 ## Current Position
 
-Phase: Phase 75 — Schema, Fairness Contract & Tree Skeleton
-Plan: 5 plans across 3 waves (Wave 0: 75-01 git mv; Wave 1: 75-02/03/04; Wave 2: 75-05)
-Status: Planned — plan-checker passed (1 revision pass); requirements + decision coverage gates green; ready to execute
-Last activity: 2026-06-14 — plan-phase 75 complete; 5 plans created, verified, committed
+Phase: 75 (schema-fairness-contract-tree-skeleton) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-06-14 -- Phase 75 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-14
+Last session: 2026-06-14T14:06:42.420Z
 Stopped at: Phase 75 planned (5 plans, 3 waves; checker passed)
 Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-01-PLAN.md
 
@@ -57,3 +57,15 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-01-PL
 ## Operator Next Steps
 
 - Run `/gsd-execute-phase 75` to execute Phase 75's 5 plans (Wave 0 `git mv` relocation runs first, then the contract/skeleton plans).
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Notes |
+|-------|------|----------|-------|
+| Phase 75 P01 | 10min | 1 tasks | 8 files |
+
+## Decisions
+
+- [Phase ?]: Phase 64 microbench relocated to internal/semantic/bench/ via per-path git mv (renames preserved, git log --follow continuity)
+- [Phase ?]: Kept package bench + benchfts/ignore build tags unchanged; no go.mod edit (single module, absolute import path unaffected)
+- [Phase ?]: Left make bench Makefile target alone; Phase 77 BENCH-05 name-collision deferred, not fixed in Wave 0

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agenthands/helix/bench/schema/result.v2.schema.json",
+  "title": "Helix bench result.v2",
+  "description": "Versioned per-task result contract written by every downstream bench phase (76-89) and validated against this schema. BENCH-03 / FAIR-03 (substrate only).",
+  "$comment": "Versioning policy (D-03/D-04): schema_version is a single flat greppable top-level string pinned to \"v2\". Additive-only changes are MINOR: new fields land OPTIONAL and additionalProperties is left OPEN at the top level so adding a field never requires a schema bump. A BREAKING change (removing/renaming a field, tightening a constraint, or making a new field required) bumps the major version to v3 (a new result.v3.schema.json). FAIR-03 SCOPE: this schema carries only the FAIR-03 SUBSTRATE — the cached-input token columns (tokens_input_cached_read, tokens_input_cache_write, D-12) and the fairness.overrides[] array (D-10). The >5% between-run variance DETECTOR and the cost_quality.md fairness WARNING are NOT part of this schema; they land in Phase 82 (variance gate, consumes STATS-01 N>=3) and Phase 89 (reports).",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "const": "v2",
+      "description": "Result-contract version. Flat, greppable, pinned to the string \"v2\" (D-04). The ONLY required field (D-03/Pitfall 5) so every other field can be added optionally without a major bump."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Stable identifier of the benchmark task this result describes (e.g. \"swe-bench-lite/django__django-12345\")."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Helix profile mode exercised for this run (e.g. read, edit, review, admin)."
+    },
+    "benchmark": {
+      "type": "string",
+      "description": "Name of the benchmark suite this task belongs to (e.g. \"swe-bench-lite\")."
+    },
+    "run_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero- or one-based repetition index for this task within a multi-run sample (STATS-01 N>=3 consumes this downstream in Phase 82)."
+    },
+    "tokens_input": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total input (prompt) tokens billed for this run."
+    },
+    "tokens_output": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total output (completion) tokens billed for this run."
+    },
+    "tokens_input_cached_read": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "FAIR-03 substrate (D-12): input tokens served from a prompt cache read, billed at the cached-read rate. Tracked as a separate column so fairness accounting can distinguish cache hits from fresh input."
+    },
+    "tokens_input_cache_write": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "FAIR-03 substrate (D-12): input tokens written into the prompt cache, billed at the cache-write rate. Separate column per D-12."
+    },
+    "fairness": {
+      "type": "object",
+      "description": "FAIR-03 substrate: fairness accounting attached to this result. Substrate only — the variance detector + cost_quality.md warning are Phase 82/89.",
+      "properties": {
+        "overrides": {
+          "type": "array",
+          "description": "FAIR-03 substrate (D-10): per-mode deviations from the pinned fairness contract, each carrying a free-text waiver_reason and a maintainer approved_by. An empty waiver_reason is rejected at load time by the runtime fairness loader (Phase 80+), not by this schema.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "description": "The profile mode this override applies to."
+              },
+              "waiver_reason": {
+                "type": "string",
+                "description": "Free-text justification for deviating from the fairness contract (D-10)."
+              },
+              "approved_by": {
+                "type": "string",
+                "description": "Maintainer signoff for this override (D-10)."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

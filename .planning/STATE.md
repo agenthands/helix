@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: verifying
-stopped_at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
+status: Phase 75 complete; v1.12 in progress (phase 76 next)
+stopped_at: Phase 75 complete (5/5 plans, verified; TOS confirmed by user; code-review blocker fixed)
 last_updated: "2026-06-15T08:48:39.026Z"
-last_activity: 2026-06-15
+last_activity: 2026-06-15 — Phase 75 executed, verified (11/11 must-haves), and marked complete
 progress:
   total_phases: 1
   completed_phases: 1
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 75 — schema-fairness-contract-tree-skeleton
+**Current focus:** v1.12 Bench Stack & Tool Evaluation — Phase 75 (foundation contracts) complete; Phase 76 next.
 
 ## Current Position
 
-Phase: 75
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-15
+Phase: 75 — schema-fairness-contract-tree-skeleton — COMPLETE
+Plan: 5/5 plans complete (3 waves)
+Status: Verified (11/11 must-haves, 5/5 success criteria); TOS attestation confirmed by user; code-review blocker (CR-01) fixed
+Last activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
 
 ### Session Continuity
 
-Last session: 2026-06-15T07:45:09.816Z
-Stopped at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
-Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-04-PLAN.md
+Last session: 2026-06-15
+Stopped at: Phase 75 complete — milestone v1.12 has 14 more phases (76–89) in .planning/milestones/v1.12-ROADMAP.md, not yet promoted into the active ROADMAP.md
+Resume file: .planning/milestones/v1.12-ROADMAP.md (Phase 76 details)
 
 ## Accumulated Context
 

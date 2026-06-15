@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -66,6 +67,22 @@ func validateCostTable(today time.Time, path string) error {
 	staleCutoff := today.AddDate(0, 0, -stalenessWindowDays)
 
 	for i, row := range ct.Rows {
+		// Required string fields must be non-empty (WR-01). A blank model_id
+		// would also make the date/price error messages below unidentifiable.
+		if strings.TrimSpace(row.Provider) == "" || strings.TrimSpace(row.ModelID) == "" || strings.TrimSpace(row.Currency) == "" {
+			return fmt.Errorf("cost-table: row %d: provider/model_id/currency must be non-empty", i)
+		}
+
+		// Prices must be sane (WR-02). A missing input/output price decodes to
+		// the Go zero value 0.0, indistinguishable from an intentional 0, so a
+		// non-positive price is a data-integrity defect. cached_input_per_mtok
+		// may legitimately be 0 for providers without prompt caching, so it is
+		// only required to be non-negative.
+		if row.InputPerMtok <= 0 || row.OutputPerMtok <= 0 || row.CachedInputPerMtok < 0 {
+			return fmt.Errorf("cost-table: row %d (%s): non-positive price (input=%v output=%v cached=%v)",
+				i, row.ModelID, row.InputPerMtok, row.OutputPerMtok, row.CachedInputPerMtok)
+		}
+
 		validUntil, err := time.Parse(dateLayout, row.ValidUntil)
 		if err != nil {
 			return fmt.Errorf("cost-table: row %d (%s): cannot parse valid_until %q: %w", i, row.ModelID, row.ValidUntil, err)

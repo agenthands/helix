@@ -15,11 +15,11 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 ### Bench Foundation (BENCH-*)
 
 - [ ] **BENCH-01**: Net-new `bench/` tree exists with the six-dir layout `bench/{datasets,runners,languages,evaluators,reports,schema}/` — the five runtime dirs plus the `schema/` **contract-only** dir (D-07; documented runtime-vs-contract in `bench/BENCH.md`). `eval/` (Phase 67) source/runtime code remains untouched. _Acceptance:_ `tree -d -L 2 bench/` matches the six-dir spec; `eval/` source/runtime is byte-identical to pre-milestone HEAD, with the single permitted change being the one-paragraph INFRA-03 reciprocal pointer in `eval/EVAL.md` (D-08/INFRA-03).
-- [ ] **BENCH-02**: `cmd/helix-bench` binary builds (`go build ./cmd/helix-bench`) and ships cobra subcommands `run`, `fetch-datasets`, `doctor`, `report`, `validate-cost-table`. _Acceptance:_ `helix-bench --help` lists all 5 subcommands; `helix-bench doctor` succeeds on a clean Linux host with documented prereqs.
+- [x] **BENCH-02**: `cmd/helix-bench` binary builds (`go build ./cmd/helix-bench`) and ships cobra subcommands `run`, `fetch-datasets`, `doctor`, `report`, `validate-cost-table`. _Acceptance:_ `helix-bench --help` lists all 5 subcommands; `helix-bench doctor` succeeds on a clean Linux host with documented prereqs.
 - [x] **BENCH-03**: Normalized per-task result schema (JSON) versioned at `v2`, validated by JSON Schema; round-trips through `bench/evaluators/aggregator/`. _Acceptance:_ a golden result fixture validates; schema-version field present; backwards-incompatible changes bump major version.
 - [ ] **BENCH-04**: Bench runtime reuses Phase 67's `internal/eval/sandbox` and subprocess patterns; one daemon subprocess per `(task × mode)`. _Acceptance:_ in-process smoke run completes ≤ 30 s for the smallest task; no port collisions on parallel runs.
 - [ ] **BENCH-05**: `make bench`, `make bench-quick`, `make bench-<suite>` targets exist and invoke `cmd/helix-bench run --benchmarks=…`. _Acceptance:_ `make bench-quick` exits 0 with ≥1 task succeeding in CI in ≤ 90 s.
-- [ ] **BENCH-06**: `bench/BENCH.md` documents operator-side prereqs (Python 3.11+, Docker Engine, per-language toolchains) and provider-TOS attestation (retention-zero verified per provider) parallel to `eval/EVAL.md`. _Acceptance:_ `make verify-tos` exits non-zero if any provider's TOS attestation row is older than 90 days.
+- [x] **BENCH-06**: `bench/BENCH.md` documents operator-side prereqs (Python 3.11+, Docker Engine, per-language toolchains) and provider-TOS attestation (retention-zero verified per provider) parallel to `eval/EVAL.md`. _Acceptance:_ `make verify-tos` exits non-zero if any provider's TOS attestation row is older than 90 days.
 
 ### Fairness Contract (FAIR-*)
 
@@ -75,7 +75,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Cost Conversion (COST-*)
 
-- [ ] **COST-01**: `bench/datasets/cost-table.yaml` ships with provider × model × `{input_per_mtok, output_per_mtok, currency}` and a `valid_until` date. _Acceptance:_ schema validates; CI gate fails if `valid_until` is past or > 90 days away from `last_verified`.
+- [x] **COST-01**: `bench/datasets/cost-table.yaml` ships with provider × model × `{input_per_mtok, output_per_mtok, currency}` and a `valid_until` date. _Acceptance:_ schema validates; CI gate fails if `valid_until` is past or > 90 days away from `last_verified`.
 - [ ] **COST-02**: `cost_per_solved_task` = (sum across solved tasks of provider-side `usage`-derived USD cost) / count(solved). _Acceptance:_ matches a hand-computed example for a known run.
 - [ ] **COST-03**: `cost_quality.md` report shows cost-per-solved-task per mode × benchmark with BCa CIs. _Acceptance:_ report renders for a sample run.
 

@@ -46,6 +46,17 @@ Go struct + loader + deprecation gate, not a ToolProvider — and `test/bench` d
 reference `bench/runners`. `go test ./bench/runners/...` is fully green. No fix
 attempted (SCOPE BOUNDARY).
 
+## From Plan 75-05 (helix-bench CLI + validators)
+
+Re-confirmed the same `test/bench` tool-inventory failure above is STILL pre-existing
+during the helix-bench CLI work (`TestBenchToolsManifestMatchesRegistry`: 53 live
+tools vs 47 expected; `TestToolDescriptionsGoldenFile`: stale golden). The new
+`cmd/helix-bench` package registers ZERO MCP tools — it is a standalone cobra CLI
+binary (run/fetch-datasets/doctor/report/validate-cost-table subcommands + a
+Makefile-only verify-tos entry), not a ToolProvider — and `test/bench` does not
+reference `cmd/helix-bench`. `go test ./cmd/helix-bench/...` is fully green (9/9).
+`go vet ./...` is green. No fix attempted (SCOPE BOUNDARY).
+
 ### Module cache repair (environment, not repo)
 
 The sandbox's Go module cache had two incompletely-extracted modules

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 75 planned (5 plans, 3 waves; checker passed)
-last_updated: "2026-06-14T14:06:52.030Z"
-last_activity: 2026-06-14 -- Phase 75 execution started
+stopped_at: Completed 75-02-PLAN.md (bench skeleton + permissive TOS defaults)
+last_updated: "2026-06-15T00:00:00.000Z"
+last_activity: 2026-06-15 -- Phase 75 plan 02 complete
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 75 (schema-fairness-contract-tree-skeleton) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
-Last activity: 2026-06-14 -- Phase 75 execution started
+Last activity: 2026-06-15 -- Phase 75 plan 02 complete
 
 ### Session Continuity
 
-Last session: 2026-06-14T14:06:42.420Z
-Stopped at: Phase 75 planned (5 plans, 3 waves; checker passed)
-Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-01-PLAN.md
+Last session: 2026-06-15T00:00:00.000Z
+Stopped at: Completed 75-02-PLAN.md (bench skeleton + permissive TOS defaults)
+Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-03-PLAN.md
 
 ## Accumulated Context
 
@@ -63,9 +63,11 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-01-PL
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 75 P01 | 10min | 1 tasks | 8 files |
+| Phase 75 P02 | 18min | 2 tasks | 9 files (1 modified in task 2) |
 
 ## Decisions
 
 - [Phase ?]: Phase 64 microbench relocated to internal/semantic/bench/ via per-path git mv (renames preserved, git log --follow continuity)
 - [Phase ?]: Kept package bench + benchfts/ignore build tags unchanged; no go.mod edit (single module, absolute import path unaffected)
 - [Phase ?]: Left make bench Makefile target alone; Phase 77 BENCH-05 name-collision deferred, not fixed in Wave 0
+- [Phase 75 P02]: bench/PROVIDERS.md TOS flags set to PERMISSIVE DEFAULTS (benchmarking + publish permitted) for all providers + local models; live-TOS verification explicitly deferred to a future phase (unblocks provider-independent bench system; honesty note added in-file)

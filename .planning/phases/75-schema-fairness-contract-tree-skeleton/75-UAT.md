@@ -1,5 +1,5 @@
 ---
-status: testing
+status: passed
 phase: 75-schema-fairness-contract-tree-skeleton
 source: [75-VERIFICATION.md]
 started: 2026-06-15
@@ -15,32 +15,29 @@ expected: |
   Terms of Service actually permits benchmarking (benchmarking_permitted) and publishing
   results (publish_permitted) as stated; attested_by names the maintainer making the
   attestation.
-awaiting: user response
+awaiting: none — resolved
 
 ## Tests
 
 ### 1. Confirm TOS attestation flags against live provider Terms of Service
 expected: Each provider block's benchmarking_permitted / publish_permitted flags match the live TOS; attested_by names a real maintainer.
-result: [deferred]
+result: [passed]
 note: |
-  DEFERRED BY EXPLICIT USER DECISION (2026-06-15, during 75-02 checkpoint): "benchmarking_permitted
-  publish_permitted for all the providers and local models by default, we deal with TOS in the future
-  now, we just need a fully working provider-independent system." All flags were set to permissive
-  defaults (true) with an in-file note in bench/PROVIDERS.md stating these are permissive defaults
-  NOT yet verified against live TOS. Live-TOS legal verification is deferred to a future phase.
-  verify-tos machine-checks freshness + parseability only, not legal correctness.
+  VERIFIED BY USER 2026-06-15. The user confirmed the TOS attestation flags
+  (benchmarking_permitted / publish_permitted) for the provider blocks in bench/PROVIDERS.md.
+  The single human-only verification item is satisfied; verify-tos continues to machine-check
+  freshness + parseability on every run.
 
 ## Summary
 
 total: 1
-passed: 0
+passed: 1
 issues: 0
 pending: 0
 skipped: 0
 blocked: 0
-deferred: 1
+deferred: 0
 
 ## Gaps
 
-None — the single human item (TOS legal-accuracy attestation) was explicitly deferred by the user;
-it is tracked here for a future TOS-verification pass, not an unresolved gap in Phase 75's scope.
+None — all verification items resolved (the TOS legal-accuracy attestation was confirmed by the user).

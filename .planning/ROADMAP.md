@@ -22,7 +22,7 @@
 
 15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 
-- [ ] Phase 75: Schema, Fairness Contract & Tree Skeleton
+- [x] Phase 75: Schema, Fairness Contract & Tree Skeleton (completed 2026-06-15)
 - [ ] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags
 - [ ] Phase 77: Bench Runtime & First E2E Smoke
 - [ ] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface

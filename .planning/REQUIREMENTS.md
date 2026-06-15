@@ -16,7 +16,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 - [ ] **BENCH-01**: Net-new `bench/` tree exists with the six-dir layout `bench/{datasets,runners,languages,evaluators,reports,schema}/` — the five runtime dirs plus the `schema/` **contract-only** dir (D-07; documented runtime-vs-contract in `bench/BENCH.md`). `eval/` (Phase 67) source/runtime code remains untouched. _Acceptance:_ `tree -d -L 2 bench/` matches the six-dir spec; `eval/` source/runtime is byte-identical to pre-milestone HEAD, with the single permitted change being the one-paragraph INFRA-03 reciprocal pointer in `eval/EVAL.md` (D-08/INFRA-03).
 - [ ] **BENCH-02**: `cmd/helix-bench` binary builds (`go build ./cmd/helix-bench`) and ships cobra subcommands `run`, `fetch-datasets`, `doctor`, `report`, `validate-cost-table`. _Acceptance:_ `helix-bench --help` lists all 5 subcommands; `helix-bench doctor` succeeds on a clean Linux host with documented prereqs.
-- [ ] **BENCH-03**: Normalized per-task result schema (JSON) versioned at `v2`, validated by JSON Schema; round-trips through `bench/evaluators/aggregator/`. _Acceptance:_ a golden result fixture validates; schema-version field present; backwards-incompatible changes bump major version.
+- [x] **BENCH-03**: Normalized per-task result schema (JSON) versioned at `v2`, validated by JSON Schema; round-trips through `bench/evaluators/aggregator/`. _Acceptance:_ a golden result fixture validates; schema-version field present; backwards-incompatible changes bump major version.
 - [ ] **BENCH-04**: Bench runtime reuses Phase 67's `internal/eval/sandbox` and subprocess patterns; one daemon subprocess per `(task × mode)`. _Acceptance:_ in-process smoke run completes ≤ 30 s for the smallest task; no port collisions on parallel runs.
 - [ ] **BENCH-05**: `make bench`, `make bench-quick`, `make bench-<suite>` targets exist and invoke `cmd/helix-bench run --benchmarks=…`. _Acceptance:_ `make bench-quick` exits 0 with ≥1 task succeeding in CI in ≤ 90 s.
 - [ ] **BENCH-06**: `bench/BENCH.md` documents operator-side prereqs (Python 3.11+, Docker Engine, per-language toolchains) and provider-TOS attestation (retention-zero verified per provider) parallel to `eval/EVAL.md`. _Acceptance:_ `make verify-tos` exits non-zero if any provider's TOS attestation row is older than 90 days.
@@ -147,13 +147,13 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 |---|---|---|---|
 | BENCH-01 | Phase 75 | TBD | Pending |
 | BENCH-02 | Phase 75 | TBD | Pending |
-| BENCH-03 | Phase 75 | TBD | Pending |
+| BENCH-03 | Phase 75 (plan 03) | 479e5c14 | Complete |
 | BENCH-04 | Phase 77 | TBD | Pending |
 | BENCH-05 | Phase 77 | TBD | Pending |
 | BENCH-06 | Phase 75 | TBD | Pending |
 | FAIR-01 | Phase 75 | TBD | Pending |
 | FAIR-02 | Phase 75 | TBD | Pending |
-| FAIR-03 | Phase 75 (schema substrate only); variance gate Phase 82, warning Phase 89 | TBD | Pending |
+| FAIR-03 | Phase 75 plan 03 = schema substrate landed (479e5c14); variance gate Phase 82, warning Phase 89 | 479e5c14 (substrate) | Substrate done; full REQ pending Phase 82/89 |
 | TOOLBENCH-01 | Phase 78 | TBD | Pending |
 | TOOLBENCH-02 | Phase 78 | TBD | Pending |
 | TOOLBENCH-03 | Phase 85 | TBD | Pending |

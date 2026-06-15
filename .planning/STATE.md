@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 75-02-PLAN.md (bench skeleton + permissive TOS defaults)
-last_updated: "2026-06-15T00:00:00.000Z"
-last_activity: 2026-06-15 -- Phase 75 plan 02 complete
+stopped_at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
+last_updated: "2026-06-15T07:30:00.000Z"
+last_activity: 2026-06-15 -- Phase 75 plan 03 complete
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 75 (schema-fairness-contract-tree-skeleton) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 75 plan 02 complete
+Last activity: 2026-06-15 -- Phase 75 plan 03 complete
 
 ### Session Continuity
 
-Last session: 2026-06-15T00:00:00.000Z
-Stopped at: Completed 75-02-PLAN.md (bench skeleton + permissive TOS defaults)
-Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-03-PLAN.md
+Last session: 2026-06-15T07:30:00.000Z
+Stopped at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
+Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-04-PLAN.md
 
 ## Accumulated Context
 
@@ -64,6 +64,7 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-03-PL
 |-------|------|----------|-------|
 | Phase 75 P01 | 10min | 1 tasks | 8 files |
 | Phase 75 P02 | 18min | 2 tasks | 9 files (1 modified in task 2) |
+| Phase 75 P03 | 12min | 1 tasks | 3 files (TDD RED+GREEN) |
 
 ## Decisions
 
@@ -71,3 +72,5 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-03-PL
 - [Phase ?]: Kept package bench + benchfts/ignore build tags unchanged; no go.mod edit (single module, absolute import path unaffected)
 - [Phase ?]: Left make bench Makefile target alone; Phase 77 BENCH-05 name-collision deferred, not fixed in Wave 0
 - [Phase 75 P02]: bench/PROVIDERS.md TOS flags set to PERMISSIVE DEFAULTS (benchmarking + publish permitted) for all providers + local models; live-TOS verification explicitly deferred to a future phase (unblocks provider-independent bench system; honesty note added in-file)
+- [Phase 75 P03]: result.v2.schema.json keeps schema_version as the ONLY required field; additionalProperties left OPEN at top level so additive fields stay minor (D-03/D-04); additive-only=minor / breaking=v3 policy recorded in a schema $comment
+- [Phase 75 P03]: FAIR-03 delivered as SCHEMA SUBSTRATE ONLY (cached-input columns tokens_input_cached_read/tokens_input_cache_write + fairness.overrides[]); variance detector deferred to Phase 82, cost_quality.md warning to Phase 89 — NOT graded as full FAIR-03 here

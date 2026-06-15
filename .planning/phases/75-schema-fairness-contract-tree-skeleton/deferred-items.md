@@ -30,6 +30,13 @@ expected count in `test/bench/tools_manifest_test.go` (and
 `internal/daemon/bootstrap_test.go` if it also asserts a count). Out of scope for a
 Wave 0 file relocation.
 
+## From Plan 75-03 (result.v2 schema)
+
+Re-confirmed the same `test/bench` failure above is STILL pre-existing during the
+result.v2 schema work: it fails identically at the commit BEFORE this plan (HEAD~2)
+and `test/bench` does not reference `bench/schema`. The result.v2 schema package
+(`go test ./bench/schema/...`) is fully green. No fix attempted (SCOPE BOUNDARY).
+
 ### Module cache repair (environment, not repo)
 
 The sandbox's Go module cache had two incompletely-extracted modules

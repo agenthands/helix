@@ -1,0 +1,20 @@
+{
+  "schema_version": "v2",
+  "task_id": "swe-bench-lite/django__django-12345",
+  "mode": "edit",
+  "benchmark": "swe-bench-lite",
+  "run_index": 1,
+  "tokens_input": 18432,
+  "tokens_output": 2048,
+  "tokens_input_cached_read": 16384,
+  "tokens_input_cache_write": 1024,
+  "fairness": {
+    "overrides": [
+      {
+        "mode": "edit",
+        "waiver_reason": "edit mode requires a higher max_tokens ceiling to fit large multi-file diffs in a single turn",
+        "approved_by": "maintainer:vizulisj"
+      }
+    ]
+  }
+}

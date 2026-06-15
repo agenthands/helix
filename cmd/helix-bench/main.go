@@ -24,6 +24,19 @@ import (
 )
 
 func main() {
+	// verify-tos is a Makefile-only HARD-FAIL gate, NOT one of the five BENCH-02
+	// subcommands. Dispatch it directly so it does not inflate the root
+	// command count (the --help acceptance fixes that at exactly five).
+	if len(os.Args) > 1 && os.Args[1] == "verify-tos" {
+		cmd := newVerifyTOSCmd()
+		cmd.SetArgs(os.Args[2:])
+		if err := cmd.Execute(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -34,8 +47,11 @@ func main() {
 // test-reachable) for in-process --help/doctor testing.
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "helix-bench",
-		Short: "Helix provider-independent benchmark harness",
+		Use: "helix-bench",
+		// Validator failures are real gate errors, not usage mistakes — don't
+		// dump the usage text on a non-zero exit.
+		SilenceUsage: true,
+		Short:        "Helix provider-independent benchmark harness",
 		Long: `helix-bench drives the Phase 75 benchmark stack.
 
 Subcommands:

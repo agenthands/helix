@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos
 
 BINARY=helix
 GO=go
@@ -236,3 +236,17 @@ eval:
 # warn-only step (continue-on-error: true) — never blocks merges.
 eval-attestation-check:
 	go run ./cmd/eval-attestation-check eval/EVAL.md
+
+# validate-cost-table: HARD-FAIL strict validator for bench/datasets/cost-table.yaml
+# (COST-01/D-13/D-16). Exits NON-ZERO on an unknown key, an unparseable date, a
+# past valid_until, or a last_verified more than 90 days stale. This is a build
+# gate — NO continue-on-error (the deliberate inversion of eval-attestation-check).
+validate-cost-table:
+	go run ./cmd/helix-bench validate-cost-table bench/datasets/cost-table.yaml
+
+# verify-tos: HARD-FAIL freshness gate for bench/PROVIDERS.md TOS attestations
+# (D-14/D-16). Exits NON-ZERO on a malformed/unknown-key frontmatter block, a
+# missing required field, or an attested_on more than 90 days stale. Build gate —
+# NO continue-on-error. Checks freshness/parse validity only, not legal accuracy.
+verify-tos:
+	go run ./cmd/helix-bench verify-tos bench/PROVIDERS.md

@@ -37,6 +37,15 @@ result.v2 schema work: it fails identically at the commit BEFORE this plan (HEAD
 and `test/bench` does not reference `bench/schema`. The result.v2 schema package
 (`go test ./bench/schema/...`) is fully green. No fix attempted (SCOPE BOUNDARY).
 
+## From Plan 75-04 (fairness contract)
+
+Re-confirmed the same `test/bench` tool-inventory failure above is STILL pre-existing
+during the fairness-contract work (registry reports 53 tools; manifest expects 47;
+golden file stale). The new `bench/runners` package adds ZERO MCP tools — it is a plain
+Go struct + loader + deprecation gate, not a ToolProvider — and `test/bench` does not
+reference `bench/runners`. `go test ./bench/runners/...` is fully green. No fix
+attempted (SCOPE BOUNDARY).
+
 ### Module cache repair (environment, not repo)
 
 The sandbox's Go module cache had two incompletely-extracted modules

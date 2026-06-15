@@ -4,14 +4,14 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
-last_updated: "2026-06-15T07:30:00.000Z"
+last_updated: "2026-06-15T07:35:39.273Z"
 last_activity: 2026-06-15 -- Phase 75 plan 03 complete
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 75 (schema-fairness-contract-tree-skeleton) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-06-15 -- Phase 75 plan 03 complete
 
 ### Session Continuity
 
-Last session: 2026-06-15T07:30:00.000Z
+Last session: 2026-06-15T07:35:28.449Z
 Stopped at: Completed 75-03-PLAN.md (result.v2 schema contract + golden-validate tests)
 Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-04-PLAN.md
 
@@ -65,6 +65,7 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-04-PL
 | Phase 75 P01 | 10min | 1 tasks | 8 files |
 | Phase 75 P02 | 18min | 2 tasks | 9 files (1 modified in task 2) |
 | Phase 75 P03 | 12min | 1 tasks | 3 files (TDD RED+GREEN) |
+| Phase 75 P04 | 10min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -74,3 +75,5 @@ Resume file: .planning/phases/75-schema-fairness-contract-tree-skeleton/75-04-PL
 - [Phase 75 P02]: bench/PROVIDERS.md TOS flags set to PERMISSIVE DEFAULTS (benchmarking + publish permitted) for all providers + local models; live-TOS verification explicitly deferred to a future phase (unblocks provider-independent bench system; honesty note added in-file)
 - [Phase 75 P03]: result.v2.schema.json keeps schema_version as the ONLY required field; additionalProperties left OPEN at top level so additive fields stay minor (D-03/D-04); additive-only=minor / breaking=v3 policy recorded in a schema $comment
 - [Phase 75 P03]: FAIR-03 delivered as SCHEMA SUBSTRATE ONLY (cached-input columns tokens_input_cached_read/tokens_input_cache_write + fairness.overrides[]); variance detector deferred to Phase 82, cost_quality.md warning to Phase 89 — NOT graded as full FAIR-03 here
+- [Phase ?]: [Phase 75 P04]: Fairness contract ModelID pinned to dated snapshot claude-sonnet-4-5-20260128 (never bare alias claude-sonnet-4-6); FAIR-02 guarded by TestModelIDIsDatedSnapshot
+- [Phase ?]: [Phase 75 P04]: Validate() returns error (unit-testable) not log.Fatal; DeprecationGate takes injected today clock (D-11); 30d boundary inclusive (==30d passes, <30d fails)

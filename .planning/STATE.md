@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: verifying
-stopped_at: Phase 76 context gathered
-last_updated: "2026-06-16T15:23:12.094Z"
+stopped_at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
+last_updated: "2026-06-16T16:20:22.762Z"
 last_activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
 progress:
   total_phases: 2
@@ -32,9 +32,9 @@ Last activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
 
 ### Session Continuity
 
-Last session: 2026-06-16T15:23:12.090Z
-Stopped at: Phase 76 context gathered
-Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/76-CONTEXT.md
+Last session: 2026-06-16 — session resumed via /gsd-resume-work
+Stopped at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
+Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/.continue-here.md (+ HANDOFF.json)
 
 ## Accumulated Context
 

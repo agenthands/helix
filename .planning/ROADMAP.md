@@ -23,7 +23,7 @@
 15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 
 - [x] Phase 75: Schema, Fairness Contract & Tree Skeleton (completed 2026-06-15)
-- [ ] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags
+- [x] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags (completed 2026-06-16)
 - [ ] Phase 77: Bench Runtime & First E2E Smoke
 - [ ] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface
 - [ ] Phase 79: Evaluators & Result-Schema Metrics Layer
@@ -57,7 +57,7 @@
 **Depends on**: Phase 75, v1.10 Phase 65 (SemanticLookup seam — read for context only)
 
 **Requirements**: ABLATE-02, ABLATE-05, ABLATE-07, ABLATE-08
-**Plans:** 4 plans in 2 waves
+**Plans:** 4/4 plans complete
 **Wave 1**
 
 - [x] 76-01-PLAN.md — Wave 1: kernel disable flags + accessors + structured-edit Unsupported guard + replace_in_file exact-match-only (TDD; ABLATE-07)

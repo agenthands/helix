@@ -18,6 +18,15 @@ import (
 // KernelConfig holds configuration for the kernel.
 type KernelConfig struct {
 	Pool lspool.PoolConfig
+	// DisableLSPSubsystem requests that the LSP subsystem be disabled. When
+	// set, the daemon wires no-op LSP seams (D-09) so back-channel LSP calls
+	// cannot reach a live language server. Consumed by Plan 76-04.
+	DisableLSPSubsystem bool // Phase 76 ABLATE-05
+	// DisableStructuredEditSubsystem requests that structured-edit tools be
+	// disabled. When set, the four structured-edit handlers return a typed
+	// serr.Unsupported error and replace_in_file falls through to exact-match
+	// only (no fuzzy cascade). Opt-in disable; default ENABLED (D-02).
+	DisableStructuredEditSubsystem bool // Phase 76 ABLATE-07
 }
 
 // Kernel coordinates workspaces, the LS worker pool, and tool dispatch.
@@ -61,6 +70,16 @@ func NewKernel(registry *workspace.Registry, langReg *langregistry.Registry, ins
 // Tracer returns the kernel's trace.Tracer. Never nil — the constructor
 // falls back to a noop tracer when none is provided.
 func (k *Kernel) Tracer() trace.Tracer { return k.tracer }
+
+// StructuredEditDisabled reports whether the structured-edit subsystem is
+// disabled (Phase 76 ABLATE-07). When true, structured-edit tool handlers
+// return serr.Unsupported and replace_in_file does exact-match only.
+func (k *Kernel) StructuredEditDisabled() bool { return k.config.DisableStructuredEditSubsystem }
+
+// LSPSubsystemDisabled reports whether the LSP subsystem is disabled
+// (Phase 76 ABLATE-05). Consumed by the daemon composition root (Plan 76-04)
+// to wire no-op LSP seams.
+func (k *Kernel) LSPSubsystemDisabled() bool { return k.config.DisableLSPSubsystem }
 
 // ActivateWorkspace detects languages and creates a WorkspaceRuntime for a project root.
 // Per WRK-02: auto-detects languages. Per WRK-03: supports multiple projects.

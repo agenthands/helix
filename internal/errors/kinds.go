@@ -11,9 +11,19 @@ package errors
 type Kind string
 
 const (
-	NotFound           Kind = "not_found"
-	InvalidArgs        Kind = "invalid_args"
-	NoWorkspace        Kind = "no_workspace"
+	NotFound    Kind = "not_found"
+	InvalidArgs Kind = "invalid_args"
+	NoWorkspace Kind = "no_workspace"
+	// Unsupported marks an operation the runtime cannot perform.
+	//
+	// Phase 76 ABLATE-07 convention (D-06): tools disabled by a kernel
+	// subsystem-disable flag (e.g. DisableStructuredEditSubsystem) reuse this
+	// kind rather than introducing a new one, and standardize a greppable
+	// message prefix of "subsystem_disabled: " so ablation-disabled tool
+	// errors can be located via `grep "subsystem_disabled:"`. Example:
+	//
+	//	serr.New(serr.Unsupported,
+	//	  "subsystem_disabled: replace_symbol_body requires the structured-edit subsystem; use replace_in_file")
 	Unsupported        Kind = "unsupported"
 	Internal           Kind = "internal"
 	CircuitOpen        Kind = "circuit_open"

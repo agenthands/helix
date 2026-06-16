@@ -70,6 +70,16 @@
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 76)
 
+### Phase 77: Bench Runtime & First E2E Smoke
+
+**Goal**: Stand up the bench orchestrator end-to-end on a single Go ToolBench task in a single mode — no container, no per-language sprawl — so the runtime shape is forced into existence and proven before evaluators or ablations land on top.
+
+**Depends on**: Phase 75 (schema, tree), Phase 76 (bench profile YAMLs exist so daemon subprocess can be started with `--profile=bench-full`)
+
+**Requirements**: BENCH-04, BENCH-05
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 77)
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

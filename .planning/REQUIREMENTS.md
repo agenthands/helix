@@ -49,7 +49,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [ ] **ABLATE-05**: Kernel-level `disable_lsp_subsystem` flag prevents any back-channel LSP call (including from `analyze_blast_radius` strangler-fig, RepoMap `SetEnrichFn`, live-update OnEdit hooks). _Acceptance:_ E2E `no_lsp` task emits **zero** `lsp.*` OTel spans; trace-tap assertion is a hard fail.
 - [ ] **ABLATE-06**: Kernel-level `disable_semantic_subsystem` flag prevents any back-channel semantic-store read (including Phase 65 SemanticLookup, RankFiles, ExpandFrom). _Acceptance:_ E2E `no_semantic` task makes zero queries against the duckdb store; runtime assertion logs and fails.
 - [x] **ABLATE-07**: Kernel-level `disable_structured_edit_subsystem` flag forces fall-through to plain unified-diff patches; structured-edit tools (replace_symbol_body, fuzzy_edit, etc.) return `unsupported` with a documented kind. _Acceptance:_ `no_structured_edit` mode's tool inventory excludes structured edits; agent receives plain `replace_in_file` only.
-- [ ] **ABLATE-08**: `vet-ablation-leakage` static analyzer (in `internal/lint/`) fails the build if any mode-restricted tool path reaches a disabled subsystem. Hooked into `make vet`. _Acceptance:_ a deliberate test-case violation makes `make vet` fail.
+- [x] **ABLATE-08**: `vet-ablation-leakage` static analyzer (in `internal/lint/`) fails the build if any mode-restricted tool path reaches a disabled subsystem. Hooked into `make vet`. _Acceptance:_ a deliberate test-case violation makes `make vet` fail.
 
 ### Metrics Layer (METRIC-*)
 

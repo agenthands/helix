@@ -62,7 +62,7 @@
 
 - [x] 76-01-PLAN.md — Wave 1: kernel disable flags + accessors + structured-edit Unsupported guard + replace_in_file exact-match-only (TDD; ABLATE-07)
 - [x] 76-02-PLAN.md — Wave 1: 4 bench profile YAMLs + Profile disable-flag fields + golden tool-surface tests + loader unknown-mode rejection (TDD; ABLATE-02)
-- [ ] 76-03-PLAN.md — Wave 1: vet-ablation-leakage analyzer + cmd + testdata green→red + make vet wiring (TDD; ABLATE-08)
+- [x] 76-03-PLAN.md — Wave 1: vet-ablation-leakage analyzer + cmd + testdata green→red + make vet wiring (TDD; ABLATE-08)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

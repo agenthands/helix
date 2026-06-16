@@ -58,6 +58,12 @@
 
 **Requirements**: ABLATE-02, ABLATE-05, ABLATE-07, ABLATE-08
 
+**Plans:** 4 plans in 2 waves
+- [ ] 76-01-PLAN.md — Wave 1: kernel disable flags + accessors + structured-edit Unsupported guard + replace_in_file exact-match-only (TDD; ABLATE-07)
+- [ ] 76-02-PLAN.md — Wave 1: 4 bench profile YAMLs + Profile disable-flag fields + golden tool-surface tests + loader unknown-mode rejection (TDD; ABLATE-02)
+- [ ] 76-03-PLAN.md — Wave 1: vet-ablation-leakage analyzer + cmd + testdata green→red + make vet wiring (TDD; ABLATE-08)
+- [ ] 76-04-PLAN.md — Wave 2: no_lsp null-object daemon wiring + CLI override flags + config fields + zero-span trace-tap (TDD; ABLATE-05)
+
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 76)
 
 <details>

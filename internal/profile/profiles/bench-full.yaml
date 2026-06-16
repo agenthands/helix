@@ -1,0 +1,60 @@
+# bench-full.yaml — Bench ablation CONTROL arm (Phase 76 ABLATE-02, D-02).
+#
+# Exposes the full bench tool surface (all skills, no exclusions) and sets
+# NEITHER kernel disable flag — the baseline against which no-lsp / no-semantic /
+# no-structured-edit arms are measured. Default subsystem state is ENABLED;
+# disable flags are opt-in (D-02), so the control arm simply omits them.
+#
+# Tool filtering reuses the EMPTY-LISTS mechanism documented in baseline.yaml:
+# the daemon resolves skill.ResolveTools(skills, tools, exclude_tools) at session
+# start and SetAllowedTools(...) the result. With all skills listed, the full
+# surface resolves.
+name: bench-full
+description: >
+  Bench ablation control arm. Full Helix tool surface with all subsystems
+  enabled — the reference arm for the Phase 76+ ablation harness. Phase 77
+  launches the daemon with --profile=bench-full. Bench-only: not for general use.
+
+prompt: |
+  You are the bench-full ablation control arm. All Helix code-intelligence tools
+  are available and every subsystem is enabled. Use symbolic tools for code
+  intelligence and editing tools for modifications.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+  - repomap
+  - health
+  - help
+  - semantic
+
+tools: []
+
+exclude_tools: []
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+guardrails:
+  enforcement: off
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

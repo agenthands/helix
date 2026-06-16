@@ -43,6 +43,20 @@ type Profile struct {
 	// SingleProject restricts sessions to a single project when true.
 	SingleProject bool `yaml:"single_project"`
 
+	// DisableLSPSubsystem requests the daemon disable the LSP subsystem for this
+	// profile (Phase 76 ABLATE-05). First-class field so a bench ablation arm's
+	// YAML fully describes the arm (tool surface + subsystem flags, D-01).
+	// Zero-value false = subsystem ENABLED; the flag is an opt-in disable (D-02).
+	// Read at the daemon composition root (Plan 76-04), OR'd with any CLI override.
+	DisableLSPSubsystem bool `yaml:"disable_lsp_subsystem"`
+
+	// DisableStructuredEditSubsystem requests the daemon disable structured edits
+	// (replace_symbol_body / fuzzy_edit / insert_*) for this profile
+	// (Phase 76 ABLATE-07). First-class field per D-01; zero-value false =
+	// ENABLED, opt-in disable per D-02. Read at the daemon composition root
+	// (Plan 76-04), OR'd with any CLI override.
+	DisableStructuredEditSubsystem bool `yaml:"disable_structured_edit_subsystem"`
+
 	// AllowedModeTransitions defines the state machine for mode switching.
 	// Key is the source mode, value is the list of allowed target modes.
 	AllowedModeTransitions map[string][]string `yaml:"allowed_mode_transitions"`

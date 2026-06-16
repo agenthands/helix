@@ -1,0 +1,68 @@
+# bench-no-structured-edit.yaml — Bench ablation arm: structured edits disabled
+# (Phase 76 ABLATE-07, D-04).
+#
+# Keeps the full skill set but uses `exclude_tools` to drop the 4 structured-edit
+# tools so tools/list offers the agent plain replace_in_file only:
+#   - replace_symbol_body, insert_before_symbol, insert_after_symbol (symbol-editing skill)
+#   - fuzzy_edit (file-ops skill)
+# replace_in_file REMAINS (file-ops). Defense-in-depth: the kernel
+# disable_structured_edit_subsystem flag (D-01) makes any back-channel call to the
+# excluded tools return a typed Unsupported error and forces replace_in_file to
+# exact-match-only (D-05) — wired at the daemon/kernel in Plans 76-01/76-04.
+name: bench-no-structured-edit
+description: >
+  Bench ablation arm: structured-edit subsystem disabled. Tool surface excludes
+  replace_symbol_body / fuzzy_edit / insert_before_symbol / insert_after_symbol;
+  the agent receives plain replace_in_file only (ABLATE-07). Pairs with kernel
+  disable_structured_edit_subsystem. Bench-only: not for general use.
+
+prompt: |
+  You are the no_structured_edit ablation arm. Tree-sitter symbol surgery and
+  fuzzy editing are unavailable. Make edits with plain replace_in_file
+  (exact-match) only.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+  - repomap
+  - health
+  - help
+  - semantic
+
+tools: []
+
+# The 4 structured-edit tools (D-04). replace_in_file is NOT excluded.
+exclude_tools:
+  - replace_symbol_body
+  - fuzzy_edit
+  - insert_before_symbol
+  - insert_after_symbol
+
+disable_structured_edit_subsystem: true
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+guardrails:
+  enforcement: off
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

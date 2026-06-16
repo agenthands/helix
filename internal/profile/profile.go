@@ -144,3 +144,9 @@ func (s *ProfileStore) ToolDescriptionOverrides(profileName string) map[string]s
 func (s *ProfileStore) SetProfile(name string, p *Profile) {
 	s.profiles[name] = p
 }
+
+// SetMode adds or replaces a mode in the store.
+// Intended for testing and dynamic mode injection.
+func (s *ProfileStore) SetMode(name string, m *Mode) {
+	s.modes[name] = m
+}

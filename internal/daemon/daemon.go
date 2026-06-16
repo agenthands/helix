@@ -269,9 +269,37 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		poolCfg = lspool.DefaultPoolConfig()
 	}
 
+	// 4b. Resolve the active profile early (hoisted from former step 8) so
+	// the kernel can be constructed with the effective subsystem-disable
+	// flags. Phase 76 ABLATE-05/07: the composition root owns the kernel-
+	// config concern (D-02/D-03); the effective flag is (CLI override OR
+	// resolved-profile field) — a one-way force-disable because both default
+	// OFF and the flags are opt-in disables (RESEARCH Pattern 2).
+	globalDir := filepath.Join(homeDir, ".helix")
+	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving profile: %w", err)
+	}
+	logger.Info("profile resolved",
+		"profile", cfg.Profile,
+		"default_mode", activeProfile.DefaultMode,
+	)
+	effDisableLSP := cfg.DisableLSPSubsystem || activeProfile.DisableLSPSubsystem
+	effDisableSE := cfg.DisableStructuredEditSubsystem || activeProfile.DisableStructuredEditSubsystem
+	if effDisableLSP || effDisableSE {
+		logger.Info("subsystem ablation flags resolved",
+			"disable_lsp_subsystem", effDisableLSP,
+			"disable_structured_edit_subsystem", effDisableSE,
+		)
+	}
+
 	// 5. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
-	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{
+		Pool:                           poolCfg,
+		DisableLSPSubsystem:            effDisableLSP,
+		DisableStructuredEditSubsystem: effDisableSE,
+	}, pressure, logger, observability.Metrics(), observability.Tracer())
 
 	// 6b. Open semantic fact store when enabled (Phase 57, STORE-01..06).
 	//     Fail-fast core subsystem; on Tier-2 corruption auto-quarantines to
@@ -542,16 +570,9 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// 7. Create MCP server.
 	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger, observability.Tracer())
 
-	// 8. Resolve profile per D-08.
-	globalDir := filepath.Join(homeDir, ".helix")
-	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolving profile: %w", err)
-	}
-	logger.Info("profile resolved",
-		"profile", cfg.Profile,
-		"default_mode", activeProfile.DefaultMode,
-	)
+	// 8. Profile already resolved at step 4b (hoisted in Phase 76 so the
+	// kernel can be built with effective subsystem-disable flags).
+	// profileStore / activeProfile / globalDir are in scope from there.
 
 	// 9. Initialize skills per D-07 (degraded mode for optional providers).
 	skillDeps := skill.SkillDeps{

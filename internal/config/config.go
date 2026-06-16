@@ -25,6 +25,21 @@ type SerenaConfig struct {
 	Observability ObservabilityConfig `koanf:"observability"`
 	// Degradation holds timeout budgets and resilience settings (Phase 13).
 	Degradation DegradationConfig `koanf:"degradation"`
+	// DisableLSPSubsystem requests the daemon disable the LSP subsystem
+	// (Phase 76 ABLATE-05). Opt-in, default OFF: the bench no_lsp ablation
+	// arm sets it true so the daemon structurally suppresses every
+	// LSP-touching seam (no live EditNotifier, no RepoMap LSP enrichment,
+	// no pool-leasing fallback paths) — proven by zero lspool.lsp.* spans.
+	// Precedence at the composition root: CLI --disable-lsp-subsystem OR
+	// resolved profile field (a one-way force-disable, D-02/D-03).
+	DisableLSPSubsystem bool `koanf:"disable_lsp_subsystem"`
+	// DisableStructuredEditSubsystem requests the daemon disable the
+	// structured-edit tools (Phase 76 ABLATE-07). Opt-in, default OFF:
+	// the bench no_structured_edit arm sets it true so the four
+	// structured-edit tools return serr.Unsupported and replace_in_file
+	// runs exact-match-only. Precedence: CLI flag OR resolved profile
+	// field (D-02/D-03).
+	DisableStructuredEditSubsystem bool `koanf:"disable_structured_edit_subsystem"`
 	// SemanticIndex holds Phase 57+ semantic graph settings (SPEC §25).
 	//
 	// Phase 57 plan P02 landed this field as a stub (zero values, no koanf

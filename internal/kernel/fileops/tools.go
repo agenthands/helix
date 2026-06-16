@@ -411,8 +411,11 @@ func registerReplaceInFile(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn
 			return errorResult(err.Error()), nil, nil
 		}
 
-		// Fuzzy fallback: when literal match returns 0 hits and not regex (FUZZ-06)
-		if count == 0 && !args.IsRegex {
+		// Fuzzy fallback: when literal match returns 0 hits and not regex (FUZZ-06).
+		// Phase 76 ABLATE-07 (D-05): under the structured-edit ablation flag,
+		// replace_in_file is exact-match only — skip the fuzzy cascade so a
+		// no-match falls through to the plain "0 replacement(s) made" return.
+		if count == 0 && !args.IsRegex && !k.StructuredEditDisabled() {
 			content, readErr := ReadFile(root, args.Path)
 			if readErr != nil {
 				// File-read failure on the fuzzy-fallback path. WR-02 fix:
@@ -496,6 +499,14 @@ func registerFuzzyEdit(server *mcp.SerenaMCPServer, k *kernel.Kernel, rootFn fun
 		if args.Search == "" {
 			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: search").
+				WithTool("fuzzy_edit").Error()), nil, nil
+		}
+		// Phase 76 ABLATE-07 (D-04): fuzzy_edit is a structured-edit tool;
+		// refuse with a typed Unsupported error under the ablation flag.
+		if k.StructuredEditDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: fuzzy_edit requires the structured-edit subsystem; use replace_in_file").
 				WithTool("fuzzy_edit").Error()), nil, nil
 		}
 		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.

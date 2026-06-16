@@ -136,6 +136,25 @@ func (s *RepoMapSkill) SetEnrichFn(fn func(graph *repomap.FileGraph)) {
 	s.enrichFn = fn
 }
 
+// HasEnrichFn reports whether an LSP enrichment callback is currently
+// installed. Used by the Phase 76 no_lsp daemon wiring test to assert that
+// SetEnrichFn was structurally skipped under disable_lsp_subsystem (D-09).
+func (s *RepoMapSkill) HasEnrichFn() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.enrichFn != nil
+}
+
+// HasFallbackDeps reports whether the pool-leasing fallback extraction
+// dependencies are wired. Used by the Phase 76 no_lsp daemon wiring test to
+// assert the D-10-audited repomap-fallback AcquireFn lease path is not wired
+// under disable_lsp_subsystem.
+func (s *RepoMapSkill) HasFallbackDeps() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.fallbackDeps != nil
+}
+
 // SetFallbackDeps sets the fallback extraction dependencies for languages without tree-sitter grammars.
 // Called by the daemon after kernel creation to enable LSP documentSymbol fallback (D-33-01).
 func (s *RepoMapSkill) SetFallbackDeps(deps *FallbackDeps) {

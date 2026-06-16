@@ -6,9 +6,17 @@ package daemon
 // callers cannot reach them.
 
 import (
+	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/treesitter"
 )
+
+// KernelForTest returns the daemon's kernel for the Phase 76 no_lsp wiring
+// regression test (TestNoLSPWiring). Lets the test assert
+// k.LSPSubsystemDisabled() and k.EditNotifier() directly.
+func (d *Daemon) KernelForTest() *kernel.Kernel {
+	return d.kernel
+}
 
 // SemanticExtractRegistryForTest returns the daemon's semantic extractor
 // registry, or nil when cfg.SemanticIndex.Enabled was false at construction.

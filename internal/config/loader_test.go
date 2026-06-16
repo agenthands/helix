@@ -214,6 +214,52 @@ func TestResolveProfile_DescriptionOverridesAccessible(t *testing.T) {
 	}
 }
 
+// TestResolveProfile_OverrideUnknownModeRejected asserts the ABLATE-02
+// fail-closed gate (WR-03): a disk override that introduces an unknown
+// default_mode must be rejected by the post-override store.Validate() pass,
+// rather than silently producing a nil allow-list at session start. Mirrors
+// the embedded unknown-mode test from 76-02 but exercises the override path.
+func TestResolveProfile_OverrideUnknownModeRejected(t *testing.T) {
+	globalDir := t.TempDir()
+	profilesDir := filepath.Join(globalDir, "profiles")
+	if err := os.MkdirAll(profilesDir, 0755); err != nil {
+		t.Fatalf("mkdir profiles: %v", err)
+	}
+	// Override the embedded "full" profile, pointing default_mode at a mode
+	// that does not exist in the embedded or override mode set.
+	override := "name: full\ndefault_mode: this-mode-does-not-exist\n"
+	if err := os.WriteFile(filepath.Join(profilesDir, "full.yaml"), []byte(override), 0600); err != nil {
+		t.Fatalf("write override: %v", err)
+	}
+
+	cfg := &SerenaConfig{Profile: "full"}
+	_, _, err := ResolveProfile(cfg, globalDir)
+	if err == nil {
+		t.Fatal("expected ResolveProfile to fail-closed on unknown default_mode in override, got nil error")
+	}
+}
+
+// TestResolveProfile_MalformedOverrideSurfaced asserts that a malformed
+// override file is no longer swallowed by the previous `_ = LoadOverrides`
+// pattern (WR-03): the parse error must surface from ResolveProfile.
+func TestResolveProfile_MalformedOverrideSurfaced(t *testing.T) {
+	globalDir := t.TempDir()
+	profilesDir := filepath.Join(globalDir, "profiles")
+	if err := os.MkdirAll(profilesDir, 0755); err != nil {
+		t.Fatalf("mkdir profiles: %v", err)
+	}
+	// Invalid YAML (a scalar where a mapping is expected).
+	if err := os.WriteFile(filepath.Join(profilesDir, "bad.yaml"), []byte(":\n  - not valid\n\t\tmapping"), 0600); err != nil {
+		t.Fatalf("write override: %v", err)
+	}
+
+	cfg := &SerenaConfig{Profile: "full"}
+	_, _, err := ResolveProfile(cfg, globalDir)
+	if err == nil {
+		t.Fatal("expected ResolveProfile to surface malformed override error, got nil")
+	}
+}
+
 // TestLoad_SemanticIndexDefaults asserts every Phase 57 SPEC §25 default
 // surfaces on cfg.SemanticIndex via the standard 4-layer koanf precedence
 // when no overrides are present.

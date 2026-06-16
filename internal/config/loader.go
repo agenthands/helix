@@ -87,7 +87,16 @@ func ResolveProfile(cfg *SerenaConfig, globalDir string) (*profile.ProfileStore,
 
 	// Apply overrides from the global Helix directory if available.
 	if globalDir != "" {
-		_ = profile.LoadOverrides(store, filepath.Join(globalDir, "profiles"), filepath.Join(globalDir, "modes"))
+		if err := profile.LoadOverrides(store, filepath.Join(globalDir, "profiles"), filepath.Join(globalDir, "modes")); err != nil {
+			return nil, nil, fmt.Errorf("loading profile overrides: %w", err)
+		}
+		// ABLATE-02 fail-closed (WR-03): re-validate after overrides so a disk
+		// override that introduces an unknown default_mode / transition (or a
+		// brand-new profile) cannot reintroduce the nil-allow-list hole that
+		// Validate() closes inside LoadEmbedded.
+		if err := store.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("validating profiles after overrides: %w", err)
+		}
 	}
 
 	p, ok := store.Profile(cfg.Profile)

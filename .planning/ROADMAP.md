@@ -50,6 +50,16 @@
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 75)
 
+### Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags
+
+**Goal**: Land the only invasive code paths inside the daemon (kernel-level `disable_lsp_subsystem` / `disable_structured_edit_subsystem` flags) plus the 4 new bench profile YAMLs, with a static `vet-ablation-leakage` analyzer so they are stable before any downstream phase consumes them. `no_semantic` flag is intentionally deferred to Phase 81 because it depends on the v1.10 Phase 65 SemanticLookup wiring being un-wired cleanly.
+
+**Depends on**: Phase 75, v1.10 Phase 65 (SemanticLookup seam — read for context only)
+
+**Requirements**: ABLATE-02, ABLATE-05, ABLATE-07, ABLATE-08
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 76)
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
-last_updated: "2026-06-16T16:34:12.675Z"
-last_activity: 2026-06-16 -- Phase 76 execution started
+stopped_at: Completed 76-02-PLAN.md (4 bench profiles + Profile disable-flag fields + fail-closed loader; ABLATE-02). Next → 76-03 (vet-ablation-leakage).
+last_updated: "2026-06-16T16:42:00.000Z"
+last_activity: 2026-06-16 -- Completed Phase 76 Plan 02
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 50
+  completed_plans: 7
+  percent: 58
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 76 (ablation-profiles-kernel-subsystem-disable-flags) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-06-16 -- Phase 76 execution started
+Last activity: 2026-06-16 -- Completed Phase 76 Plan 02
 
 ### Session Continuity
 
-Last session: 2026-06-16T16:33:49.403Z
-Stopped at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
+Last session: 2026-06-16T16:42:00.000Z
+Stopped at: Completed 76-02-PLAN.md (ABLATE-02). Next → 76-03 (vet-ablation-leakage analyzer).
 Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/.continue-here.md (+ HANDOFF.json)
 
 ## Accumulated Context
@@ -68,6 +68,7 @@ Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flag
 | Phase 75 P04 | 10min | 1 tasks | 4 files |
 | Phase 75 P05 | ~25min | 2 tasks | 10 files |
 | Phase 76 P01 | 35min | 3 tasks | 7 files |
+| Phase 76 P02 | ~4min | 2 tasks | 8 files (5 created, TDD RED+GREEN) |
 
 ## Decisions
 
@@ -81,3 +82,6 @@ Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flag
 - [Phase ?]: [Phase 75 P04]: Validate() returns error (unit-testable) not log.Fatal; DeprecationGate takes injected today clock (D-11); 30d boundary inclusive (==30d passes, <30d fails)
 - [Phase ?]: Phase 76-01: reused serr.Unsupported with greppable subsystem_disabled: prefix for ablation-disabled tools (D-06, no new kind)
 - [Phase ?]: Phase 76-01: kernel subsystem-disable flags on KernelConfig (extend-in-place) + accessors; both LSP and structured-edit flags landed, LSP consumed by 76-04
+- [Phase 76 P02]: bench-no-lsp drops symbol-retrieval+diagnostics SKILLS (skill-selection); bench-no-semantic + bench-no-structured-edit keep full skill set and use exclude_tools (D-09/RESEARCH-Q3)
+- [Phase 76 P02]: bench-no-semantic is tool-filter-only this phase (10 semantic tools excluded), NO kernel flag; keeps get_repo_map/get_context — kernel disable_semantic_subsystem guard deferred to Phase 81 (D-11/D-12)
+- [Phase 76 P02]: ProfileStore.Validate() fail-closes LoadEmbedded on unknown mode (default_mode + transition source + target); golden tests blank-import skill packages so skill.ResolveTools resolves the real per-arm surface (ABLATE-02, T-76-03/04)

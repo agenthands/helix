@@ -124,8 +124,7 @@ func (s *ProfileStore) ModeNames() []string {
 // DefaultProfile returns the "full" profile as a fallback.
 // If no "full" profile is loaded, returns nil.
 func (s *ProfileStore) DefaultProfile() *Profile {
-	p, _ := s.profiles["full"]
-	return p
+	return s.profiles["full"]
 }
 
 // ToolDescriptionOverrides returns the description override map for the named profile.

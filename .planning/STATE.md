@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Phase 75 complete; v1.12 in progress (phase 76 next)
-stopped_at: Phase 75 complete (5/5 plans, verified; TOS confirmed by user; code-review blocker fixed)
-last_updated: "2026-06-15T08:48:39.026Z"
-last_activity: 2026-06-15 — Phase 75 executed, verified (11/11 must-haves), and marked complete
+status: verifying
+stopped_at: Phase 76 context gathered
+last_updated: "2026-06-16T15:23:12.094Z"
+last_activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
   total_plans: 5
   completed_plans: 5
-  percent: 100
+  percent: 50
 ---
 
 # Project State
@@ -32,9 +32,9 @@ Last activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
 
 ### Session Continuity
 
-Last session: 2026-06-15
-Stopped at: Phase 75 complete — milestone v1.12 has 14 more phases (76–89) in .planning/milestones/v1.12-ROADMAP.md, not yet promoted into the active ROADMAP.md
-Resume file: .planning/milestones/v1.12-ROADMAP.md (Phase 76 details)
+Last session: 2026-06-16T15:23:12.090Z
+Stopped at: Phase 76 context gathered
+Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/76-CONTEXT.md
 
 ## Accumulated Context
 

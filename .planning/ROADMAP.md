@@ -66,7 +66,7 @@
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 76-04-PLAN.md — Wave 2: no_lsp null-object daemon wiring + CLI override flags + config fields + zero-span trace-tap (TDD; ABLATE-05)
+- [x] 76-04-PLAN.md — Wave 2: no_lsp null-object daemon wiring + CLI override flags + config fields + zero-span trace-tap (TDD; ABLATE-05)
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 76)
 

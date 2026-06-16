@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/agenthands/helix/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,8 @@ func TestLoadEmbedded_ReturnsAllProfilesAndModes(t *testing.T) {
 	store, err := LoadEmbedded()
 	require.NoError(t, err)
 
-	assert.Len(t, store.ProfileNames(), 6, "expected 6 profiles")
+	// 6 original profiles + 4 bench ablation profiles (Phase 76-02) = 10.
+	assert.Len(t, store.ProfileNames(), 10, "expected 10 profiles")
 	assert.Len(t, store.ModeNames(), 4, "expected 4 modes")
 }
 
@@ -90,5 +92,96 @@ func TestProfileStore_ProfileNames_Sorted(t *testing.T) {
 	require.NoError(t, err)
 
 	names := store.ProfileNames()
-	assert.Equal(t, []string{"baseline", "ci-bot", "claude-code", "codex", "full", "ide-assistant"}, names)
+	assert.Equal(t, []string{
+		"baseline",
+		"bench-full",
+		"bench-no-lsp",
+		"bench-no-semantic",
+		"bench-no-structured-edit",
+		"ci-bot",
+		"claude-code",
+		"codex",
+		"full",
+		"ide-assistant",
+	}, names)
+}
+
+// TestLoadEmbeddedValidatesModes asserts LoadEmbedded() succeeds with all 10
+// profiles — i.e. every default_mode and transition key across all profiles
+// resolves to a loaded mode (the accept path of ProfileStore.Validate, ABLATE-02).
+func TestLoadEmbeddedValidatesModes(t *testing.T) {
+	store, err := LoadEmbedded()
+	require.NoError(t, err, "all embedded profiles must reference only loaded modes")
+	require.NotNil(t, store)
+}
+
+// TestLoaderRejectsUnknownMode asserts ProfileStore.Validate() fail-closes on a
+// profile whose default_mode references an unknown mode name, and on an unknown
+// mode in an allowed_mode_transitions key/value. Mitigates T-76-03 (Tampering:
+// a malformed mode name silently no-ops the profile filter).
+//
+// Built on a hand-assembled store (not a bad embedded YAML) so it does not
+// regress LoadEmbedded globally (Pitfall 3 analog).
+func TestLoaderRejectsUnknownMode(t *testing.T) {
+	t.Run("unknown default_mode", func(t *testing.T) {
+		store := NewProfileStore()
+		store.SetMode("edit", &Mode{ModeSpec: skill.ModeSpec{Name: "edit"}})
+		store.SetProfile("bad", &Profile{
+			ContextSpec: skill.ContextSpec{Name: "bad"},
+			DefaultMode: "nonsense",
+		})
+
+		err := store.Validate()
+		require.Error(t, err, "Validate must reject an unknown default_mode")
+		assert.Contains(t, err.Error(), "nonsense", "error must name the offending mode")
+		assert.Contains(t, err.Error(), "bad", "error must name the offending profile")
+	})
+
+	t.Run("unknown transition target", func(t *testing.T) {
+		store := NewProfileStore()
+		store.SetMode("edit", &Mode{ModeSpec: skill.ModeSpec{Name: "edit"}})
+		store.SetProfile("bad", &Profile{
+			ContextSpec: skill.ContextSpec{Name: "bad"},
+			DefaultMode: "edit",
+			AllowedModeTransitions: map[string][]string{
+				"edit": {"ghost"},
+			},
+		})
+
+		err := store.Validate()
+		require.Error(t, err, "Validate must reject an unknown transition target mode")
+		assert.Contains(t, err.Error(), "ghost", "error must name the offending mode")
+	})
+
+	t.Run("unknown transition source", func(t *testing.T) {
+		store := NewProfileStore()
+		store.SetMode("edit", &Mode{ModeSpec: skill.ModeSpec{Name: "edit"}})
+		store.SetProfile("bad", &Profile{
+			ContextSpec: skill.ContextSpec{Name: "bad"},
+			DefaultMode: "edit",
+			AllowedModeTransitions: map[string][]string{
+				"phantom": {"edit"},
+			},
+		})
+
+		err := store.Validate()
+		require.Error(t, err, "Validate must reject an unknown transition source mode")
+		assert.Contains(t, err.Error(), "phantom", "error must name the offending mode")
+	})
+
+	t.Run("accepts a fully-resolvable store", func(t *testing.T) {
+		store := NewProfileStore()
+		store.SetMode("read", &Mode{ModeSpec: skill.ModeSpec{Name: "read"}})
+		store.SetMode("edit", &Mode{ModeSpec: skill.ModeSpec{Name: "edit"}})
+		store.SetProfile("good", &Profile{
+			ContextSpec: skill.ContextSpec{Name: "good"},
+			DefaultMode: "edit",
+			AllowedModeTransitions: map[string][]string{
+				"read": {"edit"},
+				"edit": {"read"},
+			},
+		})
+
+		assert.NoError(t, store.Validate(), "Validate must accept a store whose modes all resolve")
+	})
 }

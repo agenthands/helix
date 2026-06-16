@@ -157,6 +157,19 @@ func userPosToLSP(line, col int) (int, int) {
 }
 
 func acquireLease(ctx context.Context, k *kernel.Kernel, wsKeyFn func() workspace.WorkspaceKey) (*kernel.WorkspaceRuntime, error) {
+	// Phase 76 WR-02: runtime backstop for the no_lsp ablation arm. Every
+	// LS-leasing symbol-retrieval handler routes through this shared chokepoint
+	// before AcquireSession, so guarding here closes the direct-tool surface
+	// (go_to_definition, find_references, hover, implementations, call/type
+	// hierarchy, blast radius) under DisableLSPSubsystem with a single check —
+	// mirroring the StructuredEditDisabled() backstop on the edit arm. If
+	// reached via any back-channel tools/call while the flag is set, refuse
+	// with a typed Unsupported error carrying the greppable subsystem_disabled:
+	// prefix instead of leasing a live LS worker and emitting lspool.lsp.* spans.
+	if k.LSPSubsystemDisabled() {
+		return nil, serr.New(serr.Unsupported,
+			"subsystem_disabled: this tool requires the LSP subsystem, which is disabled")
+	}
 	wsKey := wsKeyFn()
 	rt, err := k.GetRuntime(wsKey)
 	if err != nil {

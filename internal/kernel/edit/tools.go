@@ -583,6 +583,18 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_name").
 				WithTool("rename_symbol").Error()), nil, nil
 		}
+		// Phase 76 WR-02: rename_symbol leases a live LS worker, so it belongs
+		// to the no_lsp ablation surface as well as the edit surface. Add the
+		// LSPSubsystemDisabled() runtime backstop (mirroring the symbols
+		// acquireLease guard) so a back-channel tools/call under the flag
+		// refuses with a typed Unsupported error instead of leasing a worker
+		// and emitting lspool.lsp.* spans.
+		if k.LSPSubsystemDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: rename_symbol requires the LSP subsystem, which is disabled").
+				WithTool("rename_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
 		defer k.BeginEditTx(wsKey)()

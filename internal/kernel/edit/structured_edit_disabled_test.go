@@ -133,3 +133,38 @@ func TestStructuredEditDisabled(t *testing.T) {
 		}
 	})
 }
+
+// TestRenameSymbolLSPDisabled asserts the Phase 76 WR-02 backstop:
+// rename_symbol leases a live LS worker, so under DisableLSPSubsystem a
+// back-channel tools/call must refuse with a serr.Unsupported error carrying
+// the greppable "subsystem_disabled:" prefix BEFORE AcquireSession — never
+// leasing a worker. With the flag OFF the guard is not hit (the handler
+// proceeds past it to workspace/session acquisition).
+func TestRenameSymbolLSPDisabled(t *testing.T) {
+	root := t.TempDir()
+	args := map[string]any{"path": "x.go", "new_name": "Bar", "line": 1, "column": 1}
+
+	t.Run("flag ON returns Unsupported", func(t *testing.T) {
+		srv := buildEditServer(t, kernel.KernelConfig{DisableLSPSubsystem: true}, root)
+		res := callEditTool(t, srv, "rename_symbol", args)
+		if !res.IsError {
+			t.Fatalf("rename_symbol: expected IsError under DisableLSPSubsystem, got success: %s", resultText(res))
+		}
+		text := resultText(res)
+		if !strings.Contains(text, "subsystem_disabled:") {
+			t.Errorf("rename_symbol: error text missing 'subsystem_disabled:' prefix: %s", text)
+		}
+		if !strings.Contains(text, string(serr.Unsupported)) {
+			t.Errorf("rename_symbol: error text missing %q kind: %s", serr.Unsupported, text)
+		}
+	})
+
+	t.Run("flag OFF does not hit the guard", func(t *testing.T) {
+		srv := buildEditServer(t, kernel.KernelConfig{}, root)
+		res := callEditTool(t, srv, "rename_symbol", args)
+		text := resultText(res)
+		if strings.Contains(text, "subsystem_disabled:") {
+			t.Errorf("rename_symbol: LSP guard hit with flag OFF: %s", text)
+		}
+	})
+}

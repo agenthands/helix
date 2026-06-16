@@ -370,15 +370,26 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// On non-nil return: kernel.SetEditNotifier is installed and
 	// scheduler.SetIncrementalHandler is wired. Per-workspace lifecycle
 	// hooks (Start/Stop) fire from SetActivateCallback below.
-	live := buildLiveBundle(
-		cfg.SemanticIndex.LiveUpdates,
-		cfg.SemanticIndex.LSPEnrichment,
-		semanticStore,
-		semanticScheduler,
-		k,
-		observability.Metrics(),
-		logger,
-	)
+	// Phase 76 D-09 null-object injection: under effDisableLSP the live-update
+	// bundle is NOT built. buildLiveBundle is what installs the kernel
+	// EditNotifier (live_wiring.go SetEditNotifier) + the LSP-enrichment
+	// manager; skipping it leaves EditNotifier() nil so all 4 fileops OnEdit
+	// hooks no-op via the existing nil-check contract (notifier.go) and no
+	// LSP-enrichment worker is started. The default arm is unchanged.
+	var live *liveBundle
+	if !effDisableLSP {
+		live = buildLiveBundle(
+			cfg.SemanticIndex.LiveUpdates,
+			cfg.SemanticIndex.LSPEnrichment,
+			semanticStore,
+			semanticScheduler,
+			k,
+			observability.Metrics(),
+			logger,
+		)
+	} else {
+		logger.Info("no_lsp: skipping live-update bundle (EditNotifier stays nil, OnEdit hooks no-op)")
+	}
 	if live != nil {
 		logger.Info("live-update pipeline wired",
 			"watcher_enabled", cfg.SemanticIndex.LiveUpdates.WatcherEnabled,
@@ -622,13 +633,25 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// closures can fire the EditNotifier.OnEdit hook on the success path.
 	fileops.RegisterTools(mcpServer, k, workspaceRootFn, wsKeyFn, observability.Tracer())
 
-	// Diag lease provider.
-	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
-		key := activeWSKey
-		if key.Language == "" && activeWSLang != "" {
-			key.Language = activeWSLang
+	// Diag lease provider. Phase 76 D-10 audit: this leaseFn is NOT
+	// profile-gated (it is wired directly here, not behind a tool the
+	// bench-no-lsp profile can exclude), so under effDisableLSP it must be
+	// neutralized to a stub that returns serr.Unsupported WITHOUT touching
+	// k.Pool() — otherwise a diagnostics tool call could acquire a live
+	// worker and emit an lspool.lsp.* span on the no_lsp arm.
+	var leaseFn diag.LeaseProvider
+	if effDisableLSP {
+		leaseFn = func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
+			return nil, serr.New(serr.Unsupported, "subsystem_disabled: LSP subsystem disabled; diagnostics unavailable")
 		}
-		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
+	} else {
+		leaseFn = func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
+			key := activeWSKey
+			if key.Language == "" && activeWSLang != "" {
+				key.Language = activeWSLang
+			}
+			return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
+		}
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
 	// WR-2 / IN-04 (Phase 65 65-11 Task 2): the probe carries the bundle
@@ -677,33 +700,52 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 
 	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
+	// Phase 76 D-09: SKIP entirely under effDisableLSP so the repomap engine
+	// falls back to tree-sitter only — enrichRepoMapFromLSP is the seam that
+	// would lease an LS worker and emit lspool.lsp.* spans.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		tagCache := rs.Cache()
-		rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
-			wsKey := activeWSKey
-			if wsKey.RepoRoot == "" {
-				return
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			enrichRepoMapFromLSP(ctx, k, wsKey, g, tagCache, logger)
-		})
+		if effDisableLSP {
+			// Explicit null-object: clear any previously-set enrich fn so the
+			// wiring is idempotent (the skill is a process-global singleton).
+			rs.SetEnrichFn(nil)
+		} else {
+			tagCache := rs.Cache()
+			rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
+				wsKey := activeWSKey
+				if wsKey.RepoRoot == "" {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				enrichRepoMapFromLSP(ctx, k, wsKey, g, tagCache, logger)
+			})
+		}
 	}
 
 	// 12c. Wire repomap skill fallback extraction for non-tree-sitter languages (RMAP-02).
+	// Phase 76 D-10 audit: the AcquireFn here calls k.Pool().AcquireLease and
+	// is NOT profile-gated, so under effDisableLSP the whole SetFallbackDeps
+	// wiring is skipped — leaving the skill without a pool-leasing fallback so
+	// no live worker (and no lspool.lsp.* span) is reachable on the no_lsp arm.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
-			Extractor: repomapPkg.NewFallbackExtractor(),
-			AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
-				wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}
-				sessionID := fmt.Sprintf("fallback-%s", lang)
-				lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
-				if err != nil {
-					return nil, nil, err
-				}
-				return lease, func() { k.Pool().ReleaseLease(sessionID) }, nil
-			},
-		})
+		if effDisableLSP {
+			// Explicit null-object: clear any previously-set pool-leasing
+			// fallback deps so the wiring is idempotent on the singleton.
+			rs.SetFallbackDeps(nil)
+		} else {
+			rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
+				Extractor: repomapPkg.NewFallbackExtractor(),
+				AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
+					wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}
+					sessionID := fmt.Sprintf("fallback-%s", lang)
+					lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
+					if err != nil {
+						return nil, nil, err
+					}
+					return lease, func() { k.Pool().ReleaseLease(sessionID) }, nil
+				},
+			})
+		}
 	}
 
 	// 12d. Wire repomap skill metrics sink (Phase 53 D-15). *obs.Metrics

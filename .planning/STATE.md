@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: verifying
+status: executing
 stopped_at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
-last_updated: "2026-06-16T16:20:22.762Z"
-last_activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
+last_updated: "2026-06-16T16:34:12.675Z"
+last_activity: 2026-06-16 -- Phase 76 execution started
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 9
+  completed_plans: 6
   percent: 50
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** v1.12 Bench Stack & Tool Evaluation — Phase 75 (foundation contracts) complete; Phase 76 next.
+**Current focus:** Phase 76 — ablation-profiles-kernel-subsystem-disable-flags
 
 ## Current Position
 
-Phase: 75 — schema-fairness-contract-tree-skeleton — COMPLETE
-Plan: 5/5 plans complete (3 waves)
-Status: Verified (11/11 must-haves, 5/5 success criteria); TOS attestation confirmed by user; code-review blocker (CR-01) fixed
-Last activity: 2026-06-15 — Phase 75 executed, verified, and marked complete
+Phase: 76 (ablation-profiles-kernel-subsystem-disable-flags) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-16 -- Phase 76 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-16 — session resumed via /gsd-resume-work
+Last session: 2026-06-16T16:33:49.403Z
 Stopped at: Phase 76 paused between discuss-phase and plan-phase (planning not started, no agents spawned). Resuming → /gsd-plan-phase 76.
 Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/.continue-here.md (+ HANDOFF.json)
 
@@ -67,6 +67,7 @@ Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flag
 | Phase 75 P03 | 12min | 1 tasks | 3 files (TDD RED+GREEN) |
 | Phase 75 P04 | 10min | 1 tasks | 4 files |
 | Phase 75 P05 | ~25min | 2 tasks | 10 files |
+| Phase 76 P01 | 35min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -78,3 +79,5 @@ Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flag
 - [Phase 75 P03]: FAIR-03 delivered as SCHEMA SUBSTRATE ONLY (cached-input columns tokens_input_cached_read/tokens_input_cache_write + fairness.overrides[]); variance detector deferred to Phase 82, cost_quality.md warning to Phase 89 — NOT graded as full FAIR-03 here
 - [Phase ?]: [Phase 75 P04]: Fairness contract ModelID pinned to dated snapshot claude-sonnet-4-5-20260128 (never bare alias claude-sonnet-4-6); FAIR-02 guarded by TestModelIDIsDatedSnapshot
 - [Phase ?]: [Phase 75 P04]: Validate() returns error (unit-testable) not log.Fatal; DeprecationGate takes injected today clock (D-11); 30d boundary inclusive (==30d passes, <30d fails)
+- [Phase ?]: Phase 76-01: reused serr.Unsupported with greppable subsystem_disabled: prefix for ablation-disabled tools (D-06, no new kind)
+- [Phase ?]: Phase 76-01: kernel subsystem-disable flags on KernelConfig (extend-in-place) + accessors; both LSP and structured-edit flags landed, LSP consumed by 76-04

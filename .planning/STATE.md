@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: verifying
-stopped_at: Completed 76-02-PLAN.md (ABLATE-02). Next → 76-03 (vet-ablation-leakage analyzer).
-last_updated: "2026-06-16T17:17:36.111Z"
+stopped_at: Phase 77 context gathered
+last_updated: "2026-06-16T19:26:05.115Z"
 last_activity: 2026-06-16
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 2
   total_plans: 9
   completed_plans: 9
-  percent: 100
+  percent: 67
 ---
 
 # Project State
@@ -32,9 +32,9 @@ Last activity: 2026-06-16
 
 ### Session Continuity
 
-Last session: 2026-06-16T17:04:12.421Z
-Stopped at: Completed 76-02-PLAN.md (ABLATE-02). Next → 76-03 (vet-ablation-leakage analyzer).
-Resume file: .planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags/.continue-here.md (+ HANDOFF.json)
+Last session: 2026-06-16T19:26:05.110Z
+Stopped at: Phase 77 context gathered
+Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 
 ## Accumulated Context
 

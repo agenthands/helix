@@ -93,8 +93,8 @@ func TestRecordEditOutcome(t *testing.T) {
 }
 
 // TestEditOutcomeEnumForTest_Closed asserts the closed enum for the outcome
-// label on helix_edit_outcome_total has exactly 6 values and contains the
-// expected closed set (Phase 53 D-10).
+// label on helix_edit_outcome_total has exactly 7 values and contains the
+// expected closed set (Phase 53 D-10 + Phase 76 "unsupported").
 func TestEditOutcomeEnumForTest_Closed(t *testing.T) {
 	enum := mcp.EditOutcomeEnumForTest()
 	want := map[string]bool{
@@ -104,6 +104,7 @@ func TestEditOutcomeEnumForTest_Closed(t *testing.T) {
 		"validation_failed": true,
 		"ls_error":          true,
 		"internal":          true,
+		"unsupported":       true,
 	}
 	if len(enum) != len(want) {
 		t.Fatalf("EditOutcomeEnumForTest len = %d, want %d", len(enum), len(want))

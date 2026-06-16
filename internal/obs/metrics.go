@@ -673,14 +673,18 @@ func (m *Metrics) SessionLifecycleInc(phase, transport string) {
 }
 
 // EditOutcomeInc increments helix_edit_outcome_total. outcome ∈
-// {"success","no_match","ambiguous_match","validation_failed","ls_error","internal"};
+// {"success","no_match","ambiguous_match","validation_failed","ls_error","internal","unsupported"};
 // strategy ∈ {"exact","whitespace_normalized","indentation_flexible","none"};
 // any other value is dropped (Phase 53 D-10/D-11/Q-4 closed enums,
 // T-53-01 mitigation). tool_name is unbounded by helper but bounded in
 // practice by the 7-tool surface (D-12).
+//
+// "unsupported" (Phase 76): emitted by the structured-edit ablation guards
+// when DisableStructuredEditSubsystem returns serr.Unsupported before any
+// edit work — lets operators measure how often agents attempt disabled tools.
 func (m *Metrics) EditOutcomeInc(toolName, outcome, strategy string) {
 	switch outcome {
-	case "success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal":
+	case "success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal", "unsupported":
 	default:
 		return
 	}

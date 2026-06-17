@@ -41,6 +41,10 @@ import (
 	"github.com/agenthands/helix/internal/eval/trace"
 )
 
+// claudeMaxToolCalls bounds the wired-not-gating claude run via --max-turns. The
+// seed task is a single edit; a small bound keeps a local claude run from looping.
+const claudeMaxToolCalls = 20
+
 // CellConfig is the full set of inputs to run one <run_id>/<task>/<mode> cell.
 type CellConfig struct {
 	// RunID is the run identifier (eval shape, e.g. "20060102T150405Z"). It is
@@ -70,6 +74,16 @@ type CellConfig struct {
 	// RunnersRoot, when non-empty, overrides the mode->profile resolver root
 	// (for tests). Empty resolves from the bench/runners package directory.
 	RunnersRoot string
+
+	// Agent selects the drive leg. "" or "scripted" (the CI gate) replays the
+	// task's scripted_agent.yaml through the forwarder; "claude" drives the real
+	// claude CLI agent (D-01, wired-not-gating — locally runnable, never the CI
+	// default). The rest of the spine (sandbox/daemon/tap/merge/result) is
+	// identical for both; only the drive step differs.
+	Agent string
+	// Prompt is the task instruction handed to the claude agent (Agent=="claude").
+	// Ignored by the scripted path. Sourced from the seed task's task.json.
+	Prompt string
 }
 
 // CellResult is the outcome of one cell plus the three Nyquist signals the
@@ -224,21 +238,46 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 
 	start := time.Now()
 
-	// (4) Drive the scripted edit through the forwarder over the per-cell socket.
-	// The --agent=claude branch is Plan 04; this plan drives only the scripted
-	// path. A drive transport error is non-fatal — we still kill+tap+merge so a
-	// partial run is observable; per-step errors live in the StepResults.
+	// (4) Drive the agent over the per-cell socket. The default scripted path (the
+	// CI gate) replays scripted_agent.yaml through the forwarder; the claude path
+	// (D-01, wired-not-gating) spawns the real claude CLI against the same socket
+	// via the per-mode MCP config. Both leave the daemon's tool_calls in
+	// daemon.log for the PID-gated tap; only the CC (agent-tap) leg differs. A
+	// drive failure is non-fatal — we still kill+tap+merge so a partial run is
+	// observable.
 	repoDir := sb.RepoFor(cfg.Task, cfg.Mode)
-	script, err := runner.LoadScript(filepath.Join(repoDir, "scripted_agent.yaml"))
-	if err != nil {
+	var steps []runner.StepResult
+	switch cfg.Agent {
+	case "", "scripted":
+		script, lerr := runner.LoadScript(filepath.Join(repoDir, "scripted_agent.yaml"))
+		if lerr != nil {
+			_ = h.Kill()
+			return preserve(fmt.Errorf("bench/runtime: load scripted_agent.yaml: %w", lerr))
+		}
+		var driveErr error
+		steps, driveErr = driveScript(ctx, cfg.HelixBin, sb.SocketFor(cfg.Task, cfg.Mode), repoDir, script)
+		if driveErr != nil {
+			fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s drive error (continuing to tap): %v\n",
+				cfg.Task, cfg.Mode, driveErr)
+		}
+	case "claude":
+		// D-01 wired-not-gating: drive the real claude CLI. Its autonomous
+		// tool-calls land in daemon.log (tapped below); the scripted StepResults
+		// are empty, so the CC leg is synthesized from the daemon side only. A
+		// missing claude binary surfaces as subprocess.ErrClaudeNotFound.
+		if _, cerr := subprocess.StartClaude(ctx, sb, subprocess.ClaudeConfig{
+			HelixBin:     cfg.HelixBin,
+			TaskID:       cfg.Task,
+			Mode:         cfg.Mode,
+			Prompt:       cfg.Prompt,
+			MaxToolCalls: claudeMaxToolCalls,
+		}); cerr != nil {
+			_ = h.Kill()
+			return preserve(fmt.Errorf("bench/runtime: drive claude: %w", cerr))
+		}
+	default:
 		_ = h.Kill()
-		return preserve(fmt.Errorf("bench/runtime: load scripted_agent.yaml: %w", err))
-	}
-	steps, driveErr := driveScript(ctx, cfg.HelixBin, sb.SocketFor(cfg.Task, cfg.Mode), repoDir, script)
-	if driveErr != nil {
-		// Transport-level failure: log and continue to tap/merge (observable run).
-		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s drive error (continuing to tap): %v\n",
-			cfg.Task, cfg.Mode, driveErr)
+		return preserve(fmt.Errorf("bench/runtime: unknown agent %q (want scripted|claude)", cfg.Agent))
 	}
 
 	// (5) Kill the daemon to flush slog buffers, THEN PID-gated tap (D-08).

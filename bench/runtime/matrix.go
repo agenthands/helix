@@ -15,7 +15,9 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -199,6 +201,16 @@ func dispatch(ctx context.Context, cells []Cell, parallel int, run func(context.
 func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 	seedDir := filepath.Join(cfg.DatasetsRoot, c.Benchmark, c.Task)
 
+	// The claude branch (D-01) needs the task prompt; the scripted gate does not.
+	// A missing/unreadable prompt is non-fatal for the scripted path, so only load
+	// it when claude is selected.
+	var prompt string
+	if cfg.Agent == "claude" {
+		if p, err := readTaskPrompt(seedDir); err == nil {
+			prompt = p
+		}
+	}
+
 	res, err := RunCell(ctx, CellConfig{
 		RunID:       cfg.RunID,
 		Benchmark:   c.Benchmark,
@@ -209,10 +221,28 @@ func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 		SeedDir:     seedDir,
 		OutDir:      cfg.OutDir,
 		RunnersRoot: cfg.RunnersRoot,
+		Agent:       cfg.Agent,
+		Prompt:      prompt,
 	})
 
 	oc := CellOutcome{Cell: c, Result: res, Err: err}
 	// Success requires a clean infra run AND a passing verify (D-04 outcome).
 	oc.Success = err == nil && res.VerifyExitCode == 0 && res.ResultValid
 	return oc
+}
+
+// readTaskPrompt reads the "prompt" field from <seedDir>/task.json (the D-03 seed
+// task metadata shape). Used only by the claude branch.
+func readTaskPrompt(seedDir string) (string, error) {
+	b, err := os.ReadFile(filepath.Join(seedDir, "task.json"))
+	if err != nil {
+		return "", err
+	}
+	var meta struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return "", err
+	}
+	return meta.Prompt, nil
 }

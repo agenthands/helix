@@ -19,7 +19,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
+	"time"
 
+	runtime "github.com/agenthands/helix/bench/runtime"
 	"github.com/spf13/cobra"
 )
 
@@ -81,13 +85,180 @@ func notYetImplemented(feature string) func(*cobra.Command, []string) error {
 	}
 }
 
-// newRunCmd returns the 'run' subcommand (skeleton).
+// newRunCmd returns the 'run' subcommand: it expands the
+// (benchmark x mode x task) matrix and dispatches each cell through the Phase 77
+// single-cell orchestrator (bench/runtime.RunCell) bounded by --parallel.
+//
+// Exit semantics (mirrors cmd/helix-eval): main() is the only os.Exit site, so
+// RunE returns a non-nil error iff ZERO cells succeeded -> exit 1; exit 0 iff
+// >=1 cell succeeded. SilenceUsage is inherited from the root (cell/infra
+// failures are gate errors, not usage mistakes).
+//
+// Agent selection (D-01): --agent=scripted (default) is the hermetic CI gate;
+// --agent=claude wires the real claude CLI branch (locally runnable, never the
+// CI default).
 func newRunCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		benchmarks   string
+		modes        []string
+		tasks        []string
+		parallel     int
+		out          string
+		agent        string
+		helixBin     string
+		runID        string
+		datasetsRoot string
+	)
+
+	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the bench suite",
-		RunE:  notYetImplemented("run"),
+		Long: `Run the bench matrix: expand (benchmark x mode x task) into cells and
+dispatch each through the per-cell orchestrator bounded by --parallel.
+
+Each cell spawns one helix daemon over a per-cell Unix socket (no TCP ports, so
+--parallel never collides), drives the scripted agent edit, runs the task's
+verify step, and writes a schema-valid result.v2.json under
+<out>/<task>/<mode>/.
+
+The default --agent=scripted is the hermetic CI gate. --agent=claude wires the
+real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runBench(cmd, runBenchOpts{
+				Benchmarks:   benchmarks,
+				Modes:        modes,
+				Tasks:        tasks,
+				Parallel:     parallel,
+				Out:          out,
+				Agent:        agent,
+				HelixBin:     helixBin,
+				RunID:        runID,
+				DatasetsRoot: datasetsRoot,
+			})
+		},
 	}
+
+	cmd.Flags().StringVar(&benchmarks, "benchmarks", "toolbench-go", "benchmark suite")
+	cmd.Flags().StringArrayVar(&modes, "modes", []string{"your_agent_full"}, "mode(s); repeatable")
+	cmd.Flags().StringArrayVar(&tasks, "tasks", nil, "task id(s); repeatable (default: all tasks under the benchmark dataset dir)")
+	cmd.Flags().IntVar(&parallel, "parallel", 1, "max concurrent cells")
+	cmd.Flags().StringVar(&out, "out", "bench/reports", "durable output dir")
+	cmd.Flags().StringVar(&agent, "agent", "scripted", "agent driver: scripted|claude")
+	cmd.Flags().StringVar(&helixBin, "helix-bin", "helix", "path to the helix binary for the daemon subprocess")
+	cmd.Flags().StringVar(&runID, "run-id", "", "run identifier (default: UTC timestamp 20060102T150405Z)")
+	cmd.Flags().StringVar(&datasetsRoot, "datasets", "bench/datasets", "root dir containing <benchmark>/<task> seed dirs")
+
+	return cmd
+}
+
+// runBenchOpts is the resolved flag set for the run subcommand.
+type runBenchOpts struct {
+	Benchmarks   string
+	Modes        []string
+	Tasks        []string
+	Parallel     int
+	Out          string
+	Agent        string
+	HelixBin     string
+	RunID        string
+	DatasetsRoot string
+}
+
+// runBench implements the 'run' subcommand body. It resolves the run-id and the
+// task set, expands the matrix, dispatches it bounded by --parallel, and returns
+// an error iff zero cells succeeded (single-exit semantics).
+func runBench(cmd *cobra.Command, o runBenchOpts) error {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = cmd.Context()
+	}
+
+	// run_id is TIMESTAMP-ONLY (RESEARCH run_id note); the git SHA is captured
+	// separately into result provenance, NOT concatenated into the run_id.
+	runID := o.RunID
+	if runID == "" {
+		runID = time.Now().UTC().Format("20060102T150405Z")
+	}
+
+	if o.Agent != "scripted" && o.Agent != "claude" {
+		return fmt.Errorf("helix-bench run: unknown --agent %q (want scripted|claude)", o.Agent)
+	}
+
+	// Resolve the task set. When --tasks is empty, default to ALL task dirs found
+	// under <datasets>/<benchmark>/ (so the seed smoke can omit --tasks while a
+	// real run can pin specific tasks). criterion #1's --tasks=<one> is supported
+	// by passing a single id explicitly.
+	tasks := o.Tasks
+	if len(tasks) == 0 {
+		discovered, err := discoverTasks(o.DatasetsRoot, o.Benchmarks)
+		if err != nil {
+			return fmt.Errorf("helix-bench run: %w", err)
+		}
+		tasks = discovered
+	}
+
+	cells, err := runtime.ExpandMatrix([]string{o.Benchmarks}, o.Modes, tasks)
+	if err != nil {
+		return fmt.Errorf("helix-bench run: %w", err)
+	}
+
+	// out dir is run-scoped: <out>/<run_id>/, matching helix-eval's layout and
+	// D-08 (durable artifacts land under <out>/<run_id>/<task>/<mode>/).
+	runOutDir := filepath.Join(o.Out, runID)
+	if err := os.MkdirAll(runOutDir, 0700); err != nil {
+		return fmt.Errorf("helix-bench run: mkdir run output dir: %w", err)
+	}
+
+	summary, err := runtime.RunMatrix(ctx, cells, o.Parallel, runtime.RunMatrixConfig{
+		RunID:        runID,
+		HelixBin:     o.HelixBin,
+		OutDir:       runOutDir,
+		DatasetsRoot: o.DatasetsRoot,
+		Agent:        o.Agent,
+	})
+	if err != nil {
+		return fmt.Errorf("helix-bench run: %w", err)
+	}
+
+	// Surface per-cell infra errors (non-fatal) for operator visibility.
+	for _, oc := range summary.Outcomes {
+		if oc.Err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "helix-bench run: cell %s/%s/%s error: %v\n",
+				oc.Cell.Benchmark, oc.Cell.Task, oc.Cell.Mode, oc.Err)
+		}
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "helix-bench run complete: %d/%d cells succeeded\n", summary.Succeeded, summary.Total)
+	fmt.Fprintf(cmd.OutOrStdout(), "Reports written to: %s\n", runOutDir)
+
+	// Single-exit (helix-eval semantics): exit 0 iff >=1 cell succeeded.
+	if summary.Succeeded == 0 {
+		return fmt.Errorf("helix-bench run: 0/%d cells succeeded", summary.Total)
+	}
+	return nil
+}
+
+// discoverTasks returns the sorted list of task ids (subdir names) under
+// <datasetsRoot>/<benchmark>/. It is used when --tasks is omitted so the seed
+// smoke can run without naming the task. An empty benchmark dir is an error (a
+// silent empty matrix would exit 0 with nothing run).
+func discoverTasks(datasetsRoot, benchmark string) ([]string, error) {
+	benchDir := filepath.Join(datasetsRoot, benchmark)
+	entries, err := os.ReadDir(benchDir)
+	if err != nil {
+		return nil, fmt.Errorf("read benchmark dataset dir %q: %w", benchDir, err)
+	}
+	var tasks []string
+	for _, e := range entries {
+		if e.IsDir() {
+			tasks = append(tasks, e.Name())
+		}
+	}
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no task dirs under %q (pass --tasks explicitly)", benchDir)
+	}
+	sort.Strings(tasks)
+	return tasks, nil
 }
 
 // newFetchDatasetsCmd returns the 'fetch-datasets' subcommand (skeleton).

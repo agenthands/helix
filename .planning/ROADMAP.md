@@ -113,12 +113,22 @@ Plans:
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 78)
 
 **Plans:** 5 plans (4 waves)
-
 Plans:
+**Wave 1**
+
 - [ ] 78-01-PLAN.md — LanguageRunner interface + GoRunner (go test -json) + WithWorkingDir daemon option (the Phase 85 seam, D-03/D-10/D-11)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 78-02-PLAN.md — Matrix language axis + seed git mv + toolbench-go→internal-toolbench cutover + runner dispatch/store opt-in wiring (D-07/D-08/D-09/D-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 78-03-PLAN.md — 8 store-off Go capability fixtures (semantic view, diagnostics, rename, fuzzy, call graph, dependency graph, context min, failure handling) (D-04/D-05/D-06)
 - [ ] 78-04-PLAN.md — Store-ON incremental_update fixture (real overlay-drain refresh) + --parallel store-isolation integration test (D-01/D-02/D-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 78-05-PLAN.md — CAPABILITIES.md + PHASE67_CROSSWALK.md + corpus-coverage aggregator (Go 10/10) + full-run human-verify checkpoint (D-06/D-11, C1/C2/C4)
 
 <details>

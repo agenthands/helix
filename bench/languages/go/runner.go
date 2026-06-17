@@ -4,11 +4,11 @@
 package golang
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,9 +32,14 @@ func (GoRunner) Detect(repoDir string) bool {
 	return err == nil
 }
 
-// Setup is a no-op for a hermetic go.mod project (RESEARCH §Pattern 2).
+// Setup is a no-op for a hermetic go.mod project (RESEARCH §Pattern 2) beyond
+// honoring cancellation. WR-05: even a no-op must consult ctx — returning
+// ctx.Err() yields nil when the context is live and the cancellation error when
+// the operator has already cancelled, so a future non-trivial runner (cargo
+// fetch, npm install) that copies this shape does not silently ignore an
+// already-cancelled context before doing expensive work.
 func (GoRunner) Setup(ctx context.Context, repoDir string) error {
-	return nil
+	return ctx.Err()
 }
 
 // Capabilities statically declares all 10 capability classes (D-11).
@@ -111,18 +116,30 @@ type test2jsonEvent struct {
 // (events where Test != "" and Action ∈ {pass, fail, skip}). pass → Passed=true;
 // fail/skip → Passed=false. Package-level events (Test == "") are ignored, as are
 // start/run/output/bench/pause/cont events.
+//
+// IN-04: a malformed line (e.g. a non-JSON build-error banner, or a single corrupt
+// line mid-stream) is SKIPPED and parsing re-syncs on the next line rather than
+// abandoning the rest of the stream. Scanning line-by-line — instead of letting a
+// streaming json.Decoder stop at the first decode error — keeps the advisory Tests
+// detail complete past an isolated bad line. This is detail-only: Passed is gated
+// on the subprocess exit code (RunTests), never inferred from these rows, so a
+// skipped line can never flip pass/fail.
 func parseTest2JSON(raw []byte) []languages.TestResult {
 	var results []languages.TestResult
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	for {
+	scan := bufio.NewScanner(bytes.NewReader(raw))
+	// test2json emits one JSON object per line; lines can be long (large output
+	// payloads), so grow the scanner buffer well beyond the 64KiB default.
+	scan.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for scan.Scan() {
+		line := bytes.TrimSpace(scan.Bytes())
+		if len(line) == 0 {
+			continue
+		}
 		var ev test2jsonEvent
-		if err := dec.Decode(&ev); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			// A malformed line (e.g. a build-error banner that is not JSON) ends
-			// structured parsing; the exit code remains the authoritative gate.
-			break
+		if err := json.Unmarshal(line, &ev); err != nil {
+			// Malformed line (build banner / corrupt line) — skip and re-sync on
+			// the next line. The exit code remains the authoritative gate.
+			continue
 		}
 		if ev.Test == "" {
 			continue

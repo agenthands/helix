@@ -96,7 +96,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 77-04-PLAN.md — helix-bench run subcommand + flags + matrix expander (--parallel bounded) + wired-not-gating claude branch
+- [x] 77-04-PLAN.md — helix-bench run subcommand + flags + matrix expander (--parallel bounded) + wired-not-gating claude branch
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

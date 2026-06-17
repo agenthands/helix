@@ -102,6 +102,18 @@ Plans:
 
 - [x] 77-05-PLAN.md — Makefile reconciliation (bench collision -> bench-micro) + bench/bench-quick/bench-<suite> targets + timed E2E smoke gate + BENCH.md key-names
 
+### Phase 78: Internal ToolBench — Go First + LanguageRunner Interface
+
+**Goal**: The deterministic ground truth for "Helix tools work" — 10 capability test classes, all 10 covered on Go (Helix's own language, tightest debug loop, no container), and a common `LanguageRunner` interface ready for the remaining 7 languages.
+
+**Depends on**: Phase 77 (bench runtime is operational)
+
+**Requirements**: TOOLBENCH-01, TOOLBENCH-02, TOOLBENCH-10
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 78)
+
+**Plans:** Not yet planned
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

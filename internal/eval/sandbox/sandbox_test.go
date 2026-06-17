@@ -266,3 +266,17 @@ func TestFakeHelixBin(t *testing.T) {
 	require.NoError(t, err)
 	conn.Close()
 }
+
+// TestWithWorkingDirSetsWorkDir asserts the additive WithWorkingDir option folds
+// into daemonOpts.workDir (D-03). A full daemon spawn is heavyweight, so this
+// unit exercises the option-application contract directly; an empty dir is a
+// no-op handled by StartDaemon's `if o.workDir != ""` guard.
+func TestWithWorkingDirSetsWorkDir(t *testing.T) {
+	var o daemonOpts
+	WithWorkingDir("/x")(&o)
+	assert.Equal(t, "/x", o.workDir)
+
+	// Zero value stays empty when no option is applied.
+	var z daemonOpts
+	assert.Equal(t, "", z.workDir)
+}

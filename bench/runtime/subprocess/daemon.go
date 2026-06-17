@@ -34,11 +34,14 @@ import (
 // resolver); cfgPath is an optional per-cell config path ("" to omit). The
 // no-TCP-port invariant is enforced upstream by StartDaemon's fixed
 // "--http-addr=" argv — this wrapper adds no transport flags of its own.
-func StartDaemon(ctx context.Context, sb *benchsandbox.Sandbox, taskID, mode, profileName, cfgPath string) (*evalsandbox.DaemonHandle, error) {
+//
+// Optional evalsandbox.DaemonOptions (e.g. WithWorkingDir for per-cell store
+// isolation, D-03) are forwarded additively to the embedded StartDaemon.
+func StartDaemon(ctx context.Context, sb *benchsandbox.Sandbox, taskID, mode, profileName, cfgPath string, opts ...evalsandbox.DaemonOption) (*evalsandbox.DaemonHandle, error) {
 	if sb == nil {
 		return nil, fmt.Errorf("subprocess: nil sandbox")
 	}
-	h, err := sb.StartDaemon(ctx, taskID, mode, profileName, cfgPath)
+	h, err := sb.StartDaemon(ctx, taskID, mode, profileName, cfgPath, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("subprocess: start daemon %s/%s: %w", taskID, mode, err)
 	}

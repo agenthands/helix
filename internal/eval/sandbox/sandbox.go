@@ -228,7 +228,33 @@ func (h *DaemonHandle) Kill() error {
 //   - HELIX_LOG_LEVEL=info
 //
 // The daemon stderr is redirected to <modeDir>/daemon.log.
-func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cfgPath string) (*DaemonHandle, error) {
+//
+// Optional DaemonOptions tune the spawn additively (P77 D-07: extend, do not
+// fork). Existing 5-arg callers compile unchanged.
+//
+// daemonOpts holds the resolved optional spawn settings.
+type daemonOpts struct {
+	workDir string
+}
+
+// DaemonOption configures an optional StartDaemon behavior.
+type DaemonOption func(*daemonOpts)
+
+// WithWorkingDir sets the daemon subprocess's working directory (cmd.Dir). The
+// bench harness uses this for per-cell store isolation (D-03): pointing cmd.Dir
+// at the per-cell repo makes the eager .helix/semantic.duckdb open resolve
+// per-cell, avoiding a shared-lock deadlock under --parallel. An empty dir is a
+// no-op (cmd.Dir stays the default).
+func WithWorkingDir(dir string) DaemonOption {
+	return func(o *daemonOpts) { o.workDir = dir }
+}
+
+func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cfgPath string, opts ...DaemonOption) (*DaemonHandle, error) {
+	var o daemonOpts
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	sockPath := s.SocketFor(taskID, mode)
 	homePath := s.HomeFor(taskID, mode)
 	modeDir := s.ModeDir(taskID, mode)
@@ -242,6 +268,12 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	}
 
 	cmd := exec.CommandContext(ctx, s.helixBin, args...)
+
+	// D-03: per-cell store isolation. When set, run the daemon with cwd at the
+	// per-cell repo so the eager .helix/semantic.duckdb open resolves per-cell.
+	if o.workDir != "" {
+		cmd.Dir = o.workDir
+	}
 
 	// WR-05: put the daemon in its OWN process group so the Kill 5s-timeout
 	// fallback's syscall.Kill(-pid, SIGKILL) targets exactly the daemon and its

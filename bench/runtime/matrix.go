@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -82,15 +81,11 @@ type Summary struct {
 // and bench/runtime.validateCellKey; MUST run before any id becomes a path
 // segment (the seed-dir join and the per-cell out dir). RunCell re-validates the
 // task/mode/benchmark defensively, but rejecting here fails the whole expansion
-// fast rather than per cell.
+// fast rather than per cell. IN-05: the predicate body is shared with the cell
+// layer via validatePathSegment so the two cannot drift; this wrapper preserves
+// the matrix-layer error prose.
 func validateMatrixID(id, kind string) error {
-	if id == "" {
-		return fmt.Errorf("%s is empty", kind)
-	}
-	if id != filepath.Clean(id) || strings.ContainsAny(id, `/\`) || strings.HasPrefix(id, ".") {
-		return fmt.Errorf("%s %q contains path separators, parent refs, or a leading dot", kind, id)
-	}
-	return nil
+	return validatePathSegment(id, kind)
 }
 
 // ExpandMatrix produces the cartesian product (benchmark x language x mode x task)

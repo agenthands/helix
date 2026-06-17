@@ -194,6 +194,13 @@ func (h *DaemonHandle) Kill() error {
 	if h.cmd == nil || h.cmd.Process == nil {
 		return nil
 	}
+	pid := h.cmd.Process.Pid
+	// WR-01: the daemon is its own group leader (Setpgid in StartDaemon), so
+	// SIGKILL the whole group on the normal path — not just the leader — to reap
+	// any descendants (language servers, a `go test` child). Doing this only in
+	// the 5s-timeout fallback leaked children on the common happy path under
+	// --parallel. The group kill is best-effort (ESRCH once the group is gone).
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
 	if err := h.cmd.Process.Kill(); err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
 			// Process already finished — reap the zombie if not already reaped.
@@ -209,11 +216,12 @@ func (h *DaemonHandle) Kill() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		// Send SIGKILL to the entire process group to ensure child processes
-		// spawned by the daemon are also reaped (WR-03 fix). Use negative PID
-		// to target the process group rather than just the daemon process.
-		pid := h.cmd.Process.Pid
+		// Re-send SIGKILL to the entire process group, then WR-02: drain the
+		// in-flight Wait() goroutine so the process is confirmed reaped before we
+		// return. The done channel is buffered (cap 1) so the goroutine's send
+		// never blocks, and Wait() returns once the group SIGKILL lands.
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		<-done
 		return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
 	}
 	return nil

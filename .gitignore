@@ -283,3 +283,7 @@ test/bench/baselines/local.txt
 # Eval harness runtime artifacts
 /eval/reports/
 /cmd/helix-eval/eval/
+
+# Bench stack runtime reports (generated per-run; keep the tracked .gitkeep)
+/bench/reports/*
+!/bench/reports/.gitkeep

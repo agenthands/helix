@@ -229,20 +229,22 @@ func cellSeedDir(datasetsRoot string, c Cell) string {
 func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 	seedDir := cellSeedDir(cfg.DatasetsRoot, c)
 
+	// IN-03: read+decode <seedDir>/task.json ONCE and derive both the prompt and
+	// the store opt-in from that single decode, instead of parsing the same file
+	// twice (once per helper). A missing/unreadable task.json yields the zero meta
+	// (empty prompt, store OFF) — a benign metadata read, never fatal.
+	meta := readTaskMeta(seedDir)
+
 	// The claude branch (D-01) needs the task prompt; the scripted gate does not.
-	// A missing/unreadable prompt is non-fatal for the scripted path, so only load
-	// it when claude is selected.
 	var prompt string
 	if cfg.Agent == "claude" {
-		if p, err := readTaskPrompt(seedDir); err == nil {
-			prompt = p
-		}
+		prompt = meta.Prompt
 	}
 
 	// StoreOptIn (D-01/D-02): the per-cell semantic store is OFF by default and is
 	// opted in by the seed task's capability (incremental_update needs the store)
 	// or an explicit task.json semantic_index override (the D-02 escape hatch).
-	storeOptIn := deriveStoreOptIn(seedDir)
+	storeOptIn := meta.storeOptIn()
 
 	res, err := RunCell(ctx, CellConfig{
 		RunID:       cfg.RunID,
@@ -266,42 +268,43 @@ func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 	return oc
 }
 
-// deriveStoreOptIn decides whether a cell opts the per-cell semantic store ON,
-// from the seed task's <seedDir>/task.json (RESEARCH Open-Q1: derive-from-
-// capability). The store is opted in when capability=="incremental_update" (the
-// store-on incremental-update class) OR when the task.json carries an explicit
-// "semantic_index": true override (the D-02 escape hatch). A missing/unreadable
-// task.json keeps the default (store OFF) — a benign metadata read, never fatal.
-func deriveStoreOptIn(seedDir string) bool {
-	b, err := os.ReadFile(filepath.Join(seedDir, "task.json"))
-	if err != nil {
-		return false
-	}
-	var meta struct {
-		Capability    string `json:"capability"`
-		SemanticIndex *bool  `json:"semantic_index"`
-	}
-	if err := json.Unmarshal(b, &meta); err != nil {
-		return false
-	}
-	if meta.SemanticIndex != nil {
-		return *meta.SemanticIndex // explicit override wins (D-02 escape hatch)
-	}
-	return meta.Capability == "incremental_update"
+// taskMeta is the decoded shape of a seed <seedDir>/task.json that the matrix
+// layer consumes. IN-03: it unifies the prompt (claude branch) and store opt-in
+// (always) fields into ONE struct so task.json is read+unmarshaled once per cell.
+type taskMeta struct {
+	Capability    string `json:"capability"`
+	SemanticIndex *bool  `json:"semantic_index"`
+	Prompt        string `json:"prompt"`
 }
 
-// readTaskPrompt reads the "prompt" field from <seedDir>/task.json (the D-03 seed
-// task metadata shape). Used only by the claude branch.
-func readTaskPrompt(seedDir string) (string, error) {
+// readTaskMeta reads+decodes <seedDir>/task.json once. A missing/unreadable or
+// malformed task.json yields the zero taskMeta (empty prompt, store OFF) — a
+// benign metadata read, never fatal (mirrors the prior per-helper behavior).
+func readTaskMeta(seedDir string) taskMeta {
+	var meta taskMeta
 	b, err := os.ReadFile(filepath.Join(seedDir, "task.json"))
 	if err != nil {
-		return "", err
-	}
-	var meta struct {
-		Prompt string `json:"prompt"`
+		return meta
 	}
 	if err := json.Unmarshal(b, &meta); err != nil {
-		return "", err
+		return taskMeta{}
 	}
-	return meta.Prompt, nil
+	return meta
+}
+
+// storeOptIn decides whether the cell opts the per-cell semantic store ON
+// (RESEARCH Open-Q1: derive-from-capability). The store is opted in when an
+// explicit "semantic_index" override is present (the D-02 escape hatch wins) or,
+// absent that, when capability=="incremental_update" (the store-on class).
+func (m taskMeta) storeOptIn() bool {
+	if m.SemanticIndex != nil {
+		return *m.SemanticIndex // explicit override wins (D-02 escape hatch)
+	}
+	return m.Capability == "incremental_update"
+}
+
+// deriveStoreOptIn is a thin wrapper preserving the standalone predicate used by
+// store_isolation_test.go: read task.json once and apply the store opt-in rule.
+func deriveStoreOptIn(seedDir string) bool {
+	return readTaskMeta(seedDir).storeOptIn()
 }

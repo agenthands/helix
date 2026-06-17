@@ -47,9 +47,14 @@ func Coverage(corpusRoot, benchmark, lang string, declared []Capability) (Covera
 		declaredSet[c] = true
 	}
 
+	// WR-04: count over the DEDUPLICATED declaredSet, not the raw `declared`
+	// slice. Iterating the slice would double-count a repeated capability in
+	// Covered while Declared (len(declaredSet)) stays deduped, yielding the
+	// incoherent Covered > Declared and corrupting the 10/10 gate semantics for a
+	// future hand-authored runner that repeats a capability.
 	var missing []Capability
 	coveredN := 0
-	for _, c := range declared {
+	for c := range declaredSet {
 		if covered[c] {
 			coveredN++
 		} else {

@@ -80,6 +80,51 @@ func TestCoverageDetectsGap(t *testing.T) {
 	}
 }
 
+// TestCoverageDeduplicatesDeclared is the WR-04 regression guard: a `declared`
+// slice that REPEATS a covered capability must never report Covered > Declared.
+// Before the fix, Covered was incremented per raw-slice element while Declared
+// counted the deduplicated set — so a duplicate inflated Covered past Declared,
+// an incoherent report that would also corrupt the 10/10 gate.
+func TestCoverageDeduplicatesDeclared(t *testing.T) {
+	// A single capability, declared twice.
+	declared := []languages.Capability{
+		languages.CapFailureHandling,
+		languages.CapFailureHandling,
+	}
+
+	// Synthetic corpus covering that one capability.
+	root := t.TempDir()
+	langDir := filepath.Join(root, "internal-toolbench", "go")
+	dir := filepath.Join(langDir, "synthetic-dup")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{
+		"id":         "IT-go-synthetic-dup",
+		"capability": string(languages.CapFailureHandling),
+	})
+	if err := os.WriteFile(filepath.Join(dir, "task.json"), body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rep, err := languages.Coverage(root, "internal-toolbench", "go", declared)
+	if err != nil {
+		t.Fatalf("Coverage() error: %v", err)
+	}
+	if rep.Declared != 1 {
+		t.Errorf("declared = %d, want 1 (deduplicated)", rep.Declared)
+	}
+	if rep.Covered != 1 {
+		t.Errorf("covered = %d, want 1 (deduplicated)", rep.Covered)
+	}
+	if rep.Covered > rep.Declared {
+		t.Errorf("covered (%d) > declared (%d): over-count regression", rep.Covered, rep.Declared)
+	}
+	if len(rep.Missing) != 0 {
+		t.Errorf("missing = %v, want empty", rep.Missing)
+	}
+}
+
 // TestNamespaceIsITGoZeroT67 is criterion C4: every Go fixture task id matches
 // ^IT-go- and NONE matches ^T-67- (zero collision between the IT-go-* corpus and
 // the Phase 67 T-67-* planning namespace).

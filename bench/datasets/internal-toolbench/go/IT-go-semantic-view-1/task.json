@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "semantic_view",
+  "prompt": "Calculator in calc.go has four methods (Add, Sub, Mul, Div) that all panic(\"not implemented\"), so TestCalculator fails. Run get_symbol_overview on calc.go to enumerate every method, then implement each one. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

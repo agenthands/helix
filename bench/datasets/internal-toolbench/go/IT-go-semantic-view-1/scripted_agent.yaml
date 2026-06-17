@@ -1,0 +1,34 @@
+# Scripted agent for IT-go-semantic-view-1 (capability: semantic_view, D-05).
+#
+# Step 1 EXPLICITLY calls get_symbol_overview on calc.go to enumerate the four
+# stubbed Calculator methods. The subsequent replace_in_file steps implement
+# every method the overview surfaces (Add, Sub, Mul, Div) — calc_test.go panics
+# unless ALL four bodies are replaced, so the test requires the FULL overview
+# output to be acted on (D-05).
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only; strict
+# KnownFields). Patterns are exact literal anchors (is_regex default false).
+steps:
+  - tool: get_symbol_overview
+    args:
+      path: calc.go
+  - tool: replace_in_file
+    args:
+      path: calc.go
+      pattern: "func (Calculator) Add(a, b int) int {\n\tpanic(\"not implemented\")\n}"
+      replacement: "func (Calculator) Add(a, b int) int {\n\treturn a + b\n}"
+  - tool: replace_in_file
+    args:
+      path: calc.go
+      pattern: "func (Calculator) Sub(a, b int) int {\n\tpanic(\"not implemented\")\n}"
+      replacement: "func (Calculator) Sub(a, b int) int {\n\treturn a - b\n}"
+  - tool: replace_in_file
+    args:
+      path: calc.go
+      pattern: "func (Calculator) Mul(a, b int) int {\n\tpanic(\"not implemented\")\n}"
+      replacement: "func (Calculator) Mul(a, b int) int {\n\treturn a * b\n}"
+  - tool: replace_in_file
+    args:
+      path: calc.go
+      pattern: "func (Calculator) Div(a, b int) int {\n\tpanic(\"not implemented\")\n}"
+      replacement: "func (Calculator) Div(a, b int) int {\n\treturn a / b\n}"

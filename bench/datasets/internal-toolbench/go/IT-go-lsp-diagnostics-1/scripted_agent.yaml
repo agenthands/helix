@@ -1,0 +1,31 @@
+# Scripted agent for IT-go-lsp-diagnostics-1 (capability: lsp_diagnostics, D-05).
+#
+# Step 1 EXPLICITLY calls get_diagnostics on broken.go to enumerate the three
+# deliberate errors. The following replace_in_file steps fix each one:
+#   1. remove the unused "strings" import
+#   2. change Greeting's return type bool -> string
+#   3. drop the undefined `prefix +` term
+# The package compiles (and broken_test.go runs) only after ALL three are fixed,
+# so the test requires the FULL diagnostics output to be acted on (D-05).
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only). Patterns are
+# exact literal anchors (is_regex default false).
+steps:
+  - tool: get_diagnostics
+    args:
+      path: broken.go
+  - tool: replace_in_file
+    args:
+      path: broken.go
+      pattern: "import (\n\t\"fmt\"\n\t\"strings\"\n)"
+      replacement: "import \"fmt\""
+  - tool: replace_in_file
+    args:
+      path: broken.go
+      pattern: "func Greeting(name string) bool {"
+      replacement: "func Greeting(name string) string {"
+  - tool: replace_in_file
+    args:
+      path: broken.go
+      pattern: "\treturn prefix + fmt.Sprintf(\"Hello, %s!\", name)\n"
+      replacement: "\treturn fmt.Sprintf(\"Hello, %s!\", name)\n"

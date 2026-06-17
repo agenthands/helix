@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "dependency_graph",
+  "prompt": "core.Tag returns a version stamp. Three packages (alpha, beta, gamma) import core but each returns an empty Label. Run get_repo_map (or get_context) to see which packages depend on core, then wire core.Tag() into every dependent's Label so it returns \"core:<tag>\". Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

@@ -4,14 +4,14 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 77-02-PLAN.md
-last_updated: "2026-06-17T00:00:00.000Z"
+last_updated: "2026-06-17T09:03:42.299Z"
 last_activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 14
-  completed_plans: 11
-  percent: 79
+  completed_plans: 12
+  percent: 67
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 77 (bench-runtime-first-e2e-smoke) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
 
 ### Session Continuity
 
-Last session: 2026-06-17T00:00:00.000Z
+Last session: 2026-06-17T09:03:26.636Z
 Stopped at: Completed 77-02-PLAN.md
 Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 
@@ -73,6 +73,7 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 | Phase 76 P04 | ~50min | 2 tasks | 7 files |
 | Phase 77 P01 | 291 | 3 tasks | 11 files |
 | Phase 77 P02 | ~9min | 2 tasks | 5 files (TDD RED+GREEN x2) |
+| Phase 77 P03 | 2400 | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -96,3 +97,5 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 - [Phase 77 P02]: synth Usage is zero (scripted has no model, Pitfall 6) and event timestamps come from each StepResult.AtTime not a batch time.Now() (Pitfall 5)
 - [Phase ?]: D-05: bench mode->profile resolver reads MODE.md frontmatter (table-driven; Phase 80 extends without code change)
 - [Phase ?]: D-07: bench/runtime/sandbox embeds eval sandbox (no fork); subprocess StartDaemon keeps --http-addr empty (no TCP port, D-06)
+- [Phase ?]: Plan 77-03: bench cell disables semantic_index per cell to avoid parallel DuckDB lock deadlock (T-57-02-01 forbids absolute store path; D-07 forbids forking eval StartDaemon cmd.Dir)
+- [Phase ?]: Plan 77-03: activate_project uses arg key repo_path (not path); driven as harness setup, not recorded as a scripted StepResult

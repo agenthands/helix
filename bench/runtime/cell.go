@@ -572,10 +572,8 @@ func writeDurable(path string, b []byte) error {
 		os.Remove(tmpName)
 		return fmt.Errorf("close temp for %q: %w", path, err)
 	}
-	if err := os.Chmod(tmpName, 0600); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("chmod temp for %q: %w", path, err)
-	}
+	// IN-01: os.CreateTemp already creates the file 0600, so an explicit Chmod
+	// here is a no-op on every platform — rely on the CreateTemp default.
 	if err := os.Rename(tmpName, path); err != nil {
 		os.Remove(tmpName)
 		return fmt.Errorf("rename temp into %q: %w", path, err)

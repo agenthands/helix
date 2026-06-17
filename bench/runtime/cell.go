@@ -311,7 +311,13 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	}
 
 	// (6) Run verify.sh in the repo working copy; its exit code is the outcome.
-	verifyExit := runVerify(ctx, filepath.Join(repoDir, "verify.sh"), repoDir)
+	// A ctx cancellation/timeout during verify is an INFRASTRUCTURE error (the
+	// harness was cancelled), NOT a task failure — route it through preserve so it
+	// is not conflated with a genuine verify failure in the result.v2 (WR-01).
+	verifyExit, verifyErr := runVerify(ctx, filepath.Join(repoDir, "verify.sh"), repoDir)
+	if verifyErr != nil {
+		return preserve(fmt.Errorf("bench/runtime: verify: %w", verifyErr))
+	}
 	res.VerifyExitCode = verifyExit
 
 	// (7) Synthesize the CC (agent-tap) leg from the scripted StepResults (D-02).
@@ -376,22 +382,35 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 }
 
 // runVerify executes verify.sh with cwd=repoDir and returns its exit code
-// (0 = pass). A missing verify.sh auto-passes (0). Mirrors
-// internal/eval/runner.runVerify; the seed task's verify.sh runs `go test`.
-func runVerify(ctx context.Context, scriptPath, repoDir string) int {
+// (0 = pass) plus an infrastructure error. A missing verify.sh auto-passes
+// (0, nil). Mirrors internal/eval/runner.runVerify; the seed task's verify.sh
+// runs `go test`.
+//
+// WR-01: a ctx cancellation/timeout is distinguished from a real non-zero verify
+// exit. When ctx is done the context kills the process and cmd.Run returns a
+// non-ExitError (or a SIGKILL-coded ExitError); mapping that to a fabricated exit
+// code would record a harness cancellation as a task FAILURE. Instead the context
+// error is returned as an infra error so the caller routes it through the
+// preserve-on-failure path rather than into trace.Merge.
+func runVerify(ctx context.Context, scriptPath, repoDir string) (int, error) {
 	if _, err := os.Stat(scriptPath); err != nil {
-		return 0 // no verify.sh — auto-pass
+		return 0, nil // no verify.sh — auto-pass
 	}
 	cmd := exec.CommandContext(ctx, "/bin/sh", scriptPath)
 	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		// Cancellation/timeout: infra error, not a task outcome.
+		return 0, fmt.Errorf("verify cancelled/timed out: %w", ctx.Err())
+	}
+	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return exitErr.ExitCode()
+			return exitErr.ExitCode(), nil
 		}
-		return 1 // non-ExitError failure (e.g. /bin/sh not found) — treat as fail
+		return 1, nil // non-ExitError failure (e.g. /bin/sh not found) — treat as fail
 	}
-	return 0
+	return 0, nil
 }
 
 // ccLegPresent reports whether the merged trace carries at least one CC-side

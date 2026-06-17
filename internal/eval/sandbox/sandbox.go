@@ -243,6 +243,14 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 
 	cmd := exec.CommandContext(ctx, s.helixBin, args...)
 
+	// WR-05: put the daemon in its OWN process group so the Kill 5s-timeout
+	// fallback's syscall.Kill(-pid, SIGKILL) targets exactly the daemon and its
+	// descendants (language servers, `go test`). Without Setpgid the daemon shares
+	// the harness's group, so -pid keys a group the daemon does not lead, the kill
+	// returns ESRCH, and the children it claims to reap survive — a real leak under
+	// --parallel.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	// Env allowlist.
 	env := []string{
 		"HOME=" + homePath,

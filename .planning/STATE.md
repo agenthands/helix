@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 78 context gathered
-last_updated: "2026-06-17T16:44:38.715Z"
+last_updated: "2026-06-17T16:57:40.449Z"
 last_activity: 2026-06-17 -- Phase 78 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 75
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-06-17 -- Phase 78 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-17T16:44:15.830Z
+Last session: 2026-06-17T16:57:20.028Z
 Stopped at: Phase 78 context gathered
 Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-interface/78-CONTEXT.md
 
@@ -85,6 +85,7 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 | Phase 78 P01 | ~14min | 2 tasks | 7 files |
 | Phase 78 P02 | 30min | 2 tasks | 24 files |
 | Phase 78 P03 | ~12min | 2 tasks | 53 files |
+| Phase 78 P04 | ~50min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -118,3 +119,4 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 - [Phase ?]: [Phase 78 P01]: WithWorkingDir = only new behavior line in eval StartDaemon (cmd.Dir); additive variadic opts thread through subprocess.StartDaemon via embedded sandbox, no fork (P77 D-07/D-03)
 - [Phase ?]: 78-03: LSP-backed capability tools return internal store-OFF (no warm gopls); marked expect_error and graded via store-off-stable replace_in_file/fuzzy_edit + go test, still naming the tool by-construction (D-05)
 - [Phase ?]: 78-03: dependency_graph kept store-OFF (A2) — get_repo_map resolves cross-package edges deterministically; D-02 escape hatch not triggered
+- [Phase ?]: 78-04: incremental_update is the ONE store-ON fixture (10th capability); D-03 parallel store isolation proven (2/2 cells, distinct .helix/semantic.duckdb, RejectedForeignPid==0), RED-proven by disabling WithWorkingDir

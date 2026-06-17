@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 77 context gathered
-last_updated: "2026-06-17T07:35:43.010Z"
-last_activity: 2026-06-17 -- Phase 77 planning complete
+last_updated: "2026-06-17T08:38:27.740Z"
+last_activity: 2026-06-17 -- Phase 77 execution started
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 14
+  completed_plans: 10
   percent: 67
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 76 — ablation-profiles-kernel-subsystem-disable-flags
+**Current focus:** Phase 77 — bench-runtime-first-e2e-smoke
 
 ## Current Position
 
-Phase: 76
-Plan: Not started
+Phase: 77 (bench-runtime-first-e2e-smoke) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 77 planning complete
+Last activity: 2026-06-17 -- Phase 77 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-16T19:26:05.110Z
+Last session: 2026-06-17T08:38:03.135Z
 Stopped at: Phase 77 context gathered
 Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 
@@ -71,6 +71,7 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 | Phase 76 P02 | ~4min | 2 tasks | 8 files (5 created, TDD RED+GREEN) |
 | Phase 76 P03 | 12min | 2 tasks | 10 files |
 | Phase 76 P04 | ~50min | 2 tasks | 7 files |
+| Phase 77 P01 | 291 | 3 tasks | 11 files |
 
 ## Decisions
 
@@ -87,3 +88,5 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 - [Phase 76 P02]: bench-no-lsp drops symbol-retrieval+diagnostics SKILLS (skill-selection); bench-no-semantic + bench-no-structured-edit keep full skill set and use exclude_tools (D-09/RESEARCH-Q3)
 - [Phase 76 P02]: bench-no-semantic is tool-filter-only this phase (10 semantic tools excluded), NO kernel flag; keeps get_repo_map/get_context — kernel disable_semantic_subsystem guard deferred to Phase 81 (D-11/D-12)
 - [Phase 76 P02]: ProfileStore.Validate() fail-closes LoadEmbedded on unknown mode (default_mode + transition source + target); golden tests blank-import skill packages so skill.ResolveTools resolves the real per-arm surface (ABLATE-02, T-76-03/04)
+- [Phase ?]: D-05: bench mode->profile resolver reads MODE.md frontmatter (table-driven; Phase 80 extends without code change)
+- [Phase ?]: D-07: bench/runtime/sandbox embeds eval sandbox (no fork); subprocess StartDaemon keeps --http-addr empty (no TCP port, D-06)

@@ -84,7 +84,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 77-01-PLAN.md — Foundation primitives: bench sandbox (embed eval), subprocess daemon lifecycle, mode->profile resolver + your_agent_full/MODE.md, and the one seed toolbench-go task
+- [x] 77-01-PLAN.md — Foundation primitives: bench sandbox (embed eval), subprocess daemon lifecycle, mode->profile resolver + your_agent_full/MODE.md, and the one seed toolbench-go task
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

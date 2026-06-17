@@ -144,7 +144,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 	}
 
 	cmd.Flags().StringVar(&benchmarks, "benchmarks", "internal-toolbench", "benchmark suite")
-	cmd.Flags().StringArrayVar(&languages, "languages", []string{"go"}, "language(s); repeatable")
+	cmd.Flags().StringArrayVar(&languages, "languages", []string{"go"}, "language(s); repeatable. When --tasks is omitted, the discovered task set is the UNION across languages, so a task present only under one language still yields a cell for every other language — those cells' seed dirs do not exist and surface as per-cell infra errors (IN-02). Pin --tasks to avoid the cross-product fan-out under multi-language runs.")
 	cmd.Flags().StringArrayVar(&modes, "modes", []string{"your_agent_full"}, "mode(s); repeatable")
 	cmd.Flags().StringArrayVar(&tasks, "tasks", nil, "task id(s); repeatable (default: all tasks under the benchmark dataset dir)")
 	cmd.Flags().IntVar(&parallel, "parallel", 1, "max concurrent cells")

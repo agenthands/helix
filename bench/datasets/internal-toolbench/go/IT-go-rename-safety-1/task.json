@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "rename_safety",
+  "prompt": "The exported function Foo is defined in widget.go and called from consumer.go, but rename_test.go expects it to be named Bar, so the package does not compile. Run find_references on Foo to locate every reference, then rename_symbol Foo to Bar so every site is updated. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

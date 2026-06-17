@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "context_minimization",
+  "prompt": "shipping.go has many helpers, but only ShippingCost is wrong: it returns 0 instead of weight * ratePerKg. Run get_context on shipping.go to surface the relevant symbol, then fix ShippingCost. Leave the other helpers untouched. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

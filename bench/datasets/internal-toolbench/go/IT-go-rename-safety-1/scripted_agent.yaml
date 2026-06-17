@@ -1,0 +1,27 @@
+# Scripted agent for IT-go-rename-safety-1 (capability: rename_safety, D-05).
+#
+# Step 1 EXPLICITLY calls find_references on the Foo declaration (widget.go line
+# 13, "Foo" at column 6) to locate every reference (the definition + the
+# consumer.go call site). Step 2 calls rename_symbol to perform the cross-file
+# Foo -> Bar rename. rename_test.go references the new name Bar AND exercises
+# Describe (the old caller), so the package compiles only if EVERY reference was
+# renamed — the test requires the full find_references output to be acted on.
+#
+# No Receipts needed: default enforcement is LevelWarn and G-001 is a no-op stub
+# (78-RESEARCH "Guardrail receipts NOT a blocker"); the read-side find_references
+# call still aligns with D-05 and future-proofs an enforce profile.
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only).
+steps:
+  - tool: find_references
+    args:
+      path: widget.go
+      line: 13
+      column: 6
+      include_declaration: true
+  - tool: rename_symbol
+    args:
+      path: widget.go
+      line: 13
+      column: 6
+      new_name: Bar

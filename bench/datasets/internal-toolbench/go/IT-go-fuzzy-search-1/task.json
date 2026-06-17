@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "fuzzy_search",
+  "prompt": "Discount in price.go returns the price unchanged; it should apply a 10% discount (price * 9 / 10). The body is indented with tabs that an exact patch may not reproduce. Use fuzzy_edit (whitespace-tolerant matching) to replace the return statement, then ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

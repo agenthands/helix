@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 // internal/daemon/bootstrap_test.go as the canonical source of truth. This
 // test is the mitigation for threat T-09-04 (tools_manifest drift).
 func TestBenchToolsManifestMatchesRegistry(t *testing.T) {
-	const expectedCount = 47
+	const expectedCount = 53
 
 	if got := len(benchTools); got != expectedCount {
 		t.Fatalf("benchTools has %d entries; expected exactly %d (per D-04 / 09-02 must_haves). "+

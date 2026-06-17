@@ -1,6 +1,6 @@
 package bench_test
 
-// tools_manifest.go enumerates the 43-tool bench manifest locked by D-04.
+// tools_manifest.go enumerates the 53-tool bench manifest locked by D-04.
 //
 // Every entry is a benchCase with:
 //   - name: exact MCP tool name (canonical source: internal/daemon/bootstrap_test.go)
@@ -9,11 +9,11 @@ package bench_test
 //     the sub-benchmark must use prepareGoFixtureCopyB(b) instead of
 //     prepareGoFixtureB(b) to avoid corrupting the shared read-only fixture
 //
-// The total count MUST equal 43 — enforced by TestBenchToolsManifestMatchesRegistry
+// The total count MUST equal 53 — enforced by TestBenchToolsManifestMatchesRegistry
 // in main_test.go, which also asserts bidirectional name parity with the live
 // MCP registry (no manifest-only names, no registry-only names).
 //
-// Breakdown (9 + 6 + 7 + 3 + 7 + 2 + 2 + 2 + 3 + 1 + 1 = 43):
+// Breakdown (9 + 6 + 7 + 3 + 7 + 2 + 2 + 2 + 3 + 1 + 1 + 4 + 6 = 53):
 //   - Symbol (9): 09-RESEARCH.md Pattern 1 symbol retrieval tools
 //   - Edit (6): mutating tools — Plan 09-03 must use prepareGoFixtureCopyB
 //   - File ops (7): read/list/find/search/create/replace/fuzzy_edit
@@ -25,6 +25,9 @@ package bench_test
 //   - Built-in (3): ping, echo, activate_project
 //   - Health (1): get_health
 //   - Help (1): get_tool_help
+//   - Semantic graph (4, Phase 64): index/refresh/status/context
+//   - Semantic deep-context (6, Phase 65): cluster map/explain, symbol deep,
+//     related symbols, change-impact graph, validate edge
 //
 // Hardcoded offsets in testdata/fixtures/go/main.go (verified at plan time):
 //
@@ -257,4 +260,23 @@ var benchTools = []benchCase{
 	{name: "get_semantic_context", args: map[string]any{
 		"query": "ping",
 	}},
+
+	// === Semantic deep-context (6, Phase 65) =================================
+	// Read-only graph queries (no needsCopy). The manifest parity test compares
+	// NAMES only and never invokes these via the manifest, so minimal sensible
+	// args matching each tool's schema are sufficient.
+	{name: "get_cluster_map", args: map[string]any{}},
+	{name: "explain_cluster", args: map[string]any{
+		"cluster_id": "c0",
+	}},
+	{name: "explain_symbol_deep", args: map[string]any{
+		"seed": map[string]any{"file_path": "main.go", "symbol_name": "Helper"},
+	}},
+	{name: "find_related_symbols", args: map[string]any{
+		"seed": map[string]any{"file_path": "main.go", "symbol_name": "Helper"},
+	}},
+	{name: "get_change_impact_graph", args: map[string]any{
+		"seed": map[string]any{"file_path": "main.go", "symbol_name": "Helper"},
+	}},
+	{name: "validate_graph_edge", args: map[string]any{}},
 }

@@ -302,6 +302,16 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 | `get_token_budget` | profile | Get token budget breakdown for the current or specified profile/mode |
 | `get_repo_map` | repomap | Get a ranked structural overview of the repository. |
 | `get_context` | repomap | Get the most relevant code context for a set of files or a task. |
+| `index_semantic_graph` | semantic | Build or refresh a committed semantic snapshot. |
+| `refresh_semantic_graph` | semantic | Apply pending live source changes (read+). |
+| `get_semantic_graph_status` | semantic | Return semantic graph status (read+). |
+| `get_semantic_context` | semantic | Ranked, evidence-backed semantic context (read+). |
+| `explain_symbol_deep` | semantic | Deep symbol explanation: type chain, callers, edges, cluster (read+). |
+| `find_related_symbols` | semantic | Top-k semantically related symbols around a seed (read+). |
+| `validate_graph_edge` | semantic | Validate a (from, to, edge_kind) graph claim with confidence + evidence (read+). |
+| `get_cluster_map` | semantic | Workspace-level cluster overview: count, top-N clusters, members, representative symbols, dominant edge kinds (read+). |
+| `explain_cluster` | semantic | Full cluster member list with per-member PageRank, cohesion/conductance metrics, and dominant entry points (read+). |
+| `get_change_impact_graph` | semantic | Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+). |
 | `replace_symbol_body` | symbol-editing | Replace a symbol's body with new content using tree-sitter for precise extraction |
 | `insert_before_symbol` | symbol-editing | Insert content immediately before a symbol |
 | `insert_after_symbol` | symbol-editing | Insert content immediately after a symbol |
@@ -317,6 +327,7 @@ Language servers are **auto-discovered** from PATH or **downloaded on demand** v
 | `get_call_hierarchy` | symbol-retrieval | Get call hierarchy (callers and/or callees) for a symbol |
 | `get_type_hierarchy` | symbol-retrieval | Get type hierarchy (subtypes and/or supertypes) for a symbol |
 | `analyze_blast_radius` | symbol-retrieval | Analyze the blast radius (impact) of changing a symbol |
+| `analyze_blast_radius` | symbols | Analyze the blast radius (impact) of changing a symbol |
 | `onboard_project` | workflow | Analyze the project structure, detect languages, count files, and return onboarding instructions. |
 | `prepare_for_new_conversation` | workflow | Prepare a session handoff summary for continuation in a new conversation. |
 

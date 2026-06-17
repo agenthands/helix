@@ -30,7 +30,7 @@ Available pytest markers for selective testing:
 
 **Helix** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
 
-Helix provides 41+ MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
+Helix provides 53 MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
 
 Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need symbol-level operations — go-to-definition, find references, rename across files, replace symbol body, blast-radius analysis — backed by real language servers with warm persistent caching, a ranked RepoMap for structural context, and fuzzy editing that tolerates LLM output drift.
 
@@ -143,7 +143,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - Skill tools use `ToolProvider.Tools()` returning `[]*mcp.ToolDef`, daemon registers centrally
 - Kernel tools wrapped as thin skill adapters for uniform ToolProvider interface
 - "Skills for composition, tool names for execution"
-- Full tool inventory (41+ callable tools with profile/mode matrix) is auto-generated in `README.md`; do not hand-edit the tool table
+- Full tool inventory (53 callable tools with profile/mode matrix) is auto-generated in `README.md`; do not hand-edit the tool table
 
 ### Skill System
 - Caddy-style `init()` registration: `skill.Register(&MySkill{})`

@@ -74,9 +74,16 @@ func driveScript(ctx context.Context, helixBin, sockPath, workspaceRoot string, 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("bench/runtime: start forwarder: %w", err)
 	}
+	// done signals the background reader to stop pushing responses once the drive
+	// loop has returned (WR-02). The reader selects on respCh-send vs <-done so a
+	// late / unexpected id-bearing line can never block it forever on a full
+	// channel after the drive has stopped draining.
+	done := make(chan struct{})
 	defer func() {
-		// Close stdin only now (after all reads) so the CloseSend cannot race
-		// response delivery, then kill+reap the forwarder.
+		// Signal the reader to stop, then close stdin only now (after all reads)
+		// so the CloseSend cannot race response delivery, then kill+reap the
+		// forwarder.
+		close(done)
 		_ = stdin.Close()
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
@@ -84,12 +91,15 @@ func driveScript(ctx context.Context, helixBin, sockPath, workspaceRoot string, 
 
 	// Background reader: parse NDJSON responses keyed by JSON-RPC id. id=1 is
 	// initialize, id=2 is activate_project (harness setup), scripted steps start
-	// at id=3.
+	// at id=3. disp owns the id-keyed pending buffer so a response for a
+	// not-yet-awaited id is RETAINED rather than discarded (WR-03), making the
+	// dispatch order non-load-bearing.
 	const idInit = 1
 	const idActivate = 2
 	const idStepBase = 3
 	respCh := make(chan jsonrpcResp, len(script.Steps)+2)
-	go readResponses(stdout, respCh)
+	go readResponses(stdout, respCh, done)
+	disp := &respDispatcher{ch: respCh, pending: map[int]jsonrpcResp{}}
 
 	// initialize frame (id=1). Do NOT wait for its response before sending the
 	// next call; the forwarder pipelines frames.
@@ -112,10 +122,15 @@ func driveScript(ctx context.Context, helixBin, sockPath, workspaceRoot string, 
 	if _, err := fmt.Fprintln(stdin, activateFrame); err != nil {
 		return nil, fmt.Errorf("bench/runtime: write activate_project: %w", err)
 	}
-	if _, err := waitForResp(ctx, respCh, idActivate); err != nil {
+	if _, err := disp.wait(ctx, idActivate); err != nil {
 		// Activation failure is fatal to the edit — surface it.
 		return nil, fmt.Errorf("bench/runtime: activate_project: %w", err)
 	}
+	// IN-04: the initialize reply (id=1) is intentionally not awaited explicitly.
+	// With the id-keyed pending buffer (WR-03), if init's response arrives before
+	// activate's it is STASHED (not discarded) and simply never read — the dispatch
+	// order is no longer load-bearing. idInit is retained for documentation of the
+	// frame id allocation.
 	_ = idInit
 
 	results := make([]runner.StepResult, 0, len(script.Steps))
@@ -144,7 +159,7 @@ func driveScript(ctx context.Context, helixBin, sockPath, workspaceRoot string, 
 		}
 
 		// Wait for this step's response (matched by id) with a per-call deadline.
-		resp, waitErr := waitForResp(ctx, respCh, id)
+		resp, waitErr := disp.wait(ctx, id)
 		if waitErr != nil {
 			sr.Err = waitErr
 			results = append(results, sr)
@@ -178,14 +193,26 @@ type jsonrpcResp struct {
 
 // readResponses scans the forwarder's stdout for NDJSON JSON-RPC responses and
 // publishes each one (keyed by id) onto respCh. It returns when stdout reaches
-// EOF or errors; the caller treats a missing id as a per-step timeout.
-func readResponses(stdout io.Reader, respCh chan<- jsonrpcResp) {
+// EOF or errors, or when done is closed; the caller treats a missing id as a
+// per-step timeout.
+//
+// WR-02: the send is non-blocking against done — once the drive loop returns and
+// closes done, no one drains respCh, so a blocking `respCh <- parsed` on a full
+// buffer (a duplicate response, a server->client request carrying a numeric id, a
+// retried frame) would park this goroutine forever. Selecting on done lets the
+// reader exit instead of leaking.
+func readResponses(stdout io.Reader, respCh chan<- jsonrpcResp, done <-chan struct{}) {
 	reader := bufio.NewReaderSize(stdout, 256*1024)
 	for {
 		line, err := reader.ReadString('\n')
 		if s := strings.TrimSpace(line); s != "" {
 			if parsed, ok := parseRPCLine([]byte(s)); ok {
-				respCh <- parsed
+				select {
+				case respCh <- parsed:
+				case <-done:
+					// Drive returned; no drainer remains. Drop rather than leak.
+					return
+				}
 			}
 		}
 		if err != nil {
@@ -236,22 +263,43 @@ func parseRPCLine(line []byte) (jsonrpcResp, bool) {
 	return r, true
 }
 
-// waitForResp blocks until a response with the given id arrives on respCh, the
-// per-call deadline elapses, or the parent context is done. Responses for other
-// ids that arrive first are dropped (each id is awaited in dispatch order).
-func waitForResp(ctx context.Context, respCh <-chan jsonrpcResp, id int) (jsonrpcResp, error) {
+// respDispatcher demultiplexes the single forwarder response stream into id-keyed
+// waits. It holds a pending buffer so a response for a not-yet-awaited id is
+// RETAINED across wait() calls instead of being discarded (WR-03). Today one
+// daemon over one socket answers in dispatch order, but nothing enforces that;
+// buffering makes out-of-order delivery (id=4 before id=3) correct rather than a
+// silent 10s-per-step stall plus a lost response.
+//
+// respDispatcher is single-consumer: all wait() calls happen on the drive
+// goroutine, so pending needs no lock.
+type respDispatcher struct {
+	ch      <-chan jsonrpcResp
+	pending map[int]jsonrpcResp
+}
+
+// wait returns the response with the given id, consulting the pending buffer
+// first and otherwise reading from the channel — stashing any non-matching id
+// into pending rather than dropping it — until the id arrives, the per-call
+// deadline elapses, or the parent context is done.
+func (d *respDispatcher) wait(ctx context.Context, id int) (jsonrpcResp, error) {
+	if r, ok := d.pending[id]; ok {
+		delete(d.pending, id)
+		return r, nil
+	}
 	deadline := time.NewTimer(driveDeadline)
 	defer deadline.Stop()
 	for {
 		select {
-		case r, ok := <-respCh:
+		case r, ok := <-d.ch:
 			if !ok {
 				return jsonrpcResp{}, fmt.Errorf("forwarder stdout closed before response id=%d", id)
 			}
 			if r.id == id {
 				return r, nil
 			}
-			// Out-of-order / stale response for an already-handled id; ignore.
+			// Response for a different (possibly not-yet-awaited) id: retain it so
+			// a later wait() for that id finds it instead of timing out (WR-03).
+			d.pending[r.id] = r
 		case <-deadline.C:
 			return jsonrpcResp{}, fmt.Errorf("no tools/call response for id=%d within %s", id, driveDeadline)
 		case <-ctx.Done():

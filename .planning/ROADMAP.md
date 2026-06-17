@@ -80,6 +80,15 @@
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 77)
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 77-01-PLAN.md — Foundation primitives: bench sandbox (embed eval), subprocess daemon lifecycle, mode->profile resolver + your_agent_full/MODE.md, and the one seed toolbench-go task
+- [ ] 77-02-PLAN.md — result.v2.json builder (schema-valid, metric-sparse) + CCTapResult synthesis from scripted StepResults (TDD)
+- [ ] 77-03-PLAN.md — Cell orchestrator spine: forwarder drive -> kill -> PID-gated tap -> 2-leg Merge -> result write; BENCH-04 + criterion-#4 integration tests
+- [ ] 77-04-PLAN.md — helix-bench run subcommand + flags + matrix expander (--parallel bounded) + wired-not-gating claude branch
+- [ ] 77-05-PLAN.md — Makefile reconciliation (bench collision -> bench-micro) + bench/bench-quick/bench-<suite> targets + timed E2E smoke gate + BENCH.md key-names
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

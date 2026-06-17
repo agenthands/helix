@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	runtime "github.com/agenthands/helix/bench/runtime"
@@ -250,7 +251,11 @@ func discoverTasks(datasetsRoot, benchmark string) ([]string, error) {
 	}
 	var tasks []string
 	for _, e := range entries {
-		if e.IsDir() {
+		// Skip non-dirs and leading-dot entries (.git, .DS_Store, editor scratch
+		// dirs). A benign filesystem artifact must not fail the whole run: a
+		// leading-dot id is rejected by ExpandMatrix's validateMatrixID, which
+		// would hard-fail the entire expansion before any legitimate task runs.
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
 			tasks = append(tasks, e.Name())
 		}
 	}

@@ -4,8 +4,8 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 78 complete (5/5 plans)
-last_updated: "2026-06-17T20:10:00.000Z"
-last_activity: 2026-06-17 -- Phase 78 completed (internal-toolbench Go 10/10)
+last_updated: "2026-06-17T21:00:00.000Z"
+last_activity: 2026-06-17 -- Completed quick task 260617-t7x: resync tool docs to live 53-tool registry (test/bench green)
 progress:
   total_phases: 4
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — COMPLETE (5/5 plans)
 Plan: 5 of 5 — DONE
 Status: Phase 78 complete — Go internal-toolbench corpus 10/10, coverage aggregator + docs shipped
-Last activity: 2026-06-17 -- Phase 78 completed (internal-toolbench Go 10/10)
+Last activity: 2026-06-17 -- Completed quick task 260617-t7x: resync tool docs to live 53-tool registry (test/bench green)
 
 ### Session Continuity
 
@@ -63,6 +63,7 @@ Resume file: None
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260617-j29 | Re-pin fairness contract ModelID to authoritative dated Sonnet 4.5 snapshot `claude-sonnet-4-5-20250929` (was placeholder `-20260128`, which didn't match the Claude API catalog); FAIR-02 dated-snapshot invariant preserved | 2026-06-17 | f62fb475 | [260617-j29-re-pin-fairness-contract-modelid-to-auth](./quick/260617-j29-re-pin-fairness-contract-modelid-to-auth/) |
+| 260617-t7x | Resync tool docs to the live 53-tool MCP registry. Root cause: `cmd/docgen` was missing the `internal/skill/semantic` blank import, so README omitted the 10 semantic tools. Added the import → regenerated README table (40→51 ToolProvider rows), bumped bench `expectedCount` 47→53 + 6 new manifest entries, refreshed descriptions golden, updated CLAUDE.md prose "41+"→"53". Clears the two long-standing `test/bench` failures (`TestBenchToolsManifestMatchesRegistry`, `TestToolDescriptionsGoldenFile`); `go test ./test/bench/...` now green | 2026-06-17 | ed0abb97 | [260617-t7x-resync-helix-tool-capability-documentati](./quick/260617-t7x-resync-helix-tool-capability-documentati/) |
 
 ## Performance Metrics
 

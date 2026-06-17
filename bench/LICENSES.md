@@ -11,7 +11,7 @@ repository license — no external redistribution concern).
 
 | dataset | source_url | license | redistribution_clause | sha256_or_pin | verified_on |
 |---------|-----------|---------|-----------------------|---------------|-------------|
-| internal-toolbench-go | (in-repo: `bench/datasets/internal-toolbench/`) | internal — repo license | covered by Helix repository license; no external redistribution | (in-repo; pinned by git) | 2026-06-14 |
+| internal-toolbench | (in-repo: `bench/datasets/internal-toolbench/`) | internal — repo license | covered by Helix repository license; no external redistribution | (in-repo; pinned by git) | 2026-06-14 |
 
 ## Column meanings
 

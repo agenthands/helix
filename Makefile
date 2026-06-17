@@ -111,24 +111,25 @@ bench-baseline: ## Capture a local microbench baseline into test/bench/baselines
 # contract and the result.v2 provenance key names.
 #
 # SUITE selects the benchmark suite (the `bench-<suite>` parameterization, RESEARCH
-# Open Question 1): `make bench SUITE=toolbench-go`. Defaults to toolbench-go.
-SUITE ?= toolbench-go
+# Open Question 1): `make bench SUITE=internal-toolbench`. Defaults to internal-toolbench.
+SUITE ?= internal-toolbench
 
-bench: ## Run the milestone bench suite via cmd/helix-bench (use SUITE=<suite>; default toolbench-go)
+bench: ## Run the milestone bench suite via cmd/helix-bench (use SUITE=<suite>; default internal-toolbench)
 	$(GO) run ./cmd/helix-bench run --benchmarks=$(SUITE)
 
 # bench-quick: the hermetic scripted CI smoke gate (BENCH-05 criterion #2, <=90s,
 # >=1 task succeeds). Builds the helix daemon binary FIRST (RESEARCH build-sequencing
 # note: the subprocess-daemon / forwarder-drive path SKIPs if `helix` is absent),
-# then runs the scripted `your_agent_full` smoke on the single sum-doubler seed task.
-# Local-only, no network, no API key (scripted agent, D-01). The absolute --helix-bin
-# ensures the daemon resolves from the per-cell ephemeral scratch cwd.
+# then runs the scripted `your_agent_full` smoke on the single IT-go-patch-apply-1
+# seed task. Local-only, no network, no API key (scripted agent, D-01). The absolute
+# --helix-bin ensures the daemon resolves from the per-cell ephemeral scratch cwd.
 bench-quick: ## Build helix, then run the hermetic scripted bench smoke (<=90s CI gate)
 	$(GO) build -o $(BINARY) ./cmd/helix
 	$(GO) run ./cmd/helix-bench run \
 		--benchmarks=$(SUITE) \
+		--languages=go \
 		--modes=your_agent_full \
-		--tasks=sum-doubler \
+		--tasks=IT-go-patch-apply-1 \
 		--agent=scripted \
 		--helix-bin=$(CURDIR)/$(BINARY) \
 		--out bench/reports

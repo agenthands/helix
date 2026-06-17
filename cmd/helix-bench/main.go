@@ -101,6 +101,7 @@ func notYetImplemented(feature string) func(*cobra.Command, []string) error {
 func newRunCmd() *cobra.Command {
 	var (
 		benchmarks   string
+		languages    []string
 		modes        []string
 		tasks        []string
 		parallel     int
@@ -127,6 +128,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBench(cmd, runBenchOpts{
 				Benchmarks:   benchmarks,
+				Languages:    languages,
 				Modes:        modes,
 				Tasks:        tasks,
 				Parallel:     parallel,
@@ -139,7 +141,8 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 		},
 	}
 
-	cmd.Flags().StringVar(&benchmarks, "benchmarks", "toolbench-go", "benchmark suite")
+	cmd.Flags().StringVar(&benchmarks, "benchmarks", "internal-toolbench", "benchmark suite")
+	cmd.Flags().StringArrayVar(&languages, "languages", []string{"go"}, "language(s); repeatable")
 	cmd.Flags().StringArrayVar(&modes, "modes", []string{"your_agent_full"}, "mode(s); repeatable")
 	cmd.Flags().StringArrayVar(&tasks, "tasks", nil, "task id(s); repeatable (default: all tasks under the benchmark dataset dir)")
 	cmd.Flags().IntVar(&parallel, "parallel", 1, "max concurrent cells")
@@ -147,7 +150,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 	cmd.Flags().StringVar(&agent, "agent", "scripted", "agent driver: scripted|claude")
 	cmd.Flags().StringVar(&helixBin, "helix-bin", "helix", "path to the helix binary for the daemon subprocess")
 	cmd.Flags().StringVar(&runID, "run-id", "", "run identifier (default: UTC timestamp 20060102T150405Z)")
-	cmd.Flags().StringVar(&datasetsRoot, "datasets", "bench/datasets", "root dir containing <benchmark>/<task> seed dirs")
+	cmd.Flags().StringVar(&datasetsRoot, "datasets", "bench/datasets", "root dir containing <benchmark>/<language>/<task> seed dirs")
 
 	return cmd
 }
@@ -155,6 +158,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 // runBenchOpts is the resolved flag set for the run subcommand.
 type runBenchOpts struct {
 	Benchmarks   string
+	Languages    []string
 	Modes        []string
 	Tasks        []string
 	Parallel     int
@@ -185,20 +189,28 @@ func runBench(cmd *cobra.Command, o runBenchOpts) error {
 		return fmt.Errorf("helix-bench run: unknown --agent %q (want scripted|claude)", o.Agent)
 	}
 
+	if len(o.Languages) == 0 {
+		return fmt.Errorf("helix-bench run: no --languages given")
+	}
+
 	// Resolve the task set. When --tasks is empty, default to ALL task dirs found
-	// under <datasets>/<benchmark>/ (so the seed smoke can omit --tasks while a
-	// real run can pin specific tasks). criterion #1's --tasks=<one> is supported
-	// by passing a single id explicitly.
+	// under <datasets>/<benchmark>/<language>/ (so the seed smoke can omit --tasks
+	// while a real run can pin specific tasks). criterion #1's --tasks=<one> is
+	// supported by passing a single id explicitly. With multiple --languages, the
+	// discovered task set is the union across languages (the matrix product then
+	// pairs each task with each language; a task dir absent for a language yields a
+	// cell whose seed dir simply will not exist — surfaced as a per-cell infra
+	// error, never a silent skip).
 	tasks := o.Tasks
 	if len(tasks) == 0 {
-		discovered, err := discoverTasks(o.DatasetsRoot, o.Benchmarks)
+		discovered, err := discoverTasks(o.DatasetsRoot, o.Benchmarks, o.Languages)
 		if err != nil {
 			return fmt.Errorf("helix-bench run: %w", err)
 		}
 		tasks = discovered
 	}
 
-	cells, err := runtime.ExpandMatrix([]string{o.Benchmarks}, o.Modes, tasks)
+	cells, err := runtime.ExpandMatrix([]string{o.Benchmarks}, o.Languages, o.Modes, tasks)
 	if err != nil {
 		return fmt.Errorf("helix-bench run: %w", err)
 	}
@@ -239,28 +251,41 @@ func runBench(cmd *cobra.Command, o runBenchOpts) error {
 	return nil
 }
 
-// discoverTasks returns the sorted list of task ids (subdir names) under
-// <datasetsRoot>/<benchmark>/. It is used when --tasks is omitted so the seed
-// smoke can run without naming the task. An empty benchmark dir is an error (a
-// silent empty matrix would exit 0 with nothing run).
-func discoverTasks(datasetsRoot, benchmark string) ([]string, error) {
-	benchDir := filepath.Join(datasetsRoot, benchmark)
-	entries, err := os.ReadDir(benchDir)
-	if err != nil {
-		return nil, fmt.Errorf("read benchmark dataset dir %q: %w", benchDir, err)
-	}
-	var tasks []string
-	for _, e := range entries {
-		// Skip non-dirs and leading-dot entries (.git, .DS_Store, editor scratch
-		// dirs). A benign filesystem artifact must not fail the whole run: a
-		// leading-dot id is rejected by ExpandMatrix's validateMatrixID, which
-		// would hard-fail the entire expansion before any legitimate task runs.
-		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-			tasks = append(tasks, e.Name())
+// discoverTasks returns the sorted, de-duplicated union of task ids (subdir
+// names) found under <datasetsRoot>/<benchmark>/<language>/ across every given
+// language. It is used when --tasks is omitted so the seed smoke can run without
+// naming the task. An empty benchmark/language tree (no tasks discoverable under
+// any language) is an error (a silent empty matrix would exit 0 with nothing run).
+func discoverTasks(datasetsRoot, benchmark string, languages []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	var scanned []string
+	for _, lang := range languages {
+		langDir := filepath.Join(datasetsRoot, benchmark, lang)
+		scanned = append(scanned, langDir)
+		entries, err := os.ReadDir(langDir)
+		if err != nil {
+			// A missing language dir is non-fatal here: a real run may pass
+			// languages not all present on disk. The aggregate emptiness check
+			// below turns a wholly-empty discovery into a hard error.
+			continue
+		}
+		for _, e := range entries {
+			// Skip non-dirs and leading-dot entries (.git, .DS_Store, editor
+			// scratch dirs). A benign filesystem artifact must not fail the whole
+			// run: a leading-dot id is rejected by ExpandMatrix's validateMatrixID,
+			// which would hard-fail the entire expansion before any legitimate
+			// task runs.
+			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				seen[e.Name()] = struct{}{}
+			}
 		}
 	}
-	if len(tasks) == 0 {
-		return nil, fmt.Errorf("no task dirs under %q (pass --tasks explicitly)", benchDir)
+	if len(seen) == 0 {
+		return nil, fmt.Errorf("no task dirs under %v (pass --tasks explicitly)", scanned)
+	}
+	tasks := make([]string, 0, len(seen))
+	for t := range seen {
+		tasks = append(tasks, t)
 	}
 	sort.Strings(tasks)
 	return tasks, nil

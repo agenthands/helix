@@ -16,13 +16,14 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 	datasetsRoot := t.TempDir()
 	outDir := t.TempDir()
 
-	// Synthetic benchmark/task: <datasets>/toolbench-go/sum-doubler/ with the
-	// minimal files RunCell needs (scripted_agent.yaml + a Go repo + verify.sh).
-	taskDir := filepath.Join(datasetsRoot, "toolbench-go", "sum-doubler")
+	// Synthetic benchmark/lang/task: <datasets>/internal-toolbench/go/IT-go-patch-apply-1/
+	// with the minimal files RunCell needs (scripted_agent.yaml + a Go repo +
+	// verify.sh).
+	taskDir := filepath.Join(datasetsRoot, "internal-toolbench", "go", "IT-go-patch-apply-1")
 	if err := os.MkdirAll(taskDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	writeFixture(t, filepath.Join(taskDir, "task.json"), `{"id":"sum-doubler","prompt":"make it pass"}`)
+	writeFixture(t, filepath.Join(taskDir, "task.json"), `{"id":"IT-go-patch-apply-1","prompt":"make it pass"}`)
 	writeFixture(t, filepath.Join(taskDir, "go.mod"), "module sumdoubler\n\ngo 1.21\n")
 	writeFixture(t, filepath.Join(taskDir, "sum.go"), "package sumdoubler\n\nfunc Double(x int) int { return x }\n")
 	writeFixture(t, filepath.Join(taskDir, "scripted_agent.yaml"), "steps:\n  - tool: read_file\n    args:\n      path: sum.go\n")
@@ -33,9 +34,10 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 	root := newRootCmd()
 	root.SetArgs([]string{
 		"run",
-		"--benchmarks", "toolbench-go",
+		"--benchmarks", "internal-toolbench",
+		"--languages", "go",
 		"--modes", "your_agent_full",
-		"--tasks", "sum-doubler",
+		"--tasks", "IT-go-patch-apply-1",
 		"--datasets", datasetsRoot,
 		"--out", outDir,
 		"--helix-bin", "helix",
@@ -55,7 +57,7 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 
 	// If a real helix binary was on PATH, the cell may have written a durable
 	// result.v2.json — assert best-effort (present-and-valid OR absent).
-	resultPath := filepath.Join(runOutDir, "sum-doubler", "your_agent_full", "result.v2.json")
+	resultPath := filepath.Join(runOutDir, "IT-go-patch-apply-1", "your_agent_full", "result.v2.json")
 	if _, err := os.Stat(resultPath); err == nil {
 		t.Logf("durable result.v2.json present at %q (helix binary was available)", resultPath)
 	} else {
@@ -68,7 +70,7 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 func TestRunSubcommandRegistersAllFlags(t *testing.T) {
 	cmd := newRunCmd()
 	for _, name := range []string{
-		"benchmarks", "modes", "tasks", "parallel", "out", "agent", "helix-bin", "run-id", "datasets",
+		"benchmarks", "languages", "modes", "tasks", "parallel", "out", "agent", "helix-bin", "run-id", "datasets",
 	} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("run subcommand missing --%s flag", name)
@@ -90,7 +92,7 @@ func TestRunSubcommandRejectsUnknownAgent(t *testing.T) {
 func TestRunSubcommandEmptyBenchmarkDirErrors(t *testing.T) {
 	root := newRootCmd()
 	// --tasks omitted forces discovery under a datasets root with no benchmark dir.
-	root.SetArgs([]string{"run", "--benchmarks", "toolbench-go", "--datasets", t.TempDir(), "--out", t.TempDir()})
+	root.SetArgs([]string{"run", "--benchmarks", "internal-toolbench", "--datasets", t.TempDir(), "--out", t.TempDir()})
 	if err := root.Execute(); err == nil {
 		t.Error("run with empty benchmark dir: want error, got nil")
 	}

@@ -75,12 +75,12 @@ The `bench` target name now belongs to the v1.12 milestone bench stack:
 | `make bench-micro` | `go test -short -bench=. ... ./test/bench/...` | the original Phase 64 Go microbenchmark suite (formerly `make bench`) |
 | `make bench-baseline` | same microbench recipe, teed to a gitignored baseline | local microbench baseline capture |
 | `make bench` | `go run ./cmd/helix-bench run --benchmarks=$(SUITE)` | the milestone bench driver (BENCH-05) |
-| `make bench SUITE=<suite>` | `... run --benchmarks=<suite>` | the `bench-<suite>` parameterization (default `toolbench-go`) |
-| `make bench-quick` | `go build ./cmd/helix` THEN `go run ./cmd/helix-bench run --modes=your_agent_full --tasks=sum-doubler --agent=scripted` | the hermetic scripted CI smoke gate (≤90s, ≥1 task succeeds) |
+| `make bench SUITE=<suite>` | `... run --benchmarks=<suite>` | the `bench-<suite>` parameterization (default `internal-toolbench`) |
+| `make bench-quick` | `go build ./cmd/helix` THEN `go run ./cmd/helix-bench run --languages=go --modes=your_agent_full --tasks=IT-go-patch-apply-1 --agent=scripted` | the hermetic scripted CI smoke gate (≤90s, ≥1 task succeeds) |
 
 `make bench-quick` builds the `helix` daemon binary **first** (the subprocess-daemon /
 forwarder-drive path SKIPs if `helix` is absent — RESEARCH build-sequencing note), then runs
-the scripted `your_agent_full` smoke on the single `sum-doubler` seed task. Like `eval-quick`
+the scripted `your_agent_full` smoke on the single `IT-go-patch-apply-1` seed task. Like `eval-quick`
 it is **local-only, no-network, no-API-key** (the scripted agent replays a hard-coded MCP call
 sequence; it never calls a real LLM — D-01). `make bench` (full driver) is local/nightly, never
 a PR gate (project rule: benchmarks local-only).

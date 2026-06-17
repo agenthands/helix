@@ -154,8 +154,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | FAIR-01 | Phase 75 | TBD | Pending |
 | FAIR-02 | Phase 75 | TBD | Pending |
 | FAIR-03 | Phase 75 plan 03 = schema substrate landed (479e5c14); variance gate Phase 82, warning Phase 89 | 479e5c14 (substrate) | Substrate done; full REQ pending Phase 82/89 |
-| TOOLBENCH-01 | Phase 78 | TBD | Pending |
-| TOOLBENCH-02 | Phase 78 | TBD | Pending |
+| TOOLBENCH-01 | Phase 78 (plans 02-05) | 78-05 | Complete |
+| TOOLBENCH-02 | Phase 78 (plans 01-05) | 78-05 | Complete |
 | TOOLBENCH-03 | Phase 85 | TBD | Pending |
 | TOOLBENCH-04 | Phase 85 | TBD | Pending |
 | TOOLBENCH-05 | Phase 85 | TBD | Pending |
@@ -163,7 +163,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | TOOLBENCH-07 | Phase 85 | TBD | Pending |
 | TOOLBENCH-08 | Phase 85 | TBD | Pending |
 | TOOLBENCH-09 | Phase 85 | TBD | Pending |
-| TOOLBENCH-10 | Phase 78 | TBD | Pending |
+| TOOLBENCH-10 | Phase 78 (plan 01) | 78-05 | Complete |
 | ABLATE-01 | Phase 80 | TBD | Pending |
 | ABLATE-02 | Phase 76 | 76-02 | Complete |
 | ABLATE-03 | Phase 80 | TBD | Pending |

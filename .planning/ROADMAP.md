@@ -25,7 +25,7 @@
 - [x] Phase 75: Schema, Fairness Contract & Tree Skeleton (completed 2026-06-15)
 - [x] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags (completed 2026-06-16)
 - [x] Phase 77: Bench Runtime & First E2E Smoke
-- [ ] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface
+- [x] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface (completed 2026-06-17)
 - [ ] Phase 79: Evaluators & Result-Schema Metrics Layer
 - [ ] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
 - [ ] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
@@ -129,7 +129,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 78-05-PLAN.md — CAPABILITIES.md + PHASE67_CROSSWALK.md + corpus-coverage aggregator (Go 10/10) + full-run human-verify checkpoint (D-06/D-11, C1/C2/C4)
+- [x] 78-05-PLAN.md — CAPABILITIES.md + PHASE67_CROSSWALK.md + corpus-coverage aggregator (Go 10/10) + full-run human-verify checkpoint (D-06/D-11, C1/C2/C4)
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

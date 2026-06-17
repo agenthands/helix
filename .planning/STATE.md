@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 78 context gathered
-last_updated: "2026-06-17T16:57:40.449Z"
-last_activity: 2026-06-17 -- Phase 78 execution started
+stopped_at: Phase 78 complete (5/5 plans)
+last_updated: "2026-06-17T20:10:00.000Z"
+last_activity: 2026-06-17 -- Phase 78 completed (internal-toolbench Go 10/10)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 19
-  completed_plans: 18
-  percent: 75
+  completed_plans: 19
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 78 execution started
+Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — COMPLETE (5/5 plans)
+Plan: 5 of 5 — DONE
+Status: Phase 78 complete — Go internal-toolbench corpus 10/10, coverage aggregator + docs shipped
+Last activity: 2026-06-17 -- Phase 78 completed (internal-toolbench Go 10/10)
 
 ### Session Continuity
 
-Last session: 2026-06-17T16:57:20.028Z
-Stopped at: Phase 78 context gathered
-Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-interface/78-CONTEXT.md
+Last session: 2026-06-17T20:10:00.000Z
+Stopped at: Phase 78 complete (5/5 plans); 78-05 human-verify gate approved (full corpus 10/10, coverage 10/10, docs accurate)
+Resume file: None
 
 ## Accumulated Context
 
@@ -86,6 +86,7 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 | Phase 78 P02 | 30min | 2 tasks | 24 files |
 | Phase 78 P03 | ~12min | 2 tasks | 53 files |
 | Phase 78 P04 | ~50min | 2 tasks | 7 files |
+| Phase 78 P05 | ~30min | 3 tasks | 4 files (TDD RED+GREEN + 2 docs) |
 
 ## Decisions
 
@@ -120,3 +121,7 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 - [Phase ?]: 78-03: LSP-backed capability tools return internal store-OFF (no warm gopls); marked expect_error and graded via store-off-stable replace_in_file/fuzzy_edit + go test, still naming the tool by-construction (D-05)
 - [Phase ?]: 78-03: dependency_graph kept store-OFF (A2) — get_repo_map resolves cross-package edges deterministically; D-02 escape hatch not triggered
 - [Phase ?]: 78-04: incremental_update is the ONE store-ON fixture (10th capability); D-03 parallel store isolation proven (2/2 cells, distinct .helix/semantic.duckdb, RejectedForeignPid==0), RED-proven by disabling WithWorkingDir
+- [Phase 78 P05]: Coverage() aggregator (bench/languages/coverage.go) computes declared (Capabilities()) ∩ covered (task.json `capability` field, D-06 source of truth — NOT the id, mitigates T-78-11); Go reports 10/10, Missing empty (criterion C2). Gap-detection test (synthetic corpus omitting one cap → reported in Missing) proves it is not a rubber-stamp (D-11/T-78-12)
+- [Phase 78 P05]: CAPABILITIES.md uses REGISTERED HELIX NATIVE tool names (get_symbol_overview singular, get_call_hierarchy) — verified against internal/kernel/symbols/skill.go + README inventory at the human-verify gate; deliberately NOT the serena/SMTC plugin spellings, left unchanged
+- [Phase 78 P05]: PHASE67_CROSSWALK.md is inspiration-only — T-67-* are Phase 67 PLANNING task IDs (no on-disk corpus); IT-go-* fixtures authored fresh on the Phase 77 bench spine; namespaces disjoint, zero code migration (criterion C4), enforced by ^IT-go-/not-^T-67- static test
+- [Phase 78 P05]: Phase 78 CLOSED — full Go corpus run 10/10 cells green (criterion C2 gate, human-verify approved); TOOLBENCH-01/02/10 satisfied

@@ -18,7 +18,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **BENCH-02**: `cmd/helix-bench` binary builds (`go build ./cmd/helix-bench`) and ships cobra subcommands `run`, `fetch-datasets`, `doctor`, `report`, `validate-cost-table`. _Acceptance:_ `helix-bench --help` lists all 5 subcommands; `helix-bench doctor` succeeds on a clean Linux host with documented prereqs.
 - [x] **BENCH-03**: Normalized per-task result schema (JSON) versioned at `v2`, validated by JSON Schema; round-trips through `bench/evaluators/aggregator/`. _Acceptance:_ a golden result fixture validates; schema-version field present; backwards-incompatible changes bump major version.
 - [x] **BENCH-04**: Bench runtime reuses Phase 67's `internal/eval/sandbox` and subprocess patterns; one daemon subprocess per `(task × mode)`. _Acceptance:_ in-process smoke run completes ≤ 30 s for the smallest task; no port collisions on parallel runs.
-- [ ] **BENCH-05**: `make bench`, `make bench-quick`, `make bench-<suite>` targets exist and invoke `cmd/helix-bench run --benchmarks=…`. _Acceptance:_ `make bench-quick` exits 0 with ≥1 task succeeding in CI in ≤ 90 s.
+- [x] **BENCH-05**: `make bench`, `make bench-quick`, `make bench-<suite>` targets exist and invoke `cmd/helix-bench run --benchmarks=…`. _Acceptance:_ `make bench-quick` exits 0 with ≥1 task succeeding in CI in ≤ 90 s.
 - [x] **BENCH-06**: `bench/BENCH.md` documents operator-side prereqs (Python 3.11+, Docker Engine, per-language toolchains) and provider-TOS attestation (retention-zero verified per provider) parallel to `eval/EVAL.md`. _Acceptance:_ `make verify-tos` exits non-zero if any provider's TOS attestation row is older than 90 days.
 
 ### Fairness Contract (FAIR-*)
@@ -148,8 +148,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | BENCH-01 | Phase 75 | TBD | Pending |
 | BENCH-02 | Phase 75 | TBD | Pending |
 | BENCH-03 | Phase 75 (plan 03) | 479e5c14 | Complete |
-| BENCH-04 | Phase 77 | TBD | Pending |
-| BENCH-05 | Phase 77 | TBD | Pending |
+| BENCH-04 | Phase 77 (plans 01-03) | 77-03 | Complete |
+| BENCH-05 | Phase 77 (plan 05) | 9aa1fa49 | Complete |
 | BENCH-06 | Phase 75 | TBD | Pending |
 | FAIR-01 | Phase 75 | TBD | Pending |
 | FAIR-02 | Phase 75 | TBD | Pending |

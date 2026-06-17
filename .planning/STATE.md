@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 77-02-PLAN.md
-last_updated: "2026-06-17T09:16:32.924Z"
-last_activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
+stopped_at: Completed 77-05-PLAN.md (Phase 77 CLOSED)
+last_updated: "2026-06-17T09:30:00.000Z"
+last_activity: 2026-06-17 -- Completed Phase 77 Plan 05 (make bench reconciliation + timed E2E smoke gate); Phase 77 CLOSED (BENCH-04 + BENCH-05)
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 14
-  completed_plans: 13
-  percent: 67
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 77 (bench-runtime-first-e2e-smoke) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
+Phase: 77 (bench-runtime-first-e2e-smoke) — COMPLETE
+Plan: 5 of 5 (all complete)
+Status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
+Last activity: 2026-06-17 -- Completed Phase 77 Plan 05 (make bench reconciliation + timed E2E smoke gate)
 
 ### Session Continuity
 
-Last session: 2026-06-17T09:16:25.491Z
-Stopped at: Completed 77-02-PLAN.md
-Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
+Last session: 2026-06-17T09:30:00.000Z
+Stopped at: Completed 77-05-PLAN.md (Phase 77 CLOSED)
+Resume file: None
 
 ## Accumulated Context
 
@@ -56,7 +56,7 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 
 ## Operator Next Steps
 
-- Run `/gsd-execute-phase 75` to execute Phase 75's 5 plans (Wave 0 `git mv` relocation runs first, then the contract/skeleton plans).
+- Phase 77 is complete (bench runtime wired end-to-end; `make bench-quick` is the hermetic ≤90s CI smoke gate; `make bench-micro` preserves the Go microbench). Next: Phase 78 (first corpus tasks) per `.planning/milestones/v1.12-ROADMAP.md`.
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 | Phase 77 P02 | ~9min | 2 tasks | 5 files (TDD RED+GREEN x2) |
 | Phase 77 P03 | 2400 | 3 tasks | 5 files |
 | Phase 77 P04 | 455 | 2 tasks | 6 files |
+| Phase 77 P05 | 540 | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -101,3 +102,6 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 - [Phase ?]: Plan 77-03: bench cell disables semantic_index per cell to avoid parallel DuckDB lock deadlock (T-57-02-01 forbids absolute store path; D-07 forbids forking eval StartDaemon cmd.Dir)
 - [Phase ?]: Plan 77-03: activate_project uses arg key repo_path (not path); driven as harness setup, not recorded as a scripted StepResult
 - [Phase ?]: Phase 77 Plan 04: helix-bench run subcommand wires ExpandMatrix/RunMatrix dispatch (--parallel bounded) over RunCell; --agent=claude wired-not-gating (D-01); E2E smoke green (1/1 cell, schema-valid result.v2.json, ~1s)
+- [Phase 77 P05]: `make bench` collision RECONCILED by rename — Go microbench bench: -> bench-micro: (recipe byte-preserved); reclaimed `bench` runs helix-bench run; verified via make -n recipe identity (T-77-13). bench-<suite> = `make bench SUITE=<suite>` make var (NOT a bench-%: pattern rule, which would shadow bench-micro/bench-quick/bench-baseline)
+- [Phase 77 P05]: bench-quick passes ABSOLUTE --helix-bin=$(CURDIR)/helix (per-cell ephemeral scratch cwd can't resolve relative ./helix); generated /bench/reports/* gitignored with .gitkeep negated (mirrors /eval/reports/)
+- [Phase 77 P05]: Timed E2E gate PASSED under AUTO MODE — single-task smoke exit 0 in 2s (<=30s); make bench-quick exit 0 (<=90s); schema-valid result.v2.json (outcome/trace_ref/model_id/fairness); merged 2-leg trace (cc+daemon, total=2, zero foreign PID). Phase 77 CLOSED (BENCH-04 + BENCH-05)

@@ -24,7 +24,7 @@
 
 - [x] Phase 75: Schema, Fairness Contract & Tree Skeleton (completed 2026-06-15)
 - [x] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags (completed 2026-06-16)
-- [ ] Phase 77: Bench Runtime & First E2E Smoke
+- [x] Phase 77: Bench Runtime & First E2E Smoke
 - [ ] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface
 - [ ] Phase 79: Evaluators & Result-Schema Metrics Layer
 - [ ] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
@@ -100,7 +100,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 77-05-PLAN.md — Makefile reconciliation (bench collision -> bench-micro) + bench/bench-quick/bench-<suite> targets + timed E2E smoke gate + BENCH.md key-names
+- [x] 77-05-PLAN.md — Makefile reconciliation (bench collision -> bench-micro) + bench/bench-quick/bench-<suite> targets + timed E2E smoke gate + BENCH.md key-names
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

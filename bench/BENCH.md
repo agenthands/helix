@@ -61,18 +61,54 @@ one-paragraph reciprocal pointer back to `bench/BENCH.md`. That reciprocal parag
 **single permitted change** to `eval/` under BENCH-01 (which otherwise stays byte-identical
 to pre-milestone HEAD).
 
-## ⚠️ `make bench` name collision (deferred to Phase 77)
+## `make bench` name collision — RESOLVED (Phase 77, BENCH-05)
 
-**Flag:** there is an existing `make bench` target (`Makefile`) that runs the Phase 64
-Go microbenchmark suite at `./test/bench/...`. A future Phase 77 (BENCH-05) wants
-`make bench` to mean `cmd/helix-bench run` (this milestone's bench stack). These two
-meanings collide on the same target name.
+**Resolution (Phase 77, RESEARCH Pitfall 1 / Open Question 1):** the original `make bench`
+target (the Phase 64 Go microbenchmark suite at `./test/bench/...`) was **renamed to
+`make bench-micro`**. The recipe is preserved verbatim — only the target name changed —
+and `make bench-baseline` still captures a local baseline from that same microbench recipe.
 
-Phase 75 **only documents** this collision — it does **not** rename either target. Phase 77
-must resolve it (rename one of the two; e.g. keep `make bench` for the existing microbench
-and use `make bench-run` / `make helix-bench` for the milestone driver, or vice versa).
-Until Phase 77 resolves it, `make bench` continues to run the existing microbench suite
-unchanged. (RESEARCH Pitfall 1; settled "deferred to Phase 77" in RESEARCH Open Questions Q1.)
+The `bench` target name now belongs to the v1.12 milestone bench stack:
+
+| Target | Invokes | Purpose |
+|--------|---------|---------|
+| `make bench-micro` | `go test -short -bench=. ... ./test/bench/...` | the original Phase 64 Go microbenchmark suite (formerly `make bench`) |
+| `make bench-baseline` | same microbench recipe, teed to a gitignored baseline | local microbench baseline capture |
+| `make bench` | `go run ./cmd/helix-bench run --benchmarks=$(SUITE)` | the milestone bench driver (BENCH-05) |
+| `make bench SUITE=<suite>` | `... run --benchmarks=<suite>` | the `bench-<suite>` parameterization (default `toolbench-go`) |
+| `make bench-quick` | `go build ./cmd/helix` THEN `go run ./cmd/helix-bench run --modes=your_agent_full --tasks=sum-doubler --agent=scripted` | the hermetic scripted CI smoke gate (≤90s, ≥1 task succeeds) |
+
+`make bench-quick` builds the `helix` daemon binary **first** (the subprocess-daemon /
+forwarder-drive path SKIPs if `helix` is absent — RESEARCH build-sequencing note), then runs
+the scripted `your_agent_full` smoke on the single `sum-doubler` seed task. Like `eval-quick`
+it is **local-only, no-network, no-API-key** (the scripted agent replays a hard-coded MCP call
+sequence; it never calls a real LLM — D-01). `make bench` (full driver) is local/nightly, never
+a PR gate (project rule: benchmarks local-only).
+
+> Migration note: anyone who called `make bench` for the Go microbenchmark must now call
+> `make bench-micro`.
+
+## `result.v2.json` provenance key names (stable contract for Phase 79)
+
+The `result.v2.json` schema (`bench/schema/result.v2.schema.json`) requires only
+`schema_version` and leaves `additionalProperties` **open** — so the provenance keys the
+runtime emits are not pinned by the schema. Phase 77 fixes the following **snake_case** key
+names as the stable contract so the Phase 79 aggregator/scorers read them without renaming
+(RESEARCH Open Question 3):
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema_version` | string | result schema version; currently `"v2"` (the one schema-required field) |
+| `outcome` | string | task outcome resolved by `trace.Merge` (budget breach > non-zero verify exit → `"failed"`, else `"success"`) |
+| `fairness` | object | the fairness block (mode overrides) from `runners.DefaultContract` / the resolved mode |
+| `tokens_input` / `tokens_output` | int | token accounting (0 under the scripted gate; populated by the real-agent path) |
+| `trace_ref` | string | filesystem path to the merged 2-leg `trace.json` for this cell |
+| `model_id` | string | the model identifier attributed to the run (e.g. the scripted gate's placeholder sonnet id) |
+
+These names are emitted today by the Plan 04 `result.v2` builder and verified by
+`go test ./bench/runtime/ -run ResultV2Valid`. **Do not rename them in Phase 79** — the
+aggregator consumes them as-is. New metrics (e.g. `edit_locality`, `regression_rate`, `pass@k`)
+land as additional open properties alongside these, never by repurposing an existing key.
 
 ## Companion docs
 

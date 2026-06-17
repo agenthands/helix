@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos
 
 BINARY=helix
 GO=go
@@ -92,11 +92,46 @@ bench-jdtls-warm: ## Run Java integration suite cold then warm; print both wall-
 	@echo "=== jdtls WARM run ==="
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
 
-bench: ## Run the bench suite once and print results to stdout
+# bench-micro: the Phase 64 Go microbenchmark suite (formerly `make bench`).
+# RENAMED in Phase 77 (BENCH-05, RESEARCH Pitfall 1): the `bench` target name was
+# reclaimed by the v1.12 milestone bench stack (`cmd/helix-bench run`). The original
+# microbench recipe is preserved verbatim here under the unambiguous `bench-micro`
+# name. `make bench-baseline` still captures a local baseline from this same recipe.
+bench-micro: ## Run the Go microbenchmark suite once and print results to stdout (formerly `make bench`)
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/...
 
-bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt (gitignored, overwrites)
+bench-baseline: ## Capture a local microbench baseline into test/bench/baselines/local.txt (gitignored, overwrites)
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee test/bench/baselines/local.txt
+
+# ─── v1.12 milestone bench stack (BENCH-05) ────────────────────────────────────
+# `bench`, `bench-quick`, and `bench SUITE=<suite>` invoke `cmd/helix-bench run`
+# (NOT the Go microbench — that is now `bench-micro`). These mirror the eval-quick /
+# eval local-only, no-network discipline: the scripted agent makes zero external
+# network calls and uses no API key (D-01). See bench/BENCH.md for the operator
+# contract and the result.v2 provenance key names.
+#
+# SUITE selects the benchmark suite (the `bench-<suite>` parameterization, RESEARCH
+# Open Question 1): `make bench SUITE=toolbench-go`. Defaults to toolbench-go.
+SUITE ?= toolbench-go
+
+bench: ## Run the milestone bench suite via cmd/helix-bench (use SUITE=<suite>; default toolbench-go)
+	$(GO) run ./cmd/helix-bench run --benchmarks=$(SUITE)
+
+# bench-quick: the hermetic scripted CI smoke gate (BENCH-05 criterion #2, <=90s,
+# >=1 task succeeds). Builds the helix daemon binary FIRST (RESEARCH build-sequencing
+# note: the subprocess-daemon / forwarder-drive path SKIPs if `helix` is absent),
+# then runs the scripted `your_agent_full` smoke on the single sum-doubler seed task.
+# Local-only, no network, no API key (scripted agent, D-01). The absolute --helix-bin
+# ensures the daemon resolves from the per-cell ephemeral scratch cwd.
+bench-quick: ## Build helix, then run the hermetic scripted bench smoke (<=90s CI gate)
+	$(GO) build -o $(BINARY) ./cmd/helix
+	$(GO) run ./cmd/helix-bench run \
+		--benchmarks=$(SUITE) \
+		--modes=your_agent_full \
+		--tasks=sum-doubler \
+		--agent=scripted \
+		--helix-bin=$(CURDIR)/$(BINARY) \
+		--out bench/reports
 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \

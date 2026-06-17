@@ -234,6 +234,15 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: write cell config: %w", err))
 	}
+
+	// Capture the span start BEFORE StartDaemon (which blocks up to 10s polling
+	// for the socket). Anchoring DurationMs after the expensive daemon boot would
+	// understate the wall-clock span and let daemon-side activation/warm-up
+	// tool_calls (emitted during the socket-wait window) sort before StartedAt
+	// (WR-06). start therefore measures the full harness span including daemon
+	// boot; it is passed as MergeInput.StartedAt.
+	start := time.Now()
+
 	h, err := subprocess.StartDaemon(ctx, sb, cfg.Task, cfg.Mode, profileName, cfgPath)
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: start daemon: %w", err))
@@ -243,8 +252,6 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		_ = h.Kill()
 		return preserve(fmt.Errorf("bench/runtime: daemon returned non-positive pid %d", daemonPID))
 	}
-
-	start := time.Now()
 
 	// (4) Drive the agent over the per-cell socket. The default scripted path (the
 	// CI gate) replays scripted_agent.yaml through the forwarder; the claude path

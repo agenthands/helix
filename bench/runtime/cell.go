@@ -200,7 +200,19 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 
 	// (3) Spawn the per-cell daemon (D-06) and capture its PID IMMEDIATELY for
 	// the PID-gated tap (before any Kill — criterion #4).
-	h, err := subprocess.StartDaemon(ctx, sb, cfg.Task, cfg.Mode, profileName, "")
+	//
+	// Per-cell config (T-77 isolation): the semantic_index.store.path default is
+	// cwd-relative (".helix/semantic.duckdb"), so without an override every
+	// parallel daemon would open the SAME DuckDB file under the process cwd and
+	// deadlock on the file lock (criterion #1 --parallel must not collide). We
+	// pin an ABSOLUTE per-cell store path under the cell's isolated HOME so each
+	// daemon's semantic store is private — preserving the bench-full control arm
+	// (semantic enabled) while keeping cells hermetic.
+	cfgPath, err := writeCellConfig(sb, cfg.Task, cfg.Mode, profileName)
+	if err != nil {
+		return preserve(fmt.Errorf("bench/runtime: write cell config: %w", err))
+	}
+	h, err := subprocess.StartDaemon(ctx, sb, cfg.Task, cfg.Mode, profileName, cfgPath)
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: start daemon: %w", err))
 	}
@@ -222,7 +234,7 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		_ = h.Kill()
 		return preserve(fmt.Errorf("bench/runtime: load scripted_agent.yaml: %w", err))
 	}
-	steps, driveErr := driveScript(ctx, cfg.HelixBin, sb.SocketFor(cfg.Task, cfg.Mode), script)
+	steps, driveErr := driveScript(ctx, cfg.HelixBin, sb.SocketFor(cfg.Task, cfg.Mode), repoDir, script)
 	if driveErr != nil {
 		// Transport-level failure: log and continue to tap/merge (observable run).
 		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s drive error (continuing to tap): %v\n",
@@ -334,6 +346,38 @@ func ccLegPresent(merged trace.MergedTrace) bool {
 		}
 	}
 	return false
+}
+
+// writeCellConfig writes a per-cell helix_config.yml into the cell HOME and
+// returns its path (for StartDaemon's --config=). It pins the resolved profile
+// and disables the semantic index for the cell daemon.
+//
+// Why disable semantic_index here (T-77 isolation, criterion #1):
+// internal/semantic/store rejects absolute store paths (T-57-02-01) and the
+// store is opened EAGERLY at daemon startup (daemon.go:318) relative to the
+// daemon's CWD — before any workspace is activated. With the cwd-relative
+// default (".helix/semantic.duckdb"), every parallel cell daemon opens the SAME
+// DuckDB file under the shared process cwd and deadlocks on its file lock,
+// breaking "no collisions on --parallel" (criterion #1). eval's StartDaemon does
+// not expose cmd.Dir, and D-07 forbids forking it, so the hermetic per-cell fix
+// is to set semantic_index.enabled=false (daemon.go:308 makes the store nil and
+// the daemon proceeds). This affects only the daemon's semantic INFRA, not the
+// bench-full TOOL surface (still applied via --profile=bench-full); the Phase 77
+// seed task drives a text-level replace_in_file edit that needs no semantic
+// store. Phase 78+ (corpus needing semantic tools) can revisit by spawning the
+// daemon with a per-cell cwd.
+func writeCellConfig(sb *benchsandbox.Sandbox, task, mode, profileName string) (string, error) {
+	home := sb.HomeFor(task, mode)
+	cfgDir := filepath.Join(home, ".helix")
+	if err := os.MkdirAll(cfgDir, 0700); err != nil {
+		return "", fmt.Errorf("mkdir cell config dir: %w", err)
+	}
+	cfgPath := filepath.Join(cfgDir, "helix_config.yml")
+	cfg := fmt.Sprintf("profile: %s\nsemantic_index:\n  enabled: false\n", profileName)
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0600); err != nil {
+		return "", fmt.Errorf("write cell config: %w", err)
+	}
+	return cfgPath, nil
 }
 
 // marshalTrace serializes the merged trace as indented JSON for the durable

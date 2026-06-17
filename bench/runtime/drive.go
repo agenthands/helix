@@ -21,9 +21,18 @@ const driveDeadline = 10 * time.Second
 
 // driveScript replays a scripted agent's steps through the helix stdio forwarder
 // over the per-cell Unix socket (D-06 transport). It shells
-// `helix --mode=stdio --socket=<sockPath>` ONCE, sends an `initialize` frame
-// followed by one `tools/call` frame per scripted step, and records each step's
-// outcome as a runner.StepResult{Tool, AtTime, Response, Err}.
+// `helix --mode=stdio --socket=<sockPath>` ONCE, sends an `initialize` frame,
+// then an `activate_project` frame pointing the daemon's workspace at
+// workspaceRoot (so the scripted edit's relative paths resolve — mirrors
+// internal/eval/runner/inprocess.go:276-280), then one `tools/call` frame per
+// scripted step, and records each scripted step's outcome as a
+// runner.StepResult{Tool, AtTime, Response, Err}.
+//
+// The activate_project call is harness setup (not a scripted-task step), so it is
+// NOT recorded in the returned []StepResult — only the script.Steps are, keeping
+// the synthesized CC leg faithful to the task's tool-call sequence. The daemon
+// still emits a tool_call for it, so it appears in the daemon-tap (a real,
+// harness-issued call — not foreign-cell leakage).
 //
 // This mirrors driveSingleToolCall in
 // internal/eval/runner/daemon_tap_integration_test.go, generalized from a single
@@ -45,7 +54,7 @@ const driveDeadline = 10 * time.Second
 // failure (cannot start the forwarder, cannot open pipes) is returned as the
 // error; per-step tool/timeout errors are recorded in StepResult.Err and do NOT
 // abort the drive — the cell still taps the daemon log and merges whatever ran.
-func driveScript(ctx context.Context, helixBin, sockPath string, script runner.Script) ([]runner.StepResult, error) {
+func driveScript(ctx context.Context, helixBin, sockPath, workspaceRoot string, script runner.Script) ([]runner.StepResult, error) {
 	fwdCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -73,21 +82,45 @@ func driveScript(ctx context.Context, helixBin, sockPath string, script runner.S
 		_ = cmd.Wait()
 	}()
 
-	// Background reader: parse NDJSON responses keyed by JSON-RPC id. Each
-	// tools/call uses id = stepIndex+2 (id=1 is reserved for initialize).
-	respCh := make(chan jsonrpcResp, len(script.Steps)+1)
+	// Background reader: parse NDJSON responses keyed by JSON-RPC id. id=1 is
+	// initialize, id=2 is activate_project (harness setup), scripted steps start
+	// at id=3.
+	const idInit = 1
+	const idActivate = 2
+	const idStepBase = 3
+	respCh := make(chan jsonrpcResp, len(script.Steps)+2)
 	go readResponses(stdout, respCh)
 
 	// initialize frame (id=1). Do NOT wait for its response before sending the
-	// first call; the forwarder pipelines frames.
+	// next call; the forwarder pipelines frames.
 	const initFrame = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"bench","version":"0"}}}`
 	if _, err := fmt.Fprintln(stdin, initFrame); err != nil {
 		return nil, fmt.Errorf("bench/runtime: write initialize: %w", err)
 	}
 
+	// activate_project frame (id=2): point the daemon workspace at the cloned
+	// repo so the scripted edit's relative paths resolve (inprocess.go:276-280).
+	// Harness setup — NOT recorded as a scripted StepResult.
+	wsJSON, err := json.Marshal(workspaceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("bench/runtime: marshal workspace root: %w", err)
+	}
+	activateFrame := fmt.Sprintf(
+		`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"activate_project","arguments":{"repo_path":%s}}}`,
+		idActivate, string(wsJSON),
+	)
+	if _, err := fmt.Fprintln(stdin, activateFrame); err != nil {
+		return nil, fmt.Errorf("bench/runtime: write activate_project: %w", err)
+	}
+	if _, err := waitForResp(ctx, respCh, idActivate); err != nil {
+		// Activation failure is fatal to the edit — surface it.
+		return nil, fmt.Errorf("bench/runtime: activate_project: %w", err)
+	}
+	_ = idInit
+
 	results := make([]runner.StepResult, 0, len(script.Steps))
 	for i, step := range script.Steps {
-		id := i + 2 // id=1 is initialize
+		id := i + idStepBase
 
 		argsJSON, marshalErr := json.Marshal(orEmptyArgs(step.Args))
 		sr := runner.StepResult{
@@ -169,6 +202,12 @@ func parseRPCLine(line []byte) (jsonrpcResp, bool) {
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
+		Result *struct {
+			IsError bool `json:"isError"`
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
 	}
 	if err := json.Unmarshal(line, &env); err != nil || env.ID == nil {
 		return jsonrpcResp{}, false
@@ -178,10 +217,20 @@ func parseRPCLine(line []byte) (jsonrpcResp, bool) {
 		return jsonrpcResp{}, false
 	}
 	r := jsonrpcResp{id: int(idInt), raw: json.RawMessage(append([]byte(nil), line...))}
-	if env.Error != nil {
+	switch {
+	case env.Error != nil:
+		// Transport / protocol-level JSON-RPC error.
 		r.rpcErr = env.Error.Message
 		if r.rpcErr == "" {
 			r.rpcErr = "jsonrpc error"
+		}
+	case env.Result != nil && env.Result.IsError:
+		// Tool-level error (MCP result.isError): surface the text content so the
+		// recorded StepResult.Err reflects the failure (e.g. "no_workspace: ...").
+		if len(env.Result.Content) > 0 && env.Result.Content[0].Text != "" {
+			r.rpcErr = env.Result.Content[0].Text
+		} else {
+			r.rpcErr = "tool returned isError"
 		}
 	}
 	return r, true

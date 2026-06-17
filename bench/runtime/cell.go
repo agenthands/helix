@@ -161,14 +161,13 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return res, errors.New("bench/runtime: empty helix binary path")
 	}
 
-	// IN-05: single-rep is the ONLY supported layout for Phase 77. The durable
-	// path is <OutDir>/<task>/<mode>/ with no run-index segment, so a non-zero
-	// RunIndex (repetitions / pass@k — a Phase 79 feature) would silently overwrite
-	// the same two files. Guard against that until run-index path segments land.
-	if cfg.RunIndex != 0 {
-		return res, fmt.Errorf("bench/runtime: RunIndex=%d unsupported; single-rep (RunIndex==0) is the only layout this phase (repetitions land in Phase 79)", cfg.RunIndex)
-	}
-
+	// IN-05: the durable artifact path below is <OutDir>/<task>/<mode>/ with NO
+	// run-index segment. cfg.RunIndex is metadata-only this phase (it flows into
+	// result.v2's run_index field), so two cells that share an OutDir AND differ
+	// only by RunIndex would overwrite the same two files. Single-rep per OutDir is
+	// the only layout Phase 77 supports: repetitions (pass@k / multi-run) MUST be
+	// given distinct OutDirs by the caller. Threading RunIndex into the path
+	// (<task>/<mode>/<run_index>/) is deferred to Phase 79 when repetitions land.
 	res.ResultPath = filepath.Join(cfg.OutDir, cfg.Task, cfg.Mode, "result.v2.json")
 	res.MergedTracePath = filepath.Join(cfg.OutDir, cfg.Task, cfg.Mode, "trace.json")
 

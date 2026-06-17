@@ -48,13 +48,14 @@ func StartDaemon(ctx context.Context, sb *benchsandbox.Sandbox, taskID, mode, pr
 	return h, nil
 }
 
-// StartClaude is the reserved home for the real `claude` CLI subprocess spawn
-// (D-01, wired-not-gating). Plan 04 implements it here against
-// internal/eval/agent.Agent.Run + WriteMCPConfig, pointing the claude MCP config
-// at this cell's forwarder socket. It is intentionally unimplemented in Plan 01:
-// the Phase 77 CI gate runs only the hermetic scripted agent, so no claude
-// process is spawned. This stub documents ownership so the wiring lands here, not
-// scattered across the runner glue.
+// StartClaude (the real `claude` CLI subprocess spawn for D-01, wired-not-gating)
+// is IMPLEMENTED in the sibling file claude.go in this package:
 //
-// (No exported signature is committed yet to avoid locking the shape before Plan
-// 04; this comment reserves the responsibility per the package doc.)
+//	func StartClaude(ctx context.Context, sb *benchsandbox.Sandbox, cfg ClaudeConfig) (*agent.Result, error)
+//
+// It wires internal/eval/agent.Agent.Run + WriteMCPConfig, pointing the claude
+// MCP config at the cell's forwarder socket; bench/runtime.RunCell's
+// `case "claude"` branch calls it. The Phase 77/78 CI gate runs only the hermetic
+// scripted agent, so no claude process is spawned by default — but the spawn lives
+// in claude.go, not here. (This package doc keeps the ownership note; see
+// claude.go for the implementation.)

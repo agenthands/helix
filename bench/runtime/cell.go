@@ -31,7 +31,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/agenthands/helix/bench/languages"
@@ -141,15 +140,11 @@ type CellResult struct {
 
 // validateCellKey rejects task/benchmark/mode names that could escape the cell
 // out dir via path traversal (V5 / T-77-08). Mirrors runner.validateTaskID; must
-// run BEFORE any filepath.Join with these segments.
+// run BEFORE any filepath.Join with these segments. IN-05: the predicate body is
+// shared with the matrix layer via validatePathSegment so the two cannot drift;
+// this wrapper preserves the cell-layer error prose.
 func validateCellKey(name, kind string) error {
-	if name == "" {
-		return fmt.Errorf("%s is empty", kind)
-	}
-	if name != filepath.Clean(name) || strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
-		return fmt.Errorf("%s %q contains path separators, parent refs, or a leading dot", kind, name)
-	}
-	return nil
+	return validatePathSegment(name, kind)
 }
 
 // RunCell executes one <run_id>/<task>/<mode> cell end-to-end and returns its
@@ -306,9 +301,18 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		}
 	case "claude":
 		// D-01 wired-not-gating: drive the real claude CLI. Its autonomous
-		// tool-calls land in daemon.log (tapped below); the scripted StepResults
-		// are empty, so the CC leg is synthesized from the daemon side only. A
-		// missing claude binary surfaces as subprocess.ErrClaudeNotFound.
+		// tool-calls land in daemon.log and ARE observable via the PID-gated
+		// daemon tap below. WR-03: `steps` stays nil for the claude path, and
+		// SynthCCTap reads ONLY `steps` (it does not consult the daemon leg), so
+		// the synthesized CC leg currently carries NO claude tool activity — it is
+		// a content-free SessionInit+Result pair. With the WR-02 fix, ccLegPresent
+		// therefore reports CCLegPresent == false for a claude cell (the cc leg has
+		// no tool event), which is accurate: the claude agent's tool activity is
+		// visible only on the daemon leg this phase. Threading the returned
+		// *agent.Result into the CC synth (so the claude tool-uses populate the cc
+		// leg) is deferred to whoever finishes the claude path in a later phase;
+		// the result is intentionally discarded until then. A missing claude binary
+		// surfaces as subprocess.ErrClaudeNotFound.
 		if _, cerr := subprocess.StartClaude(ctx, sb, subprocess.ClaudeConfig{
 			HelixBin:     cfg.HelixBin,
 			TaskID:       cfg.Task,
@@ -348,6 +352,16 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// is the outcome; a ctx cancellation there is likewise an infra error.
 	var verifyExit int
 	if r := languages.RunnerFor(cfg.Benchmark, cfg.Language); r != nil {
+		// WR-06: honor the full LanguageRunner lifecycle — Setup (pre-test
+		// preparation: dependency fetch, build-cache warm-up) MUST run before
+		// RunTests. For the hermetic Go fixture Setup is a no-op (beyond honoring
+		// ctx cancellation), but a future runner whose RunTests depends on Setup
+		// having run (e.g. fetching modules into an offline cache) would silently
+		// fail if the only production caller skipped it. A Setup error is an
+		// INFRASTRUCTURE failure routed through preserve like any other.
+		if serr := r.Setup(ctx, repoDir); serr != nil {
+			return preserve(fmt.Errorf("bench/runtime: runner setup: %w", serr))
+		}
 		outcome, runErr := r.RunTests(ctx, repoDir)
 		if runErr != nil {
 			return preserve(fmt.Errorf("bench/runtime: run tests: %w", runErr))
@@ -459,13 +473,24 @@ func runVerify(ctx context.Context, scriptPath, repoDir string) (int, error) {
 	return 0, nil
 }
 
-// ccLegPresent reports whether the merged trace carries at least one CC-side
-// event (Source == "cc") — the agent-tap leg presence check for Nyquist signal 1.
-// An exit-code-only smoke would pass even if the CC leg silently dropped; this
-// makes its presence an explicit assertion.
+// ccLegPresent reports whether the merged trace carries genuine CC-side TOOL
+// activity — the agent-tap leg presence check for Nyquist signal 1.
+//
+// WR-02: this must assert a cc-side *tool* event, NOT merely any cc event.
+// SynthCCTap ALWAYS emits a SessionInit and a Result event (both Source:"cc"),
+// even when steps is empty (SynthCCTap(nil) still produces 2 cc events). A
+// "any Source==cc" check is therefore structurally vacuous — it can never be
+// false, so it would alias an empty/scripted-less run with one that carried real
+// tool activity (exactly the exit-code-only aliasing the harness defends against).
+// Gating on a cc-side ToolResult (or an AssistantMsg carrying a non-empty
+// ToolUses) makes the signal meaningful: an empty-steps run (e.g. the claude
+// branch with no scripted steps) correctly reports CCLegPresent == false.
 func ccLegPresent(merged trace.MergedTrace) bool {
 	for _, ev := range merged.Events {
-		if ev.Source == "cc" {
+		if ev.Source != "cc" {
+			continue
+		}
+		if ev.Kind == trace.KindToolResult || len(ev.ToolUses) > 0 {
 			return true
 		}
 	}
@@ -517,13 +542,43 @@ func marshalTrace(merged trace.MergedTrace) ([]byte, error) {
 	return b, nil
 }
 
-// writeDurable writes b to path, creating parent dirs (0700) as needed.
+// writeDurable atomically writes b to path, creating parent dirs (0700) as
+// needed. WR-01: the durable artifact path is keyed only by (task, mode) with no
+// run-index segment (see the IN-05 comment above), so two cells sharing an OutDir
+// drive concurrent writes to the SAME path. A bare os.WriteFile (O_CREATE|O_TRUNC)
+// from two goroutines can interleave and leave a torn/partial file that a reader
+// observes — a real filesystem data race the Go race detector cannot see (it only
+// instruments memory). To make the write atomic, we stage to a temp file in the
+// same directory and os.Rename into place: rename is atomic within a filesystem,
+// so a concurrent reader sees either the old file or the fully-written new one,
+// never a half-written intermediate. Concurrent writers still race for last-writer-
+// wins, but each individual file is always complete.
 func writeDurable(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return fmt.Errorf("mkdir %q: %w", filepath.Dir(path), err)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("mkdir %q: %w", dir, err)
 	}
-	if err := os.WriteFile(path, b, 0600); err != nil {
-		return fmt.Errorf("write %q: %w", path, err)
+	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-*")
+	if err != nil {
+		return fmt.Errorf("create temp for %q: %w", path, err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("write temp for %q: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("close temp for %q: %w", path, err)
+	}
+	if err := os.Chmod(tmpName, 0600); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("chmod temp for %q: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("rename temp into %q: %w", path, err)
 	}
 	return nil
 }

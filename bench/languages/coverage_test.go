@@ -21,7 +21,7 @@ const corpusRoot = "../datasets"
 func TestCoverageGoIsTenOfTen(t *testing.T) {
 	declared := golang.GoRunner{}.Capabilities()
 
-	rep, err := languages.Coverage(corpusRoot, "go", declared)
+	rep, err := languages.Coverage(corpusRoot, "internal-toolbench", "go", declared)
 	if err != nil {
 		t.Fatalf("Coverage() error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCoverageDetectsGap(t *testing.T) {
 		}
 	}
 
-	rep, err := languages.Coverage(root, "go", declared)
+	rep, err := languages.Coverage(root, "internal-toolbench", "go", declared)
 	if err != nil {
 		t.Fatalf("Coverage() error: %v", err)
 	}

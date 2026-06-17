@@ -20,16 +20,22 @@ type CoverageReport struct {
 	Missing  []Capability
 }
 
-// Coverage walks <corpusRoot>/internal-toolbench/<lang>/*/task.json, decodes the
+// Coverage walks <corpusRoot>/<benchmark>/<lang>/*/task.json, decodes the
 // `capability` field of each (the D-06 source of truth — it deliberately does NOT
 // parse the task id string, mitigating T-78-11), builds the covered set, and
 // reports how many of the runner's `declared` capabilities are covered, with the
 // missing ones listed (D-11 "gaps are explicit").
 //
+// WR-04: the benchmark segment is an explicit parameter, not a hardcoded
+// "internal-toolbench" literal. `benchmark` is a first-class axis everywhere else
+// in the harness (Cell.Benchmark, cellSeedDir, ExpandMatrix, the Makefile SUITE
+// parameter); hardcoding it here would silently read the wrong directory the
+// moment a second suite (Rust/TS/Python, anticipated by runner.go) is added.
+//
 // Only capabilities in `declared` are counted toward Covered: a task tagged with a
 // capability the runner does not declare does not inflate the report.
-func Coverage(corpusRoot, lang string, declared []Capability) (CoverageReport, error) {
-	langDir := filepath.Join(corpusRoot, "internal-toolbench", lang)
+func Coverage(corpusRoot, benchmark, lang string, declared []Capability) (CoverageReport, error) {
+	langDir := filepath.Join(corpusRoot, benchmark, lang)
 
 	covered, err := coveredCapabilities(langDir)
 	if err != nil {

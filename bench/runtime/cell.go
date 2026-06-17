@@ -10,7 +10,7 @@
 //	spawn per-cell daemon          (D-06, Unix socket, HTTP off)
 //	capture daemonPID BEFORE Kill  (criterion #4 PID gate)
 //	drive scripted edit            (D-06 forwarder transport, drive.go)
-//	kill daemon, PID-gated tap      (D-08, flush slog THEN tap)
+//	kill daemon, PID-gated tap      (D-08, terminate daemon THEN tap)
 //	run verify.sh                   (D-04 outcome source)
 //	synth CC leg + 2-leg Merge      (D-02)
 //	build + validate result.v2      (D-04)
@@ -280,7 +280,12 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return preserve(fmt.Errorf("bench/runtime: unknown agent %q (want scripted|claude)", cfg.Agent))
 	}
 
-	// (5) Kill the daemon to flush slog buffers, THEN PID-gated tap (D-08).
+	// (5) Terminate the daemon, THEN PID-gated tap (D-08). The tap reads
+	// daemon.log AFTER the daemon exits; its correctness depends on the daemon
+	// writing tool_call log lines synchronously/unbuffered at the app layer (NOT
+	// on the kill "flushing" anything — SIGKILL terminates immediately and cannot
+	// flush userspace buffers). If daemon log buffering is ever introduced, this
+	// tap breaks and the kill-then-tap ordering must be revisited.
 	if err := h.Kill(); err != nil {
 		return preserve(fmt.Errorf("bench/runtime: kill daemon: %w", err))
 	}

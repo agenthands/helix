@@ -2,7 +2,7 @@
 phase: 78-internal-toolbench-go-first-languagerunner-interface
 reviewed: 2026-06-17T00:00:00Z
 depth: standard
-files_reviewed: 22
+files_reviewed: 23
 files_reviewed_list:
   - bench/languages/coverage.go
   - bench/languages/coverage_test.go
@@ -20,157 +20,228 @@ files_reviewed_list:
   - bench/runtime/result_test.go
   - bench/runtime/store_isolation_test.go
   - bench/runtime/subprocess/daemon.go
+  - bench/runtime/validate.go
   - cmd/helix-bench/main.go
   - cmd/helix-bench/run_cmd_test.go
-  - internal/eval/sandbox/sandbox.go
-  - internal/eval/sandbox/sandbox_test.go
   - Makefile
 findings:
   critical: 0
-  warning: 6
-  info: 5
-  total: 11
+  warning: 4
+  info: 4
+  total: 8
 status: issues_found
 ---
 
-# Phase 78: Code Review Report
+# Phase 78: Code Review Report (re-review after fix pass)
 
 **Reviewed:** 2026-06-17
 **Depth:** standard
-**Files Reviewed:** 22
+**Files Reviewed:** 23 (plus `bench/runtime/cctap.go`, `drive.go`, `result.go` read as call-chain context)
 **Status:** issues_found
 
 ## Summary
 
-The Phase 78 "internal ToolBench" harness is well-structured and unusually well-commented; the load-bearing D-03 store-isolation seam (`WithWorkingDir` → per-cell cwd → per-cell `.helix/semantic.duckdb`) is sound, the matrix dispatcher's semaphore bound is correct and genuinely unit-tested, and the Go `test2json` parser correctly treats exit code as the authoritative gate (verified empirically against Go 1.26: a compile failure yields zero test rows and a non-zero exit, never a false pass). Path-traversal validation is applied consistently at both the matrix and cell layers.
+This is a re-review of the Phase 78 internal-ToolBench harness after the
+`b4b66c05..dce1c0d5` fix pass. I validated the four called-out fixes and hunted
+for regressions the fixes may have introduced.
 
-No BLOCKER-class defects were found (no injection, no auth bypass, no crash, no data-loss-on-the-happy-path). The findings are concentrated in two areas the brief flagged: (1) the shipped `store_isolation_test.go` and `RunMatrix` themselves drive two concurrent goroutines into the **same durable artifact path** with an unsynchronized `os.WriteFile`, a real filesystem data race that `go test -race` cannot detect; and (2) the `CCLegPresent` "Nyquist signal" is structurally vacuous — `SynthCCTap` always emits two `Source:"cc"` events, so the assertion can never fail. Several quality issues (dead code, a hardcoded benchmark axis, a misleading doc comment about the claude leg) round out the list.
+**Prior fixes — validation result (all genuinely fixed):**
+
+- **WR-01 (atomic `writeDurable`)** — CORRECT. `cell.go:556-584` stages to
+  `os.CreateTemp(dir, ".tmp-...")` in the **same** directory as the target (so
+  `os.Rename` stays intra-filesystem and atomic), and every error path
+  (`Write`/`Close`/`Chmod`/`Rename` failure) calls `os.Remove(tmpName)` before
+  returning. No leftover temp on error; readers see old-or-complete, never torn.
+  Last-writer-wins on a shared path is acknowledged and benign. Verified fixed.
+
+- **WR-02 (`ccLegPresent` non-vacuity)** — CORRECT and non-vacuous.
+  `ccLegPresent` (`cell.go:488-498`) now gates on a cc-side `KindToolResult` or a
+  non-empty `ToolUses`, not "any `Source==cc`". `SynthCCTap(nil)` emits only a
+  `SessionInit` + `Result` (no ToolResult, no ToolUses — verified in `cctap.go`),
+  so the claude branch / empty-script case yields `CCLegPresent == false`. The
+  signal CAN be false — the fix is real. (See WR-03 below: the *false* branch is
+  never asserted by any test.)
+
+- **WR-05 (`Setup` honors `ctx`) / WR-06 (`RunCell` calls `Setup`)** — CORRECT.
+  `GoRunner.Setup` (`go/runner.go:41-43`) returns `ctx.Err()` (nil when live,
+  cancellation error when already cancelled). `RunCell` (`cell.go:362-364`) now
+  calls `r.Setup(ctx, repoDir)` BEFORE `r.RunTests`, routing a Setup error through
+  `preserve(...)` as an infra failure. Setup is wired into the run path. Verified.
+
+- **IN-05 (shared `validatePathSegment`)** — CORRECT. `bench/runtime/validate.go`
+  holds the single predicate; `validateCellKey` (`cell.go:146-148`) and
+  `validateMatrixID` (`matrix.go:87-89`) both delegate to it and keep only their
+  distinct error-prefix wrapping. No leftover duplicate body. `go vet ./bench/...`
+  is clean.
+
+No regression was introduced by the fix pass itself (verified against the
+`b4b66c05..dce1c0d5` diff). The findings below are genuinely-present issues at the
+current state — two pre-existing process-lifecycle gaps in `sandbox.go` (in scope,
+on `RunCell`'s hot path), one aggregator over-count latent in `coverage.go`, and
+one test-coverage gap the WR-02 fix left behind.
 
 ## Warnings
 
-### WR-01: Concurrent unsynchronized writes to the same durable artifact path (filesystem data race)
+### WR-01: Happy-path daemon kill reaps only the group leader — children leak under `--parallel`
 
-**File:** `bench/runtime/cell.go:414-423`, `bench/runtime/store_isolation_test.go:62-96`, `bench/runtime/matrix.go:174-221`
-**Issue:** `RunCell` writes `result.v2.json` and `trace.json` via `writeDurable` → `os.WriteFile` (O_CREATE|O_TRUNC|O_WRONLY) at `<OutDir>/<task>/<mode>/...`, a path keyed only by `(task, mode)` with no run-index segment (acknowledged in the IN-05 comment at cell.go:185-191). The shipped `store_isolation_test.go` then launches **two cells with identical `(Task, Mode)` and a shared `OutDir`** at `--parallel=2`, so both `RunCell` goroutines call `writeDurable` on the *same* two paths concurrently. Two goroutines doing `open(O_TRUNC)+write` on one path can interleave and produce a torn/partial file; this is a real data race on the filesystem that the Go race detector does **not** observe (it only instruments memory). The test comment ("last-writer-wins — benign here") understates it: there is no atomicity, so a reader could see a half-written `trace.json`. The same hazard exists in `RunMatrix` for any caller that expands the same `(task, mode)` twice into one `OutDir`.
-**Fix:** Make durable writes atomic (write to a temp file in the same dir, then `os.Rename`), and/or give each cell a distinct durable path. Minimal atomic write:
+**File:** `internal/eval/sandbox/sandbox.go:193-220`
+**Issue:** `StartDaemon` puts the daemon in its own process group
+(`SysProcAttr.Setpgid = true`, line 284) specifically so the whole group can be
+SIGKILL'd. But `Kill()` only does `h.cmd.Process.Kill()` on the normal path
+(line 197), which signals the **group leader only** — not the group. The
+`syscall.Kill(-pid, SIGKILL)` group-wide reap exists ONLY in the 5s-timeout
+fallback (line 216). On the overwhelmingly common happy path (daemon exits within
+5s), any descendants the daemon spawned (language servers, a `go test` child) are
+left orphaned, not reaped. Under `--parallel=N` this is a real per-cell process
+leak that accumulates across a run. `RunCell` always reaches `Kill()`
+(`cell.go:337`), so this is on the hot path for every cell.
+**Fix:** Signal the group on the normal path too, then wait:
 ```go
-func writeDurable(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return fmt.Errorf("mkdir %q: %w", filepath.Dir(path), err)
+func (h *DaemonHandle) Kill() error {
+	if h.cmd == nil || h.cmd.Process == nil {
+		return nil
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return err
+	pid := h.cmd.Process.Pid
+	// Daemon is a group leader (Setpgid); kill the whole group so LS / go test
+	// children are reaped, not just the leader.
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
+	if err := h.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return fmt.Errorf("sandbox: kill daemon %s/%s: %w", h.taskID, h.mode, err)
 	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return os.Rename(tmpName, path) // atomic replace
+	// ...existing 5s-bounded Wait()...
 }
 ```
-For the store-isolation test specifically, prefer distinct `OutDir`s per cell (as `cross_cell_test.go` already does with `OutDir: t.TempDir()` per goroutine) so the durable collision never arises.
 
-### WR-02: `CCLegPresent` Nyquist signal is structurally vacuous — can never be false
+### WR-02: 5s-timeout Kill fallback returns without reaping the in-flight `Wait()`
 
-**File:** `bench/runtime/cell.go:391,462-473`, `bench/runtime/cctap.go:42-79`
-**Issue:** `ccLegPresent(merged)` returns true iff any merged event has `Source == "cc"`. But `SynthCCTap` **always** emits a `SessionInit` and a `Result` event, both `Source:"cc"`, even when `steps` is empty (`SynthCCTap(nil)` still produces 2 cc events). Therefore `res.CCLegPresent` is `true` unconditionally for every cell — the "is the CC leg real?" assertion in `TestDaemonTap` (line 88), `TestCrossCell` (line 96), and the documented Nyquist signal #1 cannot ever fail, including in the claude branch where `steps` is empty by design. This is exactly the "exit-code-only smoke would alias all three signals" failure mode the code comments claim to defend against, reintroduced one layer up. The assertion gives false confidence that the agent leg carried tool activity.
-**Fix:** Make the signal meaningful: assert presence of a cc-side *tool* event (e.g. `KindAssistantMsg` with a non-empty `ToolUses`, or `KindToolResult`) rather than any cc event. For example:
+**File:** `internal/eval/sandbox/sandbox.go:209-219`
+**Issue:** When `h.cmd.Wait()` does not return within 5s, the fallback sends
+`syscall.Kill(-pid, SIGKILL)` and then **returns the error immediately without
+blocking on the in-flight `Wait()` goroutine** (line 217). The
+`go func(){ done <- h.cmd.Wait() }()` goroutine is still parked in `Wait()`. It
+will eventually complete after the group SIGKILL and send to the buffered `done`
+channel (cap 1, so the send won't block), so the reap happens *eventually* — but
+the function has already returned an infra error to the caller
+(`cell.go:337-339` → `preserve(...)`) with no confirmation the process actually
+died, and the reaping goroutine outlives the call. Pairing this with the WR-01
+group-kill on the normal path shrinks how often this fallback fires.
+**Fix:** After the group SIGKILL in the fallback, drain the already-running `done`
+channel so `Wait()` is guaranteed to complete before returning:
 ```go
-func ccLegPresent(merged trace.MergedTrace) bool {
-	for _, ev := range merged.Events {
-		if ev.Source == "cc" && (ev.Kind == trace.KindToolResult || len(ev.ToolUses) > 0) {
-			return true
-		}
-	}
-	return false
-}
+case <-time.After(5 * time.Second):
+	_ = syscall.Kill(-h.cmd.Process.Pid, syscall.SIGKILL)
+	<-done // the in-flight Wait() now returns after the group SIGKILL — reap confirmed
+	return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
 ```
-This makes an empty-steps scripted/claude run correctly report `CCLegPresent == false`.
 
-### WR-03: Claude branch discards `agent.Result` and synthesizes an empty CC leg — doc comment is wrong
+### WR-03: `ccLegPresent` false-branch (the WR-02 fix's whole point) is never asserted by any test
 
-**File:** `bench/runtime/cell.go:307-321,369-370,310-311`
-**Issue:** In the `case "claude"` branch the returned `*agent.Result` from `subprocess.StartClaude` is discarded (`if _, cerr := ...`). `steps` is never populated for the claude path, so `SynthCCTap(steps)` runs with `nil` and the CC leg carries no tool activity. The comment at cell.go:310-311 claims "the scripted StepResults are empty, so the CC leg is synthesized from the daemon side only" — but `SynthCCTap` does **not** read the daemon leg at all; it only synthesizes from `steps`. The merged trace therefore has the claude agent's real tool calls *only* on the daemon leg, and a content-free CC leg, which combined with WR-02 makes a claude cell's `CCLegPresent` misleadingly `true`. This is wired-not-gating code (never the CI default), so it is a WARNING, not a BLOCKER, but the discarded result and the inaccurate comment will mislead whoever finishes the claude path in a later phase.
-**Fix:** Either thread the `agent.Result` into the CC synth (so the claude agent's tool uses populate the cc leg) or correct the comment to state plainly that the claude CC leg is currently empty and the claude path's tool activity is observable only via the daemon tap. Do not leave a comment asserting a synthesis that does not happen.
+**File:** `bench/runtime/cell.go:488-498` (predicate); `bench/runtime/cctap_test.go`, `cross_cell_test.go:96`, `daemon_tap_integration_test.go:88`
+**Issue:** The prior WR-02 fix made `ccLegPresent` meaningful by requiring a
+cc-side tool event. But no test exercises the **false** branch. The integration
+tests assert only `CCLegPresent == true` (scripted path). `TestSynthCCTapMerge`
+counts `Source=="cc"` events directly (`cctap_test.go:123-129`) rather than
+calling `ccLegPresent`, so the predicate itself has zero direct unit coverage of
+either branch. A future regression that reverted `ccLegPresent` to "any
+`Source==cc`" (vacuous again) would pass the entire suite — exactly the failure
+mode WR-02 set out to prevent. The fix is correct but unguarded.
+**Fix:** Add a unit test on `ccLegPresent` directly that asserts BOTH branches:
+empty steps (`SynthCCTap(nil)`) → false; one scripted step → true. Build a
+`trace.MergedTrace` from the synth events and call `ccLegPresent` on it so the
+predicate, not a re-implementation, is under test.
 
-### WR-04: `Coverage` hardcodes the `internal-toolbench` benchmark, silently ignoring any other suite
+### WR-04: `Coverage` can report `Covered > Declared` when `declared` contains a duplicate capability
 
-**File:** `bench/languages/coverage.go:31-32`
-**Issue:** `Coverage(corpusRoot, lang, declared)` builds `langDir := filepath.Join(corpusRoot, "internal-toolbench", lang)` — the benchmark segment is a string literal. The rest of the harness treats `benchmark` as a first-class axis (`Cell.Benchmark`, `cellSeedDir`, `ExpandMatrix`), and `Makefile`'s `bench` target is explicitly parameterized by `SUITE`. A caller computing coverage for any benchmark other than `internal-toolbench` would silently read the wrong directory (or get a "reading corpus dir ... no such file" error) with no indication that the benchmark axis was ignored. This is a latent correctness gap the moment a second suite is added (the package doc in `runner.go` anticipates Rust/TS/Python adapters).
-**Fix:** Add a `benchmark` parameter and join it explicitly:
+**File:** `bench/languages/coverage.go:37-67`
+**Issue:** `Declared` is computed from a **de-duplicated** set
+(`len(declaredSet)`, line 64) while `coveredN` is incremented by iterating the raw
+`declared` **slice** (lines 52-57). If a caller passes a `declared` slice with a
+repeated capability that is covered in the corpus, `coveredN` double-counts it but
+`Declared` does not — yielding `Covered > Declared`, an incoherent report that
+would also corrupt the "10/10" gate semantics. `GoRunner.Capabilities()` returns
+10 distinct values today so this is latent, but `declared` is an external
+parameter (a hand-authored future runner could repeat one), and this aggregator IS
+the D-11 "gaps are explicit" gate — it must not be able to over-count. The
+`declaredSet` map is built but its membership is otherwise unused (only `len()` is
+read), which is the tell that dedup was meant to flow into the count.
+**Fix:** Count over the deduplicated set, not the raw slice:
 ```go
-func Coverage(corpusRoot, benchmark, lang string, declared []Capability) (CoverageReport, error) {
-	langDir := filepath.Join(corpusRoot, benchmark, lang)
-	...
-}
-```
-Update the single caller in `coverage_test.go` accordingly.
-
-### WR-05: `Setup`'s `ctx` parameter is unused — a cancelled context is silently ignored
-
-**File:** `bench/languages/go/runner.go:36-38`
-**Issue:** `func (GoRunner) Setup(ctx context.Context, repoDir string) error { return nil }` accepts a `context.Context` but never consults it. The interface contract (`runner.go:66-67`) documents Setup as "dependency fetch, build cache warm-up" — operations a future runner will make cancellable. For the Go no-op this is harmless today, but the no-op silently ignores an already-cancelled context, and `RunCell` never calls `Setup` at all (see WR-06), so the interface method is both unexercised and not ctx-aware. When a non-trivial runner (Rust `cargo fetch`, npm install) implements this, a copy of this no-op shape risks ignoring cancellation.
-**Fix:** For the Go runner, at minimum honor cancellation: `return ctx.Err()` (returns nil when not cancelled). More importantly, ensure callers actually invoke `Setup` (WR-06) so the seam is real rather than dead.
-
-### WR-06: `RunCell` never calls `LanguageRunner.Setup` — half the interface is dead in the only caller
-
-**File:** `bench/runtime/cell.go:350-366`
-**Issue:** The dispatch block resolves `r := languages.RunnerFor(...)` and calls `r.RunTests(...)`, but never calls `r.Setup(ctx, repoDir)` beforehand. `Setup` is a declared method of the `LanguageRunner` contract intended to run "pre-test preparation (dependency fetch, build cache warm-up)" before `RunTests`. For the hermetic Go fixture this happens to be a no-op so nothing breaks, but the contract is silently unhonored: any future runner whose `RunTests` depends on `Setup` having run (e.g. fetching modules into an offline cache) will fail when driven through `RunCell`. The interface promises a lifecycle the only production caller does not execute.
-**Fix:** Call `Setup` before `RunTests` and route its error through `preserve` like any other infra failure:
-```go
-if r := languages.RunnerFor(cfg.Benchmark, cfg.Language); r != nil {
-	if serr := r.Setup(ctx, repoDir); serr != nil {
-		return preserve(fmt.Errorf("bench/runtime: runner setup: %w", serr))
+coveredN := 0
+for c := range declaredSet {
+	if covered[c] {
+		coveredN++
+	} else {
+		missing = append(missing, c)
 	}
-	outcome, runErr := r.RunTests(ctx, repoDir)
-	...
 }
+sort.Slice(missing, func(i, j int) bool { return missing[i] < missing[j] })
 ```
 
 ## Info
 
-### IN-01: Dead no-op branch in `runBench`
+### IN-01: Redundant `os.Chmod` on a freshly `CreateTemp`'d file
 
-**File:** `cmd/helix-bench/main.go:176-179`
-**Issue:** `ctx := cmd.Context(); if ctx == nil { ctx = cmd.Context() }` assigns the result of `cmd.Context()` to `ctx`, then if it is nil reassigns the *same* `cmd.Context()` (which returns `context.Background()` and is never nil anyway). The branch can never change anything.
-**Fix:** Delete the `if` block; `ctx := cmd.Context()` suffices (cobra's `Context()` never returns nil). If a non-nil guarantee is wanted, fall back to `context.Background()`:
-```go
-ctx := cmd.Context()
-if ctx == nil {
-	ctx = context.Background()
-}
-```
+**File:** `bench/runtime/cell.go:575-578`
+**Issue:** `os.CreateTemp` already creates the file with mode 0600. The explicit
+`os.Chmod(tmpName, 0600)` (line 575) is a no-op on every platform and adds an
+extra error path. Harmless, but dead defensive code.
+**Fix:** Drop the `Chmod` block; rely on `CreateTemp`'s 0600 default (leave a
+one-line comment if the intent needs documenting).
 
-### IN-02: Stale/aspirational package doc — `main.go` header says "Phase 75 ... run (not yet wired)" but `run` is fully wired
+### IN-02: `discoverTasks` union-across-languages fabricates guaranteed-to-fail cells
 
-**File:** `cmd/helix-bench/main.go:1-13,63-64`
-**Issue:** The package doc and the root `Long` help both describe `run` as "(Phase NN, not yet wired)" / "(not yet implemented)", yet `newRunCmd` is a complete implementation that expands the matrix and dispatches cells. The help text shown to operators (`Long`, line 63) will misreport `run` as unimplemented.
-**Fix:** Update the package comment and the root `Long` block to reflect that `run` is now implemented (Phase 78); keep the "not yet implemented" wording only for `fetch-datasets` and `report`.
+**File:** `cmd/helix-bench/main.go:264-297`
+**Issue:** When `--tasks` is omitted and multiple `--languages` are given, the
+discovered task set is the union across languages (documented at lines 202-208). A
+task present only under `go/` then yields a `(rust, that-task)` cell whose seed dir
+does not exist, surfacing as a per-cell infra error rather than a skip. Intentional
+and documented; harmless for the default single-language `go` invocation, but with
+N languages it inflates the matrix with cells guaranteed to fail. Worth a guard or
+per-language discovery once the language axis is actually exercised in Phase 85.
+**Fix:** Discover per-language (pair a task only with languages whose dir contains
+it), or document the cross-product fan-out in the `--languages` flag help.
 
-### IN-03: `StartClaude` doc in `subprocess/daemon.go` claims it is "intentionally unimplemented in Plan 01", but it is implemented in `claude.go`
+### IN-03: `deriveStoreOptIn` / `readTaskPrompt` parse the same `task.json` twice per cell
 
-**File:** `bench/runtime/subprocess/daemon.go:51-61`
-**Issue:** The long comment block reserves `StartClaude` as an unimplemented stub ("It is intentionally unimplemented in Plan 01 ... No exported signature is committed yet"). In reality `StartClaude` is fully defined in the sibling `bench/runtime/subprocess/claude.go` (confirmed: `func StartClaude(ctx, sb, cfg ClaudeConfig) (*agent.Result, error)`), and `cell.go` calls it. The reservation comment is now stale and contradicts the shipped code, which will confuse the next maintainer about where the claude spawn lives.
-**Fix:** Delete or rewrite the stub comment in `daemon.go` to point at the real implementation in `claude.go`.
+**File:** `bench/runtime/matrix.go:229-245, 275-307`
+**Issue:** `runOneCell` may read+unmarshal `<seedDir>/task.json` twice — once in
+`readTaskPrompt` (claude path) and once in `deriveStoreOptIn` (always). Two small
+reads + two `json.Unmarshal` of the same file. Purely a tidiness issue (both reads
+are benign-on-error), not a correctness concern at this scale.
+**Fix:** Read `task.json` once into a single struct with `capability`,
+`semantic_index`, and `prompt` fields and pass the decoded value to both helpers.
 
-### IN-04: `parseTest2JSON` silently swallows malformed mid-stream lines
+### IN-04: `validatePathSegment` doc comment mis-attributes which clause catches a single separator
 
-**File:** `bench/languages/go/runner.go:114-141`
-**Issue:** On any JSON decode error (other than EOF) `parseTest2JSON` `break`s out of the loop, discarding all subsequent events. The comment justifies this for a leading build-error banner, and empirically (Go 1.26) `go test -json` now emits build failures as well-formed `build-output`/`build-fail` JSON, so the early-break path is not hit for compile failures. But a single corrupt line anywhere in a large stream silently truncates the per-test detail (the `Tests` slice) with no diagnostic. Because `Passed` is gated on exit code this never produces a wrong pass/fail, so it is Info, not a bug — but the silent truncation could hide real test results in a partially-corrupt stream.
-**Fix:** On a non-EOF decode error, `continue` past the offending line (re-syncing the decoder by reading line-by-line) rather than abandoning the rest of the stream, or at minimum record that parsing was truncated so the advisory `Tests` detail is not silently incomplete.
+**File:** `bench/runtime/validate.go:22-29`
+**Issue:** The comment credits the `filepath.Clean` mismatch with rejecting
+"redundant separators". That holds for `a//b` (Clean rewrites it) but a single
+embedded separator like `a/b` is caught by the explicit
+`strings.ContainsAny(name, "/\\")` clause, not by the Clean check (Clean leaves
+`a/b` unchanged). Behavior is correct and fully covered by tests
+(`matrix_test.go` "language separator"/"task separator"); only the comment's
+attribution is muddled. Doc nit.
+**Fix:** Reword to: "rejects names that `filepath.Clean` rewrites (`..`, `a//b`,
+trailing slash), that contain any path separator, or that begin with a dot."
 
-### IN-05: `validateCellKey` / `validateMatrixID` are duplicated verbatim
+---
 
-**File:** `bench/runtime/cell.go:145-153`, `bench/runtime/matrix.go:86-94`
-**Issue:** The two validators are byte-for-byte identical in body (empty check, `filepath.Clean` mismatch, separator/leading-dot rejection) and only differ in the wrapping package/error prose. The matrix.go comment even notes RunCell "re-validates ... defensively." Two copies of a security-relevant predicate risk drifting apart (a future hardening applied to one and not the other silently weakens the cell-layer check).
-**Fix:** Extract a single unexported helper (e.g. in a small shared file in package `runtime`) and have both call sites delegate to it, preserving the distinct error-prefix wrapping at the call site.
+## Narrative Findings (AI reviewer) — scope notes
+
+- `go vet ./bench/... ./cmd/helix-bench/... ./internal/eval/sandbox/...` is clean;
+  no unused imports or dead-symbol regressions were introduced by the fix pass.
+- The four called-out fixes (WR-01 atomic write, WR-02 non-vacuous
+  `ccLegPresent`, WR-05/06 Setup wiring, IN-05 shared validator) are all genuinely
+  and correctly applied; none were re-reported.
+- The two process-lifecycle warnings (WR-01/WR-02 here) live in `sandbox.go`,
+  which predates this fix pass but is in the review file list and is on `RunCell`'s
+  hot path for every cell; the `Setpgid` machinery makes the leader-only happy-path
+  kill an actual (not theoretical) child-reaping gap.
+- The result-schema validator (`result.go` `Validate`), the matrix dispatcher's
+  semaphore bound (`matrix.go` `dispatch`), the test2json parser
+  (`go/runner.go` `parseTest2JSON`, re-synced in `c43e291f`), the
+  `writeDurable` atomic write, and the path-traversal validators were traced and
+  found correct.
 
 ---
 

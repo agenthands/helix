@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/agenthands/helix/bench/languages"
 	benchsandbox "github.com/agenthands/helix/bench/runtime/sandbox"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,4 +102,75 @@ func TestCellLayoutPreserveOnFailure(t *testing.T) {
 
 	// Clean it up ourselves so the test leaves no /tmp residue.
 	t.Cleanup(func() { _ = removeAllForTest(res.ScratchDir) })
+}
+
+// TestRunOneCellLangSeedJoin asserts the seed dir a Cell with Language=="go"
+// resolves to is <root>/internal-toolbench/go/<task> (D-07 <lang> seed join).
+func TestRunOneCellLangSeedJoin(t *testing.T) {
+	c := Cell{
+		Benchmark: "internal-toolbench",
+		Language:  "go",
+		Mode:      "your_agent_full",
+		Task:      "IT-go-patch-apply-1",
+	}
+	got := cellSeedDir("/data", c)
+	want := filepath.Join("/data", "internal-toolbench", "go", "IT-go-patch-apply-1")
+	assert.Equal(t, want, got, "seed dir must include the <lang> segment (D-07)")
+}
+
+// TestWriteCellConfigStoreOptIn asserts writeCellConfig parameterizes
+// semantic_index.enabled from storeOptIn (D-01/D-02): false -> enabled: false,
+// true -> enabled: true.
+func TestWriteCellConfigStoreOptIn(t *testing.T) {
+	outDir := t.TempDir()
+	sb, err := benchsandbox.New("20060102T150405Z", "/nonexistent/helix", outDir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sb.Cleanup() })
+
+	const task = "IT-go-patch-apply-1"
+	const mode = "your_agent_full"
+	require.NoError(t, sb.Prepare(task, mode))
+
+	t.Run("store-off", func(t *testing.T) {
+		p, err := writeCellConfig(sb, task, mode, "bench-full", false)
+		require.NoError(t, err)
+		b, err := os.ReadFile(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(b), "enabled: false", "storeOptIn=false must disable the index")
+	})
+
+	t.Run("store-on", func(t *testing.T) {
+		p, err := writeCellConfig(sb, task, mode, "bench-full", true)
+		require.NoError(t, err)
+		b, err := os.ReadFile(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(b), "enabled: true", "storeOptIn=true must enable the index")
+	})
+}
+
+// TestCellRunnerDispatch asserts the D-10 dispatch wiring: a (benchmark, lang)
+// with a registered runner resolves to that runner; an unregistered pair returns
+// nil (the verify.sh-fallback signal). The Go runner is registered for
+// (internal-toolbench, go) via Plan 01's init().
+func TestCellRunnerDispatch(t *testing.T) {
+	// Registered: the Go runner dispatches structured RunTests.
+	if r := languages.RunnerFor("internal-toolbench", "go"); r == nil {
+		t.Fatalf("RunnerFor(internal-toolbench, go) = nil; want the Go runner (Plan 01 registration)")
+	}
+	// Unregistered: nil -> RunCell falls back to runVerify(verify.sh).
+	if r := languages.RunnerFor("internal-toolbench", "nonexistent-lang"); r != nil {
+		t.Fatalf("RunnerFor(internal-toolbench, nonexistent-lang) = %v; want nil (verify.sh fallback)", r)
+	}
+}
+
+// TestCellGoStaleComments guards Pitfall 5: the stale "ABSOLUTE per-cell store
+// path" phrasing must not reappear in cell.go after reconciliation.
+func TestCellGoStaleComments(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	cellGo := filepath.Join(filepath.Dir(thisFile), "cell.go")
+	b, err := os.ReadFile(cellGo)
+	require.NoError(t, err)
+	assert.NotContains(t, strings.ToLower(string(b)), "absolute per-cell store path",
+		"stale absolute-store-path comment must be reconciled (Pitfall 5)")
 }

@@ -8,24 +8,25 @@ import (
 )
 
 // TestExpandMatrixCartesianCount asserts the expansion yields exactly
-// |benchmarks| x |modes| x |tasks| cells, with no duplicates and a deterministic
-// (benchmark-outer, task-inner) ordering.
+// |benchmarks| x |languages| x |modes| x |tasks| cells, with no duplicates and a
+// deterministic (benchmark-outer, language, mode, task-inner) ordering.
 func TestExpandMatrixCartesianCount(t *testing.T) {
-	benchmarks := []string{"toolbench-go", "toolbench-rust"}
+	benchmarks := []string{"internal-toolbench", "other-bench"}
+	languages := []string{"go", "rust"}
 	modes := []string{"your_agent_full", "your_agent_no_lsp"}
-	tasks := []string{"sum-doubler", "fizzbuzz", "rename-sym"}
+	tasks := []string{"IT-go-patch-apply-1", "fizzbuzz", "rename-sym"}
 
-	cells, err := ExpandMatrix(benchmarks, modes, tasks)
+	cells, err := ExpandMatrix(benchmarks, languages, modes, tasks)
 	if err != nil {
 		t.Fatalf("ExpandMatrix: unexpected error: %v", err)
 	}
 
-	want := len(benchmarks) * len(modes) * len(tasks)
+	want := len(benchmarks) * len(languages) * len(modes) * len(tasks)
 	if len(cells) != want {
 		t.Fatalf("cell count = %d; want %d", len(cells), want)
 	}
 
-	// Every (benchmark, mode, task) triple is present exactly once.
+	// Every (benchmark, language, mode, task) tuple is present exactly once.
 	seen := make(map[Cell]int, len(cells))
 	for _, c := range cells {
 		seen[c]++
@@ -34,44 +35,78 @@ func TestExpandMatrixCartesianCount(t *testing.T) {
 		t.Fatalf("distinct cells = %d; want %d (duplicates in expansion)", len(seen), want)
 	}
 	for _, b := range benchmarks {
-		for _, m := range modes {
-			for _, tk := range tasks {
-				k := Cell{Benchmark: b, Mode: m, Task: tk}
-				if seen[k] != 1 {
-					t.Errorf("cell %+v appeared %d times; want 1", k, seen[k])
+		for _, l := range languages {
+			for _, m := range modes {
+				for _, tk := range tasks {
+					k := Cell{Benchmark: b, Language: l, Mode: m, Task: tk}
+					if seen[k] != 1 {
+						t.Errorf("cell %+v appeared %d times; want 1", k, seen[k])
+					}
 				}
 			}
 		}
 	}
 
-	// Deterministic ordering: first cell is (benchmarks[0], modes[0], tasks[0]).
-	first := Cell{Benchmark: benchmarks[0], Mode: modes[0], Task: tasks[0]}
+	// Deterministic ordering: first cell is (benchmarks[0], languages[0],
+	// modes[0], tasks[0]).
+	first := Cell{Benchmark: benchmarks[0], Language: languages[0], Mode: modes[0], Task: tasks[0]}
 	if cells[0] != first {
 		t.Errorf("cells[0] = %+v; want %+v (ordering not deterministic)", cells[0], first)
 	}
 }
 
+// TestExpandMatrixSingleCell asserts the canonical seed expansion yields exactly
+// one cell with Language=="go" and the other axes set (D-07 axis substrate).
+func TestExpandMatrixSingleCell(t *testing.T) {
+	cells, err := ExpandMatrix(
+		[]string{"internal-toolbench"},
+		[]string{"go"},
+		[]string{"your_agent_full"},
+		[]string{"IT-go-patch-apply-1"},
+	)
+	if err != nil {
+		t.Fatalf("ExpandMatrix: unexpected error: %v", err)
+	}
+	if len(cells) != 1 {
+		t.Fatalf("cell count = %d; want 1", len(cells))
+	}
+	want := Cell{
+		Benchmark: "internal-toolbench",
+		Language:  "go",
+		Mode:      "your_agent_full",
+		Task:      "IT-go-patch-apply-1",
+	}
+	if cells[0] != want {
+		t.Fatalf("cells[0] = %+v; want %+v", cells[0], want)
+	}
+}
+
 // TestExpandMatrixRejectsPathTraversal asserts that a "../"-containing or
-// absolute id in ANY axis (benchmark/mode/task) fails the expansion (V5/T-77-10).
+// absolute id in ANY axis (benchmark/language/mode/task) fails the expansion
+// (V5/T-77-10 / T-78-03 for the new <lang> segment).
 func TestExpandMatrixRejectsPathTraversal(t *testing.T) {
 	cases := []struct {
 		name       string
 		benchmarks []string
+		languages  []string
 		modes      []string
 		tasks      []string
 	}{
-		{"task parent-ref", []string{"toolbench-go"}, []string{"your_agent_full"}, []string{"../etc/passwd"}},
-		{"task separator", []string{"toolbench-go"}, []string{"your_agent_full"}, []string{"a/b"}},
-		{"task leading dot", []string{"toolbench-go"}, []string{"your_agent_full"}, []string{".hidden"}},
-		{"mode parent-ref", []string{"toolbench-go"}, []string{"../x"}, []string{"sum-doubler"}},
-		{"benchmark parent-ref", []string{"../x"}, []string{"your_agent_full"}, []string{"sum-doubler"}},
-		{"absolute task", []string{"toolbench-go"}, []string{"your_agent_full"}, []string{"/abs"}},
+		{"task parent-ref", []string{"internal-toolbench"}, []string{"go"}, []string{"your_agent_full"}, []string{"../etc/passwd"}},
+		{"task separator", []string{"internal-toolbench"}, []string{"go"}, []string{"your_agent_full"}, []string{"a/b"}},
+		{"task leading dot", []string{"internal-toolbench"}, []string{"go"}, []string{"your_agent_full"}, []string{".hidden"}},
+		{"mode parent-ref", []string{"internal-toolbench"}, []string{"go"}, []string{"../x"}, []string{"IT-go-patch-apply-1"}},
+		{"benchmark parent-ref", []string{"../x"}, []string{"go"}, []string{"your_agent_full"}, []string{"IT-go-patch-apply-1"}},
+		{"absolute task", []string{"internal-toolbench"}, []string{"go"}, []string{"your_agent_full"}, []string{"/abs"}},
+		{"language parent-ref", []string{"internal-toolbench"}, []string{"../x"}, []string{"your_agent_full"}, []string{"IT-go-patch-apply-1"}},
+		{"language separator", []string{"internal-toolbench"}, []string{"a/b"}, []string{"your_agent_full"}, []string{"IT-go-patch-apply-1"}},
+		{"language leading dot", []string{"internal-toolbench"}, []string{".go"}, []string{"your_agent_full"}, []string{"IT-go-patch-apply-1"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := ExpandMatrix(tc.benchmarks, tc.modes, tc.tasks); err == nil {
-				t.Fatalf("ExpandMatrix(%v, %v, %v) = nil error; want a path-traversal rejection",
-					tc.benchmarks, tc.modes, tc.tasks)
+			if _, err := ExpandMatrix(tc.benchmarks, tc.languages, tc.modes, tc.tasks); err == nil {
+				t.Fatalf("ExpandMatrix(%v, %v, %v, %v) = nil error; want a path-traversal rejection",
+					tc.benchmarks, tc.languages, tc.modes, tc.tasks)
 			}
 		})
 	}
@@ -80,13 +115,16 @@ func TestExpandMatrixRejectsPathTraversal(t *testing.T) {
 // TestExpandMatrixRejectsEmpty asserts an empty axis is an error (no silent
 // empty matrix that would make `run` a no-op and exit 0).
 func TestExpandMatrixRejectsEmpty(t *testing.T) {
-	if _, err := ExpandMatrix(nil, []string{"m"}, []string{"t"}); err == nil {
+	if _, err := ExpandMatrix(nil, []string{"go"}, []string{"m"}, []string{"t"}); err == nil {
 		t.Error("empty benchmarks: want error, got nil")
 	}
-	if _, err := ExpandMatrix([]string{"b"}, nil, []string{"t"}); err == nil {
+	if _, err := ExpandMatrix([]string{"b"}, nil, []string{"m"}, []string{"t"}); err == nil {
+		t.Error("empty languages: want error, got nil")
+	}
+	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, nil, []string{"t"}); err == nil {
 		t.Error("empty modes: want error, got nil")
 	}
-	if _, err := ExpandMatrix([]string{"b"}, []string{"m"}, nil); err == nil {
+	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, []string{"m"}, nil); err == nil {
 		t.Error("empty tasks: want error, got nil")
 	}
 }

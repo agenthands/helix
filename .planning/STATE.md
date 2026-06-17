@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 77 context gathered
-last_updated: "2026-06-17T08:38:27.740Z"
-last_activity: 2026-06-17 -- Phase 77 execution started
+stopped_at: Completed 77-02-PLAN.md
+last_updated: "2026-06-17T00:00:00.000Z"
+last_activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 14
-  completed_plans: 10
-  percent: 67
+  completed_plans: 11
+  percent: 79
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 77 (bench-runtime-first-e2e-smoke) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 77 execution started
+Last activity: 2026-06-17 -- Completed Phase 77 Plan 02 (result.v2 builder + CC-tap synth)
 
 ### Session Continuity
 
-Last session: 2026-06-17T08:38:03.135Z
-Stopped at: Phase 77 context gathered
-Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
+Last session: 2026-06-17T00:00:00.000Z
+Stopped at: Completed 77-02-PLAN.md
+Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-03-PLAN.md
 
 ## Accumulated Context
 
@@ -72,6 +72,7 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 | Phase 76 P03 | 12min | 2 tasks | 10 files |
 | Phase 76 P04 | ~50min | 2 tasks | 7 files |
 | Phase 77 P01 | 291 | 3 tasks | 11 files |
+| Phase 77 P02 | ~9min | 2 tasks | 5 files (TDD RED+GREEN x2) |
 
 ## Decisions
 
@@ -88,5 +89,10 @@ Resume file: .planning/phases/77-bench-runtime-first-e2e-smoke/77-CONTEXT.md
 - [Phase 76 P02]: bench-no-lsp drops symbol-retrieval+diagnostics SKILLS (skill-selection); bench-no-semantic + bench-no-structured-edit keep full skill set and use exclude_tools (D-09/RESEARCH-Q3)
 - [Phase 76 P02]: bench-no-semantic is tool-filter-only this phase (10 semantic tools excluded), NO kernel flag; keeps get_repo_map/get_context — kernel disable_semantic_subsystem guard deferred to Phase 81 (D-11/D-12)
 - [Phase 76 P02]: ProfileStore.Validate() fail-closes LoadEmbedded on unknown mode (default_mode + transition source + target); golden tests blank-import skill packages so skill.ResolveTools resolves the real per-arm surface (ABLATE-02, T-76-03/04)
+- [Phase 77 P02]: result.v2 open provenance keys frozen as snake_case outcome/trace_ref/model_id (Open Q3); Phase 79 consumes without rename (additive-only=minor)
+- [Phase 77 P02]: schema reached by the builder via go:embed in new bench/schema/schema.go (ResultV2SchemaBytes), not a cwd-relative read — single source of truth, no test-vs-prod cwd skew
+- [Phase 77 P02]: result doc is a typed struct (not map[string]any) so rich metrics (edit_locality/regression_rate/pass@k) are absent by construction (metric-sparse holds structurally, D-04)
+- [Phase 77 P02]: SynthCCTap emits NO Source:daemon KindToolCall events — Merge counts ToolCallSummary only from the real daemon leg (merge.go:97-99); CC leg adds 2nd-leg continuity without double-counting (D-02)
+- [Phase 77 P02]: synth Usage is zero (scripted has no model, Pitfall 6) and event timestamps come from each StepResult.AtTime not a batch time.Now() (Pitfall 5)
 - [Phase ?]: D-05: bench mode->profile resolver reads MODE.md frontmatter (table-driven; Phase 80 extends without code change)
 - [Phase ?]: D-07: bench/runtime/sandbox embeds eval sandbox (no fork); subprocess StartDaemon keeps --http-addr empty (no TCP port, D-06)

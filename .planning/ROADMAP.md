@@ -88,7 +88,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 77-02-PLAN.md — result.v2.json builder (schema-valid, metric-sparse) + CCTapResult synthesis from scripted StepResults (TDD)
+- [x] 77-02-PLAN.md — result.v2.json builder (schema-valid, metric-sparse) + CCTapResult synthesis from scripted StepResults (TDD)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

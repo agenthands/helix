@@ -105,7 +105,7 @@ func TestSynthCCTapMerge(t *testing.T) {
 	}
 
 	mt, err := trace.Merge(trace.MergeInput{
-		TaskID:         "toolbench-go/sum-doubler",
+		TaskID:         "internal-toolbench/IT-go-patch-apply-1",
 		Mode:           "your_agent_full",
 		RunID:          "20260617T120000Z",
 		StartedAt:      t0,

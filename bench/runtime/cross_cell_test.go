@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// allowedToolsForSeed is the set of tool names a sum-doubler cell legitimately
+// allowedToolsForSeed is the set of tool names an IT-go-patch-apply-1 cell legitimately
 // issues: activate_project (harness setup — points the daemon workspace at the
 // cloned repo) plus the scripted task's single replace_in_file edit. Any daemon
 // tool_call in a cell's merged trace OUTSIDE this set is foreign-cell leakage
@@ -61,8 +61,9 @@ func TestCrossCell(t *testing.T) {
 			defer wg.Done()
 			cfg := CellConfig{
 				RunID:       time.Now().UTC().Format("20060102T150405Z"),
-				Benchmark:   "toolbench-go",
-				Task:        "sum-doubler",
+				Benchmark:   "internal-toolbench",
+				Language:    "go",
+				Task:        "IT-go-patch-apply-1",
 				Mode:        "your_agent_full",
 				RunIndex:    idx,
 				HelixBin:    helixBin,

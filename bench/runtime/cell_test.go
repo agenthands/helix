@@ -40,7 +40,7 @@ func TestCellLayout(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sb.Cleanup() })
 
-	const task = "sum-doubler"
+	const task = "IT-go-patch-apply-1"
 	const mode = "your_agent_full"
 
 	wantResult := filepath.Join(outDir, task, mode, "result.v2.json")
@@ -60,10 +60,11 @@ func TestCellLayoutPathTraversalRejected(t *testing.T) {
 		name string
 		cfg  CellConfig
 	}{
-		{"task-traversal", CellConfig{Task: "../escape", Mode: "your_agent_full", Benchmark: "toolbench-go", HelixBin: "/bin/true"}},
-		{"mode-traversal", CellConfig{Task: "sum-doubler", Mode: "../escape", Benchmark: "toolbench-go", HelixBin: "/bin/true"}},
-		{"benchmark-traversal", CellConfig{Task: "sum-doubler", Mode: "your_agent_full", Benchmark: "../escape", HelixBin: "/bin/true"}},
-		{"task-separator", CellConfig{Task: "a/b", Mode: "your_agent_full", Benchmark: "toolbench-go", HelixBin: "/bin/true"}},
+		{"task-traversal", CellConfig{Task: "../escape", Mode: "your_agent_full", Benchmark: "internal-toolbench", Language: "go", HelixBin: "/bin/true"}},
+		{"mode-traversal", CellConfig{Task: "IT-go-patch-apply-1", Mode: "../escape", Benchmark: "internal-toolbench", Language: "go", HelixBin: "/bin/true"}},
+		{"benchmark-traversal", CellConfig{Task: "IT-go-patch-apply-1", Mode: "your_agent_full", Benchmark: "../escape", Language: "go", HelixBin: "/bin/true"}},
+		{"task-separator", CellConfig{Task: "a/b", Mode: "your_agent_full", Benchmark: "internal-toolbench", Language: "go", HelixBin: "/bin/true"}},
+		{"language-traversal", CellConfig{Task: "IT-go-patch-apply-1", Mode: "your_agent_full", Benchmark: "internal-toolbench", Language: "../escape", HelixBin: "/bin/true"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -82,8 +83,9 @@ func TestCellLayoutPreserveOnFailure(t *testing.T) {
 	outDir := t.TempDir()
 	cfg := CellConfig{
 		RunID:       "20060102T150405Z",
-		Benchmark:   "toolbench-go",
-		Task:        "sum-doubler",
+		Benchmark:   "internal-toolbench",
+		Language:    "go",
+		Task:        "IT-go-patch-apply-1",
 		Mode:        "your_agent_full",
 		HelixBin:    "/bin/true", // never spawned — CloneRepo fails first
 		SeedDir:     filepath.Join(t.TempDir(), "does-not-exist"),

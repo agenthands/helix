@@ -15,12 +15,12 @@ import (
 func TestResultV2Valid(t *testing.T) {
 	in := ResultInput{
 		SchemaVersion: "", // builder must default to "v2"
-		TaskID:        "toolbench-go/sum-doubler",
+		TaskID:        "internal-toolbench/IT-go-patch-apply-1",
 		Mode:          "your_agent_full",
-		Benchmark:     "toolbench-go",
+		Benchmark:     "internal-toolbench",
 		RunIndex:      0,
 		Outcome:       "success",
-		TraceRef:      "bench/reports/20260617T120000Z/sum-doubler/your_agent_full/trace.json",
+		TraceRef:      "bench/reports/20260617T120000Z/IT-go-patch-apply-1/your_agent_full/trace.json",
 		Fairness:      runners.DefaultContract,
 		// Scripted path: zero tokens, not fabricated (Pitfall 6).
 		TokensInput:  0,
@@ -40,9 +40,9 @@ func TestResultV2Valid(t *testing.T) {
 	// (2) Provenance-complete: schema_version=="v2", task_id, mode, benchmark,
 	// and an outcome key are present.
 	assert.Equal(t, "v2", m["schema_version"], "schema_version must be v2")
-	assert.Equal(t, "toolbench-go/sum-doubler", m["task_id"])
+	assert.Equal(t, "internal-toolbench/IT-go-patch-apply-1", m["task_id"])
 	assert.Equal(t, "your_agent_full", m["mode"])
-	assert.Equal(t, "toolbench-go", m["benchmark"])
+	assert.Equal(t, "internal-toolbench", m["benchmark"])
 	assert.Equal(t, "success", m["outcome"], "outcome must be carried as an open prop")
 	assert.Equal(t, in.TraceRef, m["trace_ref"], "trace_ref must be carried as an open prop")
 	assert.Equal(t, runners.DefaultContract.ModelID, m["model_id"], "model_id sourced from DefaultContract")
@@ -101,9 +101,9 @@ func TestResultV2ValidWithOverrides(t *testing.T) {
 		},
 	}
 	in := ResultInput{
-		TaskID:    "toolbench-go/sum-doubler",
+		TaskID:    "internal-toolbench/IT-go-patch-apply-1",
 		Mode:      "your_agent_full",
-		Benchmark: "toolbench-go",
+		Benchmark: "internal-toolbench",
 		Outcome:   "success",
 		TraceRef:  "trace.json",
 		Fairness:  fc,

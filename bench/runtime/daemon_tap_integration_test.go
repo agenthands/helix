@@ -33,20 +33,21 @@ func resolveHelixBin() string {
 	return ""
 }
 
-// seedDirForTest returns the absolute path of the toolbench-go/sum-doubler seed
-// task, derived from this test file's location so it is cwd-independent.
+// seedDirForTest returns the absolute path of the
+// internal-toolbench/go/IT-go-patch-apply-1 seed task, derived from this test
+// file's location so it is cwd-independent.
 func seedDirForTest(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok, "runtime.Caller failed")
 	benchDir := filepath.Dir(filepath.Dir(thisFile)) // .../bench
-	seed := filepath.Join(benchDir, "datasets", "toolbench-go", "sum-doubler")
+	seed := filepath.Join(benchDir, "datasets", "internal-toolbench", "go", "IT-go-patch-apply-1")
 	require.DirExists(t, seed)
 	return seed
 }
 
 // TestDaemonTap is the BENCH-04 end-to-end spine. It runs one cell on the seed
-// sum-doubler task in your_agent_full mode and asserts the THREE Nyquist signals
+// IT-go-patch-apply-1 task in your_agent_full mode and asserts the THREE Nyquist signals
 // the smoke must carry (an exit-code-only smoke would alias all three):
 //
 //  1. 2-leg merged trace: ToolCallSummary.Total >= 1 AND the CC leg is present.
@@ -68,8 +69,9 @@ func TestDaemonTap(t *testing.T) {
 
 	cfg := CellConfig{
 		RunID:       time.Now().UTC().Format("20060102T150405Z"),
-		Benchmark:   "toolbench-go",
-		Task:        "sum-doubler",
+		Benchmark:   "internal-toolbench",
+		Language:    "go",
+		Task:        "IT-go-patch-apply-1",
 		Mode:        "your_agent_full",
 		HelixBin:    helixBin,
 		SeedDir:     seedDirForTest(t),

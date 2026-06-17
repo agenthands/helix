@@ -34,10 +34,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agenthands/helix/bench/languages"
+	_ "github.com/agenthands/helix/bench/languages/go" // Caddy-style init() registers the Go runner for (internal-toolbench, go) (D-10)
 	"github.com/agenthands/helix/bench/runners"
 	benchsandbox "github.com/agenthands/helix/bench/runtime/sandbox"
 	"github.com/agenthands/helix/bench/runtime/subprocess"
 	"github.com/agenthands/helix/internal/eval/runner"
+	evalsandbox "github.com/agenthands/helix/internal/eval/sandbox"
 	"github.com/agenthands/helix/internal/eval/trace"
 )
 
@@ -50,9 +53,14 @@ type CellConfig struct {
 	// RunID is the run identifier (eval shape, e.g. "20060102T150405Z"). It is
 	// metadata only here; the durable out dir is OutDir (already run-scoped).
 	RunID string
-	// Benchmark is the benchmark suite name (e.g. "toolbench-go").
+	// Benchmark is the benchmark suite name (e.g. "internal-toolbench").
 	Benchmark string
-	// Task is the task id (e.g. "sum-doubler"). Validated against path traversal.
+	// Language is the D-07 language axis (e.g. "go"). It selects the
+	// LanguageRunner via languages.RunnerFor(Benchmark, Language) (D-10) and is
+	// validated against path traversal (T-78-03).
+	Language string
+	// Task is the task id (e.g. "IT-go-patch-apply-1"). Validated against path
+	// traversal.
 	Task string
 	// Mode is the bench mode name (e.g. "your_agent_full"). Resolved to a
 	// profile via the MODE.md resolver; validated against path traversal.
@@ -64,8 +72,9 @@ type CellConfig struct {
 	// stdio forwarder. Must be resolvable (absolute path or on PATH).
 	HelixBin string
 	// SeedDir is the source task directory cloned into the cell's repo working
-	// copy (e.g. bench/datasets/toolbench-go/sum-doubler). It must contain the
-	// scripted_agent.yaml the driver replays and the verify.sh outcome script.
+	// copy (e.g. bench/datasets/internal-toolbench/go/IT-go-patch-apply-1). It
+	// must contain the scripted_agent.yaml the driver replays and the verify.sh
+	// outcome script.
 	SeedDir string
 	// OutDir is the durable artifact root for this run (e.g.
 	// bench/reports/<run_id>). Durable artifacts land under <OutDir>/<task>/<mode>/.
@@ -84,6 +93,15 @@ type CellConfig struct {
 	// Prompt is the task instruction handed to the claude agent (Agent=="claude").
 	// Ignored by the scripted path. Sourced from the seed task's task.json.
 	Prompt string
+
+	// StoreOptIn opts this cell's per-cell semantic store ON (D-01/D-02). When
+	// false (the default), writeCellConfig writes semantic_index.enabled=false so
+	// the daemon never opens a DuckDB store (the parallel-safe default). When
+	// true, the config enables the index AND StartDaemon is given
+	// WithWorkingDir(repoDir) so the cwd-relative store path
+	// (".helix/semantic.duckdb") resolves per-cell — keeping store-on cells
+	// hermetic (D-03 substrate; the parallel isolation assertion lands in Plan 04).
+	StoreOptIn bool
 }
 
 // CellResult is the outcome of one cell plus the three Nyquist signals the
@@ -157,6 +175,9 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	if err := validateCellKey(cfg.Benchmark, "benchmark"); err != nil {
 		return res, fmt.Errorf("bench/runtime: %w", err)
 	}
+	if err := validateCellKey(cfg.Language, "language"); err != nil {
+		return res, fmt.Errorf("bench/runtime: %w", err)
+	}
 	if cfg.HelixBin == "" {
 		return res, errors.New("bench/runtime: empty helix binary path")
 	}
@@ -222,14 +243,15 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// (3) Spawn the per-cell daemon (D-06) and capture its PID IMMEDIATELY for
 	// the PID-gated tap (before any Kill — criterion #4).
 	//
-	// Per-cell config (T-77 isolation): the semantic_index.store.path default is
-	// cwd-relative (".helix/semantic.duckdb"), so without an override every
-	// parallel daemon would open the SAME DuckDB file under the process cwd and
-	// deadlock on the file lock (criterion #1 --parallel must not collide). We
-	// pin an ABSOLUTE per-cell store path under the cell's isolated HOME so each
-	// daemon's semantic store is private — preserving the bench-full control arm
-	// (semantic enabled) while keeping cells hermetic.
-	cfgPath, err := writeCellConfig(sb, cfg.Task, cfg.Mode, profileName)
+	// Per-cell config (T-77 isolation, D-01/D-02/D-03): the semantic_index store
+	// is OFF by default (writeCellConfig emits enabled=cfg.StoreOptIn). The store
+	// path default is cwd-relative (".helix/semantic.duckdb"); a store-on cell
+	// without a per-cell cwd would open the SAME DuckDB file under the shared
+	// process cwd and deadlock on the file lock (criterion #1 --parallel must not
+	// collide). So a StoreOptIn cell ALSO passes WithWorkingDir(repoDir) into
+	// StartDaemon below, resolving the cwd-relative store under the cell's own repo
+	// — hermetic per cell. Store-off cells (the default) open no store at all.
+	cfgPath, err := writeCellConfig(sb, cfg.Task, cfg.Mode, profileName, cfg.StoreOptIn)
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: write cell config: %w", err))
 	}
@@ -242,7 +264,15 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// boot; it is passed as MergeInput.StartedAt.
 	start := time.Now()
 
-	h, err := subprocess.StartDaemon(ctx, sb, cfg.Task, cfg.Mode, profileName, cfgPath)
+	// D-03: a StoreOptIn cell runs its daemon with cwd=repoDir so the cwd-relative
+	// store path (".helix/semantic.duckdb") resolves per-cell. Store-off cells pass
+	// no option (cmd.Dir stays the harness cwd; no store is opened either way).
+	var daemonOpts []evalsandbox.DaemonOption
+	if cfg.StoreOptIn {
+		daemonOpts = append(daemonOpts, evalsandbox.WithWorkingDir(sb.RepoFor(cfg.Task, cfg.Mode)))
+	}
+
+	h, err := subprocess.StartDaemon(ctx, sb, cfg.Task, cfg.Mode, profileName, cfgPath, daemonOpts...)
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: start daemon: %w", err))
 	}
@@ -309,13 +339,30 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return preserve(fmt.Errorf("bench/runtime: tap daemon log: %w", err))
 	}
 
-	// (6) Run verify.sh in the repo working copy; its exit code is the outcome.
-	// A ctx cancellation/timeout during verify is an INFRASTRUCTURE error (the
-	// harness was cancelled), NOT a task failure — route it through preserve so it
-	// is not conflated with a genuine verify failure in the result.v2 (WR-01).
-	verifyExit, verifyErr := runVerify(ctx, filepath.Join(repoDir, "verify.sh"), repoDir)
-	if verifyErr != nil {
-		return preserve(fmt.Errorf("bench/runtime: verify: %w", verifyErr))
+	// (6) Resolve the outcome (D-10 dispatch). When a structured LanguageRunner is
+	// registered for (Benchmark, Language), its RunTests provides the outcome
+	// (Passed -> exit 0, else non-zero); a non-nil RunTests error is an
+	// INFRASTRUCTURE failure (e.g. ctx cancellation/timeout) routed through
+	// preserve exactly like a verify infra error (WR-01). When no runner is
+	// registered (RunnerFor==nil) the cell falls back to verify.sh, whose exit code
+	// is the outcome; a ctx cancellation there is likewise an infra error.
+	var verifyExit int
+	if r := languages.RunnerFor(cfg.Benchmark, cfg.Language); r != nil {
+		outcome, runErr := r.RunTests(ctx, repoDir)
+		if runErr != nil {
+			return preserve(fmt.Errorf("bench/runtime: run tests: %w", runErr))
+		}
+		if outcome.Passed {
+			verifyExit = 0
+		} else {
+			verifyExit = 1
+		}
+	} else {
+		var verifyErr error
+		verifyExit, verifyErr = runVerify(ctx, filepath.Join(repoDir, "verify.sh"), repoDir)
+		if verifyErr != nil {
+			return preserve(fmt.Errorf("bench/runtime: verify: %w", verifyErr))
+		}
 	}
 	res.VerifyExitCode = verifyExit
 
@@ -427,30 +474,33 @@ func ccLegPresent(merged trace.MergedTrace) bool {
 
 // writeCellConfig writes a per-cell helix_config.yml into the cell HOME and
 // returns its path (for StartDaemon's --config=). It pins the resolved profile
-// and disables the semantic index for the cell daemon.
+// and toggles the semantic index from storeOptIn (D-01/D-02).
 //
-// Why disable semantic_index here (T-77 isolation, criterion #1):
-// internal/semantic/store rejects absolute store paths (T-57-02-01) and the
-// store is opened EAGERLY at daemon startup (daemon.go:318) relative to the
-// daemon's CWD — before any workspace is activated. With the cwd-relative
-// default (".helix/semantic.duckdb"), every parallel cell daemon opens the SAME
-// DuckDB file under the shared process cwd and deadlocks on its file lock,
-// breaking "no collisions on --parallel" (criterion #1). eval's StartDaemon does
-// not expose cmd.Dir, and D-07 forbids forking it, so the hermetic per-cell fix
-// is to set semantic_index.enabled=false (daemon.go:308 makes the store nil and
-// the daemon proceeds). This affects only the daemon's semantic INFRA, not the
-// bench-full TOOL surface (still applied via --profile=bench-full); the Phase 77
-// seed task drives a text-level replace_in_file edit that needs no semantic
-// store. Phase 78+ (corpus needing semantic tools) can revisit by spawning the
-// daemon with a per-cell cwd.
-func writeCellConfig(sb *benchsandbox.Sandbox, task, mode, profileName string) (string, error) {
+// semantic_index.enabled is parameterized (T-77 isolation, criterion #1):
+// internal/semantic/store opens the store EAGERLY at daemon startup relative to
+// the daemon's CWD, and the store-path default is cwd-relative
+// (".helix/semantic.duckdb"). With the index ENABLED, every cell daemon sharing
+// the harness cwd would open the SAME DuckDB file and deadlock on its file lock,
+// breaking "no collisions on --parallel". So:
+//
+//   - storeOptIn=false (the default): emit enabled=false — the store is never
+//     opened (daemon.go makes it nil and proceeds). This affects only the
+//     daemon's semantic INFRA, not the bench-full TOOL surface (still applied via
+//     --profile). The Phase 77 patch_apply seed needs no semantic store.
+//   - storeOptIn=true (the D-01/D-02 store-on class, e.g. incremental_update):
+//     emit enabled=true. RunCell ALSO passes WithWorkingDir(repoDir) to
+//     StartDaemon so the cwd-relative store resolves under the cell's own repo
+//     (.helix/semantic.duckdb inside repoDir) — private per cell, no shared-cwd
+//     lock contention. (The full --parallel store-on isolation assertion lands in
+//     Plan 04.)
+func writeCellConfig(sb *benchsandbox.Sandbox, task, mode, profileName string, storeOptIn bool) (string, error) {
 	home := sb.HomeFor(task, mode)
 	cfgDir := filepath.Join(home, ".helix")
 	if err := os.MkdirAll(cfgDir, 0700); err != nil {
 		return "", fmt.Errorf("mkdir cell config dir: %w", err)
 	}
 	cfgPath := filepath.Join(cfgDir, "helix_config.yml")
-	cfg := fmt.Sprintf("profile: %s\nsemantic_index:\n  enabled: false\n", profileName)
+	cfg := fmt.Sprintf("profile: %s\nsemantic_index:\n  enabled: %v\n", profileName, storeOptIn)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0600); err != nil {
 		return "", fmt.Errorf("write cell config: %w", err)
 	}

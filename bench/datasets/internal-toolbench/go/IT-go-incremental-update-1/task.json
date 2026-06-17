@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "incremental_update",
+  "prompt": "The registry in registry.go registers its capability under the wrong token (\"legacy\"), so Update resolves the zero handler and TestUpdateIncrements fails. Edit registeredCapability() in registry.go to return \"incremental\", then call refresh_semantic_graph(paths=[\"registry.go\"], wait_for_lsp=true) to drive the live overlay-drain so the semantic graph reflects the change, then verify the wiring via a semantic query. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

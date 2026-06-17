@@ -177,6 +177,17 @@ func dispatch(ctx context.Context, cells []Cell, parallel int, run func(context.
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
+			// On cancellation, already-queued goroutines must not proceed into
+			// sandbox creation / daemon spawn (wasted setup/teardown after the
+			// operator cancelled). Record a cancelled outcome instead.
+			if ctx.Err() != nil {
+				oc := CellOutcome{Cell: c, Err: ctx.Err()}
+				mu.Lock()
+				outcomes[i] = oc
+				mu.Unlock()
+				return
+			}
+
 			oc := run(ctx, c)
 
 			mu.Lock()

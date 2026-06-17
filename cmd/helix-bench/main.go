@@ -1,7 +1,8 @@
 // cmd/helix-bench is the Phase 75 provider-independent benchmark harness
 // entrypoint. It exposes five BENCH-02 subcommands:
 //
-//   - helix-bench run                 — run the bench suite (Phase NN, not yet wired)
+//   - helix-bench run                 — run the bench suite (wired in Phase 78:
+//     expands the matrix and dispatches each cell through bench/runtime.RunCell)
 //   - helix-bench fetch-datasets      — download/refresh bench datasets (Phase NN)
 //   - helix-bench doctor              — check host prerequisites; exit 0 on a clean host
 //   - helix-bench report              — render bench reports (Phase NN)
@@ -17,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,7 +62,7 @@ func newRootCmd() *cobra.Command {
 		Long: `helix-bench drives the Phase 75 benchmark stack.
 
 Subcommands:
-  run                 run the bench suite (not yet implemented)
+  run                 run the bench suite (expands the matrix and dispatches cells)
   fetch-datasets      download / refresh bench datasets (not yet implemented)
   doctor              check host prerequisites; exits 0 on a clean host
   report              render bench reports (not yet implemented)
@@ -173,9 +175,12 @@ type runBenchOpts struct {
 // task set, expands the matrix, dispatches it bounded by --parallel, and returns
 // an error iff zero cells succeeded (single-exit semantics).
 func runBench(cmd *cobra.Command, o runBenchOpts) error {
+	// cobra's Context() never returns nil (it defaults to context.Background()),
+	// but guard defensively so a future caller invoking runBench with a
+	// hand-built command cannot pass a nil context into the matrix dispatch.
 	ctx := cmd.Context()
 	if ctx == nil {
-		ctx = cmd.Context()
+		ctx = context.Background()
 	}
 
 	// run_id is TIMESTAMP-ONLY (RESEARCH run_id note); the git SHA is captured

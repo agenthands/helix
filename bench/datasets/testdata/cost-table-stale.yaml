@@ -5,7 +5,7 @@
 rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30

@@ -64,7 +64,7 @@ type ModeOverride struct {
 // benchmark runners. It is a compile-time literal (DefaultContract), not loaded
 // from a file at runtime, so the exact config is a git-committed audit fact.
 type FairnessContract struct {
-	ModelID          string                  // DATED snapshot (FAIR-02), e.g. "claude-sonnet-4-5-20260128"
+	ModelID          string                  // DATED snapshot (FAIR-02), e.g. "claude-sonnet-4-5-20250929"
 	Temperature      float64                 // shared sampling temperature
 	MaxTokens        int                     // shared output token budget
 	SystemPromptHash string                  // sha256 hex of system_prompt.txt
@@ -82,7 +82,7 @@ type FairnessContract struct {
 // SystemPromptHash is sha256(system_prompt.txt); re-pin it whenever the prompt
 // changes or TestSystemPromptHashMatches fails CI.
 var DefaultContract = FairnessContract{
-	ModelID:          "claude-sonnet-4-5-20260128",
+	ModelID:          "claude-sonnet-4-5-20250929",
 	Temperature:      0.0,
 	MaxTokens:        8192,
 	SystemPromptHash: "7873294ae45a555ff47a6164d7c8eba2eb5e13cfa163c623b6556e6ad313d636",

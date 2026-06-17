@@ -44,7 +44,7 @@ func TestValidateCostTableStaleLastVerifiedFails(t *testing.T) {
 	body := `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
@@ -65,7 +65,7 @@ func TestValidateCostTableMalformedRowFails(t *testing.T) {
 	body := `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
@@ -98,7 +98,7 @@ func TestValidateCostTableEmptyRequiredFieldFails(t *testing.T) {
 		"empty provider": `rows:
   -
     provider: ""
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
@@ -110,7 +110,7 @@ func TestValidateCostTableEmptyRequiredFieldFails(t *testing.T) {
 		"empty currency": `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
@@ -138,7 +138,7 @@ func TestValidateCostTableNonPositivePriceFails(t *testing.T) {
 		"missing input price": `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
     currency: USD
@@ -149,7 +149,7 @@ func TestValidateCostTableNonPositivePriceFails(t *testing.T) {
 		"zero output price": `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 0.0
     cached_input_per_mtok: 0.30
@@ -161,7 +161,7 @@ func TestValidateCostTableNonPositivePriceFails(t *testing.T) {
 		"negative input price": `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: -3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.30
@@ -173,7 +173,7 @@ func TestValidateCostTableNonPositivePriceFails(t *testing.T) {
 		"negative cached price": `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: -0.30
@@ -202,7 +202,7 @@ func TestValidateCostTableZeroCachedPricePasses(t *testing.T) {
 	body := `rows:
   -
     provider: Anthropic
-    model_id: claude-sonnet-4-5-20260128
+    model_id: claude-sonnet-4-5-20250929
     input_per_mtok: 3.0
     output_per_mtok: 15.0
     cached_input_per_mtok: 0.0

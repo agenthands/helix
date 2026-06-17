@@ -1,9 +1,20 @@
 package runners
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// writeModeFixture creates <root>/<mode>/MODE.md with the given body.
+func writeModeFixture(root, mode, body string) error {
+	dir := filepath.Join(root, mode)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "MODE.md"), []byte(body), 0o600)
+}
 
 // TestModeResolverYourAgentFull verifies the seed mode resolves to bench-full by
 // reading bench/runners/your_agent_full/MODE.md frontmatter — NOT a hard-coded

@@ -78,6 +78,44 @@ func TestSynthCCTapTimestamps(t *testing.T) {
 	assert.False(t, got.Events[1].T.Equal(got.Events[3].T), "distinct steps yield distinct times")
 }
 
+// TestCCLegPresentBothBranches is the WR-03 guard: it exercises ccLegPresent
+// directly on a real trace.MergedTrace (not a re-implemented event count), so a
+// regression that reverted the predicate to the vacuous "any Source==cc" form
+// would fail here.
+//
+//   - empty steps  → SynthCCTap(nil) emits only SessionInit + Result (no
+//     ToolResult, no ToolUses) → CCLegPresent == false.
+//   - one scripted step → an AssistantMsg with a non-empty ToolUses plus a
+//     ToolResult → CCLegPresent == true.
+func TestCCLegPresentBothBranches(t *testing.T) {
+	t0 := time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC)
+
+	build := func(steps []runner.StepResult) trace.MergedTrace {
+		mt, err := trace.Merge(trace.MergeInput{
+			TaskID:    "internal-toolbench/IT-go-cclegpresent",
+			Mode:      "your_agent_full",
+			RunID:     "20260617T120000Z",
+			StartedAt: t0,
+			EndedAt:   t0.Add(time.Second),
+			CC:        SynthCCTap(steps),
+		})
+		require.NoError(t, err)
+		return mt
+	}
+
+	// False branch: empty/claude script — no cc-side tool event.
+	emptyMT := build(nil)
+	assert.False(t, ccLegPresent(emptyMT),
+		"empty SynthCCTap(nil) carries no ToolResult/ToolUses → CCLegPresent must be false")
+
+	// True branch: one scripted step carries a ToolUse + ToolResult.
+	scriptedMT := build([]runner.StepResult{
+		{Tool: "replace_in_file", AtTime: t0, Response: []byte(`{"ok":true}`)},
+	})
+	assert.True(t, ccLegPresent(scriptedMT),
+		"one scripted step carries a cc ToolResult/ToolUses → CCLegPresent must be true")
+}
+
 // TestSynthCCTapMerge is the contract integration: feed the synthesized CC leg
 // to trace.Merge alongside a fabricated daemon leg with >=1 KindToolCall; the
 // merged trace must have ToolCallSummary.Total>=1 AND a CC leg present (>=1

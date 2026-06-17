@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
+status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
 stopped_at: Completed 77-05-PLAN.md (Phase 77 CLOSED)
-last_updated: "2026-06-17T09:30:00.000Z"
-last_activity: 2026-06-17 -- Completed Phase 77 Plan 05 (make bench reconciliation + timed E2E smoke gate); Phase 77 CLOSED (BENCH-04 + BENCH-05)
+last_updated: "2026-06-17T09:37:46.310Z"
+last_activity: 2026-06-17
 progress:
   total_phases: 3
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 77 (bench-runtime-first-e2e-smoke) — COMPLETE
-Plan: 5 of 5 (all complete)
+Phase: 77
+Plan: Not started
 Status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
-Last activity: 2026-06-17 -- Completed Phase 77 Plan 05 (make bench reconciliation + timed E2E smoke gate)
+Last activity: 2026-06-17
 
 ### Session Continuity
 

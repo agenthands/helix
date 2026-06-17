@@ -80,7 +80,7 @@
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 77)
 
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 Plans:
 **Wave 1**
 

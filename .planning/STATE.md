@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
+status: executing
 stopped_at: Phase 78 context gathered
-last_updated: "2026-06-17T15:47:13.774Z"
-last_activity: "2026-06-17 - Completed quick task 260617-j29: re-pin fairness contract ModelID to authoritative dated Sonnet 4.5 snapshot"
+last_updated: "2026-06-17T16:13:37.166Z"
+last_activity: 2026-06-17 -- Phase 78 execution started
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 19
+  completed_plans: 15
   percent: 75
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 77 — bench-runtime-first-e2e-smoke
+**Current focus:** Phase 78 — internal-toolbench-go-first-languagerunner-interface
 
 ## Current Position
 
-Phase: 77
-Plan: Not started
-Status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
-Last activity: 2026-06-17 - Completed quick task 260617-j29: re-pin fairness contract ModelID to authoritative dated Sonnet 4.5 snapshot
+Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-06-17 -- Phase 78 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-17T14:57:25.109Z
+Last session: 2026-06-17T16:13:26.755Z
 Stopped at: Phase 78 context gathered
 Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-interface/78-CONTEXT.md
 
@@ -82,6 +82,7 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 | Phase 77 P03 | 2400 | 3 tasks | 5 files |
 | Phase 77 P04 | 455 | 2 tasks | 6 files |
 | Phase 77 P05 | 540 | 2 tasks | 3 files |
+| Phase 78 P01 | ~14min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -111,3 +112,5 @@ Resume file: .planning/phases/78-internal-toolbench-go-first-languagerunner-inte
 - [Phase 77 P05]: `make bench` collision RECONCILED by rename — Go microbench bench: -> bench-micro: (recipe byte-preserved); reclaimed `bench` runs helix-bench run; verified via make -n recipe identity (T-77-13). bench-<suite> = `make bench SUITE=<suite>` make var (NOT a bench-%: pattern rule, which would shadow bench-micro/bench-quick/bench-baseline)
 - [Phase 77 P05]: bench-quick passes ABSOLUTE --helix-bin=$(CURDIR)/helix (per-cell ephemeral scratch cwd can't resolve relative ./helix); generated /bench/reports/* gitignored with .gitkeep negated (mirrors /eval/reports/)
 - [Phase 77 P05]: Timed E2E gate PASSED under AUTO MODE — single-task smoke exit 0 in 2s (<=30s); make bench-quick exit 0 (<=90s); schema-valid result.v2.json (outcome/trace_ref/model_id/fairness); merged 2-leg trace (cc+daemon, total=2, zero foreign PID). Phase 77 CLOSED (BENCH-04 + BENCH-05)
+- [Phase ?]: [Phase 78 P01]: LanguageRunner.RunTests Passed=(exit==0) authoritative gate; test2json rows advisory; compile-fail → Passed=false Tests=[] (Pitfall 4)
+- [Phase ?]: [Phase 78 P01]: WithWorkingDir = only new behavior line in eval StartDaemon (cmd.Dir); additive variadic opts thread through subprocess.StartDaemon via embedded sandbox, no fork (P77 D-07/D-03)

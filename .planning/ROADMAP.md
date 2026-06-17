@@ -116,7 +116,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 78-01-PLAN.md — LanguageRunner interface + GoRunner (go test -json) + WithWorkingDir daemon option (the Phase 85 seam, D-03/D-10/D-11)
+- [x] 78-01-PLAN.md — LanguageRunner interface + GoRunner (go test -json) + WithWorkingDir daemon option (the Phase 85 seam, D-03/D-10/D-11)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

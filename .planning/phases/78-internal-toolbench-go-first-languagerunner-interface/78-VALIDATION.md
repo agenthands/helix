@@ -1,8 +1,8 @@
 ---
 phase: 78
 slug: internal-toolbench-go-first-languagerunner-interface
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-17
 ---
@@ -55,14 +55,30 @@ created: 2026-06-17
 
 ## Per-Task Verification Map
 
-> Populated by the planner/executor as `IT-go-<capability>-<n>` tasks land. Each task
-> maps to a row above. Format retained for execution-time tracking.
+> Seeded from the 5 landed plans (commit `d85078cf`). `File Exists` = is the test/target on disk
+> *yet* — all ❌ W0 at plan time; execute-phase flips to ✅ as each wave lands.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 78-NN-NN | NN | N | TOOLBENCH-NN | — | N/A | unit/integration | `go test ./bench/...` | ❌ W0 | ⬜ pending |
+| 78-01-01 | 01 | 1 | TOOLBENCH-10, TOOLBENCH-02 | — | N/A | tdd/unit | `go test ./bench/languages/... -count=1` | ❌ W0 | ⬜ pending |
+| 78-01-02 | 01 | 1 | TOOLBENCH-02 | T-78-01 / T-78-02 | additive `WithWorkingDir`; ctx-cancel kills `go test` subprocess | unit | `go build ./... && go test ./internal/eval/sandbox/...` | ❌ W0 | ⬜ pending |
+| 78-02-01 | 02 | 2 | TOOLBENCH-02, TOOLBENCH-10 | T-78-03 | `<lang>` segment V5-validated (`validateMatrixID`/`validateCellKey`) | tdd/unit | `go test ./bench/runtime/... -count=1` | ❌ W0 | ⬜ pending |
+| 78-02-02 | 02 | 2 | TOOLBENCH-02 | T-78-05 | single clean cutover, no stale `toolbench-go` | integration/gate | `go test ./... && make bench-quick` | ❌ W0 | ⬜ pending |
+| 78-03-01 | 03 | 3 | TOOLBENCH-01, TOOLBENCH-02 | T-78-06 / T-78-07 | hermetic dependency-free fixtures, offline | corpus/integration | `go vet ./...` per fixture; pre-fail/post-pass authored | ❌ W0 | ⬜ pending |
+| 78-03-02 | 03 | 3 | TOOLBENCH-01, TOOLBENCH-02 | T-78-06 | hermetic; `expect_error`+recovery for failure_handling | corpus/integration | `go vet ./...` per fixture; pre-fail/post-pass authored | ❌ W0 | ⬜ pending |
+| 78-04-01 | 04 | 3 | TOOLBENCH-01, TOOLBENCH-02 | T-78-10 | store-ON fixture hermetic; in-process refresh, no network | integration | `grep refresh_semantic_graph` + `go vet ./...` in fixture | ❌ W0 | ⬜ pending |
+| 78-04-02 | 04 | 3 | TOOLBENCH-02 | T-78-04 / T-78-09 | per-cell `.helix/semantic.duckdb` isolation under `--parallel=2` | tdd/integration | `go test ./bench/runtime/ -run 'StoreIsolation\|Parallel'` | ❌ W0 | ⬜ pending |
+| 78-05-01 | 05 | 4 | TOOLBENCH-01, TOOLBENCH-02, TOOLBENCH-10 | T-78-11 / T-78-12 | coverage from `capability` field (not id); gap-detection proves non-vacuous 10/10 | tdd/unit | `go test ./bench/languages/... -count=1` | ❌ W0 | ⬜ pending |
+| 78-05-02 | 05 | 4 | TOOLBENCH-01 | — | N/A (docs) | doc-existence | `test -f CAPABILITIES.md && test -f PHASE67_CROSSWALK.md` | ❌ W0 | ⬜ pending |
+| 78-05-03 | 05 | 4 | TOOLBENCH-01, TOOLBENCH-02, TOOLBENCH-10 | — | N/A | checkpoint (blocking human-verify) | `helix-bench run --benchmarks=internal-toolbench --languages=go` = 10/10 + `go test ./bench/languages/ -run Coverage` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+> Note: `wave_0_complete: false` in frontmatter is correct at plan time — Wave 0 (Plan 01's
+> `runner.go`/`go/runner.go`) is *specified and assigned* but not yet *built*; execute-phase
+> sets it `true` once Wave 1 lands. `nyquist_compliant: true` certifies the validation
+> *strategy* (every task has an automated verify; sampling continuity holds; all MISSING
+> references are assigned to a Wave-0 task), which is satisfiable at plan time.
 
 ---
 
@@ -91,11 +107,12 @@ created: 2026-06-17
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<acceptance_criteria>` with automated verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (runner.go, go/runner.go, CAPABILITIES.md, crosswalk, coverage test, parallel test)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 90 s (`bench-quick` budget protected)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<acceptance_criteria>` with automated verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify (every task carries an automated verify)
+- [x] Wave 0 covers all MISSING references (runner.go + go/runner.go → Plan 01; CAPABILITIES.md + crosswalk + coverage test → Plan 05; parallel store-isolation test → Plan 04)
+- [x] No watch-mode flags
+- [x] Feedback latency < 90 s (`bench-quick` budget protected; pinned to the store-OFF seed)
+- [x] `nyquist_compliant: true` set in frontmatter
+- [ ] `wave_0_complete: true` — deferred to execute-phase (Wave 0 not yet built at plan time)
 
-**Approval:** pending
+**Approval:** approved 2026-06-17 (strategy approved at plan time; `wave_0_complete` flips during execution)

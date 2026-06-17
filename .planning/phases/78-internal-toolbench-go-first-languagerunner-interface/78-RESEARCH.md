@@ -413,21 +413,23 @@ Preserves `git log --follow`. After the move, edit the relocated `task.json`: ch
 | A4 | Default guardrail enforcement stays `LevelWarn` and G-001 stays a no-op stub for `bench-full` cells, so store-off edits need no receipts | Capability map (receipts) | If a future profile sets `enforce`, fixtures editing referenced symbols must carry receipts from prior `find_references`/`analyze_blast_radius` calls — which D-05 read fixtures already do |
 | A5 | `WithWorkingDir` functional-option is the team-preferred additive seam over a sandbox wrapper | Pattern 1 | If the team prefers an explicit 6th positional param, the change is equally additive but breaks the 5-arg call sites; the option avoids that |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved at plan time and adopted verbatim by the Phase 78 plans (Plan 02 for Q1/Q2, Phase 79 handoff for Q3).
 
 1. **Store opt-in knob location (CONTEXT discretion D-06/D-11 note).**
    - What we know: it can live in `task.json` (explicit `"semantic_index": true`) or be derived from `capability == "incremental update"`.
    - What's unclear: which is least-surprising for Phase 85 authors.
-   - Recommendation: **derive from `capability`** (single source of truth, no second flag to forget), with `task.json` able to OVERRIDE for the D-02 escape-hatch case (a call-graph fixture that turns out to need the store). Keeps the common case zero-config.
+   - RESOLVED: **derive from `capability`** (single source of truth, no second flag to forget), with `task.json` able to OVERRIDE for the D-02 escape-hatch case (a call-graph fixture that turns out to need the store). Keeps the common case zero-config. (Adopted in Plan 02: `StoreOptIn` derived from `capability=="incremental_update"`, `task.json semantic_index:true` override.)
 
 2. **`bench-quick` task selection after cutover.**
    - What we know: it hardcodes `--tasks=sum-doubler`.
    - What's unclear: whether to pin it to the migrated seed task id or let it discover-all (which would pull in the store-on incremental fixture and risk the 90s budget).
-   - Recommendation: **pin `--tasks` to the migrated store-OFF seed** (`IT-go-patch-apply-1`); full `make bench` runs all 10.
+   - RESOLVED: **pin `--tasks` to the migrated store-OFF seed** (`IT-go-patch-apply-1`); full `make bench` runs all 10. (Adopted in Plan 02: bench-quick pinned to `IT-go-patch-apply-1`.)
 
 3. **Does `RunTests` need a separate "before" run for `compile_errors_before`?**
    - What we know: Phase 79 wants `compile_errors_before/after`. Phase 78 only produces `after` (post-edit `go test`).
-   - Recommendation: out of scope — Phase 79 owns the before/after orchestration; `RunTests` just needs to be re-runnable. Note it for the Phase 79 handoff.
+   - RESOLVED: out of scope — Phase 79 owns the before/after orchestration; `RunTests` just needs to be re-runnable. Noted for the Phase 79 handoff. (Adopted: Plan 01 `RunTests` is stateless/re-runnable; before/after deferred to Phase 79.)
 
 ## Sources
 

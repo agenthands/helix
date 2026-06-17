@@ -1,0 +1,212 @@
+package runtime
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/agenthands/helix/internal/eval/runner"
+)
+
+// driveDeadline bounds how long the driver waits for a single tools/call
+// response before recording a timeout error for that step. It mirrors the
+// integration test's 10s per-call read deadline (daemon_tap_integration_test.go).
+const driveDeadline = 10 * time.Second
+
+// driveScript replays a scripted agent's steps through the helix stdio forwarder
+// over the per-cell Unix socket (D-06 transport). It shells
+// `helix --mode=stdio --socket=<sockPath>` ONCE, sends an `initialize` frame
+// followed by one `tools/call` frame per scripted step, and records each step's
+// outcome as a runner.StepResult{Tool, AtTime, Response, Err}.
+//
+// This mirrors driveSingleToolCall in
+// internal/eval/runner/daemon_tap_integration_test.go, generalized from a single
+// hard-coded call to the scripted step list, with two divergences (77-PATTERNS):
+//
+//  1. each step passes its own Args map as the tools/call `arguments` (the
+//     integration test hard-codes `{}`); and
+//  2. every dispatch is recorded as a StepResult (with a distinct AtTime dispatch
+//     instant) so SynthCCTap can build the CC (agent-tap) leg with faithful
+//     per-step timestamps (Pitfall 5).
+//
+// CRITICAL: stdin is NOT closed between frames or before responses arrive.
+// Closing stdin makes the forwarder's stdin->gRPC goroutine reach EOF and
+// CloseSend the gRPC stream, which races response delivery and can discard the
+// daemon's reply before it is read (integration_test:139-143). stdin is closed
+// only after all responses are collected (or the overall context is done).
+//
+// The returned []StepResult is ordered to match script.Steps. A transport-level
+// failure (cannot start the forwarder, cannot open pipes) is returned as the
+// error; per-step tool/timeout errors are recorded in StepResult.Err and do NOT
+// abort the drive — the cell still taps the daemon log and merges whatever ran.
+func driveScript(ctx context.Context, helixBin, sockPath string, script runner.Script) ([]runner.StepResult, error) {
+	fwdCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	cmd := exec.CommandContext(fwdCtx, helixBin, "--mode=stdio", "--socket="+sockPath)
+	cmd.Env = append(os.Environ(), "HELIX_LOG_LEVEL=info")
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("bench/runtime: drive stdin pipe: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("bench/runtime: drive stdout pipe: %w", err)
+	}
+	cmd.Stderr = io.Discard
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("bench/runtime: start forwarder: %w", err)
+	}
+	defer func() {
+		// Close stdin only now (after all reads) so the CloseSend cannot race
+		// response delivery, then kill+reap the forwarder.
+		_ = stdin.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
+
+	// Background reader: parse NDJSON responses keyed by JSON-RPC id. Each
+	// tools/call uses id = stepIndex+2 (id=1 is reserved for initialize).
+	respCh := make(chan jsonrpcResp, len(script.Steps)+1)
+	go readResponses(stdout, respCh)
+
+	// initialize frame (id=1). Do NOT wait for its response before sending the
+	// first call; the forwarder pipelines frames.
+	const initFrame = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"bench","version":"0"}}}`
+	if _, err := fmt.Fprintln(stdin, initFrame); err != nil {
+		return nil, fmt.Errorf("bench/runtime: write initialize: %w", err)
+	}
+
+	results := make([]runner.StepResult, 0, len(script.Steps))
+	for i, step := range script.Steps {
+		id := i + 2 // id=1 is initialize
+
+		argsJSON, marshalErr := json.Marshal(orEmptyArgs(step.Args))
+		sr := runner.StepResult{
+			Tool:   step.Tool,
+			AtTime: time.Now(), // dispatch instant (Pitfall 5)
+		}
+		if marshalErr != nil {
+			sr.Err = fmt.Errorf("marshal args for tool %q: %w", step.Tool, marshalErr)
+			results = append(results, sr)
+			continue
+		}
+
+		callFrame := fmt.Sprintf(
+			`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":%q,"arguments":%s}}`,
+			id, step.Tool, string(argsJSON),
+		)
+		if _, err := fmt.Fprintln(stdin, callFrame); err != nil {
+			sr.Err = fmt.Errorf("write tools/call for tool %q: %w", step.Tool, err)
+			results = append(results, sr)
+			continue
+		}
+
+		// Wait for this step's response (matched by id) with a per-call deadline.
+		resp, waitErr := waitForResp(ctx, respCh, id)
+		if waitErr != nil {
+			sr.Err = waitErr
+			results = append(results, sr)
+			continue
+		}
+		sr.Response = resp.raw
+		if resp.rpcErr != "" {
+			sr.Err = fmt.Errorf("tool %q returned error: %s", step.Tool, resp.rpcErr)
+		}
+		results = append(results, sr)
+	}
+
+	return results, nil
+}
+
+// orEmptyArgs returns a non-nil map so a nil Args marshals as `{}` (a valid
+// empty arguments object) rather than `null`.
+func orEmptyArgs(args map[string]any) map[string]any {
+	if args == nil {
+		return map[string]any{}
+	}
+	return args
+}
+
+// jsonrpcResp is a minimally-parsed JSON-RPC response line from the forwarder.
+type jsonrpcResp struct {
+	id     int
+	raw    json.RawMessage // the full response line (for StepResult.Response)
+	rpcErr string          // non-empty when the response carried a JSON-RPC error
+}
+
+// readResponses scans the forwarder's stdout for NDJSON JSON-RPC responses and
+// publishes each one (keyed by id) onto respCh. It returns when stdout reaches
+// EOF or errors; the caller treats a missing id as a per-step timeout.
+func readResponses(stdout io.Reader, respCh chan<- jsonrpcResp) {
+	reader := bufio.NewReaderSize(stdout, 256*1024)
+	for {
+		line, err := reader.ReadString('\n')
+		if s := strings.TrimSpace(line); s != "" {
+			if parsed, ok := parseRPCLine([]byte(s)); ok {
+				respCh <- parsed
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// parseRPCLine extracts the id and any error message from one JSON-RPC response
+// line. Lines without a numeric id (e.g. notifications) are ignored (ok=false).
+func parseRPCLine(line []byte) (jsonrpcResp, bool) {
+	var env struct {
+		ID    *json.Number `json:"id"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(line, &env); err != nil || env.ID == nil {
+		return jsonrpcResp{}, false
+	}
+	idInt, err := env.ID.Int64()
+	if err != nil {
+		return jsonrpcResp{}, false
+	}
+	r := jsonrpcResp{id: int(idInt), raw: json.RawMessage(append([]byte(nil), line...))}
+	if env.Error != nil {
+		r.rpcErr = env.Error.Message
+		if r.rpcErr == "" {
+			r.rpcErr = "jsonrpc error"
+		}
+	}
+	return r, true
+}
+
+// waitForResp blocks until a response with the given id arrives on respCh, the
+// per-call deadline elapses, or the parent context is done. Responses for other
+// ids that arrive first are dropped (each id is awaited in dispatch order).
+func waitForResp(ctx context.Context, respCh <-chan jsonrpcResp, id int) (jsonrpcResp, error) {
+	deadline := time.NewTimer(driveDeadline)
+	defer deadline.Stop()
+	for {
+		select {
+		case r, ok := <-respCh:
+			if !ok {
+				return jsonrpcResp{}, fmt.Errorf("forwarder stdout closed before response id=%d", id)
+			}
+			if r.id == id {
+				return r, nil
+			}
+			// Out-of-order / stale response for an already-handled id; ignore.
+		case <-deadline.C:
+			return jsonrpcResp{}, fmt.Errorf("no tools/call response for id=%d within %s", id, driveDeadline)
+		case <-ctx.Done():
+			return jsonrpcResp{}, fmt.Errorf("context done waiting for response id=%d: %w", id, ctx.Err())
+		}
+	}
+}

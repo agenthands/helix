@@ -25,7 +25,7 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 	writeFixture(t, filepath.Join(taskDir, "task.json"), `{"id":"sum-doubler","prompt":"make it pass"}`)
 	writeFixture(t, filepath.Join(taskDir, "go.mod"), "module sumdoubler\n\ngo 1.21\n")
 	writeFixture(t, filepath.Join(taskDir, "sum.go"), "package sumdoubler\n\nfunc Double(x int) int { return x }\n")
-	writeFixture(t, filepath.Join(taskDir, "scripted_agent.yaml"), "steps:\n  - tool: read_file\n    args:\n      relative_path: sum.go\n")
+	writeFixture(t, filepath.Join(taskDir, "scripted_agent.yaml"), "steps:\n  - tool: read_file\n    args:\n      path: sum.go\n")
 	writeFixture(t, filepath.Join(taskDir, "verify.sh"), "#!/bin/sh\nexit 0\n")
 
 	runID := "smoke-run-001"

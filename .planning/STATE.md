@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 Phase: 77
 Plan: Not started
 Status: Phase 77 closed — BENCH-04 + BENCH-05 delivered
-Last activity: 2026-06-17
+Last activity: 2026-06-17 - Completed quick task 260617-j29: re-pin fairness contract ModelID to authoritative dated Sonnet 4.5 snapshot
 
 ### Session Continuity
 
@@ -58,6 +58,12 @@ Resume file: None
 
 - Phase 77 is complete (bench runtime wired end-to-end; `make bench-quick` is the hermetic ≤90s CI smoke gate; `make bench-micro` preserves the Go microbench). Next: Phase 78 (first corpus tasks) per `.planning/milestones/v1.12-ROADMAP.md`.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260617-j29 | Re-pin fairness contract ModelID to authoritative dated Sonnet 4.5 snapshot `claude-sonnet-4-5-20250929` (was placeholder `-20260128`, which didn't match the Claude API catalog); FAIR-02 dated-snapshot invariant preserved | 2026-06-17 | f62fb475 | [260617-j29-re-pin-fairness-contract-modelid-to-auth](./quick/260617-j29-re-pin-fairness-contract-modelid-to-auth/) |
+
 ## Performance Metrics
 
 | Phase | Plan | Duration | Notes |
@@ -85,7 +91,7 @@ Resume file: None
 - [Phase 75 P02]: bench/PROVIDERS.md TOS flags set to PERMISSIVE DEFAULTS (benchmarking + publish permitted) for all providers + local models; live-TOS verification explicitly deferred to a future phase (unblocks provider-independent bench system; honesty note added in-file)
 - [Phase 75 P03]: result.v2.schema.json keeps schema_version as the ONLY required field; additionalProperties left OPEN at top level so additive fields stay minor (D-03/D-04); additive-only=minor / breaking=v3 policy recorded in a schema $comment
 - [Phase 75 P03]: FAIR-03 delivered as SCHEMA SUBSTRATE ONLY (cached-input columns tokens_input_cached_read/tokens_input_cache_write + fairness.overrides[]); variance detector deferred to Phase 82, cost_quality.md warning to Phase 89 — NOT graded as full FAIR-03 here
-- [Phase ?]: [Phase 75 P04]: Fairness contract ModelID pinned to dated snapshot claude-sonnet-4-5-20260128 (never bare alias claude-sonnet-4-6); FAIR-02 guarded by TestModelIDIsDatedSnapshot
+- [Phase ?]: [Phase 75 P04]: Fairness contract ModelID pinned to dated snapshot claude-sonnet-4-5-20260128 (never bare alias claude-sonnet-4-6); FAIR-02 guarded by TestModelIDIsDatedSnapshot — _superseded by quick task 260617-j29: -20260128 was a placeholder not in the Claude API catalog; re-pinned to the authoritative claude-sonnet-4-5-20250929 (still a dated Sonnet 4.5 snapshot, FAIR-02 intact). Sonnet 4.6 was considered but has no dated snapshot, so it cannot satisfy FAIR-02._
 - [Phase ?]: [Phase 75 P04]: Validate() returns error (unit-testable) not log.Fatal; DeprecationGate takes injected today clock (D-11); 30d boundary inclusive (==30d passes, <30d fails)
 - [Phase ?]: Phase 76-01: reused serr.Unsupported with greppable subsystem_disabled: prefix for ablation-disabled tools (D-06, no new kind)
 - [Phase ?]: Phase 76-01: kernel subsystem-disable flags on KernelConfig (extend-in-place) + accessors; both LSP and structured-edit flags landed, LSP consumed by 76-04

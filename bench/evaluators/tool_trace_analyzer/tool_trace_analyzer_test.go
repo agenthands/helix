@@ -2,6 +2,7 @@ package tool_trace_analyzer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/agenthands/helix/internal/eval/trace"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,11 @@ import (
 // gate). A re-merge would risk a tool_calls value that disagrees with
 // trace.json; this test pins parity with the merged object.
 func TestTraceMergeContinuity(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	mt := trace.MergedTrace{
+		StartedAt:  start,
+		EndedAt:    start.Add(time.Second),
+		DurationMs: 1000,
 		ToolCallSummary: trace.ToolCallSummary{
 			Total: 7,
 			ByTool: map[string]int{
@@ -37,7 +42,10 @@ func TestTraceMergeContinuity(t *testing.T) {
 // (METRIC-01/02): wall_time_seconds, semantic_tool_calls, files_read,
 // bytes_read, lsp_diagnostics_used, retry_count — all from MergedTrace fields.
 func TestTraceDerivedMetrics(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	mt := trace.MergedTrace{
+		StartedAt:  start,
+		EndedAt:    start.Add(2500 * time.Millisecond),
 		DurationMs: 2500,
 		ToolCallSummary: trace.ToolCallSummary{
 			Total: 5,
@@ -90,4 +98,49 @@ func TestTraceDerivedMetrics(t *testing.T) {
 	// retry_count: two KindAPIRetry events.
 	require.NotNil(t, tm.RetryCount)
 	assert.Equal(t, 2, *tm.RetryCount, "two KindAPIRetry events")
+}
+
+// TestWallTimeNullWhenSpanUnset covers WR-03: a merged trace whose span was
+// never captured (StartedAt == EndedAt == zero) must null wall_time_seconds with
+// a MetricError rather than fabricate a pointer-to-0, so "no timing" is distinct
+// from a genuine sub-second run.
+func TestWallTimeNullWhenSpanUnset(t *testing.T) {
+	mt := trace.MergedTrace{
+		DurationMs: 0, // no captured span
+		ToolCallSummary: trace.ToolCallSummary{
+			Total:  1,
+			ByTool: map[string]int{"read_file": 1},
+		},
+	}
+
+	tm, errs := Analyze(mt)
+
+	assert.Nil(t, tm.WallTimeSeconds, "wall_time_seconds must be nil when no span captured")
+	var sawWallErr bool
+	for _, e := range errs {
+		if e.Metric == "wall_time_seconds" {
+			sawWallErr = true
+		}
+	}
+	assert.True(t, sawWallErr, "expected a wall_time_seconds metric_errors entry")
+	// Other metrics still populate.
+	require.NotNil(t, tm.ToolCalls)
+	assert.Equal(t, 1, *tm.ToolCalls)
+}
+
+// TestWallTimeZeroForCapturedSubMillisecondSpan covers the present-and-zero case:
+// a captured span shorter than 1ms truncates to DurationMs == 0 but the span WAS
+// recorded, so wall_time_seconds is a present pointer-to-0, not null.
+func TestWallTimeZeroForCapturedSubMillisecondSpan(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	mt := trace.MergedTrace{
+		StartedAt:  start,
+		EndedAt:    start.Add(500 * time.Microsecond), // <1ms → DurationMs truncates to 0
+		DurationMs: 0,
+	}
+
+	tm, errs := Analyze(mt)
+	require.Empty(t, errs)
+	require.NotNil(t, tm.WallTimeSeconds, "captured sub-ms span is present-and-zero, not null")
+	assert.Equal(t, 0.0, *tm.WallTimeSeconds)
 }

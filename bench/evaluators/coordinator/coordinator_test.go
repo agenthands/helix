@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/languages"
@@ -68,7 +69,10 @@ func passingOutcome() languages.TestOutcome {
 // usagePresentTrace is a MergedTrace carrying a provider usage block and a
 // non-empty tool-call summary so the trace graders populate.
 func usagePresentTrace() trace.MergedTrace {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return trace.MergedTrace{
+		StartedAt:  start,
+		EndedAt:    start.Add(2500 * time.Millisecond),
 		DurationMs: 2500,
 		Usage: trace.Usage{
 			InputTokens:         1000,

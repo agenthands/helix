@@ -84,9 +84,23 @@ func Analyze(mt trace.MergedTrace) (TraceMetrics, []evaluators.MetricError) {
 	toolCalls := mt.ToolCallSummary.Total
 	tm.ToolCalls = &toolCalls
 
-	// wall_time_seconds: DurationMs / 1000.
-	wall := float64(mt.DurationMs) / 1000.0
-	tm.WallTimeSeconds = &wall
+	// wall_time_seconds: DurationMs / 1000 (DurationMs is millisecond-truncated in
+	// merge.go). When the merged span has no captured timing — both StartedAt and
+	// EndedAt are the zero time — there is no real duration to report; emit an
+	// explicit null + a MetricError rather than a fabricated pointer-to-0, so
+	// "no timing captured" is distinct from a genuine sub-second run (WR-03,
+	// mirroring the token present-vs-absent discipline). A real run with a captured
+	// span shorter than 1ms still reports 0.0 (present-and-zero), which is correct.
+	if mt.StartedAt.IsZero() && mt.EndedAt.IsZero() {
+		errs = append(errs, evaluators.MetricError{
+			Metric: "wall_time_seconds",
+			Grader: graderName,
+			Reason: "no timing captured (StartedAt/EndedAt unset)",
+		})
+	} else {
+		wall := float64(mt.DurationMs) / 1000.0
+		tm.WallTimeSeconds = &wall
+	}
 
 	// semantic_tool_calls: sum the ByTool counts over the registry-anchored
 	// semantic-tool-name set (METRIC-02).

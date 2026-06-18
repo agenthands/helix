@@ -191,4 +191,93 @@ func TestPerMetricIsolation(t *testing.T) {
 	})
 }
 
+// gitRepoNoTrackedFiles builds an initialized git repo with ZERO committed/
+// tracked files: `git init` then no `git add`. EditLocality returns a non-nil
+// files_modified (0) TOGETHER with an edit_locality MetricError (undefined
+// denominator). Skips if git is absent.
+func gitRepoNoTrackedFiles(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	return dir
+}
+
+// TestZeroTrackedFilesReportsFilesModified is the MD-02 regression: on a git
+// repo with zero tracked files, EditLocality nulls edit_locality (undefined
+// denominator) but still returns a computable files_modified. The coordinator
+// must NOT discard that value as collateral — files_modified must be reported
+// even though edit_locality carries a metric_errors[] entry.
+func TestZeroTrackedFilesReportsFilesModified(t *testing.T) {
+	in := GradeInput{
+		TestOutcome:         passingOutcome(),
+		PrePatchOutcome:     passingOutcome(),
+		RepoDir:             gitRepoNoTrackedFiles(t),
+		Merged:              usagePresentTrace(),
+		UsagePresent:        true,
+		Agent:               "claude",
+		CompileErrorsBefore: intPtr(0),
+	}
+	m, errs := Grade(context.Background(), in)
+
+	if m.EditLocality != nil {
+		t.Fatalf("edit_locality must be nil on a zero-tracked repo: %+v", m.EditLocality)
+	}
+	if m.FilesModified == nil {
+		t.Fatal("files_modified must be reported on a zero-tracked repo (MD-02), got nil")
+	}
+	if *m.FilesModified != 0 {
+		t.Fatalf("files_modified = %d, want 0 (no tracked files modified)", *m.FilesModified)
+	}
+	// edit_locality must carry its error; files_modified must NOT (it was computed).
+	var sawLocErr bool
+	for _, e := range errs {
+		if e.Metric == "edit_locality" {
+			sawLocErr = true
+		}
+		if e.Metric == "files_modified" {
+			t.Errorf("files_modified must not carry a metric_errors entry when computed: %+v", e)
+		}
+	}
+	if !sawLocErr {
+		t.Errorf("expected an edit_locality metric_errors entry, got %+v", errs)
+	}
+}
+
+// TestUncomputableFilesModifiedAnnotated is the MD-02 inverse: when
+// files_modified cannot be computed at all (non-git RepoDir → nil modified),
+// files_modified must carry its OWN metric_errors[] annotation rather than being
+// silently null.
+func TestUncomputableFilesModifiedAnnotated(t *testing.T) {
+	in := GradeInput{
+		TestOutcome:         passingOutcome(),
+		PrePatchOutcome:     passingOutcome(),
+		RepoDir:             filepath.Join(t.TempDir(), "not-a-git-repo"),
+		Merged:              usagePresentTrace(),
+		UsagePresent:        true,
+		Agent:               "claude",
+		CompileErrorsBefore: intPtr(0),
+	}
+	m, errs := Grade(context.Background(), in)
+
+	if m.FilesModified != nil {
+		t.Fatalf("files_modified must be nil when uncomputable (non-git repo): %+v", m.FilesModified)
+	}
+	var sawFilesModifiedErr bool
+	for _, e := range errs {
+		if e.Metric == "files_modified" {
+			sawFilesModifiedErr = true
+		}
+	}
+	if !sawFilesModifiedErr {
+		t.Errorf("expected a files_modified metric_errors entry when nulled, got %+v", errs)
+	}
+}
+
 func intPtr(i int) *int { return &i }

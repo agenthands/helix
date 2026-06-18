@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/runners"
 	benchschema "github.com/agenthands/helix/bench/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -51,6 +52,16 @@ type ResultInput struct {
 	// Fairness is the compile-time contract the run executed under; the builder
 	// projects its ModelID into model_id and its Overrides into fairness.overrides.
 	Fairness runners.FairnessContract
+
+	// Metrics is the canonical Phase 79 nullable metric record (D-06/METRIC-01),
+	// assembled by the coordinator. Every field is a pointer; a nil marshals to an
+	// explicit JSON null (never omitted), so a metric a grader could not compute is
+	// recorded as null rather than dropped. The zero value is an all-null metrics
+	// object, which still validates (every schema property is nullable).
+	Metrics evaluators.Metrics
+	// MetricErrors carries the D-07 per-metric grader-failure annotations. It is
+	// omitted from the doc when empty (omitempty on resultDoc.MetricErrors).
+	MetricErrors []evaluators.MetricError
 }
 
 // resultFairness is the schema's fairness block. overrides is always a non-nil
@@ -86,6 +97,13 @@ type resultDoc struct {
 	Outcome  string `json:"outcome"`
 	TraceRef string `json:"trace_ref"`
 	ModelID  string `json:"model_id"`
+
+	// Phase 79 canonical metric record (METRIC-01/D-06). Metrics has NO omitempty:
+	// the object (and every nullable field within it) is always emitted so a
+	// missing metric is an explicit JSON null, never an omission (D-07).
+	// MetricErrors is omitempty — an empty annotations slice is simply absent.
+	Metrics      evaluators.Metrics       `json:"metrics"`
+	MetricErrors []evaluators.MetricError `json:"metric_errors,omitempty"`
 }
 
 // BuildResult transforms a ResultInput into the canonical result.v2 JSON bytes.
@@ -111,6 +129,8 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		Outcome:       in.Outcome,
 		TraceRef:      in.TraceRef,
 		ModelID:       in.Fairness.ModelID,
+		Metrics:       in.Metrics,
+		MetricErrors:  in.MetricErrors,
 	}
 
 	b, err := json.MarshalIndent(doc, "", "  ")

@@ -1,10 +1,13 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/agenthands/helix/bench/evaluators"
+	"github.com/agenthands/helix/bench/languages"
 	"github.com/agenthands/helix/bench/runners"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -118,6 +121,84 @@ func TestResultMetricsRoundTrip(t *testing.T) {
 }
 
 func fPtr(f float64) *float64 { return &f }
+
+// TestRunIndexPathSegment (Pitfall 3 / V5): the durable result + trace paths
+// carry a <run_index> segment derived from cfg.RunIndex, and the segment is
+// routed through validatePathSegment before the join.
+func TestRunIndexPathSegment(t *testing.T) {
+	const out = "/reports/run"
+	const task = "IT-go-patch-apply-1"
+	const mode = "your_agent_full"
+
+	t.Run("index-2", func(t *testing.T) {
+		resultPath, tracePath, err := cellDurablePaths(out, task, mode, 2)
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(out, task, mode, "2", "result.v2.json"), resultPath)
+		assert.Equal(t, filepath.Join(out, task, mode, "2", "trace.json"), tracePath)
+	})
+
+	t.Run("index-0", func(t *testing.T) {
+		resultPath, _, err := cellDurablePaths(out, task, mode, 0)
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(out, task, mode, "0", "result.v2.json"), resultPath)
+	})
+
+	t.Run("negative-index-rejected", func(t *testing.T) {
+		// A negative run index formats to "-1" which validatePathSegment rejects
+		// (leading dot/dash is not a clean numeric segment); the guard must fire.
+		_, _, err := cellDurablePaths(out, task, mode, -1)
+		require.Error(t, err, "a non-clean run_index segment must be rejected by the guard")
+	})
+}
+
+// recordingRunner is a fixture LanguageRunner that records the order of its
+// lifecycle calls, so the pre-patch snapshot ordering can be asserted without a
+// real daemon.
+type recordingRunner struct {
+	calls    *[]string
+	outcome  languages.TestOutcome
+	runTests func()
+}
+
+func (r recordingRunner) Detect(string) bool { return true }
+func (r recordingRunner) Setup(context.Context, string) error {
+	*r.calls = append(*r.calls, "setup")
+	return nil
+}
+func (r recordingRunner) RunTests(context.Context, string) (languages.TestOutcome, error) {
+	*r.calls = append(*r.calls, "runtests")
+	if r.runTests != nil {
+		r.runTests()
+	}
+	return r.outcome, nil
+}
+func (r recordingRunner) Capabilities() []languages.Capability { return nil }
+
+// TestRunCellPrePatchOrder asserts the pre-patch snapshot seam runs the
+// registered runner's Setup+RunTests and returns its outcome, so RunCell can
+// capture a pre-patch passing set BEFORE driving the agent's edit (D-05/Pitfall 6).
+func TestRunCellPrePatchOrder(t *testing.T) {
+	var calls []string
+	rr := recordingRunner{
+		calls: &calls,
+		outcome: languages.TestOutcome{
+			Passed: true,
+			Tests:  []languages.TestResult{{Package: "p", Name: "TestSeed", Passed: true}},
+		},
+	}
+
+	out, err := prePatchSnapshot(context.Background(), rr, t.TempDir())
+	require.NoError(t, err, "pre-patch snapshot must run cleanly")
+	require.NotNil(t, out, "a registered runner must yield a pre-patch outcome")
+	assert.True(t, out.Passed, "pre-patch outcome must reflect the runner's result")
+	assert.Equal(t, []string{"setup", "runtests"}, calls,
+		"pre-patch snapshot must run Setup then RunTests")
+
+	// A nil runner (no structured runner registered) yields no snapshot.
+	out, err = prePatchSnapshot(context.Background(), nil, t.TempDir())
+	require.NoError(t, err)
+	assert.Nil(t, out, "no runner -> no pre-patch outcome (verify.sh fallback path)")
+}
 
 // TestResultV2Valid covers D-04: the result.v2 builder emits a schema-valid,
 // provenance-complete / metric-sparse doc with fairness sourced from

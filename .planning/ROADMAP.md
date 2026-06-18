@@ -26,7 +26,7 @@
 - [x] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags (completed 2026-06-16)
 - [x] Phase 77: Bench Runtime & First E2E Smoke
 - [x] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface (completed 2026-06-17)
-- [ ] Phase 79: Evaluators & Result-Schema Metrics Layer
+- [x] Phase 79: Evaluators & Result-Schema Metrics Layer (completed 2026-06-18)
 - [ ] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
 - [ ] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
 - [ ] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
@@ -145,7 +145,7 @@ Plans:
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 79)
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 Plans:
 **Wave 1**
 

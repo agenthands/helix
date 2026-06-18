@@ -4,10 +4,120 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/runners"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// metricKeys is the canonical set of 19 metric property names (17 METRIC-01/02
+// metrics + the 2 FAIR-03 cached-token columns) the metrics object must always
+// carry, every one nullable (D-06/D-07).
+var metricKeys = []string{
+	"task_success", "verified_correctness",
+	"tokens_input", "tokens_output", "tokens_input_cached_read", "tokens_input_cache_write",
+	"tool_calls", "wall_time_seconds", "files_read", "bytes_read",
+	"files_modified", "edit_locality", "regression_rate",
+	"lsp_diagnostics_used", "semantic_tool_calls", "edit_distance_patch",
+	"retry_count", "compile_errors_before", "compile_errors_after",
+}
+
+func iPtr(i int) *int  { return &i }
+func bPtr(b bool) *bool { return &b }
+
+// TestResultMetricsRoundTrip (METRIC-01): BuildResult with a populated Metrics +
+// MetricErrors emits a metrics object carrying ALL keys (nil metrics serialize
+// to JSON null, never omitted), validates against the committed schema, and a
+// D-07 row with some nil metrics + a metric_errors entry still validates.
+func TestResultMetricsRoundTrip(t *testing.T) {
+	base := func() ResultInput {
+		return ResultInput{
+			TaskID:    "internal-toolbench/IT-go-patch-apply-1",
+			Mode:      "your_agent_full",
+			Benchmark: "internal-toolbench",
+			RunIndex:  0,
+			Outcome:   "success",
+			TraceRef:  "bench/reports/x/trace.json",
+			Fairness:  runners.DefaultContract,
+		}
+	}
+
+	// (1) Metric-complete: every metric populated.
+	t.Run("complete", func(t *testing.T) {
+		in := base()
+		in.Metrics = evaluators.Metrics{
+			TaskSuccess:           bPtr(true),
+			VerifiedCorrectness:   bPtr(true),
+			TokensInput:           iPtr(1000),
+			TokensOutput:          iPtr(200),
+			TokensInputCachedRead: iPtr(50),
+			TokensInputCacheWrite: iPtr(10),
+			ToolCalls:             iPtr(3),
+			WallTimeSeconds:       fPtr(2.5),
+			FilesRead:             iPtr(2),
+			BytesRead:             iPtr(4096),
+			FilesModified:         iPtr(1),
+			EditLocality:          fPtr(0.5),
+			RegressionRate:        fPtr(0),
+			LSPDiagnosticsUsed:    iPtr(0),
+			SemanticToolCalls:     iPtr(2),
+			EditDistancePatch:     iPtr(7),
+			RetryCount:            iPtr(0),
+			CompileErrorsBefore:   iPtr(0),
+			CompileErrorsAfter:    iPtr(0),
+		}
+
+		doc, err := BuildResult(in)
+		require.NoError(t, err)
+		require.NoError(t, Validate(doc), "metric-complete doc must validate")
+
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(doc, &m))
+		metrics, ok := m["metrics"].(map[string]any)
+		require.True(t, ok, "metrics must be a JSON object")
+		for _, k := range metricKeys {
+			_, present := metrics[k]
+			assert.True(t, present, "metrics.%s must be present (never omitted)", k)
+		}
+	})
+
+	// (2) D-07 row: some nil metrics + a metric_errors entry still validates, and
+	// a nil metric serializes to JSON null (not omitted).
+	t.Run("d07-nulls", func(t *testing.T) {
+		in := base()
+		in.Metrics = evaluators.Metrics{
+			TaskSuccess: bPtr(true),
+			// tokens_input intentionally nil (scripted run) → must be JSON null.
+		}
+		in.MetricErrors = []evaluators.MetricError{
+			{Metric: "tokens_input", Grader: "token_meter", Reason: "no provider usage block (scripted run)"},
+		}
+
+		doc, err := BuildResult(in)
+		require.NoError(t, err)
+		require.NoError(t, Validate(doc), "D-07 row with nil metrics + metric_errors must validate")
+
+		// A nil metric must serialize as an explicit JSON null token, not omitted.
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(doc, &raw))
+		metricsRaw, ok := raw["metrics"]
+		require.True(t, ok, "metrics object must be present")
+		var metrics map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(metricsRaw, &metrics))
+		ti, present := metrics["tokens_input"]
+		require.True(t, present, "tokens_input key must be present even when nil")
+		assert.Equal(t, "null", string(ti), "a nil metric must serialize to JSON null, not be omitted")
+
+		// metric_errors carries the annotation.
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(doc, &m))
+		me, ok := m["metric_errors"].([]any)
+		require.True(t, ok, "metric_errors must be a JSON array")
+		require.Len(t, me, 1, "exactly one metric_errors entry")
+	})
+}
+
+func fPtr(f float64) *float64 { return &f }
 
 // TestResultV2Valid covers D-04: the result.v2 builder emits a schema-valid,
 // provenance-complete / metric-sparse doc with fairness sourced from

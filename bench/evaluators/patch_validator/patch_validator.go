@@ -26,6 +26,8 @@ package patch_validator
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -166,6 +168,15 @@ func gitLines(ctx context.Context, repoDir string, args ...string) ([]string, er
 		// Any error here (git not on PATH, repo unreadable, or a non-zero exit on
 		// a broken repo) is infra: surface it as a MetricError rather than
 		// silently undercount tracked/changed files.
+		//
+		// LO-02: a missing git binary (or a non-repo dir) is an ENVIRONMENT-class
+		// failure that nulls both patch metrics on EVERY cell, distinct from a
+		// metric-class failure (this repo has no diff to score). Tag it with a
+		// greppable "git-unavailable:" prefix so an operator can tell "no git on
+		// host" from a normal per-metric miss.
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("git-unavailable: %w", err)
+		}
 		return nil, err
 	}
 	var lines []string

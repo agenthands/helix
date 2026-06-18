@@ -101,17 +101,35 @@ func EditDistancePatch(ctx context.Context, repoDir string) (*int, *evaluators.M
 			Reason: "git diff --numstat failed: " + err.Error(),
 		}
 	}
+	return sumNumstat(lines)
+}
+
+// sumNumstat parses `git diff --numstat` lines into the summed added+deleted edit
+// distance. It is a pure function (no git, no ctx) so the binary-vs-malformed
+// distinction is unit-testable (LO-03).
+//
+// numstat format: "<added>\t<deleted>\t<path>"; a binary file is "-\t-\t<path>".
+// The binary sentinel is special-cased to contribute 0 and is silent (expected);
+// any OTHER non-integer field means git's format shifted or a corrupt line
+// appeared, which is surfaced as a MetricError rather than silently under-counted.
+func sumNumstat(lines []string) (*int, *evaluators.MetricError) {
 	total := 0
 	for _, l := range lines {
-		// numstat format: "<added>\t<deleted>\t<path>"; binary → "-\t-\t<path>".
 		fields := strings.SplitN(l, "\t", 3)
 		if len(fields) < 3 {
 			continue
 		}
+		if fields[0] == "-" && fields[1] == "-" {
+			continue // binary file: contributes 0
+		}
 		added, aerr := strconv.Atoi(fields[0])
 		deleted, derr := strconv.Atoi(fields[1])
 		if aerr != nil || derr != nil {
-			continue // binary file ("-") or malformed line
+			return nil, &evaluators.MetricError{
+				Metric: "edit_distance_patch",
+				Grader: graderName,
+				Reason: "malformed git diff --numstat line: " + l,
+			}
 		}
 		total += added + deleted
 	}

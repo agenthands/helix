@@ -141,3 +141,41 @@ func TestEditDistancePatch(t *testing.T) {
 		t.Fatalf("edit_distance_patch = %v, want 5 (3 added + 2 deleted)", dist)
 	}
 }
+
+// TestSumNumstat covers LO-03: the binary sentinel ("-\t-") contributes 0
+// silently, but any OTHER non-integer numstat field is a parse anomaly that
+// surfaces a MetricError rather than being silently dropped.
+func TestSumNumstat(t *testing.T) {
+	t.Run("text lines sum added+deleted", func(t *testing.T) {
+		dist, mErr := sumNumstat([]string{"3\t2\tf.go", "1\t0\tg.go"})
+		if mErr != nil {
+			t.Fatalf("unexpected MetricError: %+v", mErr)
+		}
+		if dist == nil || *dist != 6 {
+			t.Fatalf("sum = %v, want 6", dist)
+		}
+	})
+
+	t.Run("binary sentinel contributes 0, no error", func(t *testing.T) {
+		dist, mErr := sumNumstat([]string{"-\t-\tbin.dat", "4\t1\tf.go"})
+		if mErr != nil {
+			t.Fatalf("binary sentinel must not error: %+v", mErr)
+		}
+		if dist == nil || *dist != 5 {
+			t.Fatalf("sum = %v, want 5 (binary contributes 0)", dist)
+		}
+	})
+
+	t.Run("malformed line surfaces a MetricError", func(t *testing.T) {
+		dist, mErr := sumNumstat([]string{"3\t2\tf.go", "garbage\t1\th.go"})
+		if dist != nil {
+			t.Fatalf("malformed line must null the metric, got %v", *dist)
+		}
+		if mErr == nil {
+			t.Fatal("expected a MetricError for a malformed numstat line")
+		}
+		if mErr.Metric != "edit_distance_patch" || mErr.Grader != graderName {
+			t.Fatalf("MetricError = %+v, want metric=edit_distance_patch grader=%s", mErr, graderName)
+		}
+	})
+}

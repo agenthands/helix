@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: completed
+status: executing
 stopped_at: Phase 79 context gathered (discuss-phase complete); next step is /gsd-plan-phase 79
-last_updated: "2026-06-18T11:16:35.624Z"
-last_activity: "2026-06-18 -- Phase 79 discuss-phase complete: 7 decisions locked in 79-CONTEXT.md (ready for planning)"
+last_updated: "2026-06-18T12:30:39.086Z"
+last_activity: 2026-06-18 -- Phase 79 execution started
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_plans: 23
+  completed_plans: 20
+  percent: 80
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 79 — evaluators-result-schema-metrics-layer (context gathered, ready to plan)
+**Current focus:** Phase 79 — Evaluators & Result-Schema Metrics Layer
 
 ## Current Position
 
-Phase: 79 (evaluators-result-schema-metrics-layer) — DISCUSSED (context gathered, not yet planned)
-Plan: Not started
-Status: Phase 79 discuss-phase complete — 7 decisions locked (D-01..D-07); Phase 78 complete (5/5 plans)
-Last activity: 2026-06-18 -- Phase 79 discuss-phase complete: 7 decisions locked in 79-CONTEXT.md (ready for planning)
+Phase: 79 (Evaluators & Result-Schema Metrics Layer) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-18 -- Phase 79 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-18T00:10:00.000Z
+Last session: 2026-06-18T12:30:24.021Z
 Stopped at: Phase 79 context gathered (discuss-phase complete); next step is /gsd-plan-phase 79
 Resume file: .planning/phases/79-evaluators-result-schema-metrics-layer/79-CONTEXT.md
 
@@ -88,6 +88,7 @@ Resume file: .planning/phases/79-evaluators-result-schema-metrics-layer/79-CONTE
 | Phase 78 P03 | ~12min | 2 tasks | 53 files |
 | Phase 78 P04 | ~50min | 2 tasks | 7 files |
 | Phase 78 P05 | ~30min | 3 tasks | 4 files (TDD RED+GREEN + 2 docs) |
+| Phase 79 P01 | ~9min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -126,3 +127,5 @@ Resume file: .planning/phases/79-evaluators-result-schema-metrics-layer/79-CONTE
 - [Phase 78 P05]: CAPABILITIES.md uses REGISTERED HELIX NATIVE tool names (get_symbol_overview singular, get_call_hierarchy) — verified against internal/kernel/symbols/skill.go + README inventory at the human-verify gate; deliberately NOT the serena/SMTC plugin spellings, left unchanged
 - [Phase 78 P05]: PHASE67_CROSSWALK.md is inspiration-only — T-67-* are Phase 67 PLANNING task IDs (no on-disk corpus); IT-go-* fixtures authored fresh on the Phase 77 bench spine; namespaces disjoint, zero code migration (criterion C4), enforced by ^IT-go-/not-^T-67- static test
 - [Phase 78 P05]: Phase 78 CLOSED — full Go corpus run 10/10 cells green (criterion C2 gate, human-verify approved); TOOLBENCH-01/02/10 satisfied
+- [Phase ?]: [Phase 79 P01]: evaluators.Metrics has 19 pointer fields (17 METRIC-01/02 + 2 FAIR-03 cached-token columns), no omitempty -> nil marshals to explicit JSON null (METRIC-01 explicit-nulls, D-06/D-07)
+- [Phase ?]: [Phase 79 P01]: result.v2 metrics object + metric_errors[] added additively (minor bump, no v3); top-level tokens_input/output RELAXED to nullable (Open Q5); metrics object canonical home; old golden still valid

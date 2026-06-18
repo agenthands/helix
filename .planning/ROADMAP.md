@@ -149,7 +149,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 79-01-PLAN.md — Foundation: typed nullable `Metrics`/`MetricError` + schema typing of all 17 metrics + `metric_errors[]` (additive minor bump) [Wave 1]
+- [x] 79-01-PLAN.md — Foundation: typed nullable `Metrics`/`MetricError` + schema typing of all 17 metrics + `metric_errors[]` (additive minor bump) [Wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

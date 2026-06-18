@@ -494,7 +494,13 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	} else {
 		postOutcome = languages.TestOutcome{Passed: verifyExit == 0, ExitCode: verifyExit}
 	}
-	usagePresent := cfg.Agent == "claude" && (merged.Usage.InputTokens > 0 || merged.Usage.OutputTokens > 0)
+	// usagePresent is a true presence signal (D-01/D-03), NOT a value threshold:
+	// merged.UsagePresent is set by the CC tap when a `result` event carried a
+	// provider usage block. A real claude run reporting a genuine all-zero usage
+	// block must therefore still be classified usage-present, so token metrics are
+	// emitted as pointers-to-0 rather than silently nulled. The scripted corpus
+	// leaves UsagePresent false (cctap.go), keeping its token metrics explicit null.
+	usagePresent := cfg.Agent == "claude" && merged.UsagePresent
 	var prePatchVal languages.TestOutcome
 	if prePatch != nil {
 		prePatchVal = *prePatch

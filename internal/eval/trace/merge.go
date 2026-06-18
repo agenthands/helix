@@ -61,6 +61,7 @@ func Merge(in MergeInput) (MergedTrace, error) {
 		EndedAt:       in.EndedAt,
 		DurationMs:    int64(in.EndedAt.Sub(in.StartedAt) / time.Millisecond),
 		Usage:         in.CC.Usage,
+		UsagePresent:  in.CC.UsagePresent,
 	}
 
 	// Step 1: Concatenate and stable-sort all events by t ASC.

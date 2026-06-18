@@ -290,6 +290,44 @@ func TestTapCCStream_Result(t *testing.T) {
 	if res.Usage.OutputTokens != 567 {
 		t.Errorf("Usage.OutputTokens = %d, want 567", res.Usage.OutputTokens)
 	}
+	if !res.UsagePresent {
+		t.Error("UsagePresent = false, want true (result event carried a usage block)")
+	}
+}
+
+// TestTapCCStream_AllZeroUsageStillPresent verifies that a result event whose
+// usage block is genuinely all-zero is still classified usage-present (MD-01 /
+// D-01/D-03): UsagePresent must be a presence signal, not a value threshold, so
+// a real claude run reporting input_tokens:0/output_tokens:0 is not mistaken for
+// "no usage block".
+func TestTapCCStream_AllZeroUsageStillPresent(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t,
+		`{"type":"result","subtype":"success","usage":{"input_tokens":0,"output_tokens":0},"session_id":"sess-zero"}`+"\n",
+	)
+	res, err := trace.TapCCStream(path)
+	if err != nil {
+		t.Fatalf("TapCCStream error: %v", err)
+	}
+	if !res.UsagePresent {
+		t.Error("UsagePresent = false for an all-zero usage block, want true (presence != value threshold)")
+	}
+}
+
+// TestTapCCStream_NoUsageBlockAbsent verifies that a result event with NO usage
+// block leaves UsagePresent false (the scripted/absent contract).
+func TestTapCCStream_NoUsageBlockAbsent(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t,
+		`{"type":"result","subtype":"success","session_id":"sess-none"}`+"\n",
+	)
+	res, err := trace.TapCCStream(path)
+	if err != nil {
+		t.Fatalf("TapCCStream error: %v", err)
+	}
+	if res.UsagePresent {
+		t.Error("UsagePresent = true with no usage block, want false")
+	}
 }
 
 // TestTapCCStream_SkipsStreamEvent verifies stream_event lines are skipped.

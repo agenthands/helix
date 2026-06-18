@@ -131,6 +131,20 @@ Plans:
 
 - [x] 78-05-PLAN.md — CAPABILITIES.md + PHASE67_CROSSWALK.md + corpus-coverage aggregator (Go 10/10) + full-run human-verify checkpoint (D-06/D-11, C1/C2/C4)
 
+### Phase 79: Evaluators & Result-Schema Metrics Layer
+**Goal**: Every per-task `result.v2.json` is populated with all 17 normalized metrics from real graders — including the load-bearing `tokens_input/output` from the provider's `usage` block (not Helix's MCP counter), `edit_locality_given_solved` as the headline locality metric, and a single merged OTel trace per `(task, mode, run_index)`.
+**Depends on**: Phase 77 (bench runtime), Phase 78 (Go ToolBench produces real test results to grade)
+**Requirements**: METRIC-01, METRIC-02, METRIC-03, METRIC-04, METRIC-05, METRIC-06
+**Success Criteria** (what must be TRUE):
+  1. `bench/evaluators/{test_runner,patch_validator,token_meter,tool_trace_analyzer,regression_checker}/` produce all 12 base metrics + 5 extended metrics (`semantic_tool_calls`, `edit_distance_patch`, `retry_count`, `compile_errors_before`, `compile_errors_after`) on a real task; missing metrics are explicit nulls, not omissions.
+  2. A regression test asserts `tokens_input/output` source-of-truth is the provider response's `usage` block, NOT Helix's MCP-side counter; cached-input tokens (`tokens_input_cached_read`, `tokens_input_cache_write`) are reported as separate columns.
+  3. `edit_locality` definition (`1 − (modified_files / total_files_in_repo_subtree)`) and `regression_rate` definition (`(failing_pre-existing_tests_post_patch / passing_pre-existing_tests_pre_patch)`) are unit-tested at edge cases (root-only = 1.0, all-files ≈ 0.0, synthetic regression case); both definitions documented in `bench/evaluators/METRICS.md`.
+  4. Trace merging produces a single merged trace per `(task, mode, run_index)` from Helix daemon OTel + agent CLI subprocess + bench harness span; Jaeger import shows full continuity from `bench.run_id` root to LSP leaves; no orphan spans, no cross-cell PID leakage.
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 79)
+
+**Plans:** TBD
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

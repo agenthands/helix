@@ -56,8 +56,8 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **METRIC-01**: 12 normalized metrics per task: `task_success`, `verified_correctness`, `tokens_input`, `tokens_output`, `tool_calls`, `wall_time_seconds`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`. _Acceptance:_ result JSON schema validates against the v1 schema; missing metrics are explicit nulls, not omissions.
 - [x] **METRIC-02**: Additional metrics: `semantic_tool_calls`, `edit_distance_patch`, `retry_count`, `compile_errors_before`, `compile_errors_after`. _Acceptance:_ test records all 17 metrics for a real task run.
 - [ ] **METRIC-03**: `tokens_input/output` are sourced from the **provider's `usage` block**, not Helix's MCP-side counters. _Acceptance:_ regression test asserts source-of-truth for token counts is the provider response, not internal counters.
-- [ ] **METRIC-04**: `edit_locality` defined as `1 − (modified_files / total_files_in_repo_subtree)`; documented in `bench/evaluators/METRICS.md`. _Acceptance:_ definition test verifies edge cases (root-only edit = 1.0, all-files edit ≈ 0.0).
-- [ ] **METRIC-05**: `regression_rate` defined as `(failing_pre-existing_tests_post_patch / passing_pre-existing_tests_pre_patch)`. _Acceptance:_ definition test on a synthetic regression case.
+- [x] **METRIC-04**: `edit_locality` defined as `1 − (modified_files / total_files_in_repo_subtree)`; documented in `bench/evaluators/METRICS.md`. _Acceptance:_ definition test verifies edge cases (root-only edit = 1.0, all-files edit ≈ 0.0).
+- [x] **METRIC-05**: `regression_rate` defined as `(failing_pre-existing_tests_post_patch / passing_pre-existing_tests_pre_patch)`. _Acceptance:_ definition test on a synthetic regression case.
 - [x] **METRIC-06**: Trace merging from Helix daemon OTel + agent CLI subprocess + bench harness span — single merged trace per `(task, mode, run_index)`. Reuses Phase 67 trace-tap. _Acceptance:_ Jaeger import shows full continuity from `bench.run_id` root to LSP leaves; no orphan spans.
 
 ### Verified Correctness (VERIFIED-*)

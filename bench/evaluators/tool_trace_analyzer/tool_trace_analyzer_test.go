@@ -60,7 +60,8 @@ func TestTraceDerivedMetrics(t *testing.T) {
 			},
 		},
 		Events: []trace.Event{
-			// files_read / bytes_read: two read/list events carrying ResultSizeBytes.
+			// files_read / bytes_read: only read_file counts (WR-05). The list_dir
+			// event below must NOT contribute to files_read / bytes_read.
 			{Source: "daemon", Kind: trace.KindToolCall, Tool: "read_file", ResultSizeBytes: 100},
 			{Source: "daemon", Kind: trace.KindToolCall, Tool: "list_dir", ResultSizeBytes: 250},
 			// lsp_diagnostics_used: one get_diagnostics event.
@@ -85,11 +86,11 @@ func TestTraceDerivedMetrics(t *testing.T) {
 	assert.Equal(t, 3, *tm.SemanticToolCalls,
 		"semantic_tool_calls counts only registry-anchored semantic tool names")
 
-	// files_read / bytes_read from read/list events.
+	// files_read / bytes_read count only read_file (WR-05): list_dir is excluded.
 	require.NotNil(t, tm.FilesRead)
 	require.NotNil(t, tm.BytesRead)
-	assert.Equal(t, 2, *tm.FilesRead, "two read/list events")
-	assert.Equal(t, 350, *tm.BytesRead, "sum of ResultSizeBytes (100+250)")
+	assert.Equal(t, 1, *tm.FilesRead, "only the read_file event counts; list_dir excluded")
+	assert.Equal(t, 100, *tm.BytesRead, "only read_file ResultSizeBytes (100); list_dir 250 excluded")
 
 	// lsp_diagnostics_used: at least the one get_diagnostics event.
 	require.NotNil(t, tm.LSPDiagnosticsUsed)

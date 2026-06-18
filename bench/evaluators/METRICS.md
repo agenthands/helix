@@ -80,7 +80,10 @@ Wall-clock duration of the run in seconds, derived from the merged trace's
 
 ### files_read / bytes_read
 Number of files read and total bytes read during the run, summed from the
-read/list tool events in the merged trace (`ResultSizeBytes`).
+`read_file` tool events in the merged trace (`ResultSizeBytes`). Only file-content
+reads count: `list_dir` (directory listing) is deliberately excluded, since a
+directory enumeration is not a file read and its result bytes are listing payload,
+not file content (WR-05).
 
 ### files_modified
 The count of git-tracked files under the task repo subtree that the agent

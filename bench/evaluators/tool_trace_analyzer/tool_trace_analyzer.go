@@ -50,12 +50,16 @@ var diagnosticToolNames = map[string]struct{}{
 	"get_diagnostics": {},
 }
 
-// readToolNames is the set of file-read / directory-listing tool names whose
-// events contribute to files_read / bytes_read. Source of truth:
+// readToolNames is the set of file-CONTENT-read tool names whose events
+// contribute to files_read / bytes_read. Source of truth:
 // internal/kernel/fileops/ (CLAUDE.md "Layer 1 > internal/kernel/fileops/").
+//
+// WR-05: list_dir is deliberately EXCLUDED. files_read / bytes_read are named for
+// file-content reads; a directory listing is not a file read and its
+// ResultSizeBytes is a directory enumeration, not file content. Counting list_dir
+// over-counted files_read and polluted bytes_read with listing payload sizes.
 var readToolNames = map[string]struct{}{
 	"read_file": {},
-	"list_dir":  {},
 }
 
 // TraceMetrics is the typed bundle of trace-derived metrics this grader

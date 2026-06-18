@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
+status: verifying
 stopped_at: Completed 79-03-PLAN.md
-last_updated: "2026-06-18T13:10:00.000Z"
+last_updated: "2026-06-18T13:01:45.157Z"
 last_activity: 2026-06-18 -- Completed 79-03 (trace-derived graders)
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 23
-  completed_plans: 22
-  percent: 83
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 Phase: 79 (Evaluators & Result-Schema Metrics Layer) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-18 -- Completed 79-03 (trace-derived graders)
 
 ### Session Continuity
 
-Last session: 2026-06-18T13:10:00.000Z
+Last session: 2026-06-18T13:01:16.326Z
 Stopped at: Completed 79-03-PLAN.md
 Resume file: None
 
@@ -90,6 +90,7 @@ Resume file: None
 | Phase 78 P05 | ~30min | 3 tasks | 4 files (TDD RED+GREEN + 2 docs) |
 | Phase 79 P01 | ~9min | 2 tasks | 4 files |
 | Phase 79 P02 | 25m | 3 tasks | 6 files |
+| Phase 79 P4 | 10m | 4 tasks | 7 files |
 
 ## Decisions
 
@@ -132,3 +133,5 @@ Resume file: None
 - [Phase ?]: [Phase 79 P01]: result.v2 metrics object + metric_errors[] added additively (minor bump, no v3); top-level tokens_input/output RELAXED to nullable (Open Q5); metrics object canonical home; old golden still valid
 - [Phase ?]: edit_distance_patch = sum(added+deleted) from git diff --numstat (79-02)
 - [Phase ?]: regression numerator counts cached-passing tests now failing OR absent post-patch (79-02)
+- [Phase ?]: Coordinator in package coordinator to avoid grader->evaluators import cycle (79-04)
+- [Phase ?]: Durable bench path is <out>/<task>/<mode>/<run_index>/ with the run_index segment guarded by validateRunIndexSegment (79-04)

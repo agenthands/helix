@@ -1,4 +1,4 @@
-package evaluators
+package coordinator
 
 import (
 	"context"
@@ -8,12 +8,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/languages"
 	"github.com/agenthands/helix/internal/eval/trace"
 )
 
 // gitRepoWithModification builds a hermetic git repo under t.TempDir(): it
-// commits a tracked file, then modifies it (without committing) so
+// commits two tracked files, then modifies one (without committing) so
 // patch_validator sees a non-empty git-tracked denominator AND a modified file
 // in the working tree. Returns the repo dir. Skips the test if git is absent.
 func gitRepoWithModification(t *testing.T) string {
@@ -82,10 +83,8 @@ func usagePresentTrace() trace.MergedTrace {
 	}
 }
 
-// allMetricNames enumerates the 17 metric field names on Metrics for the
-// all-present assertion. (Two FAIR-03 cached-token columns are part of the 19
-// fields; "all 17 metrics present" means every metric field is non-nil.)
-func nonNilFieldCount(t *testing.T, m Metrics) int {
+// nonNilFieldCount counts the non-nil pointer fields on a Metrics value.
+func nonNilFieldCount(t *testing.T, m evaluators.Metrics) int {
 	t.Helper()
 	v := reflect.ValueOf(m)
 	count := 0

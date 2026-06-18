@@ -29,14 +29,14 @@
       "description": "Zero- or one-based repetition index for this task within a multi-run sample (STATS-01 N>=3 consumes this downstream in Phase 82)."
     },
     "tokens_input": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Total input (prompt) tokens billed for this run."
+      "description": "Total input (prompt) tokens billed for this run. Relaxed to nullable (Phase 79, Open Q5): the canonical home for metrics is now the `metrics` object — this top-level column is retained nullable for additive-only backward compatibility with metric-sparse fixtures."
     },
     "tokens_output": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Total output (completion) tokens billed for this run."
+      "description": "Total output (completion) tokens billed for this run. Relaxed to nullable (Phase 79, Open Q5) — see tokens_input; the `metrics` object is the canonical home."
     },
     "tokens_input_cached_read": {
       "type": "integer",
@@ -71,6 +71,127 @@
                 "description": "Maintainer signoff for this override (D-10)."
               }
             }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "METRIC-01/D-06 canonical metric record. Every metric is nullable; a missing metric is an explicit JSON null (D-07), never an omission. Carries the 17 METRIC-01/02 metrics plus the 2 FAIR-03 cached-token columns (D-03). Mirrors the Go evaluators.Metrics struct json tags 1:1 (snake_case key parity is the contract every Wave-2 grader and Wave-3 wiring consumes).",
+      "properties": {
+        "task_success": {
+          "type": ["boolean", "null"],
+          "description": "Whether the task's success oracle passed (METRIC-01)."
+        },
+        "verified_correctness": {
+          "type": ["boolean", "null"],
+          "description": "Whether the stronger verified-correctness oracle passed (METRIC-01)."
+        },
+        "tokens_input": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total input (prompt) tokens billed for this run."
+        },
+        "tokens_output": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total output (completion) tokens billed for this run."
+        },
+        "tokens_input_cached_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "FAIR-03 substrate (D-03): input tokens served from a prompt cache read."
+        },
+        "tokens_input_cache_write": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "FAIR-03 substrate (D-03): input tokens written into the prompt cache."
+        },
+        "tool_calls": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total number of tool calls made during the run."
+        },
+        "wall_time_seconds": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Wall-clock duration of the run in seconds."
+        },
+        "files_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of files read during the run."
+        },
+        "bytes_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total bytes read during the run."
+        },
+        "files_modified": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of files modified during the run."
+        },
+        "edit_locality": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of edits concentrated in the intended region (0..1)."
+        },
+        "regression_rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Rate of newly-introduced regressions."
+        },
+        "lsp_diagnostics_used": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of LSP diagnostics consulted during the run."
+        },
+        "semantic_tool_calls": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of semantic (SMTC) tool calls made during the run."
+        },
+        "edit_distance_patch": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Edit distance between the produced patch and the reference patch."
+        },
+        "retry_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of retries during the run."
+        },
+        "compile_errors_before": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Compile error count before the agent's edits."
+        },
+        "compile_errors_after": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Compile error count after the agent's edits."
+        }
+      }
+    },
+    "metric_errors": {
+      "type": "array",
+      "description": "D-07 per-metric grader-failure annotations. When a grader cannot compute a metric it leaves the metrics field null and records why here. Mirrors the Go evaluators.MetricError struct.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "Name of the metric the grader failed to compute (matches a metrics property key)."
+          },
+          "grader": {
+            "type": "string",
+            "description": "Identifier of the grader that failed."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Free-text explanation of why the metric could not be computed."
           }
         }
       }

@@ -18,6 +18,14 @@
 //     internal/eval/trace/merge.go:122-139); a path escaping the subtree is not
 //     counted toward files_modified.
 //
+// BASELINE (WR-02): the numerator is `git diff --name-only` — UNSTAGED working-
+// tree changes against the index only. This deliberately relies on the bench
+// driver editing in place and NEVER staging (`git add`) the agent's edits, which
+// holds for the scripted Go fixtures. If a future driver stages edits, those
+// staged changes would not appear in `git diff` and edit_locality would over-
+// report (and edit_distance_patch under-report); switching the baseline to a
+// captured pre-patch ref (e.g. `git diff HEAD`) would be required at that point.
+//
 // Interpretation (A3): a single-file edit in an N-file repo yields 1 − 1/N, which
 // approaches 1.0 as N grows — "locality" measures how surgical the patch is
 // relative to the tracked tree. A zero-tracked repo has an undefined denominator

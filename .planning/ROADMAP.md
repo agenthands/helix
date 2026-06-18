@@ -143,7 +143,13 @@ Plans:
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 79)
 
-**Plans:** TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 79-01-PLAN.md — Foundation: typed nullable `Metrics`/`MetricError` + schema typing of all 17 metrics + `metric_errors[]` (additive minor bump) [Wave 1]
+- [ ] 79-02-PLAN.md — Exec/git graders: test_runner (exit-authoritative success), patch_validator (edit_locality/edit_distance), regression_checker (pre/post regression_rate) [Wave 2]
+- [ ] 79-03-PLAN.md — Trace graders: token_meter (provider-usage source-of-truth, scripted-null) + tool_trace_analyzer (trace-derived metrics, no re-merge) [Wave 2]
+- [ ] 79-04-PLAN.md — Coordinator (D-07 isolation) + result.v2 wiring + run_index path + pre-patch snapshot + METRICS.md + E2E gate [Wave 3]
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

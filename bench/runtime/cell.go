@@ -31,8 +31,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/agenthands/helix/bench/evaluators/coordinator"
 	"github.com/agenthands/helix/bench/languages"
 	_ "github.com/agenthands/helix/bench/languages/go" // Caddy-style init() registers the Go runner for (internal-toolbench, go) (D-10)
 	"github.com/agenthands/helix/bench/runners"
@@ -147,6 +149,58 @@ func validateCellKey(name, kind string) error {
 	return validatePathSegment(name, kind)
 }
 
+// cellDurablePaths computes the durable result.v2.json + trace.json paths for a
+// cell, threading the <run_index> segment into the layout
+// (<OutDir>/<task>/<mode>/<run_index>/...) per Pitfall 3 (per (task, mode,
+// run_index)). The task/mode segments are assumed already V5-validated by the
+// caller (RunCell validates them up front); the run_index segment is formatted
+// via strconv.Itoa and routed through validateRunIndexSegment (V5 / T-79-04-01)
+// BEFORE the join so a malformed numeric segment can never become a path.
+func cellDurablePaths(outDir, task, mode string, runIndex int) (resultPath, tracePath string, err error) {
+	seg := strconv.Itoa(runIndex)
+	if err := validateRunIndexSegment(seg); err != nil {
+		return "", "", err
+	}
+	resultPath = filepath.Join(outDir, task, mode, seg, "result.v2.json")
+	tracePath = filepath.Join(outDir, task, mode, seg, "trace.json")
+	return resultPath, tracePath, nil
+}
+
+// validateRunIndexSegment guards the run_index path segment (T-79-04-01). A
+// run_index is a non-negative integer; a negative value formats with a leading
+// "-" (e.g. "-1") which is neither a clean nor a positive numeric segment, so it
+// is rejected before it can become a path. The formatted segment is then routed
+// through the shared validatePathSegment predicate (rejects "..", separators, a
+// leading dot — reused from validate.go so the run_index segment cannot drift
+// from the task/mode/benchmark guards).
+func validateRunIndexSegment(seg string) error {
+	if seg == "" || seg[0] == '-' {
+		return fmt.Errorf("run_index segment %q is not a non-negative integer", seg)
+	}
+	return validatePathSegment(seg, "run_index")
+}
+
+// prePatchSnapshot captures a pre-patch test outcome for regression_checker's
+// pre-patch passing set (D-05 / Pitfall 6). It runs the structured
+// LanguageRunner's Setup then RunTests against repoDir and returns the outcome.
+// A nil runner (no structured runner registered — the verify.sh fallback path)
+// yields a nil outcome and no error: there is no pre-patch test snapshot to take.
+// MUST be called BEFORE the agent's edit (driveScript) so the captured set
+// reflects the repo as it stood before the patch.
+func prePatchSnapshot(ctx context.Context, r languages.LanguageRunner, repoDir string) (*languages.TestOutcome, error) {
+	if r == nil {
+		return nil, nil
+	}
+	if err := r.Setup(ctx, repoDir); err != nil {
+		return nil, fmt.Errorf("pre-patch runner setup: %w", err)
+	}
+	out, err := r.RunTests(ctx, repoDir)
+	if err != nil {
+		return nil, fmt.Errorf("pre-patch run tests: %w", err)
+	}
+	return &out, nil
+}
+
 // RunCell executes one <run_id>/<task>/<mode> cell end-to-end and returns its
 // CellResult (with the three Nyquist signals populated). The returned error is
 // non-nil only for infrastructure failures (resolver/sandbox/daemon spawn/merge/
@@ -177,21 +231,21 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return res, errors.New("bench/runtime: empty helix binary path")
 	}
 
-	// IN-05: the durable artifact path below is <OutDir>/<task>/<mode>/ with NO
-	// run-index segment. cfg.RunIndex is metadata-only this phase (it flows into
-	// result.v2's run_index field), so two cells that share an OutDir AND differ
-	// only by RunIndex would overwrite the same two files. Single-rep per OutDir is
-	// the only layout Phase 77 supports: repetitions (pass@k / multi-run) MUST be
-	// given distinct OutDirs by the caller. Threading RunIndex into the path
-	// (<task>/<mode>/<run_index>/) is deferred to Phase 79 when repetitions land.
-	res.ResultPath = filepath.Join(cfg.OutDir, cfg.Task, cfg.Mode, "result.v2.json")
-	res.MergedTracePath = filepath.Join(cfg.OutDir, cfg.Task, cfg.Mode, "trace.json")
+	var err error
+
+	// Pitfall 3: the durable artifact path is now keyed per (task, mode,
+	// run_index): <OutDir>/<task>/<mode>/<run_index>/{result.v2.json,trace.json}.
+	// cfg.RunIndex is threaded into the path (no longer metadata-only), so two
+	// cells sharing an OutDir that differ only by RunIndex land in distinct dirs
+	// and no longer overwrite one another (Phase 79 repetitions / pass@k). The
+	// run_index segment is V5-guarded inside cellDurablePaths (T-79-04-01).
+	res.ResultPath, res.MergedTracePath, err = cellDurablePaths(cfg.OutDir, cfg.Task, cfg.Mode, cfg.RunIndex)
+	if err != nil {
+		return res, fmt.Errorf("bench/runtime: %w", err)
+	}
 
 	// (1) Resolve mode -> profile (D-05).
-	var (
-		profileName string
-		err         error
-	)
+	var profileName string
 	if cfg.RunnersRoot != "" {
 		profileName, err = runners.ResolveProfileFromRoot(cfg.RunnersRoot, cfg.Mode)
 	} else {
@@ -285,6 +339,21 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// drive failure is non-fatal — we still kill+tap+merge so a partial run is
 	// observable.
 	repoDir := sb.RepoFor(cfg.Task, cfg.Mode)
+
+	// D-05 / Pitfall 6: capture a PRE-PATCH test snapshot BEFORE driving the
+	// agent's edit, so regression_checker has the pre-patch passing set to diff
+	// the post-patch outcome against. When no structured runner is registered
+	// (verify.sh fallback) there is no pre-patch snapshot (nil) and regression_rate
+	// is left null by the coordinator. A snapshot error is an INFRASTRUCTURE
+	// failure (ctx cancellation/runner setup) routed through preserve like the
+	// post-patch RunTests below (WR-01).
+	langRunner := languages.RunnerFor(cfg.Benchmark, cfg.Language)
+	prePatch, ppErr := prePatchSnapshot(ctx, langRunner, repoDir)
+	if ppErr != nil {
+		_ = h.Kill()
+		return preserve(fmt.Errorf("bench/runtime: pre-patch snapshot: %w", ppErr))
+	}
+
 	var steps []runner.StepResult
 	switch cfg.Agent {
 	case "", "scripted":
@@ -351,14 +420,17 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// registered (RunnerFor==nil) the cell falls back to verify.sh, whose exit code
 	// is the outcome; a ctx cancellation there is likewise an infra error.
 	var verifyExit int
-	if r := languages.RunnerFor(cfg.Benchmark, cfg.Language); r != nil {
+	var postPatch *languages.TestOutcome
+	if r := langRunner; r != nil {
 		// WR-06: honor the full LanguageRunner lifecycle — Setup (pre-test
 		// preparation: dependency fetch, build-cache warm-up) MUST run before
 		// RunTests. For the hermetic Go fixture Setup is a no-op (beyond honoring
 		// ctx cancellation), but a future runner whose RunTests depends on Setup
 		// having run (e.g. fetching modules into an offline cache) would silently
 		// fail if the only production caller skipped it. A Setup error is an
-		// INFRASTRUCTURE failure routed through preserve like any other.
+		// INFRASTRUCTURE failure routed through preserve like any other. (The
+		// pre-patch snapshot above already ran Setup once; re-running is harmless
+		// for the hermetic Go runner and keeps the post-patch lifecycle explicit.)
 		if serr := r.Setup(ctx, repoDir); serr != nil {
 			return preserve(fmt.Errorf("bench/runtime: runner setup: %w", serr))
 		}
@@ -366,6 +438,8 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		if runErr != nil {
 			return preserve(fmt.Errorf("bench/runtime: run tests: %w", runErr))
 		}
+		oc := outcome
+		postPatch = &oc
 		if outcome.Passed {
 			verifyExit = 0
 		} else {
@@ -405,16 +479,48 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	res.CCLegPresent = ccLegPresent(merged)
 	res.RejectedForeignPid = tap.RejectedForeignPid
 
-	// (9) Build + validate result.v2 (D-04). outcome from merged.Outcome; tokens
-	// 0 for the scripted gate (Pitfall 6); fairness from DefaultContract.
+	// (8b) Grade the cell (Phase 79 / D-07). The coordinator fans the cell's
+	// artifacts out to all 5 graders and returns the full nullable Metrics record
+	// + the per-grader failure annotations; it never errors and never drops the
+	// row. The post-patch outcome is the structured runner's outcome when one ran,
+	// else a synthesized outcome from the verify.sh exit code so task_success is
+	// still derivable. usagePresent is the D-01 out-of-band signal: a claude run
+	// whose merged trace carries a provider usage block (the scripted Go-ToolBench
+	// corpus is usage-absent, so its token metrics are explicit null). Analyze
+	// consumes res.Merged directly — NEVER a re-merge (METRIC-06).
+	var postOutcome languages.TestOutcome
+	if postPatch != nil {
+		postOutcome = *postPatch
+	} else {
+		postOutcome = languages.TestOutcome{Passed: verifyExit == 0, ExitCode: verifyExit}
+	}
+	usagePresent := cfg.Agent == "claude" && (merged.Usage.InputTokens > 0 || merged.Usage.OutputTokens > 0)
+	var prePatchVal languages.TestOutcome
+	if prePatch != nil {
+		prePatchVal = *prePatch
+	}
+	metrics, metricErrs := coordinator.Grade(ctx, coordinator.GradeInput{
+		TestOutcome:     postOutcome,
+		PrePatchOutcome: prePatchVal,
+		RepoDir:         repoDir,
+		Merged:          merged,
+		UsagePresent:    usagePresent,
+		Agent:           cfg.Agent,
+	})
+
+	// (9) Build + validate result.v2 (D-04). outcome from merged.Outcome; fairness
+	// from DefaultContract; the full nullable metrics record + annotations from the
+	// coordinator (METRIC-01).
 	resultBytes, err := BuildResult(ResultInput{
-		TaskID:    cfg.Task,
-		Mode:      cfg.Mode,
-		Benchmark: cfg.Benchmark,
-		RunIndex:  cfg.RunIndex,
-		Outcome:   merged.Outcome,
-		TraceRef:  res.MergedTracePath,
-		Fairness:  runners.DefaultContract,
+		TaskID:       cfg.Task,
+		Mode:         cfg.Mode,
+		Benchmark:    cfg.Benchmark,
+		RunIndex:     cfg.RunIndex,
+		Outcome:      merged.Outcome,
+		TraceRef:     res.MergedTracePath,
+		Fairness:     runners.DefaultContract,
+		Metrics:      metrics,
+		MetricErrors: metricErrs,
 	})
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: build result.v2: %w", err))

@@ -32,6 +32,11 @@ type Cell struct {
 	Language  string
 	Mode      string
 	Task      string
+	// RunIndex is the 0-based repetition index for this (task, mode) cell. It is
+	// threaded into the durable path (<task>/<mode>/<run_index>/) so repetitions of
+	// the same (task, mode) land in distinct dirs (Pitfall 3). ExpandMatrix emits
+	// single-rep cells (RunIndex==0); a future repetition axis sets it per cell.
+	RunIndex int
 }
 
 // RunMatrixConfig carries the run-level inputs shared by every cell in a single
@@ -252,7 +257,7 @@ func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 		Language:    c.Language,
 		Task:        c.Task,
 		Mode:        c.Mode,
-		RunIndex:    0,
+		RunIndex:    c.RunIndex, // thread the cell's actual run index (no longer hard-coded 0)
 		HelixBin:    cfg.HelixBin,
 		SeedDir:     seedDir,
 		OutDir:      cfg.OutDir,

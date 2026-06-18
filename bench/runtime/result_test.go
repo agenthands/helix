@@ -213,9 +213,11 @@ func TestResultV2Valid(t *testing.T) {
 		Outcome:       "success",
 		TraceRef:      "bench/reports/20260617T120000Z/IT-go-patch-apply-1/your_agent_full/trace.json",
 		Fairness:      runners.DefaultContract,
-		// Scripted path: zero tokens, not fabricated (Pitfall 6).
-		TokensInput:  0,
-		TokensOutput: 0,
+		// Caller explicitly sets a genuine 0 (e.g. a real run that billed 0 tokens):
+		// an explicit non-nil pointer is honored as-is and emits 0 (LO-01: only a
+		// NIL top-level pointer defaults from the canonical metrics value).
+		TokensInput:  iPtr(0),
+		TokensOutput: iPtr(0),
 	}
 
 	doc, err := BuildResult(in)
@@ -248,9 +250,9 @@ func TestResultV2Valid(t *testing.T) {
 	assert.False(t, hasPassK, "pass@k must be absent (Phase 79)")
 	assert.False(t, hasPassAtK, "pass_at_k must be absent (Phase 79)")
 
-	// (4) tokens are 0 for the scripted path.
-	assert.EqualValues(t, 0, m["tokens_input"], "scripted tokens_input must be 0")
-	assert.EqualValues(t, 0, m["tokens_output"], "scripted tokens_output must be 0")
+	// (4) an explicitly-set 0 is honored at the top level.
+	assert.EqualValues(t, 0, m["tokens_input"], "explicit tokens_input must be 0")
+	assert.EqualValues(t, 0, m["tokens_output"], "explicit tokens_output must be 0")
 
 	// (5) fairness.overrides is an empty array (not null) when DefaultContract
 	// has no overrides.
@@ -262,6 +264,60 @@ func TestResultV2Valid(t *testing.T) {
 	arr, ok := overrides.([]any)
 	require.True(t, ok, "fairness.overrides must be a JSON array")
 	assert.Empty(t, arr, "fairness.overrides must be empty when DefaultContract has no overrides")
+}
+
+// TestResultV2TopLevelTokensAgreeWithMetrics covers LO-01: when the caller leaves
+// the top-level token pointers nil (the wired path), the builder defaults them
+// from the canonical metrics values so the two homes agree. A scripted run with
+// metrics.tokens_input == null must emit top-level tokens_input == null too — not
+// a fabricated 0.
+func TestResultV2TopLevelTokensAgreeWithMetrics(t *testing.T) {
+	t.Run("scripted: both homes null", func(t *testing.T) {
+		in := ResultInput{
+			TaskID:    "t",
+			Mode:      "your_agent_full",
+			Benchmark: "internal-toolbench",
+			Outcome:   "success",
+			TraceRef:  "trace.json",
+			Fairness:  runners.DefaultContract,
+			// TokensInput/Output left nil (wired path); Metrics tokens are nil.
+		}
+		doc, err := BuildResult(in)
+		require.NoError(t, err)
+		require.NoError(t, Validate(doc), "null top-level tokens must still validate")
+
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(doc, &m))
+		ti, present := m["tokens_input"]
+		require.True(t, present, "tokens_input key must be present")
+		assert.Nil(t, ti, "top-level tokens_input must be null when metrics.tokens_input is null (LO-01)")
+		to, present := m["tokens_output"]
+		require.True(t, present, "tokens_output key must be present")
+		assert.Nil(t, to, "top-level tokens_output must be null when metrics.tokens_output is null (LO-01)")
+	})
+
+	t.Run("usage present: both homes carry the value", func(t *testing.T) {
+		in := ResultInput{
+			TaskID:    "t",
+			Mode:      "your_agent_full",
+			Benchmark: "internal-toolbench",
+			Outcome:   "success",
+			TraceRef:  "trace.json",
+			Fairness:  runners.DefaultContract,
+			Metrics: evaluators.Metrics{
+				TokensInput:  iPtr(1234),
+				TokensOutput: iPtr(567),
+			},
+		}
+		doc, err := BuildResult(in)
+		require.NoError(t, err)
+		require.NoError(t, Validate(doc))
+
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(doc, &m))
+		assert.EqualValues(t, 1234, m["tokens_input"], "top-level mirrors metrics.tokens_input")
+		assert.EqualValues(t, 567, m["tokens_output"], "top-level mirrors metrics.tokens_output")
+	})
 }
 
 // TestResultV2ValidRejectsMalformed proves validate-on-write actually rejects a

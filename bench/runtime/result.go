@@ -36,12 +36,16 @@ type ResultInput struct {
 	Benchmark string
 	RunIndex  int
 
-	// Headline tokens. For the scripted CI gate these are legitimately 0 (no
-	// model) — callers MUST write 0, never fabricate, and never source these
-	// from a daemon-side byte counter (Pitfall 6 / METRIC-03 boundary). For the
-	// wired --agent=claude path they come from CCTapResult.Usage.
-	TokensInput  int
-	TokensOutput int
+	// Headline tokens (LEGACY top-level fields). These are deprecated in favor of
+	// the canonical metrics.tokens_input / metrics.tokens_output (METRIC-03). A nil
+	// pointer means "no token data" and is emitted as JSON null — never a
+	// fabricated 0 (Pitfall 6 / METRIC-03 boundary), never sourced from a
+	// daemon-side byte counter. The builder defaults these from the canonical
+	// metrics values when the caller leaves them nil, so the two homes agree
+	// (LO-01): a scripted run nulls BOTH rather than 0 at top-level and null in
+	// metrics.
+	TokensInput  *int
+	TokensOutput *int
 
 	// Open provenance props (not named in the schema; valid as additional
 	// properties under the additive-only=minor contract — Pitfall 2 / Open Q3).
@@ -89,8 +93,11 @@ type resultDoc struct {
 	Mode          string         `json:"mode"`
 	Benchmark     string         `json:"benchmark"`
 	RunIndex      int            `json:"run_index"`
-	TokensInput   int            `json:"tokens_input"`
-	TokensOutput  int            `json:"tokens_output"`
+	// TokensInput/Output are LEGACY top-level mirrors of metrics.tokens_input /
+	// metrics.tokens_output. Pointers so a nil emits JSON null (schema relaxed to
+	// ["integer","null"]), keeping the two homes in agreement (LO-01).
+	TokensInput   *int           `json:"tokens_input"`
+	TokensOutput  *int           `json:"tokens_output"`
 	Fairness      resultFairness `json:"fairness"`
 
 	// Open provenance props (Open Question 3 — stable snake_case keys).
@@ -117,14 +124,28 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		sv = resultSchemaVersion
 	}
 
+	// LO-01: keep the legacy top-level token fields in agreement with the
+	// canonical metrics.* home. When the caller leaves the top-level pointers nil
+	// (the wired path — cell.go never sets them), default them from the canonical
+	// metrics values, so a scripted run with metrics.tokens_input == null also
+	// emits top-level tokens_input == null rather than a fabricated 0.
+	tokensInput := in.TokensInput
+	if tokensInput == nil {
+		tokensInput = in.Metrics.TokensInput
+	}
+	tokensOutput := in.TokensOutput
+	if tokensOutput == nil {
+		tokensOutput = in.Metrics.TokensOutput
+	}
+
 	doc := resultDoc{
 		SchemaVersion: sv,
 		TaskID:        in.TaskID,
 		Mode:          in.Mode,
 		Benchmark:     in.Benchmark,
 		RunIndex:      in.RunIndex,
-		TokensInput:   in.TokensInput,
-		TokensOutput:  in.TokensOutput,
+		TokensInput:   tokensInput,
+		TokensOutput:  tokensOutput,
 		Fairness:      fairnessBlock(in.Fairness),
 		Outcome:       in.Outcome,
 		TraceRef:      in.TraceRef,

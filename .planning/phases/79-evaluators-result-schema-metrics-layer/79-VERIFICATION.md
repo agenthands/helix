@@ -1,13 +1,13 @@
 ---
 phase: 79-evaluators-result-schema-metrics-layer
-verified: 2026-06-18T16:14:00Z
-status: human_needed
+verified: 2026-06-18T16:40:00Z
+status: passed
 score: 4/4 success criteria verified
 overrides_applied: 0
-human_verification:
-  - test: "Jaeger import of the merged trace.json (METRIC-06 visual continuity)"
-    expected: "A single trace from the bench.run_index/run_id root down to LSP leaves, no orphan spans, no cross-cell PID leakage"
-    why_human: "Jaeger UI import is a visual confirmation; the structural invariants (single merged trace, tool_call_summary.total parity, rejected_foreign_pid clear) are automated and PASS, but the visual root→leaf continuity must be eyeballed"
+human_verification: []
+resolved_verification:
+  - test: "METRIC-06 merged-trace continuity"
+    resolved_by: "Direct inspection of the merged trace record (trace.json), not Jaeger — Jaeger is not part of this Go-native product. The continuity invariant (single run_id root, daemon leg + CC leg merged into one trace, no orphan spans, no cross-cell PID leakage, tool_call_summary.total == tool_calls, outcome success) is fully observable in the trace record on stdout. Confirmed live in bench/reports/20260618T141224Z/IT-go-patch-apply-1/your_agent_full/0/trace.json via /gsd-verify-work 79. The original 'Jaeger UI import' framing was an over-specified manual check inherited from the validation strategy and is withdrawn."
 ---
 
 # Phase 79: Evaluators & Result-Schema Metrics Layer Verification Report

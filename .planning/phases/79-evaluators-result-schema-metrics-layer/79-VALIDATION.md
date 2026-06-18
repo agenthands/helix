@@ -73,11 +73,11 @@ created: 2026-06-18
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| METRIC-06 Jaeger continuity (full root→LSP-leaf visual) | METRIC-06 | Jaeger UI import is a visual confirmation; the automated test asserts span continuity + no orphans/foreign-PID structurally | Import the merged `trace.json` into Jaeger; confirm a single trace from `bench.run_index` root to LSP leaves, no orphan spans |
+_None._
 
-*All other phase behaviors have automated verification (the source-of-truth METRIC-03 path uses a captured CC stream-json fixture — no live `claude` CLI needed in CI).*
+METRIC-06 trace continuity is verified **structurally from the merged `trace.json` record**, not via any external UI. The automated invariants — single merged trace per `(task, mode, run_index)`, single `run_id` root, daemon leg + agent-CLI (CC) leg merged with no orphan spans, `rejected_foreign_pid` clear (no cross-cell PID leakage), `tool_call_summary.total == tool_calls`, and `outcome: success` (root closed) — are all observable directly in the trace record on stdout. (An earlier draft listed a "Jaeger import" manual check; Jaeger is not part of this Go-native product and that framing is withdrawn — see 79-VERIFICATION.md `resolved_verification`.)
+
+*All phase behaviors have automated verification (the source-of-truth METRIC-03 path uses a captured CC stream-json fixture — no live `claude` CLI needed in CI).*
 
 ---
 

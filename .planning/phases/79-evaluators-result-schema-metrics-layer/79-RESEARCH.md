@@ -332,25 +332,30 @@ if len(prePass) == 0 { rate = nil } else { r := float64(postFail)/float64(len(pr
 | A4 | `lsp_diagnostics_used` and `semantic_tool_calls` are counted by matching `Event.Tool` against the known diagnostic/semantic tool-name sets from the registry | Pattern 2 | If a tool is renamed or the semantic set is mis-enumerated, the counts drift. Anchor the name sets on the README tool inventory / registry (the 10 semantic tools, the diagnostic tools) rather than hard-coding. The quick-task 260617-t7x history shows the 10 semantic tools were recently re-synced — use that list. |
 | A5 | The pre-patch regression snapshot requires a new `RunTests` call in `RunCell` before `driveScript` | Pitfall 6 | If the planner instead snapshots tests in the grader from a pristine re-clone, the cell.go change is unnecessary. Either works; confirm the integration point. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where do graders write — direct-into-doc vs per-grader fragments?**
    - What we know: `BuildResult`/`resultDoc` is the established single-doc seam; `writeDurable` is atomic.
    - What's unclear: CONTEXT.md leaves this to the planner (discretion item).
    - Recommendation: direct-into-doc via an extended `ResultInput.Metrics` + `resultDoc.Metrics`; coordinator assembles the struct, `BuildResult` marshals it, `Validate` gates it. Fragments add filesystem coordination for no benefit at single-rep scale.
+   - **RESOLVED:** → direct-into-doc. 79-04 Task 2a wires `evaluators.Metrics` into `ResultInput.Metrics`/`resultDoc.Metrics`; `BuildResult` assembles and the verbatim `Validate` gate accepts it (no per-grader fragment files). Matches CONTEXT.md discretion item.
 
 2. **Are `internal/eval/{score,judge,report}` reusable, or net-new?**
    - What we know: BENCH-01 mandates `eval/` stays **byte-identical** (only a one-paragraph EVAL.md pointer permitted). `report.ComputeContextMetrics` and `eval_result.go`'s `*float64` nullable pattern are good *templates*. `score.Apply` operates on `MergedTrace` daemon tool-call events — conceptually adjacent to `tool_trace_analyzer`.
    - What's unclear: whether `bench/evaluators` may *import* from `internal/eval/*` (read-only) or must be wholly net-new.
    - Recommendation: **Net-new packages under `bench/evaluators/*`**, copying the proven *patterns* (nullable pointers, exit-code-authoritative gating) but not importing `internal/eval/score|judge|report` (those are the eval PR-gate lineage; keeping bench independent honors the eval↔bench separation in INFRA-03). Importing `internal/eval/trace` is fine and expected (it is the shared trace substrate, already imported by `bench/runtime`).
+   - **RESOLVED:** → net-new `bench/evaluators/*` packages (reflected across 79-02 + 79-03 graders and the 79-04 coordinator). `internal/eval/{score,judge,report}` are NOT imported (BENCH-01 eval↔bench separation); only `internal/eval/trace` is imported (the shared trace substrate, per tool_trace_analyzer in 79-03).
 
 3. **Does Phase 79 add the `<run_index>` durable-path segment now?**
    - What we know: `cell.go` IN-05 comment defers it to Phase 79; the goal text says "per `(task, mode, run_index)`".
    - Recommendation: yes — add the segment and stop hard-coding `RunIndex: 0` in `matrix.go runOneCell`. Coordinate with Phase 82 (multi-run) expectations.
+   - **RESOLVED:** → yes. 79-04 Task 2b adds the `<run_index>` durable-path segment in `cell.go` (guarded by `validatePathSegment`) and drops the hard-coded `RunIndex: 0` in `matrix.go runOneCell`.
 
 4. **Exact `edit_distance_patch` definition** — see Assumption A1. Pick a deterministic definition, document it in METRICS.md.
+   - **RESOLVED:** → `edit_distance_patch` = `git diff --numstat` added + deleted lines (the deterministic in-house definition). Implemented in 79-02 (patch_validator) and documented in 79-04 `bench/evaluators/METRICS.md`.
 
 5. **Top-level token fields: relax-to-nullable vs migrate into `metrics`** — see the schema code example. Recommend relaxing the existing top-level `tokens_input/output` to `["integer","null"]` and making the `metrics` object the canonical home, to keep old fixtures valid.
+   - **RESOLVED:** → relax-to-nullable. 79-01 Task 2 relaxes the existing top-level `tokens_input`/`tokens_output` from `"integer"` to `["integer","null"]` and makes the `metrics` object the canonical home (keeps old golden fixtures valid; additive-only minor bump).
 
 ## Environment Availability
 

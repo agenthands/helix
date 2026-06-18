@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 78 complete (5/5 plans)
-last_updated: "2026-06-17T21:00:00.000Z"
-last_activity: 2026-06-17 -- Completed quick task 260617-t7x: resync tool docs to live 53-tool registry (test/bench green)
+stopped_at: Phase 79 context gathered (discuss-phase complete)
+last_updated: "2026-06-18T00:10:00.000Z"
+last_activity: 2026-06-18 -- Phase 79 discuss-phase complete: 7 decisions locked in 79-CONTEXT.md (ready for planning)
 progress:
   total_phases: 4
   completed_phases: 4
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 78 — internal-toolbench-go-first-languagerunner-interface
+**Current focus:** Phase 79 — evaluators-result-schema-metrics-layer (context gathered, ready to plan)
 
 ## Current Position
 
-Phase: 78 (internal-toolbench-go-first-languagerunner-interface) — COMPLETE (5/5 plans)
-Plan: 5 of 5 — DONE
-Status: Phase 78 complete — Go internal-toolbench corpus 10/10, coverage aggregator + docs shipped
-Last activity: 2026-06-17 -- Completed quick task 260617-t7x: resync tool docs to live 53-tool registry (test/bench green)
+Phase: 79 (evaluators-result-schema-metrics-layer) — DISCUSSED (context gathered, not yet planned)
+Plan: Not started
+Status: Phase 79 discuss-phase complete — 7 decisions locked (D-01..D-07); Phase 78 complete (5/5 plans)
+Last activity: 2026-06-18 -- Phase 79 discuss-phase complete: 7 decisions locked in 79-CONTEXT.md (ready for planning)
 
 ### Session Continuity
 
-Last session: 2026-06-17T20:10:00.000Z
-Stopped at: Phase 78 complete (5/5 plans); 78-05 human-verify gate approved (full corpus 10/10, coverage 10/10, docs accurate)
-Resume file: None
+Last session: 2026-06-18T00:10:00.000Z
+Stopped at: Phase 79 context gathered (discuss-phase complete); next step is /gsd-plan-phase 79
+Resume file: .planning/phases/79-evaluators-result-schema-metrics-layer/79-CONTEXT.md
 
 ## Accumulated Context
 

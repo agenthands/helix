@@ -160,6 +160,19 @@ Plans:
 
 - [x] 79-04-PLAN.md — Coordinator (D-07 isolation) + result.v2 wiring + run_index path + pre-patch snapshot + METRICS.md + E2E gate [Wave 3]
 
+### Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
+**Goal**: All 6 ablation modes are operational end-to-end on the Go ToolBench corpus, holding the same-model-same-budget invariant via the Phase 75 fairness contract. `your_agent_full` + `baseline_plain` + `no_lsp` + `no_structured_edit` produce real per-mode `result.v2.json` rows; `no_semantic` scaffolding is in place but the kernel flag (ABLATE-06) lands in Phase 81; `baseline_rag` runner stub exists but its real implementation lands in Phase 83.
+**Depends on**: Phase 76 (bench profile YAMLs + no_lsp / no_structured_edit kernel flags), Phase 79 (evaluators produce real metrics), Phase 78 (Go ToolBench is the corpus)
+**Requirements**: ABLATE-01, ABLATE-03
+**Success Criteria** (what must be TRUE):
+
+  1. Each of 6 modes runs end-to-end on a smoke task; mode definition lives in `bench/runners/<mode>/MODE.md`; ablation runs produce schema-valid `result.v2.json` rows tagged with the mode.
+  2. `baseline_plain` reuses existing `internal/profile/profiles/baseline.yaml` (no new YAML); tool inventory for `baseline_plain` is empty except for the shell/grep/read/edit/test that the agent runtime exposes natively (documented decision in `bench/BENCH.md`).
+  3. Same-model-same-budget invariant is enforced at runner-startup: per-task token budget is identical across modes; CI contract test asserts every runner's effective `(model_id, temperature, max_tokens, system_prompt_hash, retry_policy, cache_policy)` equals the fairness contract.
+  4. Ablation deltas (`your_agent_full` − `baseline_plain`, `full` − `no_lsp`, `full` − `no_structured_edit`) compute correctly on the Go ToolBench corpus and surface in the per-mode result rows.
+
+**Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 80)
+
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>
 

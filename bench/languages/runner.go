@@ -41,6 +41,7 @@ type TestResult struct {
 	Name    string  // the test function name (test2json `Test` field)
 	Package string  // the import path of the package the test belongs to
 	Passed  bool    // true for a `pass` event; false for `fail`/`skip`
+	Skipped bool    // true for a `skip` event (tri-state: pass vs fail vs skip)
 	Elapsed float64 // seconds, from the test2json `Elapsed` field
 }
 

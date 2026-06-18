@@ -150,6 +150,7 @@ func parseTest2JSON(raw []byte) []languages.TestResult {
 				Name:    ev.Test,
 				Package: ev.Package,
 				Passed:  ev.Action == "pass",
+				Skipped: ev.Action == "skip",
 				Elapsed: ev.Elapsed,
 			})
 		}

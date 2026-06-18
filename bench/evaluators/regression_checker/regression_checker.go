@@ -13,6 +13,15 @@
 //
 // regression_rate = failing_pre-existing_tests_post_patch / passing_pre-existing_tests_pre_patch
 //
+// Skip policy (WR-01): a pre-existing passing test that is SKIPPED post-patch is
+// NOT counted as a regression. A regression means a previously-passing test now
+// FAILS; a deliberate t.Skip() (or a build-tag/env change that skips it) makes
+// the test's pass/fail status unknown, not broken, so counting it as a regression
+// would inflate the rate for a non-failure. A skipped post-patch row is therefore
+// excluded from the numerator. A test that is ABSENT post-patch (disappeared
+// entirely) still counts — its previously-passing behavior is no longer
+// demonstrable, which is a genuine loss of coverage.
+//
 // An empty pre-patch passing set is an undefined denominator: the rate is nulled
 // and annotated with a MetricError (D-07).
 package regression_checker
@@ -55,17 +64,26 @@ func RegressionRate(prePatch, postPatch languages.TestOutcome) (*float64, *evalu
 		}
 	}
 
-	// Index post-patch pass/fail by key. A cached-passing member counts toward the
-	// numerator when it is now failing OR absent from the post-patch run (a test
-	// that disappeared is no longer passing).
+	// Index post-patch rows by key. A cached-passing member counts toward the
+	// numerator when it is now FAILING or ABSENT post-patch, but NOT when it was
+	// deliberately SKIPPED (WR-01 skip policy above). Track presence + skip
+	// separately from pass so a skip is excluded rather than treated as a failure.
 	postPassed := make(map[testKey]bool, len(postPatch.Tests))
+	postSkipped := make(map[testKey]bool, len(postPatch.Tests))
+	postPresent := make(map[testKey]bool, len(postPatch.Tests))
 	for _, r := range postPatch.Tests {
-		postPassed[testKey{r.Package, r.Name}] = r.Passed
+		k := testKey{r.Package, r.Name}
+		postPassed[k] = r.Passed
+		postSkipped[k] = r.Skipped
+		postPresent[k] = true
 	}
 
 	regressed := 0
 	for k := range passingPre {
-		if !postPassed[k] { // false when failing OR absent post-patch
+		if postPresent[k] && postSkipped[k] {
+			continue // deliberately skipped post-patch → not a regression
+		}
+		if !postPassed[k] { // failing, or absent from the post-patch run
 			regressed++
 		}
 	}

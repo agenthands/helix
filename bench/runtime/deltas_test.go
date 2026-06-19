@@ -74,11 +74,11 @@ func TestAblationDeltasArithmetic(t *testing.T) {
 		TokensInput: intPtr(1500), TokensOutput: intPtr(300), ToolCalls: intPtr(25),
 		FilesModified: intPtr(5), EditLocality: floatPtr(0.5),
 	})
-	noLSP := writeModeRow(t, outDir, task, "your_agent_no_lsp", evaluators.Metrics{
+	noLSP := writeModeRow(t, outDir, task, "no_lsp", evaluators.Metrics{
 		TokensInput: intPtr(1200), TokensOutput: intPtr(250), ToolCalls: intPtr(15),
 		FilesModified: intPtr(4), EditLocality: floatPtr(0.7),
 	})
-	noEdit := writeModeRow(t, outDir, task, "your_agent_no_structured_edit", evaluators.Metrics{
+	noEdit := writeModeRow(t, outDir, task, "no_structured_edit", evaluators.Metrics{
 		TokensInput: intPtr(1100), TokensOutput: intPtr(220), ToolCalls: intPtr(12),
 		FilesModified: intPtr(3), EditLocality: floatPtr(0.8),
 	})
@@ -86,8 +86,8 @@ func TestAblationDeltasArithmetic(t *testing.T) {
 	outcomes := []CellOutcome{
 		outcomeFor(task, "your_agent_full", full),
 		outcomeFor(task, "baseline_plain", baselinePlain),
-		outcomeFor(task, "your_agent_no_lsp", noLSP),
-		outcomeFor(task, "your_agent_no_structured_edit", noEdit),
+		outcomeFor(task, "no_lsp", noLSP),
+		outcomeFor(task, "no_structured_edit", noEdit),
 	}
 
 	report, err := ComputeAndWriteDeltas(outcomes)
@@ -130,14 +130,14 @@ func TestAblationDeltasWriteBackStillValid(t *testing.T) {
 	m := evaluators.Metrics{TokensInput: intPtr(100), ToolCalls: intPtr(5)}
 	full := writeModeRow(t, outDir, task, "your_agent_full", m)
 	bp := writeModeRow(t, outDir, task, "baseline_plain", m)
-	nl := writeModeRow(t, outDir, task, "your_agent_no_lsp", m)
-	ne := writeModeRow(t, outDir, task, "your_agent_no_structured_edit", m)
+	nl := writeModeRow(t, outDir, task, "no_lsp", m)
+	ne := writeModeRow(t, outDir, task, "no_structured_edit", m)
 
 	outcomes := []CellOutcome{
 		outcomeFor(task, "your_agent_full", full),
 		outcomeFor(task, "baseline_plain", bp),
-		outcomeFor(task, "your_agent_no_lsp", nl),
-		outcomeFor(task, "your_agent_no_structured_edit", ne),
+		outcomeFor(task, "no_lsp", nl),
+		outcomeFor(task, "no_structured_edit", ne),
 	}
 
 	_, err := ComputeAndWriteDeltas(outcomes)
@@ -160,13 +160,13 @@ func TestAblationDeltasSkipsIncompleteTask(t *testing.T) {
 	m := evaluators.Metrics{TokensInput: intPtr(100)}
 	full := writeModeRow(t, outDir, task, "your_agent_full", m)
 	bp := writeModeRow(t, outDir, task, "baseline_plain", m)
-	nl := writeModeRow(t, outDir, task, "your_agent_no_lsp", m)
+	nl := writeModeRow(t, outDir, task, "no_lsp", m)
 	// no_structured_edit row deliberately ABSENT.
 
 	outcomes := []CellOutcome{
 		outcomeFor(task, "your_agent_full", full),
 		outcomeFor(task, "baseline_plain", bp),
-		outcomeFor(task, "your_agent_no_lsp", nl),
+		outcomeFor(task, "no_lsp", nl),
 	}
 
 	report, err := ComputeAndWriteDeltas(outcomes)

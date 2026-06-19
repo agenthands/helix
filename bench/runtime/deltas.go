@@ -31,8 +31,8 @@ import (
 const (
 	modeFull             = "your_agent_full"
 	modeBaselinePlain    = "baseline_plain"
-	modeNoLSP            = "your_agent_no_lsp"
-	modeNoStructuredEdit = "your_agent_no_structured_edit"
+	modeNoLSP            = "no_lsp"
+	modeNoStructuredEdit = "no_structured_edit"
 )
 
 // deltaComparisons names the three fixed comparisons in the surfaced

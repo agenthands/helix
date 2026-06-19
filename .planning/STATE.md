@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 80-03-PLAN.md
-last_updated: "2026-06-19T09:50:51.246Z"
+last_updated: "2026-06-19T09:55:10.499Z"
 last_activity: 2026-06-19 -- Phase 80 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 28
-  completed_plans: 26
+  completed_plans: 27
   percent: 83
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 80 (Five-of-Six Ablation Runners + Fairness Enforcement) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-06-19 -- Phase 80 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-19T09:50:51.242Z
+Last session: 2026-06-19T09:55:02.775Z
 Stopped at: Completed 80-03-PLAN.md
 Resume file: None
 
@@ -94,6 +94,7 @@ Resume file: None
 | Phase 80 P01 | ~7min | 2 tasks | 7 files |
 | Phase 80 P02 | ~6min | 1 tasks | 3 files |
 | Phase 80 P03 | ~9min | 2 tasks | 3 files |
+| Phase 80 P04 | ~8min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -143,3 +144,4 @@ Resume file: None
 - [Phase ?]: [Phase 80 P03]: RunCell fairness gate calls DefaultContract.Validate() UNCONDITIONALLY after profile resolution, fatal on non-nil (D-04, Open Q1 scope A); committed contract has no overrides so never fatals in CI; Plan 04 owns the always-on CI contract test
 - [Phase ?]: [Phase 80 P03]: baseline_rag fail-closed by mode-name comparison in RunCell BEFORE benchsandbox.New (D-02) — no daemon, no result.v2.json, nil error; CellResult.Deferred/CellOutcome.Deferred make it a distinct third matrix outcome (Success==false AND Err==nil); name detection keeps the two-key MODE.md resolver change-free
 - [Phase ?]: [Phase 80 P03]: ablation_status SET via ablationStatusFor(mode) (guarantee_pending_phase_81 iff your_agent_no_semantic) into the existing BuildResult call; honest modes leave it empty so omitempty omits the key
+- [Phase ?]: [Phase 80 P04]: Plan 04 ships TestEffectiveConfigMatchesContract — always-on hermetic CI gate iterating all 6 modes, asserting projected model_id==DefaultContract.ModelID + Validate()==nil (D-04 layer 2, criterion #3, T-80-02). Scope A only: other 5 contract fields documented as wired-not-enforced (no live argv producer, Pitfall 5), NOT faked; RED proven via transient unregistered mode then restored

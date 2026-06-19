@@ -151,6 +151,16 @@ type CellResult struct {
 	ScratchDir string
 	// ScratchPreserved is true when the cell failed and scratch was kept.
 	ScratchPreserved bool
+
+	// Deferred is the D-02 fail-close signal: the cell short-circuited BEFORE any
+	// sandbox/daemon and produced NO result.v2.json (currently only baseline_rag,
+	// the registered fail-closed stub deferred to Phase 83). A deferred cell returns
+	// a nil error (it is a registered stub, not an infra failure) and is neither a
+	// success (ResultValid stays false) nor an infra error at the matrix layer.
+	Deferred bool
+	// DeferredReason is the human-readable reason the cell was deferred (names the
+	// phase the real arm lands in). Empty when Deferred is false.
+	DeferredReason string
 }
 
 // validateCellKey rejects task/benchmark/mode names that could escape the cell
@@ -278,6 +288,20 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// unconditionally; the always-on CI contract test is Plan 04's separate guarantee.)
 	if verr := runners.DefaultContract.Validate(); verr != nil {
 		return res, fmt.Errorf("bench/runtime: fairness contract invalid: %w", verr)
+	}
+
+	// (1c) D-02 baseline_rag fail-close: baseline_rag is a registered stub whose
+	// REAL RAG arm (chromem-go + cmd/helix-bench-rag) is deferred to Phase 83
+	// (ABLATE-04). It must NOT spawn a daemon or emit a result row this phase, so we
+	// short-circuit BY MODE NAME (not a frontmatter marker — keeps the two-key
+	// resolver change-free) right after the fairness gate and BEFORE benchsandbox.New.
+	// The path-segment validation above (and ResultPath layout) already ran; we set
+	// the Deferred signal and return a nil error (a registered stub, not an infra
+	// failure) so the matrix counts it as neither a success nor an infra error.
+	if cfg.Mode == "baseline_rag" {
+		res.Deferred = true
+		res.DeferredReason = "baseline_rag: real RAG arm deferred to Phase 83 (ABLATE-04)"
+		return res, nil
 	}
 
 	// (2) Bench sandbox (D-07): ephemeral OS-temp scratch for HOME/repo/socket;

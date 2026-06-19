@@ -68,6 +68,12 @@ type CellOutcome struct {
 	Cell    Cell
 	Result  CellResult
 	Success bool
+	// Deferred is the D-02 distinct third outcome: a fail-closed stub (baseline_rag)
+	// that produced NO result row. A deferred cell has Success==false (ResultValid is
+	// false) AND Err==nil (it is a registered stub, not an infra failure), so without
+	// this flag it would be indistinguishable from a plain verify-fail. Deferred==true
+	// lets the smoke assert "registered + deferred" — neither succeeded nor errored.
+	Deferred bool
 	// Err is the infrastructure error from RunCell (nil for a normal pass/fail run).
 	// A verify-failed cell has Err==nil and Success==false.
 	Err error
@@ -268,8 +274,11 @@ func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 	})
 
 	oc := CellOutcome{Cell: c, Result: res, Err: err}
-	// Success requires a clean infra run AND a passing verify (D-04 outcome).
+	// Success requires a clean infra run AND a passing verify (D-04 outcome). A
+	// deferred stub (baseline_rag) has ResultValid==false → not Success; Err==nil →
+	// not an infra error; Deferred==true is the distinct third outcome (D-02).
 	oc.Success = err == nil && res.VerifyExitCode == 0 && res.ResultValid
+	oc.Deferred = res.Deferred
 	return oc
 }
 

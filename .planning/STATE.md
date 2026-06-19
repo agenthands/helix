@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
+status: verifying
 stopped_at: Completed 80-03-PLAN.md
-last_updated: "2026-06-19T09:55:10.499Z"
+last_updated: "2026-06-19T10:06:41.029Z"
 last_activity: 2026-06-19 -- Phase 80 execution started
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 28
-  completed_plans: 27
-  percent: 83
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 Phase: 80 (Five-of-Six Ablation Runners + Fairness Enforcement) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-19 -- Phase 80 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-19T09:55:02.775Z
+Last session: 2026-06-19T10:05:44.481Z
 Stopped at: Completed 80-03-PLAN.md
 Resume file: None
 
@@ -95,6 +95,7 @@ Resume file: None
 | Phase 80 P02 | ~6min | 1 tasks | 3 files |
 | Phase 80 P03 | ~9min | 2 tasks | 3 files |
 | Phase 80 P04 | ~8min | 1 tasks | 1 files |
+| Phase 80 P05 | ~8min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -145,3 +146,5 @@ Resume file: None
 - [Phase ?]: [Phase 80 P03]: baseline_rag fail-closed by mode-name comparison in RunCell BEFORE benchsandbox.New (D-02) — no daemon, no result.v2.json, nil error; CellResult.Deferred/CellOutcome.Deferred make it a distinct third matrix outcome (Success==false AND Err==nil); name detection keeps the two-key MODE.md resolver change-free
 - [Phase ?]: [Phase 80 P03]: ablation_status SET via ablationStatusFor(mode) (guarantee_pending_phase_81 iff your_agent_no_semantic) into the existing BuildResult call; honest modes leave it empty so omitempty omits the key
 - [Phase ?]: [Phase 80 P04]: Plan 04 ships TestEffectiveConfigMatchesContract — always-on hermetic CI gate iterating all 6 modes, asserting projected model_id==DefaultContract.ModelID + Validate()==nil (D-04 layer 2, criterion #3, T-80-02). Scope A only: other 5 contract fields documented as wired-not-enforced (no live argv producer, Pitfall 5), NOT faked; RED proven via transient unregistered mode then restored
+- [Phase 80 P05]: ablation_deltas is an open top-level property (comparison -> metric -> float64); the 3 fixed deltas (full vs baseline_plain/no_lsp/no_structured_edit) surface in EACH of the 4 real-mode rows, re-Validated + atomic; null-in-either-operand metrics skipped
+- [Phase 80 P05]: delta operands use RESOLVABLE mode names no_lsp/no_structured_edit (NOT prior-wave aliases your_agent_no_lsp/your_agent_no_structured_edit; Rule 1 fix); row write-back decodes as map[string]json.RawMessage so additive keys survive; scope held single-run/3-delta (NOT Phase 82 aggregator)

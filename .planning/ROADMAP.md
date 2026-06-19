@@ -186,7 +186,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 80-05-PLAN.md — minimal 3-delta pass surfaced in per-mode rows + five-of-six multi-mode scripted smoke (TDD; D-05)
+- [x] 80-05-PLAN.md — minimal 3-delta pass surfaced in per-mode rows + five-of-six multi-mode scripted smoke (TDD; D-05)
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 80)
 

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/agenthands/helix/bench/languages"
+	"github.com/agenthands/helix/bench/runners"
 	benchsandbox "github.com/agenthands/helix/bench/runtime/sandbox"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -163,6 +165,83 @@ func TestCellRunnerDispatch(t *testing.T) {
 	if r := languages.RunnerFor("internal-toolbench", "nonexistent-lang"); r != nil {
 		t.Fatalf("RunnerFor(internal-toolbench, nonexistent-lang) = %v; want nil (verify.sh fallback)", r)
 	}
+}
+
+// TestFairnessGate proves the D-04 startup fairness gate predicate RunCell wires:
+// the committed runners.DefaultContract.Validate() == nil (so a normal cell is
+// never aborted by the gate), and a contract carrying an override with an empty
+// WaiverReason fails Validate() (so RunCell's `non-nil return is FATAL` wiring
+// would refuse to run an unfair benchmark). This mirrors the unit-level pattern in
+// runners.TestEmptyWaiverReasonFatal: RunCell calls the gate the same way (a pure
+// predicate over the compile-time contract right after profile resolution), so
+// asserting the predicate here proves the gate's behavior without spawning a daemon.
+func TestFairnessGate(t *testing.T) {
+	// The committed contract must pass — a normal cell is never aborted by the gate.
+	require.NoError(t, runners.DefaultContract.Validate(),
+		"committed DefaultContract must Validate() == nil so RunCell never fatals in CI")
+
+	// A contract with an empty-WaiverReason override fails the gate predicate, the
+	// exact non-nil return RunCell treats as fatal (refuse the unfair benchmark).
+	tokens := 4096
+	bad := runners.DefaultContract
+	bad.Overrides = map[string]runners.ModeOverride{
+		"your_agent_no_semantic": {
+			MaxTokens:  &tokens,
+			ApprovedBy: "maintainer",
+			// WaiverReason intentionally empty.
+		},
+	}
+	require.Error(t, bad.Validate(),
+		"an override lacking a WaiverReason must fail the fairness gate predicate")
+}
+
+// TestAblationStatus asserts the D-03 deferral-marker helper RunCell uses at the
+// BuildResult step: only the your_agent_no_semantic arm carries
+// guarantee_pending_phase_81; honest modes leave it empty. It also round-trips
+// BuildResult to confirm the no_semantic value lands under the `ablation_status`
+// key and the honest mode omits the key entirely (omitempty).
+func TestAblationStatus(t *testing.T) {
+	assert.Equal(t, "guarantee_pending_phase_81", ablationStatusFor("your_agent_no_semantic"),
+		"the no_semantic arm must carry the deferral marker (D-03)")
+	assert.Equal(t, "", ablationStatusFor("your_agent_full"),
+		"honest modes must leave ablation_status empty")
+	assert.Equal(t, "", ablationStatusFor("baseline_plain"),
+		"honest modes must leave ablation_status empty")
+
+	// BuildResult round-trip: the no_semantic row carries the key; the full row omits it.
+	t.Run("no_semantic row carries ablation_status", func(t *testing.T) {
+		b, err := BuildResult(ResultInput{
+			TaskID:         "IT-go-patch-apply-1",
+			Mode:           "your_agent_no_semantic",
+			Benchmark:      "internal-toolbench",
+			Outcome:        "pass",
+			Fairness:       runners.DefaultContract,
+			AblationStatus: ablationStatusFor("your_agent_no_semantic"),
+		})
+		require.NoError(t, err)
+		require.NoError(t, Validate(b))
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal(b, &doc))
+		assert.Equal(t, "guarantee_pending_phase_81", doc["ablation_status"],
+			"no_semantic result.v2 must contain ablation_status: guarantee_pending_phase_81")
+	})
+
+	t.Run("full row omits ablation_status", func(t *testing.T) {
+		b, err := BuildResult(ResultInput{
+			TaskID:         "IT-go-patch-apply-1",
+			Mode:           "your_agent_full",
+			Benchmark:      "internal-toolbench",
+			Outcome:        "pass",
+			Fairness:       runners.DefaultContract,
+			AblationStatus: ablationStatusFor("your_agent_full"),
+		})
+		require.NoError(t, err)
+		require.NoError(t, Validate(b))
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal(b, &doc))
+		_, present := doc["ablation_status"]
+		assert.False(t, present, "honest mode result.v2 must omit the ablation_status key (omitempty)")
+	})
 }
 
 // TestCellGoStaleComments guards Pitfall 5: the stale "ABSOLUTE per-cell store

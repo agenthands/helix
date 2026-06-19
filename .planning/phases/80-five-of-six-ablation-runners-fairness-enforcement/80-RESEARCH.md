@@ -367,7 +367,12 @@ type resultDoc struct {
 
 **All other claims in this research are `[VERIFIED: read in session]` against a real file:line in this repo.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> **RESOLVED in planning (Phase 80 plans 80-01..80-05):**
+> - **Q1 (D-04): RESOLVED → scope (A).** Plan 80-04 asserts the projected `model_id == DefaultContract.ModelID` + unconditional `Validate()`; the other 5 fields are documented as live-agent-enforcement-out-of-phase. No `internal/eval/agent` argv threading (scope B avoided).
+> - **Q2 (D-05): RESOLVED → write-back into rows.** Plan 80-05 surfaces the 3 deltas in each per-mode row (criterion #4), re-validating the row.
+> - **Q3 (D-02): RESOLVED → mode-name detection** (a *justified divergence* from the research recommendation below: the plans detect `baseline_rag` by mode name rather than adding a `MODE.md` frontmatter flag, deliberately keeping `modeFrontmatter`/the resolver change-free per D-02 + planner-note #1).
 
 1. **D-04 — what is the "effective config" the CI contract test asserts, and is `Validate()` unconditional?**
    - What we know: `DefaultContract` holds all 6 fields; `BuildResult` projects only `model_id` into the row (`result.go:152`); the claude argv sets none of temperature/max_tokens/system_prompt (`internal/eval/agent/claude.go:76-89`); `Validate()` is pure and CI-cheap.

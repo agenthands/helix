@@ -705,16 +705,17 @@ func marshalTrace(merged trace.MergedTrace) ([]byte, error) {
 }
 
 // writeDurable atomically writes b to path, creating parent dirs (0700) as
-// needed. WR-01: the durable artifact path is keyed only by (task, mode) with no
-// run-index segment (see the IN-05 comment above), so two cells sharing an OutDir
-// drive concurrent writes to the SAME path. A bare os.WriteFile (O_CREATE|O_TRUNC)
-// from two goroutines can interleave and leave a torn/partial file that a reader
-// observes — a real filesystem data race the Go race detector cannot see (it only
-// instruments memory). To make the write atomic, we stage to a temp file in the
-// same directory and os.Rename into place: rename is atomic within a filesystem,
-// so a concurrent reader sees either the old file or the fully-written new one,
-// never a half-written intermediate. Concurrent writers still race for last-writer-
-// wins, but each individual file is always complete.
+// needed. The durable path is keyed by (task, mode, run_index) via
+// cellDurablePaths, so distinct cells never target the same path and the
+// concurrent-writers-to-one-path scenario cannot arise under the current
+// single-rep ExpandMatrix (RunIndex always 0). The atomic temp-file+rename is
+// kept as defense for a future repetition axis (pass@k) or a re-run that
+// overwrites an existing row: a bare os.WriteFile (O_CREATE|O_TRUNC) could leave
+// a torn/partial file that a reader observes — a real filesystem data race the
+// Go race detector cannot see (it only instruments memory). Staging to a temp
+// file in the same directory and os.Rename into place makes the swap atomic
+// within a filesystem, so a concurrent reader sees either the old file or the
+// fully-written new one, never a half-written intermediate.
 func writeDurable(path string, b []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {

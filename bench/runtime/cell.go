@@ -49,6 +49,19 @@ import (
 // seed task is a single edit; a small bound keeps a local claude run from looping.
 const claudeMaxToolCalls = 20
 
+// ablationStatusFor returns the D-03 machine-checkable deferral marker for a mode.
+// Only the your_agent_no_semantic arm carries "guarantee_pending_phase_81" — that
+// arm emits a REAL result row, but the kernel disable_semantic_subsystem guarantee
+// (ABLATE-06, the zero-DuckDB measurement) does not land until Phase 81, so its row
+// is flagged partial for the Phase 82 aggregator. Every honest mode returns "" so
+// the open provenance key is omitted (omitempty) from its result.v2 doc.
+func ablationStatusFor(mode string) string {
+	if mode == "your_agent_no_semantic" {
+		return "guarantee_pending_phase_81"
+	}
+	return ""
+}
+
 // CellConfig is the full set of inputs to run one <run_id>/<task>/<mode> cell.
 type CellConfig struct {
 	// RunID is the run identifier (eval shape, e.g. "20060102T150405Z"). It is
@@ -253,6 +266,18 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	}
 	if err != nil {
 		return res, fmt.Errorf("bench/runtime: resolve profile for mode %q: %w", cfg.Mode, err)
+	}
+
+	// (1b) D-04 startup fairness gate: the single compile-time contract every
+	// runner shares is validated UNCONDITIONALLY right after profile resolution and
+	// BEFORE any sandbox/daemon. A non-nil return means an override deviates from the
+	// shared budget without a WaiverReason — an unfair benchmark — so we refuse to
+	// run it (fatal, no daemon spawned). Validate() is pure + CI-cheap (a loop over a
+	// compile-time map); the committed DefaultContract has no overrides so this gate
+	// never fatals in CI under the current contract. (Open Q1 scope A: gate here
+	// unconditionally; the always-on CI contract test is Plan 04's separate guarantee.)
+	if verr := runners.DefaultContract.Validate(); verr != nil {
+		return res, fmt.Errorf("bench/runtime: fairness contract invalid: %w", verr)
 	}
 
 	// (2) Bench sandbox (D-07): ephemeral OS-temp scratch for HOME/repo/socket;
@@ -518,15 +543,16 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// from DefaultContract; the full nullable metrics record + annotations from the
 	// coordinator (METRIC-01).
 	resultBytes, err := BuildResult(ResultInput{
-		TaskID:       cfg.Task,
-		Mode:         cfg.Mode,
-		Benchmark:    cfg.Benchmark,
-		RunIndex:     cfg.RunIndex,
-		Outcome:      merged.Outcome,
-		TraceRef:     res.MergedTracePath,
-		Fairness:     runners.DefaultContract,
-		Metrics:      metrics,
-		MetricErrors: metricErrs,
+		TaskID:         cfg.Task,
+		Mode:           cfg.Mode,
+		Benchmark:      cfg.Benchmark,
+		RunIndex:       cfg.RunIndex,
+		Outcome:        merged.Outcome,
+		TraceRef:       res.MergedTracePath,
+		Fairness:       runners.DefaultContract,
+		AblationStatus: ablationStatusFor(cfg.Mode),
+		Metrics:        metrics,
+		MetricErrors:   metricErrs,
 	})
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: build result.v2: %w", err))

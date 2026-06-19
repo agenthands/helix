@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/runners"
@@ -176,7 +177,11 @@ func BuildResult(in ResultInput) ([]byte, error) {
 
 // fairnessBlock projects a FairnessContract's overrides into the schema's
 // fairness block. The slice is always non-nil so it marshals as `[]` (not
-// `null`) when there are no overrides (D-04).
+// `null`) when there are no overrides (D-04). The projected overrides are sorted
+// by mode before returning: fc.Overrides is a map, and ranging it in Go's
+// randomized iteration order would emit fairness.overrides[] in a different
+// order across builds, breaking the repo's byte-identical-sha256 reproducibility
+// guarantee once ≥2 overrides exist.
 func fairnessBlock(fc runners.FairnessContract) resultFairness {
 	overrides := make([]resultOverride, 0, len(fc.Overrides))
 	for mode, ov := range fc.Overrides {
@@ -186,6 +191,7 @@ func fairnessBlock(fc runners.FairnessContract) resultFairness {
 			ApprovedBy:   ov.ApprovedBy,
 		})
 	}
+	sort.Slice(overrides, func(i, j int) bool { return overrides[i].Mode < overrides[j].Mode })
 	return resultFairness{Overrides: overrides}
 }
 

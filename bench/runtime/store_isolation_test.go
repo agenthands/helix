@@ -30,7 +30,7 @@ func benchDatasetsRootForTest(t *testing.T) string {
 
 // TestStoreIsolationParallel is the D-03 end-to-end proof (security T-78-04): two
 // store-ON cells (the incremental_update fixture, which RunMatrix opts into the
-// per-cell semantic store via deriveStoreOptIn) run at --parallel=2 and must:
+// per-cell semantic store via meta.storeOptIn) run at --parallel=2 and must:
 //
 //  1. BOTH succeed (Summary.Succeeded == 2). The Pitfall-1 deadlock — two cells
 //     opening the SAME cwd-relative .helix/semantic.duckdb under a shared CWD —
@@ -70,7 +70,7 @@ func TestStoreIsolationParallel(t *testing.T) {
 	// Sanity: the fixture must actually opt the store ON (capability=incremental_update).
 	seedDir := filepath.Join(benchDatasetsRootForTest(t), "internal-toolbench", "go", task)
 	require.DirExists(t, seedDir)
-	require.True(t, deriveStoreOptIn(seedDir),
+	require.True(t, readTaskMeta(seedDir).storeOptIn(),
 		"the incremental_update fixture MUST derive StoreOptIn=true — this test is meaningless store-OFF")
 
 	outDir := t.TempDir()

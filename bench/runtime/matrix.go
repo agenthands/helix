@@ -316,9 +316,3 @@ func (m taskMeta) storeOptIn() bool {
 	}
 	return m.Capability == "incremental_update"
 }
-
-// deriveStoreOptIn is a thin wrapper preserving the standalone predicate used by
-// store_isolation_test.go: read task.json once and apply the store opt-in rule.
-func deriveStoreOptIn(seedDir string) bool {
-	return readTaskMeta(seedDir).storeOptIn()
-}

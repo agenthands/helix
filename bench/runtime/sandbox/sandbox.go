@@ -9,8 +9,10 @@
 //     responsibility of the cell orchestrator's call site — this package does NOT
 //     override the embedded Cleanup().
 //   - Durable artifacts (result.v2.json, the merged-trace JSON) live under the
-//     out dir: bench/reports/<run_id>/<task>/<mode>/. The two NEW path helpers
-//     here (ResultPath, MergedTracePath) are the only bench additions.
+//     out dir: bench/reports/<run_id>/<task>/<mode>/<run_index>/. The durable
+//     path layout is computed by the cell orchestrator's cellDurablePaths
+//     (which threads the <run_index> segment); this package only records the
+//     durable artifact root via OutDir().
 //
 // All filesystem hardening (lstat-symlink reject, 0700, macOS short-socket-root)
 // is inherited verbatim from the embedded eval sandbox; it is intentionally not
@@ -19,7 +21,6 @@ package sandbox
 
 import (
 	"fmt"
-	"path/filepath"
 
 	evalsandbox "github.com/agenthands/helix/internal/eval/sandbox"
 )
@@ -55,15 +56,3 @@ func New(runID, helixBin, outDir string) (*Sandbox, error) {
 
 // OutDir returns the durable artifact root recorded at construction.
 func (s *Sandbox) OutDir() string { return s.outDir }
-
-// ResultPath returns the durable path of the result.v2.json for a (task, mode)
-// cell: <outDir>/<task>/<mode>/result.v2.json (D-04/D-08).
-func (s *Sandbox) ResultPath(task, mode string) string {
-	return filepath.Join(s.outDir, task, mode, "result.v2.json")
-}
-
-// MergedTracePath returns the durable path of the merged OTel trace JSON for a
-// (task, mode) cell: <outDir>/<task>/<mode>/trace.json (D-08).
-func (s *Sandbox) MergedTracePath(task, mode string) string {
-	return filepath.Join(s.outDir, task, mode, "trace.json")
-}

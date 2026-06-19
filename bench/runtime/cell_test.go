@@ -33,25 +33,27 @@ func benchRunnersRootForTest(t *testing.T) string {
 // removeAllForTest removes a preserved scratch dir at the end of a test.
 func removeAllForTest(path string) error { return os.RemoveAll(path) }
 
-// TestCellLayout asserts the durable artifact layout is
-// <out>/<task>/<mode>/{result.v2.json,trace.json} (D-08), exercised through the
-// bench sandbox path helpers that RunCell uses. This is a UNIT test — no daemon.
+// TestCellLayout asserts the durable artifact layout RunCell ACTUALLY writes:
+// <out>/<task>/<mode>/<run_index>/{result.v2.json,trace.json} (D-08, Pitfall 3),
+// computed by the production cellDurablePaths helper RunCell calls. This is a
+// UNIT test — no daemon.
 func TestCellLayout(t *testing.T) {
 	outDir := t.TempDir()
-	sb, err := benchsandbox.New("20060102T150405Z", "/nonexistent/helix", outDir)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sb.Cleanup() })
 
 	const task = "IT-go-patch-apply-1"
 	const mode = "your_agent_full"
+	const runIndex = 0
 
-	wantResult := filepath.Join(outDir, task, mode, "result.v2.json")
-	wantTrace := filepath.Join(outDir, task, mode, "trace.json")
+	wantResult := filepath.Join(outDir, task, mode, "0", "result.v2.json")
+	wantTrace := filepath.Join(outDir, task, mode, "0", "trace.json")
 
-	assert.Equal(t, wantResult, sb.ResultPath(task, mode),
-		"result.v2.json must live at <out>/<task>/<mode>/result.v2.json (D-08)")
-	assert.Equal(t, wantTrace, sb.MergedTracePath(task, mode),
-		"merged trace must live at <out>/<task>/<mode>/trace.json (D-08)")
+	gotResult, gotTrace, err := cellDurablePaths(outDir, task, mode, runIndex)
+	require.NoError(t, err)
+
+	assert.Equal(t, wantResult, gotResult,
+		"result.v2.json must live at <out>/<task>/<mode>/<run_index>/result.v2.json (D-08, Pitfall 3)")
+	assert.Equal(t, wantTrace, gotTrace,
+		"merged trace must live at <out>/<task>/<mode>/<run_index>/trace.json (D-08, Pitfall 3)")
 }
 
 // TestCellLayoutPathTraversalRejected confirms RunCell rejects task/mode/

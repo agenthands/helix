@@ -177,7 +177,7 @@ Plans:
 **Wave 1**
 
 - [x] 80-01-PLAN.md — 5 new bench/runners/<mode>/MODE.md definitions + resolver test + BENCH.md docs (ABLATE-01/03; D-01/02/03)
-- [ ] 80-02-PLAN.md — additive ablation_status field on the result.v2 builder + schema doc (TDD; D-03)
+- [x] 80-02-PLAN.md — additive ablation_status field on the result.v2 builder + schema doc (TDD; D-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 80 context gathered
-last_updated: "2026-06-19T09:40:13.627Z"
+last_updated: "2026-06-19T09:44:16.006Z"
 last_activity: 2026-06-19 -- Phase 80 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 28
-  completed_plans: 24
+  completed_plans: 25
   percent: 83
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 80 (Five-of-Six Ablation Runners + Fairness Enforcement) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-06-19 -- Phase 80 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-19T09:39:58.115Z
+Last session: 2026-06-19T09:44:08.513Z
 Stopped at: Phase 80 context gathered
 Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforcement/80-CONTEXT.md
 
@@ -92,6 +92,7 @@ Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforceme
 | Phase 79 P02 | 25m | 3 tasks | 6 files |
 | Phase 79 P4 | 10m | 4 tasks | 7 files |
 | Phase 80 P01 | ~7min | 2 tasks | 7 files |
+| Phase 80 P02 | ~6min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -137,3 +138,4 @@ Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforceme
 - [Phase ?]: Coordinator in package coordinator to avoid grader->evaluators import cycle (79-04)
 - [Phase ?]: Durable bench path is <out>/<task>/<mode>/<run_index>/ with the run_index segment guarded by validateRunIndexSegment (79-04)
 - [Phase ?]: [Phase 80 P01]: 5 ablation MODE.md added — baseline_plain reuses baseline.yaml (D-01/ABLATE-03, no new YAML); your_agent_no_semantic emits a real row marked ablation_status: guarantee_pending_phase_81 (kernel disable_semantic_subsystem lands Phase 81); baseline_rag is a registered fail-closed stub (placeholder profile: baseline) deferred to Phase 83; all MODE.md frontmatter two-key only (KnownFields-strict, zero Go resolver change)
+- [Phase ?]: [Phase 80 P02]: ablation_status added as an additive OPTIONAL open provenance field (omitempty); schema_version stays v2, no v3, no additionalProperties:false (D-03). Honest modes omit it; no_semantic arm carries guarantee_pending_phase_81, value SET by Plan 03 cell wiring

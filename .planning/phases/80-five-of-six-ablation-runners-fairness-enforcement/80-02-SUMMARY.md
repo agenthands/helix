@@ -109,6 +109,15 @@ None — `ablation_status` is a fixed internal harness constant (provenance/disp
 - Field + schema doc ready for Plan 03 to SET `ablation_status: guarantee_pending_phase_81` on the no_semantic cell.
 - Phase 81 lands the kernel `disable_semantic_subsystem` guarantee; Phase 82 aggregator reads `ablation_status` to distinguish partial rows.
 
+## Self-Check: PASSED
+
+- bench/runtime/result.go — FOUND
+- bench/runtime/result_test.go — FOUND
+- bench/schema/result.v2.schema.json — FOUND
+- 80-02-SUMMARY.md — FOUND
+- commit 496a81b1 (RED test) — FOUND
+- commit 3aec6043 (GREEN feat) — FOUND
+
 ---
 *Phase: 80-five-of-six-ablation-runners-fairness-enforcement*
 *Completed: 2026-06-19*

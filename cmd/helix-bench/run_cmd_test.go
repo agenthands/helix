@@ -75,7 +75,7 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 
 	// If a real helix binary was on PATH, the cell may have written a durable
 	// result.v2.json — assert best-effort (present-and-valid OR absent).
-	resultPath := filepath.Join(runOutDir, "IT-go-patch-apply-1", "your_agent_full", "result.v2.json")
+	resultPath := filepath.Join(runOutDir, "IT-go-patch-apply-1", "your_agent_full", "0", "result.v2.json")
 	if _, err := os.Stat(resultPath); err == nil {
 		t.Logf("durable result.v2.json present at %q (helix binary was available)", resultPath)
 	} else {

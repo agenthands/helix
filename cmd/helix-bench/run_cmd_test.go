@@ -1,10 +1,28 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+// resolveHelixBinForCmd returns a resolvable helix binary path (HELIX_BIN env or
+// `helix` on PATH), or "" when none is available so the caller can degrade to a
+// wiring-only assertion. Mirrors bench/runtime.resolveHelixBin.
+func resolveHelixBinForCmd() string {
+	if env := os.Getenv("HELIX_BIN"); env != "" {
+		if _, err := os.Stat(env); err == nil {
+			return env
+		}
+	}
+	if p, err := exec.LookPath("helix"); err == nil {
+		return p
+	}
+	return ""
+}
 
 // TestRunSubcommandWiresThemAll verifies that the `run` subcommand registers all
 // seven+ flags and, when invoked, expands the matrix and dispatches cells under a
@@ -65,6 +83,71 @@ func TestRunSubcommandWiresThemAll(t *testing.T) {
 	}
 }
 
+// TestRunSubcommandWiresDeltaPass asserts the `run` subcommand invokes the
+// Plan-05 post-RunMatrix delta pass: a multi-mode run over the 4 real modes on
+// one seed task writes rows that, after the run completes, carry the
+// `ablation_deltas` open property. It SKIPs when no helix binary is resolvable
+// (the per-cell daemon spawn would fail and no rows would be written), since the
+// assertion is specifically that the delta pass ran AFTER the matrix wrote the
+// real rows. Hermetic: scripted agent, no model, no network.
+func TestRunSubcommandWiresDeltaPass(t *testing.T) {
+	helixBin := resolveHelixBinForCmd()
+	if helixBin == "" {
+		t.Skip("helix binary not resolvable (set HELIX_BIN or 'go build ./cmd/helix'); skipping delta-pass wiring smoke")
+	}
+
+	// Use the REAL bench datasets root + the real runners (the mode resolver reads
+	// bench/runners/<mode>/MODE.md). Derive the repo root from this test file.
+	repoRoot := repoRootForTest(t)
+	datasetsRoot := filepath.Join(repoRoot, "bench", "datasets")
+	const task = "IT-go-patch-apply-1"
+
+	outDir := t.TempDir()
+	runID := "delta-wiring-001"
+
+	root := newRootCmd()
+	root.SetArgs([]string{
+		"run",
+		"--benchmarks", "internal-toolbench",
+		"--languages", "go",
+		"--modes", "your_agent_full",
+		"--modes", "baseline_plain",
+		"--modes", "no_lsp",
+		"--modes", "no_structured_edit",
+		"--tasks", task,
+		"--datasets", datasetsRoot,
+		"--out", outDir,
+		"--helix-bin", helixBin,
+		"--run-id", runID,
+		"--parallel", "2",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("run (4 real modes): %v", err)
+	}
+
+	// Each real mode's row must carry ablation_deltas after the run (the delta pass
+	// ran after the matrix barrier). Layout: <out>/<run_id>/<task>/<mode>/0/result.v2.json.
+	runOutDir := filepath.Join(outDir, runID)
+	for _, mode := range []string{"your_agent_full", "baseline_plain", "no_lsp", "no_structured_edit"} {
+		p := filepath.Join(runOutDir, task, mode, "0", "result.v2.json")
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("real mode %s: result row not written at %q: %v", mode, p, err)
+		}
+		var doc struct {
+			AblationDeltas map[string]map[string]float64 `json:"ablation_deltas"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("real mode %s: decode row: %v", mode, err)
+		}
+		if doc.AblationDeltas == nil {
+			t.Errorf("real mode %s: row at %q missing ablation_deltas (delta pass not wired into runBench)", mode, p)
+		} else if len(doc.AblationDeltas) != 3 {
+			t.Errorf("real mode %s: want exactly 3 deltas, got %d", mode, len(doc.AblationDeltas))
+		}
+	}
+}
+
 // TestRunSubcommandRegistersAllFlags asserts every documented flag is registered
 // on the run subcommand (the --help acceptance, mechanically).
 func TestRunSubcommandRegistersAllFlags(t *testing.T) {
@@ -109,6 +192,19 @@ func TestNotYetImplementedStillCoversOtherSubcommands(t *testing.T) {
 			t.Errorf("subcommand %q: expected not-yet-implemented error, got nil", sub)
 		}
 	}
+}
+
+// repoRootForTest returns the repository root derived from this test file's
+// location (.../cmd/helix-bench/run_cmd_test.go -> repo root), so the real
+// bench/datasets + bench/runners trees are reachable cwd-independently.
+func repoRootForTest(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	// thisFile = <repo>/cmd/helix-bench/run_cmd_test.go
+	return filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
 }
 
 func writeFixture(t *testing.T, path, content string) {

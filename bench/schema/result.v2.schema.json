@@ -175,6 +175,10 @@
         }
       }
     },
+    "ablation_status": {
+      "type": "string",
+      "description": "OPTIONAL D-03 machine-checkable ablation deferral marker. Additive-only (no schema major bump; schema_version stays \"v2\"). Honest modes OMIT this key entirely (the Go builder uses omitempty); it is present only on a partial ablation arm. Greppable enum values: \"guarantee_pending_phase_81\" marks the no_semantic arm whose kernel disable_semantic_subsystem guarantee is deferred to Phase 81 (SET by the cell wiring in Plan 03); honest modes omit it (and may set \"enforced\" once Phase 81 lands). The Phase 82 aggregator reads it to distinguish a partial no_semantic row from a clean measurement."
+    },
     "metric_errors": {
       "type": "array",
       "description": "D-07 per-metric grader-failure annotations. When a grader cannot compute a metric it leaves the metrics field null and records why here. Mirrors the Go evaluators.MetricError struct.",

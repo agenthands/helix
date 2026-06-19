@@ -57,6 +57,14 @@ type ResultInput struct {
 	// projects its ModelID into model_id and its Overrides into fairness.overrides.
 	Fairness runners.FairnessContract
 
+	// AblationStatus is the D-03 machine-checkable deferral marker projected into
+	// the open provenance key `ablation_status` (omitempty). "" for honest modes;
+	// "guarantee_pending_phase_81" for the no_semantic arm whose kernel
+	// disable_semantic_subsystem guarantee lands in Phase 81. The Phase 82
+	// aggregator reads it to tell a partial no_semantic row from a clean one. SET
+	// by the cell wiring in Plan 03 (this plan delivers the field + schema doc).
+	AblationStatus string
+
 	// Metrics is the canonical Phase 79 nullable metric record (D-06/METRIC-01),
 	// assembled by the coordinator. Every field is a pointer; a nil marshals to an
 	// explicit JSON null (never omitted), so a metric a grader could not compute is
@@ -88,22 +96,26 @@ type resultOverride struct {
 // top-level additionalProperties OPEN). Rich metrics are intentionally not
 // fields here, so they are absent from the emitted doc (D-04).
 type resultDoc struct {
-	SchemaVersion string         `json:"schema_version"`
-	TaskID        string         `json:"task_id"`
-	Mode          string         `json:"mode"`
-	Benchmark     string         `json:"benchmark"`
-	RunIndex      int            `json:"run_index"`
+	SchemaVersion string `json:"schema_version"`
+	TaskID        string `json:"task_id"`
+	Mode          string `json:"mode"`
+	Benchmark     string `json:"benchmark"`
+	RunIndex      int    `json:"run_index"`
 	// TokensInput/Output are LEGACY top-level mirrors of metrics.tokens_input /
 	// metrics.tokens_output. Pointers so a nil emits JSON null (schema relaxed to
 	// ["integer","null"]), keeping the two homes in agreement (LO-01).
-	TokensInput   *int           `json:"tokens_input"`
-	TokensOutput  *int           `json:"tokens_output"`
-	Fairness      resultFairness `json:"fairness"`
+	TokensInput  *int           `json:"tokens_input"`
+	TokensOutput *int           `json:"tokens_output"`
+	Fairness     resultFairness `json:"fairness"`
 
 	// Open provenance props (Open Question 3 — stable snake_case keys).
 	Outcome  string `json:"outcome"`
 	TraceRef string `json:"trace_ref"`
 	ModelID  string `json:"model_id"`
+
+	// AblationStatus is the D-03 deferral marker. WITH omitempty so honest modes
+	// emit nothing; only the no_semantic arm carries "guarantee_pending_phase_81".
+	AblationStatus string `json:"ablation_status,omitempty"`
 
 	// Phase 79 canonical metric record (METRIC-01/D-06). Metrics has NO omitempty:
 	// the object (and every nullable field within it) is always emitted so a
@@ -139,19 +151,20 @@ func BuildResult(in ResultInput) ([]byte, error) {
 	}
 
 	doc := resultDoc{
-		SchemaVersion: sv,
-		TaskID:        in.TaskID,
-		Mode:          in.Mode,
-		Benchmark:     in.Benchmark,
-		RunIndex:      in.RunIndex,
-		TokensInput:   tokensInput,
-		TokensOutput:  tokensOutput,
-		Fairness:      fairnessBlock(in.Fairness),
-		Outcome:       in.Outcome,
-		TraceRef:      in.TraceRef,
-		ModelID:       in.Fairness.ModelID,
-		Metrics:       in.Metrics,
-		MetricErrors:  in.MetricErrors,
+		SchemaVersion:  sv,
+		TaskID:         in.TaskID,
+		Mode:           in.Mode,
+		Benchmark:      in.Benchmark,
+		RunIndex:       in.RunIndex,
+		TokensInput:    tokensInput,
+		TokensOutput:   tokensOutput,
+		Fairness:       fairnessBlock(in.Fairness),
+		Outcome:        in.Outcome,
+		TraceRef:       in.TraceRef,
+		ModelID:        in.Fairness.ModelID,
+		AblationStatus: in.AblationStatus,
+		Metrics:        in.Metrics,
+		MetricErrors:   in.MetricErrors,
 	}
 
 	b, err := json.MarshalIndent(doc, "", "  ")

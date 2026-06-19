@@ -320,6 +320,57 @@ func TestResultV2TopLevelTokensAgreeWithMetrics(t *testing.T) {
 	})
 }
 
+// TestAblationStatusProjected covers D-03: a row built with a non-empty
+// AblationStatus (the deferred no_semantic marker) projects that exact value
+// under the open provenance key `ablation_status`, and the row still passes the
+// validate-on-write gate (top-level additionalProperties is OPEN — additive).
+func TestAblationStatusProjected(t *testing.T) {
+	in := ResultInput{
+		TaskID:         "internal-toolbench/IT-go-patch-apply-1",
+		Mode:           "your_agent_no_semantic",
+		Benchmark:      "internal-toolbench",
+		RunIndex:       0,
+		Outcome:        "success",
+		TraceRef:       "trace.json",
+		Fairness:       runners.DefaultContract,
+		AblationStatus: "guarantee_pending_phase_81",
+	}
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc), "an ablation_status-marked row must still validate (open additionalProperties)")
+
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(doc, &m))
+	got, present := m["ablation_status"]
+	require.True(t, present, "ablation_status key must be present when set")
+	assert.Equal(t, "guarantee_pending_phase_81", got,
+		"ablation_status must round-trip the exact deferred-marker value (D-03)")
+}
+
+// TestAblationStatusOmittedWhenEmpty covers D-03: an honest mode (empty
+// AblationStatus) omits the ablation_status key entirely (omitempty), and the
+// row still validates.
+func TestAblationStatusOmittedWhenEmpty(t *testing.T) {
+	in := ResultInput{
+		TaskID:    "internal-toolbench/IT-go-patch-apply-1",
+		Mode:      "your_agent_full",
+		Benchmark: "internal-toolbench",
+		RunIndex:  0,
+		Outcome:   "success",
+		TraceRef:  "trace.json",
+		Fairness:  runners.DefaultContract,
+		// AblationStatus left empty (honest mode).
+	}
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc), "an honest-mode row must validate")
+
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(doc, &m))
+	_, present := m["ablation_status"]
+	assert.False(t, present, "ablation_status must be omitted when empty (omitempty, honest mode)")
+}
+
 // TestResultV2ValidRejectsMalformed proves validate-on-write actually rejects a
 // doc the schema forbids (schema_version of the wrong type), not rubber-stamps.
 func TestResultV2ValidRejectsMalformed(t *testing.T) {

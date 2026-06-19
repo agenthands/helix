@@ -161,6 +161,7 @@ Plans:
 - [x] 79-04-PLAN.md — Coordinator (D-07 isolation) + result.v2 wiring + run_index path + pre-patch snapshot + METRICS.md + E2E gate [Wave 3]
 
 ### Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
+
 **Goal**: All 6 ablation modes are operational end-to-end on the Go ToolBench corpus, holding the same-model-same-budget invariant via the Phase 75 fairness contract. `your_agent_full` + `baseline_plain` + `no_lsp` + `no_structured_edit` produce real per-mode `result.v2.json` rows; `no_semantic` scaffolding is in place but the kernel flag (ABLATE-06) lands in Phase 81; `baseline_rag` runner stub exists but its real implementation lands in Phase 83.
 **Depends on**: Phase 76 (bench profile YAMLs + no_lsp / no_structured_edit kernel flags), Phase 79 (evaluators produce real metrics), Phase 78 (Go ToolBench is the corpus)
 **Requirements**: ABLATE-01, ABLATE-03
@@ -175,7 +176,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 80-01-PLAN.md — 5 new bench/runners/<mode>/MODE.md definitions + resolver test + BENCH.md docs (ABLATE-01/03; D-01/02/03)
+- [x] 80-01-PLAN.md — 5 new bench/runners/<mode>/MODE.md definitions + resolver test + BENCH.md docs (ABLATE-01/03; D-01/02/03)
 - [ ] 80-02-PLAN.md — additive ablation_status field on the result.v2 builder + schema doc (TDD; D-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*

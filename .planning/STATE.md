@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 80 context gathered
-last_updated: "2026-06-19T08:42:16.417Z"
-last_activity: 2026-06-19 -- Phase 80 planning complete
+last_updated: "2026-06-19T09:40:13.627Z"
+last_activity: 2026-06-19 -- Phase 80 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
+  total_plans: 28
+  completed_plans: 24
   percent: 83
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 79 — Evaluators & Result-Schema Metrics Layer
+**Current focus:** Phase 80 — Five-of-Six Ablation Runners + Fairness Enforcement
 
 ## Current Position
 
-Phase: 79
-Plan: Not started
+Phase: 80 (Five-of-Six Ablation Runners + Fairness Enforcement) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-06-19 -- Phase 80 planning complete
+Last activity: 2026-06-19 -- Phase 80 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-18T15:50:23.856Z
+Last session: 2026-06-19T09:39:58.115Z
 Stopped at: Phase 80 context gathered
 Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforcement/80-CONTEXT.md
 
@@ -91,6 +91,7 @@ Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforceme
 | Phase 79 P01 | ~9min | 2 tasks | 4 files |
 | Phase 79 P02 | 25m | 3 tasks | 6 files |
 | Phase 79 P4 | 10m | 4 tasks | 7 files |
+| Phase 80 P01 | ~7min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -135,3 +136,4 @@ Resume file: .planning/phases/80-five-of-six-ablation-runners-fairness-enforceme
 - [Phase ?]: regression numerator counts cached-passing tests now failing OR absent post-patch (79-02)
 - [Phase ?]: Coordinator in package coordinator to avoid grader->evaluators import cycle (79-04)
 - [Phase ?]: Durable bench path is <out>/<task>/<mode>/<run_index>/ with the run_index segment guarded by validateRunIndexSegment (79-04)
+- [Phase ?]: [Phase 80 P01]: 5 ablation MODE.md added — baseline_plain reuses baseline.yaml (D-01/ABLATE-03, no new YAML); your_agent_no_semantic emits a real row marked ablation_status: guarantee_pending_phase_81 (kernel disable_semantic_subsystem lands Phase 81); baseline_rag is a registered fail-closed stub (placeholder profile: baseline) deferred to Phase 83; all MODE.md frontmatter two-key only (KnownFields-strict, zero Go resolver change)

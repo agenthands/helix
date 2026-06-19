@@ -171,6 +171,22 @@ Plans:
   3. Same-model-same-budget invariant is enforced at runner-startup: per-task token budget is identical across modes; CI contract test asserts every runner's effective `(model_id, temperature, max_tokens, system_prompt_hash, retry_policy, cache_policy)` equals the fairness contract.
   4. Ablation deltas (`your_agent_full` − `baseline_plain`, `full` − `no_lsp`, `full` − `no_structured_edit`) compute correctly on the Go ToolBench corpus and surface in the per-mode result rows.
 
+**Plans:** 5 plans (3 waves)
+Plans:
+**Wave 1**
+
+- [ ] 80-01-PLAN.md — 5 new bench/runners/<mode>/MODE.md definitions + resolver test + BENCH.md docs (ABLATE-01/03; D-01/02/03)
+- [ ] 80-02-PLAN.md — additive ablation_status field on the result.v2 builder + schema doc (TDD; D-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 80-03-PLAN.md — RunCell fairness Validate() startup gate + baseline_rag fail-close (no row) + ablation_status wiring (TDD; D-01/02/03/04)
+- [ ] 80-04-PLAN.md — unconditional CI effective-config contract test (TDD; D-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 80-05-PLAN.md — minimal 3-delta pass surfaced in per-mode rows + five-of-six multi-mode scripted smoke (TDD; D-05)
+
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md` (Phase Details > Phase 80)
 
 <details>

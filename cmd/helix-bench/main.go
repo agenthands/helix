@@ -303,9 +303,11 @@ func discoverTasks(datasetsRoot, benchmark string, languages []string) ([]string
 		for _, e := range entries {
 			// Skip non-dirs and leading-dot entries (.git, .DS_Store, editor
 			// scratch dirs). A benign filesystem artifact must not fail the whole
-			// run: a leading-dot id is rejected by ExpandMatrix's validateMatrixID,
-			// which would hard-fail the entire expansion before any legitimate
-			// task runs.
+			// run: ExpandMatrix's validateMatrixID rejects a leading-dot id and
+			// returns on the first bad id, so letting such a dir into the task set
+			// hard-fails the entire expansion before any legitimate task runs. This
+			// leading-dot filter is what prevents that abort (locked by
+			// TestDiscoverTasksSkipsHiddenDirs).
 			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
 				seen[e.Name()] = struct{}{}
 			}

@@ -30,6 +30,53 @@ Phase 75 only stands up the empty skeleton (each dir tracked via a `.gitkeep`) a
 `schema/` contract document (Plan 03). Plan 04 fills `runners/`; Plan 05 fills
 `datasets/`. Downstream phases (76–89) write into the stable layout above.
 
+## Ablation modes (`bench/runners/<mode>/MODE.md`) — the five-of-six matrix
+
+Each bench arm is a `bench/runners/<mode>/MODE.md` definition (ABLATE-01). The
+mode→profile resolver (`bench/runners/mode_resolver.go`) is table-driven: it
+reads the two-key (`mode` + `profile`) frontmatter of `MODE.md`, so adding a
+mode is purely a matter of dropping in a new directory — no Go change (D-05).
+Phase 80 grows the matrix from the single Phase 77 seed (`your_agent_full`) to
+six modes:
+
+| Mode | Profile | Notes |
+|------|---------|-------|
+| `your_agent_full` | `bench-full` | full Helix tool surface (Phase 77 seed) |
+| `baseline_plain` | `baseline` | zero-Helix-tools control arm (see below) |
+| `no_lsp` | `bench-no-lsp` | LSP subsystem disabled (ABLATE-05) |
+| `no_structured_edit` | `bench-no-structured-edit` | structured-edit tools excluded (ABLATE-07) |
+| `your_agent_no_semantic` | `bench-no-semantic` | semantic-store tools excluded; **deferred guarantee** (see below) |
+| `baseline_rag` | `baseline` (placeholder) | registered **fail-closed stub**, no row until Phase 83 |
+
+**`baseline_plain` — empty Helix inventory, no new YAML.** `baseline_plain`
+reuses the existing `baseline.yaml` profile (D-01, ABLATE-03 — there is
+deliberately **no** new `bench-*` YAML for it). It exposes an **empty** Helix
+tool inventory: the agent sees only the shell / grep / read / edit / test
+capabilities its own runtime exposes natively. That empty inventory is
+enforced by the **profile filter** (the `baseline` profile's empty tool
+lists), not by any bench-side code. The daemon still spawns for trace
+symmetry, so baseline_plain's run shape matches the other arms.
+
+**`your_agent_no_semantic` — `ablation_status: guarantee_pending_phase_81`.**
+This arm emits a **real** result row, but the row is marked **partial** via
+`ablation_status: guarantee_pending_phase_81`. The kernel-level
+`disable_semantic_subsystem` flag — the zero-DuckDB guarantee, ABLATE-06 —
+lands in **Phase 81**, not this phase. Until then `bench-no-semantic` is
+tool-filter-only (Phase 76 D-11/D-12): the 10 semantic-store tools are
+excluded from the agent surface, but the daemon may still read the semantic
+store via back-channel paths. The `guarantee_pending_phase_81` status flags
+the row as not-yet-a-clean no_semantic measurement; the clean zero-DuckDB
+number arrives once Phase 81 wires the kernel flag with its config-gate E2E
+test.
+
+**`baseline_rag` — fail-closed stub, no row until Phase 83.** `baseline_rag`
+is a registered fail-closed stub. Its `MODE.md` carries a placeholder
+`profile: baseline` so the resolver parses it, but the cell wiring fail-closes
+the mode **before** any daemon spawn (detected by mode name, not a frontmatter
+marker — keeping the resolver change-free). The real RAG arm (standalone
+`cmd/helix-bench-rag` + chromem-go embedding index, ABLATE-04) is **deferred to
+Phase 83**; this mode produces **no result row** this phase.
+
 ## Operator prerequisites (operator-side, NOT Go build deps)
 
 Running the full bench stack requires tooling that is **NOT** needed to build the Helix

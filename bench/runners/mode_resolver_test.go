@@ -30,6 +30,35 @@ func TestModeResolverYourAgentFull(t *testing.T) {
 	}
 }
 
+// TestModeResolverAblationModes verifies each of the 5 new Phase 80 ablation
+// modes resolves to its declared profile by reading
+// bench/runners/<mode>/MODE.md frontmatter — NOT a hard-coded Go map (D-05).
+// This proves Phase 80 grew the table-driven resolver from 1 mode to 6 with
+// ZERO Go change to mode_resolver.go (the filesystem IS the table).
+// baseline_plain and baseline_rag both resolve to "baseline" (D-01/ABLATE-03 for
+// baseline_plain; a well-formed placeholder profile for the baseline_rag stub).
+func TestModeResolverAblationModes(t *testing.T) {
+	cases := []struct {
+		mode string
+		want string
+	}{
+		{"baseline_plain", "baseline"},
+		{"no_lsp", "bench-no-lsp"},
+		{"no_structured_edit", "bench-no-structured-edit"},
+		{"your_agent_no_semantic", "bench-no-semantic"},
+		{"baseline_rag", "baseline"},
+	}
+	for _, tc := range cases {
+		got, err := ResolveProfile(tc.mode)
+		if err != nil {
+			t.Fatalf("ResolveProfile(%q) returned error: %v", tc.mode, err)
+		}
+		if got != tc.want {
+			t.Fatalf("ResolveProfile(%q) = %q, want %q", tc.mode, got, tc.want)
+		}
+	}
+}
+
 // TestModeResolverUnknownMode verifies an unknown mode name (no MODE.md dir)
 // fails closed with a non-nil error.
 func TestModeResolverUnknownMode(t *testing.T) {

@@ -27,7 +27,7 @@
 - [x] Phase 77: Bench Runtime & First E2E Smoke
 - [x] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface (completed 2026-06-17)
 - [x] Phase 79: Evaluators & Result-Schema Metrics Layer (completed 2026-06-18)
-- [ ] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement
+- [x] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement (completed 2026-06-19)
 - [ ] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
 - [ ] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
 - [ ] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
@@ -172,7 +172,7 @@ Plans:
   3. Same-model-same-budget invariant is enforced at runner-startup: per-task token budget is identical across modes; CI contract test asserts every runner's effective `(model_id, temperature, max_tokens, system_prompt_hash, retry_policy, cache_policy)` equals the fairness contract.
   4. Ablation deltas (`your_agent_full` − `baseline_plain`, `full` − `no_lsp`, `full` − `no_structured_edit`) compute correctly on the Go ToolBench corpus and surface in the per-mode result rows.
 
-**Plans:** 5 plans (3 waves)
+**Plans:** 5/5 plans complete
 Plans:
 **Wave 1**
 

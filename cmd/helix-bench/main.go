@@ -238,12 +238,38 @@ func runBench(cmd *cobra.Command, o runBenchOpts) error {
 		return fmt.Errorf("helix-bench run: %w", err)
 	}
 
-	// Surface per-cell infra errors (non-fatal) for operator visibility.
+	// Surface per-cell infra errors (non-fatal) and deferred stubs (e.g.
+	// baseline_rag) distinctly for operator visibility. A deferred cell is neither
+	// a success nor an infra error — it is a registered-and-fail-closed arm whose
+	// real implementation lands in a later phase, so it MUST NOT be reported as a
+	// failure.
 	for _, oc := range summary.Outcomes {
 		if oc.Err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "helix-bench run: cell %s/%s/%s error: %v\n",
 				oc.Cell.Benchmark, oc.Cell.Task, oc.Cell.Mode, oc.Err)
 		}
+		if oc.Deferred {
+			fmt.Fprintf(cmd.ErrOrStderr(), "helix-bench run: deferred: %s/%s (%s)\n",
+				oc.Cell.Task, oc.Cell.Mode, oc.Result.DeferredReason)
+		}
+	}
+
+	// Plan-05 post-matrix 3-delta pass (D-05). It runs STRICTLY AFTER RunMatrix
+	// returns (the wg.Wait() barrier — Pitfall 3): the matrix is the only tier that
+	// sees every mode for a task, so the cross-mode deltas can only be computed
+	// here. For each task with all 4 real-mode rows, it computes the 3 fixed deltas
+	// (full vs baseline_plain/no_lsp/no_structured_edit) and surfaces them in each
+	// per-mode row's ablation_deltas property; tasks missing a real mode are skipped
+	// and reported. A write-back error is surfaced but non-fatal (the rows already
+	// exist; the run's exit is driven by Succeeded).
+	deltaReport, derr := runtime.ComputeAndWriteDeltas(summary.Outcomes)
+	if derr != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "helix-bench run: delta pass: %v\n", derr)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "helix-bench run: ablation deltas computed for %d task(s), %d skipped\n",
+		len(deltaReport.Computed), len(deltaReport.Skipped))
+	for _, sk := range deltaReport.Skipped {
+		fmt.Fprintf(cmd.ErrOrStderr(), "helix-bench run: delta skipped: task %s (%s)\n", sk.Task, sk.Reason)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "helix-bench run complete: %d/%d cells succeeded\n", summary.Succeeded, summary.Total)

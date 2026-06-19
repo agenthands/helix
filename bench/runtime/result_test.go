@@ -25,9 +25,6 @@ var metricKeys = []string{
 	"retry_count", "compile_errors_before", "compile_errors_after",
 }
 
-func iPtr(i int) *int  { return &i }
-func bPtr(b bool) *bool { return &b }
-
 // TestResultMetricsRoundTrip (METRIC-01): BuildResult with a populated Metrics +
 // MetricErrors emits a metrics object carrying ALL keys (nil metrics serialize
 // to JSON null, never omitted), validates against the committed schema, and a
@@ -119,8 +116,6 @@ func TestResultMetricsRoundTrip(t *testing.T) {
 		require.Len(t, me, 1, "exactly one metric_errors entry")
 	})
 }
-
-func fPtr(f float64) *float64 { return &f }
 
 // TestRunIndexPathSegment (Pitfall 3 / V5): the durable result + trace paths
 // carry a <run_index> segment derived from cfg.RunIndex, and the segment is

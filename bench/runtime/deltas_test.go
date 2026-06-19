@@ -11,10 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// intPtr / floatPtr build the nullable metric pointers the helper operates on.
-func intPtr(v int) *int           { return &v }
-func floatPtr(v float64) *float64 { return &v }
-
 // writeModeRow builds a schema-valid result.v2.json for (task, mode) with the
 // given metrics and writes it to <outDir>/<task>/<mode>/0/result.v2.json,
 // returning the path. It mirrors the durable layout cellDurablePaths produces.
@@ -67,20 +63,20 @@ func TestAblationDeltasArithmetic(t *testing.T) {
 	const task = "IT-go-patch-apply-1"
 
 	full := writeModeRow(t, outDir, task, "your_agent_full", evaluators.Metrics{
-		TokensInput: intPtr(1000), TokensOutput: intPtr(200), ToolCalls: intPtr(10),
-		FilesModified: intPtr(3), EditLocality: floatPtr(0.9),
+		TokensInput: iPtr(1000), TokensOutput: iPtr(200), ToolCalls: iPtr(10),
+		FilesModified: iPtr(3), EditLocality: fPtr(0.9),
 	})
 	baselinePlain := writeModeRow(t, outDir, task, "baseline_plain", evaluators.Metrics{
-		TokensInput: intPtr(1500), TokensOutput: intPtr(300), ToolCalls: intPtr(25),
-		FilesModified: intPtr(5), EditLocality: floatPtr(0.5),
+		TokensInput: iPtr(1500), TokensOutput: iPtr(300), ToolCalls: iPtr(25),
+		FilesModified: iPtr(5), EditLocality: fPtr(0.5),
 	})
 	noLSP := writeModeRow(t, outDir, task, "no_lsp", evaluators.Metrics{
-		TokensInput: intPtr(1200), TokensOutput: intPtr(250), ToolCalls: intPtr(15),
-		FilesModified: intPtr(4), EditLocality: floatPtr(0.7),
+		TokensInput: iPtr(1200), TokensOutput: iPtr(250), ToolCalls: iPtr(15),
+		FilesModified: iPtr(4), EditLocality: fPtr(0.7),
 	})
 	noEdit := writeModeRow(t, outDir, task, "no_structured_edit", evaluators.Metrics{
-		TokensInput: intPtr(1100), TokensOutput: intPtr(220), ToolCalls: intPtr(12),
-		FilesModified: intPtr(3), EditLocality: floatPtr(0.8),
+		TokensInput: iPtr(1100), TokensOutput: iPtr(220), ToolCalls: iPtr(12),
+		FilesModified: iPtr(3), EditLocality: fPtr(0.8),
 	})
 
 	outcomes := []CellOutcome{
@@ -127,7 +123,7 @@ func TestAblationDeltasWriteBackStillValid(t *testing.T) {
 	outDir := t.TempDir()
 	const task = "IT-go-patch-apply-1"
 
-	m := evaluators.Metrics{TokensInput: intPtr(100), ToolCalls: intPtr(5)}
+	m := evaluators.Metrics{TokensInput: iPtr(100), ToolCalls: iPtr(5)}
 	full := writeModeRow(t, outDir, task, "your_agent_full", m)
 	bp := writeModeRow(t, outDir, task, "baseline_plain", m)
 	nl := writeModeRow(t, outDir, task, "no_lsp", m)
@@ -157,7 +153,7 @@ func TestAblationDeltasSkipsIncompleteTask(t *testing.T) {
 	outDir := t.TempDir()
 	const task = "IT-go-incomplete-1"
 
-	m := evaluators.Metrics{TokensInput: intPtr(100)}
+	m := evaluators.Metrics{TokensInput: iPtr(100)}
 	full := writeModeRow(t, outDir, task, "your_agent_full", m)
 	bp := writeModeRow(t, outDir, task, "baseline_plain", m)
 	nl := writeModeRow(t, outDir, task, "no_lsp", m)

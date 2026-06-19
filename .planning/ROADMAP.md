@@ -181,7 +181,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 80-03-PLAN.md — RunCell fairness Validate() startup gate + baseline_rag fail-close (no row) + ablation_status wiring (TDD; D-01/02/03/04)
+- [x] 80-03-PLAN.md — RunCell fairness Validate() startup gate + baseline_rag fail-close (no row) + ablation_status wiring (TDD; D-01/02/03/04)
 - [ ] 80-04-PLAN.md — unconditional CI effective-config contract test (TDD; D-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*

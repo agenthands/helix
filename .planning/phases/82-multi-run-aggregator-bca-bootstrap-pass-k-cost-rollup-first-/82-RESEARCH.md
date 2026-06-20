@@ -16,10 +16,12 @@ verified present) and `math.Lgamma` (log-gamma, verified present) cover the only
 primitives, and `gopkg.in/yaml.v3` (already a direct dep) covers the cost-table loader.
 
 The single most important correctness fact: **pass@k MUST be the HumanEval unbiased estimator in
-the numerically-stable product form** `1 − Π_{i=0}^{k−1}(1 − k/(n−c+1+i))` evaluated when `n−c ≥ k`
-(else 1.0), NOT the naive `1 − (1 − p)^k`. The second: **BCa is bias-correction (z0) + acceleration
-(a via jackknife)**, not a percentile bootstrap. Both are exercised by closed-form acceptance tests
-(STATS-02/STATS-03) that a naive implementation would fail.
+the numerically-stable product form** `1 − Π_{i=n−c+1}^{n}(1 − k/i)` evaluated when `n−c ≥ k`
+(else 1.0), NOT the naive `1 − (1 − p)^k`. ⚠ The product has exactly **c** terms (c = number of
+successes), NOT k — looping k times is the classic wrong implementation (it yields 0.97348 for
+(n=10,c=3,k=5) instead of the correct 0.91667). The second: **BCa is bias-correction (z0) +
+acceleration (a via jackknife)**, not a percentile bootstrap. Both are exercised by closed-form
+acceptance tests (STATS-02/STATS-03) that a naive implementation would fail.
 
 The aggregator is overwhelmingly unit-testable without `HELIX_BIN`: all math, the cost join, the
 N-enforcement gate, and report rendering run over synthetic `result.v2.json` fixtures written to a
@@ -148,7 +150,7 @@ Erfinv(0.9)= 1.1630871536766738   Lgamma(6)= 4.787491742782046   go version go1.
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
 | `math.Erfinv` for Φ⁻¹ | Hand-rolled Acklam / Beasley-Springer-Moro rational approximation | UNNECESSARY — stdlib `Erfinv` gives `Φ⁻¹(p) = √2·Erfinv(2p−1)` exactly; the hand-roll only adds approximation error and LOC. **Recommend `math.Erfinv`.** |
-| `math.Lgamma` log-binomial | Stable product form `1 − Π(1 − k/(n−c+1+i))` | Both correct. The **product form is the canonical Chen et al. choice** and avoids even lgamma rounding for small k; lgamma generalizes cleanly. **Recommend the product form as primary, lgamma as the cross-check in the test** (compute both, assert agreement). |
+| `math.Lgamma` log-binomial | Stable product form `1 − Π_{i=n−c+1}^{n}(1 − k/i)` | Both correct. The **product form is the canonical Chen et al. choice** and avoids even lgamma rounding for small k; lgamma generalizes cleanly. **Recommend the product form as primary, lgamma as the cross-check in the test** (compute both, assert agreement). |
 | `math/rand/v2` | `math/rand` (v1) with `rand.New(rand.NewSource(seed))` | v1 works but v2 is the current idiom and its PCG source is explicitly reproducible; either satisfies D-08. Pick v2. |
 
 **Installation:** No new modules. All four core libs are stdlib or existing direct deps.
@@ -282,6 +284,9 @@ the planner chooses that path per D-03) goes through `Validate()`.
 
 ### Anti-Patterns to Avoid
 - **Naive pass@k `1 − (1 − p̂)^k`:** biased; fails STATS-03 against published values. (See Pitfall 1.)
+- **c-vs-k loop-count bug (product looping k times not c times):** the product `1 − Π_{i=n−c+1}^{n}(1 − k/i)`
+  has exactly **c** terms; a `for i:=0;i<k;i++` loop computes the wrong product (0.97348 not 0.91667 for
+  (10,3,5)). (See Pitfall 1.)
 - **Percentile bootstrap labeled "BCa":** skips z0 + a; wrong on skewed metrics. (Pitfall 2.)
 - **Counting on-disk files as N:** hides a partial matrix. Compare valid-row count to *expected* N
   from the manifest/flag. (Pitfall 3.)
@@ -401,25 +406,36 @@ Trained on Code", arXiv:2107.03374, §2.1]`
 ```go
 // Source: Chen et al. 2021 reference numpy estimator, transcribed to Go.
 // pass@k for a single task with n samples, c correct, target k.
+//
+// CRITICAL: the product runs over i = n-c+1 .. n, which is exactly c terms
+// (c = number of successes), NOT k. Looping k times is the classic WRONG
+// implementation — it yields 0.97348 for (n=10,c=3,k=5) instead of 0.91667.
 func passAtK(n, c, k int) float64 {
     if k > n {
         // k > available samples is undefined; guard per D-11. Caller should not
-        // request k>n, but fail safe (return 1.0 if every sample is correct path
-        // below also covers it). Recommend: treat as an error upstream, or clamp.
+        // request k>n; treat as the n-c<k branch (return 1.0) or clamp upstream.
     }
     if n-c < k {
         return 1.0 // fewer than k incorrect samples → at least one of any k is correct
     }
     prod := 1.0
-    for i := 0; i < k; i++ {
-        // 1 - C(n-c,k)/C(n,k) computed as 1 - Π_{i=0}^{k-1} (1 - k/(n-c+1+i))
-        prod *= 1.0 - float64(k)/float64(n-c+1+i)
+    // 1 - C(n-c,k)/C(n,k) computed as 1 - Π_{i=n-c+1}^{n} (1 - k/i).
+    // The loop runs i = n-c+1 .. n  →  c terms (= number of successes), NOT k.
+    for i := n - c + 1; i <= n; i++ {
+        prod *= 1.0 - float64(k)/float64(i)
     }
     return 1.0 - prod
 }
 ```
-This is the form OpenAI ships in the HumanEval repo (`np.prod(1.0 - n/(n - c + 1 + np.arange(k)))`
-with their `n` = our `k`). It never overflows and needs no factorials.
+This is algebraically the HumanEval unbiased estimator: `C(n-c,k)/C(n,k) = Π_{i=n-c+1}^{n} (i-k)/i =
+Π_{i=n-c+1}^{n} (1 - k/i)`, a product of `n - (n-c+1) + 1 = c` terms. It never overflows and needs no
+factorials.
+
+> **Worked verification (the load-bearing k≥2 anchor):** (n=10, c=3, k=5).
+> `n-c = 7 ≥ k = 5`, so the loop runs i ∈ {8, 9, 10} (3 = c terms):
+> `(1 − 5/8)(1 − 5/9)(1 − 5/10) = 0.375 · 0.444444 · 0.5 = 0.0833333 = 1/12`, so
+> `pass@k = 1 − 1/12 = 11/12 = 0.91667`. ✓ A k-term loop (i = 8..12, 5 terms) would instead give
+> 0.97348 — the bug this anchor catches.
 
 ### lgamma log-binomial CROSS-CHECK (D-11, for the test)
 ```go
@@ -433,14 +449,15 @@ func logBinom(a, b int) float64 {
 }
 // passAtKLog = 1 - exp(logBinom(n-c,k) - logBinom(n,k)), with n-c<k → 1.0.
 ```
-Compute BOTH in the test and assert they agree to ~1e-12. Two independent derivations agreeing is
-strong evidence of correctness.
+This implements the correct closed form and AGREES with the c-term product form. Compute BOTH in the
+test and assert they agree to ~1e-12. Two independent derivations agreeing is strong evidence of
+correctness (and a k-term product loop would break the agreement).
 
 ### Verified reference values to assert against (STATS-03)
 
 | n | c | k | pass@k | Source |
 |---|---|---|--------|--------|
-| 10 | 3 | 5 | **0.91667** (= 11/12) | `[VERIFIED: leehanchung.github.io pass@k worked example]` — matches both forms |
+| 10 | 3 | 5 | **0.91667** (= 11/12) | `[VERIFIED: leehanchung.github.io pass@k worked example + hand-computed (1−5/8)(1−5/9)(1−5/10)=1/12]` — matches both forms; the k≥2 anti-naive AND anti-k-term-loop anchor |
 | 5 | 1 | 1 | **0.2** (= c/n when k=1; pass@1 = mean success) | `[VERIFIED: hand-computed]` 1 − C(4,1)/C(5,1) = 1 − 4/5 |
 | 5 | 2 | 2 | **0.7** (= 1 − C(3,2)/C(5,2) = 1 − 3/10) | `[VERIFIED: hand-computed]` |
 | n | c | 1 | **c/n** (pass@1 reduces to the success rate) | `[VERIFIED: algebra]` 1 − C(n−c,1)/C(n,1) = 1 − (n−c)/n = c/n |
@@ -449,7 +466,8 @@ strong evidence of correctness.
 
 > **pass@1 == success-rate** is a load-bearing identity: it means the same per-task reduction that
 > feeds the boolean `task_success` leaderboard column (success-rate) IS pass@1. Use it as a sanity
-> assertion linking the two code paths.
+> assertion linking the two code paths. (Note: k=1 alone cannot catch the c-vs-k loop bug — at k=1 the
+> loop runs once either way; the (10,3,5)→0.91667 anchor is what catches it.)
 
 ### Leaderboard pass@k (D-11)
 Per-mode leaderboard `pass@k` = **mean of per-task pass@k across tasks**, with a BCa CI computed by
@@ -557,8 +575,8 @@ Reuse the EXACT shape from `cmd/helix-bench/validate_cost_table.go:25-42` (`Cost
 but in a reusable home. **The types currently live in `package main` (cmd/helix-bench) — they are not
 importable by `bench/aggregator/`.** Two options for the planner:
 - **(preferred)** Move `CostRow`/`CostTable` + the `validateCostTable` freshness logic into a new
-  exported `bench/datasets` (or `bench/cost`) package, and have BOTH `validate_cost_table.go` and the
-  aggregator import it (DRY — one freshness gate, one parser).
+  exported `bench/cost` package, and have BOTH `validate_cost_table.go` and the aggregator import it
+  (DRY — one freshness gate, one parser).
 - (fallback) Duplicate the small struct in `bench/aggregator/cost.go` (acceptable but risks drift; the
   freshness constants `stalenessWindowDays = 90` and `dateLayout = "2006-01-02"` must match).
 
@@ -630,13 +648,21 @@ reports (REPORT-05 forward-compat).
 
 ## Common Pitfalls
 
-### Pitfall 1: Naive pass@k
-**What goes wrong:** Using `1 − (1 − c/n)^k`. **Why:** it is a biased estimator (treats k draws as
-independent with replacement; the unbiased estimator is without-replacement combinatorial).
-**How to avoid:** the locked `1 − C(n−c,k)/C(n,k)` product form (D-10). **Warning sign:** pass@1 from
-the naive form still equals c/n (so a pass@1-only test would NOT catch the bug) — the divergence
-appears at k≥2. The STATS-03 test MUST include a k≥2 reference value (e.g. n=10,c=3,k=5 → 0.91667;
-naive gives `1 − 0.7^5 = 0.83193`, clearly different).
+### Pitfall 1: Naive or mis-looped pass@k
+**What goes wrong (1a — naive):** Using `1 − (1 − c/n)^k`. **Why:** it is a biased estimator (treats
+k draws as independent with replacement; the unbiased estimator is without-replacement combinatorial).
+**What goes wrong (1b — c-vs-k loop count):** writing the product as `for i:=0;i<k;i++ { prod *= 1 -
+k/(n-c+1+i) }` (looping **k** times) instead of `for i:=n-c+1;i<=n;i++ { prod *= 1 - k/i }` (looping
+**c** times). The correct product `1 − Π_{i=n−c+1}^{n}(1 − k/i)` has exactly **c** terms (c = number
+of successes), NOT k. The k-term loop yields 0.97348 for (10,3,5); the correct c-term loop yields
+0.91667.
+**How to avoid:** the locked `1 − C(n−c,k)/C(n,k)` c-term product form (D-10). Add a code comment
+"term count is c (= number of successes), NOT k — looping k times is the classic wrong implementation."
+**Warning sign:** pass@1 from the naive form (and from a k-term loop) still equals c/n (so a pass@1-only
+test would NOT catch either bug) — the divergence appears at k≥2. The STATS-03 test MUST include a k≥2
+reference value (e.g. n=10,c=3,k=5 → 0.91667; naive gives `1 − 0.7^5 = 0.83193`, a k-term loop gives
+0.97348, both clearly different) AND assert product-form ≡ lgamma-form agreement (a k-term loop breaks
+the agreement).
 
 ### Pitfall 2: Percentile bootstrap masquerading as BCa
 **What goes wrong:** skipping z0 + a and just reading the `α/2` and `1−α/2` percentiles.
@@ -760,28 +786,33 @@ func priceFor(ct CostTable, modelID string, today time.Time) (CostRow, error) {
 **Note:** No `[ASSUMED]` package names — all dependencies are stdlib or pre-existing direct deps,
 so no `checkpoint:human-verify` install gate is needed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Move vs duplicate the cost-table types?**
+1. **Move vs duplicate the cost-table types? — RESOLVED: MOVE to an importable `bench/cost` package.**
    - What we know: `CostRow`/`CostTable`/`validateCostTable` live in `cmd/helix-bench` `package main`,
      not importable by `bench/aggregator`.
-   - What's unclear: whether to refactor them into a shared `bench/datasets`/`bench/cost` package now
-     or duplicate the small struct.
-   - Recommendation: **move to a shared package** (DRY; one freshness gate). Low-risk refactor; the
-     `validate-cost-table` subcommand and the aggregator then share one source of truth.
+   - **Resolution:** MOVE `CostRow`/`CostTable` + the freshness logic into a new exported `bench/cost`
+     package (Plan 82-01 owns this — `files_modified` includes `bench/cost/cost_table.go` and updates
+     `cmd/helix-bench/validate_cost_table.go` to import it). Both `validate-cost-table` and the
+     aggregator share one parser and one freshness gate (DRY). Low-risk refactor.
 
-2. **FAIR-03 variance statistic exact definition (see A2).**
+2. **FAIR-03 variance statistic exact definition (see A2)? — RESOLVED: CV of per-run USD > 0.05.**
    - What we know: ">5% between-run variance" is the requirement; acceptance is a synthetic
      high-variance trace producing a warning.
-   - What's unclear: the precise statistic (CV of USD? of total tokens? relative range?).
-   - Recommendation: CV (stddev/mean) of per-run USD per (task,mode) > 0.05. Confirm in discuss-phase
-     before locking the fixture.
+   - **Resolution:** FAIR-03 variance = **coefficient of variation (stddev/mean) of per-run USD across
+     the N runs of a (task,mode), threshold > 0.05** → emit a fairness warning. The cost-quality plan
+     encodes this statistic and its acceptance fixture (high-variance CV>0.05 warns; low-variance does
+     not).
 
-3. **Auto-invoke aggregator at RunMatrix tail (D-02 "optionally")?**
-   - What we know: D-02 makes the subcommand primary and the auto-invoke optional.
-   - Recommendation: ship the subcommand first (re-runnable, testable); add the tail auto-invoke only
-     if it does not complicate the fail-closed semantics (a deficient run should still write per-cell
-     rows but NO reports — the auto-invoke must not abort the run's exit code on a deficiency).
+3. **Per-task USD aggregation for a multi-run cell (see A3)? — RESOLVED: mean USD over the task's runs.**
+   - What we know: D-12 fixes `cost_per_solved_task = Σ(USD over solved)/count(solved)`; the per-task
+     reduction for a multi-run cell was open.
+   - **Resolution:** per-task USD = **mean USD over the task's N runs** (keeps tasks comparable across
+     equal N; sum would scale with N). The cost plan and the COST-02 golden test use this reduction.
+
+> (Note: the earlier "auto-invoke aggregator at RunMatrix tail" item is covered by D-02's "optionally"
+> — the subcommand is the primary, re-runnable, testable entry point this phase; the tail auto-invoke
+> is a non-blocking follow-up and is not required for any Phase 82 acceptance.)
 
 ## Environment Availability
 
@@ -858,7 +889,7 @@ HELIX_BIN-free per D-01).
 - Efron & Tibshirani (1993), "An Introduction to the Bootstrap" §14.3 / eqs. 14.10, 14.15 — BCa z0, jackknife acceleration, percentile adjustment.
 
 ### Secondary (MEDIUM confidence)
-- leehanchung.github.io "Statistics for AI/ML Part 4: pass@k and Unbiased Estimator" — worked reference value n=10,c=3,pass@5 = 0.91667 (cross-checked against the product form).
+- leehanchung.github.io "Statistics for AI/ML Part 4: pass@k and Unbiased Estimator" — worked reference value n=10,c=3,pass@5 = 0.91667 (cross-checked against the c-term product form: (1−5/8)(1−5/9)(1−5/10)=1/12 → 1−1/12=11/12).
 
 ### Tertiary (LOW confidence)
 - Anthropic prompt-caching pricing structure (cache-write ~1.25× input, cache-read ~0.1×) — training knowledge, flagged A1; affects only the "conservative" label on the D-14 approximation, not the code path.
@@ -868,10 +899,11 @@ HELIX_BIN-free per D-01).
 **Confidence breakdown:**
 - Standard stack: HIGH — all deps stdlib/existing, `Erfinv`/`Lgamma` probe-verified.
 - BCa algorithm: HIGH — formulas from the standard reference; degenerate cases enumerated; test design specified.
-- pass@k: HIGH — locked formula + stable form + multiple verified/hand-computed reference values.
-- Cost rollup: HIGH for formula/join (read from live schema + cost-table); MEDIUM on per-task USD aggregation choice (A3) and FAIR-03 variance statistic (A2).
+- pass@k: HIGH — locked formula + stable c-term product form + multiple verified/hand-computed reference values (incl. the (10,3,5)→0.91667 k≥2 anchor recomputed by hand).
+- Cost rollup: HIGH for formula/join (read from live schema + cost-table); MEDIUM on per-task USD aggregation choice (A3, now resolved to mean) and FAIR-03 variance statistic (A2, now resolved to CV of per-run USD).
 - Integration points: HIGH — read directly from `matrix.go`/`cell.go`/`result.go`/`metrics.go`.
 - Pitfalls: HIGH — each tied to a concrete acceptance test that catches it.
 
 **Research date:** 2026-06-20
+**Revised:** 2026-06-21 (BLOCKER fix: pass@k product form corrected to c-term loop `Π_{i=n−c+1}^{n}(1−k/i)`; Open Questions marked RESOLVED)
 **Valid until:** 2026-07-20 (stable — pure-Go algorithms + locked decisions; the only volatile item is A1 provider pricing wording)

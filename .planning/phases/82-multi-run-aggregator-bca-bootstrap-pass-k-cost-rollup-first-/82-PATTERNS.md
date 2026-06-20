@@ -20,7 +20,7 @@ loop edit in `bench/runtime/matrix.go`, a moved/shared cost-table types package,
 | `bench/aggregator/passk.go` | utility (pure math) | transform (estimator) | RESEARCH §pass@k product/lgamma forms | role-match (no existing analog) |
 | `bench/aggregator/cost.go` | service (loader + join) | file-I/O + transform | `cmd/helix-bench/validate_cost_table.go` (`CostRow`/`CostTable`/`validateCostTable`) | exact (reuse shape + freshness gate) |
 | `bench/aggregator/report.go` | service (renderer) | transform (→markdown) | `bench/runtime/deltas.go` write-back + `result.go` `fairnessBlock` sort-before-emit | role-match |
-| `bench/cost/` (or `bench/datasets`) shared types — **Open Q1 move** | model/config | — | `cmd/helix-bench/validate_cost_table.go:25-107` (move verbatim) | exact (lift to exported pkg) |
+| `bench/cost/` shared types — **Open Q1 RESOLVED: move** | model/config | — | `cmd/helix-bench/validate_cost_table.go:25-107` (move verbatim) | exact (lift to exported pkg) |
 | `cmd/helix-bench/aggregate.go` (subcommand) | route (cobra dispatch) | request-response (CLI) | `cmd/helix-bench/main.go:103-158` (`newRunCmd`) + `validate_cost_table.go:113` (`newValidateCostTableCmd`) | exact |
 | `bench/runtime/matrix.go` **(MODIFY)** `ExpandMatrix` inner loop | service | — | itself, lines 145-155 (add `runs` axis) | exact (in-place) |
 | `bench/aggregator/*_test.go` (5 files) | test | — | `bench/runtime/deltas_test.go` (table-driven, `BuildResult`/`Validate`/`writeModeRow`) | exact |
@@ -147,20 +147,28 @@ percentile on a skewed sample).
 
 **Analog:** none in-repo — transcribe the LOCKED HumanEval form (D-10, RESEARCH §pass@k).
 
-**PRIMARY (Chen et al. stable product form):**
+**PRIMARY (Chen et al. stable product form — the product has c terms, NOT k):**
 ```go
 func passAtK(n, c, k int) float64 {
     if n-c < k { return 1.0 }
     prod := 1.0
-    for i := 0; i < k; i++ { prod *= 1.0 - float64(k)/float64(n-c+1+i) }
+    // term count is c (= number of successes), NOT k — looping k times is the
+    // classic wrong implementation (yields 0.97348 for (10,3,5) instead of 0.91667).
+    for i := n - c + 1; i <= n; i++ { prod *= 1.0 - float64(k)/float64(i) }
     return 1.0 - prod
 }
 ```
-**CROSS-CHECK (lgamma, for the test only):** `passAtKLog = 1 - exp(logBinom(n-c,k) - logBinom(n,k))`
-with `logBinom` via `math.Lgamma`. The test computes BOTH and asserts agreement ~1e-12.
+This is `1 − Π_{i=n−c+1}^{n}(1 − k/i)`; the product runs over `n − (n−c+1) + 1 = c` terms. Hand-check:
+(10,3,5) → i∈{8,9,10} → (1−5/8)(1−5/9)(1−5/10) = 0.375·0.444444·0.5 = 1/12 → 1−1/12 = **0.91667**. ✓
 
-**DO NOT** use `1 − (1−p)^k` (biased — Pitfall 1; fails STATS-03 at k≥2). Reference values to assert:
-`(10,3,5)→0.91667`, `(5,1,1)→0.2`, `(5,2,2)→0.7`, `(n,c,1)→c/n`, `(n,0,k)→0.0`.
+**CROSS-CHECK (lgamma, for the test only):** `passAtKLog = 1 - exp(logBinom(n-c,k) - logBinom(n,k))`
+with `logBinom` via `math.Lgamma`. The test computes BOTH and asserts agreement ~1e-12 — and a k-term
+loop would break that agreement.
+
+**DO NOT** use `1 − (1−p)^k` (biased — Pitfall 1a; fails STATS-03 at k≥2) and DO NOT loop the product
+k times instead of c times (Pitfall 1b — same wrong value 0.97348 for (10,3,5)). Reference values to
+assert: `(10,3,5)→0.91667` (the load-bearing k≥2 anchor), `(5,1,1)→0.2`, `(5,2,2)→0.7`, `(n,c,1)→c/n`,
+`(n,0,k)→0.0`. Keep at least one k≥2 value — k=1 cannot catch the c-vs-k loop bug.
 
 ---
 
@@ -198,13 +206,15 @@ The join key is the result's top-level `model_id` (set by `BuildResult` from
 ```go
 usd = (ti*input + tcr*cached + tcw*input /*D-14 cache-write@input rate, TODO column*/ + to*output) / 1_000_000
 ```
-Each term skipped if its token field is nil. cost_per_solved_task = Σ(USD over `task_success==true`) /
+Each term skipped if its token field is nil. Per-task USD for a multi-run cell = **mean USD over the
+task's runs** (Open Q3 RESOLVED). cost_per_solved_task = Σ(USD over `task_success==true`) /
 count(solved); no solved → null/`—`. Golden test target: 3.555 USD (RESEARCH §COST-02 hand example).
 
-> **Open Q1 — types currently live in `package main` (`cmd/helix-bench`), NOT importable.** Preferred:
-> move `CostRow`/`CostTable` + freshness logic into an exported `bench/cost` (or `bench/datasets`)
-> package; have BOTH `validate_cost_table.go` and `cost.go` import it (one parser, one gate). Fallback:
-> duplicate the struct (risks drift; constants must match). See Shared Pattern below.
+> **Open Q1 RESOLVED — MOVE the cost-table types to an importable `bench/cost` package.** The types
+> currently live in `package main` (`cmd/helix-bench`), NOT importable. Plan 82-01 moves
+> `CostRow`/`CostTable` + the freshness logic into `bench/cost/cost_table.go` and updates
+> `validate_cost_table.go` to import it; the aggregator imports the same package (one parser, one gate).
+> See Shared Pattern below.
 
 ---
 
@@ -224,8 +234,9 @@ overlap := lo_a <= hi_b && lo_b <= hi_a // adjacent rows, sort metric → annota
 ```
 
 **FAIR-03 variance warning (D-15):** CV = stddev/mean of per-run USD across a (task,mode)'s N runs >
-0.05 → warning row (A2 — confirm statistic). **Determinism:** sort rows (sort-metric desc, mode
-tiebreaker), fixed column + footer order (mirror `result.go` `fairnessBlock`).
+0.05 → warning row (Open Q2 RESOLVED — CV of per-run USD is the locked statistic). **Determinism:**
+sort rows (sort-metric desc, mode tiebreaker), fixed column + footer order (mirror `result.go`
+`fairnessBlock`).
 
 ---
 
@@ -333,7 +344,7 @@ unknown model_id → hard error → no reports.
 | File | Role | Data Flow | Reason |
 |------|------|-----------|--------|
 | `bench/aggregator/bootstrap.go` (BCa core) | utility | transform | No existing statistics code in-repo; anchor on hand-rolled-numerics ethos + RESEARCH exact algorithm. Stdlib `math.Erfinv`/`Erfc`/`Lgamma` cover the primitives — no third-party dep. |
-| `bench/aggregator/passk.go` (estimator) | utility | transform | No existing estimator; transcribe the LOCKED Chen et al. product form (D-10) per RESEARCH. |
+| `bench/aggregator/passk.go` (estimator) | utility | transform | No existing estimator; transcribe the LOCKED Chen et al. c-term product form (D-10) per RESEARCH. |
 
 (Both are pure math with closed-form acceptance tests; RESEARCH provides verified reference values and
 the exact formulas, so "no analog" does not mean "uncertain" — it means the pattern source is the
@@ -346,3 +357,4 @@ research doc, not another file.)
 **Files scanned (read):** `deltas.go`, `matrix.go`, `cell.go` (path/write sections), `result.go`
 (signatures), `metrics.go`, `validate_cost_table.go`, `main.go` (run subcommand), `deltas_test.go`.
 **Pattern extraction date:** 2026-06-20
+**Revised:** 2026-06-21 (BLOCKER fix: passk product form corrected to c-term loop `for i := n-c+1; i <= n; i++`; Open Qs 1/2/3 marked RESOLVED in the cost/report/passk sections)

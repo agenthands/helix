@@ -69,13 +69,17 @@ const noSemanticMode = "your_agent_no_semantic"
 const daemonReadsTotalMsg = "semantic store reads total"
 
 // daemonGracefulStopTimeout bounds the graceful SIGTERM teardown RunCell attempts
-// before falling back to the hard Kill. It is aligned with the daemon's default
-// Daemon.ShutdownTimeout (10s; internal/daemon/shutdown.go:13-16) so a daemon that
-// is genuinely draining its kernel/LS workers has the full shutdown window to run
-// d.shutdown() and flush the "semantic store reads total" line (Phase 81 ABLATE-06,
-// WR-02) BEFORE the Kill fallback reaps it. A small slack is added so a daemon that
-// uses its entire ShutdownTimeout still beats our deadline.
-const daemonGracefulStopTimeout = 12 * time.Second
+// before falling back to the hard Kill. It is sized off the daemon's WORST-CASE
+// shutdown wall-time, not just the kernel drain (WR-01): d.shutdown() first runs
+// the kernel Shutdown(ctx) bounded by Daemon.ShutdownTimeout (default 10s;
+// internal/daemon/shutdown.go:13-16), THEN flushes the trace exporter under a
+// SEPARATE 5s context (internal/daemon/shutdown.go:43), and only afterwards emits
+// the "semantic store reads total" line (shutdown.go:60-62). Worst case is
+// therefore ~10s (kernel) + ~5s (trace flush) ≈ 15s, plus the post-flush emit and
+// listener close. The 20s budget = 10s + 5s + 5s slack, so a daemon that uses its
+// entire kernel-drain window AND a slow trace flush still emits the proof line
+// gracefully BEFORE the Kill fallback reaps it (Phase 81 ABLATE-06, WR-01/WR-02).
+const daemonGracefulStopTimeout = 20 * time.Second
 
 // scrapeSemanticReadsTotal reads the semantic-store read counter value the daemon
 // emits at shutdown (Task 0 path A) from a daemon JSONL log file. It scans for the
@@ -99,9 +103,16 @@ func scrapeSemanticReadsTotal(daemonLogPath string) (count int, present bool, er
 	}
 	defer f.Close()
 
+	// WR-03: decode count as *int so a msg-matching line whose `count` is absent,
+	// JSON-null, or non-integer is treated as MALFORMED (present stays false) and
+	// the fail-closed gate stays honest — a garbled count must NOT masquerade as a
+	// clean count=0. NOTE: this parser is duplicated by scanReadsTotalLine in
+	// bench/runtime/no_semantic_emission_integration_test.go (IN-03); the two MUST
+	// stay in lockstep — any change here (struct, *int handling, last-line-wins)
+	// must be mirrored there.
 	type readsTotalLine struct {
 		Msg   string `json:"msg"`
-		Count int    `json:"count"`
+		Count *int   `json:"count"`
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -116,8 +127,11 @@ func scrapeSemanticReadsTotal(daemonLogPath string) (count int, present bool, er
 			continue // truncated/malformed line — skip defensively
 		}
 		if raw.Msg == daemonReadsTotalMsg {
-			count = raw.Count // last occurrence wins (the final shutdown line)
-			present = true    // the proof line was emitted (graceful shutdown ran)
+			if raw.Count == nil {
+				continue // msg matched but count missing/non-integer — not a valid proof line
+			}
+			count = *raw.Count // last occurrence wins (the final shutdown line)
+			present = true     // the proof line was emitted (graceful shutdown ran)
 		}
 	}
 	if serr := scanner.Err(); serr != nil {
@@ -610,6 +624,18 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// violation the cell FAILS HARD (mirrors the fail-closed shape of the fairness
 	// gate above) — a corrupted no_semantic row must never be published
 	// (T-81-05-01). Off the no_semantic arm assertNoSemanticReads is a no-op.
+	//
+	// WR-04 — SCOPE OF THE GUARANTEE: helix_semantic_store_reads_total counts ONLY
+	// reads that funnel through the store's counting wrappers in
+	// internal/semantic/store/effective_graph.go (s.queryContext / s.queryRowContext).
+	// It is NOT a universal witness for "no DB read happened": tx-scoped read paths
+	// that call the raw *sql.Tx / *sql.DB methods directly (e.g. snapshot.go,
+	// overlay.go tx-scoped reads) are not instrumented and would NOT increment this
+	// counter. The zero-reads proof therefore certifies that no read reached the
+	// counted effective-graph path on the no_semantic arm — which is the path the
+	// Plan 04 build-but-block gate un-wires — not that the database was provably
+	// untouched by every conceivable code path. Do not over-trust the counter as a
+	// universal read-detector when reasoning about new background read paths.
 	semanticReads, readsPresent, srErr := scrapeSemanticReadsTotal(daemonLog)
 	if srErr != nil {
 		return preserve(fmt.Errorf("bench/runtime: scrape semantic reads total: %w", srErr))

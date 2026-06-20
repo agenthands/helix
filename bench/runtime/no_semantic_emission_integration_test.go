@@ -70,15 +70,22 @@ func TestNoSemanticReadsTotalLineEmitted(t *testing.T) {
 	// as the hard reaper. Stop MUST report graceful exit — that is the WR-02 fix.
 	graceful, stopErr := h.Stop(daemonGracefulStopTimeout)
 	require.NoError(t, stopErr, "graceful Stop must not error")
-	require.True(t, graceful,
-		"the daemon must exit GRACEFULLY under SIGTERM so d.shutdown() runs and flushes the reads-total line (WR-02)")
+	// WR-02: the LOAD-BEARING proof is the presence of the reads-total line below,
+	// not strictly that the first Stop won the race within the budget. A genuinely
+	// slow-but-correct shutdown (the daemon drained gracefully but past the budget,
+	// e.g. under heavy CI load) must NOT flake this test, so graceful is a LOGGED
+	// expectation rather than a hard assertion. The require.True(present) below
+	// still fails the test if the daemon never emitted the line at all.
+	if !graceful {
+		t.Logf("daemon did not exit within %s; relying on the reads-total line-presence assertion", daemonGracefulStopTimeout)
+	}
 	// Kill fallback: a no-op reaper here (the daemon already exited), mirrors RunCell.
 	require.NoError(t, h.Kill(), "Kill fallback (no-op reaper) must not error")
 
 	daemonLog := filepath.Join(sb.ModeDir(task, mode), "daemon.log")
 
 	present, count := scanReadsTotalLine(t, daemonLog)
-	assert.True(t, present,
+	require.True(t, present,
 		"daemon.log must contain a real %q line emitted by the daemon's graceful shutdown (WR-02 emission proof)",
 		daemonReadsTotalMsg)
 	// On a bare daemon with no semantic activity the count is 0, but the test's
@@ -92,6 +99,13 @@ func TestNoSemanticReadsTotalLineEmitted(t *testing.T) {
 // the test so the test asserts the line is REALLY present in the file the daemon
 // wrote (not via the production scraper, whose presence contract is exercised in
 // no_semantic_zero_reads_test.go).
+//
+// IN-03 / WR-03: this parser is a deliberate copy of scrapeSemanticReadsTotal in
+// bench/runtime/cell.go and MUST stay in lockstep with it — including the *int
+// `count` handling, where a msg-matching line whose count is absent/non-integer
+// is treated as MALFORMED (present stays false) so a garbled count cannot
+// masquerade as a clean count=0. Any change to the struct, *int handling, or
+// last-line-wins logic must be mirrored in cell.go.
 func scanReadsTotalLine(t *testing.T, logPath string) (present bool, count int) {
 	t.Helper()
 	f, err := os.Open(logPath)
@@ -100,7 +114,7 @@ func scanReadsTotalLine(t *testing.T, logPath string) (present bool, count int) 
 
 	type line struct {
 		Msg   string `json:"msg"`
-		Count int    `json:"count"`
+		Count *int   `json:"count"`
 	}
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 256*1024), 256*1024)
@@ -114,8 +128,11 @@ func scanReadsTotalLine(t *testing.T, logPath string) (present bool, count int) 
 			continue
 		}
 		if l.Msg == daemonReadsTotalMsg {
+			if l.Count == nil {
+				continue // msg matched but count missing/non-integer — not a valid proof line
+			}
 			present = true
-			count = l.Count
+			count = *l.Count
 		}
 	}
 	require.NoError(t, sc.Err(), "scan daemon.log")

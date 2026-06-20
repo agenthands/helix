@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: verifying
-stopped_at: Completed 81-06-PLAN.md
-last_updated: "2026-06-20T19:45:27.737Z"
-last_activity: 2026-06-20 -- Completed 81-06 (GAP 1 / WR-02 closure)
+status: ready
+stopped_at: Completed Phase 81 — verified (7/7 plans)
+last_updated: "2026-06-20T20:14:50.721Z"
+last_activity: 2026-06-20
 progress:
   total_phases: 15
   completed_phases: 7
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 81 — no-semantic-kernel-flag-e2e-config-gate-test
+**Current focus:** Phase 82 — multi-run aggregator, BCa bootstrap, pass@k, cost rollup, first leaderboard
 
 ## Current Position
 
-Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
-Plan: 7 of 7
-Status: Phase complete — ready for verification
-Last activity: 2026-06-20 -- Completed 81-06 (GAP 1 / WR-02 closure)
+Phase: 82
+Plan: Not started
+Status: Phase 81 complete & verified (4/4 must-haves, ABLATE-06 satisfied) — Phase 82 not started
+Last activity: 2026-06-20
 
 ### Session Continuity
 
 Last session: 2026-06-20T19:44:55.499Z
-Stopped at: Completed 81-06-PLAN.md
+Stopped at: Completed Phase 81 (7/7 plans, verified)
 Resume file: None
 
 ## Accumulated Context

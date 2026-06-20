@@ -279,7 +279,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 83-02-PLAN.md — standalone cmd/helix-bench-rag MCP server (exactly 4 tools, --help) + no-kernel/no-semantic import-boundary vet gate
+- [x] 83-02-PLAN.md — standalone cmd/helix-bench-rag MCP server (exactly 4 tools, --help) + no-kernel/no-semantic import-boundary vet gate
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

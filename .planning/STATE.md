@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed Phase 82 (7/7 plans, verified)
-last_updated: "2026-06-20T23:50:04.032Z"
+last_updated: "2026-06-20T23:59:03.022Z"
 last_activity: 2026-06-20 -- Phase 83 execution started
 progress:
   total_phases: 15
   completed_phases: 8
   total_plans: 45
-  completed_plans: 43
+  completed_plans: 44
   percent: 53
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 83 (cmd-helix-bench-rag-baseline-rag-mode-embedding-index-builde) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-20 -- Phase 83 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-20T23:49:06.717Z
+Last session: 2026-06-20T23:58:13.867Z
 Stopped at: Completed Phase 82 (7/7 plans, verified)
 Resume file: None
 
@@ -110,6 +110,7 @@ Resume file: None
 | Phase 82 P05 | ~3m | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
 | Phase 82 P06 | ~12m | 3 tasks | 7 files |
 | Phase 83 P01 | 22min | 4 tasks | 11 files |
+| Phase 83 P02 | ~30min | 2 tasks | 14 files |
 
 ## Decisions
 
@@ -176,3 +177,5 @@ Resume file: None
 - [Phase 82 P05]: STATS-01 consumer half DONE — bench/aggregator.Load(runDir, expectedN) (*Loaded, error) globs <runDir>/<task>/<mode>/<run_index>/result.v2.json, groups VALID rows by (task,mode), fail-closed N-gate (D-05). valid row = exists + json.Unmarshal + runtime.Validate==nil; an invalid/garbage file is EXCLUDED (counts as deficient, not silently skipped to pass). expectedN is the caller arg (--runs/manifest), NEVER len(glob) (Pitfall 3) — proven by the 3-files-but-1-garbage => got 2 want 3 test. Any cell < expectedN => fmt.Errorf("aggregate: insufficient runs: %v", deficient) with every "<task>/<mode>: got X want N" named (sorted), result nil => caller writes NOTHING. rowMetrics mirrors evaluators.Metrics pointer types (*bool/*int/*float64), nil stays nil never fabricated 0 (Pitfall 4); full doc preserved as map[string]json.RawMessage for write-back. Glob rooted at runDir via filepath.Join, non-numeric/negative run_index skipped (T-82-05-02). Pure unit, no HELIX_BIN (D-01). Plan 06 orchestrator calls Load first and aborts before rendering on any deficiency.
 - [Phase 82 P07]: D-02 DONE — helix-bench aggregate <run_dir> cobra subcommand (cmd/helix-bench/aggregate.go newAggregateCmd) is a thin RunE wrapping the pure bench/aggregator.Aggregate. Flags --runs(3, the EXPECTED N for the fail-closed gate, NEVER disk count) / --seed(42, fixed for D-08 byte-determinism) / --iterations(10000) / --ci-level(0.95) thread into aggregator.Config; CostTablePath pinned to bench/datasets/cost-table.yaml; Today injected as time.Now().UTC() (freshness gate). Fail-closed: RunE returns the Aggregate error verbatim => non-zero exit, no reports (D-05, T-82-07-01); success prints both report paths. Registered as the SIXTH helix-bench subcommand (the always-intended aggregator surface) — Phase 75 BENCH-02 "exactly five" --help assertion updated 5->6 (NOT bypassed via the verify-tos direct-dispatch hack). In-process aggregate_test.go over synthetic result.v2.json fixtures (NO HELIX_BIN): deficient->error+no reports, sufficient->both reports. Real-daemon E2E (auto-approved human-verify): 6/6-cell N=3 matrix on IT-go-semantic-view-1 -> aggregate renders leaderboard.md (mode x benchmark rows, value [lo,hi] CIs, STATS-04 overlap warning, seed/iters/ci_level/runs/valid_until footer, em-dash null tokens) + cost_quality.md; second aggregate run byte-identical (D-08). Pre-existing OUT-OF-SCOPE failure logged to deferred-items.md: TestRunSubcommandWiresDeltaPass (Phase 80-05 RED, ablation_deltas write-back not wired into runBench) — reproduces on 82-07~1, HELIX_BIN-gated, NOT fixed here.
 - [Phase 83]: [Phase 83 P01]: bench/ragindex is a LEAF (chromem-go v0.7.0 + stdlib only; proven by go list -deps clean of kernel/semantic/bench-runtime/mcp) so Plan 02's no-kernel/no-semantic vet gate holds transitively. CorpusSHA = sha256 over SORTED (rel-path, content-sha256) pairs (mtime/order-independent, content-discriminating, Pitfall 4). cacheDir precedence HELIX_CACHE_DIR > os.UserCacheDir()/helix > ~/.helix/cache; index at <cacheDir>/bench-rag-index/<corpus_sha>/. Warm-path reuse via coll.Count()>0 after NewPersistentDB auto-loads gob docs+embeddings => AddDocuments skipped, ZERO re-embeds; same embedder re-supplied to GetOrCreateCollection (chromem never persists the func, Pitfall 1). selectEmbedder: OpenAI text-embedding-3-small > Ollama nomic-embed-text (base URL PINNED constant, SSRF T-83-01-02) > stub-deterministic (byte-value histogram, no-network, distinct embedder_id, Open Q3); API key NEVER logged (T-83-01-01). chunk struct named Piece to free exported func Chunk; 40-line/8-overlap windows, IDs <rel>#<ord>, empty=>0 chunks. chromem promoted to DIRECT require by go.mod hand-edit (full go mod tidy blocked by pre-existing unrelated s2a-go failure, deferred).
+- [Phase 83]: 83-02: cmd/helix-bench-rag built via mcpsdk directly (never internal/mcp); dual import-boundary gate (dynamic NeedDeps test + static benchragleakage vet) keeps the baseline_rag control arm daemon-code-free
+- [Phase 83]: 83-02: exactly-4 tool surface asserted via self-tracked benchServer.ToolNames; all FS tools confined to corpus root by validatePath (rejects .., absolute, post-Join escapes)

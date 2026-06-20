@@ -50,6 +50,15 @@ type Profile struct {
 	// Read at the daemon composition root (Plan 76-04), OR'd with any CLI override.
 	DisableLSPSubsystem bool `yaml:"disable_lsp_subsystem"`
 
+	// DisableSemanticSubsystem requests the daemon disable the semantic-store
+	// read seam for this profile (Phase 81 ABLATE-06). First-class field so a
+	// bench ablation arm's YAML fully describes the arm (tool surface +
+	// subsystem flags, D-01). Zero-value false = subsystem ENABLED; the flag is
+	// an opt-in disable (D-02). Read at the daemon composition root (Plan 81-04),
+	// OR'd with any CLI override; it resolves to the distinct
+	// `semantic_index.bench_disabled` koanf gate (build-but-block, D-03/D-04).
+	DisableSemanticSubsystem bool `yaml:"disable_semantic_subsystem"`
+
 	// DisableStructuredEditSubsystem requests the daemon disable structured edits
 	// (replace_symbol_body / fuzzy_edit / insert_*) for this profile
 	// (Phase 76 ABLATE-07). First-class field per D-01; zero-value false =

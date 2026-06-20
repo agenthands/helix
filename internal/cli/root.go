@@ -74,6 +74,12 @@ func NewRootCommand() *cobra.Command {
 	// the resolved profile (CLI > profile > default-off precedence, D-02/D-03).
 	rootCmd.Flags().Bool("disable-lsp-subsystem", false, "Ablation override: force-disable the LSP subsystem (no LS workers, no enrichment)")
 	rootCmd.Flags().Bool("disable-structured-edit-subsystem", false, "Ablation override: force-disable structured-edit tools (replace_symbol_body, fuzzy_edit, insert_*)")
+	// Phase 81 ABLATE-06: force-disable the semantic-store read seam (the
+	// `no_semantic` arm). Build-but-block — the store still builds but every
+	// SemanticLookup read is forced to NoopLookup (D-04). Maps to the NESTED
+	// koanf key semantic_index.bench_disabled (distinct from the top-level
+	// disable_lsp_subsystem path).
+	rootCmd.Flags().Bool("disable-semantic-subsystem", false, "Ablation override: force-disable the semantic-store read seam (reads forced to tree-sitter fallback)")
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
@@ -150,6 +156,7 @@ func runDaemon(cmd *cobra.Command) error {
 	adminAddr, _ := cmd.Flags().GetString("admin-addr")
 	disableLSP, _ := cmd.Flags().GetBool("disable-lsp-subsystem")
 	disableStructuredEdit, _ := cmd.Flags().GetBool("disable-structured-edit-subsystem")
+	disableSemantic, _ := cmd.Flags().GetBool("disable-semantic-subsystem")
 
 	logger := newLogger(jsonLog)
 
@@ -178,6 +185,12 @@ func runDaemon(cmd *cobra.Command) error {
 	}
 	if disableStructuredEdit {
 		overrides["disable_structured_edit_subsystem"] = true
+	}
+	// Phase 81 ABLATE-06: only-when-set so a blank invocation cannot clear a
+	// profile value. Note the NESTED koanf path (semantic_index.bench_disabled),
+	// distinct from the top-level disable_lsp_subsystem key above.
+	if disableSemantic {
+		overrides["semantic_index.bench_disabled"] = true
 	}
 
 	cfg, err := config.Load("", configPath, overrides)

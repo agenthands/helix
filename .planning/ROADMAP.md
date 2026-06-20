@@ -247,7 +247,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 82-02-PLAN.md — BCa bootstrap CI (z0 + jackknife a, seeded, >=10k resamples) (TDD; STATS-02)
-- [ ] 82-03-PLAN.md — HumanEval unbiased pass@k (product form + lgamma cross-check; k>=2 anti-naive) (TDD; STATS-03)
+- [x] 82-03-PLAN.md — HumanEval unbiased pass@k (product form + lgamma cross-check; k>=2 anti-naive) (TDD; STATS-03)
 - [ ] 82-04-PLAN.md — cost-per-solved rollup (USD formula + freshness gate via bench/cost; golden 3.555) (TDD; COST-02)
 - [ ] 82-05-PLAN.md — aggregator loader + fail-closed N-gate (expectedN from flag, not disk) (TDD; STATS-01)
 

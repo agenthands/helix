@@ -79,14 +79,23 @@ const daemonGracefulStopTimeout = 12 * time.Second
 
 // scrapeSemanticReadsTotal reads the semantic-store read counter value the daemon
 // emits at shutdown (Task 0 path A) from a daemon JSONL log file. It scans for the
-// last line whose msg == daemonReadsTotalMsg and returns its count field. A log
-// with no such line yields 0 (a daemon that shut down without emitting the line —
-// e.g. the semantic subsystem never ran — is treated as zero reads, not an error).
-// Malformed/truncated lines are skipped defensively (mirrors trace.TapDaemonLog).
-func scrapeSemanticReadsTotal(daemonLogPath string) (int, error) {
-	f, err := os.Open(daemonLogPath)
-	if err != nil {
-		return 0, fmt.Errorf("scrape semantic reads total: open %q: %w", daemonLogPath, err)
+// last line whose msg == daemonReadsTotalMsg and reports BOTH its count field AND
+// whether such a line was present at all.
+//
+// present is the load-bearing fail-CLOSED signal (Phase 81-06, WR-02): under the
+// graceful teardown (RunCell calls DaemonHandle.Stop before Kill) the daemon ALWAYS
+// reaches d.shutdown() and emits this line whenever d.obs != nil — so on a real
+// no_semantic run the line is expected to be present. An ABSENT line therefore no
+// longer means "zero reads"; it means the daemon never reached graceful shutdown
+// and the zero-reads PROOF DID NOT RUN. The caller (assertNoSemanticReads) turns an
+// absent line into a HARD failure on the no_semantic arm — the missing line can no
+// longer masquerade as a clean count=0 (the root fail-open anti-pattern flagged at
+// 81-VERIFICATION.md:127 is removed). Malformed/truncated lines are skipped
+// defensively (mirrors trace.TapDaemonLog).
+func scrapeSemanticReadsTotal(daemonLogPath string) (count int, present bool, err error) {
+	f, ferr := os.Open(daemonLogPath)
+	if ferr != nil {
+		return 0, false, fmt.Errorf("scrape semantic reads total: open %q: %w", daemonLogPath, ferr)
 	}
 	defer f.Close()
 
@@ -95,7 +104,6 @@ func scrapeSemanticReadsTotal(daemonLogPath string) (int, error) {
 		Count int    `json:"count"`
 	}
 
-	count := 0
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 256*1024), 256*1024)
 	for scanner.Scan() {
@@ -104,30 +112,47 @@ func scrapeSemanticReadsTotal(daemonLogPath string) (int, error) {
 			continue
 		}
 		var raw readsTotalLine
-		if err := json.Unmarshal(line, &raw); err != nil {
+		if jerr := json.Unmarshal(line, &raw); jerr != nil {
 			continue // truncated/malformed line — skip defensively
 		}
 		if raw.Msg == daemonReadsTotalMsg {
 			count = raw.Count // last occurrence wins (the final shutdown line)
+			present = true    // the proof line was emitted (graceful shutdown ran)
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return 0, fmt.Errorf("scrape semantic reads total: scan %q: %w", daemonLogPath, err)
+	if serr := scanner.Err(); serr != nil {
+		return 0, false, fmt.Errorf("scrape semantic reads total: scan %q: %w", daemonLogPath, serr)
 	}
-	return count, nil
+	return count, present, nil
 }
 
-// assertNoSemanticReads is the fail-closed runtime verification (D-05, criterion
+// assertNoSemanticReads is the fail-CLOSED runtime verification (D-05, criterion
 // #2): on the no_semantic ablation arm the semantic-store read counter MUST be 0
 // (the kernel gate of Plan 04 forces NoopLookup, so a real read should be
-// impossible). A non-zero count means a read SURVIVED the gate — the central
-// integrity threat the phase exists to close (T-81-05-01) — so this returns a
-// non-error-named diagnostic that RunCell turns into a HARD cell failure (not a
-// warn). For every other mode the assertion is a no-op (scope guard, Test 3): a
-// non-zero read count is expected and legitimate off the no_semantic arm.
-func assertNoSemanticReads(mode string, reads int) error {
+// impossible). It hard-fails the arm on EITHER of two conditions:
+//
+//   - present == false: the reads-total proof line was ABSENT from daemon.log.
+//     Under the graceful teardown (RunCell's DaemonHandle.Stop before Kill) the
+//     daemon always reaches d.shutdown() and emits this line, so its absence means
+//     the daemon never shut down gracefully and the zero-reads guarantee was NEVER
+//     PROVEN. This is the WR-02 fail-CLOSED inversion of the old silent count=0: an
+//     unproven run can no longer masquerade as a proven one.
+//   - reads != 0: a read SURVIVED the gate — the central integrity threat the
+//     phase exists to close (T-81-05-01).
+//
+// Both return an error RunCell turns into a HARD cell failure (not a warn). For
+// every other mode the assertion is a no-op (scope guard, Test 3): a non-zero read
+// count is expected off the no_semantic arm, and an absent line there is benign.
+func assertNoSemanticReads(mode string, reads int, present bool) error {
 	if mode != noSemanticMode {
 		return nil
+	}
+	if !present {
+		return fmt.Errorf(
+			"no_semantic ablation UNPROVEN: the helix_semantic_store_reads_total proof line was ABSENT " +
+				"from daemon.log; the daemon did not reach graceful shutdown (d.shutdown()) so the zero-reads " +
+				"guarantee was never emitted — the no_semantic arm result is INVALID and the cell fails hard " +
+				"(fail-CLOSED, ABLATE-06, D-05, WR-02)")
 	}
 	if reads != 0 {
 		return fmt.Errorf(
@@ -585,12 +610,12 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// violation the cell FAILS HARD (mirrors the fail-closed shape of the fairness
 	// gate above) — a corrupted no_semantic row must never be published
 	// (T-81-05-01). Off the no_semantic arm assertNoSemanticReads is a no-op.
-	semanticReads, srErr := scrapeSemanticReadsTotal(daemonLog)
+	semanticReads, readsPresent, srErr := scrapeSemanticReadsTotal(daemonLog)
 	if srErr != nil {
 		return preserve(fmt.Errorf("bench/runtime: scrape semantic reads total: %w", srErr))
 	}
 	res.SemanticStoreReads = semanticReads
-	if vErr := assertNoSemanticReads(cfg.Mode, semanticReads); vErr != nil {
+	if vErr := assertNoSemanticReads(cfg.Mode, semanticReads, readsPresent); vErr != nil {
 		res.SemanticReadViolation = true
 		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s FAILED no_semantic zero-reads gate: %v\n",
 			cfg.Task, cfg.Mode, vErr)

@@ -19,16 +19,18 @@ import (
 // from <modeDir>/daemon.log instead). assertNoSemanticReads is the pure
 // fail-closed predicate RunCell calls.
 func TestNoSemanticZeroReads(t *testing.T) {
-	// Test 1 (pass case): a no_semantic cell whose counter reads 0 passes.
+	// Test 1 (pass case): a no_semantic cell whose counter reads 0 AND whose proof
+	// line is PRESENT passes (the clean proof).
 	t.Run("no_semantic_zero_reads_passes", func(t *testing.T) {
-		err := assertNoSemanticReads("your_agent_no_semantic", 0)
+		err := assertNoSemanticReads("your_agent_no_semantic", 0, true)
 		assert.NoError(t, err,
-			"a no_semantic cell with 0 semantic-store reads must pass (no violation)")
+			"a no_semantic cell with 0 semantic-store reads (proof line present) must pass (no violation)")
 	})
 
-	// Test 2 (fail case): a no_semantic cell whose counter reads N>0 FAILS.
+	// Test 2 (fail case): a no_semantic cell whose counter reads N>0 FAILS (proof
+	// line present, but a read survived the gate).
 	t.Run("no_semantic_nonzero_reads_fails_hard", func(t *testing.T) {
-		err := assertNoSemanticReads("your_agent_no_semantic", 3)
+		err := assertNoSemanticReads("your_agent_no_semantic", 3, true)
 		require.Error(t, err,
 			"a no_semantic cell with N>0 semantic-store reads must FAIL the cell (hard fail, not warn)")
 		assert.Contains(t, err.Error(), "helix_semantic_store_reads_total",
@@ -37,7 +39,8 @@ func TestNoSemanticZeroReads(t *testing.T) {
 			"the violation diagnostic must report the observed non-zero count")
 	})
 
-	// Test 3 (scope guard): the assertion fires ONLY on the no_semantic arm.
+	// Test 3 (scope guard): the assertion fires ONLY on the no_semantic arm — a
+	// non-zero read count off-arm is benign regardless of line presence.
 	t.Run("other_modes_unaffected_by_nonzero_reads", func(t *testing.T) {
 		for _, mode := range []string{
 			"your_agent_full",
@@ -45,10 +48,30 @@ func TestNoSemanticZeroReads(t *testing.T) {
 			"no_structured_edit",
 			"baseline_plain",
 		} {
-			err := assertNoSemanticReads(mode, 42)
+			err := assertNoSemanticReads(mode, 42, true)
 			assert.NoErrorf(t, err,
 				"mode %q is NOT the no_semantic arm; a non-zero read count must not fail it", mode)
 		}
+	})
+
+	// Test 7 (fail-CLOSED, WR-02): a no_semantic cell whose proof line is ABSENT
+	// HARD-FAILS — a missing line means the daemon never reached graceful shutdown
+	// so the zero-reads guarantee was never proven. This is the inversion of the
+	// old fail-open silent count=0.
+	t.Run("no_semantic_absent_line_fails_hard", func(t *testing.T) {
+		err := assertNoSemanticReads("your_agent_no_semantic", 0, false)
+		require.Error(t, err,
+			"a no_semantic cell whose reads-total proof line is ABSENT must FAIL hard (fail-closed, WR-02)")
+		assert.Contains(t, err.Error(), "helix_semantic_store_reads_total",
+			"the absent-line diagnostic must name the counter so the failure is greppable")
+	})
+
+	// Test 8 (scope guard for absent line): an ABSENT line off the no_semantic arm
+	// is benign — the fail-closed behavior must NOT leak to other modes.
+	t.Run("other_modes_absent_line_benign", func(t *testing.T) {
+		err := assertNoSemanticReads("your_agent_full", 0, false)
+		assert.NoError(t, err,
+			"an absent reads-total line off the no_semantic arm must NOT fail (scope guard)")
 	})
 
 	// Test 4: scrapeSemanticReadsTotal parses the daemon-log line the daemon
@@ -66,8 +89,9 @@ func TestNoSemanticZeroReads(t *testing.T) {
 `
 		require.NoError(t, os.WriteFile(logPath, []byte(logBody), 0600))
 
-		got, err := scrapeSemanticReadsTotal(logPath)
+		got, present, err := scrapeSemanticReadsTotal(logPath)
 		require.NoError(t, err)
+		assert.True(t, present, "the reads-total line is present in the log")
 		assert.Equal(t, 0, got, "scraper must read the count field from the shutdown line")
 	})
 
@@ -80,23 +104,29 @@ func TestNoSemanticZeroReads(t *testing.T) {
 `
 		require.NoError(t, os.WriteFile(logPath, []byte(logBody), 0600))
 
-		got, err := scrapeSemanticReadsTotal(logPath)
+		got, present, err := scrapeSemanticReadsTotal(logPath)
 		require.NoError(t, err)
+		assert.True(t, present, "the non-zero reads-total line is present")
 		assert.Equal(t, 7, got, "scraper must read a non-zero count")
 	})
 
-	// Test 6: a daemon.log with NO reads-total line yields 0 (a daemon that
-	// shut down without emitting the line is treated as zero reads, not an
-	// error — the line only appears when the semantic subsystem ran).
-	t.Run("scrape_missing_line_yields_zero", func(t *testing.T) {
+	// Test 6 (WR-02 fail-CLOSED): a daemon.log with NO reads-total line reports
+	// present=false (NOT a silent count=0). The absent-line case is no longer
+	// indistinguishable from a real count=0; the no_semantic arm's
+	// assertNoSemanticReads (Tests 7/8 above) turns present=false into a HARD
+	// failure on-arm and a benign no-op off-arm. This replaces the old
+	// "scrape_missing_line_yields_zero" fail-open assertion.
+	t.Run("scrape_missing_line_reports_absent", func(t *testing.T) {
 		dir := t.TempDir()
 		logPath := filepath.Join(dir, "daemon.log")
 		logBody := `{"time":"2026-06-20T11:00:00Z","level":"INFO","msg":"daemon started"}
 `
 		require.NoError(t, os.WriteFile(logPath, []byte(logBody), 0600))
 
-		got, err := scrapeSemanticReadsTotal(logPath)
+		got, present, err := scrapeSemanticReadsTotal(logPath)
 		require.NoError(t, err)
-		assert.Equal(t, 0, got, "a log with no reads-total line means zero reads")
+		assert.False(t, present,
+			"a log with no reads-total line must report present=false (fail-closed signal, not a silent 0)")
+		assert.Equal(t, 0, got, "count is the zero value when no line was seen")
 	})
 }

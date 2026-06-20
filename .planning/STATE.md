@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 82-05-PLAN.md
-last_updated: "2026-06-20T22:01:35.891Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 05 executed (aggregator loader + fail-closed N-gate, STATS-01 consumer half)
+stopped_at: Completed 82-04-PLAN.md
+last_updated: "2026-06-21T00:10:00.000Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 04 executed (cost-per-solved rollup, COST-02; golden 3.555, fail-closed freshness gate via bench/cost)
 progress:
   total_phases: 15
   completed_phases: 7
   total_plans: 42
-  completed_plans: 39
-  percent: 47
+  completed_plans: 40
+  percent: 48
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: 05 complete
-Status: Wave 1 in progress; STATS-01 consumer half (loader + fail-closed N-gate) landed
-Last activity: 2026-06-21 -- Phase 82 Plan 05 executed (aggregator loader + fail-closed N-gate, STATS-01 consumer half)
+Plan: 04 complete (Wave 2 — 82-01..05 all done)
+Status: Wave 2 closing; COST-02 cost-per-solved rollup landed (golden 3.555, fail-closed freshness gate via bench/cost)
+Last activity: 2026-06-21 -- Phase 82 Plan 04 executed (cost-per-solved rollup, COST-02)
 
 ### Session Continuity
 
-Last session: 2026-06-20T22:01:35.886Z
-Stopped at: Completed 82-05-PLAN.md
+Last session: 2026-06-21T00:10:00.000Z
+Stopped at: Completed 82-04-PLAN.md
 Resume file: None
 
 ## Accumulated Context

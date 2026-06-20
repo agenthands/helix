@@ -76,7 +76,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 ### Cost Conversion (COST-*)
 
 - [x] **COST-01**: `bench/datasets/cost-table.yaml` ships with provider × model × `{input_per_mtok, output_per_mtok, currency}` and a `valid_until` date. _Acceptance:_ schema validates; CI gate fails if `valid_until` is past or > 90 days away from `last_verified`.
-- [ ] **COST-02**: `cost_per_solved_task` = (sum across solved tasks of provider-side `usage`-derived USD cost) / count(solved). _Acceptance:_ matches a hand-computed example for a known run.
+- [x] **COST-02**: `cost_per_solved_task` = (sum across solved tasks of provider-side `usage`-derived USD cost) / count(solved). _Acceptance:_ matches a hand-computed example for a known run.
 - [ ] **COST-03**: `cost_quality.md` report shows cost-per-solved-task per mode × benchmark with BCa CIs. _Acceptance:_ report renders for a sample run.
 
 ### Public Benchmark Adapters (ADAPTER-*)
@@ -186,7 +186,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | STATS-03 | Phase 82 | TBD | Pending |
 | STATS-04 | Phase 82 | TBD | Pending |
 | COST-01 | Phase 75 | TBD | Pending |
-| COST-02 | Phase 82 | TBD | Pending |
+| COST-02 | Phase 82 | 82-04 | Complete |
 | COST-03 | Phase 82 | TBD | Pending |
 | ADAPTER-AIDER-01 | Phase 85 | TBD | Pending |
 | ADAPTER-CCE-01 | Phase 86 | TBD | Pending |

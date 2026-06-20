@@ -200,7 +200,9 @@ Plans:
   1. With `semantic_index.bench_disabled: true` (or equivalent kernel flag), daemon bootstrap skips `SetSemanticLookup`; `get_repo_map` and `get_context` return v1.9 tree-sitter path with `source == "tree_sitter"`; `find_related_symbols`, `explain_symbol_deep`, `validate_graph_edge`, `analyze_blast_radius` SemanticLookup paths all see `NoopLookup`.
   2. An E2E `no_semantic` smoke task makes zero queries against the DuckDB semantic store; runtime assertion (`helix_semantic_*` counter family == 0) logs and fails the bench cell if violated.
   3. A vet-style boundary guard in `internal/lint/` flags any code path that conditionally bypasses the `bench_disabled` gate (extension of the `vet-ablation-leakage` analyzer from Phase 76).
-  4. `bench/runners/your_agent_no_semantic/MODE.md` documents the config-key gate + the strangler-fig consumer enumeration so a future contributor cannot accidentally rip out the bypass.**Plans**: 5 plans (3 waves)
+  4. `bench/runners/your_agent_no_semantic/MODE.md` documents the config-key gate + the strangler-fig consumer enumeration so a future contributor cannot accidentally rip out the bypass.
+
+**Plans**: 7 plans (5 waves) — 5 original + 2 gap-closure (81-06, 81-07) added after 81-VERIFICATION found criterion #2 vacuous (WR-02) and criterion #1 partial (CR-01)
 
 **Wave 1**
 
@@ -215,6 +217,14 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 81-05-PLAN.md — E2E counter==0 bench-cell assertion + fail-cell + MODE.md rewrite (D-05, criteria #2 & #4)
+
+**Wave 4** *(gap closure — 81-VERIFICATION.md GAP 1 / WR-02: criterion #2 runtime assertion was vacuous end-to-end)*
+
+- [ ] 81-06-PLAN.md — graceful DaemonHandle.Stop (SIGTERM) so d.shutdown() flushes the reads-total line on a real bench run + fail-CLOSED scrape/assert (absent line hard-fails the no_semantic arm) + real-daemon emission integration test (ABLATE-06, D-05)
+
+**Wave 5** *(gap closure — 81-VERIFICATION.md GAP 2 / CR-01: criterion #1 background pipelines ungated; blocked on Wave 4's fail-closed teeth)*
+
+- [ ] 81-07-PLAN.md — gate SetActivateCallback background read pipelines + SetFileFactStore on effSemanticDisabled (build-but-block, store stays built per D-04) + store-ON no_semantic end-to-end regression proof (ABLATE-06)
 
 ### Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
 

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Wave 3 — aggregator orchestrator + leaderboard.md/cost_quality.md landed (STATS-02/03/04, COST-03); STATS-04 overlap gate + FAIR-03 CV warning live
-stopped_at: Completed 82-06-PLAN.md
-last_updated: "2026-06-21T01:25:00.000Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 06 executed (aggregator orchestrator + leaderboard/cost_quality reports, STATS-02/03/04 + COST-03)
+status: Wave 4 — helix-bench aggregate subcommand landed (D-02); STATS-01/COST-03 operator-invocable; first leaderboard.md/cost_quality.md render end-to-end
+stopped_at: Completed 82-07-PLAN.md
+last_updated: "2026-06-20T22:33:27.000Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 07 executed (helix-bench aggregate subcommand wiring aggregator.Aggregate into the CLI, D-02; STATS-01/COST-03)
 progress:
   total_phases: 15
-  completed_phases: 7
+  completed_phases: 9
   total_plans: 42
   completed_plans: 42
-  percent: 48
+  percent: 60
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: 06 complete (Wave 3 — 82-01..06 all done; 82-07 remains)
-Status: Wave 3 — aggregator orchestrator + leaderboard.md/cost_quality.md landed (STATS-02/03/04, COST-03); STATS-04 overlap gate + FAIR-03 CV warning live
-Last activity: 2026-06-21 -- Phase 82 Plan 06 executed (aggregator orchestrator + leaderboard/cost_quality reports, STATS-02/03/04 + COST-03)
+Plan: 07 complete (Wave 4 — 82-01..07 all done; phase 82 plans complete)
+Status: Wave 4 — helix-bench aggregate subcommand landed (D-02); STATS-01/COST-03 operator-invocable; first leaderboard.md/cost_quality.md render end-to-end
+Last activity: 2026-06-21 -- Phase 82 Plan 07 executed (helix-bench aggregate subcommand wiring aggregator.Aggregate into the CLI, D-02; STATS-01/COST-03)
 
 ### Session Continuity
 
-Last session: 2026-06-20T22:20:35.059Z
-Stopped at: Completed 82-06-PLAN.md
+Last session: 2026-06-20T22:33:27.000Z
+Stopped at: Completed 82-07-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -173,3 +173,4 @@ Resume file: None
 - [Phase 82 P02]: STATS-02 DONE — bench/aggregator.BCaInterval(vals, stat, B, alpha, rng) (lo,hi,ok) is a PROPER BCa: z0 = phiInv(#{theta*<theta_hat}/B) with phiInv=Sqrt2*Erfinv, plus jackknife acceleration a (Efron-Tibshirani eq 14.15); endpoints via bcaPercentiles (eq 14.10) read off a seeded math/rand/v2 PCG bootstrap distribution. NOT a percentile bootstrap — the RED test asserts BCa endpoints diverge from a plain-percentile interval over the SAME seeded distribution (fake-BCa discriminator) and that proof passed GREEN. Determinism (D-08): same seed => bit-identical [lo,hi]. Degenerate matrix (D-09): empty->ok=false null CI (never fabricated [0,0]); all-identical/m==1->point CI [v,v]; den~0->percentile fallback + clamp01; no NaN/Inf. Quantile rule LOCKED to nearest-rank idx=round(p*(B-1)) for byte-stable reproduction (A5). StatMean exported for Plan 06 callers. Pure unit, no HELIX_BIN (D-01), zero new deps (stdlib math + math/rand/v2).
 - [Phase ?]: pass@k locked to HumanEval unbiased c-term product form; exported PassAtK; lgamma logBinom independent cross-check (D-10/D-11)
 - [Phase 82 P05]: STATS-01 consumer half DONE — bench/aggregator.Load(runDir, expectedN) (*Loaded, error) globs <runDir>/<task>/<mode>/<run_index>/result.v2.json, groups VALID rows by (task,mode), fail-closed N-gate (D-05). valid row = exists + json.Unmarshal + runtime.Validate==nil; an invalid/garbage file is EXCLUDED (counts as deficient, not silently skipped to pass). expectedN is the caller arg (--runs/manifest), NEVER len(glob) (Pitfall 3) — proven by the 3-files-but-1-garbage => got 2 want 3 test. Any cell < expectedN => fmt.Errorf("aggregate: insufficient runs: %v", deficient) with every "<task>/<mode>: got X want N" named (sorted), result nil => caller writes NOTHING. rowMetrics mirrors evaluators.Metrics pointer types (*bool/*int/*float64), nil stays nil never fabricated 0 (Pitfall 4); full doc preserved as map[string]json.RawMessage for write-back. Glob rooted at runDir via filepath.Join, non-numeric/negative run_index skipped (T-82-05-02). Pure unit, no HELIX_BIN (D-01). Plan 06 orchestrator calls Load first and aborts before rendering on any deficiency.
+- [Phase 82 P07]: D-02 DONE — helix-bench aggregate <run_dir> cobra subcommand (cmd/helix-bench/aggregate.go newAggregateCmd) is a thin RunE wrapping the pure bench/aggregator.Aggregate. Flags --runs(3, the EXPECTED N for the fail-closed gate, NEVER disk count) / --seed(42, fixed for D-08 byte-determinism) / --iterations(10000) / --ci-level(0.95) thread into aggregator.Config; CostTablePath pinned to bench/datasets/cost-table.yaml; Today injected as time.Now().UTC() (freshness gate). Fail-closed: RunE returns the Aggregate error verbatim => non-zero exit, no reports (D-05, T-82-07-01); success prints both report paths. Registered as the SIXTH helix-bench subcommand (the always-intended aggregator surface) — Phase 75 BENCH-02 "exactly five" --help assertion updated 5->6 (NOT bypassed via the verify-tos direct-dispatch hack). In-process aggregate_test.go over synthetic result.v2.json fixtures (NO HELIX_BIN): deficient->error+no reports, sufficient->both reports. Real-daemon E2E (auto-approved human-verify): 6/6-cell N=3 matrix on IT-go-semantic-view-1 -> aggregate renders leaderboard.md (mode x benchmark rows, value [lo,hi] CIs, STATS-04 overlap warning, seed/iters/ci_level/runs/valid_until footer, em-dash null tokens) + cost_quality.md; second aggregate run byte-identical (D-08). Pre-existing OUT-OF-SCOPE failure logged to deferred-items.md: TestRunSubcommandWiresDeltaPass (Phase 80-05 RED, ablation_deltas write-back not wired into runBench) — reproduces on 82-07~1, HELIX_BIN-gated, NOT fixed here.

@@ -257,7 +257,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 82-07-PLAN.md — helix-bench aggregate subcommand + registration + E2E human-verify checkpoint (D-02; STATS-01/COST-03)
+- [x] 82-07-PLAN.md — helix-bench aggregate subcommand + registration + E2E human-verify checkpoint (D-02; STATS-01/COST-03)
 
 ### Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
 

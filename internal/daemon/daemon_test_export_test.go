@@ -40,3 +40,11 @@ func (d *Daemon) GrammarRegistryForTest() *treesitter.GrammarRegistry {
 func (d *Daemon) BodyExtractorForTest() interface{} {
 	return d.bodyExtractor
 }
+
+// semanticBundleForTest returns the daemon's semantic bundle, or nil when
+// cfg.SemanticIndex.Enabled was false at construction. Phase 81 Plan 04 gate
+// test seam: asserts the bundle is STILL built under the ablation gate
+// (build-but-block, D-04) and provides a non-nil bundle to the gate helpers.
+func (d *Daemon) semanticBundleForTest() *semanticBundle {
+	return d.semantic
+}

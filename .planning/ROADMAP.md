@@ -238,7 +238,26 @@ Plans:
   3. `pass@1` and `pass@k` computed per HumanEval closed-form `1 − C(n-c, k)/C(n, k)`; unit test against published reference values passes.
   4. `cost_per_solved_task` = (sum across solved tasks of provider-`usage`-derived USD cost) / count(solved); matches a hand-computed example for a known run; `cost_quality.md` renders cost-per-solved-task per mode × benchmark with BCa CIs.
 
-**Plans**: TBD
+**Plans**: 7 plans (4 waves)
+
+**Wave 1**
+
+- [ ] 82-01-PLAN.md — Foundation: move cost-table types to importable bench/cost (Open Q1) + ExpandMatrix N-cell axis + --runs flag (D-04, STATS-01 producer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 82-02-PLAN.md — BCa bootstrap CI (z0 + jackknife a, seeded, >=10k resamples) (TDD; STATS-02)
+- [ ] 82-03-PLAN.md — HumanEval unbiased pass@k (product form + lgamma cross-check; k>=2 anti-naive) (TDD; STATS-03)
+- [ ] 82-04-PLAN.md — cost-per-solved rollup (USD formula + freshness gate via bench/cost; golden 3.555) (TDD; COST-02)
+- [ ] 82-05-PLAN.md — aggregator loader + fail-closed N-gate (expectedN from flag, not disk) (TDD; STATS-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 82-06-PLAN.md — orchestrator (two-level reduce) + leaderboard.md/cost_quality.md render + STATS-04 overlap gate + FAIR-03 CV variance + determinism (TDD; STATS-02/03/04/COST-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 82-07-PLAN.md — helix-bench aggregate subcommand + registration + E2E human-verify checkpoint (D-02; STATS-01/COST-03)
 
 ### Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
 

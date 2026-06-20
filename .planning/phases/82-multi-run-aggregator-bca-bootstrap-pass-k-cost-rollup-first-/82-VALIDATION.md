@@ -1,8 +1,8 @@
 ---
 phase: 82
 slug: multi-run-aggregator-bca-bootstrap-pass-k-cost-rollup-first-leaderboard
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-20
 ---

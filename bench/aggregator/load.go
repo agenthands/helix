@@ -118,6 +118,17 @@ func Load(runDir string, expectedN int) (*Loaded, error) {
 		return nil, err
 	}
 
+	// Fail-CLOSED on zero discovery (CR-01). filepath.Glob returns (nil, nil) for
+	// a non-existent directory, so a typo'd / missing / empty runDir would yield
+	// zero candidates, an empty byTask, an empty (vacuously-passing) N-gate, and a
+	// clean, authoritative-looking EMPTY report — the exact "partial/empty matrix
+	// silently accepted" failure the fail-closed gate (D-05, Pitfall 3) exists to
+	// prevent. An empty/wrong runDir is an ERROR, never an empty success report.
+	if len(cands) == 0 {
+		return nil, fmt.Errorf("aggregate: no result.v2.json rows discovered under %q "+
+			"(expected <task>/<mode>/<run_index>/result.v2.json)", runDir)
+	}
+
 	// Group VALID rows by (task, mode). A row is valid iff it reads, decodes, and
 	// passes runtime.Validate. Invalid rows are excluded so they cannot pad the
 	// count toward expectedN (the invalid-row-counts-as-deficient contract).

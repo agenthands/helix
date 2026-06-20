@@ -155,3 +155,36 @@ func TestLoadNilMetricPreserved(t *testing.T) {
 	assert.True(t, *rows[0].Metrics.TaskSuccess)
 	assert.Nil(t, rows[0].Metrics.TokensInput, "null metric stays nil, never fabricated 0")
 }
+
+// TestLoadZeroDiscoveryFailsClosed locks CR-01: an empty runDir, a non-existent
+// runDir, and a tree with only non-numeric run-index segments all discover ZERO
+// result.v2 rows. Load MUST return an error (fail closed), not a valid empty
+// &Loaded{} — otherwise Aggregate would render an authoritative-looking empty
+// report on a typo'd / missing path.
+func TestLoadZeroDiscoveryFailsClosed(t *testing.T) {
+	t.Run("empty_dir", func(t *testing.T) {
+		dir := t.TempDir() // exists, no rows
+		loaded, err := Load(dir, 3)
+		require.Error(t, err, "empty runDir must fail closed")
+		assert.Nil(t, loaded)
+	})
+
+	t.Run("non_existent_dir", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "nope")
+		loaded, err := Load(dir, 3)
+		require.Error(t, err, "non-existent runDir must fail closed")
+		assert.Nil(t, loaded)
+	})
+
+	t.Run("only_non_numeric_run_index", func(t *testing.T) {
+		dir := t.TempDir()
+		// A result.v2.json under a NON-numeric run-index segment is skipped by
+		// globRows, so zero valid candidates are discovered.
+		d := filepath.Join(dir, "task-a", "honest", "not-a-number")
+		require.NoError(t, os.MkdirAll(d, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(d, "result.v2.json"), []byte("{}"), 0o600))
+		loaded, err := Load(dir, 3)
+		require.Error(t, err, "a tree with only non-numeric run-index segments must fail closed")
+		assert.Nil(t, loaded)
+	})
+}

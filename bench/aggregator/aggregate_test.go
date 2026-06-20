@@ -100,6 +100,36 @@ func TestAggregateFailClosed(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"))
 }
 
+// TestAggregateEmptyRunDirFailsClosed: an empty (but existing) runDir discovers
+// ZERO result.v2.json rows. Aggregate MUST fail CLOSED — return an error and
+// write NO leaderboard.md / cost_quality.md — never an authoritative-looking
+// empty success report (CR-01).
+func TestAggregateEmptyRunDirFailsClosed(t *testing.T) {
+	dir := t.TempDir() // exists, but contains no result.v2.json rows
+
+	rep, err := Aggregate(dir, aggConfig(3))
+	require.Error(t, err, "an empty runDir (zero discovery) must fail closed")
+	assert.Nil(t, rep)
+	assert.NoFileExists(t, filepath.Join(dir, "leaderboard.md"),
+		"zero discovery must write no leaderboard.md")
+	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"),
+		"zero discovery must write no cost_quality.md")
+}
+
+// TestAggregateNonExistentRunDirFailsClosed: a runDir that does not exist on
+// disk yields filepath.Glob (nil, nil) — indistinguishable from a clean run
+// unless we fail closed. Aggregate MUST return an error and write nothing
+// (CR-01). A typo'd / missing path must never produce a clean empty report.
+func TestAggregateNonExistentRunDirFailsClosed(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "does-not-exist")
+
+	rep, err := Aggregate(dir, aggConfig(3))
+	require.Error(t, err, "a non-existent runDir must fail closed")
+	assert.Nil(t, rep)
+	assert.NoFileExists(t, filepath.Join(dir, "leaderboard.md"))
+	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"))
+}
+
 // TestAggregateTwoLevelReduce: a 2-mode x 3-task x N=3 matrix yields one row per
 // (mode x benchmark); task_success == mean of per-task success-rates; pass@1 ==
 // task_success (c/n identity); every metric carries a CI; the reports render.

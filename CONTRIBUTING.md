@@ -313,7 +313,3 @@ wiring, make sure that test still passes.
 - `gopls` is installed at runtime by `internal/langregistry`; the project does not pin a gopls version in `go.sum` or `go.mod`.
 - The project tests against `gopls@latest`. Run `go install golang.org/x/tools/gopls@latest` after every Go upgrade.
 - gopls v0.17.1 had a Go 1.25 incompatibility on linux/amd64. The fix shipped upstream in gopls v0.21 and later — use `>=v0.21` as a floor, not a pin.
-
-## Legacy Python
-
-The `legacy/` directory contains the original Python Serena (the project's prior name; renamed to Helix at v1.9) for reference only. It is not actively developed.

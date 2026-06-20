@@ -361,8 +361,7 @@ func (j *JdtlsAdapter) InitOptions(workDir string) map[string]any {
 }
 
 // NotificationHandlers handles jdtls language/status notifications. Payload
-// schema (per legacy/src/solidlsp/language_servers/eclipse_jdtls.py:861-867):
-// {type: string, message: string}. Phase 56 D-06: handler runs synchronously
+// schema is {type: string, message: string}. Phase 56 D-06: handler runs synchronously
 // on the Listen goroutine — operations are limited to json.Unmarshal +
 // mutex-guarded channel close. No I/O, no LSP calls back to the same conn.
 func (j *JdtlsAdapter) NotificationHandlers() map[string]func(json.RawMessage) {

@@ -99,7 +99,7 @@ func (s *Store) GetLatestFileFact(ctx context.Context, repoID, path string) (Pri
 func (s *Store) readOverlayFileFact(ctx context.Context, repoID, path string) (PriorFileFact, bool, error) {
 	var fileID uint64
 	var lang sql.NullString
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRowContext(ctx, `
 		SELECT file_id, language FROM semantic_live_overlay_files
 		 WHERE repo_id = ? AND path = ? AND status = 'live'
 	`, repoID, path).Scan(&fileID, &lang)
@@ -114,7 +114,7 @@ func (s *Store) readOverlayFileFact(ctx context.Context, repoID, path string) (P
 		return PriorFileFact{}, false, nil
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.queryContext(ctx, `
 		SELECT fact_json::VARCHAR
 		  FROM semantic_live_overlay_symbols
 		 WHERE repo_id = ? AND file_id = ? AND status = 'live'
@@ -166,7 +166,7 @@ func (s *Store) readSnapshotFileFact(ctx context.Context, repoID, path string) (
 	// Resolve file_id + language for the path within this snapshot.
 	var fileID uint64
 	var lang string
-	err = s.db.QueryRowContext(ctx, `
+	err = s.queryRowContext(ctx, `
 		SELECT file_id, language FROM semantic_files
 		 WHERE snapshot_id = ? AND repo_id = ? AND path = ?
 	`, snapID, repoID, path).Scan(&fileID, &lang)
@@ -177,7 +177,7 @@ func (s *Store) readSnapshotFileFact(ctx context.Context, repoID, path string) (
 		return PriorFileFact{}, false, fmt.Errorf("GetLatestFileFact(%q,%q): snapshot file lookup: %w", repoID, path, err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.queryContext(ctx, `
 		SELECT symbol_id, stable_key, name, kind,
 		       COALESCE(signature, ''), COALESCE(signature_hash, ''),
 		       COALESCE(visibility, ''), COALESCE(exported, false)

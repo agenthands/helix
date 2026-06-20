@@ -46,6 +46,34 @@ import (
 	"github.com/agenthands/helix/internal/semantic/graph"
 )
 
+// queryContext is the single semantic-store READ chokepoint for multi-row
+// queries on the database handle (s.db). Phase 81 ABLATE-06: every read that
+// funnels through here increments helix_semantic_store_reads_total via
+// SemanticStoreReadsInc, so the no_semantic ablation arm's "zero reads"
+// assertion (D-05) is faithful. Writes/maintenance (Exec, schema-version,
+// migrations, BeginOverlayTx epoch bump) deliberately do NOT route through
+// this helper — the counter is reads-only by construction (T-81-01-02).
+//
+// Routed read sites: QueryEffectiveAdjacency, CountStaleScoreRows,
+// IterateCommittedSymbols, the effective_graph cluster/impact reads, and the
+// overlay pure-read seams (CurrentGraphVersion, CurrentOverlayEpoch,
+// OverlayChangedPathsSince). See the SUMMARY for the exact file:line set.
+func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if s.metrics != nil {
+		s.metrics.SemanticStoreReadsInc()
+	}
+	return s.db.QueryContext(ctx, query, args...)
+}
+
+// queryRowContext is the single-row sibling of queryContext (same read
+// chokepoint contract). Phase 81 ABLATE-06.
+func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if s.metrics != nil {
+		s.metrics.SemanticStoreReadsInc()
+	}
+	return s.db.QueryRowContext(ctx, query, args...)
+}
+
 // SymbolRow is the iteration payload for IterateCommittedSymbols.
 //
 // Field set is the minimum required by Phase 64 P64-07 retrieval/corpus.go
@@ -114,7 +142,7 @@ func (s *Store) QueryEffectiveAdjacency(ctx context.Context, repoID, projection 
 		   AND o.edge_kind = ?
 		   AND o.status    = 'live'
 	`
-	rows, err := s.db.QueryContext(ctx, q, repoID, projection, repoID, repoID, projection)
+	rows, err := s.queryContext(ctx, q, repoID, projection, repoID, repoID, projection)
 	if err != nil {
 		return nil, nil, fmt.Errorf("QueryEffectiveAdjacency(%q, %q): %w", repoID, projection, err)
 	}
@@ -166,7 +194,7 @@ func (s *Store) CountStaleScoreRows(ctx context.Context, repoID, projection stri
 		WHERE repo_id    = ?
 		  AND score_name = ?
 	`
-	if err := s.db.QueryRowContext(ctx, q, repoID, projection).Scan(&stale, &total); err != nil {
+	if err := s.queryRowContext(ctx, q, repoID, projection).Scan(&stale, &total); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, 0, nil
 		}
@@ -266,7 +294,7 @@ func (s *Store) ClusterStatusForGraphVersion(ctx context.Context, repoID string,
 		   AND graph_version < ?
 	`
 	var prior sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, priorQ, repoID, graphVersion).Scan(&prior); err != nil {
+	if err := s.queryRowContext(ctx, priorQ, repoID, graphVersion).Scan(&prior); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ClusterStatusRow{GraphVersion: graphVersion}, nil
 		}
@@ -336,7 +364,7 @@ func (s *Store) aggregateClusterStatus(ctx context.Context, repoID string, gv ui
 		clusterCount int
 		memberCount  int
 	)
-	if err := s.db.QueryRowContext(ctx, q, repoID, gv, repoID, gv).Scan(&computedAtMs, &clusterCount, &memberCount); err != nil {
+	if err := s.queryRowContext(ctx, q, repoID, gv, repoID, gv).Scan(&computedAtMs, &clusterCount, &memberCount); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return clusterAggResult{}, false, nil
 		}
@@ -393,7 +421,7 @@ func (s *Store) LatestCommittedSnapshot(ctx context.Context, repoID string) (uin
 		   AND status  = 'committed'
 	`
 	var id uint64
-	if err := s.db.QueryRowContext(ctx, q, repoID).Scan(&id); err != nil {
+	if err := s.queryRowContext(ctx, q, repoID).Scan(&id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
 		}
@@ -462,7 +490,7 @@ func (s *Store) QueryRankedFiles(
 		q += " LIMIT ?"
 		args = append(args, limit)
 	}
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.queryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("QueryRankedFiles(%q, %q): %w", repoID, projection, err)
 	}
@@ -514,7 +542,7 @@ func (s *Store) QuerySymbolPath(ctx context.Context, snapshotID uint64, symbolID
 		 LIMIT 1
 	`
 	var path string
-	if err := s.db.QueryRowContext(ctx, q, snapshotID, symID).Scan(&path); err != nil {
+	if err := s.queryRowContext(ctx, q, snapshotID, symID).Scan(&path); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", false, nil
 		}
@@ -566,7 +594,7 @@ func (s *Store) QuerySymbolByLocation(
 		 LIMIT 1
 	`
 	var stableKey string
-	err = s.db.QueryRowContext(ctx, q,
+	err = s.queryRowContext(ctx, q,
 		latest, path,
 		line, line, col,
 		line, line, col,
@@ -616,7 +644,7 @@ func (s *Store) QuerySymbolByName(
 		 ORDER BY sym.stable_key ASC
 		 LIMIT 6
 	`
-	rows, err := s.db.QueryContext(ctx, q, latest, path, name)
+	rows, err := s.queryContext(ctx, q, latest, path, name)
 	if err != nil {
 		return nil, fmt.Errorf("QuerySymbolByName(%q,%q): %w", path, name, err)
 	}
@@ -685,7 +713,7 @@ func (s *Store) QueryNodeIDByStableKey(ctx context.Context, repoID, stableKey st
 		 LIMIT 1
 	`
 	var symID uint64
-	if err := s.db.QueryRowContext(ctx, q, latest, stableKey).Scan(&symID); err != nil {
+	if err := s.queryRowContext(ctx, q, latest, stableKey).Scan(&symID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, false, nil
 		}
@@ -718,7 +746,7 @@ func (s *Store) QueryStableKeyByNodeID(ctx context.Context, repoID string, nodeI
 		 LIMIT 1
 	`
 	var sk string
-	if err := s.db.QueryRowContext(ctx, q, latest, nodeID).Scan(&sk); err != nil {
+	if err := s.queryRowContext(ctx, q, latest, nodeID).Scan(&sk); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", false, nil
 		}
@@ -765,7 +793,7 @@ func (s *Store) QuerySymbolLocationByStableKey(
 		 LIMIT 1
 	`
 	var startLine, startCol int
-	err = s.db.QueryRowContext(ctx, q, latest, stableKey).Scan(&path, &startLine, &startCol)
+	err = s.queryRowContext(ctx, q, latest, stableKey).Scan(&path, &startLine, &startCol)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", 0, 0, false, nil
@@ -821,7 +849,7 @@ func (s *Store) QueryClusterSummaries(
 		 ORDER BY score DESC
 		 LIMIT ?
 	`
-	rows, err := s.db.QueryContext(ctx, q, repoID, graphVersion, topN)
+	rows, err := s.queryContext(ctx, q, repoID, graphVersion, topN)
 	if err != nil {
 		return nil, fmt.Errorf("QueryClusterSummaries(%q, %q, gv=%d): %w", repoID, projection, graphVersion, err)
 	}
@@ -875,7 +903,7 @@ func (s *Store) QueryClusterMembers(
 		 ORDER BY scm.node_id ASC
 		 LIMIT ?
 	`
-	rows, err := s.db.QueryContext(ctx, q, repoID, graphVersion, clusterIntID, limit)
+	rows, err := s.queryContext(ctx, q, repoID, graphVersion, clusterIntID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("QueryClusterMembers(%q, %q, gv=%d, cluster=%d): %w",
 			repoID, projection, graphVersion, clusterIntID, err)
@@ -931,7 +959,7 @@ func (s *Store) QueryNodePageRanks(
 		" WHERE repo_id = ? AND score_name = ? AND graph_version = ?" +
 		" AND node_id IN (" + string(placeholders) + ")"
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.queryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("QueryNodePageRanks(%q, %q, gv=%d): %w", repoID, projection, graphVersion, err)
 	}
@@ -983,7 +1011,7 @@ func (s *Store) IterateCommittedSymbols(ctx context.Context, snapshotID uint64, 
 		 WHERE sym.snapshot_id = ?
 		 ORDER BY sym.symbol_id ASC
 	`
-	rows, err := s.db.QueryContext(ctx, q, snapshotID)
+	rows, err := s.queryContext(ctx, q, snapshotID)
 	if err != nil {
 		return fmt.Errorf("IterateCommittedSymbols(snap=%d): %w", snapshotID, err)
 	}
@@ -1052,7 +1080,7 @@ func (s *Store) QuerySymbolEdgesIncoming(ctx context.Context, snapshotID, dstNod
 			   AND e.dst_node_id = ?
 			   AND e.edge_kind   = 'CALLS'
 		`
-		rows, err = s.db.QueryContext(ctx, q, snapshotID, dstNodeID)
+		rows, err = s.queryContext(ctx, q, snapshotID, dstNodeID)
 	} else {
 		const q = `
 			SELECT e.src_node_id, e.dst_node_id, e.edge_kind
@@ -1060,7 +1088,7 @@ func (s *Store) QuerySymbolEdgesIncoming(ctx context.Context, snapshotID, dstNod
 			 WHERE e.snapshot_id = ?
 			   AND e.dst_node_id = ?
 		`
-		rows, err = s.db.QueryContext(ctx, q, snapshotID, dstNodeID)
+		rows, err = s.queryContext(ctx, q, snapshotID, dstNodeID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("QuerySymbolEdgesIncoming(snap=%d, dst=%d, callsOnly=%v): %w", snapshotID, dstNodeID, callsOnly, err)
@@ -1094,7 +1122,7 @@ func (s *Store) QuerySymbolEdgesOutgoing(ctx context.Context, snapshotID, srcNod
 		 WHERE e.snapshot_id = ?
 		   AND e.src_node_id = ?
 	`
-	rows, err := s.db.QueryContext(ctx, q, snapshotID, srcNodeID)
+	rows, err := s.queryContext(ctx, q, snapshotID, srcNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("QuerySymbolEdgesOutgoing(snap=%d, src=%d): %w", snapshotID, srcNodeID, err)
 	}
@@ -1141,7 +1169,7 @@ func (s *Store) QueryClusterIDOfNode(ctx context.Context, repoID string, graphVe
 	`
 	var cid uint64
 	var mc int
-	if scanErr := s.db.QueryRowContext(ctx, q, repoID, graphVersion, nodeID).Scan(&cid, &mc); scanErr != nil {
+	if scanErr := s.queryRowContext(ctx, q, repoID, graphVersion, nodeID).Scan(&cid, &mc); scanErr != nil {
 		if scanErr == sql.ErrNoRows {
 			return 0, 0, false, nil
 		}

@@ -50,6 +50,11 @@ var carveOuts = map[string]map[string]bool{
 	// Phase 57: closed-enum "outcome" ∈ {opened, quarantined, created} on
 	// semantic store open counter. workspace_label is bounded.
 	"helix_semantic_store_open_total": {"workspace_label": true, "outcome": true},
+	// Phase 81 ABLATE-06: labelless read counter — no label dimensions, so
+	// nothing to carve. The entry exists for documentation parity with the
+	// rest of the helix_semantic_store_* family and to mark the metric as
+	// intentionally labelless (a faithful "any read" signal).
+	"helix_semantic_store_reads_total": {},
 	// Phase 59 P02: bounded-label allowlist for tree-sitter extraction
 	// outcome counter. "language" ∈ {go, typescript, python, other};
 	// "outcome" ∈ {ready, partial, unsupported, failed}. Both labels are
@@ -203,6 +208,9 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	// dropped by Gather()).
 	m.SemanticStoreQuarantine.WithLabelValues("ws-aaa", "corrupt_file").Inc()
 	m.SemanticStoreOpen.WithLabelValues("ws-aaa", "opened").Inc()
+	// Phase 81 ABLATE-06: prime the labelless read counter so Gather()
+	// returns its family (empty families are dropped by Gather()).
+	m.SemanticStoreReadsInc()
 	// Phase 59 P02: prime the tree-sitter extraction vector.
 	m.SemanticExtraction.WithLabelValues("go", "ready").Inc()
 	// Phase 60 D-07 (60-05B): prime the live-update outcome vector so

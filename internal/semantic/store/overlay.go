@@ -272,7 +272,7 @@ func (s *Store) OverlayRowCount(ctx context.Context, repoID string, capturedEpoc
 	total := 0
 	for _, q := range queries {
 		var n int
-		if err := s.db.QueryRowContext(ctx, q.sql, repoID, capturedEpoch).Scan(&n); err != nil {
+		if err := s.queryRowContext(ctx, q.sql, repoID, capturedEpoch).Scan(&n); err != nil {
 			return 0, fmt.Errorf("OverlayRowCount(%s): %w", q.table, err)
 		}
 		total += n
@@ -989,7 +989,7 @@ func (s *Store) CurrentGraphVersion(ctx context.Context, repoID string) (uint64,
 		return 0, fmt.Errorf("CurrentGraphVersion: empty repoID")
 	}
 	var gv uint64
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRowContext(ctx, `
 		SELECT graph_version FROM semantic_live_overlay_meta
 		 WHERE repo_id = ?
 	`, repoID).Scan(&gv)
@@ -1025,7 +1025,7 @@ func (s *Store) CurrentOverlayEpoch(ctx context.Context, repoID string) (uint64,
 		return 0, fmt.Errorf("CurrentOverlayEpoch: empty repoID")
 	}
 	var ep uint64
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRowContext(ctx, `
 		SELECT current_epoch FROM semantic_live_overlay_meta
 		 WHERE repo_id = ?
 	`, repoID).Scan(&ep)
@@ -1068,7 +1068,7 @@ func (s *Store) OverlayChangedPathsSince(
 		return nil, 0, fmt.Errorf("OverlayChangedPathsSince: empty repoID")
 	}
 
-	err = s.db.QueryRowContext(ctx, `
+	err = s.queryRowContext(ctx, `
 		SELECT current_epoch FROM semantic_live_overlay_meta
 		 WHERE repo_id = ?
 	`, repoID).Scan(&currentEpoch)
@@ -1079,7 +1079,7 @@ func (s *Store) OverlayChangedPathsSince(
 		return nil, 0, fmt.Errorf("OverlayChangedPathsSince(%q): epoch read: %w", repoID, err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.queryContext(ctx, `
 		SELECT DISTINCT path FROM semantic_live_overlay_files
 		 WHERE repo_id = ? AND write_epoch > ?
 	`, repoID, baseEpoch)

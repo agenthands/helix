@@ -181,7 +181,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | VERIFIED-01 | Phase 87 | TBD | Pending |
 | VERIFIED-02 | Phase 87 | TBD | Pending |
 | VERIFIED-03 | Phase 86 | TBD | Pending |
-| STATS-01 | Phase 82 | TBD | Pending |
+| STATS-01 | Phase 82 | 82-01 (producer half) | In progress — producer side done (ExpandMatrix N cells + --runs); aggregator fail-closed N-gate lands in 82-05 |
 | STATS-02 | Phase 82 | TBD | Pending |
 | STATS-03 | Phase 82 | TBD | Pending |
 | STATS-04 | Phase 82 | TBD | Pending |

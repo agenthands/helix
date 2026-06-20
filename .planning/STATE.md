@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Phase 82 context gathered
-last_updated: "2026-06-20T21:31:23.613Z"
-last_activity: 2026-06-20 -- Phase 82 planning complete
+stopped_at: Completed 82-01-PLAN.md
+last_updated: "2026-06-21T00:00:00.000Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 01 executed (bench/cost package + ExpandMatrix runs axis)
 progress:
   total_phases: 15
   completed_phases: 7
-  total_plans: 35
-  completed_plans: 35
-  percent: 47
+  total_plans: 36
+  completed_plans: 36
+  percent: 48
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-20 -- Phase 82 planning complete
+Plan: 01 complete
+Status: Wave 1 foundation landed; Plan 02+ ready
+Last activity: 2026-06-21 -- Phase 82 Plan 01 executed
 
 ### Session Continuity
 
-Last session: 2026-06-20T20:44:51.188Z
-Stopped at: Phase 82 context gathered
-Resume file: .planning/phases/82-multi-run-aggregator-bca-bootstrap-pass-k-cost-rollup-first-/82-CONTEXT.md
+Last session: 2026-06-21T00:00:00.000Z
+Stopped at: Completed 82-01-PLAN.md
+Resume file: None
 
 ## Accumulated Context
 
@@ -104,6 +104,7 @@ Resume file: .planning/phases/82-multi-run-aggregator-bca-bootstrap-pass-k-cost-
 | Phase 81 P05 | ~35m | 3 tasks | 6 files (TDD RED+GREEN) |
 | Phase 81 P06 | ~22m | 2 tasks | 4 files (gap closure, WR-02) |
 | Phase 81 P07 | ~30min | 2 tasks | 5 files |
+| Phase 82 P01 | ~12min | 3 tasks | 6 files (2 created in bench/cost) |
 
 ## Decisions
 
@@ -163,3 +164,4 @@ Resume file: .planning/phases/82-multi-run-aggregator-bca-bootstrap-pass-k-cost-
 - [Phase 81 P05]: Counter exposure = path A (daemon-log shutdown line). Bench daemon runs --http-addr= (HTTP off) over a Unix socket so the Prometheus /metrics scrape is unreachable; daemon emits ONE line msg="semantic store reads total" count=N in shutdown.go (d.shutdown() Phase 1.6), reusing the trace.TapDaemonLog msg== JSONL substrate. bench cell scrapeSemanticReadsTotal parses it (last occurrence wins; missing line => 0). assertNoSemanticReads hard-FAILS the no_semantic cell (routes through preserve(), CellResult.SemanticReadViolation) on any non-zero read — fail-closed, NOT a warn (D-05/criterion #2, T-81-05-01). guarantee_pending_phase_81 deferral marker REMOVED: ablationStatusFor deleted, AblationStatus forced "" for every mode (no_semantic row no longer partial). MODE.md rewritten to no_lsp shape + names the gate key semantic_index.bench_disabled (precedence CLI > profile YAML > default-off) + all 8 strangler-fig consumers (criterion #4). Added obs.Metrics.SemanticStoreReadsValue() getter (dto.Metric.Write, nil-safe). Phase 81 CLOSED (ABLATE-06). _Superseded by 81-VERIFICATION (gaps_found): criterion #2 was vacuous end-to-end (WR-02) and criterion #1 partial (CR-01); two gap-closure plans 81-06/81-07 added._
 - [Phase 81 P06]: GAP 1 / WR-02 closed. New DaemonHandle.Stop(timeout) sends SIGTERM to the daemon process GROUP (Setpgid leader) and waits up to timeout for graceful exit so d.shutdown() flushes the "semantic store reads total" line (shutdown.go:60-62) — the one thing SIGKILL can never do. RunCell now drains GRACEFULLY (h.Stop, daemonGracefulStopTimeout=12s = 10s ShutdownTimeout + slack) THEN Kill as a hard reaper (called unconditionally, no-op on the graceful path, before the daemon-log tap). scrapeSemanticReadsTotal returns (count, present, err): an ABSENT line is present=false, no longer a silent count=0 (root fail-open anti-pattern cell.go:101-103 removed). assertNoSemanticReads(mode, reads, present) HARD-FAILS the no_semantic arm when present==false (proof never ran) AND when reads!=0; off-arm both are no-ops. New real-daemon HELIX_BIN-gated integration test TestNoSemanticReadsTotalLineEmitted spawns a bare daemon, drives Stop-then-Kill, asserts daemon.log carries a real reads-total line with an integer count (replaces synthetic-os.WriteFile-only coverage). D-04 build-but-block + D-05 path-A emission preserved. GAP 2 / CR-01 (background read pipelines ungated) remains for 81-07.
 - [Phase ?]: [Phase 81 P07]: GAP 2 / CR-01 closed — gated SIX daemon-internal semantic read-DRIVERS on effSemanticDisabled via backgroundSemanticReadsDisabled predicate (SetFileFactStore + 5 SetActivateCallback drivers + lazy-activate ScheduleInitialExtraction, Rule 2). D-04 build-but-block preserved (store-Open + newSemanticBundle UNTOUCHED). Store-ON no_semantic regression TestNoSemanticStoreOnZeroReads proves SemanticStoreReads==0 on an OPEN store (teeth from 81-06). 81-VERIFICATION.md:113 masking broken; ABLATE-06 runtime guarantee holds. Phase 81 CLOSED.
+- [Phase 82 P01]: Open Q1 RESOLVED — MOVED CostRow/CostTable + freshness gate out of cmd/helix-bench package main into importable bench/cost (exactly one type CostTable in the tree). bench/cost exports CostRow, CostTable, LoadCostTable, ValidateCostTable(today,path), PriceFor(ct,modelID,today), DateLayout, StalenessWindowDays. PriceFor is the per-lookup fail-closed gate the Plan 04 aggregator reuses: unknown model_id / past valid_until / >90d-stale last_verified are all HARD errors (D-13). validate-cost-table CLI gutted to a thin cost.ValidateCostTable shim (behavior-identical); package-main dateLayout/stalenessWindowDays kept as local copies for the sibling verify-tos validator. ExpandMatrix gained a runs int axis (D-04, STATS-01 PRODUCER half): emits N cells per (b,l,m,t) with RunIndex 0..N-1, runs<1 clamps to 1, deterministic (runs innermost), no path-machinery change. helix-bench run --runs N (default 3) wired. STATS-01 not yet complete — the aggregator REFUSAL half lands in Plan 05.

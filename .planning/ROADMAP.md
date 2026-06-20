@@ -238,11 +238,11 @@ Plans:
   3. `pass@1` and `pass@k` computed per HumanEval closed-form `1 − C(n-c, k)/C(n, k)`; unit test against published reference values passes.
   4. `cost_per_solved_task` = (sum across solved tasks of provider-`usage`-derived USD cost) / count(solved); matches a hand-computed example for a known run; `cost_quality.md` renders cost-per-solved-task per mode × benchmark with BCa CIs.
 
-**Plans**: 7 plans (4 waves)
+**Plans**: 7 plans (4 waves) — 1/7 complete
 
 **Wave 1**
 
-- [ ] 82-01-PLAN.md — Foundation: move cost-table types to importable bench/cost (Open Q1) + ExpandMatrix N-cell axis + --runs flag (D-04, STATS-01 producer)
+- [x] 82-01-PLAN.md — Foundation: move cost-table types to importable bench/cost (Open Q1) + ExpandMatrix N-cell axis + --runs flag (D-04, STATS-01 producer) ✅ (commits dccf8352, abcae78c, 88f62367)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

@@ -2,36 +2,23 @@
 phase: 81-no-semantic-kernel-flag-e2e-config-gate-test
 reviewed: 2026-06-20T00:00:00Z
 depth: standard
-files_reviewed: 24
+files_reviewed: 10
 files_reviewed_list:
   - bench/runtime/cell.go
-  - bench/runtime/cell_test.go
+  - bench/runtime/no_semantic_emission_integration_test.go
+  - bench/runtime/no_semantic_store_on_test.go
   - bench/runtime/no_semantic_zero_reads_test.go
-  - bench/runtime/five_of_six_test.go
-  - internal/cli/root.go
   - internal/daemon/daemon.go
   - internal/daemon/daemon_test_export_test.go
   - internal/daemon/semantic_gate.go
   - internal/daemon/semantic_gate_test.go
-  - internal/daemon/semantic_wiring.go
-  - internal/daemon/shutdown.go
-  - internal/lint/ablationleakage/analyzer.go
-  - internal/lint/ablationleakage/analyzer_test.go
-  - internal/obs/metrics.go
-  - internal/obs/metrics_labels_test.go
-  - internal/profile/bench_profiles_test.go
-  - internal/profile/profile.go
-  - internal/semantic/config.go
-  - internal/semantic/store/effective_graph.go
-  - internal/semantic/store/filefact_accessor.go
-  - internal/semantic/store/overlay.go
-  - internal/semantic/store/reads_counter_test.go
-  - internal/semantic/store/snapshot.go
+  - internal/eval/sandbox/sandbox.go
+  - internal/semantic/live/handler/handler.go
 findings:
   critical: 1
   warning: 4
-  info: 4
-  total: 9
+  info: 3
+  total: 8
 status: issues_found
 ---
 
@@ -39,242 +26,276 @@ status: issues_found
 
 **Reviewed:** 2026-06-20
 **Depth:** standard
-**Files Reviewed:** 24 (23 in scope + daemon.go composition-root + 2 supporting store files)
+**Files Reviewed:** 10
 **Status:** issues_found
 
 ## Summary
 
-Phase 81 wires a labelless `helix_semantic_store_reads_total` counter at a single
-DuckDB read chokepoint (`s.queryContext` / `s.queryRowContext`), resolves an
-`effSemanticDisabled` ablation gate once at the daemon composition root, forces
-the tool-facing semantic read consumers to `NoopLookup{}` + a disabled
-`ConfigGate` (build-but-block), extends the `ablationleakage` analyzer with a
-call-site gate, and adds a bench cell that asserts the counter == 0 on the
-`no_semantic` arm.
+Phase 81 gap-closure (plans 81-06 / 81-07) for ABLATE-06. The two-part design is
+sound and the intent is well realized:
 
-The counter plumbing, metrics allowlist, gate-helper unit tests, and the lint
-analyzer are well constructed. The central correctness concern is a **scope gap
-between what the gate disables and what the counter counts**: the gate is applied
-only to the tool-facing read consumers (the `SetSemanticLookup` hand-outs), but
-several daemon-internal background pipelines that survive the build-but-block
-("store stays built") path ALSO route reads through the counted chokepoint and
-are NOT gated. On a store-on (`StoreOptIn=true`) `no_semantic` cell this can make
-the counter non-zero through a legitimate, non-tool read path, which the bench
-cell would (correctly, per its own contract) treat as a hard failure — i.e. the
-"zero reads" invariant can be violated by code the phase did not gate. The
-currently-shipped five-of-six smoke uses a store-OFF seed task, so the gap is
-latent today but is a real defect for the phase's stated guarantee.
+- **D-04 build-but-block invariant holds.** Verified the store-Open guard
+  (`daemon.go:330 if cfg.SemanticIndex.Enabled`), the live-bundle build
+  (`daemon.go:393 if !effDisableLSP`), and the `newSemanticBundle` build path
+  (`daemon.go:532`) are all free of `effSemanticDisabled` as a *construction*
+  predicate; `effSemanticDisabled` is passed into the bundle only to skip the
+  accessor block, not to skip building. Gating consistently un-wires
+  READ-DRIVERS only (`SetFileFactStore` at daemon.go:437, the five
+  `SetActivateCallback` drivers at daemon.go:995-1037, the lazy-activate
+  `ScheduleInitialExtraction` at daemon.go:930). `TestSemanticBackgroundPipelinesGated`
+  asserts `semanticBundleForTest() != nil` and `SemanticStore() != nil` under the
+  gate. The zero-reads proof is therefore non-vacuous. Good.
+- **Fail-closed scrape is correct in shape.** `scrapeSemanticReadsTotal` returns
+  `(count, present)`; `assertNoSemanticReads` hard-fails on `!present` on the
+  no_semantic arm only; the daemon emits the line on every graceful shutdown
+  whenever `d.obs != nil` (shutdown.go:60-62); the msg constant matches.
+- **handler.go** change is the additive nil-safe `HasFactStore()` accessor only —
+  consistent with the gating intent, no defect.
+
+However, the graceful-teardown sequence in `sandbox.go` has a real concurrency
+defect: `DaemonHandle.Stop` and `DaemonHandle.Kill` can call `(*exec.Cmd).Wait()`
+concurrently on the same `Cmd`, which the stdlib forbids. There are also
+robustness gaps around the 12s graceful-stop budget vs. the daemon's worst-case
+shutdown wall-time, a strict `graceful=true` assertion in the emission test, and a
+malformed-count blind spot in the scraper.
 
 ## Critical Issues
 
-### CR-01: Build-but-block leaves daemon-internal read pipelines ungated; counter can be non-zero on a store-on `no_semantic` cell
+### CR-01: Concurrent `(*exec.Cmd).Wait()` from `Stop` then `Kill` on the non-graceful path
 
-**File:** `internal/daemon/daemon.go:948-1003` (also `:967-975`, `:979`, `:1001-1003`); read sites `internal/daemon/semantic_wiring.go:381-423` (`ensureRetrieval` → recovery `Probe`), `internal/semantic/store/effective_graph.go:413` (`LatestCommittedSnapshot`)
-
+**File:** `internal/eval/sandbox/sandbox.go:230-240` (Stop) and `:264-277` (Kill)
 **Issue:**
-The gate (`effSemanticDisabled`) is threaded into exactly the four tool-facing
-`SemanticLookup` hand-outs (symbols, repomap, health, guardrail) plus the
-`SemanticSkill` accessor block. Per D-04 build-but-block, the store IS opened
-(`daemon.go:324`) and `sBndl` is non-nil even under the gate. But
-`SetActivateCallback` unconditionally drives daemon-internal pipelines that issue
-reads through the **counted** chokepoint, with no `effSemanticDisabled` guard:
+`os/exec` documents `Cmd.Wait()` as call-once and not safe for concurrent use; a
+second call returns `exec: Wait was already called` instead of the real exit
+status, and two concurrent calls race on `Cmd.ProcessState` and the internal
+bookkeeping goroutine.
 
-- `daemon.go:1001-1003` → `sBndl.ensureRetrieval(...)` → `retrieval.Recoverer.Probe`
-  → `store.LatestCommittedSnapshot` → `s.queryRowContext` → `SemanticStoreReadsInc()`.
-  (`Probe` calls `LatestCommittedSnapshot` on every workspace activation; verified
-  in `internal/semantic/retrieval/recovery.go:141-149`.)
-- `daemon.go:979` → `live.startWorkspace(...)`; the live handler holds
-  `SetFileFactStore(semanticStore)` (`daemon.go:425`), so an edit-driven
-  `GetLatestFileFact` (`filefact_accessor.go:75` → `s.queryRowContext` /
-  `s.queryContext`) is a counted read.
-- `daemon.go:967-975` → `ScheduleInitialExtraction` → rank scheduler →
-  `QueryEffectiveAdjacency` / `CountStaleScoreRows` (`effective_graph.go:113`,
-  `:183`), both counted reads.
+On the **timeout / non-graceful path** the contract is violated:
 
-`StoreOptIn` is driven by the seed task's capability (`matrix.go:258`), **not** by
-mode, so a `no_semantic` cell on a store-on task (e.g. an `incremental_update`
-task) runs with `semantic_index.enabled=true`. The store opens, the workspace
-activates, and the above background reads fire — incrementing
-`helix_semantic_store_reads_total` even though every *tool* lookup is correctly
-forced to Noop. `bench/runtime/cell.go:560` (`assertNoSemanticReads`) then fails
-the cell hard, mislabeling a correctly-gated tool surface as a gate breach
-(T-81-05-01 false positive) — OR, read the other way, the phase's "zero
-semantic-store reads on the no_semantic arm" guarantee is simply not true for
-store-on tasks.
+1. `Stop` launches goroutine **G1** = `go func() { done <- h.cmd.Wait() }()`
+   (line 231) and on `<-time.After(timeout)` returns `graceful=false` WITHOUT
+   draining `done`. G1 is still blocked in `Wait()` because the process has not
+   exited (that is *why* the timeout fired).
+2. `RunCell` (cell.go:593) then unconditionally calls `h.Kill()`.
+3. `Kill` sends the group SIGKILL (line 254), calls `cmd.Process.Kill()` (returns
+   nil while the process is still live, so the `ErrProcessDone` branch is
+   skipped), then launches goroutine **G2** = `go func() { done <- h.cmd.Wait() }()`
+   (line 266).
 
-The five-of-six smoke passes only because its seed (`IT-go-patch-apply-1`) is
-store-OFF (`semantic_index.enabled=false` → store never opened → chokepoint never
-reached). The defect is therefore latent against the current corpus but is a real
-correctness gap for the stated invariant.
+In the window between G2's launch and the process being reaped, **G1 and G2 both
+execute `h.cmd.Wait()` on the same `*exec.Cmd` concurrently.** The buffered-channel
+comment addresses goroutine *leakage*, not the concurrent-`Wait` invariant — both
+goroutines run `Wait` simultaneously regardless of buffer depth. One call returns
+the "already called" error rather than reaping, so the process may be left unreaped
+and the exit status is lost.
 
-**Fix:** Either (a) gate the background read pipelines under `effSemanticDisabled`
-the same way the tool consumers are gated, so build-but-block blocks ALL reads,
-not just tool reads:
+A secondary, benign instance is on the **graceful path**: G1 in Stop has already
+returned before `Stop` returns, then `Kill` calls `h.cmd.Wait()` again at line 258
+(via the `ErrProcessDone` branch). That call is serial (not racing) and only
+returns a discarded "already called" error.
+
+**Impact:** flakiness under `-race`, a possibly-leaked unreaped daemon when the
+losing `Wait` returns the error instead of reaping, and — because the reads-total
+line is scraped only *after* `Kill` returns — an intermittently-incomplete
+`daemon.log` that the fail-closed gate then turns into a spurious HARD cell
+failure. This is precisely the teardown path 81-06 made load-bearing.
+
+**Fix:** own a single `Wait` goroutine in the handle (started in `StartDaemon`)
+and have both `Stop` and `Kill` select on a shared `exited <-chan error`:
 
 ```go
-// daemon.go SetActivateCallback
-if semanticScheduler != nil && !effSemanticDisabled {
-    semanticScheduler.ScheduleInitialExtraction(...)
+type DaemonHandle struct {
+	cmd    *exec.Cmd
+	taskID string
+	mode   string
+	exited chan error // the ONLY Wait() lives here, started in StartDaemon
 }
-if !effSemanticDisabled {
-    live.startWorkspace(ctx, activeWSKey, logger)
+
+// after cmd.Start() in StartDaemon:
+h.exited = make(chan error, 1)
+go func() { h.exited <- h.cmd.Wait() }()
+
+func (h *DaemonHandle) Stop(timeout time.Duration) (bool, error) {
+	if h == nil || h.cmd == nil || h.cmd.Process == nil {
+		return true, nil
+	}
+	pid := h.cmd.Process.Pid
+	if kerr := syscall.Kill(-pid, syscall.SIGTERM); kerr != nil && !errors.Is(kerr, syscall.ESRCH) {
+		return false, fmt.Errorf("sandbox: SIGTERM daemon %s/%s: %w", h.taskID, h.mode, kerr)
+	}
+	select {
+	case <-h.exited:
+		return true, nil
+	case <-time.After(timeout):
+		return false, nil
+	}
 }
-if rank != nil && !effSemanticDisabled {
-    rank.ensureScheduler(ctx, repoPath)
-}
-if compactBndl != nil && !effSemanticDisabled {
-    compactBndl.ensureCompactor(ctx, repoPath, activeWSKey)
-}
-if sBndl != nil && !effSemanticDisabled {
-    sBndl.ensureRetrieval(ctx, activeWSKey)
+
+func (h *DaemonHandle) Kill() error {
+	if h == nil || h.cmd == nil || h.cmd.Process == nil {
+		return nil
+	}
+	pid := h.cmd.Process.Pid
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
+	_ = h.cmd.Process.Kill()
+	select {
+	case <-h.exited:
+		return nil
+	case <-time.After(5 * time.Second):
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		<-h.exited
+		return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
+	}
 }
 ```
 
-or (b) if these pipelines are intentionally allowed to read under the gate
-(build-but-block must keep maintaining the store), then the counter / assertion
-contract is wrong: the bench cell cannot assert `== 0` against a counter that
-legitimately moves. In that case scope the counter to *tool-path* reads (or
-assert against a tool-read-only sub-counter) so the invariant matches reality.
-Pick one; the current code commits to neither and the two halves contradict on a
-store-on arm. At minimum, add a store-ON `no_semantic` cell to the smoke matrix
-so this path is actually exercised before the guarantee is claimed.
+This guarantees exactly one `Wait()` for the process lifetime; `Stop` and `Kill`
+both observe the same exit signal without ever racing.
 
 ## Warnings
 
-### WR-01: `SemanticStoreReadsValue()` reports daemon-lifetime total, not per-cell — multi-workspace / warm-daemon reuse inflates the assertion
+### WR-01: 12s graceful-stop budget is shorter than the daemon's worst-case shutdown wall-time
 
-**File:** `internal/obs/metrics.go:766-778`, `internal/daemon/shutdown.go:60-62`
+**File:** `bench/runtime/cell.go:71-78` (`daemonGracefulStopTimeout = 12 * time.Second`); cross-ref `internal/daemon/shutdown.go:12-62`
+**Issue:**
+The comment claims the 12s budget is "aligned with the daemon's default
+`Daemon.ShutdownTimeout` (10s) ... so a daemon that is genuinely draining ... has
+the full shutdown window." But `shutdown()` is not bounded by `ShutdownTimeout`
+alone: the kernel `Shutdown(ctx)` uses the `ShutdownTimeout` context (up to 10s),
+and the trace-exporter flush at `shutdown.go:43` uses a **separate 5s context**
+that runs *after* the kernel shutdown. Worst-case `shutdown()` wall-time is
+therefore ≈ 10s + 5s ≈ 15s, plus the post-flush reads-total emit and listener
+close. A daemon that uses most of its kernel-drain window followed by a slow trace
+flush exceeds 12s.
 
-**Issue:** The counter is a process-global monotone total emitted once at daemon
-shutdown. The bench spawns a fresh per-cell daemon (`cell.go:453`), so today the
-total ≈ per-cell, but the assertion `== 0` is exact and brittle: any future reuse
-of a daemon across cells, any pre-activation warm read, or any daemon-level
-health/readiness probe that touches the store would make the total non-zero for
-reasons unrelated to the cell under test. The "exact zero" assertion has no
-baseline subtraction.
+When that happens `Stop` times out, returns `graceful=false`, and `RunCell`
+escalates to `Kill` — which SIGKILLs the daemon *mid-shutdown*, potentially before
+`shutdown.go:60-62` emits the reads-total line. The fail-closed gate
+(`!present`) then turns a slow-but-correct shutdown into a spurious HARD cell
+failure, converting a latency hiccup into a false ABLATE-06 violation.
 
-**Fix:** Snapshot the counter at cell start (post-daemon-boot, pre-drive) and
-assert `after - before == 0`, or document and enforce the one-daemon-per-cell
-invariant the exact-zero assertion silently depends on.
+**Fix:** size the budget off the true worst case (kernel `ShutdownTimeout` + the
+5s trace flush + slack), e.g.:
 
-### WR-02: `scrapeSemanticReadsTotal` treats a missing reads-total line as 0 reads — a daemon that crashes before shutdown silently passes the gate
+```go
+// kernel drain (ShutdownTimeout, default 10s) + trace flush (5s, shutdown.go:43) + slack
+const daemonGracefulStopTimeout = 20 * time.Second
+```
 
-**File:** `bench/runtime/cell.go:77-109` (and the asserted behavior in
-`no_semantic_zero_reads_test.go:91-101`)
+and correct the comment to account for the additive 5s flush window.
 
-**Issue:** If the daemon is `SIGKILL`ed (`cell.go:535` `h.Kill()`) before it runs
-its graceful `shutdown()` (which emits the reads-total line at
-`shutdown.go:60-62`), no line is written and the scraper returns `(0, nil)` —
-"treated as zero reads, not an error." But `RunCell` kills the daemon with
-`h.Kill()` and only THEN taps the log; if `Kill()` is SIGKILL rather than a
-graceful signal, the shutdown hook never runs and the reads-total line is never
-emitted, so the zero-reads gate is vacuously satisfied for EVERY run — it can
-never observe a real non-zero count. The gate's teeth depend entirely on
-`h.Kill()` delivering a signal that triggers graceful shutdown.
+### WR-02: Emission integration test's strict `require.True(graceful)` will flake on slow shutdown
 
-**Fix:** Verify `subprocess.Handle.Kill()` sends a graceful signal (SIGTERM) and
-waits for the graceful-shutdown path, not SIGKILL. If termination is SIGKILL,
-the read-counter line is never written and the entire `assertNoSemanticReads`
-gate is dead. Add a positive test that a real (non-synthetic) daemon run emits
-the line, or assert the line's presence (not just its value) on the
-`no_semantic` arm so a missing line is a failure, not a silent pass.
+**File:** `bench/runtime/no_semantic_emission_integration_test.go:71-76`
+**Issue:**
+`require.True(t, graceful, ...)` hard-fails whenever the real daemon does not exit
+within `daemonGracefulStopTimeout`. Given WR-01 (the budget can be shorter than the
+daemon's worst-case shutdown) and that this is a real-daemon test subject to host /
+CI load, the assertion is a flake source. The load-bearing proof here is the
+*presence of the reads-total line emitted by the graceful path* (lines 80-86), not
+strictly that the first `Stop` won the race within 12s.
 
-### WR-03: `ValidateCriticalEdges` is in the analyzer's `semanticReadMethods` but is a documented no-read passthrough — name-based gate over-broad
+**Fix:** either raise the budget per WR-01 so the graceful window comfortably
+exceeds the daemon's worst case, or keep the presence assertion as load-bearing and
+downgrade the `graceful` flag to a logged expectation:
 
-**File:** `internal/lint/ablationleakage/analyzer.go:57-61`; method at
-`internal/daemon/semantic_wiring.go:1266-1275`
+```go
+graceful, stopErr := h.Stop(daemonGracefulStopTimeout)
+require.NoError(t, stopErr, "graceful Stop must not error")
+if !graceful {
+	t.Logf("daemon did not exit within %s; relying on line-presence assertion", daemonGracefulStopTimeout)
+}
+require.NoError(t, h.Kill())
+present, count := scanReadsTotalLine(t, daemonLog)
+require.True(t, present, "...")
+```
 
-**Issue:** `semanticReadMethods` flags `ValidateCriticalEdges` as a "data-bearing
-semantic read," but the production implementation is a permanent passthrough that
-issues no store traffic (`semantic_wiring.go:1251-1275`: "returns the input edges
-with LSPConfirmed=false, without issuing any LSP traffic"). Conversely, genuine
-counted reads like `RankFromSeeds`, `LocateSymbol`, `SymbolID`, and `ExpandFrom`'s
-deeper helpers are NOT in the set. The analyzer's call-site gate is a coarse
-name-match approximation (acknowledged in the doc comment), but the chosen set
-both over-includes a no-op and under-includes real reads — so the static gate
-gives a false sense of coverage relative to the runtime counter (CR-01).
+### WR-03: `scrapeSemanticReadsTotal` treats a `msg`-present-but-`count`-malformed line as a clean count=0
 
-**Fix:** Align the flagged set with the methods that actually reach the counted
-chokepoint, or document explicitly (in the analyzer doc) that the set is a
-representative tripwire, not an exhaustive read inventory, and that the runtime
-counter (Plan 05) is the authoritative coverage mechanism.
+**File:** `bench/runtime/cell.go:114-121`
+**Issue:**
+The scraper unmarshals into `readsTotalLine{Msg string; Count int}`. A line whose
+`msg` matches but whose `count` is JSON-null or wrong-typed unmarshals with
+`raw.Count` silently at its zero value while `present` is set true — recording
+`(0, true)`, a clean pass on the no_semantic arm even though the real count was
+never parsed. The phase's own stated concern ("line-present-but-malformed") is only
+half-closed: presence is validated, but a garbled count masquerades as 0. (A
+line that fails to unmarshal *entirely* is correctly skipped → `present=false` →
+fail-closed; this gap is specifically the partially-decodable line.)
 
-### WR-04: `gatedCfgGate` silently ignores `effSemanticDisabled` precedence vs `cfg.SemanticIndex.Enabled` only via AND — no guard if a future caller passes a nil cfg with the gate off
+**Fix:** decode `count` as `*int` and treat a `msg`-matching line whose `count` is
+absent/non-integer as malformed → do not set `present=true` for it:
 
-**File:** `internal/daemon/semantic_gate.go:58-61`
+```go
+type readsTotalLine struct {
+	Msg   string `json:"msg"`
+	Count *int   `json:"count"`
+}
+...
+if raw.Msg == daemonReadsTotalMsg {
+	if raw.Count == nil {
+		continue // msg matched but count missing/garbled — not a valid proof line
+	}
+	count = *raw.Count
+	present = true
+}
+```
 
-**Issue:** `gatedCfgGate` computes `enabled := cfg != nil && cfg.SemanticIndex.Enabled && !effSemanticDisabled`.
-This is correct for the two intended states, but the `gatedSymbolsLookupFn` /
-`gatedCfgGate` pair encode the same `effSemanticDisabled` decision in two places
-(lookup forcing in one helper, gate disabling in the other). If a future edit
-changes one and not the other, the lookup and the gate can disagree
-(Noop-lookup + enabled-gate, or real-lookup + disabled-gate), and
-`integ.ChooseSource`'s ladder would pick an inconsistent source. The unit test
-(`semantic_gate_test.go`) covers the matched pairs but not the mismatched ones.
+### WR-04: Uncounted store reads bypass the `helix_semantic_store_reads_total` chokepoint
 
-**Fix:** Consider folding both decisions behind a single `gatedSemanticWiring(cfg,
-effSemanticDisabled)` constructor returning the matched `(lookupFn, cfgGate)` pair
-so they cannot drift, or add an explicit invariant assertion that a Noop lookup
-always accompanies a disabled gate at each call site.
+**File:** cross-module — `internal/semantic/store/effective_graph.go:61-74` (counted wrappers) vs. raw `s.db.QueryRowContext` / `t.tx.QueryRowContext` / `snap.tx.QueryContext` callers (e.g. `overlay.go:694,967`, `snapshot.go:558`)
+**Issue:**
+The zero-reads gate assumes every back-channel read funnels through
+`s.queryContext` / `s.queryRowContext`, which increment the counter. Several
+tx-scoped read paths call the raw `*sql.Tx` / `*sql.DB` methods directly and do
+NOT increment the counter (`snapshot.go:558 snap.tx.QueryContext` is a read inside
+a snapshot tx; `overlay.go:694,967 t.tx.QueryRowContext` are tx-scoped reads). If a
+gated-but-not-fully-un-wired background path ever reaches one of these uncounted
+reads on the no_semantic arm, `SemanticStoreReadsValue()` stays 0 and the gate
+passes vacuously — the counter cannot witness a read it does not instrument.
+(`overlay.go:129` is an `UPDATE ... RETURNING` RMW, correctly out of a *reads*
+counter's scope.) This is largely pre-existing, but the phase elevates the counter
+to a correctness gate, so the scope of what the gate can prove should be tightened
+or documented.
+
+**Fix:** route the tx-scoped *read* paths (`snapshot.go:558`, `overlay.go:694,967`)
+through a counting wrapper, or add a comment at the gate (cell.go:602 /
+semantic_gate.go) explicitly scoping the guarantee to reads through
+`effective_graph.go`'s wrappers so a future maintainer does not over-trust the
+counter.
 
 ## Info
 
-### IN-01: Stale "1 partial row" comment after the no_semantic arm stopped being partial
+### IN-01: `prePatchSnapshot` and the post-patch path both run `r.Setup`, double-running setup
 
-**File:** `bench/runtime/five_of_six_test.go:131`
+**File:** `bench/runtime/cell.go:327-339` and `:644-646`
+**Issue:** `prePatchSnapshot` calls `r.Setup` then `r.RunTests`; the post-patch
+block (644-646) calls `r.Setup` again before `RunTests`. The comment acknowledges
+this is "harmless for the hermetic Go runner," but a runner with side-effecting
+Setup (module fetch, build-cache mutation) would run setup twice per cell.
+**Fix:** document `LanguageRunner.Setup` as idempotent, or track a `setupDone`
+flag in the cell.
 
-**Issue:** The comment "Exactly 4 real rows + 1 partial row = 5 rows on disk" and
-the assertion message "4 real-with-deltas + 1 no_semantic row" describe the
-no_semantic row as "partial," but Phase 81's whole point is that this row is now a
-clean (non-partial) measurement (the deferral marker was removed). The body and
-the rest of the file are correct; only the "partial" wording is stale.
+### IN-02: `_ = rank.engine.SetVersionNotifier` evaluates a method value purely to "surface the keyword"
 
-**Fix:** Replace "1 partial row" with "1 clean no_semantic row" to match the
-post-Phase-81 semantics asserted two blocks above.
+**File:** `internal/daemon/daemon.go:464`
+**Issue:** Takes a method value and discards it solely so the identifier appears in
+daemon wiring (per the inline comment). Dead code that conveys no behavior and can
+mislead readers into thinking a notifier is wired here. Not introduced by this
+phase, but adjacent to the gated region under review.
+**Fix:** remove the line and reference the real channel-based notify path in a
+comment instead of an executable no-op.
 
-### IN-02: `SemanticStoreReadsValue` float→int truncation documented as exact but uses `int(*float64)` with no overflow note for 32-bit builds
+### IN-03: Duplicated JSONL reads-total parsing in test and production can drift
 
-**File:** `internal/obs/metrics.go:766-778`
-
-**Issue:** The doc says "a counter only ever increments, so the float-to-int
-truncation is exact for any count the process can reach." On a 32-bit platform
-`int` is 32-bit; a count > 2^31 would wrap. Practically unreachable for a
-short-lived bench daemon, but the "exact for any count" claim is stronger than
-the type guarantees.
-
-**Fix:** Either narrow the comment ("exact for any count a bench daemon reaches")
-or return `int64` and have the scraper read `int64`.
-
-### IN-03: Two-place duplication of the gate decision string in logs/comments increases drift risk (doc-only)
-
-**File:** `internal/daemon/semantic_wiring.go:262-317`
-
-**Issue:** The gated/non-gated branches list all 16 `Set*Accessor(nil)` calls
-twice (once real, once nil-reset). This is intentional (Pitfall 5 idempotent
-reset for the process-global singleton) but is a long literal duplication; adding
-a 17th accessor requires editing both arms and the `"setters", 14` log count,
-which is already out of sync (16 setters are listed but the log says 14, with two
-deferred — TypeChain/EdgeEvidence — explaining the delta). The count literal is a
-maintenance trap.
-
-**Fix:** Derive the setter count or drop the numeric literal; at minimum add a
-test asserting the two arms cover the same setter set so they cannot drift.
-
-### IN-04: `assertNoSemanticReads` couples to the mode-name string constant `your_agent_no_semantic` in three files
-
-**File:** `bench/runtime/cell.go:61`, `bench/runtime/no_semantic_zero_reads_test.go:24`,
-`internal/profile/bench_profiles_test.go:145` (profile name `bench-no-semantic`)
-
-**Issue:** The runtime gate keys off the bench *mode* name (`your_agent_no_semantic`)
-while the profile that actually sets `DisableSemanticSubsystem` is `bench-no-semantic`;
-the mode→profile mapping lives in the MODE.md resolver. If the mode is renamed or
-the resolver maps `your_agent_no_semantic` to a different profile, the runtime
-zero-reads gate and the profile's disable flag would silently decouple (the gate
-would assert against a daemon that never set the flag, or vice versa).
-
-**Fix:** Add an integration assertion that the `your_agent_no_semantic` mode
-resolves to a profile with `DisableSemanticSubsystem==true`, pinning the
-mode↔flag coupling the gate depends on.
+**File:** `bench/runtime/no_semantic_emission_integration_test.go:95-123` (`scanReadsTotalLine`) duplicates `bench/runtime/cell.go:95-127` (`scrapeSemanticReadsTotal`)
+**Issue:** `scanReadsTotalLine` reimplements the production scraper's buffer size,
+struct, last-line-wins, and skip-on-error logic. The local copy is justified (the
+test asserts against the file the daemon wrote, not via the scraper), but the two
+can drift — e.g. the WR-03 `*int` fix would need applying in both.
+**Fix:** annotate both sites that they must stay in lockstep, or factor the parse
+into a shared exported helper and have the test assert raw-file presence
+separately.
 
 ---
 

@@ -215,6 +215,7 @@ func newSemanticBundle(
 	metrics *obs.Metrics,
 	getSession func(ctx context.Context) *mcp.SessionInfo,
 	wsKeyFn func() workspace.WorkspaceKey,
+	effSemanticDisabled bool,
 ) *semanticBundle {
 	if store == nil {
 		return nil
@@ -248,8 +249,17 @@ func newSemanticBundle(
 	// Resolve the registered SemanticSkill. nil when semantic disabled or
 	// the skill failed to register; downstream wiring is a no-op in that
 	// case.
+	// Phase 81 ABLATE-06 / Pitfall 3 (A5): under the gate, SKIP the entire
+	// Set*Accessor block so the direct-DuckDB-read SemanticSkill tools
+	// (find_related_symbols, explain_symbol_deep, validate_graph_edge,
+	// cluster/impact) and the SetImpactLookup ExpandFrom back-channel get nil
+	// accessors. These tools bypass integ.ChooseSource, so the cfgGate gate is
+	// insufficient — leaving the accessors nil is the structural block (the
+	// handlers already nil-guard). This closes the THIRD integLookupAccessor
+	// hand-out (the other three are gated in daemon.go: symbols, repomap,
+	// guardrail). The bundle/store itself stays built (D-04 build-but-block).
 	b.skill = semantic.GetSemanticSkill()
-	if b.skill != nil {
+	if b.skill != nil && !effSemanticDisabled {
 		b.skill.SetStore(storeAcc)
 		b.skill.SetScheduler(b.schedulerAccessor())
 		b.skill.SetQueue(b.queueAccessor())
@@ -273,6 +283,35 @@ func newSemanticBundle(
 				"setters", 14,
 				"bleve_subdir", cfg.BleveSubdir,
 				"index_timeout", cfg.IndexTimeout,
+			)
+		}
+	} else if b.skill != nil {
+		// Phase 81 ABLATE-06 / Pitfall 5: under the gate, EXPLICITLY clear every
+		// accessor to nil rather than merely skipping the setters. SemanticSkill
+		// is a process-global singleton (semantic.GetSemanticSkill()); a prior
+		// non-gated daemon construction in the same process would otherwise leave
+		// a STALE real accessor wired. The idempotent null-object reset (mirroring
+		// the repomap SetSemanticLookup(nil) reset in daemon.go) is the structural
+		// block that guarantees the direct-read tools have no read path.
+		b.skill.SetStore(nil)
+		b.skill.SetScheduler(nil)
+		b.skill.SetQueue(nil)
+		b.skill.SetLive(nil)
+		b.skill.SetRunner(nil)
+		b.skill.SetRetrieval(nil)
+		b.skill.SetCompactor(nil)
+		b.skill.SetSessionAccessor(nil)
+		b.skill.SetSymbolByName(nil)
+		b.skill.SetExtractorRun(nil)
+		b.skill.SetClusterMap(nil)
+		b.skill.SetClusterMember(nil)
+		b.skill.SetClusterPageRank(nil)
+		b.skill.SetImpactLookup(nil)
+		b.skill.SetSymbolEdges(nil)
+		b.skill.SetClusterMembership(nil)
+		if logger != nil {
+			logger.Info("semantic skill accessors gated off (effSemanticDisabled)",
+				"setters", 0,
 			)
 		}
 	}

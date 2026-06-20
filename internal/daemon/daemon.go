@@ -527,6 +527,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			observability.Metrics(),
 			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
 			wsKeyFn,
+			effSemanticDisabled, // Phase 81 ABLATE-06: gate the Set*Accessor block (Pitfall 3 / A5)
 		)
 		// Phase 69-05 / STATUS-02: bind the compactBundle bleveMetaFn so
 		// every per-workspace compactor receives the matching bleve

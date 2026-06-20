@@ -272,10 +272,17 @@ Plans:
   4. The same-model-same-budget invariant holds: `baseline_rag` agent uses the identical fairness-contract model snapshot and budget as `your_agent_full`; embedding-API calls are NOT charged against the agent's per-task budget (documented in `BENCH.md`).
 
 **Plans**: 3 plans
-
 Plans:
+**Wave 1**
+
 - [ ] 83-01-PLAN.md — bench/ragindex leaf package (chromem-go index build/cache, deterministic corpus_sha, embedder selection) + EMBED-CHOICE.md
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 83-02-PLAN.md — standalone cmd/helix-bench-rag MCP server (exactly 4 tools, --help) + no-kernel/no-semantic import-boundary vet gate
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 83-03-PLAN.md — bench wiring: embedder_id result key, real baseline_rag drive leg (out-of-band index, same contract+budget), flip deferral tests, BENCH.md/MODE.md rewrite
 
 ### Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard

@@ -71,6 +71,36 @@ func TestPassAtK(t *testing.T) {
 	}
 }
 
+// TestPassAtKDomainGuard locks WR-02: the k>n branch must NOT fabricate 1.0 for
+// c<n (the estimator is undefined out of its k<=n domain). The only k>n input
+// with a guaranteed answer is c==n (every draw correct -> 1.0); any other k>n is
+// an out-of-contract caller bug surfaced as NaN, never a silent wrong 1.0.
+func TestPassAtKDomainGuard(t *testing.T) {
+	// c < n with k > n MUST be NaN, not the old wrong 1.0.
+	for _, tc := range []struct{ n, c, k int }{
+		{2, 0, 3}, // zero correct samples -> must not claim success
+		{3, 1, 4},
+		{5, 4, 6},
+	} {
+		got := PassAtK(tc.n, tc.c, tc.k)
+		if !math.IsNaN(got) {
+			t.Fatalf("PassAtK(%d,%d,%d) = %.10f, want NaN (estimator undefined for k>n, c<n)",
+				tc.n, tc.c, tc.k, got)
+		}
+	}
+	// c == n with k > n is the one guaranteed case: every draw is correct -> 1.0.
+	for _, tc := range []struct{ n, c, k int }{
+		{2, 2, 3},
+		{4, 4, 10},
+	} {
+		got := PassAtK(tc.n, tc.c, tc.k)
+		if math.Abs(got-1.0) > 1e-12 {
+			t.Fatalf("PassAtK(%d,%d,%d) = %.10f, want 1.0 (c==n, all draws correct)",
+				tc.n, tc.c, tc.k, got)
+		}
+	}
+}
+
 // TestPassAtKAntiNaive locks Pitfall 1: the result for the k>=2 anchor MUST NOT
 // equal the biased naive estimator 1-(1-c/n)^k. This is an explicit guard that
 // the implementation did not silently regress to the forbidden form.

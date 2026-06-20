@@ -116,6 +116,15 @@ func BCaInterval(vals []float64, stat func([]float64) float64, B int, alpha floa
 	// Step 5 — read endpoints off the sorted bootstrap distribution.
 	lo = quantile(thetaStar, a1)
 	hi = quantile(thetaStar, a2)
+	// Ordering guard (WR-01): under a large bias-correction z0 combined with a
+	// sizable acceleration a, the BCa-adjusted percentiles (a1, a2) can cross
+	// (a1 > a2), yielding lo > hi and a visibly wrong published CI rendered as
+	// "point [lo, hi]" with the endpoints inverted. Swap so the returned interval
+	// always satisfies lo <= hi. The swap is deterministic and preserves the
+	// [0,1]/percentile clamping already applied in bcaPercentiles.
+	if lo > hi {
+		lo, hi = hi, lo
+	}
 	return lo, hi, true
 }
 

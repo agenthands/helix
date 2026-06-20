@@ -187,3 +187,60 @@ func TestBCa(t *testing.T) {
 		assert.False(t, math.IsNaN(lo) || math.IsNaN(hi) || math.IsInf(lo, 0) || math.IsInf(hi, 0))
 	})
 }
+
+// TestBCaPercentilesCanInvert documents the WR-01 root cause: under an extreme
+// bias-correction z0 combined with a sizable acceleration a, the BCa-adjusted
+// percentile levels (a1, a2) CROSS (a1 > a2). The enumerated cases mirror the
+// review's findings (alpha=0.05). This is the upstream condition the
+// BCaInterval ordering guard must absorb.
+func TestBCaPercentilesCanInvert(t *testing.T) {
+	const alpha = 0.05
+	cases := []struct{ z0, a float64 }{
+		{-1.00, -0.50},
+		{2.00, 1.00},
+		{-3.00, -0.50},
+	}
+	sawInversion := false
+	for _, tc := range cases {
+		a1, a2 := bcaPercentiles(tc.z0, tc.a, alpha)
+		if a1 > a2 {
+			sawInversion = true
+		}
+		// Whatever the order, both levels must stay in [0,1] (clamp discipline).
+		assert.GreaterOrEqual(t, a1, 0.0)
+		assert.LessOrEqual(t, a1, 1.0)
+		assert.GreaterOrEqual(t, a2, 0.0)
+		assert.LessOrEqual(t, a2, 1.0)
+	}
+	require.True(t, sawInversion,
+		"the enumerated extreme (z0,a) cases must reproduce an a1>a2 inversion")
+}
+
+// TestBCaIntervalOrderingGuard locks WR-01: a sample whose bootstrap-of-means
+// distribution drives an extreme z0 (and a non-trivial jackknife a) must NOT
+// return an inverted interval (lo > hi). The ordering guard swaps inverted
+// endpoints so the published CI always satisfies lo <= hi. We scan many seeds
+// and several skewed/discrete samples to surface any inversion the guard must
+// catch; with the guard in place, every returned interval is well-ordered.
+func TestBCaIntervalOrderingGuard(t *testing.T) {
+	samples := [][]float64{
+		// Highly skewed discrete sample: drives z0 far from 0 and a non-zero a.
+		{0, 0, 0, 0, 0, 0, 0, 0, 1, 100},
+		{0, 0, 0, 1, 1, 1, 50},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1, 1000},
+		{0, 0, 0, 0, 0, 1, 1, 2, 3, 80},
+	}
+	for si, vals := range samples {
+		for seed := uint64(1); seed <= 64; seed++ {
+			lo, hi, ok := BCaInterval(vals, statMean, testB, testAlpha, seedRNG(seed))
+			if !ok {
+				continue
+			}
+			require.LessOrEqualf(t, lo, hi,
+				"sample[%d] seed=%d returned inverted CI lo=%.6f hi=%.6f (ordering guard failed)",
+				si, seed, lo, hi)
+			require.Falsef(t, math.IsNaN(lo) || math.IsNaN(hi),
+				"sample[%d] seed=%d produced NaN endpoint", si, seed)
+		}
+	}
+}

@@ -24,11 +24,19 @@ import "math"
 // [CITED: Chen et al. 2021, "Evaluating Large Language Models Trained on Code",
 // arXiv:2107.03374, §2.1]
 func PassAtK(n, c, k int) float64 {
-	// Guard k > n per D-11. Callers pass k<=n; if k exceeds the available
-	// samples the estimator is undefined, so we fold it into the n-c<k branch
-	// (return 1.0) rather than producing a nonsense product.
+	// Guard k > n per D-11 (WR-02). The unbiased estimator's domain is k <= n
+	// (sampling k items without replacement from n). For k > n the estimator is
+	// UNDEFINED, and a blanket return 1.0 is mathematically wrong: e.g.
+	// PassAtK(n=2, c=0, k=3) would claim certain success despite ZERO correct
+	// samples. The only k>n input with a guaranteed answer is c == n (every draw
+	// is correct -> 1.0); any other k>n is an out-of-contract caller bug, so we
+	// surface it as NaN rather than fabricating 1.0. Callers in this package cap
+	// k <= ExpectedN <= n via pickKN, so this branch is unreachable in practice.
 	if k > n {
-		return 1.0
+		if c == n {
+			return 1.0
+		}
+		return math.NaN()
 	}
 	if n-c < k {
 		// Fewer than k incorrect samples → any k samples must include at least

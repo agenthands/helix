@@ -220,7 +220,7 @@ Plans:
 
 **Wave 4** *(gap closure — 81-VERIFICATION.md GAP 1 / WR-02: criterion #2 runtime assertion was vacuous end-to-end)*
 
-- [ ] 81-06-PLAN.md — graceful DaemonHandle.Stop (SIGTERM) so d.shutdown() flushes the reads-total line on a real bench run + fail-CLOSED scrape/assert (absent line hard-fails the no_semantic arm) + real-daemon emission integration test (ABLATE-06, D-05)
+- [x] 81-06-PLAN.md — graceful DaemonHandle.Stop (SIGTERM) so d.shutdown() flushes the reads-total line on a real bench run + fail-CLOSED scrape/assert (absent line hard-fails the no_semantic arm) + real-daemon emission integration test (ABLATE-06, D-05)
 
 **Wave 5** *(gap closure — 81-VERIFICATION.md GAP 2 / CR-01: criterion #1 background pipelines ungated; blocked on Wave 4's fail-closed teeth)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 82-02-PLAN.md
-last_updated: "2026-06-20T21:56:18.106Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 03 executed (HumanEval unbiased pass@k, STATS-03)
+stopped_at: Completed 82-05-PLAN.md
+last_updated: "2026-06-20T22:01:35.891Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 05 executed (aggregator loader + fail-closed N-gate, STATS-01 consumer half)
 progress:
   total_phases: 15
   completed_phases: 7
   total_plans: 42
-  completed_plans: 38
+  completed_plans: 39
   percent: 47
 ---
 
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: 03 complete
-Status: Wave 1 in progress; pass@k primitive (STATS-03) landed; Plan 04+ ready
-Last activity: 2026-06-21 -- Phase 82 Plan 03 executed (HumanEval unbiased pass@k, STATS-03)
+Plan: 05 complete
+Status: Wave 1 in progress; STATS-01 consumer half (loader + fail-closed N-gate) landed
+Last activity: 2026-06-21 -- Phase 82 Plan 05 executed (aggregator loader + fail-closed N-gate, STATS-01 consumer half)
 
 ### Session Continuity
 
-Last session: 2026-06-20T21:55:04.411Z
-Stopped at: Completed 82-02-PLAN.md
+Last session: 2026-06-20T22:01:35.886Z
+Stopped at: Completed 82-05-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -107,6 +107,7 @@ Resume file: None
 | Phase 82 P01 | ~12min | 3 tasks | 6 files (2 created in bench/cost) |
 | Phase 82 P02 | ~3min | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
 | Phase 82 P03 | ~4m | 2 tasks | 2 files |
+| Phase 82 P05 | ~3m | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
 
 ## Decisions
 
@@ -169,3 +170,4 @@ Resume file: None
 - [Phase 82 P01]: Open Q1 RESOLVED — MOVED CostRow/CostTable + freshness gate out of cmd/helix-bench package main into importable bench/cost (exactly one type CostTable in the tree). bench/cost exports CostRow, CostTable, LoadCostTable, ValidateCostTable(today,path), PriceFor(ct,modelID,today), DateLayout, StalenessWindowDays. PriceFor is the per-lookup fail-closed gate the Plan 04 aggregator reuses: unknown model_id / past valid_until / >90d-stale last_verified are all HARD errors (D-13). validate-cost-table CLI gutted to a thin cost.ValidateCostTable shim (behavior-identical); package-main dateLayout/stalenessWindowDays kept as local copies for the sibling verify-tos validator. ExpandMatrix gained a runs int axis (D-04, STATS-01 PRODUCER half): emits N cells per (b,l,m,t) with RunIndex 0..N-1, runs<1 clamps to 1, deterministic (runs innermost), no path-machinery change. helix-bench run --runs N (default 3) wired. STATS-01 not yet complete — the aggregator REFUSAL half lands in Plan 05.
 - [Phase 82 P02]: STATS-02 DONE — bench/aggregator.BCaInterval(vals, stat, B, alpha, rng) (lo,hi,ok) is a PROPER BCa: z0 = phiInv(#{theta*<theta_hat}/B) with phiInv=Sqrt2*Erfinv, plus jackknife acceleration a (Efron-Tibshirani eq 14.15); endpoints via bcaPercentiles (eq 14.10) read off a seeded math/rand/v2 PCG bootstrap distribution. NOT a percentile bootstrap — the RED test asserts BCa endpoints diverge from a plain-percentile interval over the SAME seeded distribution (fake-BCa discriminator) and that proof passed GREEN. Determinism (D-08): same seed => bit-identical [lo,hi]. Degenerate matrix (D-09): empty->ok=false null CI (never fabricated [0,0]); all-identical/m==1->point CI [v,v]; den~0->percentile fallback + clamp01; no NaN/Inf. Quantile rule LOCKED to nearest-rank idx=round(p*(B-1)) for byte-stable reproduction (A5). StatMean exported for Plan 06 callers. Pure unit, no HELIX_BIN (D-01), zero new deps (stdlib math + math/rand/v2).
 - [Phase ?]: pass@k locked to HumanEval unbiased c-term product form; exported PassAtK; lgamma logBinom independent cross-check (D-10/D-11)
+- [Phase 82 P05]: STATS-01 consumer half DONE — bench/aggregator.Load(runDir, expectedN) (*Loaded, error) globs <runDir>/<task>/<mode>/<run_index>/result.v2.json, groups VALID rows by (task,mode), fail-closed N-gate (D-05). valid row = exists + json.Unmarshal + runtime.Validate==nil; an invalid/garbage file is EXCLUDED (counts as deficient, not silently skipped to pass). expectedN is the caller arg (--runs/manifest), NEVER len(glob) (Pitfall 3) — proven by the 3-files-but-1-garbage => got 2 want 3 test. Any cell < expectedN => fmt.Errorf("aggregate: insufficient runs: %v", deficient) with every "<task>/<mode>: got X want N" named (sorted), result nil => caller writes NOTHING. rowMetrics mirrors evaluators.Metrics pointer types (*bool/*int/*float64), nil stays nil never fabricated 0 (Pitfall 4); full doc preserved as map[string]json.RawMessage for write-back. Glob rooted at runDir via filepath.Join, non-numeric/negative run_index skipped (T-82-05-02). Pure unit, no HELIX_BIN (D-01). Plan 06 orchestrator calls Load first and aborts before rendering on any deficiency.

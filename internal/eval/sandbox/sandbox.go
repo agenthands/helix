@@ -189,6 +189,57 @@ func (h *DaemonHandle) Pid() int {
 	return h.cmd.Process.Pid
 }
 
+// Stop attempts a GRACEFUL teardown: it sends SIGTERM to the daemon's process
+// GROUP and waits up to timeout for the process to exit on its own. SIGTERM is
+// caught by the daemon's signal.NotifyContext (daemon.go:1179), which unblocks
+// g.Wait() (daemon.go:1273) so d.shutdown() runs — flushing the
+// "semantic store reads total" log line (shutdown.go:60-62) that SIGKILL can
+// never produce. Phase 81 ABLATE-06 (WR-02) relies on this: the bench cell
+// drains the daemon GRACEFULLY here BEFORE falling back to Kill, so the
+// reads-total proof line is actually emitted on a real run.
+//
+// Returns graceful=true iff the process exited within timeout (the line was
+// flushed). On timeout it returns graceful=false WITHOUT blocking past the
+// deadline — the caller is expected to follow up with Kill (whose group SIGKILL
+// + buffered drain reaps the straggler and the in-flight Wait goroutine). A
+// nil/already-exited process is a no-op returning graceful=true (mirrors Kill's
+// nil and os.ErrProcessDone guards). Stop does NOT remove the socket file or
+// scratch — RunCell/Kill own lifecycle teardown.
+func (h *DaemonHandle) Stop(timeout time.Duration) (graceful bool, err error) {
+	if h == nil || h.cmd == nil || h.cmd.Process == nil {
+		// Nothing to stop — treat as a graceful no-op (mirrors Kill's nil guard).
+		return true, nil
+	}
+	pid := h.cmd.Process.Pid
+	// Send SIGTERM to the whole process group (the daemon is its own group leader
+	// per Setpgid in StartDaemon, mirroring Kill's -pid group-targeting). ESRCH
+	// (group already gone) is benign — fall through to the Wait below.
+	if kerr := syscall.Kill(-pid, syscall.SIGTERM); kerr != nil {
+		if errors.Is(kerr, syscall.ESRCH) {
+			// Group already gone — reap any zombie and report graceful exit.
+			_ = h.cmd.Wait()
+			return true, nil
+		}
+		return false, fmt.Errorf("sandbox: SIGTERM daemon %s/%s: %w", h.taskID, h.mode, kerr)
+	}
+
+	// Wait for graceful exit, bounded by timeout. The done channel is buffered
+	// (cap 1) so the Wait goroutine never leaks/blocks on send if we time out —
+	// the subsequent Kill's group-SIGKILL makes Wait() return and the goroutine
+	// completes its send into the buffer.
+	done := make(chan error, 1)
+	go func() { done <- h.cmd.Wait() }()
+	select {
+	case <-done:
+		// Graceful exit within timeout: d.shutdown() ran and flushed the line.
+		return true, nil
+	case <-time.After(timeout):
+		// Not graceful within the deadline. Do NOT drain done here (Kill owns the
+		// group-SIGKILL + drain); just report so the caller falls back to Kill.
+		return false, nil
+	}
+}
+
 // Kill terminates the daemon process and waits for it to exit.
 func (h *DaemonHandle) Kill() error {
 	if h.cmd == nil || h.cmd.Process == nil {

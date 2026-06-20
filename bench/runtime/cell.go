@@ -68,6 +68,15 @@ const noSemanticMode = "your_agent_no_semantic"
 // internal/daemon/shutdown.go.
 const daemonReadsTotalMsg = "semantic store reads total"
 
+// daemonGracefulStopTimeout bounds the graceful SIGTERM teardown RunCell attempts
+// before falling back to the hard Kill. It is aligned with the daemon's default
+// Daemon.ShutdownTimeout (10s; internal/daemon/shutdown.go:13-16) so a daemon that
+// is genuinely draining its kernel/LS workers has the full shutdown window to run
+// d.shutdown() and flush the "semantic store reads total" line (Phase 81 ABLATE-06,
+// WR-02) BEFORE the Kill fallback reaps it. A small slack is added so a daemon that
+// uses its entire ShutdownTimeout still beats our deadline.
+const daemonGracefulStopTimeout = 12 * time.Second
+
 // scrapeSemanticReadsTotal reads the semantic-store read counter value the daemon
 // emits at shutdown (Task 0 path A) from a daemon JSONL log file. It scans for the
 // last line whose msg == daemonReadsTotalMsg and returns its count field. A log
@@ -526,12 +535,36 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return preserve(fmt.Errorf("bench/runtime: unknown agent %q (want scripted|claude)", cfg.Agent))
 	}
 
-	// (5) Terminate the daemon, THEN PID-gated tap (D-08). The tap reads
-	// daemon.log AFTER the daemon exits; its correctness depends on the daemon
-	// writing tool_call log lines synchronously/unbuffered at the app layer (NOT
-	// on the kill "flushing" anything — SIGKILL terminates immediately and cannot
-	// flush userspace buffers). If daemon log buffering is ever introduced, this
-	// tap breaks and the kill-then-tap ordering must be revisited.
+	// (5) Terminate the daemon, THEN PID-gated tap (D-08). Teardown is now a
+	// graceful Stop (SIGTERM + bounded wait) FOLLOWED BY a Kill fallback:
+	//
+	//   - h.Stop sends SIGTERM to the daemon group, which the daemon's
+	//     signal.NotifyContext catches → g.Wait() unblocks → d.shutdown() runs and
+	//     FLUSHES the "semantic store reads total" line (shutdown.go:60-62). This is
+	//     the WR-02 fix: SIGKILL is untrappable and could never let shutdown() emit
+	//     that line, so on every prior real run the reads-total proof was missing and
+	//     the no_semantic gate passed vacuously. Graceful Stop makes the line real.
+	//   - h.Kill is the hard fallback that reaps a non-graceful / straggler daemon
+	//     (and any descendant LS / `go test`) via the group SIGKILL + buffered drain.
+	//     It runs unconditionally after Stop so a daemon that did NOT exit gracefully
+	//     is still reaped (and Kill on an already-exited process is a clean no-op).
+	//
+	// The tap still reads daemon.log AFTER the daemon has fully exited; tool_call
+	// lines are written synchronously/unbuffered at the app layer, and the
+	// reads-total line is now flushed by the graceful shutdown above (not by any
+	// kill "flush" — Kill remains a hard, non-flushing terminator).
+	graceful, stopErr := h.Stop(daemonGracefulStopTimeout)
+	if stopErr != nil {
+		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s graceful stop error (falling back to Kill): %v\n",
+			cfg.Task, cfg.Mode, stopErr)
+	}
+	if !graceful || stopErr != nil {
+		// Non-graceful (or Stop errored): the daemon did not drain within the
+		// window — reap it hard. (On the graceful path Kill is still called below as
+		// a no-op reaper to guarantee the process is fully reaped before the tap.)
+		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s daemon did not exit gracefully within %s; killing\n",
+			cfg.Task, cfg.Mode, daemonGracefulStopTimeout)
+	}
 	if err := h.Kill(); err != nil {
 		return preserve(fmt.Errorf("bench/runtime: kill daemon: %w", err))
 	}

@@ -204,7 +204,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 81-01-PLAN.md — net-new helix_semantic_store_reads_total counter + DuckDB read-chokepoint instrumentation (D-05 verification target)
+- [x] 81-01-PLAN.md — net-new helix_semantic_store_reads_total counter + DuckDB read-chokepoint instrumentation (D-05 verification target)
 - [ ] 81-02-PLAN.md — config surface: distinct bench_disabled field + profile field + CLI override + bench-no-semantic.yaml gate + assertion flip (D-01/D-03)
 - [ ] 81-03-PLAN.md — vet-ablation-leakage call-site gate check + green→red testdata (D-06, criterion #3)
 

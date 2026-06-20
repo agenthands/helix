@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Phase 81 context gathered
-last_updated: "2026-06-19T22:05:26.042Z"
-last_activity: 2026-06-19 -- Phase 81 planning complete
+last_updated: "2026-06-20T10:18:12.921Z"
+last_activity: 2026-06-20 -- Phase 81 execution started
 progress:
   total_phases: 15
   completed_phases: 6
-  total_plans: 28
-  completed_plans: 28
+  total_plans: 33
+  completed_plans: 29
   percent: 40
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 80 — Five-of-Six Ablation Runners + Fairness Enforcement
+**Current focus:** Phase 81 — no-semantic-kernel-flag-e2e-config-gate-test
 
 ## Current Position
 
-Phase: 80
-Plan: Not started
+Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-06-19 -- Phase 81 planning complete
+Last activity: 2026-06-20 -- Phase 81 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-19T21:32:04.381Z
+Last session: 2026-06-20T10:17:55.559Z
 Stopped at: Phase 81 context gathered
 Resume file: .planning/phases/81-no-semantic-kernel-flag-e2e-config-gate-test/81-CONTEXT.md
 
@@ -96,6 +96,7 @@ Resume file: .planning/phases/81-no-semantic-kernel-flag-e2e-config-gate-test/81
 | Phase 80 P03 | ~9min | 2 tasks | 3 files |
 | Phase 80 P04 | ~8min | 1 tasks | 1 files |
 | Phase 80 P05 | ~8min | 2 tasks | 5 files |
+| Phase 81 P01 | 20m | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -148,3 +149,4 @@ Resume file: .planning/phases/81-no-semantic-kernel-flag-e2e-config-gate-test/81
 - [Phase ?]: [Phase 80 P04]: Plan 04 ships TestEffectiveConfigMatchesContract — always-on hermetic CI gate iterating all 6 modes, asserting projected model_id==DefaultContract.ModelID + Validate()==nil (D-04 layer 2, criterion #3, T-80-02). Scope A only: other 5 contract fields documented as wired-not-enforced (no live argv producer, Pitfall 5), NOT faked; RED proven via transient unregistered mode then restored
 - [Phase 80 P05]: ablation_deltas is an open top-level property (comparison -> metric -> float64); the 3 fixed deltas (full vs baseline_plain/no_lsp/no_structured_edit) surface in EACH of the 4 real-mode rows, re-Validated + atomic; null-in-either-operand metrics skipped
 - [Phase 80 P05]: delta operands use RESOLVABLE mode names no_lsp/no_structured_edit (NOT prior-wave aliases your_agent_no_lsp/your_agent_no_structured_edit; Rule 1 fix); row write-back decodes as map[string]json.RawMessage so additive keys survive; scope held single-run/3-delta (NOT Phase 82 aggregator)
+- [Phase ?]: 81-01: helix_semantic_store_reads_total is a labelless read counter incremented at a single s.queryContext/s.queryRowContext chokepoint in internal/semantic/store; writes/maintenance deliberately excluded (reads-only) so the no_semantic arm can assert ==0.

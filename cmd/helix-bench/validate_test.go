@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agenthands/helix/bench/cost"
 	"github.com/agenthands/helix/bench/runners"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -26,14 +27,14 @@ const (
 )
 
 func TestValidateCostTableGoodPasses(t *testing.T) {
-	require.NoError(t, validateCostTable(injectedToday, goodCostTable),
+	require.NoError(t, cost.ValidateCostTable(injectedToday, goodCostTable),
 		"the committed good cost-table must pass at the injected clock")
 }
 
 func TestValidateCostTablePastValidUntilFails(t *testing.T) {
 	// The stale fixture has valid_until 2026-01-01 (< injected today) AND a
 	// last_verified > 90 days stale — either one must hard-fail.
-	require.Error(t, validateCostTable(injectedToday, staleCostTable),
+	require.Error(t, cost.ValidateCostTable(injectedToday, staleCostTable),
 		"a past valid_until / stale last_verified must hard-fail")
 }
 
@@ -54,7 +55,7 @@ func TestValidateCostTableStaleLastVerifiedFails(t *testing.T) {
     deprecation_at: 2027-01-28
 `
 	require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-	require.Error(t, validateCostTable(injectedToday, p),
+	require.Error(t, cost.ValidateCostTable(injectedToday, p),
 		"last_verified > 90 days stale must hard-fail")
 }
 
@@ -76,7 +77,7 @@ func TestValidateCostTableMalformedRowFails(t *testing.T) {
     bogus_unknown_key: nope
 `
 	require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-	require.Error(t, validateCostTable(injectedToday, p),
+	require.Error(t, cost.ValidateCostTable(injectedToday, p),
 		"an unknown YAML key must hard-fail under strict decode")
 }
 
@@ -125,7 +126,7 @@ func TestValidateCostTableEmptyRequiredFieldFails(t *testing.T) {
 			dir := t.TempDir()
 			p := filepath.Join(dir, "ct.yaml")
 			require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-			require.Error(t, validateCostTable(injectedToday, p),
+			require.Error(t, cost.ValidateCostTable(injectedToday, p),
 				"an empty required string field must hard-fail")
 		})
 	}
@@ -188,7 +189,7 @@ func TestValidateCostTableNonPositivePriceFails(t *testing.T) {
 			dir := t.TempDir()
 			p := filepath.Join(dir, "ct.yaml")
 			require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-			require.Error(t, validateCostTable(injectedToday, p),
+			require.Error(t, cost.ValidateCostTable(injectedToday, p),
 				"a non-positive price must hard-fail")
 		})
 	}
@@ -212,7 +213,7 @@ func TestValidateCostTableZeroCachedPricePasses(t *testing.T) {
     deprecation_at: 2027-01-28
 `
 	require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-	require.NoError(t, validateCostTable(injectedToday, p),
+	require.NoError(t, cost.ValidateCostTable(injectedToday, p),
 		"cached_input_per_mtok == 0 must be accepted")
 }
 
@@ -225,7 +226,7 @@ func TestCostTableMatchesDefaultContractModelID(t *testing.T) {
 	data, err := os.ReadFile(goodCostTable)
 	require.NoError(t, err)
 
-	var ct CostTable
+	var ct cost.CostTable
 	require.NoError(t, yaml.Unmarshal(data, &ct))
 
 	want := runners.DefaultContract.ModelID

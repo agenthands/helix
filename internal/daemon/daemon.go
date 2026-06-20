@@ -194,6 +194,12 @@ type Daemon struct {
 	// to avoid importing the rank engine's concrete type into this struct;
 	// Phase 64 will narrow it.
 	semanticGraphRanker any
+
+	// effSemanticDisabled is the Phase 81 ABLATE-06 composition-root gate
+	// (resolved once at New, daemon.go:294). Persisted on the struct so the
+	// Plan 07 (CR-01) gate test can assert the background read pipelines are
+	// inert under the gate (build-but-block: the store/bundle stay built).
+	effSemanticDisabled bool
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -422,7 +428,15 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// *semanticstore.Store satisfies handler.FileFactStore via the
 		// Phase 68 Plan 01 accessor (GetLatestFileFact); *extract.Registry
 		// satisfies handler.ExtractRegistry via Provider(lang).
-		live.handler.SetFileFactStore(semanticStore)
+		// Phase 81 Plan 07 (CR-01): SetFileFactStore is the read-DRIVER
+		// behind GetLatestFileFact / LatestCommittedSnapshot — gate it on
+		// effSemanticDisabled so the no_semantic arm drives ZERO background
+		// reads against the COUNTED DuckDB chokepoint. The store stays OPEN
+		// (store-Open guard untouched, D-04 build-but-block); we un-wire the
+		// read-driver, not the store.
+		if !backgroundSemanticReadsDisabled(effSemanticDisabled) {
+			live.handler.SetFileFactStore(semanticStore)
+		}
 		if semanticExtractRegistry != nil {
 			live.handler.SetExtractRegistry(semanticExtractRegistry)
 		}
@@ -907,7 +921,13 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// (mirrors the explicit-activate path in SetActivateCallback below).
 		// Reason string distinguishes the lazy path from the explicit one so
 		// operators can tell which trigger fired extraction.
-		if semanticScheduler != nil {
+		//
+		// Phase 81 Plan 07 (CR-01): ScheduleInitialExtraction is a semantic
+		// read-DRIVER (the initial walk reads the COUNTED store) — gate it on
+		// effSemanticDisabled here too so the lazy-activate path (not just the
+		// explicit SetActivateCallback below) drives ZERO back-channel reads on
+		// the no_semantic arm. Build-but-block preserved (the store stays open).
+		if semanticScheduler != nil && !backgroundSemanticReadsDisabled(effSemanticDisabled) {
 			semanticScheduler.ScheduleInitialExtraction(
 				semantic.WorkspaceID(repoPath),
 				scheduler.InitialExtraction{
@@ -961,10 +981,22 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		if sess := sessionProvider.CurrentSession(); sess != nil {
 			sess.SetLanguage(activeWSLang)
 		}
+		// Phase 81 Plan 07 (CR-01): the five SetActivateCallback semantic
+		// read-DRIVERS below reach the COUNTED DuckDB chokepoint
+		// (ScheduleInitialExtraction → extraction reads; startWorkspace →
+		// incremental reads; ensureScheduler → QueryEffectiveAdjacency /
+		// CountStaleScoreRows; ensureCompactor / ensureRetrieval → store
+		// reads). Under build-but-block (D-04) the store + bundle are NON-nil,
+		// so the existing nil-checks do NOT stop them on a store-ON no_semantic
+		// arm. Gate them ALL on effSemanticDisabled so the no_semantic arm
+		// drives ZERO back-channel reads. The kernel workspace activation +
+		// repomap root + session language above are NOT semantic-store reads
+		// and stay ungated.
+		bgReadsDisabled := backgroundSemanticReadsDisabled(effSemanticDisabled)
 		// Phase 59 P03: kick the initial-walk extraction non-blockingly
 		// (D-04). Idempotent — repeat activations of the same workspace
 		// return the already-in-flight JobID.
-		if semanticScheduler != nil {
+		if semanticScheduler != nil && !bgReadsDisabled {
 			semanticScheduler.ScheduleInitialExtraction(
 				semantic.WorkspaceID(repoPath),
 				scheduler.InitialExtraction{
@@ -976,7 +1008,9 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// Phase 60 D-05/D-06: per-workspace live-update lifecycle. nil
 		// bundle means LiveUpdates is disabled — startWorkspace is a
 		// no-op in that case.
-		live.startWorkspace(ctx, activeWSKey, logger)
+		if !bgReadsDisabled {
+			live.startWorkspace(ctx, activeWSKey, logger)
+		}
 
 		// Phase 62 P03: lazy-construct the per-workspace RankScheduler
 		// the first time a workspace activates. The scheduler.Run
@@ -985,20 +1019,20 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		// top-level errgroup-attached ctx (rank.Run owns the ctx the
 		// scheduler closures capture). nil-safe: when rank == nil the
 		// helper short-circuits.
-		if rank != nil {
+		if rank != nil && !bgReadsDisabled {
 			rank.ensureScheduler(ctx, repoPath)
 		}
 		// Phase 63 P63-02: lazy-construct the per-workspace compactor
 		// alongside the rank scheduler. nil-safe: the helper short-
 		// circuits when compactBndl is nil (semantic disabled).
-		if compactBndl != nil {
+		if compactBndl != nil && !bgReadsDisabled {
 			compactBndl.ensureCompactor(ctx, repoPath, activeWSKey)
 		}
 		// Phase 64 P64-08: lazy-construct the per-workspace bleve
 		// retrieval engine + recovery probe. nil-safe: short-circuits
 		// when sBndl is nil (semantic disabled). The probe runs in its
 		// own goroutine inside ensureRetrieval — non-blocking.
-		if sBndl != nil {
+		if sBndl != nil && !bgReadsDisabled {
 			sBndl.ensureRetrieval(ctx, activeWSKey)
 		}
 		logger.Info("kernel workspace activated",
@@ -1029,6 +1063,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		compact:                 compactBndl,
 		semantic:                sBndl,
 		typeResolver:            typeResolver,
+		effSemanticDisabled:     effSemanticDisabled,
 	}, nil
 }
 

@@ -188,3 +188,78 @@ func TestSemanticSkillAccessorsGated(t *testing.T) {
 	require.False(t, wired.ClusterMembership, "ClusterMembership accessor must be nil under the gate")
 	require.False(t, wired.ExtractorRun, "ExtractorRun accessor must be nil under the gate")
 }
+
+// TestSemanticBackgroundPipelinesGated (Phase 81 Plan 07, CR-01) proves the
+// daemon-INTERNAL background read pipelines are forced OFF under the gate while
+// the store + bundle stay BUILT (D-04 build-but-block):
+//
+//   - SetFileFactStore(semanticStore) — the read-driver behind GetLatestFileFact
+//     / LatestCommittedSnapshot — is NOT wired under the gate (the FileFactStore
+//     is the thing the rank/post-commit pipeline reads through).
+//   - The bundle is STILL non-nil under the gate (D-04 — otherwise the
+//     zero-reads proof is vacuous).
+//   - OFF the gate (default arm) the FileFactStore IS wired exactly as before
+//     (no behavior change off the gate).
+//
+// The store-ON dynamic read proof (a real daemon driven end-to-end asserting
+// helix_semantic_store_reads_total == 0) is the bench integration test
+// TestNoSemanticStoreOnZeroReads — this unit test asserts the STRUCTURAL gate.
+func TestSemanticBackgroundPipelinesGated(t *testing.T) {
+	// The pure predicate is the single-resolution-point doctrine extension.
+	require.True(t, backgroundSemanticReadsDisabled(true),
+		"under effSemanticDisabled the background read pipelines must be disabled")
+	require.False(t, backgroundSemanticReadsDisabled(false),
+		"off the gate the background read pipelines run as before")
+
+	// newGatedDaemon boots daemon.New with semantic ENABLED + LiveUpdates ENABLED
+	// (so the live bundle + FileFactStore wiring path is exercised) and the
+	// ablation gate toggled per arm.
+	newGatedDaemon := func(t *testing.T, gateOn bool) *Daemon {
+		t.Helper()
+		wsDir := t.TempDir()
+		t.Chdir(wsDir)
+		cfg := newTestConfig(t)
+		cfg.SemanticIndex = semanticpkg.Config{
+			Enabled:       true,   // store + bundle STILL built (D-04)
+			BenchDisabled: gateOn, // ablation gate -> effSemanticDisabled
+			Store: semanticpkg.StoreConfig{
+				Kind:        "duckdb",
+				Path:        filepath.Join(".helix", "semantic.duckdb"),
+				MemoryLimit: "256MiB",
+				Threads:     1,
+			},
+		}
+		// LiveUpdates ON so buildLiveBundle returns non-nil and the
+		// SetFileFactStore read-driver wiring path is reached.
+		cfg.SemanticIndex.LiveUpdates.Enabled = true
+		logger := newTestLogger()
+		d, err := New(cfg, logger)
+		require.NoError(t, err, "daemon.New must succeed (store built under D-04 regardless of gate)")
+		return d
+	}
+
+	t.Run("gate_on_pipelines_inert_bundle_still_built", func(t *testing.T) {
+		d := newGatedDaemon(t, true)
+		require.True(t, d.effSemanticDisabledForTest(),
+			"the gate must be resolved ON when BenchDisabled=true")
+		// D-04 build-but-block: the bundle is STILL built under the gate.
+		require.NotNil(t, d.semanticBundleForTest(),
+			"semantic bundle must STILL be built under the gate (D-04 build-but-block)")
+		require.NotNil(t, d.SemanticStore(),
+			"semantic store must STILL be built under the gate (D-04 build-but-block)")
+		// The FileFactStore read-driver is NOT wired under the gate.
+		require.False(t, d.fileFactStoreWiredForTest(),
+			"SetFileFactStore must be SKIPPED under the gate (the read-driver is inert, CR-01)")
+	})
+
+	t.Run("gate_off_pipelines_wire_as_before", func(t *testing.T) {
+		d := newGatedDaemon(t, false)
+		require.False(t, d.effSemanticDisabledForTest(),
+			"the gate must be resolved OFF when BenchDisabled=false")
+		require.NotNil(t, d.semanticBundleForTest(),
+			"semantic bundle is built on the default arm")
+		// Off the gate the FileFactStore IS wired exactly as before.
+		require.True(t, d.fileFactStoreWiredForTest(),
+			"off the gate SetFileFactStore must wire the read-driver as before (no behavior change)")
+	})
+}

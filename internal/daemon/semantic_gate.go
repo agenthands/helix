@@ -59,3 +59,33 @@ func gatedCfgGate(cfg *config.SerenaConfig, effSemanticDisabled bool) *daemonCfg
 	enabled := cfg != nil && cfg.SemanticIndex.Enabled && !effSemanticDisabled
 	return &daemonCfgGate{enabled: enabled}
 }
+
+// backgroundSemanticReadsDisabled extends the gate doctrine to the
+// daemon-INTERNAL background read pipelines (Phase 81 Plan 07, CR-01).
+//
+// Plan 04 gated the TOOL-FACING SemanticLookup hand-outs + the SemanticSkill
+// accessor block via gatedSymbolsLookupFn / gatedCfgGate above. But the
+// daemon-internal activation pipelines reach the COUNTED DuckDB read chokepoint
+// (s.queryContext / s.queryRowContext) without any gate:
+//
+//   - SetFileFactStore(semanticStore) wires the FileFactStore that drives
+//     GetLatestFileFact / LatestCommittedSnapshot reads.
+//   - The SetActivateCallback read-drivers — ScheduleInitialExtraction,
+//     live.startWorkspace, rank.ensureScheduler, compactBndl.ensureCompactor,
+//     sBndl.ensureRetrieval — drive QueryEffectiveAdjacency / CountStaleScoreRows
+//     and the initial-walk extraction reads.
+//
+// Under D-04 build-but-block the store + bundle are NON-nil, so the existing
+// nil-checks do NOT stop these reads on a store-ON no_semantic arm. This
+// predicate is the single-resolution-point that says "the background read
+// pipelines are part of the gated surface" — mirroring the gatedSymbolsLookupFn
+// / gatedCfgGate doctrine, so the gating is documented intent, not an orphan
+// inline `!effSemanticDisabled` scattered across five call sites.
+//
+// CRITICAL D-04 invariant: this gates the READ-DRIVERS, NOT construction. The
+// store-Open guard (daemon.go ~324 `if cfg.SemanticIndex.Enabled`) and the
+// newSemanticBundle guard (~518) MUST stay free of effSemanticDisabled so the
+// zero-reads proof (the bench store-ON cell) is non-vacuous.
+func backgroundSemanticReadsDisabled(effSemanticDisabled bool) bool {
+	return effSemanticDisabled
+}

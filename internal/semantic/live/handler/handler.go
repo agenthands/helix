@@ -304,6 +304,18 @@ func (h *Handler) SetFileFactStore(s FileFactStore) {
 	h.factStore = s
 }
 
+// HasFactStore reports whether a FileFactStore is currently wired. Used by the
+// Phase 81 Plan 07 (CR-01) daemon gate test to assert the background read-driver
+// is INERT under effSemanticDisabled (the FileFactStore is the thing that drives
+// GetLatestFileFact / LatestCommittedSnapshot reads against the DuckDB store).
+// Nil-safe.
+func (h *Handler) HasFactStore() bool {
+	if h == nil {
+		return false
+	}
+	return h.factStore != nil
+}
+
 // SetExtractRegistry installs (or replaces) the Phase 68 ExtractRegistry
 // surface consumed by the Tier-1/Tier-2 populators. Nil-safe.
 func (h *Handler) SetExtractRegistry(r ExtractRegistry) {

@@ -48,3 +48,21 @@ func (d *Daemon) BodyExtractorForTest() interface{} {
 func (d *Daemon) semanticBundleForTest() *semanticBundle {
 	return d.semantic
 }
+
+// effSemanticDisabledForTest exposes the composition-root gate decision for the
+// Phase 81 Plan 07 (CR-01) background-pipeline gate test.
+func (d *Daemon) effSemanticDisabledForTest() bool {
+	return d.effSemanticDisabled
+}
+
+// fileFactStoreWiredForTest reports whether the live handler's FileFactStore
+// read-driver is wired. Phase 81 Plan 07 (CR-01) seam: under the gate the
+// SetFileFactStore call is skipped, so this is false even though the store +
+// bundle stay built (build-but-block, D-04). Returns false when the live
+// bundle / handler is absent.
+func (d *Daemon) fileFactStoreWiredForTest() bool {
+	if d.live == nil || d.live.handler == nil {
+		return false
+	}
+	return d.live.handler.HasFactStore()
+}

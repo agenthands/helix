@@ -1,16 +1,18 @@
 <h1 align="center">Helix</h1>
 
 <h3 align="center">
-    Helix is the IDE for your coding agent.
+    Helix is the code editor for your LLM.
 </h3>
 
-<!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the brand
-     assets are produced; the original Python-Serena SVGs live under legacy/resources/ and
-     are not part of the active product surface. -->
+<!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the
+     brand assets are produced. -->
+
+<p align="center"><b>Not a code-assistant add-on &mdash; literally the editor your coding agent drives.</b><br/>
+It replaces the agent's blunt, file-based tool calls &mdash; <code>read</code> whole files, <code>grep</code>, line-number / regex edits &mdash; with precise, IDE-grade <b>semantic operations</b> backed by real language servers: go-to-definition, find-references, call hierarchy, rename-across-files, replace-symbol-body.</p>
 
 <p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
-<p align="center"><sub>Helix originally started as a rewrite of <a href="https://github.com/oraios/serena">Python Serena</a>. The full rename of binary, CLI, env vars, config dirs, and MCP server identity from the project's prior name to <code>helix</code> shipped at v1.9 (see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes). The <code>legacy/</code> tree retains the historical name for read-only reference.</sub></p>
+<p align="center"><sub>Helix is an independent, Go-native project &mdash; not a fork, port, or rewrite. It is partially inspired by prior art including <a href="https://github.com/oraios/serena">Serena</a>, <a href="https://github.com/Aider-AI/aider">Aider</a>, Graphify, and others, but its kernel, daemon, and tooling are its own. (The project carried an earlier name through v1.8; the full rename of binary, CLI, env vars, config dirs, and MCP server identity to <code>helix</code> shipped at v1.9 &mdash; see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes.)</sub></p>
 
 * Helix provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
@@ -50,7 +52,9 @@ Agents connect via the **model context protocol (MCP)** through:
 
 ## Key Advantages Over File-Based Approaches
 
-| | File-based tools | Helix |
+Every row below is a tool call your agent makes today — `Read`, `Grep`, `Edit`, `Bash` — that Helix replaces with a semantic, language-server-backed equivalent:
+
+| | Agent's default tools (`Read`/`Grep`/`Edit`/`Bash`) | Helix |
 |---|---|---|
 | **Navigation** | grep, find, read whole files | Go to definition, find references, symbol search, call hierarchy |
 | **Editing** | Line-number replacements, regex | Replace symbol body, insert before/after, rename across files |
@@ -274,6 +278,72 @@ Helix supports **52 programming languages** via Language Server Protocol (LSP):
 
 Language servers are **auto-discovered** from PATH or **downloaded on demand** via the three-tier installer (PATH lookup > managed download > helpful error message).
 
+### Capability tiers
+
+LSP coverage is broad, but the *depth* of intelligence varies by language across three independent layers:
+
+| Layer | What it powers | Coverage |
+|-------|----------------|----------|
+| **LSP** | Semantic navigation & edits — goto-def, references, rename, hover, hierarchy, diagnostics | **52 languages** (every row above) |
+| **RepoMap + body edit** | Native tree-sitter tag extraction for `get_repo_map`/`get_context`, scope-aware elision, **AST body surgery** for `replace_symbol_body` | **23 grammars / ~21 first-class** |
+| **Semantic graph** | Live fact graph — `find_related_symbols`, `explain_symbol_deep`, `validate_graph_edge`, cross-file type ladder | **3 languages** (Go, Python, TS/JS) |
+
+A language is **first-class** when it has both a warm LSP server *and* a native tree-sitter grammar (RepoMap tags + body-surgery editing). The three semantic-graph languages are the deepest tier (see below).
+
+**Legend:** ✅ full · ◐ via LSP `documentSymbol` fallback · — not available · ✓ exercised by a Go test · ⓛ covered only by the legacy Python suite.
+
+#### First-class (LSP + native grammar + body-surgery edits)
+
+| Language | LSP | RepoMap | Body edit | Sem. graph | Type ladder | Fixtures |
+|----------|:---:|:-------:|:---------:|:----------:|:-----------:|:--------:|
+| Go | ✅ | ✅ | ✅ | ✅ | ✅ | ✓ |
+| Python | ✅ | ✅ | ✅ | ✅ | ✅ | ✓ |
+| TypeScript / JavaScript | ✅ | ✅ | ✅ | ✅ | ✅ | ✓ |
+| Java | ✅ | ✅ | ✅ | — | ✅ | ✓ |
+| PHP | ✅ | ✅ | ✅ | — | ✅ | ✓ |
+| Ruby | ✅ | ✅ | ✅ | — | ✅ | ✓ |
+| Rust | ✅ | ✅ | ✅ | — | — | ✓ |
+| C / C++ | ✅ | ✅ | ✅ | — | — | ✓ |
+| C# | ✅ | ✅ | ✅ | — | — | ✓ |
+| Kotlin | ✅ | ✅ | ✅ | — | — | ✓ |
+| Scala | ✅ | ✅ | ✅ | — | — | ✓ |
+| Swift | ✅ | ✅ | ✅ | — | — | ✓ |
+| Lua | ✅ | ✅ | ✅ | — | — | ✓ |
+| Zig | ✅ | ✅ | ✅ | — | — | ✓ |
+| Julia | ✅ | ✅ | ✅ | — | — | ✓ |
+| R | ✅ | ✅ | ✅ | — | — | ✓ |
+| Bash | ✅ | ✅ | ✅ | — | — | ✓ |
+
+#### Grammar only (RepoMap tags, no body-surgery edits yet)
+
+| Language | LSP | RepoMap | Body edit | Fixtures |
+|----------|:---:|:-------:|:---------:|:--------:|
+| Haskell | ✅ | ✅ | — | ✓ |
+| OCaml | ✅ | ✅ | — | ✓ |
+| Terraform (HCL) | ✅ | ✅ | — | ⓛ |
+
+#### LSP only (RepoMap via `documentSymbol` fallback)
+
+Markdown, Vue, Clojure, Elixir, Perl, PowerShell, Dart, Elm, Erlang, Fortran, F#, Groovy, HLSL, MATLAB, Nix, Pascal, Rego, Solidity, SystemVerilog, TOML, YAML, AL, Ansible — full LSP navigation, RepoMap via `documentSymbol` (◐), no native grammar or body-surgery editing.
+
+### Semantic graph (Go, Python, TS/JS)
+
+The semantic graph (`internal/semantic/`) — the live fact graph behind `find_related_symbols`, `explain_symbol_deep`, and `validate_graph_edge` — is intentionally **narrower** than the LSP/tree-sitter surface above. It supports exactly three languages:
+
+| Language | Provider package | Covers |
+|----------|------------------|--------|
+| Go | `internal/semantic/extract/golang/` | `.go` |
+| Python | `internal/semantic/extract/python/` | `.py` |
+| TypeScript / JavaScript | `internal/semantic/extract/typescript/` | `.ts .tsx .js .jsx .mjs .cjs` |
+
+It is a **per-language extractor model**, not a reuse of the 23-grammar RepoMap tagger:
+
+- Each language ships its own `extract.Provider` with a dedicated tree-sitter query file (`golang/queries.scm`, `python/queries.scm`, `typescript/queries.scm` — the only three `.scm` files under `internal/semantic/`).
+- Providers are wired into the daemon-owned `Registry` keyed by `Provider.Language()` (`internal/semantic/extract/registry.go`), which **panics on a duplicate or missing provider** — so the supported set is a hard, enumerated allow-list.
+- The graph engine itself (`internal/semantic/graph/`) is **language-agnostic** — it operates on abstract `NodeID`/`EdgeKind`, so the only gating factor is "does a `Provider` exist for this language." Files in any other language get `ExtractionStatus = "unsupported"`.
+
+This is a deliberate first-release scope (per `SPEC-DRAFT.md`: *"scope production correctness to Go, TypeScript/JavaScript, and Python first, with other languages best-effort"*). Adding a fourth language means implementing a new `extract.Provider` package with its own `queries.scm`.
+
 ## Features
 
 <!-- BEGIN TOOLS -->
@@ -353,8 +423,14 @@ The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus
 
 ## Acknowledgements
 
-A significant part of Helix, especially support for various languages, was contributed by the open source community.
-We are very grateful for the many contributors who made this possible and who played an important role in making Helix
-what it is today.
+Helix is an independent Go project, but it stands on the shoulders of prior art and a large open-source ecosystem.
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes.
+**Inspiration.** The agent-tooling design draws on ideas from [Serena](https://github.com/oraios/serena) (symbol-level MCP operations over LSP), [Aider](https://github.com/Aider-AI/aider) (the ranked, PageRank-style RepoMap), Graphify, and other code-intelligence projects.
+
+**Foundations.** Helix is built directly on top of:
+
+- the dozens of open-source **language servers** it drives through LSP, and the communities that maintain them;
+- the [**tree-sitter**](https://github.com/tree-sitter/tree-sitter) grammars used for RepoMap tag extraction and AST body surgery;
+- the official [**MCP Go SDK**](https://github.com/modelcontextprotocol/go-sdk).
+
+Without these projects Helix would not exist. See [CHANGELOG.md](CHANGELOG.md) for release notes.

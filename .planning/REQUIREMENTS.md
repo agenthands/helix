@@ -69,7 +69,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 ### Statistical Rigor (STATS-*)
 
 - [ ] **STATS-01**: Default `N ≥ 3` runs per task per mode; N configurable per-suite. _Acceptance:_ schema validates `runs` array length ≥ N; matrix runner enforces.
-- [ ] **STATS-02**: BCa (bias-corrected accelerated) bootstrap CIs computed over per-task aggregates for every metric on every leaderboard row. Bootstrap iterations ≥ 10,000. _Acceptance:_ unit tests against a closed-form known distribution; CI width sanity-checked.
+- [x] **STATS-02**: BCa (bias-corrected accelerated) bootstrap CIs computed over per-task aggregates for every metric on every leaderboard row. Bootstrap iterations ≥ 10,000. _Acceptance:_ unit tests against a closed-form known distribution; CI width sanity-checked.
 - [ ] **STATS-03**: `pass@1` and `pass@k` reported per HumanEval closed-form `1 − C(n-c, k)/C(n, k)`. _Acceptance:_ unit test against published reference values.
 - [ ] **STATS-04**: Reports flag any cell where the BCa CI overlaps a neighboring cell (no claim of "X > Y" without non-overlapping CIs). _Acceptance:_ a synthetic-overlap test case is rendered with the overlap warning.
 
@@ -182,7 +182,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | VERIFIED-02 | Phase 87 | TBD | Pending |
 | VERIFIED-03 | Phase 86 | TBD | Pending |
 | STATS-01 | Phase 82 | 82-01 (producer half) | In progress — producer side done (ExpandMatrix N cells + --runs); aggregator fail-closed N-gate lands in 82-05 |
-| STATS-02 | Phase 82 | TBD | Pending |
+| STATS-02 | Phase 82 | 82-02 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, D-09 degenerate matrix) |
 | STATS-03 | Phase 82 | TBD | Pending |
 | STATS-04 | Phase 82 | TBD | Pending |
 | COST-01 | Phase 75 | TBD | Pending |

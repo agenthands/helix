@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
-stopped_at: Completed 82-01-PLAN.md
-last_updated: "2026-06-21T00:00:00.000Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 01 executed (bench/cost package + ExpandMatrix runs axis)
+status: Wave 1 foundation landed; Plan 03+ ready
+stopped_at: Completed 82-02-PLAN.md
+last_updated: "2026-06-21T21:46:58.000Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 02 executed (BCa bootstrap, STATS-02)
 progress:
   total_phases: 15
   completed_phases: 7
-  total_plans: 36
-  completed_plans: 36
+  total_plans: 42
+  completed_plans: 38
   percent: 48
 ---
 
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: 01 complete
-Status: Wave 1 foundation landed; Plan 02+ ready
-Last activity: 2026-06-21 -- Phase 82 Plan 01 executed
+Plan: 02 complete
+Status: Wave 1 foundation landed; Plan 03+ ready
+Last activity: 2026-06-21 -- Phase 82 Plan 02 executed (BCa bootstrap, STATS-02)
 
 ### Session Continuity
 
-Last session: 2026-06-21T00:00:00.000Z
-Stopped at: Completed 82-01-PLAN.md
+Last session: 2026-06-21T21:46:58.000Z
+Stopped at: Completed 82-02-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -105,6 +105,7 @@ Resume file: None
 | Phase 81 P06 | ~22m | 2 tasks | 4 files (gap closure, WR-02) |
 | Phase 81 P07 | ~30min | 2 tasks | 5 files |
 | Phase 82 P01 | ~12min | 3 tasks | 6 files (2 created in bench/cost) |
+| Phase 82 P02 | ~3min | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
 
 ## Decisions
 
@@ -165,3 +166,4 @@ Resume file: None
 - [Phase 81 P06]: GAP 1 / WR-02 closed. New DaemonHandle.Stop(timeout) sends SIGTERM to the daemon process GROUP (Setpgid leader) and waits up to timeout for graceful exit so d.shutdown() flushes the "semantic store reads total" line (shutdown.go:60-62) — the one thing SIGKILL can never do. RunCell now drains GRACEFULLY (h.Stop, daemonGracefulStopTimeout=12s = 10s ShutdownTimeout + slack) THEN Kill as a hard reaper (called unconditionally, no-op on the graceful path, before the daemon-log tap). scrapeSemanticReadsTotal returns (count, present, err): an ABSENT line is present=false, no longer a silent count=0 (root fail-open anti-pattern cell.go:101-103 removed). assertNoSemanticReads(mode, reads, present) HARD-FAILS the no_semantic arm when present==false (proof never ran) AND when reads!=0; off-arm both are no-ops. New real-daemon HELIX_BIN-gated integration test TestNoSemanticReadsTotalLineEmitted spawns a bare daemon, drives Stop-then-Kill, asserts daemon.log carries a real reads-total line with an integer count (replaces synthetic-os.WriteFile-only coverage). D-04 build-but-block + D-05 path-A emission preserved. GAP 2 / CR-01 (background read pipelines ungated) remains for 81-07.
 - [Phase ?]: [Phase 81 P07]: GAP 2 / CR-01 closed — gated SIX daemon-internal semantic read-DRIVERS on effSemanticDisabled via backgroundSemanticReadsDisabled predicate (SetFileFactStore + 5 SetActivateCallback drivers + lazy-activate ScheduleInitialExtraction, Rule 2). D-04 build-but-block preserved (store-Open + newSemanticBundle UNTOUCHED). Store-ON no_semantic regression TestNoSemanticStoreOnZeroReads proves SemanticStoreReads==0 on an OPEN store (teeth from 81-06). 81-VERIFICATION.md:113 masking broken; ABLATE-06 runtime guarantee holds. Phase 81 CLOSED.
 - [Phase 82 P01]: Open Q1 RESOLVED — MOVED CostRow/CostTable + freshness gate out of cmd/helix-bench package main into importable bench/cost (exactly one type CostTable in the tree). bench/cost exports CostRow, CostTable, LoadCostTable, ValidateCostTable(today,path), PriceFor(ct,modelID,today), DateLayout, StalenessWindowDays. PriceFor is the per-lookup fail-closed gate the Plan 04 aggregator reuses: unknown model_id / past valid_until / >90d-stale last_verified are all HARD errors (D-13). validate-cost-table CLI gutted to a thin cost.ValidateCostTable shim (behavior-identical); package-main dateLayout/stalenessWindowDays kept as local copies for the sibling verify-tos validator. ExpandMatrix gained a runs int axis (D-04, STATS-01 PRODUCER half): emits N cells per (b,l,m,t) with RunIndex 0..N-1, runs<1 clamps to 1, deterministic (runs innermost), no path-machinery change. helix-bench run --runs N (default 3) wired. STATS-01 not yet complete — the aggregator REFUSAL half lands in Plan 05.
+- [Phase 82 P02]: STATS-02 DONE — bench/aggregator.BCaInterval(vals, stat, B, alpha, rng) (lo,hi,ok) is a PROPER BCa: z0 = phiInv(#{theta*<theta_hat}/B) with phiInv=Sqrt2*Erfinv, plus jackknife acceleration a (Efron-Tibshirani eq 14.15); endpoints via bcaPercentiles (eq 14.10) read off a seeded math/rand/v2 PCG bootstrap distribution. NOT a percentile bootstrap — the RED test asserts BCa endpoints diverge from a plain-percentile interval over the SAME seeded distribution (fake-BCa discriminator) and that proof passed GREEN. Determinism (D-08): same seed => bit-identical [lo,hi]. Degenerate matrix (D-09): empty->ok=false null CI (never fabricated [0,0]); all-identical/m==1->point CI [v,v]; den~0->percentile fallback + clamp01; no NaN/Inf. Quantile rule LOCKED to nearest-rank idx=round(p*(B-1)) for byte-stable reproduction (A5). StatMean exported for Plan 06 callers. Pure unit, no HELIX_BIN (D-01), zero new deps (stdlib math + math/rand/v2).

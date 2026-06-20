@@ -79,6 +79,25 @@ func (l *Loaded) Tasks() []string {
 	return l.taskOrder
 }
 
+// Modes returns the discovered mode IDs for one task in deterministic (sorted)
+// order, or nil if the task was not present. The aggregator orchestrator uses it
+// to enumerate the (mode x benchmark) leaderboard rows.
+func (l *Loaded) Modes(task string) []string {
+	if l == nil || l.rows == nil {
+		return nil
+	}
+	modes, ok := l.rows[task]
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(modes))
+	for mode := range modes {
+		out = append(out, mode)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // candidate is one on-disk result.v2.json file before validation.
 type candidate struct {
 	task     string

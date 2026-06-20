@@ -1,9 +1,11 @@
 package aggregator
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// updateGolden regenerates the committed testdata/*.golden.md files when set
+// (`-update`), instead of asserting against them.
+var updateGolden = flag.Bool("update", false, "regenerate golden .md testdata")
 
 // aggregate_test.go exercises the pure orchestrator end-to-end: fail-closed on a
 // deficient cell (D-05), the two-level reduction (D-07) over a synthetic
@@ -159,6 +165,54 @@ func TestAggregateNilMetricEmDash(t *testing.T) {
 	require.Len(t, rep.Leaderboard, 1)
 	assert.False(t, rep.Leaderboard[0].EditLocality.OK,
 		"a metric nil across all runs must produce a null CI (em-dash), never 0")
+}
+
+// goldenFixture builds the canonical 2-mode x 3-task x N=3 synthetic runDir used
+// by both the golden-diff and determinism locks. It is deliberately fixed so the
+// committed golden .md files (testdata/*.golden.md) are a stable byte contract.
+func goldenFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	tasks := []string{"task-1", "task-2", "task-3"}
+	for _, task := range tasks {
+		for i := 0; i < 3; i++ {
+			// full: all-success, low/stable cost.
+			writeCostedRow(t, dir, task, "full", i, metric(true, 1000, 100, 5, 3, 0.9))
+			// no_lsp: task-3 success-rate 2/3 (solved), others 1/3; varied tokens
+			// so task-3's per-run USD CV trips the FAIR-03 gate.
+			succ := i < 1
+			ti := 2000
+			if task == "task-3" {
+				succ = i < 2
+				ti = 1000 + i*3000 // 1000, 4000, 7000 -> high CV
+			}
+			writeCostedRow(t, dir, task, "no_lsp", i, metric(succ, ti, 200, 9, 6, 0.5))
+		}
+	}
+	return dir
+}
+
+// TestAggregateEndToEnd runs the full orchestrator over the golden fixture and
+// diffs both reports against the committed golden .md files. Regenerate with
+// `go test ./bench/aggregator/ -run TestAggregateEndToEnd -update`.
+func TestAggregateEndToEnd(t *testing.T) {
+	dir := goldenFixture(t)
+	_, err := Aggregate(dir, aggConfig(3))
+	require.NoError(t, err)
+
+	for _, name := range []string{"leaderboard.md", "cost_quality.md"} {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		require.NoError(t, err)
+		goldenPath := filepath.Join("testdata", strings.TrimSuffix(name, ".md")+".golden.md")
+		if *updateGolden {
+			require.NoError(t, os.WriteFile(goldenPath, got, 0o600))
+			continue
+		}
+		want, err := os.ReadFile(goldenPath)
+		require.NoError(t, err, "missing golden %s — regenerate with -update", goldenPath)
+		assert.Equal(t, string(want), string(got),
+			"%s drifted from its committed golden (byte determinism, D-08)", name)
+	}
 }
 
 // TestDeterministic: two Aggregate calls with the SAME seed over the SAME runDir

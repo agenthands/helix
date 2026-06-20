@@ -50,7 +50,7 @@ func TestFiveOfSixSmoke(t *testing.T) {
 		"baseline_rag",
 	}
 
-	cells, err := ExpandMatrix([]string{"internal-toolbench"}, []string{"go"}, allModes, []string{task})
+	cells, err := ExpandMatrix([]string{"internal-toolbench"}, []string{"go"}, allModes, []string{task}, 1)
 	require.NoError(t, err)
 	require.Len(t, cells, len(allModes))
 

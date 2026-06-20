@@ -16,7 +16,7 @@ func TestExpandMatrixCartesianCount(t *testing.T) {
 	modes := []string{"your_agent_full", "your_agent_no_lsp"}
 	tasks := []string{"IT-go-patch-apply-1", "fizzbuzz", "rename-sym"}
 
-	cells, err := ExpandMatrix(benchmarks, languages, modes, tasks)
+	cells, err := ExpandMatrix(benchmarks, languages, modes, tasks, 1)
 	if err != nil {
 		t.Fatalf("ExpandMatrix: unexpected error: %v", err)
 	}
@@ -63,6 +63,7 @@ func TestExpandMatrixSingleCell(t *testing.T) {
 		[]string{"go"},
 		[]string{"your_agent_full"},
 		[]string{"IT-go-patch-apply-1"},
+		1,
 	)
 	if err != nil {
 		t.Fatalf("ExpandMatrix: unexpected error: %v", err)
@@ -78,6 +79,65 @@ func TestExpandMatrixSingleCell(t *testing.T) {
 	}
 	if cells[0] != want {
 		t.Fatalf("cells[0] = %+v; want %+v", cells[0], want)
+	}
+}
+
+// TestExpandMatrixRuns asserts the D-04 runs axis (STATS-01 producer half):
+// ExpandMatrix(..., N) emits exactly N cells per (benchmark, language, mode,
+// task) with distinct RunIndex 0..N-1, and a runs value < 1 clamps to 1 (never
+// an empty matrix). It is the Wave-0 scaffold for the multi-run producer.
+func TestExpandMatrixRuns(t *testing.T) {
+	benchmarks := []string{"internal-toolbench"}
+	languages := []string{"go"}
+	modes := []string{"your_agent_full"}
+	tasks := []string{"t1", "t2"}
+	const runs = 3
+
+	cells, err := ExpandMatrix(benchmarks, languages, modes, tasks, runs)
+	if err != nil {
+		t.Fatalf("ExpandMatrix: unexpected error: %v", err)
+	}
+
+	// Total = |b| * |l| * |m| * |t| * runs = 1*1*1*2*3 = 6.
+	want := len(benchmarks) * len(languages) * len(modes) * len(tasks) * runs
+	if len(cells) != want {
+		t.Fatalf("cell count = %d; want %d", len(cells), want)
+	}
+
+	// For each task there are exactly `runs` cells with RunIndex {0,1,2} (a set,
+	// not order-dependent).
+	byTask := make(map[string]map[int]int)
+	for _, c := range cells {
+		if byTask[c.Task] == nil {
+			byTask[c.Task] = make(map[int]int)
+		}
+		byTask[c.Task][c.RunIndex]++
+	}
+	for _, tk := range tasks {
+		idx := byTask[tk]
+		if len(idx) != runs {
+			t.Errorf("task %q: %d distinct RunIndex values; want %d (%v)", tk, len(idx), runs, idx)
+		}
+		for r := 0; r < runs; r++ {
+			if idx[r] != 1 {
+				t.Errorf("task %q: RunIndex %d appeared %d times; want exactly 1", tk, r, idx[r])
+			}
+		}
+	}
+
+	// runs < 1 clamps to 1: exactly one cell per (b,l,m,t), RunIndex 0.
+	clamped, err := ExpandMatrix(benchmarks, languages, modes, tasks, 0)
+	if err != nil {
+		t.Fatalf("ExpandMatrix(runs=0): unexpected error: %v", err)
+	}
+	wantClamped := len(benchmarks) * len(languages) * len(modes) * len(tasks)
+	if len(clamped) != wantClamped {
+		t.Fatalf("runs=0 cell count = %d; want %d (clamp to 1)", len(clamped), wantClamped)
+	}
+	for _, c := range clamped {
+		if c.RunIndex != 0 {
+			t.Errorf("runs=0: cell %+v has RunIndex %d; want 0", c, c.RunIndex)
+		}
 	}
 }
 
@@ -104,7 +164,7 @@ func TestExpandMatrixRejectsPathTraversal(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := ExpandMatrix(tc.benchmarks, tc.languages, tc.modes, tc.tasks); err == nil {
+			if _, err := ExpandMatrix(tc.benchmarks, tc.languages, tc.modes, tc.tasks, 1); err == nil {
 				t.Fatalf("ExpandMatrix(%v, %v, %v, %v) = nil error; want a path-traversal rejection",
 					tc.benchmarks, tc.languages, tc.modes, tc.tasks)
 			}
@@ -115,16 +175,16 @@ func TestExpandMatrixRejectsPathTraversal(t *testing.T) {
 // TestExpandMatrixRejectsEmpty asserts an empty axis is an error (no silent
 // empty matrix that would make `run` a no-op and exit 0).
 func TestExpandMatrixRejectsEmpty(t *testing.T) {
-	if _, err := ExpandMatrix(nil, []string{"go"}, []string{"m"}, []string{"t"}); err == nil {
+	if _, err := ExpandMatrix(nil, []string{"go"}, []string{"m"}, []string{"t"}, 1); err == nil {
 		t.Error("empty benchmarks: want error, got nil")
 	}
-	if _, err := ExpandMatrix([]string{"b"}, nil, []string{"m"}, []string{"t"}); err == nil {
+	if _, err := ExpandMatrix([]string{"b"}, nil, []string{"m"}, []string{"t"}, 1); err == nil {
 		t.Error("empty languages: want error, got nil")
 	}
-	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, nil, []string{"t"}); err == nil {
+	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, nil, []string{"t"}, 1); err == nil {
 		t.Error("empty modes: want error, got nil")
 	}
-	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, []string{"m"}, nil); err == nil {
+	if _, err := ExpandMatrix([]string{"b"}, []string{"go"}, []string{"m"}, nil, 1); err == nil {
 		t.Error("empty tasks: want error, got nil")
 	}
 }

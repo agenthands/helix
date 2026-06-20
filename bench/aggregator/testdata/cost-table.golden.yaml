@@ -1,0 +1,18 @@
+# bench/aggregator/testdata/cost-table.golden.yaml — frozen COST-02 golden rate.
+#
+# This mirrors the committed bench/datasets/cost-table.yaml row for
+# claude-sonnet-4-5-20250929 so the 3.555 hand-computed golden in cost_test.go
+# is anchored to a STABLE in-test rate, independent of future edits to the
+# committed table. Dates are kept fresh relative to the test's INJECTED today
+# (2026-06-20) so PriceFor's D-13 freshness gate PASSES for the golden math.
+rows:
+  -
+    provider: Anthropic
+    model_id: claude-sonnet-4-5-20250929
+    input_per_mtok: 3.0
+    output_per_mtok: 15.0
+    cached_input_per_mtok: 0.30
+    currency: USD
+    valid_until: 2027-01-28
+    last_verified: 2026-06-15
+    deprecation_at: 2027-01-28

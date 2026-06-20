@@ -1,0 +1,13 @@
+# Freshness-gate fixture: valid_until is in the PAST relative to the injected
+# today (2026-06-20). PriceFor must HARD-FAIL (D-13 fail-closed).
+rows:
+  -
+    provider: Anthropic
+    model_id: claude-sonnet-4-5-20250929
+    input_per_mtok: 3.0
+    output_per_mtok: 15.0
+    cached_input_per_mtok: 0.30
+    currency: USD
+    valid_until: 2026-01-01
+    last_verified: 2026-06-15
+    deprecation_at: 2026-01-01

@@ -210,7 +210,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 81-04-PLAN.md — effSemanticDisabled resolution at composition root + Noop/disabled-gate forcing on all 8 consumers, build-but-block (D-02/D-04, criterion #1)
+- [x] 81-04-PLAN.md — effSemanticDisabled resolution at composition root + Noop/disabled-gate forcing on all 8 consumers (+a 4th guardrail hand-out), build-but-block (D-02/D-04, criterion #1)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

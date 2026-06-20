@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 81-03-PLAN.md
-last_updated: "2026-06-20T10:45:00.000Z"
-last_activity: 2026-06-20 -- Phase 81 Plan 03 completed
+stopped_at: Completed 81-04-PLAN.md
+last_updated: "2026-06-20T14:25:00.000Z"
+last_activity: 2026-06-20 -- Phase 81 Plan 04 completed
 progress:
   total_phases: 15
   completed_phases: 6
   total_plans: 33
-  completed_plans: 31
-  percent: 42
+  completed_plans: 32
+  percent: 44
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-06-20 -- Phase 81 Plan 03 completed
+Last activity: 2026-06-20 -- Phase 81 Plan 04 completed
 
 ### Session Continuity
 
-Last session: 2026-06-20T10:45:00.000Z
-Stopped at: Completed 81-03-PLAN.md
+Last session: 2026-06-20T14:25:00.000Z
+Stopped at: Completed 81-04-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -98,6 +98,8 @@ Resume file: None
 | Phase 80 P05 | ~8min | 2 tasks | 5 files |
 | Phase 81 P01 | 20m | 2 tasks | 7 files |
 | Phase 81 P02 | ~10m | 2 tasks | 5 files |
+| Phase 81 P03 | ~25m | 2 tasks | 5 files |
+| Phase 81 P04 | ~30m | 2 tasks | 5 files (TDD RED+GREEN x2) |
 
 ## Decisions
 
@@ -153,3 +155,4 @@ Resume file: None
 - [Phase 80 P05]: delta operands use RESOLVABLE mode names no_lsp/no_structured_edit (NOT prior-wave aliases your_agent_no_lsp/your_agent_no_structured_edit; Rule 1 fix); row write-back decodes as map[string]json.RawMessage so additive keys survive; scope held single-run/3-delta (NOT Phase 82 aggregator)
 - [Phase ?]: 81-01: helix_semantic_store_reads_total is a labelless read counter incremented at a single s.queryContext/s.queryRowContext chokepoint in internal/semantic/store; writes/maintenance deliberately excluded (reads-only) so the no_semantic arm can assert ==0.
 - [Phase 81 P03]: vet-ablation-leakage extended with a D-06 narrow-AST call-site gate check: flags direct {ExpandFrom,RankFiles,ValidateCriticalEdges} calls outside the gate allowlist (internal/semantic, internal/skill/semantic, internal/daemon, internal/kernel/symbols, internal/kernel/health) and not routed through integ.ChooseSource. Check is gated on the file importing internal/semantic/integ (name-collision guard, e.g. repomap.RankFiles); _test pkg suffix stripped for allowlist match. Plan 04 production read wiring MUST stay inside the allowlist or route through ChooseSource. SSA is the deferred precision upgrade (Plan 05 runtime counter is the dynamic complement).
+- [Phase 81 P04]: effSemanticDisabled := cfg.SemanticIndex.BenchDisabled || activeProfile.DisableSemanticSubsystem resolved ONCE at daemon.go:294 (D-02, mirror Phase 76 effDisableLSP). Threaded via gatedSymbolsLookupFn/gatedCfgGate (new internal/daemon/semantic_gate.go) into ALL FOUR integLookupAccessor hand-outs: symbols/health, repomap, guardrail middleware (the 4th, not in plan A5 — deviation Rule 2), and the SemanticSkill Set*Accessor block. Gate DISABLES the cfgGate (not just the lookup) so ChooseSource yields source=tree_sitter not fallback (Pitfall 4). Under the gate repomap SetSemanticLookup(nil) + all 16 SemanticSkill accessors explicitly cleared to nil (idempotent null-object on the process-global singletons, Pitfall 5 — the skill-clear caught an order-dependent staleness bug). Bundle-build guards (daemon.go:324/518) UNTOUCHED — store stays built (D-04 build-but-block). Plan 05 asserts zero semantic-store reads on this gated arm.

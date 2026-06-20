@@ -4,13 +4,12 @@
     Helix is the IDE for your coding agent.
 </h3>
 
-<!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the brand
-     assets are produced; the original Python-Serena SVGs live under legacy/resources/ and
-     are not part of the active product surface. -->
+<!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the
+     brand assets are produced. -->
 
 <p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
-<p align="center"><sub>Helix is an independent, Go-native project &mdash; not a fork, port, or rewrite. It is partially inspired by prior art including <a href="https://github.com/oraios/serena">Serena</a>, <a href="https://github.com/Aider-AI/aider">Aider</a>, Graphify, and others, but its kernel, daemon, and tooling are its own. (The project carried an earlier name through v1.8; the full rename of binary, CLI, env vars, config dirs, and MCP server identity to <code>helix</code> shipped at v1.9 &mdash; see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes. The <code>legacy/</code> tree retains the historical Python codebase for read-only reference.)</sub></p>
+<p align="center"><sub>Helix is an independent, Go-native project &mdash; not a fork, port, or rewrite. It is partially inspired by prior art including <a href="https://github.com/oraios/serena">Serena</a>, <a href="https://github.com/Aider-AI/aider">Aider</a>, Graphify, and others, but its kernel, daemon, and tooling are its own. (The project carried an earlier name through v1.8; the full rename of binary, CLI, env vars, config dirs, and MCP server identity to <code>helix</code> shipped at v1.9 &mdash; see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes.)</sub></p>
 
 * Helix provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
@@ -421,7 +420,7 @@ The **admin listener** exposes health checks (`/healthz`, `/readyz`), Prometheus
 
 Helix is an independent Go project, but it stands on the shoulders of prior art and a large open-source ecosystem.
 
-**Inspiration.** The agent-tooling design draws on ideas from [Serena](https://github.com/oraios/serena) (symbol-level MCP operations over LSP — Helix's `legacy/` tree is the original Python codebase, kept read-only for reference), [Aider](https://github.com/Aider-AI/aider) (the ranked, PageRank-style RepoMap), Graphify, and other code-intelligence projects.
+**Inspiration.** The agent-tooling design draws on ideas from [Serena](https://github.com/oraios/serena) (symbol-level MCP operations over LSP), [Aider](https://github.com/Aider-AI/aider) (the ranked, PageRank-style RepoMap), Graphify, and other code-intelligence projects.
 
 **Foundations.** Helix is built directly on top of:
 

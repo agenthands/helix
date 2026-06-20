@@ -13,19 +13,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always run go vet and go test before completing any Go task.**
 
-## Legacy Python Commands (run from legacy/ directory)
-
-- `cd legacy && uv run poe format` - Format Python code (RUFF)
-- `cd legacy && uv run poe type-check` - Run mypy type checking
-- `cd legacy && uv run poe test` - Run Python tests with default markers (excludes java/rust)
-- `cd legacy && uv run poe test -m "python or go"` - Run specific language tests
-- `cd legacy && uv run poe lint` - Check Python code style without fixing
-
-**Test Markers:**
-Available pytest markers for selective testing:
-- `python`, `go`, `java`, `rust`, `typescript`, `vue`, `php`, `perl`, `powershell`, `csharp`, `elixir`, `terraform`, `clojure`, `swift`, `bash`, `ruby`, `ruby_solargraph`
-- `snapshot` - for symbolic editing operation tests
-
 ## Project
 
 **Helix** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
@@ -36,7 +23,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 
 **Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, serves ranked structural context on demand, and exposes semantic code operations as agent tools — all from a single binary with one-command client setup.
 
-**Legacy reference:** The `legacy/` directory contains the original Python Serena as a read-only reference. All active development is in Go. Helix is a standalone Go product originally inspired by Python Serena, not a port or rewrite. The product was renamed Serena → Helix at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes); the `legacy/` tree retains the historical Serena name.
+**Lineage:** Helix is a standalone, Go-native product — not a fork, port, or rewrite. It is partially inspired by prior art including Serena, Aider, Graphify, and others, but its kernel, daemon, and tooling are its own. The project carried an earlier name through v1.8 and was renamed to `helix` at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes). The original Python reference codebase (formerly under `legacy/`) has been removed from the tree; see git history prior to v1.12 if you need it.
 
 ## Architecture
 
@@ -191,7 +178,7 @@ LazyInit MUST run first so the workspace is activated before `TelemetryMiddlewar
 - **Language**: Go -- single binary, native concurrency
 - **Protocol**: MCP (Model Context Protocol) -- primary interface
 - **LSP only**: No JetBrains or proprietary backends
-- **Repo**: Same repo, Python in `legacy/`
+- **Repo**: Go-only; the historical Python reference tree has been removed (see git history)
 
 ## GSD Workflow Enforcement
 

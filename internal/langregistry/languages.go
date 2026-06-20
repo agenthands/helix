@@ -1,7 +1,6 @@
 package langregistry
 
 // defaultEntries contains all embedded language server definitions.
-// Ported from legacy/src/solidlsp/language_servers/*.py.
 // Grouped by quirk level: LOW first, then MEDIUM, then HIGH.
 var defaultEntries = map[string]LSEntry{
 

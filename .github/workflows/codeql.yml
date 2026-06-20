@@ -44,7 +44,6 @@ jobs:
       matrix:
         include:
         # Helix is a Go binary with vendored tree-sitter C bindings.
-        # The legacy/ Python tree is not analyzed (read-only reference per CLAUDE.md).
         - language: actions
           build-mode: none
         - language: go

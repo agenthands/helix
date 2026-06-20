@@ -1,11 +1,14 @@
 <h1 align="center">Helix</h1>
 
 <h3 align="center">
-    Helix is the IDE for your coding agent.
+    Helix is the code editor for your LLM.
 </h3>
 
 <!-- TODO(post-v1.9): Add Helix logo + block-diagram assets under resources/ once the
      brand assets are produced. -->
+
+<p align="center"><b>Not a code-assistant add-on &mdash; literally the editor your coding agent drives.</b><br/>
+It replaces the agent's blunt, file-based tool calls &mdash; <code>read</code> whole files, <code>grep</code>, line-number / regex edits &mdash; with precise, IDE-grade <b>semantic operations</b> backed by real language servers: go-to-definition, find-references, call hierarchy, rename-across-files, replace-symbol-body.</p>
 
 <p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
 
@@ -49,7 +52,9 @@ Agents connect via the **model context protocol (MCP)** through:
 
 ## Key Advantages Over File-Based Approaches
 
-| | File-based tools | Helix |
+Every row below is a tool call your agent makes today — `Read`, `Grep`, `Edit`, `Bash` — that Helix replaces with a semantic, language-server-backed equivalent:
+
+| | Agent's default tools (`Read`/`Grep`/`Edit`/`Bash`) | Helix |
 |---|---|---|
 | **Navigation** | grep, find, read whole files | Go to definition, find references, symbol search, call hierarchy |
 | **Editing** | Line-number replacements, regex | Replace symbol body, insert before/after, rename across files |

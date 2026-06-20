@@ -19,7 +19,8 @@ findings:
   warning: 4
   info: 3
   total: 8
-status: issues_found
+status: resolved
+resolved: 2026-06-20T00:00:00Z
 ---
 
 # Phase 81: Code Review Report
@@ -27,7 +28,14 @@ status: issues_found
 **Reviewed:** 2026-06-20
 **Depth:** standard
 **Files Reviewed:** 10
-**Status:** issues_found
+**Status:** resolved
+
+> **Resolution (2026-06-20):** All in-scope findings fixed and verified
+> (race-detector clean, `make vet` green, HELIX_BIN-gated bench tests run+pass).
+> - CR-01 — fixed in `63b4a6b0` (single owned daemon Wait goroutine; Stop/Kill select on shared `exited` channel).
+> - WR-01/WR-02/WR-03/IN-03 — fixed in `58c057d0` (graceful-stop budget 12s→20s; strict `graceful` assertion downgraded to logged expectation; malformed reads-total `count` now fail-closed via `*int`; scraper/test parsers kept in lockstep).
+> - WR-04 — addressed (doc-only) in `cc61320f` (counter guarantee scoped to `effective_graph.go` counting wrappers; no reads rerouted).
+> - IN-01 (harmless, documented) and IN-02 (pre-existing keyword-surfacing no-op tied to `vet-ablation-leakage`) intentionally left untouched.
 
 ## Summary
 

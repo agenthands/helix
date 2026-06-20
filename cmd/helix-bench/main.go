@@ -1,5 +1,5 @@
 // cmd/helix-bench is the Phase 75 provider-independent benchmark harness
-// entrypoint. It exposes five BENCH-02 subcommands:
+// entrypoint. It exposes six top-level subcommands:
 //
 //   - helix-bench run                 — run the bench suite (wired in Phase 78:
 //     expands the matrix and dispatches each cell through bench/runtime.RunCell)
@@ -8,6 +8,13 @@
 //   - helix-bench report              — render bench reports (Phase NN)
 //   - helix-bench validate-cost-table — HARD-FAIL strict validator for the
 //     bench/datasets/cost-table.yaml pricing + staleness contract (COST-01/D-13/D-16)
+//   - helix-bench aggregate           — Phase 82 D-02: reduce a durable multi-run
+//     tree into the first leaderboard.md + cost_quality.md (STATS-01/COST-03),
+//     fail-closed on a deficient run (D-05)
+//
+// (BENCH-02's "exactly five subcommands" --help acceptance was the Phase 75
+// contract; Phase 82 adds `aggregate` as the always-intended sixth — the
+// aggregator surface the milestone roadmap reserved here.)
 //
 // The companion `verify-tos` validator (D-16) is exposed as a sibling subcommand
 // and wired into the Makefile, but BENCH-02 counts exactly five top-level
@@ -67,6 +74,7 @@ Subcommands:
   doctor              check host prerequisites; exits 0 on a clean host
   report              render bench reports (not yet implemented)
   validate-cost-table HARD-FAIL strict validator for bench/datasets/cost-table.yaml
+  aggregate           reduce a multi-run tree into leaderboard.md + cost_quality.md
 
 See bench/BENCH.md for the benchmark contract and bench/PROVIDERS.md for the
 per-provider TOS attestation surface (gated by 'make verify-tos').`,
@@ -77,6 +85,7 @@ per-provider TOS attestation surface (gated by 'make verify-tos').`,
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newReportCmd())
 	root.AddCommand(newValidateCostTableCmd())
+	root.AddCommand(newAggregateCmd())
 
 	return root
 }

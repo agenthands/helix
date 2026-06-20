@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
-stopped_at: Completed 82-04-PLAN.md
-last_updated: "2026-06-21T00:10:00.000Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 04 executed (cost-per-solved rollup, COST-02; golden 3.555, fail-closed freshness gate via bench/cost)
+status: Wave 3 — aggregator orchestrator + leaderboard.md/cost_quality.md landed (STATS-02/03/04, COST-03); STATS-04 overlap gate + FAIR-03 CV warning live
+stopped_at: Completed 82-06-PLAN.md
+last_updated: "2026-06-21T01:25:00.000Z"
+last_activity: 2026-06-21 -- Phase 82 Plan 06 executed (aggregator orchestrator + leaderboard/cost_quality reports, STATS-02/03/04 + COST-03)
 progress:
   total_phases: 15
   completed_phases: 7
   total_plans: 42
-  completed_plans: 40
+  completed_plans: 42
   percent: 48
 ---
 
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 82
-Plan: 04 complete (Wave 2 — 82-01..05 all done)
-Status: Wave 2 closing; COST-02 cost-per-solved rollup landed (golden 3.555, fail-closed freshness gate via bench/cost)
-Last activity: 2026-06-21 -- Phase 82 Plan 04 executed (cost-per-solved rollup, COST-02)
+Plan: 06 complete (Wave 3 — 82-01..06 all done; 82-07 remains)
+Status: Wave 3 — aggregator orchestrator + leaderboard.md/cost_quality.md landed (STATS-02/03/04, COST-03); STATS-04 overlap gate + FAIR-03 CV warning live
+Last activity: 2026-06-21 -- Phase 82 Plan 06 executed (aggregator orchestrator + leaderboard/cost_quality reports, STATS-02/03/04 + COST-03)
 
 ### Session Continuity
 
-Last session: 2026-06-21T00:10:00.000Z
-Stopped at: Completed 82-04-PLAN.md
+Last session: 2026-06-20T22:20:35.059Z
+Stopped at: Completed 82-06-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -108,9 +108,11 @@ Resume file: None
 | Phase 82 P02 | ~3min | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
 | Phase 82 P03 | ~4m | 2 tasks | 2 files |
 | Phase 82 P05 | ~3m | 2 tasks | 2 files (TDD RED+GREEN, bench/aggregator) |
+| Phase 82 P06 | ~12m | 3 tasks | 7 files |
 
 ## Decisions
 
+- [Phase 82 P06]: STATS-02/03/04 + COST-03 DONE — aggregator.Aggregate(runDir,cfg) is a PURE orchestrator composing Load + BCaInterval/StatMean + PassAtK + perResultUSD/costPerSolvedTask via the two-level reduction (D-07: Level 1 per-(task,mode) scalar = success-rate / mean-over-non-nil / mean-USD; Level 2 BCa across-task vector). pass@1==success-rate identity; pass@N via PassAtK. ONE seeded math/rand/v2 PCG per Aggregate threaded into every BCa => byte-deterministic (D-08), locked by committed leaderboard.golden.md/cost_quality.golden.md + TestDeterministic. STATS-04 overlap gate: ciOverlap(lo_a<=hi_b && lo_b<=hi_a) on adjacent sorted rows -> "## CI overlap warnings" section suppressing X>Y (null CI never overlaps). FAIR-03 (D-15/A2): coefVariation = sample stddev/mean of per-run USD > 0.05 -> named warning in cost_quality.md. Null discipline: nil-across-all -> null CI -> em-dash, never 0. cost solved-gate = cell success-rate>0.5 (D-12); per-task USD = MEAN over runs (A3); valid_until footer = earliest across cost-table rows. Atomic temp+rename writeReport (cell.go:writeDurable analog, T-82-06-03). Added Loaded.Modes(task) accessor (Rule 3). PURE unit, NO HELIX_BIN, zero new deps.
 - [Phase ?]: Phase 64 microbench relocated to internal/semantic/bench/ via per-path git mv (renames preserved, git log --follow continuity)
 - [Phase ?]: Kept package bench + benchfts/ignore build tags unchanged; no go.mod edit (single module, absolute import path unaffected)
 - [Phase ?]: Left make bench Makefile target alone; Phase 77 BENCH-05 name-collision deferred, not fixed in Wave 0

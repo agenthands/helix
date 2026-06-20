@@ -71,13 +71,13 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **STATS-01**: Default `N ≥ 3` runs per task per mode; N configurable per-suite. _Acceptance:_ schema validates `runs` array length ≥ N; matrix runner enforces.
 - [x] **STATS-02**: BCa (bias-corrected accelerated) bootstrap CIs computed over per-task aggregates for every metric on every leaderboard row. Bootstrap iterations ≥ 10,000. _Acceptance:_ unit tests against a closed-form known distribution; CI width sanity-checked.
 - [x] **STATS-03**: `pass@1` and `pass@k` reported per HumanEval closed-form `1 − C(n-c, k)/C(n, k)`. _Acceptance:_ unit test against published reference values.
-- [ ] **STATS-04**: Reports flag any cell where the BCa CI overlaps a neighboring cell (no claim of "X > Y" without non-overlapping CIs). _Acceptance:_ a synthetic-overlap test case is rendered with the overlap warning.
+- [x] **STATS-04**: Reports flag any cell where the BCa CI overlaps a neighboring cell (no claim of "X > Y" without non-overlapping CIs). _Acceptance:_ a synthetic-overlap test case is rendered with the overlap warning.
 
 ### Cost Conversion (COST-*)
 
 - [x] **COST-01**: `bench/datasets/cost-table.yaml` ships with provider × model × `{input_per_mtok, output_per_mtok, currency}` and a `valid_until` date. _Acceptance:_ schema validates; CI gate fails if `valid_until` is past or > 90 days away from `last_verified`.
 - [x] **COST-02**: `cost_per_solved_task` = (sum across solved tasks of provider-side `usage`-derived USD cost) / count(solved). _Acceptance:_ matches a hand-computed example for a known run.
-- [ ] **COST-03**: `cost_quality.md` report shows cost-per-solved-task per mode × benchmark with BCa CIs. _Acceptance:_ report renders for a sample run.
+- [x] **COST-03**: `cost_quality.md` report shows cost-per-solved-task per mode × benchmark with BCa CIs. _Acceptance:_ report renders for a sample run.
 
 ### Public Benchmark Adapters (ADAPTER-*)
 

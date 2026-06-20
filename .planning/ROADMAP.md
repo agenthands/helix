@@ -253,7 +253,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 82-06-PLAN.md — orchestrator (two-level reduce) + leaderboard.md/cost_quality.md render + STATS-04 overlap gate + FAIR-03 CV variance + determinism (TDD; STATS-02/03/04/COST-03)
+- [x] 82-06-PLAN.md — orchestrator (two-level reduce) + leaderboard.md/cost_quality.md render + STATS-04 overlap gate + FAIR-03 CV variance + determinism (TDD; STATS-02/03/04/COST-03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

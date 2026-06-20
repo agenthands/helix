@@ -33,3 +33,21 @@ func TestAnalyzer_AllowsSlashBoundaryLookalike(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), ablationleakage.Analyzer,
 		"github.com/agenthands/helix/bench/runners/siblingrunner")
 }
+
+// TestAnalyzer_RejectsUngatedSemanticRead is the D-06 call-site RED fixture: a
+// package that calls a SemanticLookup read method (`.ExpandFrom(`) directly,
+// without first routing through `integ.ChooseSource`, MUST be flagged. The
+// badgate fixture carries the matching `// want` comment.
+func TestAnalyzer_RejectsUngatedSemanticRead(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), ablationleakage.Analyzer,
+		"github.com/agenthands/helix/badgate")
+}
+
+// TestAnalyzer_AllowsSemanticReadBehindChooseSource is the D-06 call-site GREEN
+// fixture: the same `.ExpandFrom(` read routed through `integ.ChooseSource` MUST
+// NOT be flagged. The goodgate fixture has no `// want` directive, so
+// analysistest fails if the analyzer emits any diagnostic.
+func TestAnalyzer_AllowsSemanticReadBehindChooseSource(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), ablationleakage.Analyzer,
+		"github.com/agenthands/helix/goodgate")
+}

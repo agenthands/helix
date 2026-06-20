@@ -197,53 +197,37 @@ func TestFairnessGate(t *testing.T) {
 		"an override lacking a WaiverReason must fail the fairness gate predicate")
 }
 
-// TestAblationStatus asserts the D-03 deferral-marker helper RunCell uses at the
-// BuildResult step: only the your_agent_no_semantic arm carries
-// guarantee_pending_phase_81; honest modes leave it empty. It also round-trips
-// BuildResult to confirm the no_semantic value lands under the `ablation_status`
-// key and the honest mode omits the key entirely (omitempty).
-func TestAblationStatus(t *testing.T) {
-	assert.Equal(t, "guarantee_pending_phase_81", ablationStatusFor("your_agent_no_semantic"),
-		"the no_semantic arm must carry the deferral marker (D-03)")
-	assert.Equal(t, "", ablationStatusFor("your_agent_full"),
-		"honest modes must leave ablation_status empty")
-	assert.Equal(t, "", ablationStatusFor("baseline_plain"),
-		"honest modes must leave ablation_status empty")
-
-	// BuildResult round-trip: the no_semantic row carries the key; the full row omits it.
-	t.Run("no_semantic row carries ablation_status", func(t *testing.T) {
+// TestAblationStatusMarkerRemoved asserts the Phase 81 deferral-marker removal:
+// the no_semantic arm NO LONGER carries guarantee_pending_phase_81. The kernel
+// disable_semantic_subsystem guarantee (ABLATE-06) lands this phase, so the
+// no_semantic row's clean measurement is now verified by the zero-reads
+// assertion (assertNoSemanticReads) rather than flagged partial. RunCell now sets
+// AblationStatus: "" for EVERY mode, so result.v2 omits the ablation_status key on
+// both the no_semantic and the honest arms (omitempty).
+func TestAblationStatusMarkerRemoved(t *testing.T) {
+	for _, mode := range []string{
+		"your_agent_no_semantic",
+		"your_agent_full",
+		"baseline_plain",
+	} {
 		b, err := BuildResult(ResultInput{
-			TaskID:         "IT-go-patch-apply-1",
-			Mode:           "your_agent_no_semantic",
-			Benchmark:      "internal-toolbench",
-			Outcome:        "pass",
-			Fairness:       runners.DefaultContract,
-			AblationStatus: ablationStatusFor("your_agent_no_semantic"),
-		})
-		require.NoError(t, err)
-		require.NoError(t, Validate(b))
-		var doc map[string]any
-		require.NoError(t, json.Unmarshal(b, &doc))
-		assert.Equal(t, "guarantee_pending_phase_81", doc["ablation_status"],
-			"no_semantic result.v2 must contain ablation_status: guarantee_pending_phase_81")
-	})
-
-	t.Run("full row omits ablation_status", func(t *testing.T) {
-		b, err := BuildResult(ResultInput{
-			TaskID:         "IT-go-patch-apply-1",
-			Mode:           "your_agent_full",
-			Benchmark:      "internal-toolbench",
-			Outcome:        "pass",
-			Fairness:       runners.DefaultContract,
-			AblationStatus: ablationStatusFor("your_agent_full"),
+			TaskID:    "IT-go-patch-apply-1",
+			Mode:      mode,
+			Benchmark: "internal-toolbench",
+			Outcome:   "pass",
+			Fairness:  runners.DefaultContract,
+			// RunCell now passes AblationStatus: "" for every mode (the deferral
+			// marker is gone); mirror that here.
+			AblationStatus: "",
 		})
 		require.NoError(t, err)
 		require.NoError(t, Validate(b))
 		var doc map[string]any
 		require.NoError(t, json.Unmarshal(b, &doc))
 		_, present := doc["ablation_status"]
-		assert.False(t, present, "honest mode result.v2 must omit the ablation_status key (omitempty)")
-	})
+		assert.Falsef(t, present,
+			"mode %q result.v2 must omit ablation_status — the guarantee_pending_phase_81 marker is removed in Phase 81", mode)
+	}
 }
 
 // TestBaselineRagFailClose asserts the D-02 fail-close: a RunCell for

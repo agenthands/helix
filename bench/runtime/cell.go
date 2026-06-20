@@ -24,6 +24,7 @@
 package runtime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -49,17 +50,84 @@ import (
 // seed task is a single edit; a small bound keeps a local claude run from looping.
 const claudeMaxToolCalls = 20
 
-// ablationStatusFor returns the D-03 machine-checkable deferral marker for a mode.
-// Only the your_agent_no_semantic arm carries "guarantee_pending_phase_81" — that
-// arm emits a REAL result row, but the kernel disable_semantic_subsystem guarantee
-// (ABLATE-06, the zero-DuckDB measurement) does not land until Phase 81, so its row
-// is flagged partial for the Phase 82 aggregator. Every honest mode returns "" so
-// the open provenance key is omitted (omitempty) from its result.v2 doc.
-func ablationStatusFor(mode string) string {
-	if mode == "your_agent_no_semantic" {
-		return "guarantee_pending_phase_81"
+// noSemanticMode is the bench-mode name of the semantic-store-disabled ablation
+// arm. The kernel gate (Plan 04, effSemanticDisabled) forces NoopLookup for this
+// arm, so its semantic-store read counter MUST be 0; the cell asserts that
+// (assertNoSemanticReads) and fails hard on any violation. The Phase 80 "pending"
+// ablation-status deferral marker is GONE — the kernel disable_semantic_subsystem
+// guarantee (ABLATE-06) lands this phase, so the no_semantic arm no longer emits a
+// partial-row marker; its result.v2 ablation status field is now empty like every
+// honest mode (omitempty drops the key).
+const noSemanticMode = "your_agent_no_semantic"
+
+// daemonReadsTotalMsg is the slog msg the daemon emits on a single shutdown log
+// line carrying the semantic-store read counter value (Phase 81 ABLATE-06, Task
+// 0 path A). The bench daemon runs HTTP-disabled over a Unix socket (D-06), so
+// the Prometheus /metrics scrape is unreachable; scrapeSemanticReadsTotal parses
+// this line from daemon.log instead. MUST match the msg string in
+// internal/daemon/shutdown.go.
+const daemonReadsTotalMsg = "semantic store reads total"
+
+// scrapeSemanticReadsTotal reads the semantic-store read counter value the daemon
+// emits at shutdown (Task 0 path A) from a daemon JSONL log file. It scans for the
+// last line whose msg == daemonReadsTotalMsg and returns its count field. A log
+// with no such line yields 0 (a daemon that shut down without emitting the line —
+// e.g. the semantic subsystem never ran — is treated as zero reads, not an error).
+// Malformed/truncated lines are skipped defensively (mirrors trace.TapDaemonLog).
+func scrapeSemanticReadsTotal(daemonLogPath string) (int, error) {
+	f, err := os.Open(daemonLogPath)
+	if err != nil {
+		return 0, fmt.Errorf("scrape semantic reads total: open %q: %w", daemonLogPath, err)
 	}
-	return ""
+	defer f.Close()
+
+	type readsTotalLine struct {
+		Msg   string `json:"msg"`
+		Count int    `json:"count"`
+	}
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 256*1024), 256*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var raw readsTotalLine
+		if err := json.Unmarshal(line, &raw); err != nil {
+			continue // truncated/malformed line — skip defensively
+		}
+		if raw.Msg == daemonReadsTotalMsg {
+			count = raw.Count // last occurrence wins (the final shutdown line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("scrape semantic reads total: scan %q: %w", daemonLogPath, err)
+	}
+	return count, nil
+}
+
+// assertNoSemanticReads is the fail-closed runtime verification (D-05, criterion
+// #2): on the no_semantic ablation arm the semantic-store read counter MUST be 0
+// (the kernel gate of Plan 04 forces NoopLookup, so a real read should be
+// impossible). A non-zero count means a read SURVIVED the gate — the central
+// integrity threat the phase exists to close (T-81-05-01) — so this returns a
+// non-error-named diagnostic that RunCell turns into a HARD cell failure (not a
+// warn). For every other mode the assertion is a no-op (scope guard, Test 3): a
+// non-zero read count is expected and legitimate off the no_semantic arm.
+func assertNoSemanticReads(mode string, reads int) error {
+	if mode != noSemanticMode {
+		return nil
+	}
+	if reads != 0 {
+		return fmt.Errorf(
+			"no_semantic ablation violated: helix_semantic_store_reads_total == %d (want 0); "+
+				"a semantic-store read survived the kernel disable_semantic_subsystem gate (Plan 04) — "+
+				"the no_semantic arm result is INVALID and the cell fails hard (ABLATE-06, D-05)",
+			reads)
+	}
+	return nil
 }
 
 // CellConfig is the full set of inputs to run one <run_id>/<task>/<mode> cell.
@@ -151,6 +219,18 @@ type CellResult struct {
 	ScratchDir string
 	// ScratchPreserved is true when the cell failed and scratch was kept.
 	ScratchPreserved bool
+
+	// SemanticStoreReads is the helix_semantic_store_reads_total counter value the
+	// daemon emitted at shutdown (Task 0 path A), scraped from daemon.log. On the
+	// no_semantic arm it MUST be 0 (the Plan 04 kernel gate forces NoopLookup);
+	// off that arm it is informational. (D-05, criterion #2.)
+	SemanticStoreReads int
+	// SemanticReadViolation is the HARD-fail signal for the no_semantic arm: true
+	// when SemanticStoreReads > 0 on the no_semantic mode, i.e. a semantic-store
+	// read survived the kernel gate. RunCell returns a non-nil error in this case
+	// (the cell is a failure, not a success) and preserves scratch for debugging
+	// (T-81-05-01). Always false off the no_semantic arm.
+	SemanticReadViolation bool
 
 	// Deferred is the D-02 fail-close signal: the cell short-circuited BEFORE any
 	// sandbox/daemon and produced NO result.v2.json (currently only baseline_rag,
@@ -461,6 +541,29 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return preserve(fmt.Errorf("bench/runtime: tap daemon log: %w", err))
 	}
 
+	// (5b) Independent runtime verification (D-05, criterion #2): on the
+	// no_semantic arm assert helix_semantic_store_reads_total == 0. The daemon
+	// emitted its read-counter value on a single shutdown log line (Task 0 path A —
+	// HTTP is disabled over the bench Unix socket so the Prometheus scrape is
+	// unreachable); scrapeSemanticReadsTotal reads it from daemon.log. The Plan 04
+	// kernel gate forces NoopLookup for this arm, so a non-zero count means a read
+	// SURVIVED the gate. This is the Plan 04 build-but-block gate's independent
+	// proof: the store EXISTS and could be queried, and we verify it was NOT. On a
+	// violation the cell FAILS HARD (mirrors the fail-closed shape of the fairness
+	// gate above) — a corrupted no_semantic row must never be published
+	// (T-81-05-01). Off the no_semantic arm assertNoSemanticReads is a no-op.
+	semanticReads, srErr := scrapeSemanticReadsTotal(daemonLog)
+	if srErr != nil {
+		return preserve(fmt.Errorf("bench/runtime: scrape semantic reads total: %w", srErr))
+	}
+	res.SemanticStoreReads = semanticReads
+	if vErr := assertNoSemanticReads(cfg.Mode, semanticReads); vErr != nil {
+		res.SemanticReadViolation = true
+		fmt.Fprintf(os.Stderr, "bench/runtime: cell %s/%s FAILED no_semantic zero-reads gate: %v\n",
+			cfg.Task, cfg.Mode, vErr)
+		return preserve(fmt.Errorf("bench/runtime: %w", vErr))
+	}
+
 	// (6) Resolve the outcome (D-10 dispatch). When a structured LanguageRunner is
 	// registered for (Benchmark, Language), its RunTests provides the outcome
 	// (Passed -> exit 0, else non-zero); a non-nil RunTests error is an
@@ -567,14 +670,19 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 	// from DefaultContract; the full nullable metrics record + annotations from the
 	// coordinator (METRIC-01).
 	resultBytes, err := BuildResult(ResultInput{
-		TaskID:         cfg.Task,
-		Mode:           cfg.Mode,
-		Benchmark:      cfg.Benchmark,
-		RunIndex:       cfg.RunIndex,
-		Outcome:        merged.Outcome,
-		TraceRef:       res.MergedTracePath,
-		Fairness:       runners.DefaultContract,
-		AblationStatus: ablationStatusFor(cfg.Mode),
+		TaskID:    cfg.Task,
+		Mode:      cfg.Mode,
+		Benchmark: cfg.Benchmark,
+		RunIndex:  cfg.RunIndex,
+		Outcome:   merged.Outcome,
+		TraceRef:  res.MergedTracePath,
+		Fairness:  runners.DefaultContract,
+		// AblationStatus is now empty for EVERY mode: the Phase 80 "pending"
+		// deferral marker is removed because the kernel disable_semantic_subsystem
+		// guarantee (ABLATE-06) lands this phase. The no_semantic arm's clean
+		// measurement is verified by the zero-reads assertion above, not flagged
+		// partial. (Empty => omitempty drops the key.)
+		AblationStatus: "",
 		Metrics:        metrics,
 		MetricErrors:   metricErrs,
 	})

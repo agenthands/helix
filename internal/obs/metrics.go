@@ -21,6 +21,7 @@ package obs
 
 import "github.com/prometheus/client_golang/prometheus"
 import "github.com/prometheus/client_golang/prometheus/collectors"
+import dto "github.com/prometheus/client_model/go"
 
 // Phase 70 D-04: closed-enum "reason" values for the incremental-refresh
 // fallback counter. Declared as package-level constants so call sites in
@@ -232,9 +233,9 @@ type Metrics struct {
 	// helix_guardrail_eval_timeout_total — UNLABELED (T-66-21 fail-open audit
 	//   trail; no label to avoid cardinality from timeout sources). Incremented
 	//   from the GuardrailMiddleware eval timeout branch (Plan 04).
-	ReceiptIssuedVec    *prometheus.CounterVec
-	ReceiptExpiredVec   *prometheus.CounterVec
-	ReceiptLookupVec    *prometheus.CounterVec
+	ReceiptIssuedVec     *prometheus.CounterVec
+	ReceiptExpiredVec    *prometheus.CounterVec
+	ReceiptLookupVec     *prometheus.CounterVec
 	GuardrailEvalTimeout prometheus.Counter
 }
 
@@ -752,6 +753,28 @@ func (m *Metrics) SemanticStoreReadsInc() {
 		return
 	}
 	m.SemanticStoreReads.Inc()
+}
+
+// SemanticStoreReadsValue returns the current value of the labelless
+// helix_semantic_store_reads_total counter as an integer. Phase 81 ABLATE-06:
+// the bench daemon runs HTTP-disabled over a Unix socket (D-06), so the
+// Prometheus /metrics scrape is unreachable; the daemon instead emits this value
+// on a single shutdown log line (msg="semantic store reads total") that the
+// bench cell scrapes from daemon.log to assert == 0 on the no_semantic arm
+// (D-05). Nil-receiver-safe (returns 0); a counter only ever increments, so the
+// float-to-int truncation is exact for any count the process can reach.
+func (m *Metrics) SemanticStoreReadsValue() int {
+	if m == nil || m.SemanticStoreReads == nil {
+		return 0
+	}
+	var metric dto.Metric
+	if err := m.SemanticStoreReads.Write(&metric); err != nil {
+		return 0
+	}
+	if metric.Counter == nil || metric.Counter.Value == nil {
+		return 0
+	}
+	return int(*metric.Counter.Value)
 }
 
 // --- Phase 59 P02 helper (T-59-02-02 mitigation: bounded-label allowlist) ---

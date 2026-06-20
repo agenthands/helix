@@ -47,6 +47,20 @@ func (d *Daemon) shutdown() {
 		flushCancel()
 	}
 
+	// Phase 1.6: emit the semantic-store read total on a single shutdown log
+	// line (Phase 81 ABLATE-06, Task 0 path A). The bench daemon runs
+	// HTTP-disabled over a Unix socket (D-06), so the Prometheus /metrics scrape
+	// is unreachable; the bench cell instead scrapes this line from daemon.log to
+	// assert helix_semantic_store_reads_total == 0 on the no_semantic arm (D-05).
+	// The line is parseable by the cell's scrapeSemanticReadsTotal: msg matches
+	// "semantic store reads total" and the count is the integer counter value.
+	// On the no_semantic arm the kernel gate (Plan 04) forces NoopLookup, so this
+	// count is 0 — a non-zero value here means a semantic read survived the gate
+	// and the bench cell fails hard.
+	if d.obs != nil {
+		d.logger.Info("semantic store reads total", "count", d.obs.Metrics().SemanticStoreReadsValue())
+	}
+
 	// Phase 2: Close listeners.
 	if d.socketListener != nil {
 		d.socketListener.Close()

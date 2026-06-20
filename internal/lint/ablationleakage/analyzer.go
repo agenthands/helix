@@ -67,6 +67,16 @@ var semanticReadMethods = map[string]bool{
 // SSA receiver-typed call-graph proof is the deferred higher-precision upgrade.
 const chooseSourceFn = "ChooseSource"
 
+// integImportPath is the package that owns the SemanticLookup interface. The
+// call-site check only inspects files that import this package — a file that
+// never imports integ cannot be making a SemanticLookup read, so a same-named
+// method (e.g. repomap's FileGraph.RankFiles(damping, ...), which has nothing to
+// do with the semantic store) is NOT a false positive. This import-gating is the
+// narrow-AST guard against method-name collisions (RESEARCH Pitfall 6); proving
+// the receiver type cross-package would require the SSA upgrade. Matched
+// exact-OR-slash-boundary.
+const integImportPath = "github.com/agenthands/helix/internal/semantic/integ"
+
 // gateAllowedPkgPrefixes are the package namespaces permitted to call a
 // SemanticLookup read method directly without a ChooseSource guard: the integ
 // adapter that *implements* the lookup, the semantic store/skill packages that
@@ -84,10 +94,26 @@ var gateAllowedPkgPrefixes = []string{
 
 // pkgInAllowlist reports whether pkgPath is rooted at one of the gate-allowed
 // prefixes, using exact-OR-slash-boundary matching so lookalike siblings are not
-// silently exempted.
+// silently exempted. The trailing "_test" of an external test package (Go's
+// go/analysis reports `<pkg>_test` for files in `package <name>_test`) is
+// stripped first so an external test of an allowlisted package — which exercises
+// the legitimate read path — is exempted exactly like the package it tests.
 func pkgInAllowlist(pkgPath string) bool {
+	pkgPath = strings.TrimSuffix(pkgPath, "_test")
 	for _, prefix := range gateAllowedPkgPrefixes {
 		if pkgPath == prefix || strings.HasPrefix(pkgPath, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// fileImportsInteg reports whether the file imports the integ package that owns
+// the SemanticLookup interface. Read-method calls in a file that does not import
+// integ cannot be SemanticLookup reads (name-collision guard).
+func fileImportsInteg(file *ast.File) bool {
+	for _, imp := range file.Imports {
+		if strings.Trim(imp.Path.Value, `"`) == integImportPath {
 			return true
 		}
 	}
@@ -157,6 +183,11 @@ var Analyzer = &analysis.Analyzer{
 			return nil, nil
 		}
 		for _, file := range pass.Files {
+			// A file that never imports integ cannot be making a SemanticLookup
+			// read — skip it (name-collision guard, e.g. repomap.RankFiles).
+			if !fileImportsInteg(file) {
+				continue
+			}
 			// A file that routes through ChooseSource gates its reads (the
 			// green path) — exempt every read in it.
 			if fileRoutesThroughChooseSource(file) {

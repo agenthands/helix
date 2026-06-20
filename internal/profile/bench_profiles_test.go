@@ -131,16 +131,20 @@ func TestBenchProfiles(t *testing.T) {
 		for _, tool := range semanticStoreTools {
 			assert.False(t, names[tool], "bench-no-semantic must EXCLUDE semantic-store tool %q", tool)
 		}
-		// get_repo_map/get_context REMAIN (tree-sitter fallback; kernel guard is Phase 81).
+		// get_repo_map/get_context REMAIN exposed; the Phase 81 kernel gate
+		// forces their SemanticLookup reads to NoopLookup (tree-sitter fallback).
 		assert.True(t, names["get_repo_map"], "bench-no-semantic must keep get_repo_map (D-11)")
 		assert.True(t, names["get_context"], "bench-no-semantic must keep get_context (D-11)")
 		// LSP + structured-edit tools remain (this arm only ablates semantic).
 		assert.True(t, names["go_to_definition"], "bench-no-semantic keeps LSP tools")
 		assert.True(t, names["replace_symbol_body"], "bench-no-semantic keeps structured edits")
 
-		// Tool-filter-only this phase: NEITHER kernel flag set (D-11/D-12).
-		assert.False(t, p.DisableLSPSubsystem, "bench-no-semantic must NOT set a kernel flag (D-11/D-12)")
-		assert.False(t, p.DisableStructuredEditSubsystem, "bench-no-semantic must NOT set a kernel flag (D-11/D-12)")
+		// Phase 81 ABLATE-06: the kernel gate has now LANDED — this arm declares
+		// the semantic kernel flag (deliberate flip of the Phase 76 D-11/D-12
+		// deferral). It still ablates ONLY semantic, so LSP/structured-edit stay false.
+		assert.True(t, p.DisableSemanticSubsystem, "bench-no-semantic must declare disable_semantic_subsystem: true")
+		assert.False(t, p.DisableLSPSubsystem, "bench-no-semantic must NOT disable the LSP subsystem")
+		assert.False(t, p.DisableStructuredEditSubsystem, "bench-no-semantic must NOT disable structured edits")
 	})
 
 	t.Run("bench-no-structured-edit", func(t *testing.T) {

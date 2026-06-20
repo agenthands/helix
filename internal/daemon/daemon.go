@@ -286,10 +286,17 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	)
 	effDisableLSP := cfg.DisableLSPSubsystem || activeProfile.DisableLSPSubsystem
 	effDisableSE := cfg.DisableStructuredEditSubsystem || activeProfile.DisableStructuredEditSubsystem
-	if effDisableLSP || effDisableSE {
+	// Phase 81 ABLATE-06 (D-02): resolve effSemanticDisabled ONCE here, OR'ing
+	// the config field with the active profile field (precedence already
+	// collapsed upstream, D-03). Threaded into every back-channel semantic read
+	// consumer below to force integ.NoopLookup{} + a DISABLED ConfigGate
+	// (build-but-block, D-04 — the bundle/store is STILL built).
+	effSemanticDisabled := resolveSemanticDisabled(cfg, activeProfile)
+	if effDisableLSP || effDisableSE || effSemanticDisabled {
 		logger.Info("subsystem ablation flags resolved",
 			"disable_lsp_subsystem", effDisableLSP,
 			"disable_structured_edit_subsystem", effDisableSE,
+			"disable_semantic_subsystem", effSemanticDisabled,
 		)
 	}
 
@@ -609,13 +616,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// the SetSemanticLookup post-init wiring used by RepoMapSkill in 65-05).
 	// nil sBndl is normalized to NoopLookup{} so ChooseSource always sees a
 	// valid SemanticLookup interface value.
-	symbolsLookupFn := func() integ.SemanticLookup {
-		if sBndl != nil {
-			return sBndl.integLookupAccessor()
-		}
-		return integ.NoopLookup{}
-	}
-	symbolsCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	// Phase 81 ABLATE-06 gate point 1 (D-04 / Pitfall 4): under
+	// effSemanticDisabled the closure returns integ.NoopLookup{} as its FIRST
+	// line (build-but-block — the bundle stays built) and the cfgGate reports
+	// DISABLED so ChooseSource yields source=tree_sitter, not fallback.
+	symbolsLookupFn := gatedSymbolsLookupFn(sBndl, effSemanticDisabled)
+	symbolsCfgGate := gatedCfgGate(cfg, effSemanticDisabled)
 	symbols.RegisterTools(mcpServer, k, wsKeyFn, symbolsLookupFn, symbolsCfgGate)
 
 	// Phase 65 65-07 INTEG-04 / INTEG-05: capture the wired SemanticLookup
@@ -624,9 +630,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// nil (semantic disabled) so integ.ChooseSource always sees a valid
 	// SemanticLookup interface value, and the SemanticIndexAccessor adapter
 	// always has a non-nil delegate.
+	// Phase 81 ABLATE-06 gate point 2 (health): healthLookup inherits the gated
+	// symbolsLookupFn (Noop under the gate); healthCfgGate is disabled under the
+	// gate to match (Pitfall 4 — source=tree_sitter on the get_health stamp).
 	healthLookup := symbolsLookupFn()
 	healthSemIndex := &daemonSemIndexAccessor{lookup: healthLookup}
-	healthCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	healthCfgGate := gatedCfgGate(cfg, effSemanticDisabled)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
 	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
 	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
@@ -774,9 +783,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// steady-state path renders source="tree_sitter" instead of
 	// source="fallback" + reason="index_disabled" when the feature is off
 	// (D-04 / Pitfall §3).
+	//
+	// Phase 81 ABLATE-06 gate point 3 (repomap, get_repo_map / get_context):
+	// the ConfigGate is gated DISABLED under effSemanticDisabled (Pitfall 4 →
+	// source=tree_sitter), and the SemanticLookup is EXPLICITLY nulled
+	// (idempotent null-object, Pitfall 5 — mirror SetEnrichFn(nil) above) rather
+	// than skipping the setter, so a stale real lookup cannot persist on the
+	// process-global RepoMapSkill singleton.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		rs.SetConfigGate(&daemonCfgGate{enabled: cfg.SemanticIndex.Enabled})
-		if sBndl != nil {
+		rs.SetConfigGate(gatedCfgGate(cfg, effSemanticDisabled))
+		if effSemanticDisabled {
+			rs.SetSemanticLookup(nil)
+		} else if sBndl != nil {
 			rs.SetSemanticLookup(sBndl.integLookupAccessor())
 		}
 	}
@@ -827,8 +845,13 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		guardrails.SetReceiptIssueSink(func(ctx context.Context, class guardrails.ReceiptClass, scope guardrails.ReceiptScope, tool string) (guardrails.ReceiptID, error) {
 			return guardrailStore.Issue(activeWSKey, class, scope, guardrails.IssueFields{IssuingTool: tool})
 		})
+		// Phase 81 ABLATE-06: the guardrail middleware is a FOURTH
+		// integLookupAccessor hand-out (the SessionContext.Lookup consumed by
+		// rule predicates G-001..G-005). Gate it under effSemanticDisabled so the
+		// no_semantic arm sees integ.NoopLookup{} here too (T-81-04-01: no
+		// back-channel read consumer may leak a semantic read onto the gated arm).
 		var semanticLookup integ.SemanticLookup = integ.NoopLookup{}
-		if sBndl != nil {
+		if sBndl != nil && !effSemanticDisabled {
 			semanticLookup = sBndl.integLookupAccessor()
 		}
 		guardrailDeps := newGuardrailDeps(

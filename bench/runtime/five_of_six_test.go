@@ -23,8 +23,9 @@ import (
 //   - exactly 4 REAL result.v2.json rows on disk (your_agent_full, baseline_plain,
 //     no_lsp, no_structured_edit), each schema-valid and (after the delta pass)
 //     carrying ablation_deltas;
-//   - exactly 1 PARTIAL row (your_agent_no_semantic) carrying
-//     ablation_status == "guarantee_pending_phase_81";
+//   - exactly 1 additional REAL row (your_agent_no_semantic) that OMITS
+//     ablation_status (the Phase 81 deferral-marker removal — ABLATE-06 landed)
+//     and is NOT a delta operand (no ablation_deltas);
 //   - ZERO rows for baseline_rag — its cell is Deferred==true, Success==false, and
 //     no file exists at its ResultPath.
 //
@@ -109,10 +110,12 @@ func TestFiveOfSixSmoke(t *testing.T) {
 		assert.Empty(t, doc.AblationStatus, "honest real mode %s must NOT carry ablation_status", m)
 	}
 
-	// The partial no_semantic row: a REAL row carrying the deferral marker, NOT one
-	// of the 3 delta operands (so it carries no ablation_deltas).
+	// The no_semantic row: a REAL row that (post-Phase-81) OMITS the deferral
+	// marker — the kernel disable_semantic_subsystem guarantee (ABLATE-06) landed,
+	// so the row is a clean measurement, not a partial. It is still NOT one of the
+	// 3 delta operands (so it carries no ablation_deltas).
 	ns := ocByMode["your_agent_no_semantic"]
-	require.FileExists(t, ns.Result.ResultPath, "your_agent_no_semantic must write a (partial) row")
+	require.FileExists(t, ns.Result.ResultPath, "your_agent_no_semantic must write a row")
 	nsBytes, err := os.ReadFile(ns.Result.ResultPath)
 	require.NoError(t, err)
 	var nsDoc struct {
@@ -120,10 +123,10 @@ func TestFiveOfSixSmoke(t *testing.T) {
 		AblationDeltas map[string]map[string]float64 `json:"ablation_deltas"`
 	}
 	require.NoError(t, json.Unmarshal(nsBytes, &nsDoc))
-	assert.Equal(t, "guarantee_pending_phase_81", nsDoc.AblationStatus,
-		"the no_semantic partial row must carry the deferral marker")
+	assert.Empty(t, nsDoc.AblationStatus,
+		"the no_semantic row must OMIT ablation_status — the guarantee_pending_phase_81 marker is removed in Phase 81")
 	assert.Nil(t, nsDoc.AblationDeltas,
-		"the no_semantic partial arm is NOT a delta operand and must not gain ablation_deltas")
+		"the no_semantic arm is NOT a delta operand and must not gain ablation_deltas")
 
 	// Exactly 4 real rows + 1 partial row = 5 rows on disk; baseline_rag = 0.
 	rowCount := 0
@@ -132,5 +135,5 @@ func TestFiveOfSixSmoke(t *testing.T) {
 			rowCount++
 		}
 	}
-	assert.Equal(t, 5, rowCount, "five-of-six: exactly 4 real + 1 partial rows; baseline_rag writes none")
+	assert.Equal(t, 5, rowCount, "five-of-six: exactly 4 real-with-deltas + 1 no_semantic row; baseline_rag writes none")
 }

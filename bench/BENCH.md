@@ -45,7 +45,7 @@ six modes:
 | `baseline_plain` | `baseline` | zero-Helix-tools control arm (see below) |
 | `no_lsp` | `bench-no-lsp` | LSP subsystem disabled (ABLATE-05) |
 | `no_structured_edit` | `bench-no-structured-edit` | structured-edit tools excluded (ABLATE-07) |
-| `your_agent_no_semantic` | `bench-no-semantic` | semantic-store tools excluded; **deferred guarantee** (see below) |
+| `your_agent_no_semantic` | `bench-no-semantic` | semantic-store tools excluded; **kernel disable_semantic_subsystem gate** (ABLATE-06, Phase 81 — see below) |
 | `baseline_rag` | `baseline` (placeholder) | registered **fail-closed stub**, no row until Phase 83 |
 
 **`baseline_plain` — empty Helix inventory, no new YAML.** `baseline_plain`
@@ -57,17 +57,22 @@ enforced by the **profile filter** (the `baseline` profile's empty tool
 lists), not by any bench-side code. The daemon still spawns for trace
 symmetry, so baseline_plain's run shape matches the other arms.
 
-**`your_agent_no_semantic` — `ablation_status: guarantee_pending_phase_81`.**
-This arm emits a **real** result row, but the row is marked **partial** via
-`ablation_status: guarantee_pending_phase_81`. The kernel-level
-`disable_semantic_subsystem` flag — the zero-DuckDB guarantee, ABLATE-06 —
-lands in **Phase 81**, not this phase. Until then `bench-no-semantic` is
-tool-filter-only (Phase 76 D-11/D-12): the 10 semantic-store tools are
-excluded from the agent surface, but the daemon may still read the semantic
-store via back-channel paths. The `guarantee_pending_phase_81` status flags
-the row as not-yet-a-clean no_semantic measurement; the clean zero-DuckDB
-number arrives once Phase 81 wires the kernel flag with its config-gate E2E
-test.
+**`your_agent_no_semantic` — clean zero-DuckDB measurement (ABLATE-06 landed in Phase 81).**
+This arm emits a **real, clean** result row with **no** `ablation_status` marker.
+As of **Phase 81**, the kernel-level `disable_semantic_subsystem` gate
+(`semantic_index.bench_disabled`, precedence CLI > profile YAML > default-off)
+is wired at the daemon composition root: `effSemanticDisabled` forces
+`integ.NoopLookup{}` + a disabled `ConfigGate` across all eight back-channel
+semantic read consumers (`get_repo_map`, `get_context`, `find_related_symbols`,
+`explain_symbol_deep`, `validate_graph_edge`, `analyze_blast_radius`,
+`RankFiles`, `ExpandFrom`), while the store stays **built** (D-04 build-but-block).
+The guarantee is verified at runtime: the bench cell asserts
+`helix_semantic_store_reads_total == 0` after the run and **fails the cell** on
+any non-zero read. The earlier `ablation_status: guarantee_pending_phase_81`
+deferral marker (Phase 80) is **removed** — the row is now a clean no_semantic
+measurement, not a partial. `bench-no-semantic` still also excludes the 10
+semantic-store tools from the agent surface (Phase 76 tool-filter), so the gate
+is defence-in-depth over the surface filter.
 
 **`baseline_rag` — fail-closed stub, no row until Phase 83.** `baseline_rag`
 is a registered fail-closed stub. Its `MODE.md` carries a placeholder

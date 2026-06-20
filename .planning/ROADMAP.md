@@ -224,7 +224,7 @@ Plans:
 
 **Wave 5** *(gap closure — 81-VERIFICATION.md GAP 2 / CR-01: criterion #1 background pipelines ungated; blocked on Wave 4's fail-closed teeth)*
 
-- [ ] 81-07-PLAN.md — gate SetActivateCallback background read pipelines + SetFileFactStore on effSemanticDisabled (build-but-block, store stays built per D-04) + store-ON no_semantic end-to-end regression proof (ABLATE-06)
+- [x] 81-07-PLAN.md — gate SetActivateCallback background read pipelines + SetFileFactStore on effSemanticDisabled (build-but-block, store stays built per D-04) + store-ON no_semantic end-to-end regression proof (ABLATE-06)
 
 ### Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
 

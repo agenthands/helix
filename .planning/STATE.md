@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
+status: verifying
 stopped_at: Completed 81-06-PLAN.md
-last_updated: "2026-06-20T19:40:00.000Z"
+last_updated: "2026-06-20T19:45:27.737Z"
 last_activity: 2026-06-20 -- Completed 81-06 (GAP 1 / WR-02 closure)
 progress:
   total_phases: 15
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 35
-  completed_plans: 34
-  percent: 41
+  completed_plans: 35
+  percent: 47
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
 Plan: 7 of 7
-Status: Executing Phase 81 (81-07 remaining — GAP 2 / CR-01)
+Status: Phase complete — ready for verification
 Last activity: 2026-06-20 -- Completed 81-06 (GAP 1 / WR-02 closure)
 
 ### Session Continuity
 
-Last session: 2026-06-20T19:40:00.000Z
+Last session: 2026-06-20T19:44:55.499Z
 Stopped at: Completed 81-06-PLAN.md
 Resume file: None
 
@@ -103,6 +103,7 @@ Resume file: None
 | Phase 81 P04 | ~30m | 2 tasks | 5 files (TDD RED+GREEN x2) |
 | Phase 81 P05 | ~35m | 3 tasks | 6 files (TDD RED+GREEN) |
 | Phase 81 P06 | ~22m | 2 tasks | 4 files (gap closure, WR-02) |
+| Phase 81 P07 | ~30min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -161,3 +162,4 @@ Resume file: None
 - [Phase 81 P04]: effSemanticDisabled := cfg.SemanticIndex.BenchDisabled || activeProfile.DisableSemanticSubsystem resolved ONCE at daemon.go:294 (D-02, mirror Phase 76 effDisableLSP). Threaded via gatedSymbolsLookupFn/gatedCfgGate (new internal/daemon/semantic_gate.go) into ALL FOUR integLookupAccessor hand-outs: symbols/health, repomap, guardrail middleware (the 4th, not in plan A5 — deviation Rule 2), and the SemanticSkill Set*Accessor block. Gate DISABLES the cfgGate (not just the lookup) so ChooseSource yields source=tree_sitter not fallback (Pitfall 4). Under the gate repomap SetSemanticLookup(nil) + all 16 SemanticSkill accessors explicitly cleared to nil (idempotent null-object on the process-global singletons, Pitfall 5 — the skill-clear caught an order-dependent staleness bug). Bundle-build guards (daemon.go:324/518) UNTOUCHED — store stays built (D-04 build-but-block). Plan 05 asserts zero semantic-store reads on this gated arm.
 - [Phase 81 P05]: Counter exposure = path A (daemon-log shutdown line). Bench daemon runs --http-addr= (HTTP off) over a Unix socket so the Prometheus /metrics scrape is unreachable; daemon emits ONE line msg="semantic store reads total" count=N in shutdown.go (d.shutdown() Phase 1.6), reusing the trace.TapDaemonLog msg== JSONL substrate. bench cell scrapeSemanticReadsTotal parses it (last occurrence wins; missing line => 0). assertNoSemanticReads hard-FAILS the no_semantic cell (routes through preserve(), CellResult.SemanticReadViolation) on any non-zero read — fail-closed, NOT a warn (D-05/criterion #2, T-81-05-01). guarantee_pending_phase_81 deferral marker REMOVED: ablationStatusFor deleted, AblationStatus forced "" for every mode (no_semantic row no longer partial). MODE.md rewritten to no_lsp shape + names the gate key semantic_index.bench_disabled (precedence CLI > profile YAML > default-off) + all 8 strangler-fig consumers (criterion #4). Added obs.Metrics.SemanticStoreReadsValue() getter (dto.Metric.Write, nil-safe). Phase 81 CLOSED (ABLATE-06). _Superseded by 81-VERIFICATION (gaps_found): criterion #2 was vacuous end-to-end (WR-02) and criterion #1 partial (CR-01); two gap-closure plans 81-06/81-07 added._
 - [Phase 81 P06]: GAP 1 / WR-02 closed. New DaemonHandle.Stop(timeout) sends SIGTERM to the daemon process GROUP (Setpgid leader) and waits up to timeout for graceful exit so d.shutdown() flushes the "semantic store reads total" line (shutdown.go:60-62) — the one thing SIGKILL can never do. RunCell now drains GRACEFULLY (h.Stop, daemonGracefulStopTimeout=12s = 10s ShutdownTimeout + slack) THEN Kill as a hard reaper (called unconditionally, no-op on the graceful path, before the daemon-log tap). scrapeSemanticReadsTotal returns (count, present, err): an ABSENT line is present=false, no longer a silent count=0 (root fail-open anti-pattern cell.go:101-103 removed). assertNoSemanticReads(mode, reads, present) HARD-FAILS the no_semantic arm when present==false (proof never ran) AND when reads!=0; off-arm both are no-ops. New real-daemon HELIX_BIN-gated integration test TestNoSemanticReadsTotalLineEmitted spawns a bare daemon, drives Stop-then-Kill, asserts daemon.log carries a real reads-total line with an integer count (replaces synthetic-os.WriteFile-only coverage). D-04 build-but-block + D-05 path-A emission preserved. GAP 2 / CR-01 (background read pipelines ungated) remains for 81-07.
+- [Phase ?]: [Phase 81 P07]: GAP 2 / CR-01 closed — gated SIX daemon-internal semantic read-DRIVERS on effSemanticDisabled via backgroundSemanticReadsDisabled predicate (SetFileFactStore + 5 SetActivateCallback drivers + lazy-activate ScheduleInitialExtraction, Rule 2). D-04 build-but-block preserved (store-Open + newSemanticBundle UNTOUCHED). Store-ON no_semantic regression TestNoSemanticStoreOnZeroReads proves SemanticStoreReads==0 on an OPEN store (teeth from 81-06). 81-VERIFICATION.md:113 masking broken; ABLATE-06 runtime guarantee holds. Phase 81 CLOSED.

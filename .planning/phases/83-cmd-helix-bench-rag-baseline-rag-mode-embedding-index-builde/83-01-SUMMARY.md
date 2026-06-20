@@ -141,6 +141,10 @@ See `key-decisions` frontmatter. Headline: byte-value-histogram stub (determinis
 - Leaf invariant holds, so importing `bench/ragindex` into the standalone server will not break the no-kernel/no-semantic vet gate.
 - Open: full-tree `go mod tidy` deferred until the pre-existing s2a-go module-graph issue is resolved (deferred-items.md).
 
+## Self-Check: PASSED
+
+All 10 created files exist on disk; all 7 commits (5300a7ee, 552c34b2, 6990b2f5, ae447e89, 16873280, 6a4ae1a0, dd12c804) are present in git history.
+
 ---
 *Phase: 83-cmd-helix-bench-rag-baseline-rag-mode-embedding-index-builde*
 *Completed: 2026-06-21*

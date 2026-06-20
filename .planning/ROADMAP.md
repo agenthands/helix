@@ -275,7 +275,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 83-01-PLAN.md — bench/ragindex leaf package (chromem-go index build/cache, deterministic corpus_sha, embedder selection) + EMBED-CHOICE.md
+- [x] 83-01-PLAN.md — bench/ragindex leaf package (chromem-go index build/cache, deterministic corpus_sha, embedder selection) + EMBED-CHOICE.md
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

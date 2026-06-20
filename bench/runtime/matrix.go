@@ -104,10 +104,20 @@ func validateMatrixID(id, kind string) error {
 // segment (V5/T-77-10; the <language> axis is covered by T-78-03). It returns an
 // error if any list is empty or any id is unsafe.
 //
+// The runs axis (D-04, STATS-01 producer half) emits `runs` cells per
+// (benchmark, language, mode, task) with distinct RunIndex 0..runs-1, so each
+// repetition lands in its own durable <task>/<mode>/<run_index>/ dir (the path
+// machinery is already RunIndex-aware — no path code changes here). A runs value
+// < 1 is treated as 1 (defensive: a zero/negative runs must never silently
+// produce an empty matrix that would make `run` a no-op).
+//
 // Cell ordering is deterministic: benchmarks (outer) x languages x modes x tasks
-// (inner), so a fixed input always yields the same cell sequence (stable artifact
-// layout, stable tests).
-func ExpandMatrix(benchmarks, languages, modes, tasks []string) ([]Cell, error) {
+// x runs (inner), so a fixed input always yields the same cell sequence (stable
+// artifact layout, stable tests).
+func ExpandMatrix(benchmarks, languages, modes, tasks []string, runs int) ([]Cell, error) {
+	if runs < 1 {
+		runs = 1
+	}
 	if len(benchmarks) == 0 {
 		return nil, fmt.Errorf("bench/runtime: no benchmarks given")
 	}
@@ -142,12 +152,14 @@ func ExpandMatrix(benchmarks, languages, modes, tasks []string) ([]Cell, error) 
 		}
 	}
 
-	cells := make([]Cell, 0, len(benchmarks)*len(languages)*len(modes)*len(tasks))
+	cells := make([]Cell, 0, len(benchmarks)*len(languages)*len(modes)*len(tasks)*runs)
 	for _, b := range benchmarks {
 		for _, l := range languages {
 			for _, m := range modes {
 				for _, t := range tasks {
-					cells = append(cells, Cell{Benchmark: b, Language: l, Mode: m, Task: t})
+					for r := 0; r < runs; r++ {
+						cells = append(cells, Cell{Benchmark: b, Language: l, Mode: m, Task: t, RunIndex: r})
+					}
 				}
 			}
 		}

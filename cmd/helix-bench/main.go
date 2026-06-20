@@ -107,6 +107,7 @@ func newRunCmd() *cobra.Command {
 		modes        []string
 		tasks        []string
 		parallel     int
+		runs         int
 		out          string
 		agent        string
 		helixBin     string
@@ -134,6 +135,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 				Modes:        modes,
 				Tasks:        tasks,
 				Parallel:     parallel,
+				Runs:         runs,
 				Out:          out,
 				Agent:        agent,
 				HelixBin:     helixBin,
@@ -148,6 +150,7 @@ real claude CLI agent (locally runnable; requires the claude binary on PATH).`,
 	cmd.Flags().StringArrayVar(&modes, "modes", []string{"your_agent_full"}, "mode(s); repeatable")
 	cmd.Flags().StringArrayVar(&tasks, "tasks", nil, "task id(s); repeatable (default: all tasks under the benchmark dataset dir)")
 	cmd.Flags().IntVar(&parallel, "parallel", 1, "max concurrent cells")
+	cmd.Flags().IntVar(&runs, "runs", 3, "runs per (task,mode); each lands a distinct run_index dir (STATS-01)")
 	cmd.Flags().StringVar(&out, "out", "bench/reports", "durable output dir")
 	cmd.Flags().StringVar(&agent, "agent", "scripted", "agent driver: scripted|claude")
 	cmd.Flags().StringVar(&helixBin, "helix-bin", "helix", "path to the helix binary for the daemon subprocess")
@@ -164,6 +167,7 @@ type runBenchOpts struct {
 	Modes        []string
 	Tasks        []string
 	Parallel     int
+	Runs         int
 	Out          string
 	Agent        string
 	HelixBin     string
@@ -215,7 +219,7 @@ func runBench(cmd *cobra.Command, o runBenchOpts) error {
 		tasks = discovered
 	}
 
-	cells, err := runtime.ExpandMatrix([]string{o.Benchmarks}, o.Languages, o.Modes, tasks)
+	cells, err := runtime.ExpandMatrix([]string{o.Benchmarks}, o.Languages, o.Modes, tasks, o.Runs)
 	if err != nil {
 		return fmt.Errorf("helix-bench run: %w", err)
 	}

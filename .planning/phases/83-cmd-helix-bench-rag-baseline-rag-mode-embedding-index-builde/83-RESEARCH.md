@@ -126,6 +126,9 @@ bench/runners/baseline_rag_agent/
 bench/runtime/
 ├── cell.go             # REPLACE fail-close (line 429) with baseline_rag drive leg
 └── result.go           # add embedder_id open-provenance key to ResultInput/resultDoc
+
+bench/runtime/subprocess/
+└── ragserver.go        # StartRAGServer: spawn cmd/helix-bench-rag over the per-cell socket (sibling of daemon.go's StartDaemon)
 ```
 
 ### Pattern 1: Standalone MCP server (no internal/mcp import)
@@ -191,6 +194,7 @@ forbidden := []string{
 | MCP protocol framing | custom JSON-RPC server | `mcpsdk.NewServer` + `StdioTransport` | Same SDK the daemon ships; spec-correct |
 | result.v2 schema validation | manual field checks | `bench/runtime.Validate` (reuse) | Already embedded + tested |
 | Fairness model/budget pin | a new config | `runners.DefaultContract` | Single source of truth; criterion #4 demands identity with `your_agent_full` |
+| Per-cell RAG-server subprocess spawn | re-roll exec/socket plumbing in cell.go | a sibling `subprocess/ragserver.go` `StartRAGServer` (mirrors `daemon.go` `StartDaemon`) | The bench sandbox already owns socket/clone/cleanup; the RAG leg reuses it like the daemon leg does |
 
 **Key insight:** chromem-go was chosen precisely because it collapses the entire embedding-RAG stack (vector store + persistence + OpenAI + Ollama embedders) into one zero-dependency library, which respects Helix's single-binary constraint and keeps the standalone server's import set tiny — directly serving the no-leakage vet gate.
 
@@ -311,21 +315,16 @@ func CorpusSHA(root string) (string, error) {
 
 **Non-empty:** these assumptions need confirmation at the planner's `checkpoint:human-verify` (especially A2 Ollama availability and A5 budget exclusion).
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where does the corpus live for `corpus_sha`?**
-   - What we know: Go ToolBench tasks are under `bench/datasets/internal-toolbench/go/<task>/` (each a clonable repo). A "corpus" for RAG is the set of source files an agent searches.
-   - What's unclear: Is the index built per-task-repo, or per-language-corpus (all tasks)? Success criterion #2 says "once per `(corpus, embedder_model)`" — implying a corpus broader than one task.
-   - Recommendation: Treat the cloned task repo as the corpus (hash its source tree → `corpus_sha`); build the index per cell's repo working copy. This keeps the RAG arm honest (it sees the same repo the daemon arm edits) and naturally caches when the same repo recurs.
+1. **Where does the corpus live for `corpus_sha`?** — **RESOLVED: per-repo (cloned task-repo working copy).** The index is built over the cloned task repo's source tree (hash → `corpus_sha`), per cell's repo working copy — NOT a per-language corpus spanning all tasks. This keeps the RAG arm honest (it sees the same repo the daemon arm edits) and naturally caches when the same repo recurs. Plan 03 builds the index via `ragindex.Open(repoDir)` over the cloned working copy.
+   - What we knew: Go ToolBench tasks are under `bench/datasets/internal-toolbench/go/<task>/` (each a clonable repo). A "corpus" for RAG is the set of source files an agent searches. Success criterion #2 says "once per `(corpus, embedder_model)`" — the chosen reading treats one task repo as one corpus, so the `(corpus, embedder_model)` cache key is `(corpus_sha, embedder_id)`.
 
-2. **Does `baseline_rag` become a delta operand once it emits rows?**
-   - What we know: `bench/runtime/deltas.go` currently excludes it as a non-operand stub.
-   - What's unclear: Whether the leaderboard wants `full vs baseline_rag` deltas this phase.
-   - Recommendation: Include it as an operand (it is the headline control arm), but confirm with the aggregator's expectations from Phase 82.
+2. **Does `baseline_rag` become a delta operand once it emits rows?** — **RESOLVED: YES.** `baseline_rag` is added as a delta operand in `bench/runtime/deltas.go` (Plan 03, Task 3) now that it emits real rows — it is the headline control arm and the leaderboard wants `full vs baseline_rag` deltas this phase. The Phase-80 non-operand exclusion (`deltas.go:18-29,128-136,257`) is revised accordingly.
+   - What we knew: `bench/runtime/deltas.go` previously excluded it as a non-operand stub; Phase 82's aggregator expectations confirm the control arm participates in deltas.
 
-3. **How should the offline (no OPENAI_API_KEY, no Ollama) path behave?**
-   - What we know: CI is hermetic; embedding APIs are network calls.
-   - Recommendation: For CI smoke, allow a deterministic stub embedder (hash-based pseudo-embedding) selected when neither backend is reachable, recorded as a distinct `embedder_id` (e.g. `stub-deterministic`) so a CI row is never mistaken for a real RAG measurement. Real embedder runs are the soak/local path.
+3. **How should the offline (no OPENAI_API_KEY, no Ollama) path behave?** — **RESOLVED: deterministic stub embedder, recorded as a distinct `embedder_id`.** When neither OpenAI nor Ollama is reachable (hermetic CI), a deterministic hash-based pseudo-embedding embedder is selected and recorded as `embedder_id == "stub-deterministic"` (Plan 01, `bench/ragindex/embedder.go selectEmbedder()`), so a CI row is never mistaken for a real RAG measurement. Real embedder runs (OpenAI primary → Ollama fallback) are the soak/local path; all three record a distinct `embedder_id`.
+   - What we knew: CI is hermetic; embedding APIs are network calls. The fallback chain is OpenAI → Ollama → `stub-deterministic`.
 
 ## Environment Availability
 
@@ -426,3 +425,5 @@ func CorpusSHA(root string) (string, error) {
 
 **Research date:** 2026-06-21
 **Valid until:** 2026-07-21 (stable Go libs; chromem-go v0.7.0 is the current release)
+</content>
+</invoke>

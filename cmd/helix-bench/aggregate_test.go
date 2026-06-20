@@ -30,11 +30,13 @@ import (
 // the built binary, not a Go test — these in-process tests are deliberately
 // HELIX_BIN-free so `go test ./...` is never false-green on this surface.
 
-// aggGoldenModelID is the cost-table model_id the aggregator package's golden
-// row prices; projecting it into each fixture row keeps the fixtures realistic.
-// The cost join itself is not asserted here (the cost table is resolved relative
-// to the daemon CWD, not this test's), so cost cells degrade to em-dashes — the
-// leaderboard.md still renders, which is all these contracts assert.
+// aggGoldenModelID is the cost-table model_id the committed cost table prices;
+// projecting it into each fixture row lets the cost join succeed when these
+// tests point --cost-table at the real bench/datasets/cost-table.yaml (WR-03
+// makes a missing/unparseable cost table fail closed, so the subcommand tests
+// pass an explicit, valid --cost-table path). The exact cost VALUES are not
+// asserted here — only that the reports render (or, for the fail-closed cases,
+// that they do NOT).
 const aggGoldenModelID = "claude-sonnet-4-5-20250929"
 
 // writeAggRow writes one schema-valid result.v2.json at
@@ -74,15 +76,30 @@ func aggMetric(success bool, ti, to, tc, fr int, loc float64) evaluators.Metrics
 	}
 }
 
-// runAggregateCmd executes `helix-bench aggregate <dir> --runs <runs>` through
-// the real cobra tree in-process and returns the Execute() error.
-func runAggregateCmd(t *testing.T, dir string, runs int) error {
+// repoCostTablePath returns an absolute path to the committed cost table. The
+// cmd test's CWD is cmd/helix-bench/, so the aggregate subcommand's relative
+// default (bench/datasets/cost-table.yaml) does NOT resolve here; a WR-03
+// fail-closed LOAD requires pointing --cost-table at a real, parseable file.
+func repoCostTablePath(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", "bench", "datasets", "cost-table.yaml"))
+	require.NoError(t, err)
+	if _, statErr := os.Stat(abs); statErr != nil {
+		t.Fatalf("committed cost table not found at %s: %v", abs, statErr)
+	}
+	return abs
+}
+
+// runAggregateCmd executes `helix-bench aggregate <dir> --runs <runs>
+// --cost-table <costTable>` through the real cobra tree in-process and returns
+// the Execute() error.
+func runAggregateCmd(t *testing.T, dir string, runs int, costTable string) error {
 	t.Helper()
 	root := newRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"aggregate", dir, "--runs", strconv.Itoa(runs)})
+	root.SetArgs([]string{"aggregate", dir, "--runs", strconv.Itoa(runs), "--cost-table", costTable})
 	return root.Execute()
 }
 
@@ -99,12 +116,36 @@ func TestAggregateCmdFailClosed(t *testing.T) {
 		writeAggRow(t, dir, "task-1", "no_lsp", i, aggMetric(false, 2000, 200, 9, 6, 0.5))
 	}
 
-	err := runAggregateCmd(t, dir, 3)
+	err := runAggregateCmd(t, dir, 3, repoCostTablePath(t))
 	require.Error(t, err, "a deficient cell must fail closed (non-zero exit)")
 	assert.NoFileExists(t, filepath.Join(dir, "leaderboard.md"),
 		"a deficient run must write no leaderboard.md")
 	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"),
 		"a deficient run must write no cost_quality.md")
+}
+
+// TestAggregateCmdBadCostTableFailsClosed locks WR-03: a cost-table LOAD failure
+// (here a non-existent --cost-table path) is an operator/config error that must
+// fail CLOSED — Execute() returns non-nil AND no reports are written — NOT a
+// silent degrade-to-em-dash success. This is distinct from a per-row pricing gap
+// (unknown model_id), which stays a soft per-cell em-dash.
+func TestAggregateCmdBadCostTableFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	// A fully-sufficient N=3 matrix: the ONLY problem is the cost table.
+	for _, task := range []string{"task-1", "task-2", "task-3"} {
+		for i := 0; i < 3; i++ {
+			writeAggRow(t, dir, task, "full", i, aggMetric(true, 1000, 100, 5, 3, 0.9))
+			writeAggRow(t, dir, task, "no_lsp", i, aggMetric(false, 2000, 200, 9, 6, 0.5))
+		}
+	}
+
+	missing := filepath.Join(t.TempDir(), "no-such-cost-table.yaml")
+	err := runAggregateCmd(t, dir, 3, missing)
+	require.Error(t, err, "a cost-table LOAD failure must fail closed (non-zero exit)")
+	assert.NoFileExists(t, filepath.Join(dir, "leaderboard.md"),
+		"a cost-table load failure must write no leaderboard.md")
+	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"),
+		"a cost-table load failure must write no cost_quality.md")
 }
 
 // TestAggregateCmdSufficient: a sufficient N=3 run dir makes Execute() return
@@ -118,7 +159,7 @@ func TestAggregateCmdSufficient(t *testing.T) {
 		}
 	}
 
-	err := runAggregateCmd(t, dir, 3)
+	err := runAggregateCmd(t, dir, 3, repoCostTablePath(t))
 	require.NoError(t, err, "a sufficient run must exit 0")
 
 	for _, name := range []string{"leaderboard.md", "cost_quality.md"} {

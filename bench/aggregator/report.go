@@ -87,9 +87,14 @@ type Footer struct {
 
 // Report is the orchestrator's output: the reduced rows for both artifacts plus
 // the shared footer. Aggregate builds it; the renderers consume it.
+//
+// PassNK is the actual k rendered in the leaderboard's pass@<k> column — the
+// largest configured k <= ExpectedN (pickKN), which need not equal ExpectedN
+// (IN-01). The renderer prints pass@<PassNK> so the header is self-describing.
 type Report struct {
 	Leaderboard []LeaderRow
 	Cost        []CostRow
+	PassNK      int
 	Footer      Footer
 }
 
@@ -168,12 +173,15 @@ func sortKey(c ciValue) float64 {
 // rows sorted task_success desc, each metric a `point [lo, hi]` CI (null -> em-
 // dash), with the STATS-04 overlap gate annotating adjacent rows whose
 // task_success CIs overlap (suppressing the X>Y claim) and a provenance footer.
-func renderLeaderboard(rows []LeaderRow, footer Footer) string {
+func renderLeaderboard(rows []LeaderRow, passNK int, footer Footer) string {
 	sorted := sortLeaderRows(rows)
 
 	var b strings.Builder
 	b.WriteString("# Leaderboard\n\n")
-	b.WriteString("| mode | benchmark | task_success | pass@1 | pass@N | tokens_input | tokens_output | tool_calls | files_read | edit_locality |\n")
+	// IN-01: render the ACTUAL pass@k column header (pickKN result), not a
+	// hard-coded "pass@N", so an intermediate k (e.g. KValues={1,2}, N=5 -> k=2)
+	// is labelled honestly in the published artifact.
+	fmt.Fprintf(&b, "| mode | benchmark | task_success | pass@1 | pass@%d | tokens_input | tokens_output | tool_calls | files_read | edit_locality |\n", passNK)
 	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range sorted {
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",

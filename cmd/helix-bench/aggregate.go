@@ -38,10 +38,11 @@ const aggregateCostTablePath = "bench/datasets/cost-table.yaml"
 // so a deficient run exits non-zero with no reports written.
 func newAggregateCmd() *cobra.Command {
 	var (
-		runs    int
-		seed    uint64
-		iters   int
-		ciLevel float64
+		runs      int
+		seed      uint64
+		iters     int
+		ciLevel   float64
+		costTable string
 	)
 
 	cmd := &cobra.Command{
@@ -63,10 +64,11 @@ seeded RNG (byte-deterministic, D-08) and writes both reports into <run_dir>.`,
 				Seed:          seed,
 				Iterations:    iters,
 				CILevel:       ciLevel,
-				CostTablePath: aggregateCostTablePath,
+				CostTablePath: costTable,
 				// Injected freshness clock (never time.Now() deep inside the
 				// pure aggregator). The cost rollup gates pricing rows against
-				// this; a stale row degrades to an em-dash, never a fabricated 0.
+				// this; a stale/unknown row degrades to a soft em-dash per cell.
+				// A cost-table LOAD failure, by contrast, fails CLOSED (WR-03).
 				Today: time.Now().UTC(),
 			}
 			if _, err := aggregator.Aggregate(runDir, cfg); err != nil {
@@ -86,6 +88,10 @@ seeded RNG (byte-deterministic, D-08) and writes both reports into <run_dir>.`,
 	cmd.Flags().Uint64Var(&seed, "seed", defaultAggregateSeed, "bootstrap RNG seed (fixed for byte-deterministic reports, D-08)")
 	cmd.Flags().IntVar(&iters, "iterations", 10000, "BCa bootstrap replicate count (floored to 10000)")
 	cmd.Flags().Float64Var(&ciLevel, "ci-level", 0.95, "confidence level for the BCa intervals")
+	// --cost-table is the pinned pricing source for the cost rollup. A LOAD
+	// failure (missing/unparseable/empty) fails CLOSED (non-zero exit, no reports)
+	// per WR-03; a per-row pricing gap (unknown model_id) stays a soft em-dash.
+	cmd.Flags().StringVar(&costTable, "cost-table", aggregateCostTablePath, "cost-table YAML path (LOAD failure fails closed, WR-03)")
 
 	return cmd
 }

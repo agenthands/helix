@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand/v2"
 	"sort"
 	"time"
@@ -72,14 +73,23 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 	}
 
 	// Cost table is loaded ONCE; pricing per result reuses bench/cost (Open Q1).
-	// A cost-table problem must not silently zero costs, but it also must not
-	// block the leaderboard — cost cells degrade to null (em-dash) when pricing
-	// is unavailable.
-	ct, ctErr := cost.LoadCostTable(cfg.CostTablePath)
-	validUntil := ""
-	if ctErr == nil {
-		validUntil = costTableValidUntil(ct)
+	//
+	// WR-03 fail-CLOSED on a cost-table LOAD failure: a missing, unparseable, or
+	// empty cost table is an operator/config error, NOT a per-row pricing gap.
+	// Previously ctErr was swallowed and degraded EVERY cost cell to an em-dash
+	// while the CLI still reported success and exited 0 — undermining the D-13
+	// fail-closed freshness-gate intent at the aggregator boundary. A LOAD failure
+	// now returns a hard error and writes NOTHING.
+	//
+	// This is DISTINCT from the legitimate per-cell soft em-dash: a row whose
+	// model_id has no price (cost.PriceFor returns an error) or whose tokens are
+	// all nil still degrades to "—" inside reduceCostRow, because that is missing
+	// DATA for one cell, not a broken cost table.
+	ct, err := cost.LoadCostTable(cfg.CostTablePath)
+	if err != nil {
+		return nil, fmt.Errorf("aggregate: cost table unavailable: %w", err)
 	}
+	validUntil := costTableValidUntil(ct)
 
 	alpha := 1 - cfg.CILevel
 	// ONE RNG per Aggregate, threaded into every BCaInterval (D-08).
@@ -96,18 +106,22 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 		CostTableValidUntil: validUntil,
 	}
 
-	rep := &Report{Footer: footer}
+	// IN-01: the pass@N leaderboard column actually holds pass@kN where kN is the
+	// largest configured k <= ExpectedN (pickKN), which need not equal ExpectedN
+	// (e.g. KValues={1,2}, ExpectedN=5 -> pass@2). Carry the real k so the header
+	// is self-describing instead of a misleading hard-coded "pass@N".
+	rep := &Report{Footer: footer, PassNK: pickKN(cfg.KValues, cfg.ExpectedN)}
 
 	for _, mode := range modes {
 		leader := reduceLeaderRow(loaded, tasks, mode, cfg, alpha, rng)
 		rep.Leaderboard = append(rep.Leaderboard, leader)
 
-		costRow := reduceCostRow(loaded, tasks, mode, ct, ctErr, cfg, alpha, rng)
+		costRow := reduceCostRow(loaded, tasks, mode, ct, cfg, alpha, rng)
 		rep.Cost = append(rep.Cost, costRow)
 	}
 
 	// Render + atomically write both artifacts (only reached on success).
-	lb := renderLeaderboard(rep.Leaderboard, rep.Footer)
+	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
 	cq := renderCostQuality(rep.Cost, rep.Footer)
 	if err := writeReport(runDir, "leaderboard.md", lb); err != nil {
 		return nil, err
@@ -181,6 +195,15 @@ func reduceLeaderRow(loaded *Loaded, tasks []string, mode string, cfg Config, al
 	}
 
 	// Level 2: BCa CI of the mean across tasks for every metric.
+	//
+	// DETERMINISM CONTRACT (IN-03): a single *rand.Rand is threaded sequentially
+	// through every bca() call below, and bca() consumes NO RNG when its metric
+	// vector is empty (see bca's early return). Therefore the bootstrap draws of
+	// each metric depend on (a) the FIXED textual ORDER of these reductions and
+	// (b) which earlier metrics were present/absent. Output stays byte-deterministic
+	// for a fixed input, but REORDERING these lines — or adding/removing a metric
+	// above an existing one — silently shifts every subsequent metric's CI.
+	// Treat this metric-reduction order as part of the locked determinism contract.
 	row.TaskSuccess = bca(successVec, cfg.Iterations, alpha, rng)
 	row.PassAt1 = row.TaskSuccess // c/n identity (pass@1 == success-rate)
 	row.PassAtN = bca(passNVec, cfg.Iterations, alpha, rng)
@@ -196,11 +219,8 @@ func reduceLeaderRow(loaded *Loaded, tasks []string, mode string, cfg Config, al
 // benchmark): per-solved-task mean USD feeds both the cost_per_solved_task point
 // (costPerSolvedTask) and the per-solved-task USD vector for the cost BCa CI; the
 // FAIR-03 CV detector flags any (task,mode) whose per-run USD CV exceeds 0.05.
-func reduceCostRow(loaded *Loaded, tasks []string, mode string, ct cost.CostTable, ctErr error, cfg Config, alpha float64, rng *rand.Rand) CostRow {
+func reduceCostRow(loaded *Loaded, tasks []string, mode string, ct cost.CostTable, cfg Config, alpha float64, rng *rand.Rand) CostRow {
 	row := CostRow{Mode: mode, Benchmark: "internal-toolbench"}
-	if ctErr != nil {
-		return row // pricing unavailable -> null cost CI (em-dash), no flags
-	}
 
 	perSolvedUSD := map[string]float64{} // task -> mean USD (solved tasks only)
 	var solvedUSDVec []float64           // per-solved-task mean USD (cost CI unit)
@@ -228,12 +248,22 @@ func reduceCostRow(loaded *Loaded, tasks []string, mode string, ct cost.CostTabl
 	}
 
 	// Point estimate via the COST-02 primitive; CI via BCa over the per-solved-
-	// task USD vector.
-	if _, ok := costPerSolvedTask(perSolvedUSD); ok {
-		row.CostPerSolved = bca(solvedUSDVec, cfg.Iterations, alpha, rng)
-	} else {
+	// task USD vector. IN-02: the primitive's RETURNED value is the published
+	// point — previously only its ok flag was read and the headline silently came
+	// from bca()'s own StatMean. The two are equal by construction today, but
+	// sourcing the point from costPerSolvedTask keeps the rendered headline
+	// honest if either reduction later diverges (e.g. weighting). The BCa Lo/Hi
+	// still come from the bootstrap over solvedUSDVec.
+	point, ok := costPerSolvedTask(perSolvedUSD)
+	if !ok {
 		row.CostPerSolved = ciValue{OK: false}
+		return row
 	}
+	ci := bca(solvedUSDVec, cfg.Iterations, alpha, rng)
+	if ci.OK {
+		ci.Point = point // publish the COST-02 primitive's value as the headline
+	}
+	row.CostPerSolved = ci
 	return row
 }
 
@@ -337,6 +367,10 @@ func mean(xs []float64) float64 {
 // returning a ciValue. An empty vector yields a null CI (rendered em-dash).
 func bca(vec []float64, iterations int, alpha float64, rng *rand.Rand) ciValue {
 	if len(vec) == 0 {
+		// IN-03: an empty metric vector returns WITHOUT touching rng, so the
+		// presence/absence of one metric shifts the bootstrap draws of every
+		// subsequent metric. This is the source of the metric-order/presence
+		// sensitivity documented in reduceLeaderRow's determinism contract.
 		return ciValue{OK: false}
 	}
 	lo, hi, ok := BCaInterval(vec, StatMean, iterations, alpha, rng)

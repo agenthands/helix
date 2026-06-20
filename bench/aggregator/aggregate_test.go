@@ -130,6 +130,33 @@ func TestAggregateNonExistentRunDirFailsClosed(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"))
 }
 
+// TestAggregateBadCostTableFailsClosed locks WR-03: a cost-table LOAD failure
+// (missing/unparseable/empty) is fail-CLOSED — Aggregate returns an error and
+// writes NO reports — NOT a silent degrade where every cost cell becomes an
+// em-dash while the run reports success. A per-row pricing gap (unknown
+// model_id) is a DIFFERENT, soft per-cell em-dash and stays non-fatal.
+func TestAggregateBadCostTableFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	// A fully-sufficient N=3 matrix: only the cost table is broken.
+	for _, task := range []string{"task-1", "task-2", "task-3"} {
+		for i := 0; i < 3; i++ {
+			writeCostedRow(t, dir, task, "full", i, metric(true, 1000, 100, 5, 3, 0.9))
+			writeCostedRow(t, dir, task, "no_lsp", i, metric(false, 2000, 200, 9, 6, 0.5))
+		}
+	}
+
+	cfg := aggConfig(3)
+	cfg.CostTablePath = filepath.Join(t.TempDir(), "no-such-cost-table.yaml")
+
+	rep, err := Aggregate(dir, cfg)
+	require.Error(t, err, "a cost-table LOAD failure must fail closed")
+	assert.Nil(t, rep)
+	assert.NoFileExists(t, filepath.Join(dir, "leaderboard.md"),
+		"a cost-table load failure must write no leaderboard.md")
+	assert.NoFileExists(t, filepath.Join(dir, "cost_quality.md"),
+		"a cost-table load failure must write no cost_quality.md")
+}
+
 // TestAggregateTwoLevelReduce: a 2-mode x 3-task x N=3 matrix yields one row per
 // (mode x benchmark); task_success == mean of per-task success-rates; pass@1 ==
 // task_success (c/n identity); every metric carries a CI; the reports render.

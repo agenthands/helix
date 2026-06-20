@@ -1,6 +1,6 @@
 # Leaderboard
 
-| mode | benchmark | task_success | pass@1 | pass@N | tokens_input | tokens_output | tool_calls | files_read | edit_locality |
+| mode | benchmark | task_success | pass@1 | pass@3 | tokens_input | tokens_output | tool_calls | files_read | edit_locality |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | full | internal-toolbench | 1.0000 [1.0000, 1.0000] | 1.0000 [1.0000, 1.0000] | 1.0000 [1.0000, 1.0000] | 1000.0000 [1000.0000, 1000.0000] | 100.0000 [100.0000, 100.0000] | 5.0000 [5.0000, 5.0000] | 3.0000 [3.0000, 3.0000] | 0.9000 [0.9000, 0.9000] |
 | no_lsp | internal-toolbench | 0.4444 [0.3333, 0.5556] | 0.4444 [0.3333, 0.5556] | 1.0000 [1.0000, 1.0000] | 2666.6667 [2000.0000, 3333.3333] | 200.0000 [200.0000, 200.0000] | 9.0000 [9.0000, 9.0000] | 6.0000 [6.0000, 6.0000] | 0.5000 [0.5000, 0.5000] |

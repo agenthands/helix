@@ -52,7 +52,7 @@ func TestOverlapGate(t *testing.T) {
 			{Mode: "full", Benchmark: "internal-toolbench", TaskSuccess: ci(0.70, 0.55, 0.85)},
 			{Mode: "no_lsp", Benchmark: "internal-toolbench", TaskSuccess: ci(0.60, 0.45, 0.75)},
 		}
-		md := renderLeaderboard(rows, testFooter())
+		md := renderLeaderboard(rows, 3, testFooter())
 		assert.Contains(t, md, "CI overlap",
 			"adjacent overlapping task_success CIs must render the STATS-04 warning")
 		assert.Contains(t, strings.ToLower(md), "no x>y",
@@ -64,7 +64,7 @@ func TestOverlapGate(t *testing.T) {
 			{Mode: "full", Benchmark: "internal-toolbench", TaskSuccess: ci(0.90, 0.85, 0.95)},
 			{Mode: "no_lsp", Benchmark: "internal-toolbench", TaskSuccess: ci(0.50, 0.40, 0.60)},
 		}
-		md := renderLeaderboard(rows, testFooter())
+		md := renderLeaderboard(rows, 3, testFooter())
 		assert.NotContains(t, md, "CI overlap",
 			"disjoint task_success CIs must NOT render the overlap warning")
 	})
@@ -81,7 +81,7 @@ func TestLeaderboardRender(t *testing.T) {
 			TaskSuccess: ci(0.90, 0.85, 0.95), PassAt1: ci(0.90, 0.85, 0.95),
 			PassAtN: ci(0.95, 0.90, 0.99), TokensInput: ci(1000, 900, 1100)},
 	}
-	md := renderLeaderboard(rows, testFooter())
+	md := renderLeaderboard(rows, 3, testFooter())
 
 	// Sorted task_success DESC: "full" (0.90) precedes "no_lsp" (0.50).
 	fullIdx := strings.Index(md, "full")
@@ -97,6 +97,21 @@ func TestLeaderboardRender(t *testing.T) {
 	assert.Contains(t, md, "10000", "footer records bootstrap iterations")
 	assert.Contains(t, md, "0.95", "footer records ci_level")
 	assert.Contains(t, md, "2027-01-28", "footer cites the cost-table valid_until")
+}
+
+// TestLeaderboardPassKHeader locks IN-01: the pass@k column header renders the
+// ACTUAL k (pickKN result), not a hard-coded "pass@N". With an intermediate k
+// (e.g. KValues={1,2}, N=5 -> k=2) the header must read "pass@2", never the
+// misleading "pass@N".
+func TestLeaderboardPassKHeader(t *testing.T) {
+	rows := []LeaderRow{
+		{Mode: "full", Benchmark: "internal-toolbench", TaskSuccess: ci(0.9, 0.8, 1.0)},
+	}
+	md := renderLeaderboard(rows, 2, testFooter())
+	assert.Contains(t, md, "pass@2",
+		"the header must render the actual k from pickKN")
+	assert.NotContains(t, md, "pass@N",
+		"the misleading hard-coded pass@N header must be gone")
 }
 
 // TestCV locks the FAIR-03 coefficient-of-variation detector: CV = stddev/mean

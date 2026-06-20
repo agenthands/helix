@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 81-02-PLAN.md
-last_updated: "2026-06-20T10:30:00.000Z"
-last_activity: 2026-06-20 -- Phase 81 Plan 02 completed
+stopped_at: Completed 81-03-PLAN.md
+last_updated: "2026-06-20T10:45:00.000Z"
+last_activity: 2026-06-20 -- Phase 81 Plan 03 completed
 progress:
   total_phases: 15
   completed_phases: 6
   total_plans: 33
-  completed_plans: 30
-  percent: 41
+  completed_plans: 31
+  percent: 42
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
-Last activity: 2026-06-20 -- Phase 81 Plan 02 completed
+Last activity: 2026-06-20 -- Phase 81 Plan 03 completed
 
 ### Session Continuity
 
-Last session: 2026-06-20T10:30:00.000Z
-Stopped at: Completed 81-02-PLAN.md
+Last session: 2026-06-20T10:45:00.000Z
+Stopped at: Completed 81-03-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -152,3 +152,4 @@ Resume file: None
 - [Phase 80 P05]: ablation_deltas is an open top-level property (comparison -> metric -> float64); the 3 fixed deltas (full vs baseline_plain/no_lsp/no_structured_edit) surface in EACH of the 4 real-mode rows, re-Validated + atomic; null-in-either-operand metrics skipped
 - [Phase 80 P05]: delta operands use RESOLVABLE mode names no_lsp/no_structured_edit (NOT prior-wave aliases your_agent_no_lsp/your_agent_no_structured_edit; Rule 1 fix); row write-back decodes as map[string]json.RawMessage so additive keys survive; scope held single-run/3-delta (NOT Phase 82 aggregator)
 - [Phase ?]: 81-01: helix_semantic_store_reads_total is a labelless read counter incremented at a single s.queryContext/s.queryRowContext chokepoint in internal/semantic/store; writes/maintenance deliberately excluded (reads-only) so the no_semantic arm can assert ==0.
+- [Phase 81 P03]: vet-ablation-leakage extended with a D-06 narrow-AST call-site gate check: flags direct {ExpandFrom,RankFiles,ValidateCriticalEdges} calls outside the gate allowlist (internal/semantic, internal/skill/semantic, internal/daemon, internal/kernel/symbols, internal/kernel/health) and not routed through integ.ChooseSource. Check is gated on the file importing internal/semantic/integ (name-collision guard, e.g. repomap.RankFiles); _test pkg suffix stripped for allowlist match. Plan 04 production read wiring MUST stay inside the allowlist or route through ChooseSource. SSA is the deferred precision upgrade (Plan 05 runtime counter is the dynamic complement).

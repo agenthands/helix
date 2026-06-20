@@ -24,10 +24,19 @@ findings:
   warning: 3
   info: 3
   total: 7
-status: issues_found
+status: resolved
+resolved: 2026-06-21T00:00:00Z
 ---
 
 # Phase 82: Code Review Report
+
+> **Resolution (2026-06-21):** All 7 findings fixed and verified (build + `make vet` clean;
+> new regression tests RUN+PASS; HELIX_BIN subcommand E2E passes; full suite 97 pkgs ok).
+> - CR-01 — `802c38eb` (aggregator/Load fail-closed on zero-discovery: empty/missing/all-invalid run dir → hard error, no reports; subcommand exits non-zero).
+> - WR-01/WR-02 — `b278cdd6` (BCa interval ordering guard `lo<=hi`; pass@k k>n domain returns NaN unless c==n, never fabricated 1.0).
+> - WR-03/IN-01/IN-02/IN-03 — `a2083183` (cost-table LOAD failure fail-closed + `--cost-table` flag; honest `pass@k` header; cost rollup primitive wired through; RNG metric-order determinism documented).
+> The verified-correct pass@k c-term form and BCa z0+jackknife structure were preserved.
+> The pre-existing Phase 80-05 failure `TestRunSubcommandWiresDeltaPass` (fails under HELIX_BIN) is out of Phase 82 scope and untouched.
 
 **Reviewed:** 2026-06-21
 **Depth:** standard

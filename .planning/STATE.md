@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 81-04-PLAN.md
-last_updated: "2026-06-20T14:25:00.000Z"
-last_activity: 2026-06-20 -- Phase 81 Plan 04 completed
+stopped_at: Completed 81-05-PLAN.md
+last_updated: "2026-06-20T12:10:00.000Z"
+last_activity: 2026-06-20 -- Phase 81 execution: Plan 05 complete (no_semantic zero-reads runtime verification)
 progress:
   total_phases: 15
   completed_phases: 6
   total_plans: 33
-  completed_plans: 32
-  percent: 44
+  completed_plans: 33
+  percent: 41
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 81 (no-semantic-kernel-flag-e2e-config-gate-test) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-20 -- Phase 81 Plan 04 completed
+Plan: 5 of 5 (all plans complete)
+Status: Executing Phase 81
+Last activity: 2026-06-20 -- Phase 81 Plan 05 complete (no_semantic zero-reads runtime verification + MODE.md rewrite)
 
 ### Session Continuity
 
-Last session: 2026-06-20T14:25:00.000Z
-Stopped at: Completed 81-04-PLAN.md
+Last session: 2026-06-20T12:10:00.000Z
+Stopped at: Completed 81-05-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -101,6 +101,7 @@ Resume file: None
 | Phase 81 P02 | ~10m | 2 tasks | 5 files |
 | Phase 81 P03 | ~25m | 2 tasks | 5 files |
 | Phase 81 P04 | ~30m | 2 tasks | 5 files (TDD RED+GREEN x2) |
+| Phase 81 P05 | ~35m | 3 tasks | 6 files (TDD RED+GREEN) |
 
 ## Decisions
 
@@ -157,3 +158,4 @@ Resume file: None
 - [Phase ?]: 81-01: helix_semantic_store_reads_total is a labelless read counter incremented at a single s.queryContext/s.queryRowContext chokepoint in internal/semantic/store; writes/maintenance deliberately excluded (reads-only) so the no_semantic arm can assert ==0.
 - [Phase 81 P03]: vet-ablation-leakage extended with a D-06 narrow-AST call-site gate check: flags direct {ExpandFrom,RankFiles,ValidateCriticalEdges} calls outside the gate allowlist (internal/semantic, internal/skill/semantic, internal/daemon, internal/kernel/symbols, internal/kernel/health) and not routed through integ.ChooseSource. Check is gated on the file importing internal/semantic/integ (name-collision guard, e.g. repomap.RankFiles); _test pkg suffix stripped for allowlist match. Plan 04 production read wiring MUST stay inside the allowlist or route through ChooseSource. SSA is the deferred precision upgrade (Plan 05 runtime counter is the dynamic complement).
 - [Phase 81 P04]: effSemanticDisabled := cfg.SemanticIndex.BenchDisabled || activeProfile.DisableSemanticSubsystem resolved ONCE at daemon.go:294 (D-02, mirror Phase 76 effDisableLSP). Threaded via gatedSymbolsLookupFn/gatedCfgGate (new internal/daemon/semantic_gate.go) into ALL FOUR integLookupAccessor hand-outs: symbols/health, repomap, guardrail middleware (the 4th, not in plan A5 — deviation Rule 2), and the SemanticSkill Set*Accessor block. Gate DISABLES the cfgGate (not just the lookup) so ChooseSource yields source=tree_sitter not fallback (Pitfall 4). Under the gate repomap SetSemanticLookup(nil) + all 16 SemanticSkill accessors explicitly cleared to nil (idempotent null-object on the process-global singletons, Pitfall 5 — the skill-clear caught an order-dependent staleness bug). Bundle-build guards (daemon.go:324/518) UNTOUCHED — store stays built (D-04 build-but-block). Plan 05 asserts zero semantic-store reads on this gated arm.
+- [Phase 81 P05]: Counter exposure = path A (daemon-log shutdown line). Bench daemon runs --http-addr= (HTTP off) over a Unix socket so the Prometheus /metrics scrape is unreachable; daemon emits ONE line msg="semantic store reads total" count=N in shutdown.go (d.shutdown() Phase 1.6), reusing the trace.TapDaemonLog msg== JSONL substrate. bench cell scrapeSemanticReadsTotal parses it (last occurrence wins; missing line => 0). assertNoSemanticReads hard-FAILS the no_semantic cell (routes through preserve(), CellResult.SemanticReadViolation) on any non-zero read — fail-closed, NOT a warn (D-05/criterion #2, T-81-05-01). guarantee_pending_phase_81 deferral marker REMOVED: ablationStatusFor deleted, AblationStatus forced "" for every mode (no_semantic row no longer partial). MODE.md rewritten to no_lsp shape + names the gate key semantic_index.bench_disabled (precedence CLI > profile YAML > default-off) + all 8 strangler-fig consumers (criterion #4). Added obs.Metrics.SemanticStoreReadsValue() getter (dto.Metric.Write, nil-safe). Phase 81 CLOSED (ABLATE-06).

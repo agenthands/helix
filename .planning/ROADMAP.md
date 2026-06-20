@@ -28,7 +28,7 @@
 - [x] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface (completed 2026-06-17)
 - [x] Phase 79: Evaluators & Result-Schema Metrics Layer (completed 2026-06-18)
 - [x] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement (completed 2026-06-19)
-- [ ] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
+- [x] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
 - [ ] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
 - [ ] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
 - [ ] Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard
@@ -214,7 +214,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 81-05-PLAN.md — E2E counter==0 bench-cell assertion + fail-cell + MODE.md rewrite (D-05, criteria #2 & #4)
+- [x] 81-05-PLAN.md — E2E counter==0 bench-cell assertion + fail-cell + MODE.md rewrite (D-05, criteria #2 & #4)
 
 ### Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
 

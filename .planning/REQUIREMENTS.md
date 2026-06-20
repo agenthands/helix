@@ -47,7 +47,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **ABLATE-03**: `baseline_plain` mode reuses existing `baseline.yaml` (Phase 67) — no new YAML, no Helix tools exposed. _Acceptance:_ tool inventory for `baseline_plain` is empty except for the shell/grep/read/edit/test the agent gets from the agent runtime itself.
 - [ ] **ABLATE-04**: `baseline_rag` mode is implemented as a **standalone MCP server** `cmd/helix-bench-rag` exposing exactly 4 tools (`rag_search`, `rag_read_chunk`, `grep`, `read_file`). It is **not** a Helix profile and shares no code with the Helix daemon's tool surface. _Acceptance:_ `cmd/helix-bench-rag --help` works; tool-list returns exactly 4 tools; vet test asserts no import from `internal/kernel/` or `internal/semantic/`.
 - [x] **ABLATE-05**: Kernel-level `disable_lsp_subsystem` flag prevents any back-channel LSP call (including from `analyze_blast_radius` strangler-fig, RepoMap `SetEnrichFn`, live-update OnEdit hooks). _Acceptance:_ E2E `no_lsp` task emits **zero** `lsp.*` OTel spans; trace-tap assertion is a hard fail.
-- [ ] **ABLATE-06**: Kernel-level `disable_semantic_subsystem` flag prevents any back-channel semantic-store read (including Phase 65 SemanticLookup, RankFiles, ExpandFrom). _Acceptance:_ E2E `no_semantic` task makes zero queries against the duckdb store; runtime assertion logs and fails.
+- [x] **ABLATE-06**: Kernel-level `disable_semantic_subsystem` flag prevents any back-channel semantic-store read (including Phase 65 SemanticLookup, RankFiles, ExpandFrom). _Acceptance:_ E2E `no_semantic` task makes zero queries against the duckdb store; runtime assertion logs and fails.
 - [x] **ABLATE-07**: Kernel-level `disable_structured_edit_subsystem` flag forces fall-through to plain unified-diff patches; structured-edit tools (replace_symbol_body, fuzzy_edit, etc.) return `unsupported` with a documented kind. _Acceptance:_ `no_structured_edit` mode's tool inventory excludes structured edits; agent receives plain `replace_in_file` only.
 - [x] **ABLATE-08**: `vet-ablation-leakage` static analyzer (in `internal/lint/`) fails the build if any mode-restricted tool path reaches a disabled subsystem. Hooked into `make vet`. _Acceptance:_ a deliberate test-case violation makes `make vet` fail.
 
@@ -169,7 +169,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | ABLATE-03 | Phase 80 | TBD | Pending |
 | ABLATE-04 | Phase 83 | TBD | Pending |
 | ABLATE-05 | Phase 76 | TBD | Pending |
-| ABLATE-06 | Phase 81 | TBD | Pending |
+| ABLATE-06 | Phase 81 | 81-04, 81-05 | Complete |
 | ABLATE-07 | Phase 76 | TBD | Pending |
 | ABLATE-08 | Phase 76 | TBD | Pending |
 | METRIC-01 | Phase 79 | 79-01 | Complete |

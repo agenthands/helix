@@ -86,6 +86,19 @@ func gatedCfgGate(cfg *config.SerenaConfig, effSemanticDisabled bool) *daemonCfg
 // store-Open guard (daemon.go ~324 `if cfg.SemanticIndex.Enabled`) and the
 // newSemanticBundle guard (~518) MUST stay free of effSemanticDisabled so the
 // zero-reads proof (the bench store-ON cell) is non-vacuous.
+//
+// WR-04 — SCOPE OF THE helix_semantic_store_reads_total PROOF: the bench
+// zero-reads gate (bench/runtime/cell.go assertNoSemanticReads) observes ONLY
+// the counter incremented by internal/semantic/store/effective_graph.go's
+// counting wrappers (s.queryContext / s.queryRowContext). Tx-scoped raw reads
+// that bypass those wrappers (e.g. snapshot.go / overlay.go tx-scoped
+// *sql.Tx.QueryContext / QueryRowContext) are NOT counted. The guarantee this
+// gate proves is therefore "no read reached the COUNTED effective-graph path on
+// the no_semantic arm" — which is exactly the read surface this predicate
+// un-wires — not "the DuckDB file was provably untouched by every path". If a
+// future background read path is added, route it through the counting wrappers
+// (or extend the gate here) rather than trusting the counter as a universal
+// read-detector.
 func backgroundSemanticReadsDisabled(effSemanticDisabled bool) bool {
 	return effSemanticDisabled
 }

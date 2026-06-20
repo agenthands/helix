@@ -173,10 +173,24 @@ func copyFile(src, dst string) error {
 }
 
 // DaemonHandle represents a running daemon subprocess.
+//
+// CR-01: there is exactly ONE (*exec.Cmd).Wait() for the life of the process,
+// run by a single goroutine started in StartDaemon right after cmd.Start(). Its
+// result is delivered on the buffered `exited` channel. Both Stop and Kill
+// observe termination by selecting on `exited` and MUST NEVER call cmd.Wait()
+// themselves — os/exec forbids concurrent / repeated Wait, and the pre-CR-01
+// code could run Wait from Stop's leaked goroutine and Kill's goroutine at the
+// same time on the timeout path, racing Cmd.ProcessState and losing the reap.
 type DaemonHandle struct {
 	cmd    *exec.Cmd
 	taskID string
 	mode   string
+	// exited carries the single cmd.Wait() result. The owning goroutine
+	// (launched in StartDaemon) sends the Wait result and then CLOSES the
+	// channel, so every subsequent receive succeeds immediately with the
+	// zero value. This lets Stop and Kill both observe process termination on
+	// the same channel any number of times without ever blocking or racing.
+	exited chan error
 }
 
 // Pid returns the OS process ID of the daemon subprocess, or 0 if the process
@@ -213,36 +227,34 @@ func (h *DaemonHandle) Stop(timeout time.Duration) (graceful bool, err error) {
 	pid := h.cmd.Process.Pid
 	// Send SIGTERM to the whole process group (the daemon is its own group leader
 	// per Setpgid in StartDaemon, mirroring Kill's -pid group-targeting). ESRCH
-	// (group already gone) is benign — fall through to the Wait below.
+	// (group already gone) is benign — fall through to observe `exited` below.
 	if kerr := syscall.Kill(-pid, syscall.SIGTERM); kerr != nil {
 		if errors.Is(kerr, syscall.ESRCH) {
-			// Group already gone — reap any zombie and report graceful exit.
-			_ = h.cmd.Wait()
+			// Group already gone — observe the single Wait result and report a
+			// graceful exit.
+			<-h.exited
 			return true, nil
 		}
 		return false, fmt.Errorf("sandbox: SIGTERM daemon %s/%s: %w", h.taskID, h.mode, kerr)
 	}
 
-	// Wait for graceful exit, bounded by timeout. The done channel is buffered
-	// (cap 1) so the Wait goroutine never leaks/blocks on send if we time out —
-	// the subsequent Kill's group-SIGKILL makes Wait() return and the goroutine
-	// completes its send into the buffer.
-	done := make(chan error, 1)
-	go func() { done <- h.cmd.Wait() }()
+	// CR-01: observe the SINGLE Wait goroutine (owned by StartDaemon) via the
+	// shared `exited` channel, bounded by timeout. We NEVER call cmd.Wait() here
+	// — that would race the owner goroutine and the follow-up Kill. On timeout we
+	// simply return graceful=false and leave `exited` for Kill to drain.
 	select {
-	case <-done:
+	case <-h.exited:
 		// Graceful exit within timeout: d.shutdown() ran and flushed the line.
 		return true, nil
 	case <-time.After(timeout):
-		// Not graceful within the deadline. Do NOT drain done here (Kill owns the
-		// group-SIGKILL + drain); just report so the caller falls back to Kill.
+		// Not graceful within the deadline; the caller falls back to Kill.
 		return false, nil
 	}
 }
 
 // Kill terminates the daemon process and waits for it to exit.
 func (h *DaemonHandle) Kill() error {
-	if h.cmd == nil || h.cmd.Process == nil {
+	if h == nil || h.cmd == nil || h.cmd.Process == nil {
 		return nil
 	}
 	pid := h.cmd.Process.Pid
@@ -252,30 +264,22 @@ func (h *DaemonHandle) Kill() error {
 	// the 5s-timeout fallback leaked children on the common happy path under
 	// --parallel. The group kill is best-effort (ESRCH once the group is gone).
 	_ = syscall.Kill(-pid, syscall.SIGKILL)
-	if err := h.cmd.Process.Kill(); err != nil {
-		if errors.Is(err, os.ErrProcessDone) {
-			// Process already finished — reap the zombie if not already reaped.
-			_ = h.cmd.Wait()
-			return nil
-		}
-		return fmt.Errorf("sandbox: kill daemon %s/%s: %w", h.taskID, h.mode, err)
-	}
+	_ = h.cmd.Process.Kill()
 
-	// Wait with a 5s deadline so we don't hang.
-	done := make(chan error, 1)
-	go func() { done <- h.cmd.Wait() }()
+	// CR-01: observe the SINGLE Wait goroutine via the shared `exited` channel —
+	// never call cmd.Wait() here. The buffered+closed channel makes this safe
+	// even if Stop already drained `exited` on the graceful path (a closed
+	// channel keeps yielding immediately). Bound the wait at 5s so we don't hang
+	// if the group is wedged; on timeout, re-send the group SIGKILL and block on
+	// the owner goroutine to confirm the reap before returning.
 	select {
-	case <-done:
+	case <-h.exited:
+		return nil
 	case <-time.After(5 * time.Second):
-		// Re-send SIGKILL to the entire process group, then WR-02: drain the
-		// in-flight Wait() goroutine so the process is confirmed reaped before we
-		// return. The done channel is buffered (cap 1) so the goroutine's send
-		// never blocks, and Wait() returns once the group SIGKILL lands.
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
-		<-done
+		<-h.exited
 		return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
 	}
-	return nil
 }
 
 // StartDaemon spawns the helix daemon subprocess with an isolated environment
@@ -370,14 +374,25 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 		return nil, fmt.Errorf("sandbox: start daemon %s/%s: %w", taskID, mode, err)
 	}
 
+	// CR-01: own the SINGLE cmd.Wait() for the life of this process here. Send
+	// the result, then close so every later receive on `exited` (from Stop and
+	// Kill, possibly both) returns immediately without re-calling Wait().
+	exited := make(chan error, 1)
+	go func() {
+		exited <- cmd.Wait()
+		close(exited)
+	}()
+
 	// Poll until socket appears or ctx/deadline expires.
 	if err := waitSocket(ctx, sockPath, 10*time.Second); err != nil {
+		// Kill the process and drain the single Wait goroutine via `exited`
+		// (never call cmd.Wait() directly — that would race the owner goroutine).
 		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		<-exited
 		return nil, fmt.Errorf("sandbox: daemon %s/%s socket did not appear: %w", taskID, mode, err)
 	}
 
-	h := &DaemonHandle{cmd: cmd, taskID: taskID, mode: mode}
+	h := &DaemonHandle{cmd: cmd, taskID: taskID, mode: mode, exited: exited}
 
 	s.mu.Lock()
 	s.handles = append(s.handles, h)

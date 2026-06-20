@@ -22,6 +22,7 @@ VETTOOL_NOKERNEL2SEMANTIC=$(shell go env GOPATH)/bin/vet-nokernel2semantic
 VETTOOL_NOSEMANTIC2KERNEL=$(shell go env GOPATH)/bin/vet-nosemantic2kernel
 VETTOOL_COMPACT_USES_STORE=$(shell go env GOPATH)/bin/vet-compact-uses-store
 VETTOOL_ABLATION_LEAKAGE=$(shell go env GOPATH)/bin/vet-ablation-leakage
+VETTOOL_BENCH_RAG_LEAKAGE=$(shell go env GOPATH)/bin/vet-bench-rag-leakage
 
 # Phase 61 ENRICH-01: enforce semantic does not import kernel (carve-out:
 # internal/kernel/lspool). The vet-nosemantic2kernel singlechecker is the
@@ -37,13 +38,20 @@ VETTOOL_ABLATION_LEAKAGE=$(shell go env GOPATH)/bin/vet-ablation-leakage
 # runners) MUST NOT import the disabled-subsystem packages
 # internal/kernel/lspool or internal/semantic/store. Static, compile-time
 # complement to the kernel Unsupported runtime guard (Plan 76-01).
-vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE)
+#
+# Phase 83 ABLATE-04 #1c: vet-bench-rag-leakage enforces the standalone
+# baseline_rag control-arm boundary — cmd/helix-bench-rag MUST NOT import
+# internal/kernel or internal/semantic (transitively the same as not importing
+# internal/mcp). Static, compile-time complement to the dynamic transitive
+# import-set test in cmd/helix-bench-rag/leakage_test.go.
+vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE) $(VETTOOL_BENCH_RAG_LEAKAGE)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOSEMANTIC2KERNEL) ./...
 	$(GO) vet -vettool=$(VETTOOL_COMPACT_USES_STORE) ./...
 	$(GO) vet -vettool=$(VETTOOL_ABLATION_LEAKAGE) ./...
+	$(GO) vet -vettool=$(VETTOOL_BENCH_RAG_LEAKAGE) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
@@ -59,6 +67,9 @@ $(VETTOOL_COMPACT_USES_STORE): cmd/vet-compact-uses-store/main.go internal/lint/
 
 $(VETTOOL_ABLATION_LEAKAGE): cmd/vet-ablation-leakage/main.go internal/lint/ablationleakage/*.go
 	$(GO) install ./cmd/vet-ablation-leakage
+
+$(VETTOOL_BENCH_RAG_LEAKAGE): cmd/vet-bench-rag-leakage/main.go internal/lint/benchragleakage/*.go
+	$(GO) install ./cmd/vet-bench-rag-leakage
 
 fmt:
 	gofmt -w .

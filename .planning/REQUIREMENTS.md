@@ -181,13 +181,13 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | VERIFIED-01 | Phase 87 | TBD | Pending |
 | VERIFIED-02 | Phase 87 | TBD | Pending |
 | VERIFIED-03 | Phase 86 | TBD | Pending |
-| STATS-01 | Phase 82 | 82-01 (producer half) | In progress — producer side done (ExpandMatrix N cells + --runs); aggregator fail-closed N-gate lands in 82-05 |
-| STATS-02 | Phase 82 | 82-02 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, D-09 degenerate matrix) |
-| STATS-03 | Phase 82 | TBD | Pending |
-| STATS-04 | Phase 82 | TBD | Pending |
+| STATS-01 | Phase 82 | 82-01, 82-05 | Complete — ExpandMatrix N cells + --runs (producer); aggregator fail-closed N-gate (expectedN-from-arg, zero-discovery hard error) |
+| STATS-02 | Phase 82 | 82-02, 82-06 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, ordering guard, D-09 degenerate matrix); CIs on every leaderboard row |
+| STATS-03 | Phase 82 | 82-03, 82-06 | Complete — HumanEval unbiased c-term pass@k (0.91667 anchor, anti-naive + lgamma-agreement), pass@1/pass@k columns |
+| STATS-04 | Phase 82 | 82-06 | Complete — BCa CI-overlap gate renders warning + suppresses X>Y for overlapping neighbors |
 | COST-01 | Phase 75 | TBD | Pending |
-| COST-02 | Phase 82 | 82-04 | Complete |
-| COST-03 | Phase 82 | TBD | Pending |
+| COST-02 | Phase 82 | 82-04 | Complete — cost_per_solved_task golden (3.555) + model_id join + freshness gate fail-closed |
+| COST-03 | Phase 82 | 82-06, 82-07 | Complete — cost_quality.md renders cost-per-solved per mode×benchmark with BCa CIs + FAIR-03 CV>0.05 variance warning |
 | ADAPTER-AIDER-01 | Phase 85 | TBD | Pending |
 | ADAPTER-CCE-01 | Phase 86 | TBD | Pending |
 | ADAPTER-REPO-01 | Phase 86 | TBD | Pending |

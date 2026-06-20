@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: Wave 4 — helix-bench aggregate subcommand landed (D-02); STATS-01/COST-03 operator-invocable; first leaderboard.md/cost_quality.md render end-to-end
-stopped_at: Completed 82-07-PLAN.md
-last_updated: "2026-06-20T22:33:27.000Z"
-last_activity: 2026-06-21 -- Phase 82 Plan 07 executed (helix-bench aggregate subcommand wiring aggregator.Aggregate into the CLI, D-02; STATS-01/COST-03)
+status: ready
+stopped_at: Completed Phase 82 — verified (7/7 plans, STATS-01..04 + COST-02/03)
+last_updated: "2026-06-20T23:03:40.794Z"
+last_activity: 2026-06-20
 progress:
   total_phases: 15
-  completed_phases: 9
+  completed_phases: 8
   total_plans: 42
   completed_plans: 42
-  percent: 60
+  percent: 53
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 82 — multi-run aggregator, BCa bootstrap, pass@k, cost rollup, first leaderboard
+**Current focus:** Phase 83 — `cmd/helix-bench-rag` + baseline_rag mode + embedding-index builder
 
 ## Current Position
 
-Phase: 82
-Plan: 07 complete (Wave 4 — 82-01..07 all done; phase 82 plans complete)
-Status: Wave 4 — helix-bench aggregate subcommand landed (D-02); STATS-01/COST-03 operator-invocable; first leaderboard.md/cost_quality.md render end-to-end
-Last activity: 2026-06-21 -- Phase 82 Plan 07 executed (helix-bench aggregate subcommand wiring aggregator.Aggregate into the CLI, D-02; STATS-01/COST-03)
+Phase: 83
+Plan: Not started
+Status: Phase 82 complete & verified (4/4 must-haves; STATS-01..04 + COST-02/03) — Phase 83 not started
+Last activity: 2026-06-21
 
 ### Session Continuity
 
-Last session: 2026-06-20T22:33:27.000Z
-Stopped at: Completed 82-07-PLAN.md
+Last session: 2026-06-21
+Stopped at: Completed Phase 82 (7/7 plans, verified)
 Resume file: None
 
 ## Accumulated Context

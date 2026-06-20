@@ -29,7 +29,7 @@
 - [x] Phase 79: Evaluators & Result-Schema Metrics Layer (completed 2026-06-18)
 - [x] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement (completed 2026-06-19)
 - [x] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
-- [ ] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard
+- [x] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard (completed 2026-06-20)
 - [ ] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder
 - [ ] Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard
 - [ ] Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners

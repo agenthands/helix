@@ -197,11 +197,19 @@ func decodeParquet(ctx context.Context, raw []byte, language string) ([]Task, er
 	}
 
 	out := make([]Task, 0, len(tasks))
+	// langSkipped counts rows dropped because their `language` column value did
+	// not match the requested language, and otherLang remembers one such value so
+	// a wholly-mismatched parquet surfaces the drift explicitly (WR-03) instead of
+	// masquerading as a generic "zero tasks" decode.
+	var langSkipped int
+	var otherLang string
 	for i := range tasks {
 		rowLang := language
 		if i < len(langs) && langs[i] != "" {
 			rowLang = langs[i]
 			if rowLang != language {
+				langSkipped++
+				otherLang = rowLang
 				continue // skip other-language rows in a mixed fixture
 			}
 		}
@@ -284,6 +292,13 @@ func decodeParquet(ctx context.Context, raw []byte, language string) ([]Task, er
 		out = append(out, t)
 	}
 	if len(out) == 0 {
+		// Distinguish "every row carried a different language tag" (a tag-semantics
+		// drift, e.g. "py" vs "python") from a genuinely empty decode, so the
+		// mismatch surfaces explicitly rather than as a misleading zero-task error
+		// (WR-03).
+		if langSkipped > 0 {
+			return nil, fmt.Errorf("repobench: %s parquet decoded zero tasks: all %d rows carried a non-matching language (e.g. %q); none matched requested %q", language, langSkipped, otherLang, language)
+		}
 		return nil, fmt.Errorf("repobench: %s parquet decoded zero tasks", language)
 	}
 	return out, nil

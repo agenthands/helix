@@ -156,11 +156,11 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | FAIR-03 | Phase 75 plan 03 = schema substrate landed (479e5c14); variance gate Phase 82, warning Phase 89 | 479e5c14 (substrate) | Substrate done; full REQ pending Phase 82/89 |
 | TOOLBENCH-01 | Phase 78 (plans 02-05) | 78-05 | Complete |
 | TOOLBENCH-02 | Phase 78 (plans 01-05) | 78-05 | Complete |
-| TOOLBENCH-03 | Phase 85 | TBD | Pending |
-| TOOLBENCH-04 | Phase 85 | TBD | Pending |
-| TOOLBENCH-05 | Phase 85 | TBD | Pending |
-| TOOLBENCH-06 | Phase 85 | TBD | Pending |
-| TOOLBENCH-07 | Phase 85 | TBD | Pending |
+| TOOLBENCH-03 | Phase 85 | 85-03 | Complete — PyRunner (pytest --json-report, parsePytestJSON), 9/9 capabilities (≥8), hermetic golden-fixture parser test (sole proof) |
+| TOOLBENCH-04 | Phase 85 | 85-05 | Complete — TSRunner (vitest --reporter=json, parseJestStyleJSON), 9 capabilities incl tsserver CapLSPDiagnostics (≥8), hermetic golden test |
+| TOOLBENCH-05 | Phase 85 | 85-05 | Complete — JSRunner (jest --json), 9 capabilities incl eslint CapLSPDiagnostics (≥8), package.json-without-tsconfig Detect precedence, hermetic golden test |
+| TOOLBENCH-06 | Phase 85 | 85-03 | Complete — JavaRunner (mvn surefire, parseSurefireXML), 9/9 capabilities (≥8), REAL-provenance surefire golden (apache/maven-surefire@5ee132b4) + TestJavaFixtureProvenance gate; live mvn skips (no JDK) |
+| TOOLBENCH-07 | Phase 85 | 85-03 | Complete — CSharpRunner (dotnet test --logger trx, parseTRX), 7/7 capabilities (≥6), live-captured dotnet 8 TRX golden |
 | TOOLBENCH-08 | Phase 85 | 85-04 | Complete |
 | TOOLBENCH-09 | Phase 85 | 85-04 | Complete |
 | TOOLBENCH-10 | Phase 78 (plan 01) | 78-05 | Complete |

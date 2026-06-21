@@ -123,6 +123,21 @@ type ResultInput struct {
 	// through verbatim — no top-level default/fallback.
 	ExitCode *int
 
+	// SwebenchRawResolved / SwebenchRescoredVerified are the Phase 87 (VERIFIED-02)
+	// open-provenance keys the SWE-bench rescore producer (Plan 03 rescore.go
+	// ApplyToRow) STAMPS onto the row under the PINNED SwebenchRawResolvedKey /
+	// SwebenchRescoredVerifiedKey names so the Plan 04 aggregator (rowSwebenchScores)
+	// reads them back present=true on a LIVE row. They are *bool (NOT bool) WITH
+	// omitempty so a nil drops the key but a literal false (the SC#2 buggy-patch
+	// rescored verdict, the WHOLE POINT) is PRESERVED — a value-type omitempty would
+	// wrongly drop a load-bearing false (Pitfall 2). They mirror the EmbedderID/
+	// Language/ContainerID additive-minor discipline EXACTLY: additive-minor,
+	// omitempty, schema_version stays "v2", additionalProperties stays OPEN, NOT
+	// added to required. Only the SWE-bench rescore path populates them; honest non-
+	// SWE-bench rows leave both nil so old artifacts stay byte-compatible.
+	SwebenchRawResolved      *bool
+	SwebenchRescoredVerified *bool
+
 	// Metrics is the canonical Phase 79 nullable metric record (D-06/METRIC-01),
 	// assembled by the coordinator. Every field is a pointer; a nil marshals to an
 	// explicit JSON null (never omitted), so a metric a grader could not compute is
@@ -202,6 +217,17 @@ type resultDoc struct {
 	// OPEN at the schema top level, no v3 bump.
 	ExitCode *int `json:"exit_code,omitempty"`
 
+	// SwebenchRawResolved / SwebenchRescoredVerified are the Phase 87 (VERIFIED-02)
+	// SWE-bench raw-vs-rescored open keys. *bool (NOT bool) WITH omitempty so a nil
+	// drops the key but a literal false (the SC#2 rescored verdict) is PRESERVED — a
+	// value-type omitempty would wrongly drop a load-bearing false (Pitfall 2). The
+	// json tags are the PINNED SwebenchRawResolvedKey / SwebenchRescoredVerifiedKey
+	// const VALUES verbatim, so producer (ApplyToRow) and reader (aggregator
+	// rowSwebenchScores) read the same spelling. additive-minor open keys —
+	// additionalProperties is OPEN at the schema top level, no v3 bump.
+	SwebenchRawResolved      *bool `json:"swebench_raw_resolved,omitempty"`
+	SwebenchRescoredVerified *bool `json:"swebench_rescored_verified,omitempty"`
+
 	// Phase 79 canonical metric record (METRIC-01/D-06). Metrics has NO omitempty:
 	// the object (and every nullable field within it) is always emitted so a
 	// missing metric is an explicit JSON null, never an omission (D-07).
@@ -252,7 +278,11 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		AblationStatus: in.AblationStatus,
 		ContainerID:    in.ContainerID,
 		ExitCode:       in.ExitCode,
-		Metrics:        in.Metrics,
+
+		SwebenchRawResolved:      in.SwebenchRawResolved,
+		SwebenchRescoredVerified: in.SwebenchRescoredVerified,
+
+		Metrics: in.Metrics,
 		MetricErrors:   in.MetricErrors,
 	}
 

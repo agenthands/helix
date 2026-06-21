@@ -63,7 +63,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 ### Verified Correctness (VERIFIED-*)
 
 - [ ] **VERIFIED-01**: `verified_correctness` is computed independently of `task_success` — multi-oracle verdict: (a) all canonical tests pass, (b) all augmented tests pass (UTBoost or equivalent for benchmarks that have them), (c) no pre-existing tests regress. _Acceptance:_ a known-buggy patch that passes only canonical tests gets `task_success=true`, `verified_correctness=false`.
-- [ ] **VERIFIED-02**: SWE-bench Verified runs report **both** raw upstream score and UTBoost-augmented rescored score side-by-side. _Acceptance:_ SWE-bench Verified report has both columns; UTBoost augmented suite is wired and reproducible.
+- [x] **VERIFIED-02**: SWE-bench Verified runs report **both** raw upstream score and UTBoost-augmented rescored score side-by-side. _Acceptance:_ SWE-bench Verified report has both columns; UTBoost augmented suite is wired and reproducible.
 - [x] **VERIFIED-03**: Multi-oracle gate for non-test-bearing benchmarks (CrossCodeEval, RepoBench): EM + edit-similarity + identifier match all required to pass; abstain mode for low-confidence completions. _Acceptance:_ gate documented in `bench/evaluators/VERIFIED.md`; threshold per oracle configurable.
 
 ### Statistical Rigor (STATS-*)
@@ -84,7 +84,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **ADAPTER-AIDER-01**: Aider Polyglot adapter wired via `dataset-loader-only` — shallow git clone `Aider-AI/polyglot-benchmark` at pinned sha; 225 tasks × 6 langs (C++, Go, Java, JS, Python, Rust); 2-attempt protocol with stderr re-prompt. _Acceptance:_ full Aider Polyglot run completes; per-language pass-rate matches sanity benchmarks.
 - [x] **ADAPTER-CCE-01**: CrossCodeEval adapter wired via `dataset-loader-only` — HF dataset; EM + edit-similarity + identifier-match scoring; Python, Java, TS, C#. _Acceptance:_ smoke run scores at least one task per language; scorers unit-tested against CCE paper examples.
 - [x] **ADAPTER-REPO-01**: RepoBench adapter wired via `dataset-loader-only` — RepoBench-R + RepoBench-C + RepoBench-P sub-tasks; Python + Java. _Acceptance:_ smoke run for each sub-task; EM/ES metrics match published reference values on a sampled subset.
-- [ ] **ADAPTER-SWE-01**: SWE-bench Verified adapter wired via `subprocess-shellout` — produces `predictions.jsonl`; shells out to `python -m swebench.harness.run_evaluation`; ingests `<run_id>.json`. _Acceptance:_ smoke run of 5 tasks completes; result JSON ingested into bench schema.
+- [x] **ADAPTER-SWE-01**: SWE-bench Verified adapter wired via `subprocess-shellout` — produces `predictions.jsonl`; shells out to `python -m swebench.harness.run_evaluation`; ingests `<run_id>.json`. _Acceptance:_ smoke run of 5 tasks completes; result JSON ingested into bench schema.
 - [ ] **ADAPTER-MULTI-01**: Multi-SWE-bench adapter wired via `subprocess-shellout` — `python -m multi_swe_bench.harness.run_evaluation --config`; Java, TS, JS, Go, Rust, C, C++ (Mini set acceptable at ship; full set reach goal). _Acceptance:_ Mini set runs; per-language slicing exposed in reporter.
 - [ ] **ADAPTER-TERM-01**: Terminal-Bench 2.0 adapter wired via `subprocess-shellout` — drives agent through `tb run` CLI; ingests `tb` JSON. _Acceptance:_ smoke run of ≥ 5 tasks; container-isolation invariant holds.
 

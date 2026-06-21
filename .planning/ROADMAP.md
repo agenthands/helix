@@ -355,7 +355,7 @@ Plans:
 **Plans**: 4 plansPlans:
 **Wave 1**
 
-- [ ] 87-01-PLAN.md — substrate: additive container_id/exit_code result.v2 keys + harness subprocess argv wrapper + UTBoost pin/fetch + A1-A5 human-verify
+- [x] 87-01-PLAN.md — substrate: additive container_id/exit_code result.v2 keys + harness subprocess argv wrapper + UTBoost pin/fetch + A1-A5 human-verify
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

@@ -506,3 +506,170 @@ func TestRunHealthCheckWithKnownBinary(t *testing.T) {
 	err := runHealthCheck(context.Background(), entries, t.TempDir(), printer, false)
 	assert.NoError(t, err)
 }
+
+// --- teardownMCP tests (Phase 93-03 Task 1) ---
+//
+// teardownMCP removes ONLY the prior helix MCP server entry for each client and
+// MUST NOT remove hooks (Pitfall 3). It must be a best-effort no-op when the
+// prior entry / config file is absent.
+
+// seedMCPConfig writes a JSON config file with a helix entry plus an unrelated
+// entry under key, so tests can assert the helix entry is removed while the
+// unrelated entry survives.
+func seedMCPConfig(t *testing.T, path, key string) {
+	t.Helper()
+	cfg := map[string]any{
+		key: map[string]any{
+			"helix": map[string]any{"command": "/old/helix"},
+			"other": map[string]any{"command": "/other"},
+		},
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+	require.NoError(t, os.WriteFile(path, append(data, '\n'), 0644))
+}
+
+// assertHelixGoneOtherKept reads a JSON config and asserts the helix entry under
+// key was removed while the "other" entry remains.
+func assertHelixGoneOtherKept(t *testing.T, path, key string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(data, &result))
+	servers, ok := result[key].(map[string]any)
+	require.True(t, ok, "key %q should exist", key)
+	assert.NotContains(t, servers, "helix", "helix MCP entry must be removed")
+	assert.Contains(t, servers, "other", "unmanaged entries must be preserved")
+}
+
+func TestTeardownPriorMCP_VSCode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vscode", "mcp.json")
+	seedMCPConfig(t, path, "servers")
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&VSCodeRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "servers")
+}
+
+func TestTeardownPriorMCP_JetBrains(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".junie", "mcp", "mcp.json")
+	seedMCPConfig(t, path, "mcpServers")
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&JetBrainsRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "mcpServers")
+}
+
+func TestTeardownPriorMCP_OpenCode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "opencode.json")
+	seedMCPConfig(t, path, "mcp")
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&OpenCodeRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "mcp")
+}
+
+func TestTeardownPriorMCP_ClaudeCode(t *testing.T) {
+	// Isolate HOME so the global ~/.claude/settings.json removal and any
+	// best-effort `claude mcp remove` operate on a sandbox, never the user's home.
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".mcp.json")
+	seedMCPConfig(t, path, "mcpServers")
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "mcpServers")
+}
+
+func TestTeardownPriorMCP_Gemini(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gemini", "settings.json")
+	seedMCPConfig(t, path, "mcpServers")
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&GeminiCLIRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "mcpServers")
+}
+
+func TestTeardownPriorMCP_Generic_OutputFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.json")
+	seedMCPConfig(t, path, "mcpServers")
+
+	cfg := RegistrationConfig{ProjectDir: dir, OutputPath: path, Printer: &SetupPrinter{}}
+	require.NoError(t, (&GenericRegistrar{}).teardownMCP(cfg))
+	assertHelixGoneOtherKept(t, path, "mcpServers")
+}
+
+func TestTeardownPriorMCP_Generic_StdoutNoOp(t *testing.T) {
+	cfg := RegistrationConfig{ProjectDir: t.TempDir(), Printer: &SetupPrinter{}}
+	// No OutputPath: stdout config has nothing on disk → no-op, no error.
+	require.NoError(t, (&GenericRegistrar{}).teardownMCP(cfg))
+}
+
+// TestTeardownPriorMCP_MissingFileNoOp asserts teardown on an absent config file
+// is a no-op (returns nil, creates nothing) for every file-backed client.
+func TestTeardownPriorMCP_MissingFileNoOp(t *testing.T) {
+	// Isolate HOME so claude-code's global-settings removal does not touch the user's home.
+	t.Setenv("HOME", t.TempDir())
+	clients := []struct {
+		name string
+		r    ClientRegistrar
+		// rel is the config path (relative to ProjectDir) that must NOT be created.
+		rel string
+	}{
+		{"vscode", &VSCodeRegistrar{}, filepath.Join(".vscode", "mcp.json")},
+		{"jetbrains", &JetBrainsRegistrar{}, filepath.Join(".junie", "mcp", "mcp.json")},
+		{"opencode", &OpenCodeRegistrar{}, "opencode.json"},
+		{"claude-code", &ClaudeCodeRegistrar{}, ".mcp.json"},
+	}
+	for _, c := range clients {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+			require.NoError(t, c.r.teardownMCP(cfg), "teardown on missing file must be a no-op")
+			_, err := os.Stat(filepath.Join(dir, c.rel))
+			assert.True(t, os.IsNotExist(err), "teardown must not create a config file")
+		})
+	}
+}
+
+// TestTeardownPriorMCP_PreservesHooks asserts teardown removes the MCP entry but
+// leaves a seeded helix_managed hook intact (Pitfall 3, T-93-06). Uses claude-code
+// because it is the client whose Unregister also strips hooks.
+func TestTeardownPriorMCP_PreservesHooks(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+
+	// Seed the project .mcp.json with an mcpServers.helix entry.
+	mcpPath := filepath.Join(dir, ".mcp.json")
+	seedMCPConfig(t, mcpPath, "mcpServers")
+
+	// Seed a settings.json that carries a helix_managed PreToolUse hook.
+	settingsPath := hookSettingsPath(dir, false)
+	require.NoError(t, mergeHooksIntoSettings(settingsPath, "/usr/local/bin/helix"))
+
+	cfg := RegistrationConfig{ProjectDir: dir, Printer: &SetupPrinter{}}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).teardownMCP(cfg))
+
+	// MCP entry gone.
+	assertHelixGoneOtherKept(t, mcpPath, "mcpServers")
+
+	// Hook survives: settings.json still has a helix_managed PreToolUse hook.
+	data, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+	var settings map[string]any
+	require.NoError(t, json.Unmarshal(data, &settings))
+	hooks, ok := settings["hooks"].(map[string]any)
+	require.True(t, ok, "hooks block must survive teardown")
+	pre, ok := hooks["PreToolUse"].([]any)
+	require.True(t, ok, "PreToolUse hooks must survive teardown")
+	require.NotEmpty(t, pre, "helix_managed PreToolUse hook must survive teardown")
+}

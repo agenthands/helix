@@ -16,10 +16,15 @@ type ClientRegistrar interface {
 	Name() string
 	// Description returns a one-line description for help output.
 	Description() string
-	// Register adds Helix as an MCP server for this client.
+	// Register installs the Helix skill + hooks for this client and tears down
+	// any prior Helix MCP server registration (the Phase 93 "flip").
 	Register(cfg RegistrationConfig) error
-	// Unregister removes Helix from this client.
+	// Unregister removes Helix from this client (MCP entry AND hooks).
 	Unregister(cfg RegistrationConfig) error
+	// teardownMCP removes ONLY the prior Helix MCP server entry for this client.
+	// Unlike Unregister it MUST NOT remove hooks (Pitfall 3) and MUST be a
+	// best-effort no-op when the prior entry / required CLI is absent.
+	teardownMCP(cfg RegistrationConfig) error
 }
 
 // RegistrationConfig holds common registration parameters.
@@ -224,6 +229,45 @@ func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
 	return nil
 }
 
+// teardownMCP removes the prior Helix MCP server entry for Claude Code WITHOUT
+// touching hooks (Pitfall 3). It is best-effort: a missing `claude` CLI or an
+// absent entry is a no-op, never a hard error. It mirrors the MCP-removal half
+// of Unregister (the `claude mcp remove` + `.mcp.json` / global settings.json
+// direct-file removal) but deliberately omits removeHooksFromSettings.
+func (r *ClaudeCodeRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	scope := "project"
+	if cfg.Global {
+		scope = "user"
+	}
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry (claude mcp remove helix --scope %s + .mcp.json/settings.json)", scope)
+		return nil
+	}
+
+	// Best-effort CLI removal (only when the claude CLI is present).
+	if _, err := exec.LookPath("claude"); err == nil {
+		rmCmd := exec.Command("claude", "mcp", "remove", "helix", "--scope", scope)
+		rmCmd.Stdout = os.Stderr
+		rmCmd.Stderr = os.Stderr
+		_ = rmCmd.Run() // ignore: absent entry is a no-op
+	}
+
+	// Direct-file removal (idempotent — missing file/key → no-op). Cover both
+	// the project .mcp.json and the global settings.json so a prior entry written
+	// via either path is removed regardless of CLI availability.
+	if err := removeFromJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix"); err != nil {
+		return err
+	}
+	if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		globalSettings := filepath.Join(home, ".claude", "settings.json")
+		if err := removeFromJSONConfig(globalSettings, "mcpServers", "helix"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	scope := "project"
 	if cfg.Global {
@@ -384,6 +428,29 @@ func (r *GeminiCLIRegistrar) settingsPath(cfg RegistrationConfig) (string, error
 	return filepath.Join(cfg.ProjectDir, ".gemini", "settings.json"), nil
 }
 
+// teardownMCP removes the prior Helix MCP server entry for Gemini CLI WITHOUT
+// touching hooks. It removes the settings-file mcpServers.helix entry and marks
+// helix disabled in the enablement file. Best-effort: missing files are no-ops
+// and enablement-write failure is non-fatal.
+func (r *GeminiCLIRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	configPath, err := r.settingsPath(cfg)
+	if err != nil {
+		return err
+	}
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s and disable in mcp-server-enablement.json", configPath)
+		return nil
+	}
+
+	if err := removeFromJSONConfig(configPath, "mcpServers", "helix"); err != nil {
+		return err
+	}
+	// Best-effort: disabling failure (e.g., missing home dir) must not break teardown.
+	_ = r.ensureDisabled()
+	return nil
+}
+
 func (r *GeminiCLIRegistrar) Unregister(cfg RegistrationConfig) error {
 	scope := "project"
 	if cfg.Global {
@@ -450,6 +517,20 @@ func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
 	return mergeJSONConfig(configPath, "servers", "helix", serverEntry)
 }
 
+// teardownMCP removes the prior Helix MCP server entry for VS Code WITHOUT
+// touching hooks. VS Code uses the "servers" key (Pitfall 1). Missing file → no-op.
+func (r *VSCodeRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s", configPath)
+		return nil
+	}
+	return removeFromJSONConfig(configPath, "servers", "helix")
+}
+
 func (r *VSCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	configPath, err := r.configPath(cfg)
 	if err != nil {
@@ -495,6 +576,20 @@ func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
+}
+
+// teardownMCP removes the prior Helix MCP server entry for JetBrains/Junie
+// WITHOUT touching hooks. Missing file → no-op.
+func (r *JetBrainsRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s", configPath)
+		return nil
+	}
+	return removeFromJSONConfig(configPath, "mcpServers", "helix")
 }
 
 func (r *JetBrainsRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -543,6 +638,20 @@ func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
 	}
 
 	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
+}
+
+// teardownMCP removes the prior Helix MCP server entry for Claude Desktop
+// WITHOUT touching hooks. Claude Desktop is global-only. Missing file → no-op.
+func (r *ClaudeDesktopRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	configPath, err := r.configPath()
+	if err != nil {
+		return err
+	}
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s", configPath)
+		return nil
+	}
+	return removeFromJSONConfig(configPath, "mcpServers", "helix")
 }
 
 func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
@@ -614,6 +723,20 @@ func (r *OpenCodeRegistrar) Register(cfg RegistrationConfig) error {
 	return mergeJSONConfig(configPath, "mcp", "helix", serverEntry)
 }
 
+// teardownMCP removes the prior Helix MCP server entry for OpenCode WITHOUT
+// touching hooks. OpenCode uses the "mcp" key. Missing file → no-op.
+func (r *OpenCodeRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	configPath, err := r.configPath(cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s", configPath)
+		return nil
+	}
+	return removeFromJSONConfig(configPath, "mcp", "helix")
+}
+
 func (r *OpenCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	configPath, err := r.configPath(cfg)
 	if err != nil {
@@ -683,6 +806,21 @@ func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {
 	// Print to stdout -- this is the only registrar that writes to stdout
 	fmt.Fprintf(os.Stdout, "%s\n", data)
 	return nil
+}
+
+// teardownMCP for the generic client is a documented no-op when the config is
+// emitted to stdout (there is nothing on disk to clean). When --output points at
+// a file, the prior helix entry is removed from it. Best-effort; missing file → no-op.
+func (r *GenericRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	if cfg.OutputPath == "" {
+		// stdout-only config: no prior on-disk MCP entry to tear down.
+		return nil
+	}
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry from %s", cfg.OutputPath)
+		return nil
+	}
+	return removeFromJSONConfig(cfg.OutputPath, "mcpServers", "helix")
 }
 
 func (r *GenericRegistrar) Unregister(cfg RegistrationConfig) error {

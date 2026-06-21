@@ -113,8 +113,14 @@ func Fetch(ctx context.Context, rev, file string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if b, err := os.ReadFile(dst); err == nil {
+	if b, err := readCacheCapped(dst); err == nil {
 		return b, nil
+	} else if !os.IsNotExist(err) {
+		// A present-but-oversized (or otherwise unreadable) cache file must NOT
+		// silently fall through to a re-fetch: the cap is a total invariant
+		// (WR-02), so surface the refusal. Only a genuine cache MISS
+		// (os.IsNotExist) proceeds to the network leg.
+		return nil, err
 	}
 	url, err := resolveURL(rev, file)
 	if err != nil {
@@ -148,6 +154,40 @@ func Fetch(ctx context.Context, rev, file string) ([]byte, error) {
 
 	if err := writeCacheAtomic(dst, body); err != nil {
 		return nil, err
+	}
+	return body, nil
+}
+
+// readCacheCapped reads a cache-hit file under the SAME maxDatasetBytes cap the
+// network leg enforces (WR-02), so a poisoned/oversized cache file (cosmic-ray
+// growth, a future writer bug, or a manually planted file under the predictable
+// <cacheDir>/swebench-utboost/<rev>/<file> path) is REFUSED rather than read
+// unbounded into memory. A genuine cache miss returns an os.IsNotExist error so
+// the caller falls through to the network fetch; an oversized file returns a cap
+// error. It stat-checks first (cheap, catches the common case) and ALSO reads
+// via io.LimitReader so a file whose size races the read still cannot exceed the
+// cap.
+func readCacheCapped(dst string) ([]byte, error) {
+	fi, err := os.Stat(dst)
+	if err != nil {
+		return nil, err // os.IsNotExist(err) ⇒ genuine miss; other errors surface.
+	}
+	if fi.Size() > maxDatasetBytes {
+		return nil, fmt.Errorf("swebench-utboost: cache file %s is %d bytes, exceeds %d-byte cap (refuse poisoned/oversized cache)", dst, fi.Size(), int64(maxDatasetBytes))
+	}
+	f, err := os.Open(dst)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	// Read one byte past the cap to detect a file that grew between the stat and
+	// the read (TOCTOU), symmetric with the network body's +1 overflow probe.
+	body, err := io.ReadAll(io.LimitReader(f, maxDatasetBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("swebench-utboost: read cache %s: %w", dst, err)
+	}
+	if int64(len(body)) > maxDatasetBytes {
+		return nil, fmt.Errorf("swebench-utboost: cache file %s exceeds %d-byte cap (refuse poisoned/oversized cache)", dst, int64(maxDatasetBytes))
 	}
 	return body, nil
 }

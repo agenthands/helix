@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,67 @@ func TestFetchRefusesMutableRevBeforeNetwork(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mutable ref") {
 		t.Errorf("expected a mutable-ref refusal error, got %v", err)
+	}
+}
+
+// TestFetchCacheHitHonorsSizeCap (WR-02): a present cache file under the
+// predictable cache path that exceeds maxDatasetBytes is REFUSED on the
+// cache-hit read leg — symmetric with the network leg's io.LimitReader cap —
+// rather than read unbounded into memory. Hermetic: no network; a small valid
+// cache file is still served. We exercise readCacheCapped directly (the
+// cache-read primitive) so the test needs no multi-GiB fixture: the cap is
+// asserted against fi.Size() and via io.LimitReader, both reachable here.
+func TestFetchCacheHitHonorsSizeCap(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv(cacheDirEnv, tmp)
+
+	dst, err := cachePath(PinnedSHA, "data.parquet")
+	if err != nil {
+		t.Fatalf("cachePath error: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+
+	// A genuine miss surfaces os.IsNotExist so Fetch falls through to network.
+	if _, err := readCacheCapped(dst); !os.IsNotExist(err) {
+		t.Fatalf("readCacheCapped on a missing file = %v, want an os.IsNotExist error", err)
+	}
+
+	// A small in-cap file is served verbatim.
+	want := []byte("small-valid-cache-payload")
+	if err := os.WriteFile(dst, want, 0o644); err != nil {
+		t.Fatalf("write small cache file: %v", err)
+	}
+	got, err := readCacheCapped(dst)
+	if err != nil {
+		t.Fatalf("readCacheCapped on an in-cap file = %v, want it served", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("readCacheCapped returned %q, want %q", got, want)
+	}
+
+	// An oversized file is REFUSED (not read unbounded). Use a tiny sentinel cap
+	// by writing a file one byte over maxDatasetBytes would be wasteful; instead
+	// assert the size-guard branch by creating a sparse file sized just over the
+	// cap (sparse → no real bytes written), so the os.Stat().Size() guard fires
+	// without allocating maxDatasetBytes of memory or disk.
+	big := filepath.Join(filepath.Dir(dst), "oversized.parquet")
+	f, err := os.Create(big)
+	if err != nil {
+		t.Fatalf("create oversized file: %v", err)
+	}
+	if err := f.Truncate(int64(maxDatasetBytes) + 1); err != nil {
+		f.Close()
+		t.Fatalf("truncate oversized file: %v", err)
+	}
+	f.Close()
+	if _, err := readCacheCapped(big); err == nil {
+		t.Fatal("readCacheCapped must REFUSE an oversized cache file, got nil error")
+	} else if os.IsNotExist(err) {
+		t.Fatalf("oversized cache file must be a cap refusal, not a miss: %v", err)
+	} else if !strings.Contains(err.Error(), "cap") {
+		t.Errorf("expected a size-cap refusal error, got %v", err)
 	}
 }
 

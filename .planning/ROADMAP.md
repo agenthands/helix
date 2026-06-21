@@ -310,7 +310,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 84-04-PLAN.md — bench-mirror.yml CI publish+sign of the GHCR mirror + BENCH.md container docs (CONTAINER-03 CI/publish half)
+- [x] 84-04-PLAN.md — bench-mirror.yml CI publish+sign of the GHCR mirror + BENCH.md container docs (CONTAINER-03 CI/publish half)
 
 ### Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners
 

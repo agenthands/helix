@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 92
-current_phase_name: Terse Output Renderer + Re-Targeted Contract Oracle
+current_phase: 93
+current_phase_name: SKILL.md + Nudge Repurpose + `helix setup` Flip
 status: verifying
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T18:49:08.618Z"
+last_updated: "2026-06-21T19:18:42.086Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 92 execution resumed (wave continue)
+last_activity_desc: Phase 92 complete, transitioned to Phase 93
 progress:
   total_phases: 6
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 92 (Terse Output Renderer + Re-Targeted Contract Oracle) — EXECUTING
-Plan: 3 of 3
+Phase: 93 — SKILL.md + Nudge Repurpose + `helix setup` Flip
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 92 execution resumed (wave continue)
+Last activity: 2026-06-21 — Phase 92 complete, transitioned to Phase 93
 
 Progress: [██░░░░░░░░] 19%
 
@@ -43,6 +43,7 @@ Progress: [██░░░░░░░░] 19%
 |-------|-------|-------|----------|
 | 90 | 4 | - | - |
 | 91 | 4 | - | - |
+| 92 | 3 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

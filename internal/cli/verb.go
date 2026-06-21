@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
 	"github.com/agenthands/helix/internal/config"
@@ -212,7 +211,7 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 		return fmt.Errorf("calling %s: %w", spec.toolName, err)
 	}
 
-	renderResult(cmd, res)
+	renderResult(cmd, spec, res)
 	if res.IsError {
 		return fmt.Errorf("tool %s reported an error", spec.toolName)
 	}
@@ -242,17 +241,5 @@ func resolveVerbSocket(cmd *cobra.Command) string {
 	return config.DefaultSocketPath()
 }
 
-// renderResult prints the tool result to stdout: text content verbatim,
-// non-text content as compact JSON. (Terse rendering is Phase 92.)
-func renderResult(cmd *cobra.Command, res *mcpsdk.CallToolResult) {
-	out := cmd.OutOrStdout()
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcpsdk.TextContent); ok {
-			fmt.Fprintln(out, tc.Text)
-			continue
-		}
-		if b, err := json.Marshal(c); err == nil {
-			fmt.Fprintln(out, string(b))
-		}
-	}
-}
+// renderResult moved to render.go (Phase 92 terse renderer). verb.go's runVerb
+// calls renderResult(cmd, spec, res) which dispatches on the tool's render class.

@@ -51,6 +51,19 @@ func main() {
 		return
 	}
 
+	// verify-licenses is likewise a Makefile-only HARD-FAIL gate (SC#4), NOT a
+	// BENCH-02 root subcommand. Dispatch it directly so it does not inflate the
+	// root command count.
+	if len(os.Args) > 1 && os.Args[1] == "verify-licenses" {
+		cmd := newVerifyLicensesCmd()
+		cmd.SetArgs(os.Args[2:])
+		if err := cmd.Execute(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

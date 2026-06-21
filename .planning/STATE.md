@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
-stopped_at: Completed 87-03-PLAN.md
-last_updated: "2026-06-21T07:14:24.214Z"
-last_activity: 2026-06-21 -- Phase 88 execution started
+status: verifying
+stopped_at: Completed 88-04-PLAN.md
+last_updated: "2026-06-21T07:26:55.851Z"
+last_activity: "2026-06-21 -- Completed 88-03-PLAN.md (bench/longwall checkpoint/resume, SC#3)"
 progress:
   total_phases: 15
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 69
-  completed_plans: 67
-  percent: 87
+  completed_plans: 69
+  percent: 93
 ---
 
 # Project State
@@ -27,13 +27,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 Phase: 88 (multi-swe-bench-terminal-bench-2-0-adapters) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 -- Completed 88-03-PLAN.md (bench/longwall checkpoint/resume, SC#3)
 
 ### Session Continuity
 
-Last session: 2026-06-21T07:15:38Z
-Stopped at: Completed 88-03-PLAN.md
+Last session: 2026-06-21T07:26:55.846Z
+Stopped at: Completed 88-04-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -132,6 +132,7 @@ Resume file: None
 | Phase 87 P04 | 12m | 1 tasks | 3 files |
 | Phase 88 P01 | 8 | 3 tasks | 12 files |
 | Phase 88 P02 | 11 | 2 tasks | 10 files |
+| Phase 88 P04 | 3 min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -219,3 +220,4 @@ Resume file: None
 - [Phase ?]: Phase 87 A1-A5 UTBoost upstream details resolved APPROVED-WITH-DEFERRAL; live pin confirmation deferred to a Docker+network host
 - [Phase ?]: VERIFIED-02 raw-vs-rescored columns populated on LeaderRow but not rendered (goldens byte-identical); SWE-bench render deferred to Phase 89
 - [Phase ?]: Phase 88-01: Multi-SWE adapter is config-file-driven; WriteConfig path-validates every field before marshal then a fixed --config argv; Ingest stamps Language from the cell arg (Pitfall 1) and 7-language slicing flows through existing reduceLanguageRows with zero new aggregator code (SC#1)
+- [Phase 88]: 88-04: Multi-SWE Mini fetcher cloned from swebench-utboost (SSRF-safe, capped, atomic, network-gated); DatasetID=ByteDance-Seed/Multi-SWE-bench (CC0 umbrella id confirmed); PinnedSHA placeholder + live-confirm DEFERRED (A4/A5, Phase 87 precedent); LICENSES.md +2 rows (CC0, Apache-2.0) + full-set v1.13 deferral; A1-A7 checkpoint resolved approved-with-deferral

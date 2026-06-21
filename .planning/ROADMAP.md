@@ -402,7 +402,7 @@ Plans:
 **Wave 1**
 
 - [x] 89-01-PLAN.md — Report renderers: verified_correctness reduce + leaderboard column, per_language.md (n/a rows), ablations.md (5 deltas incl. aggregate-time no_semantic), cost_quality.md ASCII scatter [REPORT-01/02/03/04]
-- [ ] 89-04-PLAN.md — CI cost-policy workflow (.github/workflows/bench.yml: PR bench-quick 5-min cap + nightly/maintainer-gated full) + hermetic YAML-parse test + BENCH.md cost-budget/canary-policy doc [INFRA-04]
+- [x] 89-04-PLAN.md — CI cost-policy workflow (.github/workflows/bench.yml: PR bench-quick 5-min cap + nightly/maintainer-gated full) + hermetic YAML-parse test + BENCH.md cost-budget/canary-policy doc [INFRA-04]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

@@ -109,8 +109,18 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.Flags().String("mode", "auto", "Transport mode: stdio, http, auto")
 	// Run as daemon directly (skip forwarder)
 	rootCmd.Flags().Bool("serve", false, "Run as daemon directly (skip forwarder)")
-	// Logging
-	rootCmd.Flags().Bool("json", false, "Use JSON log format (default: text)")
+	// --json is DUAL-PURPOSE and PERSISTENT (Phase 92-02, RESEARCH Pitfall 1
+	// option a). The daemon/forwarder dispatch paths read it as the log format
+	// (runForwarder/runDaemon below), while the disjoint verb path reads it as
+	// "emit verb output as compact JSON lines" (render.go resolveRenderOpts).
+	// These two read sites never overlap for a single invocation, so one flag
+	// safely serves both. It must be persistent so generated verbs inherit it.
+	rootCmd.PersistentFlags().Bool("json", false, "JSON output: log format for the daemon/forwarder; compact JSON lines for verb output")
+	// --color and --abs are persistent verb-output flags inherited by every
+	// generated verb (Phase 92-02). --color gates ANSI generation; --abs emits
+	// absolute paths instead of the workspace-relative default (OUT-06/07).
+	rootCmd.PersistentFlags().String("color", "auto", "Colorize verb output: auto|always|never")
+	rootCmd.PersistentFlags().Bool("abs", false, "Emit absolute paths instead of workspace-relative")
 	// Socket override
 	rootCmd.Flags().String("socket", "", "Override daemon socket path")
 	// HTTP listen address

@@ -2,11 +2,14 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"sort"
+	"strings"
 
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
 	"github.com/agenthands/helix/internal/config"
@@ -195,8 +198,8 @@ func buildVerbArgs(cmd *cobra.Command, spec verbSpec) (map[string]any, error) {
 }
 
 // runVerb builds the args (pre-dial validation), issues the one-shot tools/call,
-// and renders the result. Terse relpath:line:col rendering is Phase 92 — here
-// raw text / compact JSON is acceptable.
+// and renders the result via the Phase 92 terse renderer (render.go dispatches
+// on the tool's render class and resolves --abs/--json/--color CLI-side).
 func runVerb(cmd *cobra.Command, spec verbSpec) error {
 	args, err := buildVerbArgs(cmd, spec)
 	if err != nil {
@@ -211,11 +214,35 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 		return fmt.Errorf("calling %s: %w", spec.toolName, err)
 	}
 
-	renderResult(cmd, spec, res)
+	// OUT-05: a tool error must surface the typed `<kind>: msg` so main.go's
+	// parseKind picks the per-kind exit code. The daemon ships the typed message
+	// in the result's TextContent; return it VERBATIM (no generic
+	// "tool X reported an error" wrap that would drop the kind — replaces the old
+	// kind-dropping branch). The error text is routed to stderr by main.go; we do
+	// NOT also render it to stdout.
 	if res.IsError {
-		return fmt.Errorf("tool %s reported an error", spec.toolName)
+		return errors.New(resultErrorText(res, spec.toolName))
 	}
+
+	renderResult(cmd, spec, res)
 	return nil
+}
+
+// resultErrorText extracts the typed error message from an IsError result's
+// TextContent (joined, trimmed). It falls back to a generic message keyed by the
+// tool name only when the daemon shipped no text — that fallback yields no
+// parseKind match, so main.go exits with the generic code 1.
+func resultErrorText(res *mcpsdk.CallToolResult, toolName string) string {
+	var parts []string
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcpsdk.TextContent); ok && tc.Text != "" {
+			parts = append(parts, tc.Text)
+		}
+	}
+	if msg := strings.TrimSpace(strings.Join(parts, "\n")); msg != "" {
+		return msg
+	}
+	return fmt.Sprintf("tool %s failed", toolName)
 }
 
 // resolveVerbSocket resolves the daemon socket the one-shot call dials, with the

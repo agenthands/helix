@@ -101,3 +101,20 @@ func exitCodeForKind(kind serr.Kind) int {
 func stderrPrefixForKind(kind serr.Kind) string {
 	return string(kind)
 }
+
+// ExitCodeForError is the exported entrypoint cmd/helix/main.go uses to map a
+// CLI error to its process exit code. It parses the typed `<kind>:` token from
+// the error message (parseKind) and returns the frozen per-kind code
+// (exitCodeForKind); an error with no recognized kind falls through to 1, the
+// generic non-zero code. A nil error returns 0. The numbering is the published
+// contract (see exitcode.go header).
+func ExitCodeForError(err error) int {
+	if err == nil {
+		return 0
+	}
+	kind, ok := parseKind(err.Error())
+	if !ok {
+		return 1
+	}
+	return exitCodeForKind(kind)
+}

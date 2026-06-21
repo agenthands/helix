@@ -99,6 +99,34 @@ func TestLeaderboardRender(t *testing.T) {
 	assert.Contains(t, md, "2027-01-28", "footer cites the cost-table valid_until")
 }
 
+// TestLeaderboardVerifiedAndCostColumns locks REPORT-01: the leaderboard renders
+// a verified_correctness column and a cost_per_solved column for every row, each
+// routed through fmtCI (so a null total renders an em-dash, never a fabricated 0).
+func TestLeaderboardVerifiedAndCostColumns(t *testing.T) {
+	rows := []LeaderRow{
+		{Mode: "full", Benchmark: "internal-toolbench",
+			TaskSuccess:         ci(0.90, 0.85, 0.95),
+			VerifiedCorrectness: ci(0.80, 0.80, 0.80),
+			CostPerSolved:       ci(0.0045, 0.0045, 0.0045)},
+		{Mode: "no_lsp", Benchmark: "internal-toolbench",
+			TaskSuccess:         ci(0.50, 0.40, 0.60),
+			VerifiedCorrectness: nullCI(),
+			CostPerSolved:       nullCI()},
+	}
+	md := renderLeaderboard(rows, 3, testFooter())
+
+	assert.Contains(t, md, "verified_correctness",
+		"the leaderboard must render a verified_correctness column header")
+	assert.Contains(t, md, "cost_per_solved",
+		"the leaderboard must render a cost_per_solved column header")
+	assert.Contains(t, md, "0.8000 [0.8000, 0.8000]",
+		"a present verified_correctness CI must render via fmtCI")
+	assert.Contains(t, md, "0.0045 [0.0045, 0.0045]",
+		"a present cost_per_solved CI must render via fmtCI")
+	// no_lsp's null verified_correctness + null cost both render em-dash.
+	assert.Contains(t, md, "—", "a null verified_correctness / cost cell renders an em-dash")
+}
+
 // TestLeaderboardPassKHeader locks IN-01: the pass@k column header renders the
 // ACTUAL k (pickKN result), not a hard-coded "pass@N". With an intermediate k
 // (e.g. KValues={1,2}, N=5 -> k=2) the header must read "pass@2", never the

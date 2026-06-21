@@ -71,6 +71,14 @@ func metric(success bool, ti, to, tc, fr int, locality float64) evaluators.Metri
 
 func ptrFloat(v float64) *float64 { return &v }
 
+// metricVC builds a populated Metrics carrying an explicit verified_correctness
+// verdict (a non-nil *bool), used to exercise reduceVerifiedCorrectness.
+func metricVC(success bool, verified bool, ti, to, tc, fr int, locality float64) evaluators.Metrics {
+	m := metric(success, ti, to, tc, fr, locality)
+	m.VerifiedCorrectness = ptrBool(verified)
+	return m
+}
+
 // aggConfig is the standard test config: fixed seed, golden cost table, injected today.
 func aggConfig(expectedN int) Config {
 	return Config{
@@ -223,6 +231,68 @@ func TestAggregateNilMetricEmDash(t *testing.T) {
 	require.Len(t, rep.Leaderboard, 1)
 	assert.False(t, rep.Leaderboard[0].EditLocality.OK,
 		"a metric nil across all runs must produce a null CI (em-dash), never 0")
+}
+
+// TestVerifiedCorrectness locks REPORT-01: reduceVerifiedCorrectness is the
+// pooled fraction of rows whose verified_correctness *bool is true over the rows
+// whose verdict is non-nil; a nil verdict is excluded from BOTH numerator and
+// denominator (never fabricated), a cell with NO verdict anywhere is a null CI
+// (em-dash), and the reduce consumes NO RNG. The reduced value is surfaced onto
+// the LeaderRow and rendered as the leaderboard verified_correctness column.
+func TestVerifiedCorrectness(t *testing.T) {
+	t.Run("pooled true-fraction over non-nil verdicts", func(t *testing.T) {
+		dir := t.TempDir()
+		// full: 3 runs all verified true -> 1.0. no_lsp: 1 true, 2 false -> 1/3.
+		for i := 0; i < 3; i++ {
+			writeCostedRow(t, dir, "task-1", "full", i, metricVC(true, true, 1000, 100, 5, 3, 0.9))
+			writeCostedRow(t, dir, "task-1", "no_lsp", i, metricVC(true, i == 0, 2000, 200, 9, 6, 0.5))
+		}
+		rep, err := Aggregate(dir, aggConfig(3))
+		require.NoError(t, err)
+
+		byMode := map[string]LeaderRow{}
+		for _, r := range rep.Leaderboard {
+			byMode[r.Mode] = r
+		}
+		full := byMode["full"]
+		require.True(t, full.VerifiedCorrectness.OK)
+		assert.InDelta(t, 1.0, full.VerifiedCorrectness.Point, 1e-9, "full: 3/3 verified -> 1.0")
+
+		noLsp := byMode["no_lsp"]
+		require.True(t, noLsp.VerifiedCorrectness.OK)
+		assert.InDelta(t, 1.0/3.0, noLsp.VerifiedCorrectness.Point, 1e-9, "no_lsp: 1/3 verified")
+	})
+
+	t.Run("no verified_correctness anywhere -> null CI (em-dash)", func(t *testing.T) {
+		dir := t.TempDir()
+		// metric() leaves VerifiedCorrectness nil on every row.
+		for i := 0; i < 3; i++ {
+			writeCostedRow(t, dir, "task-1", "full", i, metric(true, 1000, 100, 5, 3, 0.9))
+		}
+		rep, err := Aggregate(dir, aggConfig(3))
+		require.NoError(t, err)
+		require.Len(t, rep.Leaderboard, 1)
+		assert.False(t, rep.Leaderboard[0].VerifiedCorrectness.OK,
+			"a cell with no verified_correctness verdict must be a null CI, never 0")
+	})
+
+	t.Run("leaderboard cost_per_solved equals cost_quality cost for the same row", func(t *testing.T) {
+		dir := goldenFixture(t)
+		rep, err := Aggregate(dir, aggConfig(3))
+		require.NoError(t, err)
+		costByMode := map[string]ciValue{}
+		for _, c := range rep.Cost {
+			costByMode[c.Mode] = c.CostPerSolved
+		}
+		for _, lr := range rep.Leaderboard {
+			want := costByMode[lr.Mode]
+			assert.Equal(t, want.OK, lr.CostPerSolved.OK, "%s: cost presence must match", lr.Mode)
+			if want.OK {
+				assert.InDelta(t, want.Point, lr.CostPerSolved.Point, 1e-12,
+					"%s: leaderboard cost_per_solved must be single-sourced from the cost row", lr.Mode)
+			}
+		}
+	})
 }
 
 // goldenFixture builds the canonical 2-mode x 3-task x N=3 synthetic runDir used

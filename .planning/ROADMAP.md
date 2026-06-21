@@ -410,7 +410,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 89-03-PLAN.md — helix-bench report --run-id: shared renderAll factoring, validated run-id, hermetic double-render byte-reproducibility, lockstep golden-guard updates [REPORT-05]
+- [x] 89-03-PLAN.md — helix-bench report --run-id: shared renderAll factoring, validated run-id, hermetic double-render byte-reproducibility, lockstep golden-guard updates [REPORT-05]
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

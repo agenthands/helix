@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-no-docker-sdk
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk
 
 BINARY=helix
 GO=go
@@ -308,6 +308,15 @@ validate-cost-table:
 # NO continue-on-error. Checks freshness/parse validity only, not legal accuracy.
 verify-tos:
 	go run ./cmd/helix-bench verify-tos bench/PROVIDERS.md
+
+# verify-licenses: HARD-FAIL per-track license gate for the Aider-Polyglot
+# dataset (SC#4 / ADAPTER-AIDER-01). Strict-decodes every track block in
+# bench/datasets/aider-polyglot/LICENSE-AUDIT.md (KnownFields(true) — unknown
+# key → non-zero exit), asserts a non-empty SPDX license + sha256 per track, and
+# fails closed on a missing/malformed/zero-track audit. Build gate — NO
+# continue-on-error. Checks structural validity only, not legal accuracy.
+verify-licenses:
+	go run ./cmd/helix-bench verify-licenses bench/datasets/aider-polyglot/LICENSE-AUDIT.md
 
 # verify-no-docker-sdk: HARD-FAIL supply-chain gate (CONTAINER-01 / SC#1). The
 # bench container stack MUST drive docker/podman purely via os/exec — the Docker

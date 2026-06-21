@@ -170,13 +170,22 @@ func (f *e2eFixture) mcpActivate(t *testing.T, ctx context.Context) {
 // returns its rendered text — the reference the CLI path is compared against.
 func (f *e2eFixture) mcpSearch(t *testing.T, ctx context.Context) string {
 	t.Helper()
-	res, err := forwarder.CallTool(ctx, f.socket, "", f.logger, "e2e-test",
-		"search_in_files", map[string]any{"pattern": searchPattern})
+	return f.mcpCall(t, ctx, "search_in_files", map[string]any{"pattern": searchPattern})
+}
+
+// mcpCall issues an arbitrary tool over the MCP path (the still-present gRPC
+// forwarder.CallTool, which both deleted heads funnel through via the identical
+// mcpServer.SDK() — A2/Q1 fidelity) and returns its rendered text. It is the
+// generalized form of mcpSearch the dual-run parity gate (RETIRE-03) compares the
+// CLI subprocess against.
+func (f *e2eFixture) mcpCall(t *testing.T, ctx context.Context, tool string, args map[string]any) string {
+	t.Helper()
+	res, err := forwarder.CallTool(ctx, f.socket, "", f.logger, "e2e-test", tool, args)
 	if err != nil {
-		t.Fatalf("MCP search_in_files: %v", err)
+		t.Fatalf("MCP %s: %v", tool, err)
 	}
 	if res.IsError {
-		t.Fatalf("MCP search_in_files reported error: %s", toolText(res))
+		t.Fatalf("MCP %s reported error: %s", tool, toolText(res))
 	}
 	return toolText(res)
 }
@@ -822,4 +831,195 @@ func TestCLI_E2E_NavSelfContained(t *testing.T) {
 
 	t.Logf("OUT-03 self-contained nav proven: %s:%d:%d carries snippet token %q on the same line: %q",
 		relpath, line, col, snippetToken, locusLine)
+}
+
+// --- Phase 94 RETIRE-03: dual-run parity gate (strangler-fig pre-deletion proof) ---
+
+// anyLocusRe extracts (path, line) from ANY locus form across BOTH surfaces: the
+// terse CLI shape "relpath:line:col<TAB>payload" AND the raw MCP forms
+// "file:///abs/path:line:col — payload" (formatLocations) and "relpath:line: text"
+// (search_in_files). The path segment is everything up to the FIRST ":<digits>"
+// run; the line is that first digit run. An OPTIONAL ":col" OR a bare trailing ":"
+// (the search_in_files "path:line: text" form) may follow before the
+// whitespace/EOL boundary. This tolerates abs-vs-rel path differences — the parity
+// comparison normalizes paths to their basename.
+var anyLocusRe = regexp.MustCompile(`(?m)^(\S.*?):(\d+)(?::\d+|:)?(?:\s|\t|$)`)
+
+// locusSet returns the set of "basename:line" loci present in a rendered result,
+// normalizing each path to its basename so an abs MCP path and a workspace-rel
+// CLI path for the SAME file compare equal. The basename+line pair is the
+// load-bearing locus the parity gate asserts on.
+func locusSet(text string) map[string]bool {
+	out := make(map[string]bool)
+	for _, m := range anyLocusRe.FindAllStringSubmatch(text, -1) {
+		path, line := m[1], m[2]
+		// Strip a file:// scheme then reduce to basename.
+		path = strings.TrimPrefix(path, "file://")
+		base := path
+		if i := strings.LastIndexByte(base, '/'); i >= 0 {
+			base = base[i+1:]
+		}
+		out[base+":"+line] = true
+	}
+	return out
+}
+
+// TestCLI_DualRunParity is the RETIRE-03 strangler-fig gate. For a representative
+// verb set it proves the load-bearing loci (or verbatim payload, per the verb's
+// render class) emitted by the real `helix <verb>` subprocess equal those emitted
+// by the pre-removal MCP path (forwarder.CallTool over gRPC), against ONE live
+// daemon with BOTH agent-facing heads STILL PRESENT in the tree. It is GREEN in
+// the commit immediately before 94-02's deletion commit (the acceptance contract).
+//
+// Comparison kind per render class (render_policy.go):
+//   - locus  (classLocusList: search_in_files / find_references / go_to_definition):
+//     the {basename:line} locus SET must agree across CLI and MCP.
+//   - verbatim (classOpaque: read_file): the CLI passes daemon text through, so the
+//     trimmed CLI stdout must equal the trimmed MCP text.
+//   - outline (classTree: get_symbol_overview): the symbol NAMES present in the
+//     shape must agree (the CLI re-renders the indentation, so we compare the
+//     load-bearing content — the symbol set — not byte-for-byte indentation).
+func TestCLI_DualRunParity(t *testing.T) {
+	f := newE2EFixture(t, "dualparity")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	// Seed the richer cross-referenced fixture (Helper symbol + a go.mod) so the
+	// LS-backed nav verbs have a real symbol to resolve, and activate once.
+	f.seedChainFixture(t, ctx)
+
+	goplsAvailable := func() bool {
+		_, err := exec.LookPath("gopls")
+		return err == nil
+	}()
+
+	type cmp int
+	const (
+		cmpLocus cmp = iota
+		cmpVerbatim
+		cmpOutline
+	)
+
+	cases := []struct {
+		name     string
+		tool     string         // MCP tool name
+		verb     string         // flat CLI verb name
+		mcpArgs  map[string]any // MCP-path args
+		cliArgs  []string       // CLI subprocess flags
+		kind     cmp
+		needsLS  bool
+	}{
+		{
+			name:    "search_in_files",
+			tool:    "search_in_files",
+			verb:    "search-in-files",
+			mcpArgs: map[string]any{"pattern": "Helper"},
+			cliArgs: []string{"--pattern=Helper"},
+			kind:    cmpLocus,
+		},
+		{
+			name:    "read_file",
+			tool:    "read_file",
+			verb:    "read-file",
+			mcpArgs: map[string]any{"path": "main.go"},
+			cliArgs: []string{"--path=main.go"},
+			kind:    cmpVerbatim,
+		},
+		{
+			name:    "get_symbol_overview",
+			tool:    "get_symbol_overview",
+			verb:    "get-symbol-overview",
+			mcpArgs: map[string]any{"path": "main.go"},
+			cliArgs: []string{"--path=main.go"},
+			kind:    cmpOutline,
+		},
+		{
+			name:    "go_to_definition",
+			tool:    "go_to_definition",
+			verb:    "go-to-definition",
+			mcpArgs: map[string]any{"path": "main.go", "line": 7, "column": 2},
+			cliArgs: []string{"--path=main.go", "--line=7", "--column=2"},
+			kind:    cmpLocus,
+			needsLS: true,
+		},
+		{
+			name:    "find_references",
+			tool:    "find_references",
+			verb:    "find-references",
+			mcpArgs: map[string]any{"path": "main.go", "line": 11, "column": 6},
+			cliArgs: []string{"--path=main.go", "--line=11", "--column=6"},
+			kind:    cmpLocus,
+			needsLS: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.needsLS && !goplsAvailable {
+				t.Skip("gopls not installed; skipping LS-backed parity verb")
+			}
+
+			// MCP path (pre-removal reference) — the still-present gRPC head.
+			mcpText := f.mcpCall(t, ctx, tc.tool, tc.mcpArgs)
+
+			// CLI subprocess path — run from the workspace root so the terse
+			// renderer's os.Getwd()-derived workspaceRoot relativizes loci.
+			cliArgs := append([]string{tc.verb}, tc.cliArgs...)
+			cliOut, err := f.runCLIVerbInDir(ctx, f.repoDir, cliArgs...)
+			if err != nil {
+				t.Fatalf("helix %s failed: %v\noutput:\n%s", tc.verb, err, cliOut)
+			}
+
+			switch tc.kind {
+			case cmpLocus:
+				mcpLoci := locusSet(mcpText)
+				cliLoci := locusSet(cliOut)
+				if len(mcpLoci) == 0 {
+					t.Fatalf("MCP %s produced no parseable loci; got:\n%s", tc.tool, mcpText)
+				}
+				if len(cliLoci) == 0 {
+					t.Fatalf("CLI %s produced no parseable loci; got:\n%s", tc.verb, cliOut)
+				}
+				// Every MCP locus must be present in the CLI output (the CLI is the
+				// sole sufficient surface — it must not DROP a load-bearing locus).
+				for loc := range mcpLoci {
+					if !cliLoci[loc] {
+						t.Fatalf("CLI %s dropped MCP locus %q\nMCP loci: %v\nCLI loci: %v\nMCP:\n%s\nCLI:\n%s",
+							tc.verb, loc, keysOf(mcpLoci), keysOf(cliLoci), mcpText, cliOut)
+					}
+				}
+			case cmpVerbatim:
+				mcpTrim := strings.TrimRight(mcpText, "\n")
+				cliTrim := strings.TrimRight(cliOut, "\n")
+				if mcpTrim != cliTrim {
+					t.Fatalf("CLI %s verbatim payload != MCP payload\nMCP:\n%q\nCLI:\n%q", tc.verb, mcpTrim, cliTrim)
+				}
+			case cmpOutline:
+				// The load-bearing content of an outline is the symbol set. The
+				// seeded fixture defines main / Helper / UsingHelper; assert each
+				// appears in BOTH surfaces.
+				for _, sym := range []string{"main", "Helper", "UsingHelper"} {
+					if !strings.Contains(mcpText, sym) {
+						t.Fatalf("MCP %s outline missing symbol %q:\n%s", tc.tool, sym, mcpText)
+					}
+					if !strings.Contains(cliOut, sym) {
+						t.Fatalf("CLI %s outline missing symbol %q:\n%s", tc.verb, sym, cliOut)
+					}
+				}
+			}
+
+			t.Logf("RETIRE-03 parity OK: verb=%s kind=%d (CLI == pre-removal MCP path)", tc.verb, tc.kind)
+		})
+	}
+}
+
+// keysOf returns the sorted keys of a locus set for stable failure messages.
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

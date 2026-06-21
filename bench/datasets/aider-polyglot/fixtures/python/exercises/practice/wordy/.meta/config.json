@@ -1,0 +1,9 @@
+{
+  "authors": ["fixture"],
+  "files": {
+    "solution": ["wordy.py"],
+    "test": ["wordy_test.py"],
+    "example": [".meta/example.py"]
+  },
+  "blurb": "Parse and evaluate simple math word problems (committed fixture mirroring Aider-AI/polyglot-benchmark wordy)."
+}

@@ -1,0 +1,10 @@
+{
+  "authors": ["fixture"],
+  "files": {
+    "solution": ["src/lib.rs"],
+    "test": ["tests/leap.rs"],
+    "example": [".meta/example.rs"]
+  },
+  "non_hermetic": true,
+  "blurb": "Leap-year exercise (committed fixture). Marked non_hermetic to exercise SC#3 network-flagging; its crate would fetch deps at test time."
+}

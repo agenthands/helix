@@ -74,7 +74,7 @@ func (f *fakeClientStream) sentMessages() []*serenav1.MCPMessage {
 
 // encodeReq is a small helper that marshals a JSON-RPC request to its wire
 // bytes so tests can push realistic payloads through the stream.
-func encodeReq(t *testing.T, id int64, method string) []byte {
+func encodeReq(t *testing.T, id float64, method string) []byte {
 	t.Helper()
 	rpcID, err := jsonrpc.MakeID(id)
 	if err != nil {
@@ -119,7 +119,7 @@ func TestClientTransport_RoundTripFraming(t *testing.T) {
 
 	// Send direction: writing a message should produce exactly one MCPMessage,
 	// with the configured sessionID and no embedded newline.
-	outID, _ := jsonrpc.MakeID(int64(2))
+	outID, _ := jsonrpc.MakeID(float64(2))
 	if err := conn.Write(ctx, &jsonrpc.Request{ID: outID, Method: "pong"}); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -160,8 +160,8 @@ func TestClientTransport_MultiLineDrain(t *testing.T) {
 	}
 	defer conn.Close()
 
-	id1, _ := jsonrpc.MakeID(int64(10))
-	id2, _ := jsonrpc.MakeID(int64(11))
+	id1, _ := jsonrpc.MakeID(float64(10))
+	id2, _ := jsonrpc.MakeID(float64(11))
 	if err := conn.Write(ctx, &jsonrpc.Request{ID: id1, Method: "a"}); err != nil {
 		t.Fatalf("Write 1: %v", err)
 	}

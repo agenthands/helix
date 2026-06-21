@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 95
-current_phase_name: Identity & Docs Rewrite + docgen Regen
-status: verifying
+current_phase_name: identity-docs-rewrite-docgen-regen
+status: executing
 stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T22:48:01.123Z"
+last_updated: "2026-06-21T23:13:15.836Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 94 complete, transitioned to Phase 95
+last_activity_desc: Phase 95 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 19
+  completed_plans: 18
   percent: 83
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 94 — retire-the-agent-facing-mcp-surface-delete
+**Current focus:** Phase 95 — identity-docs-rewrite-docgen-regen
 
 ## Current Position
 
-Phase: 95 — Identity & Docs Rewrite + docgen Regen
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 94 complete, transitioned to Phase 95
+Phase: 95 (identity-docs-rewrite-docgen-regen) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-06-21 — Phase 95 execution started
 
 Progress: [██░░░░░░░░] 19%
 
@@ -66,6 +66,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 93 P04 | 310 | 2 tasks | 21 files |
 | Phase 94 P01 | 18min | 3 tasks | 14 files |
 | Phase 94 P02 | 25min | 3 tasks | 28 files |
+| Phase 95 P01 | 3min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -101,7 +102,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T22:08:19.660Z
+Last session: 2026-06-21T23:12:56.649Z
 Stopped at: Completed 93-03-PLAN.md
 Resume file: None
 
@@ -132,3 +133,4 @@ Resume file: None
 - [Phase ?]: Phase 93-03: helix setup flipped to skill+hooks install with MCP-only hook-preserving teardown across all 7 clients; daemon MCP head intact for Phase 94
 - [Phase ?]: 94-02: CLI is the sole agent-facing MCP surface — both stdio (RunForwarder) and HTTP (/mcp) heads deleted; daemon/wire/middleware engine retained behind forwarder.CallTool
 - [Phase ?]: 94-02: --mode retained with only the auto arm; legacy stdio/http modes surface the unknown-mode error
+- [Phase ?]: Phase 95-01: docgen derives helix verbs inline via ReplaceAll; docgen drift gate wired as make verify-docs + CI step (closes v1.12 hole); blank-import parity via --check gate + cross-ref comments, not literal equality (D-02 preserved)

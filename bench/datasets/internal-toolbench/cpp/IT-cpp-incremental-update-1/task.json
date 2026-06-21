@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "incremental_update",
+  "prompt": "After editing widget.cpp, re-run only the affected target via ctest -R and confirm the cache reflects the change without a full reconfigure. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

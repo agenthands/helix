@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "semantic_view",
+  "prompt": "widget.cpp defines a Widget class with several methods. Use get_repo_map / list_file_outline to obtain the symbol outline of widget.cpp, then summarize its public methods without reading the whole file. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

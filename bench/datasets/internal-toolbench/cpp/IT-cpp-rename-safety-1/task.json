@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "rename_safety",
+  "prompt": "The free function compute() is referenced across widget.cpp and main.cpp. Use rename_symbol to rename it to evaluate() across all call sites without breaking the build. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

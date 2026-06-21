@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "context_minimization",
+  "prompt": "Without reading every file, use get_context to gather only the symbols relevant to the failing assertion in widget_test.cpp, then fix widget.cpp. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

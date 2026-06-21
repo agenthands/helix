@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "failure_handling",
+  "prompt": "widget.cpp dereferences a possibly-null pointer in process(). Add a guard so the failing widget_test.cpp case passes, handling the error path gracefully. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

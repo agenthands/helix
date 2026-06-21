@@ -1,0 +1,8 @@
+{
+  "id": "IT-cpp-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "cpp",
+  "capability": "fuzzy_search",
+  "prompt": "widget_test.cpp asserts a normalized output string, but widget.cpp emits slightly different whitespace. Use fuzzy_edit / replace_in_file to update the offending literal in widget.cpp despite the indentation drift. Ensure `ctest` passes.",
+  "verify": "verify.sh"
+}

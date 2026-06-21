@@ -282,6 +282,13 @@ func nativeTestCommand(language string) ([]string, error) {
 	case "python":
 		return []string{"pytest"}, nil
 	case "rust":
+		// --include-ignored (after "--" so cargo forwards it to libtest) is
+		// LOAD-BEARING (WR-02): Exercism's Rust track marks all but the first
+		// acceptance test #[ignore], so plain `cargo test` runs only one test and
+		// a do-nothing stub that merely compiles exits 0 → a vacuous false pass.
+		// Running the ignored tests is what makes the Rust pass/fail trustworthy.
+		// The TOOLBENCH rust runner (bench/languages/rust/runner.go) deliberately
+		// keeps plain `cargo test` for ITS own dataset; this adapter must NOT.
 		return []string{"cargo", "test", "--", "--include-ignored"}, nil
 	case "go":
 		return []string{"go", "test", "./..."}, nil

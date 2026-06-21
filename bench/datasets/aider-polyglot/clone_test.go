@@ -34,8 +34,8 @@ func TestIsHexSHA1(t *testing.T) {
 	for _, bad := range []string{
 		"",
 		"main",
-		"7e0611e7", // too short
-		good + "00", // too long
+		"7e0611e7",            // too short
+		good + "00",           // too long
 		strings.ToUpper(good), // uppercase
 		"7e0611e77b54e2dea774cdc0aa00cf9f7ed6144g", // non-hex 'g'
 		"v1.0.0",

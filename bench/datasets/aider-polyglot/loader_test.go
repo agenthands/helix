@@ -255,6 +255,39 @@ func TestNativeTestCommand(t *testing.T) {
 	}
 }
 
+// TestRustAcceptanceArgvRunsIgnoredTests proves the WR-02 invariant: the Aider
+// adapter's NATIVE Rust test command runs the #[ignore]-gated acceptance tests
+// (Exercism's Rust convention marks all but the first test #[ignore]). Without
+// --include-ignored those acceptance tests are skipped and a do-nothing stub that
+// merely compiles exits 0 → a vacuous false pass. This guards the flag so it can
+// never be dropped, and confirms it is terminated after "--" so it reaches
+// libtest (not cargo).
+func TestRustAcceptanceArgvRunsIgnoredTests(t *testing.T) {
+	got, err := nativeTestCommand("rust")
+	if err != nil {
+		t.Fatalf("nativeTestCommand(rust): %v", err)
+	}
+	joined := strings.Join(got, " ")
+	if !strings.Contains(joined, "--include-ignored") {
+		t.Fatalf("rust acceptance argv = %v, must include --include-ignored "+
+			"(else #[ignore]-gated acceptance tests don't run → vacuous pass)", got)
+	}
+	// The flag must follow the "--" terminator so cargo forwards it to the libtest
+	// harness rather than interpreting it as a cargo flag.
+	dashIdx, flagIdx := -1, -1
+	for i, a := range got {
+		switch a {
+		case "--":
+			dashIdx = i
+		case "--include-ignored":
+			flagIdx = i
+		}
+	}
+	if dashIdx < 0 || flagIdx < 0 || flagIdx < dashIdx {
+		t.Fatalf("rust acceptance argv = %v, want --include-ignored AFTER a -- terminator", got)
+	}
+}
+
 // TestTwoAttemptTimeoutBudget proves the 180s upstream timeout constant is wired.
 func TestTwoAttemptTimeoutBudget(t *testing.T) {
 	if attemptTimeout.Seconds() != 180 {

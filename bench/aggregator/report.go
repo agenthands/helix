@@ -84,6 +84,25 @@ type LeaderRow struct {
 	// SWE-bench-specific render of these columns is downstream (Phase 89).
 	RawScore      ciValue
 	RescoredScore ciValue
+
+	// VerifiedCorrectness is the Phase 89 (REPORT-01) ADDITIVE leaderboard column:
+	// the pooled fraction of this (mode x benchmark)'s rows whose decoded
+	// verified_correctness *bool (load.go:32) is true, over the rows whose verdict
+	// is non-nil. It is reduced at AGGREGATE time by reduceVerifiedCorrectness,
+	// mirroring the CanaryPassRate/RawScore pooled-rate precedent: a nil verdict is
+	// excluded from BOTH numerator and denominator (never fabricated), a cell with NO
+	// verdict anywhere is a NULL ci (OK==false) rendered as an em-dash, and it is a
+	// flat pooled rate (NOT a BCa CI) so it consumes ZERO RNG and cannot perturb the
+	// locked determinism contract. Unlike the SWE-bench raw/rescored columns above it
+	// IS rendered (REPORT-01), so adding it regenerates leaderboard.golden.md.
+	VerifiedCorrectness ciValue
+
+	// CostPerSolved is the Phase 89 (REPORT-01) ADDITIVE leaderboard column,
+	// SINGLE-SOURCED from the matching CostRow.CostPerSolved (keyed by mode +
+	// benchmark) — NOT a second cost reduce (Pitfall 3 / IN-02 discipline). The
+	// leaderboard cost MUST equal cost_quality.md's cost for the same row. A null
+	// cost (no priced/solved task) renders an em-dash.
+	CostPerSolved ciValue
 }
 
 // VarianceFlag names a (task,mode) cell whose per-run USD CV exceeds the FAIR-03
@@ -228,14 +247,16 @@ func renderLeaderboard(rows []LeaderRow, passNK int, footer Footer) string {
 	// IN-01: render the ACTUAL pass@k column header (pickKN result), not a
 	// hard-coded "pass@N", so an intermediate k (e.g. KValues={1,2}, N=5 -> k=2)
 	// is labelled honestly in the published artifact.
-	fmt.Fprintf(&b, "| mode | benchmark | task_success | pass@1 | pass@%d | tokens_input | tokens_output | tool_calls | files_read | edit_locality |\n", passNK)
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(&b, "| mode | benchmark | task_success | verified_correctness | pass@1 | pass@%d | tokens_input | tokens_output | tool_calls | files_read | edit_locality | cost_per_solved |\n", passNK)
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range sorted {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
 			r.Mode, r.Benchmark,
-			fmtCI(r.TaskSuccess), fmtCI(r.PassAt1), fmtCI(r.PassAtN),
+			fmtCI(r.TaskSuccess), fmtCI(r.VerifiedCorrectness),
+			fmtCI(r.PassAt1), fmtCI(r.PassAtN),
 			fmtCI(r.TokensInput), fmtCI(r.TokensOutput),
-			fmtCI(r.ToolCalls), fmtCI(r.FilesRead), fmtCI(r.EditLocality))
+			fmtCI(r.ToolCalls), fmtCI(r.FilesRead), fmtCI(r.EditLocality),
+			fmtCI(r.CostPerSolved))
 	}
 
 	// STATS-04 overlap gate (D-17): walk adjacent rows in the sorted order; when

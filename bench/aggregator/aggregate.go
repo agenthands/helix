@@ -131,9 +131,20 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 		// cost_quality.md (so the existing goldens stay byte-for-byte — Phase 86
 		// CanaryPassRate discipline); the SWE-bench render is downstream Phase 89.
 		leader.RawScore, leader.RescoredScore = reduceSwebenchScores(loaded, tasks, mode)
-		rep.Leaderboard = append(rep.Leaderboard, leader)
+		// Phase 89 (REPORT-01) ADDITIVE verified_correctness leaderboard column:
+		// populate AFTER the determinism-locked metric reductions (mirror the
+		// CanaryPassRate/RawScore assignments above). It is a flat pooled rate that
+		// consumes NO RNG, so it cannot perturb the IN-03 metric-order/presence
+		// bootstrap contract; it only reads the same loaded rows.
+		leader.VerifiedCorrectness = reduceVerifiedCorrectness(loaded, tasks, mode)
 
 		costRow := reduceCostRow(loaded, tasks, mode, ct, cfg, alpha, rng)
+		// Phase 89 (REPORT-01) SINGLE-SOURCE the leaderboard cost_per_solved column
+		// from the SAME reduceCostRow output (Pitfall 3 / IN-02): the leaderboard cost
+		// MUST equal cost_quality.md's cost for the same (mode x benchmark) — do NOT
+		// run a second cost reduce.
+		leader.CostPerSolved = costRow.CostPerSolved
+		rep.Leaderboard = append(rep.Leaderboard, leader)
 		rep.Cost = append(rep.Cost, costRow)
 	}
 
@@ -408,6 +419,33 @@ func reduceSwebenchScores(loaded *Loaded, tasks []string, mode string) (rawCI, r
 		}
 	}
 	return pooledRate(rawTrue, rawTotal), pooledRate(rescoredTrue, rescoredTotal)
+}
+
+// reduceVerifiedCorrectness computes the Phase 89 (REPORT-01) ADDITIVE
+// VerifiedCorrectness for one (mode x benchmark): a flat pooled fraction of the
+// rows whose decoded verified_correctness *bool (rowMetrics.VerifiedCorrectness,
+// load.go:32) is true over the rows whose verdict is non-nil. It mirrors
+// reduceCanaryRate/reduceSwebenchScores' pooled-rate path exactly: a nil verdict
+// is excluded from BOTH numerator and denominator (Pitfall 4 null discipline —
+// never fabricated as a failure). When NO row in the cell carries a verdict the
+// rate is a NULL ci (OK==false, rendered em-dash) — never a fabricated 0. It is a
+// flat pooled rate (NOT a BCa CI), so it consumes ZERO RNG and cannot perturb the
+// locked determinism contract; the bootstrapped verified CI is a later concern.
+func reduceVerifiedCorrectness(loaded *Loaded, tasks []string, mode string) ciValue {
+	var trueCount, total int
+	for _, task := range tasks {
+		for _, r := range loaded.Rows(task, mode) {
+			v := r.Metrics.VerifiedCorrectness
+			if v == nil {
+				continue
+			}
+			total++
+			if *v {
+				trueCount++
+			}
+		}
+	}
+	return pooledRate(trueCount, total)
 }
 
 // pooledRate builds a degenerate [point, point] ciValue from a true-count over a

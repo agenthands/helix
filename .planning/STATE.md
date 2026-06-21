@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 93
-current_phase_name: skill-md-nudge-repurpose-helix-setup-flip
+current_phase: 94
+current_phase_name: DELETE
 status: verifying
 stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T20:30:03.702Z"
+last_updated: "2026-06-21T20:54:47.137Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 93 execution started
+last_activity_desc: Phase 93 complete, transitioned to Phase 94
 progress:
   total_phases: 6
   completed_phases: 4
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 93 (skill-md-nudge-repurpose-helix-setup-flip) — EXECUTING
-Plan: 4 of 4
+Phase: 94 — Retire the Agent-Facing MCP Surface (DELETE)
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 93 execution started
+Last activity: 2026-06-21 — Phase 93 complete, transitioned to Phase 94
 
 Progress: [██░░░░░░░░] 19%
 
@@ -44,6 +44,7 @@ Progress: [██░░░░░░░░] 19%
 | 90 | 4 | - | - |
 | 91 | 4 | - | - |
 | 92 | 3 | - | - |
+| 93 | 4 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

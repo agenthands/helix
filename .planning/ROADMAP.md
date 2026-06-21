@@ -28,7 +28,7 @@
 - [x] **Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse** — zero-proto `tools/call` over `StreamMCP`, cross-process spawn lock, 2nd-call SLO, E2E oracle stood up (completed 2026-06-21)
 - [x] **Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement** — all-tool parity codegen + the security gate that must ship with the verbs (completed 2026-06-21)
 - [x] **Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle** — the load-bearing `relpath:line:col` product work that freezes the output shape SKILL.md will cite (completed 2026-06-21)
-- [ ] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration
+- [x] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration (completed 2026-06-21)
 - [ ] **Phase 94: Retire the Agent-Facing MCP Surface (DELETE)** — drop stdio forwarder head + Streamable-HTTP `/mcp` only after dual-run parity; optional gRPC TCP bind
 - [ ] **Phase 95: Identity & Docs Rewrite + docgen Regen** — CLI-first identity across four docs; auto-generated table regenerated against the verb surface
 
@@ -207,7 +207,7 @@ Plans:
 **Depends on**: Phase 75, v1.10 Phase 65 (SemanticLookup seam — read for context only)
 
 **Requirements**: ABLATE-02, ABLATE-05, ABLATE-07, ABLATE-08
-**Plans:** 3/3 plans complete
+**Plans:** 4/4 plans complete
 **Wave 1**
 
 - [x] 76-01-PLAN.md — Wave 1: kernel disable flags + accessors + structured-edit Unsupported guard + replace_in_file exact-match-only (TDD; ABLATE-07)

@@ -21,7 +21,6 @@ func newTestConfig(t *testing.T) *config.SerenaConfig {
 	socketPath := filepath.Join(tmpDir, "s.sock")
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = socketPath
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
 	return cfg

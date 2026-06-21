@@ -50,7 +50,6 @@ func startDaemonOverSocket(t *testing.T, tp *sdktrace.TracerProvider) (string, c
 	cfg := &config.SerenaConfig{}
 	tmpDir := t.TempDir()
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
 	cfg.WorkerPool.MaxWorkers = 2

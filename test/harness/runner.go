@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -61,24 +60,34 @@ func (r *Runner) Stop() {
 	r.cancel()
 }
 
-// NewHTTPSession creates an MCP client session over HTTP transport.
-// Uses httptest.NewServer + StreamableClientTransport to validate the full
-// HTTP serialization path.
-func (r *Runner) NewHTTPSession(t *testing.T) *mcp.ClientSession {
+// NewGRPCSession creates a fresh MCP client session against the SAME running
+// daemon, over the retained in-memory transport that the gRPC StreamMCP wire also
+// funnels into (mcpServer.SDK()).
+//
+// Phase 94 RETIRE-02: this replaces the former NewHTTPSession (httptest.NewServer
+// + HTTPHandler), which exercised the deleted Streamable-HTTP /mcp head. Both the
+// unix-socket gRPC wire and this in-memory transport drive the identical
+// mcpServer.SDK() with all middlewares attached, so an in-memory second session
+// is a faithful stand-in for "a new client reconnecting to the warm daemon".
+func (r *Runner) NewGRPCSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	ts := httptest.NewServer(r.Daemon.MCPServer().HTTPHandler())
-	t.Cleanup(ts.Close)
+	ctx := context.Background()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+
+	// Connect the server side first (required by the MCP SDK), against the same
+	// daemon SDK server the original session uses.
+	if _, err := r.Daemon.MCPServer().SDK().Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatalf("gRPC-path server Connect: %v", err)
+	}
 
 	client := mcp.NewClient(&mcp.Implementation{
-		Name:    "test-http",
+		Name:    "test-grpc",
 		Version: "1.0",
 	}, nil)
-	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
-		Endpoint: ts.URL,
-	}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
-		t.Fatalf("HTTP client Connect: %v", err)
+		t.Fatalf("gRPC-path client Connect: %v", err)
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
@@ -247,7 +256,6 @@ func DefaultTestConfig(tb testing.TB) *config.SerenaConfig {
 	tmpDir := tb.TempDir()
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
 	cfg.WorkerPool.MaxWorkers = 4

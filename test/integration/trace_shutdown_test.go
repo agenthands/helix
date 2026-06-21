@@ -43,7 +43,6 @@ func TestTraceFlushOnShutdown(t *testing.T) {
 	cfg := &config.SerenaConfig{}
 	tmpDir := t.TempDir()
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 5
 	cfg.Profile = "full"
 	cfg.WorkerPool.MaxWorkers = 4

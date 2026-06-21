@@ -16,8 +16,11 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Fatalf("Load with defaults failed: %v", err)
 	}
 
-	if cfg.Daemon.HTTPAddr != ":8080" {
-		t.Errorf("expected default http_addr :8080, got %s", cfg.Daemon.HTTPAddr)
+	// Phase 94 RETIRE-02 deleted daemon.http_addr; daemon.grpc_addr (the gated
+	// loopback gRPC TCP opt-in) is the remaining daemon address key and defaults
+	// to empty (unix-socket only).
+	if cfg.Daemon.GRPCAddr != "" {
+		t.Errorf("expected default grpc_addr empty, got %s", cfg.Daemon.GRPCAddr)
 	}
 	if cfg.Daemon.ShutdownTimeout != 10 {
 		t.Errorf("expected default shutdown_timeout 10, got %d", cfg.Daemon.ShutdownTimeout)
@@ -37,7 +40,7 @@ func TestLoad_Defaults(t *testing.T) {
 func TestLoad_CLIOverrides(t *testing.T) {
 	overrides := map[string]interface{}{
 		"daemon.socket_path": "/custom/path.sock",
-		"daemon.http_addr":   ":9090",
+		"daemon.grpc_addr":   "127.0.0.1:9090",
 	}
 	cfg, err := Load("/nonexistent/global.yml", "", overrides)
 	if err != nil {
@@ -47,30 +50,33 @@ func TestLoad_CLIOverrides(t *testing.T) {
 	if cfg.Daemon.SocketPath != "/custom/path.sock" {
 		t.Errorf("expected CLI override socket path /custom/path.sock, got %s", cfg.Daemon.SocketPath)
 	}
-	if cfg.Daemon.HTTPAddr != ":9090" {
-		t.Errorf("expected CLI override http_addr :9090, got %s", cfg.Daemon.HTTPAddr)
+	// Phase 94 RETIRE-02: daemon.grpc_addr replaces the deleted daemon.http_addr
+	// as the representative daemon string key exercised by the override path.
+	if cfg.Daemon.GRPCAddr != "127.0.0.1:9090" {
+		t.Errorf("expected CLI override grpc_addr 127.0.0.1:9090, got %s", cfg.Daemon.GRPCAddr)
 	}
 }
 
 func TestLoad_ProjectConfigOverridesGlobal(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create global config
+	// Create global config (Phase 94 RETIRE-02: daemon.grpc_addr replaces the
+	// deleted daemon.http_addr as the layered daemon string key under test).
 	globalPath := filepath.Join(dir, "global.yml")
-	os.WriteFile(globalPath, []byte("daemon:\n  http_addr: \":7070\"\nlogging:\n  level: debug\n"), 0600)
+	os.WriteFile(globalPath, []byte("daemon:\n  grpc_addr: \"127.0.0.1:7070\"\nlogging:\n  level: debug\n"), 0600)
 
-	// Create project config that overrides http_addr
+	// Create project config that overrides grpc_addr
 	projectPath := filepath.Join(dir, "project.yml")
-	os.WriteFile(projectPath, []byte("daemon:\n  http_addr: \":8888\"\n"), 0600)
+	os.WriteFile(projectPath, []byte("daemon:\n  grpc_addr: \"127.0.0.1:8888\"\n"), 0600)
 
 	cfg, err := Load(globalPath, projectPath, nil)
 	if err != nil {
 		t.Fatalf("Load with project config failed: %v", err)
 	}
 
-	// Project overrides global for http_addr
-	if cfg.Daemon.HTTPAddr != ":8888" {
-		t.Errorf("expected project override http_addr :8888, got %s", cfg.Daemon.HTTPAddr)
+	// Project overrides global for grpc_addr
+	if cfg.Daemon.GRPCAddr != "127.0.0.1:8888" {
+		t.Errorf("expected project override grpc_addr 127.0.0.1:8888, got %s", cfg.Daemon.GRPCAddr)
 	}
 	// Global sets logging level (not overridden by project)
 	if cfg.Logging.Level != "debug" {

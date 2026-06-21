@@ -56,7 +56,6 @@ func TestDaemon_StartsAndStops(t *testing.T) {
 	socketPath := shortSocketPath(t, "lifecycle")
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = socketPath
-	cfg.Daemon.HTTPAddr = "" // no HTTP in this test
 	cfg.Daemon.ShutdownTimeout = 2
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))

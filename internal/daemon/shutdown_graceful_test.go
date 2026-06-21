@@ -22,7 +22,6 @@ func TestGracefulShutdownMidRequest(t *testing.T) {
 	socketPath := shortSocketPath(t, "graceful-mid")
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = socketPath
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 5
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
@@ -77,7 +76,6 @@ func TestGracefulShutdownClean(t *testing.T) {
 	socketPath := shortSocketPath(t, "graceful-clean")
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = socketPath
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))

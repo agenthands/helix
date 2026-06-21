@@ -30,7 +30,7 @@ func TestReconnect_DaemonStatePreserved(t *testing.T) {
 	require.NoError(t, err, "session close error")
 
 	// Create a new session against the same daemon.
-	newSession := runner.NewHTTPSession(t)
+	newSession := runner.NewGRPCSession(t)
 
 	// Read the memory via the new session -- daemon state should be preserved.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -60,7 +60,7 @@ func TestReconnect_NoWorkerLeakage(t *testing.T) {
 	require.NoError(t, err, "session close error")
 
 	// Create new session and verify it is functional.
-	newSession := runner.NewHTTPSession(t)
+	newSession := runner.NewGRPCSession(t)
 	newTools := harness.ListSessionTools(t, newSession)
 	require.NotEmpty(t, newTools, "new session should have tools after reconnect")
 
@@ -84,9 +84,9 @@ func TestReconnect_MultipleReconnects(t *testing.T) {
 	err := runner.Session.Close()
 	require.NoError(t, err, "initial session close error")
 
-	// Perform repeated reconnect cycles via HTTP.
+	// Perform repeated reconnect cycles over the retained gRPC/in-memory wire.
 	for i := 0; i < reconnectCycles; i++ {
-		session := runner.NewHTTPSession(t)
+		session := runner.NewGRPCSession(t)
 
 		cycleTools := harness.ListSessionTools(t, session)
 		require.NotEmpty(t, cycleTools, "reconnect cycle %d: session should have tools", i+1)
@@ -95,7 +95,7 @@ func TestReconnect_MultipleReconnects(t *testing.T) {
 		harness.CallTool(t, session, "list_memories", map[string]any{})
 
 		// Close this session for the next cycle (except the last, which is
-		// cleaned up by t.Cleanup registered in NewHTTPSession).
+		// cleaned up by t.Cleanup registered in NewGRPCSession).
 		if i < reconnectCycles-1 {
 			err := session.Close()
 			require.NoError(t, err, "reconnect cycle %d: session close error", i+1)

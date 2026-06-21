@@ -25,7 +25,6 @@ func newE2EConfig(t *testing.T) *config.SerenaConfig {
 	tmpDir := t.TempDir()
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
 	return cfg

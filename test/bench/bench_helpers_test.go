@@ -158,7 +158,6 @@ func defaultBenchConfig(tb testing.TB) *config.SerenaConfig {
 	tmpDir := tb.TempDir()
 	cfg := &config.SerenaConfig{}
 	cfg.Daemon.SocketPath = filepath.Join(tmpDir, "s.sock")
-	cfg.Daemon.HTTPAddr = ""
 	cfg.Daemon.ShutdownTimeout = 2
 	cfg.Profile = "full"
 	// MaxWorkers must accommodate the edit-tool sub-benchmarks in Plan 09-03,

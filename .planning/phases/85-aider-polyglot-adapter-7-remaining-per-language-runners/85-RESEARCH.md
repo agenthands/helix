@@ -430,7 +430,7 @@ verify-licenses:
 | A4 | vitest/jest emit Jest-compatible `testResults[].assertionResults[].status` JSON | Reporter Formats | low — both documented; verify with a golden fixture during impl |
 | A5 | Surefire XML shape (`<testcase>` + child `<failure>/<error>/<skipped>`) — assumed from docs, NOT captured live (no JDK in env) | Reporter Formats | medium — Java golden fixture must be sourced from a real surefire run elsewhere, not hand-fabricated |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **No `language` axis in result.v2 / aggregator — how to slice per-language pass-rate (SC#1)?**
    - Known: schema has `task_id`+`benchmark`, no `language`; aggregator groups (task,mode), emits (mode×benchmark) rows. `Cell.Language` exists in the harness but isn't persisted.

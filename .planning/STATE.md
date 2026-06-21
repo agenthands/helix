@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 83-03-PLAN.md
-last_updated: "2026-06-21T01:08:38.341Z"
-last_activity: 2026-06-21 -- Phase 84 planning complete
+last_updated: "2026-06-21T01:14:39.507Z"
+last_activity: 2026-06-21 -- Phase 84 execution started
 progress:
   total_phases: 15
   completed_phases: 9
-  total_plans: 45
-  completed_plans: 45
+  total_plans: 49
+  completed_plans: 46
   percent: 60
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 83 — cmd-helix-bench-rag-baseline-rag-mode-embedding-index-builde
+**Current focus:** Phase 84 — container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard
 
 ## Current Position
 
-Phase: 84
-Plan: Not started
+Phase: 84 (container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 84 planning complete
+Last activity: 2026-06-21 -- Phase 84 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T00:19:59.568Z
+Last session: 2026-06-21T01:14:21.041Z
 Stopped at: Completed 83-03-PLAN.md
 Resume file: None
 
@@ -112,6 +112,7 @@ Resume file: None
 | Phase 83 P01 | 22min | 4 tasks | 11 files |
 | Phase 83 P02 | ~30min | 2 tasks | 14 files |
 | Phase 83 P03 | 55min | 4 tasks | 14 files |
+| Phase 84 P01 | 3m22s | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -182,3 +183,5 @@ Resume file: None
 - [Phase 83]: 83-02: exactly-4 tool surface asserted via self-tracked benchServer.ToolNames; all FS tools confined to corpus root by validatePath (rejects .., absolute, post-Join escapes)
 - [Phase ?]: 83-03: baseline_rag is a real retrieval-only arm — RunCell spawns cmd/helix-bench-rag over stdio (StartRAGServer), builds the embedding index out-of-band (budget-excluded), records embedder_id, reuses DefaultContract verbatim
 - [Phase ?]: 83-03: StartRAGServer returns a bench-owned RAGHandle (stdio MCP endpoint, not a socketed daemon); baseline_rag is an OPTIONAL delta operand (full_minus_baseline_rag)
+- [Phase ?]: 84-01: go-containerregistry promoted to direct require via go.mod hand-edit (not tidy); Plan 03 crane import makes it self-sustaining
+- [Phase ?]: 84-01: ArchGate pure host-arch-as-parameter for hermetic both-ways testing; escape hatch only on exact BENCH_ARCH_MISMATCH_OK=1

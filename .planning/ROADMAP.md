@@ -301,7 +301,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 84-01-PLAN.md — Package foundation + os/exec docker/podman engine shim + arch-mismatch gate + go.mod docker-SDK grep gate (CONTAINER-01)
+- [x] 84-01-PLAN.md — Package foundation + os/exec docker/podman engine shim + arch-mismatch gate + go.mod docker-SDK grep gate (CONTAINER-01)
 - [ ] 84-02-PLAN.md — SHA256 digest-pinned image cache at $HELIX_CACHE_DIR/bench-images/<sha>/ + cross-platform disk-budget guard (CONTAINER-02, CONTAINER-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*

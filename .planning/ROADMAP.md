@@ -71,8 +71,18 @@
   4. `helix replace-symbol-body` under read mode is refused with a typed error; the same verb succeeds under edit mode.
   5. Per-profile goldens (re-pointed from the MCP `tools/list` goldens) verify the CLI verb surface for each profile — verbs outside the active profile are hidden and refused.
 
-**Plans**: TBD
+**Plans**: 4 plans (2 waves)
 **UI hint**: yes
+
+**Wave 1** *(file-disjoint, parallel)*
+
+- [ ] 91-01-PLAN.md — `cmd/helix-cligen` generator (go/packages+AST scan recovers tool->`*Args`, VERB-04) + committed `internal/cli/verbs_gen.go` + flatten verbs onto root grouped by capability + `--check` drift gate + parity-by-name test + `make verify-cligen`/CI (VERB-01/02/03/04)
+- [ ] 91-02-PLAN.md — `tools/call` ProfileEnforcementMiddleware (Guardrail clone; refuse with typed `serr.PermissionDenied`) installed AFTER Guardrail / BEFORE LazyInit (LIFO invariant) (SEC-01)
+
+**Wave 2** *(blocked on Wave 1; file-disjoint, parallel)*
+
+- [ ] 91-03-PLAN.md — re-point the per-profile contract oracle from MCP `tools/list` to the CLI verb surface against the unchanged `testdata/profiles/*.tools.golden`; hidden-AND-refused sub-assertion (SEC-02)
+- [ ] 91-04-PLAN.md — HELIX_BIN-gated !windows E2E: read-profile refuses a real `helix replace-symbol-body` (typed PermissionDenied, non-zero exit), full-profile allows it; re-point the Phase 90 oracle to flat `helix <verb>` (SEC-01 live, VERB-03)
 
 ### Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle
 

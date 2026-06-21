@@ -181,6 +181,125 @@ func isHelixSymbolicTool(name string) bool {
 	return false
 }
 
+// codeExtensions is a small static allowlist of source-code file extensions.
+// Used by classifyBashTarget to positively identify a CODE target without
+// constructing a langregistry.Registry on every hook call (hot path, T-93-05).
+// It mirrors the spirit of langregistry.ByExtension but stays allocation-free.
+var codeExtensions = map[string]bool{
+	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
+	".py": true, ".rb": true, ".rs": true, ".java": true, ".kt": true,
+	".c": true, ".h": true, ".cc": true, ".cpp": true, ".hpp": true,
+	".cs": true, ".php": true, ".swift": true, ".scala": true, ".m": true,
+	".mm": true, ".lua": true, ".dart": true, ".ex": true, ".exs": true,
+	".clj": true, ".hs": true, ".ml": true, ".r": true, ".sh": true,
+	".bash": true, ".zig": true, ".vue": true, ".svelte": true,
+}
+
+// nonCodeExtensions classifies prose/log/config targets as explicitly NON-code.
+// A target with one of these extensions (or a recognized no-extension config
+// filename like Dockerfile) yields isCode=false, ok=true so the caller can stay
+// silent (fail-open by intent) per RESEARCH Pitfall 2.
+var nonCodeExtensions = map[string]bool{
+	".md": true, ".markdown": true, ".log": true, ".txt": true,
+	".json": true, ".yaml": true, ".yml": true, ".toml": true,
+	".ini": true, ".cfg": true, ".conf": true, ".csv": true,
+	".html": true, ".htm": true, ".css": true, ".xml": true,
+	".lock": true, ".env": true, ".rst": true,
+}
+
+// nonCodeBasenames classifies extensionless prose/config files as NON-code.
+var nonCodeBasenames = map[string]bool{
+	"Dockerfile": true, "Makefile": true, "LICENSE": true,
+	"README": true, "CHANGELOG": true, ".gitignore": true,
+}
+
+// classifyBashTarget tokenizes a Bash command string as DATA (never executing
+// it, T-36-01) and classifies its file/path operand(s) as code vs non-code.
+//
+// Returns:
+//   - (true, true)   when at least one file operand was found and ALL recognized
+//     file operands are code files (conservative: a single non-code operand
+//     demotes the whole command to non-code, since a false suggestion is the
+//     failure mode to avoid).
+//   - (false, true)  when file operand(s) were found but at least one is
+//     positively non-code (prose/log/config) — caller stays silent.
+//   - (_, false)     when no file operand can be identified or the command
+//     cannot be tokenized into a recognizable grep/sed/cat/find shape
+//     (fail-open: caller emits nothing).
+//
+// It NEVER imports os/exec and never runs the command string. Tokenization is a
+// bounded whitespace split (no regex backtracking on attacker input, T-93-05).
+func classifyBashTarget(cmd string) (isCode bool, ok bool) {
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return false, false
+	}
+
+	// Recognize only grep/sed/cat/find-shaped read tools; anything else fails open.
+	switch fields[0] {
+	case "grep", "rg", "ag", "sed", "cat", "find", "egrep", "fgrep":
+		// recognized read/search tool
+	default:
+		return false, false
+	}
+
+	sawCode := false
+	sawNonCode := false
+	sawAnyOperand := false
+
+	for _, tok := range fields[1:] {
+		// Skip option flags (leading '-'). This also skips grep patterns that
+		// happen to start with '-' via -e, which is acceptable (we only need
+		// to find file operands, not patterns).
+		if strings.HasPrefix(tok, "-") {
+			continue
+		}
+
+		// For `find . -name '*.go'` the operand carrying the extension is the
+		// glob value, e.g. '*.go' (quotes stripped by the JSON/shell layer, but
+		// strip residual quotes defensively as DATA).
+		tok = strings.Trim(tok, `'"`)
+		if tok == "" {
+			continue
+		}
+
+		// A file/path operand is a token containing a path separator OR a
+		// recognizable extension. Pure patterns (no '/', no '.ext') are skipped.
+		base := filepath.Base(tok)
+		ext := filepath.Ext(tok)
+
+		switch {
+		case ext != "" && codeExtensions[ext]:
+			sawCode = true
+			sawAnyOperand = true
+		case ext != "" && nonCodeExtensions[ext]:
+			sawNonCode = true
+			sawAnyOperand = true
+		case ext == "" && nonCodeBasenames[base]:
+			sawNonCode = true
+			sawAnyOperand = true
+		case strings.ContainsRune(tok, filepath.Separator) && ext == "":
+			// A bare directory/path operand with no extension (e.g. `internal/cli`)
+			// is not a positively-identified code FILE; treat as no signal.
+			// (Do not count it as an operand so a pure-dir grep fails open.)
+		default:
+			// Token with an unknown extension or no extension and no separator:
+			// not a recognizable code or non-code file operand. Ignore it.
+		}
+	}
+
+	if !sawAnyOperand {
+		return false, false // no file operand → fail open
+	}
+	if sawNonCode {
+		return false, true // any non-code operand → conservative non-code
+	}
+	if sawCode {
+		return true, true
+	}
+	return false, false
+}
+
 // isGrepReadTool returns true if the tool is Grep, Read, or Bash running a grep-like command.
 // Never executes values from stdin -- only reads ToolName/ToolInput as data (per T-36-01).
 func isGrepReadTool(name string, input map[string]any) bool {

@@ -86,7 +86,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **ADAPTER-REPO-01**: RepoBench adapter wired via `dataset-loader-only` — RepoBench-R + RepoBench-C + RepoBench-P sub-tasks; Python + Java. _Acceptance:_ smoke run for each sub-task; EM/ES metrics match published reference values on a sampled subset.
 - [x] **ADAPTER-SWE-01**: SWE-bench Verified adapter wired via `subprocess-shellout` — produces `predictions.jsonl`; shells out to `python -m swebench.harness.run_evaluation`; ingests `<run_id>.json`. _Acceptance:_ smoke run of 5 tasks completes; result JSON ingested into bench schema.
 - [x] **ADAPTER-MULTI-01**: Multi-SWE-bench adapter wired via `subprocess-shellout` — `python -m multi_swe_bench.harness.run_evaluation --config`; Java, TS, JS, Go, Rust, C, C++ (Mini set acceptable at ship; full set reach goal). _Acceptance:_ Mini set runs; per-language slicing exposed in reporter.
-- [ ] **ADAPTER-TERM-01**: Terminal-Bench 2.0 adapter wired via `subprocess-shellout` — drives agent through `tb run` CLI; ingests `tb` JSON. _Acceptance:_ smoke run of ≥ 5 tasks; container-isolation invariant holds.
+- [x] **ADAPTER-TERM-01**: Terminal-Bench 2.0 adapter wired via `subprocess-shellout` — drives agent through `tb run` CLI; ingests `tb` JSON. _Acceptance:_ smoke run of ≥ 5 tasks; container-isolation invariant holds.
 
 ### Container Runtime (CONTAINER-*)
 

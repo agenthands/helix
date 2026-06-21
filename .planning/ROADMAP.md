@@ -174,7 +174,11 @@ Plans:
   2. The CLAUDE.md tool-routing matrix cites `helix` CLI verbs end-to-end instead of MCP tool names.
   3. The generated tool table lists `helix` verbs and the docgen drift gate is green, with docgen's blank imports equal to the daemon's (three-way registry ↔ CLI ↔ docgen parity).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 95-01-PLAN.md — docgen verb re-key + `make verify-docs` + CI docgen drift gate + verb-form tests + blank-import cross-ref (DOCS-02)
+- [ ] 95-02-PLAN.md — CLI-first identity rewrite across README/CLAUDE.md/PROJECT.md + new Helix-CLI routing matrix in CLAUDE.md (DOCS-01, DOCS-03)
 
 ### ✅ v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — SHIPPED 2026-06-21
 

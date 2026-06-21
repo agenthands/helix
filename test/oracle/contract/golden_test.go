@@ -155,7 +155,7 @@ func newGoldenEnv(t *testing.T) *goldenEnv {
 	// Activate over MCP (sets the daemon's active-workspace state; the gRPC
 	// activate RPC sets only kernel state).
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	res, err := forwarder.CallTool(ctx, socket, logger, "contract-golden",
+	res, err := forwarder.CallTool(ctx, socket, "", logger, "contract-golden",
 		"activate_project", map[string]any{"repo_path": repoDir})
 	if err != nil {
 		t.Fatalf("MCP activate_project: %v", err)

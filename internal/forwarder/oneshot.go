@@ -29,9 +29,13 @@ import (
 // Without the explicit CloseSend the daemon would see a non-EOF RST when the
 // conn drops and record the session with an `error` outcome, so
 // helix_session_lifecycle{outcome="error"} would climb per CLI call (WR-03).
+// tcpAddr (Phase 94 RETIRE-04): when non-empty the one-shot call dials the
+// loopback gRPC TCP endpoint instead of the unix socket (split-host topology, no
+// auto-start). Empty preserves the unix-socket default exactly.
 func CallTool(
 	ctx context.Context,
 	socketPath string,
+	tcpAddr string,
 	logger *slog.Logger,
 	version string,
 	name string,
@@ -39,7 +43,7 @@ func CallTool(
 ) (*mcpsdk.CallToolResult, error) {
 	// Race-safe dial (90-01): warm-reuse fast path, or a single guarded cold
 	// auto-start. A CLI command needs no OTel, so pass a noop TracerProvider.
-	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, logger, noop.NewTracerProvider())
+	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, tcpAddr, logger, noop.NewTracerProvider())
 	if err != nil {
 		return nil, fmt.Errorf("connecting to daemon: %w", err)
 	}

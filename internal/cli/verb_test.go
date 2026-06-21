@@ -70,7 +70,7 @@ func TestVerb_ToolNameResolution(t *testing.T) {
 	var gotName string
 	var gotArgs map[string]any
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, name string, args map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, name string, args map[string]any) (*mcpsdk.CallToolResult, error) {
 		gotName = name
 		gotArgs = args
 		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "ok"}}}, nil
@@ -95,7 +95,7 @@ func TestVerb_ToolNameResolution(t *testing.T) {
 func TestVerb_MissingRequiredArgErrorsBeforeDial(t *testing.T) {
 	dialed := false
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
 		dialed = true
 		return nil, errors.New("should not be reached")
 	}

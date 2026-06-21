@@ -207,9 +207,10 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 	}
 
 	socketPath := resolveVerbSocket(cmd)
+	tcpAddr := resolveVerbGRPCAddr(cmd)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	res, err := callToolFn(cmd.Context(), socketPath, logger, CurrentVersion(), spec.toolName, args)
+	res, err := callToolFn(cmd.Context(), socketPath, tcpAddr, logger, CurrentVersion(), spec.toolName, args)
 	if err != nil {
 		return fmt.Errorf("calling %s: %w", spec.toolName, err)
 	}
@@ -266,6 +267,26 @@ func resolveVerbSocket(cmd *cobra.Command) string {
 		return env
 	}
 	return config.DefaultSocketPath()
+}
+
+// resolveVerbGRPCAddr resolves the OPTIONAL loopback gRPC TCP endpoint the
+// one-shot call dials (Phase 94 RETIRE-04), with the precedence: inherited root
+// --grpc-addr flag > HELIX_GRPC_ADDR env > "" (empty = unix-socket dial, the
+// default). It is the dial-side mirror of the daemon's daemon.grpc_addr /
+// --grpc-addr config, and HELIX_GRPC_ADDR mirrors how HELIX_SOCKET is read for
+// the unix path. When this returns "" the dial path is byte-identical to today.
+func resolveVerbGRPCAddr(cmd *cobra.Command) string {
+	if cmd != nil {
+		if root := cmd.Root(); root != nil {
+			if v, _ := root.Flags().GetString("grpc-addr"); v != "" {
+				return v
+			}
+		}
+	}
+	if env := os.Getenv("HELIX_GRPC_ADDR"); env != "" {
+		return env
+	}
+	return ""
 }
 
 // renderResult moved to render.go (Phase 92 terse renderer). verb.go's runVerb

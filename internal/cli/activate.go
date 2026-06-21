@@ -50,7 +50,7 @@ func runActivate(cmd *cobra.Command, _ []string) error {
 
 	// Use ConnectOrStartDaemon to auto-start daemon if not running (per D-05, D-06)
 	// Pass noop tracer -- activate is a CLI command, no OTel needed
-	client, conn, err := forwarder.ConnectOrStartDaemon(cmd.Context(), socketPath, logger, noop.NewTracerProvider())
+	client, conn, err := forwarder.ConnectOrStartDaemon(cmd.Context(), socketPath, resolveVerbGRPCAddr(cmd), logger, noop.NewTracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}

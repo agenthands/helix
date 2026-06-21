@@ -312,7 +312,7 @@ func TestReadSnippetLine_Hermetic(t *testing.T) {
 // terse output. (OUT-07)
 func TestVerb_ResolveRenderOpts_AbsEndToEnd(t *testing.T) {
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
 		// search-symbols carries a payload, so no CLI-side snippet read is
 		// triggered (keeps the test hermetic — no filesystem dependency).
 		return textResult("file:///abs/ws/pkg/a.go:5:6 — Helper [Function]\n"), nil
@@ -337,7 +337,7 @@ func TestVerb_ResolveRenderOpts_AbsEndToEnd(t *testing.T) {
 // output to compact JSON lines on the real cobra path. (OUT-06)
 func TestVerb_ResolveRenderOpts_JSONEndToEnd(t *testing.T) {
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
 		return textResult("file:///abs/ws/pkg/a.go:5:6 — Helper [Function]\n"), nil
 	}
 	defer func() { callToolFn = restore }()
@@ -410,7 +410,7 @@ func TestVerb_InheritsPersistentFlags(t *testing.T) {
 // generic "tool X reported an error" wrap. (OUT-05, replaces verb.go:216-218)
 func TestRunVerb_KindPreservingError(t *testing.T) {
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
 		return &mcpsdk.CallToolResult{
 			IsError: true,
 			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "permission_denied: workspace not activated"}},

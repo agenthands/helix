@@ -159,7 +159,7 @@ func TestVerbs_NoEmptyFlags(t *testing.T) {
 func TestVerbs_RequiredBeforeDial(t *testing.T) {
 	dialed := false
 	restore := callToolFn
-	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+	callToolFn = func(_ context.Context, _ string, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
 		dialed = true
 		return nil, nil
 	}

@@ -42,7 +42,7 @@ func RunForwarder(ctx context.Context, socketPath string, logger *slog.Logger) e
 		_ = fwdProvider.ShutdownTracing(shutdownCtx)
 	}()
 
-	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, logger, fwdProvider.TracerProvider())
+	client, conn, err := ConnectOrStartDaemon(ctx, socketPath, "", logger, fwdProvider.TracerProvider())
 	if err != nil {
 		return fmt.Errorf("connecting to daemon: %w", err)
 	}

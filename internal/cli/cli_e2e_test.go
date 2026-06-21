@@ -156,7 +156,7 @@ func newE2EFixture(t *testing.T, runID string, daemonOpts ...sandbox.DaemonOptio
 // operates on the active workspace.
 func (f *e2eFixture) mcpActivate(t *testing.T, ctx context.Context) {
 	t.Helper()
-	res, err := forwarder.CallTool(ctx, f.socket, f.logger, "e2e-test",
+	res, err := forwarder.CallTool(ctx, f.socket, "", f.logger, "e2e-test",
 		"activate_project", map[string]any{"repo_path": f.repoDir})
 	if err != nil {
 		t.Fatalf("MCP activate_project: %v", err)
@@ -170,7 +170,7 @@ func (f *e2eFixture) mcpActivate(t *testing.T, ctx context.Context) {
 // returns its rendered text — the reference the CLI path is compared against.
 func (f *e2eFixture) mcpSearch(t *testing.T, ctx context.Context) string {
 	t.Helper()
-	res, err := forwarder.CallTool(ctx, f.socket, f.logger, "e2e-test",
+	res, err := forwarder.CallTool(ctx, f.socket, "", f.logger, "e2e-test",
 		"search_in_files", map[string]any{"pattern": searchPattern})
 	if err != nil {
 		t.Fatalf("MCP search_in_files: %v", err)

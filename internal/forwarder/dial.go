@@ -32,10 +32,27 @@ var newFlockLocker = func(path string) daemonLocker {
 // ConnectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
 // The tp parameter provides an explicit TracerProvider for the otelgrpc client handler
 // (D-01: no global TracerProvider).
-func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
+//
+// Phase 94 RETIRE-04: when tcpAddr is non-empty the dial targets a loopback gRPC
+// TCP endpoint (split-host topology) instead of the unix socket. In that mode
+// there is NO cold-start auto-spawn — a remote/TCP daemon is operator-managed, so
+// the dial either connects or fails fast; the lock+spawn cold path is unix-only.
+func ConnectOrStartDaemon(ctx context.Context, socketPath, tcpAddr string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
+	// TCP endpoint: no auto-start. Dial the operator-managed gRPC TCP daemon
+	// directly; the unix cold-start lock+spawn machinery does not apply to a
+	// split-host endpoint.
+	if tcpAddr != "" {
+		conn, client, err := tryConnect(ctx, socketPath, tcpAddr, tp)
+		if err != nil {
+			return nil, nil, fmt.Errorf("connecting to grpc tcp daemon %s: %w", tcpAddr, err)
+		}
+		logger.Info("connected to grpc tcp daemon", "addr", tcpAddr)
+		return client, conn, nil
+	}
+
 	// Warm-reuse fast path: try connecting to an existing daemon BEFORE taking the
 	// startup lock so the common (daemon-already-up) case is lock-free.
-	conn, client, err := tryConnect(ctx, socketPath, tp)
+	conn, client, err := tryConnect(ctx, socketPath, "", tp)
 	if err == nil {
 		logger.Info("connected to existing daemon", "socket", socketPath)
 		return client, conn, nil
@@ -57,7 +74,7 @@ func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.L
 		// goroutines and FD for the life of the process (ConnectOrStartDaemon
 		// re-dials the single real conn at the tryConnect below).
 		connect: func(sp string) error {
-			c, _, e := tryConnect(ctx, sp, tp)
+			c, _, e := tryConnect(ctx, sp, "", tp)
 			if c != nil {
 				_ = c.Close()
 			}
@@ -79,30 +96,47 @@ func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.L
 
 	// Guard returned success: the daemon is up (we spawned it, reused a peer's, or
 	// won the double-check). Obtain the real connection handles.
-	conn, client, err = tryConnect(ctx, socketPath, tp)
+	conn, client, err = tryConnect(ctx, socketPath, "", tp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connecting after startup: %w", err)
 	}
 	return client, conn, nil
 }
 
-// tryConnect attempts to connect to a daemon at the given socket path.
-// The tp parameter provides an explicit TracerProvider for the otelgrpc stats handler.
-func tryConnect(_ context.Context, socketPath string, tp trace.TracerProvider) (*grpc.ClientConn, serenav1.ForwarderServiceClient, error) {
-	// Check socket exists
-	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-		return nil, nil, fmt.Errorf("socket not found: %s", socketPath)
-	}
+// tryConnect attempts to connect to a daemon at the given socket path, or — when
+// tcpAddr is non-empty — at the given loopback gRPC TCP endpoint (Phase 94
+// RETIRE-04). The tp parameter provides an explicit TracerProvider for the
+// otelgrpc stats handler.
+//
+// The two paths differ ONLY in the network: the TCP path skips the unix-file
+// liveness probe (os.Stat + unix net.DialTimeout, which are unix-socket-specific)
+// and targets `passthrough:///host:port` instead of `unix://path`. "tcp://" is
+// NOT a valid gRPC target scheme — passthrough:/// dials the address verbatim,
+// the direct analog of the unix:// form. All other dial options (keepalive +
+// obs.ClientStatsHandler) are byte-for-byte identical so the two transports cannot
+// drift.
+func tryConnect(_ context.Context, socketPath, tcpAddr string, tp trace.TracerProvider) (*grpc.ClientConn, serenav1.ForwarderServiceClient, error) {
+	target := "unix://" + socketPath
+	if tcpAddr != "" {
+		// TCP endpoint: skip the unix-file liveness probe (unix-socket-specific)
+		// and dial the address verbatim via the passthrough resolver.
+		target = "passthrough:///" + tcpAddr
+	} else {
+		// Check socket exists
+		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("socket not found: %s", socketPath)
+		}
 
-	// Verify the socket is alive by attempting a dial
-	testConn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
-	if err != nil {
-		return nil, nil, fmt.Errorf("socket not responding: %w", err)
+		// Verify the socket is alive by attempting a dial
+		testConn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+		if err != nil {
+			return nil, nil, fmt.Errorf("socket not responding: %w", err)
+		}
+		testConn.Close()
 	}
-	testConn.Close()
 
 	conn, err := grpc.NewClient(
-		"unix://"+socketPath,
+		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// Pitfall 1: Configure keepalive to detect dead daemon
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -187,8 +221,8 @@ func waitForDaemon(ctx context.Context, socketPath string, timeout time.Duration
 
 		// Check if socket file appeared
 		if _, err := os.Stat(socketPath); err == nil {
-			// Try connecting
-			conn, client, err := tryConnect(ctx, socketPath, tp)
+			// Try connecting (cold-start is unix-only; tcpAddr empty)
+			conn, client, err := tryConnect(ctx, socketPath, "", tp)
 			if err == nil {
 				return client, conn, nil
 			}

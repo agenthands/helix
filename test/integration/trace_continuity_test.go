@@ -112,7 +112,7 @@ func TestE2ETraceContinuity(t *testing.T) {
 	// daemon Provider point at the test exporter.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer dialCancel()
-	client, conn, err := forwarder.ConnectOrStartDaemon(dialCtx, socketPath, logger, tp)
+	client, conn, err := forwarder.ConnectOrStartDaemon(dialCtx, socketPath, "", logger, tp)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 

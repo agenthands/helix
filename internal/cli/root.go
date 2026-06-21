@@ -132,6 +132,13 @@ func NewRootCommand() *cobra.Command {
 	// Admin listener bind address (Phase 10 observability). Empty = disabled.
 	// Must be loopback (127.0.0.1/localhost/::1); non-loopback deferred to v1.3 auth.
 	rootCmd.Flags().String("admin-addr", "", "Loopback admin listener address (e.g. 127.0.0.1:9090); empty = disabled")
+	// Phase 94 RETIRE-04: optional loopback gRPC TCP endpoint for split-host
+	// CLI↔daemon use. On the daemon (--serve) it sets daemon.grpc_addr (the bind
+	// address, loopback-only — non-loopback is refused, deferred to REMOTE-01); on
+	// a verb it selects the dial target. Empty = local unix socket (the default).
+	// Plaintext, no auth (loopback-only confines traffic to the host); see
+	// REMOTE-SCOPE-ADR.md.
+	rootCmd.Flags().String("grpc-addr", "", "Optional loopback gRPC TCP daemon endpoint (e.g. 127.0.0.1:9099); empty = local unix socket")
 	// Phase 76 ABLATE-05/07 ablation overrides. Default false (opt-in
 	// disable). When set, force-disables the named subsystem regardless of
 	// the resolved profile (CLI > profile > default-off precedence, D-02/D-03).
@@ -238,6 +245,7 @@ func runDaemon(cmd *cobra.Command) error {
 	configPath, _ := cmd.Flags().GetString("config")
 	profileName, _ := cmd.Flags().GetString("profile")
 	adminAddr, _ := cmd.Flags().GetString("admin-addr")
+	grpcAddr, _ := cmd.Flags().GetString("grpc-addr")
 	disableLSP, _ := cmd.Flags().GetBool("disable-lsp-subsystem")
 	disableStructuredEdit, _ := cmd.Flags().GetBool("disable-structured-edit-subsystem")
 	disableSemantic, _ := cmd.Flags().GetBool("disable-semantic-subsystem")
@@ -259,6 +267,12 @@ func runDaemon(cmd *cobra.Command) error {
 	// blank CLI invocation cannot wipe a project config value.
 	if adminAddr != "" {
 		overrides["observability.admin_addr"] = adminAddr
+	}
+	// Phase 94 RETIRE-04: non-empty-only guard (mirror the --admin-addr guard,
+	// NOT cmd.Flags().Changed) so a blank invocation cannot wipe a project
+	// daemon.grpc_addr value. Empty = unix-socket only (the default).
+	if grpcAddr != "" {
+		overrides["daemon.grpc_addr"] = grpcAddr
 	}
 	// Phase 76 ABLATE-05/07: only apply the disable overrides when the flag
 	// was explicitly set so a blank invocation cannot wipe a profile/config

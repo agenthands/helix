@@ -16,7 +16,7 @@ import (
 )
 
 func TestTryConnect_NoSocket(t *testing.T) {
-	conn, client, err := tryConnect(context.Background(), "/tmp/helix-test-nonexistent.sock", tracenoop.NewTracerProvider())
+	conn, client, err := tryConnect(context.Background(), "/tmp/helix-test-nonexistent.sock", "", tracenoop.NewTracerProvider())
 	assert.Error(t, err)
 	assert.Nil(t, conn)
 	assert.Nil(t, client)

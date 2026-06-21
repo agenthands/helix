@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -24,6 +25,11 @@ const maxK = 50
 // maxGrepMatches caps grep output so a pathological pattern cannot flood the
 // MCP transport.
 const maxGrepMatches = 200
+
+// binarySniffBytes is the prefix length scanned for a NUL byte to classify a
+// file as binary (the `grep -I` heuristic). A NUL in the first chunk is a strong
+// signal of non-text content (WR-05).
+const binarySniffBytes = 8000
 
 // maxReadFileBytes caps read_file output so a multi-megabyte corpus file cannot
 // serialize an oversized frame onto the stdio JSON-RPC transport (WR-03,
@@ -190,6 +196,18 @@ func (h *handlers) grep(pattern, path string) (string, error) {
 		b, readErr := os.ReadFile(p)
 		if readErr != nil {
 			return readErr
+		}
+		// Skip binary files (WR-05): the directory walk hits every file including
+		// committed .so/.png/.pdf. Running the regex over raw bytes and emitting
+		// matching "lines" verbatim would inject NULs/control bytes into a
+		// TextContent field, corrupting the NDJSON framing the driver parses. A
+		// NUL in the first chunk is the standard `grep -I` non-text signal.
+		sniff := b
+		if len(sniff) > binarySniffBytes {
+			sniff = sniff[:binarySniffBytes]
+		}
+		if bytes.IndexByte(sniff, 0) >= 0 {
+			return nil
 		}
 		rel, _ := filepath.Rel(rootAbs, p)
 		rel = filepath.ToSlash(rel)

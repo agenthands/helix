@@ -89,6 +89,37 @@ func TestPathTraversalRejected(t *testing.T) {
 	}
 }
 
+// TestGrepSkipsBinaryFiles asserts grep skips files containing NUL bytes so raw
+// binary content never reaches the JSON-RPC transport (WR-05), while still
+// matching adjacent text files.
+func TestGrepSkipsBinaryFiles(t *testing.T) {
+	root := t.TempDir()
+	// A binary file whose bytes contain the pattern but also a NUL.
+	binContent := append([]byte("PATTERN\x00garbage"), 0x00, 0x01, 0x02)
+	if err := os.WriteFile(filepath.Join(root, "blob.bin"), binContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A text file with the same pattern that MUST still match.
+	if err := os.WriteFile(filepath.Join(root, "src.go"), []byte("// PATTERN here\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &handlers{idx: newStubIndex(), root: root}
+
+	out, err := srv.grep("PATTERN", ".")
+	if err != nil {
+		t.Fatalf("grep(.) = %v, want success", err)
+	}
+	if strings.Contains(out, "blob.bin") {
+		t.Errorf("grep matched binary file blob.bin; output:\n%s", out)
+	}
+	if !strings.Contains(out, "src.go") {
+		t.Errorf("grep did not match text file src.go; output:\n%s", out)
+	}
+	if strings.IndexByte(out, 0) >= 0 {
+		t.Errorf("grep output contains a NUL byte (transport-corrupting)")
+	}
+}
+
 // TestReadFileByteCap asserts read_file truncates oversized files with a marker
 // so a single call cannot flood the stdio transport (WR-03).
 func TestReadFileByteCap(t *testing.T) {

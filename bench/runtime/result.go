@@ -54,6 +54,14 @@ type ResultInput struct {
 	Outcome  string // pass/fail outcome derived from the merged trace / VerifyExitCode
 	TraceRef string // durable merged-trace JSON path
 
+	// EmbedderID is the Phase 83 (ABLATE-04 #3) open-provenance key recording which
+	// embedding model produced a baseline_rag RAG row (e.g. "text-embedding-3-small",
+	// "nomic-embed-text", or "stub-deterministic"). It mirrors the Outcome/TraceRef
+	// open keys exactly. Honest non-RAG modes leave it "" so the omitempty doc field
+	// drops the key — only baseline_rag sets it. The recorded string answers a
+	// "weak embedder" pushback with the exact model used (T-83-03-01).
+	EmbedderID string
+
 	// Fairness is the compile-time contract the run executed under; the builder
 	// projects its ModelID into model_id and its Overrides into fairness.overrides.
 	Fairness runners.FairnessContract
@@ -114,6 +122,12 @@ type resultDoc struct {
 	TraceRef string `json:"trace_ref"`
 	ModelID  string `json:"model_id"`
 
+	// EmbedderID is the Phase 83 (ABLATE-04 #3) embedder-provenance key. WITH
+	// omitempty so honest non-RAG modes (EmbedderID=="") emit nothing; only the
+	// baseline_rag arm carries the selected embedding model string. additive-minor
+	// open key — additionalProperties is OPEN at the schema top level, no v3 bump.
+	EmbedderID string `json:"embedder_id,omitempty"`
+
 	// AblationStatus is the D-03 deferral marker. WITH omitempty so honest modes
 	// emit nothing; only the no_semantic arm carries "guarantee_pending_phase_81".
 	AblationStatus string `json:"ablation_status,omitempty"`
@@ -163,6 +177,7 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		Outcome:        in.Outcome,
 		TraceRef:       in.TraceRef,
 		ModelID:        in.Fairness.ModelID,
+		EmbedderID:     in.EmbedderID,
 		AblationStatus: in.AblationStatus,
 		Metrics:        in.Metrics,
 		MetricErrors:   in.MetricErrors,

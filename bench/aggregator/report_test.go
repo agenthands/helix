@@ -167,7 +167,7 @@ func TestCostQualityRender(t *testing.T) {
 				CostPerSolved: ci(3.55, 3.10, 4.00),
 				VarianceFlags: []VarianceFlag{{Task: "task-7", Mode: "full", CV: 0.42}}},
 		}
-		md := renderCostQuality(rows, testFooter())
+		md := renderCostQuality(rows, nil, testFooter())
 		assert.Contains(t, md, "cost_per_solved_task")
 		assert.Contains(t, md, "task-7", "the variance warning must name the offending cell")
 		assert.Contains(t, strings.ToLower(md), "variance",
@@ -180,7 +180,7 @@ func TestCostQualityRender(t *testing.T) {
 			{Mode: "full", Benchmark: "internal-toolbench",
 				CostPerSolved: ci(3.55, 3.10, 4.00), VarianceFlags: nil},
 		}
-		md := renderCostQuality(rows, testFooter())
+		md := renderCostQuality(rows, nil, testFooter())
 		assert.NotContains(t, strings.ToLower(md), "variance",
 			"a low-variance run must NOT render a FAIR-03 warning")
 	})
@@ -189,7 +189,43 @@ func TestCostQualityRender(t *testing.T) {
 		rows := []CostRow{
 			{Mode: "no_lsp", Benchmark: "internal-toolbench", CostPerSolved: nullCI()},
 		}
-		md := renderCostQuality(rows, testFooter())
+		md := renderCostQuality(rows, nil, testFooter())
 		assert.Contains(t, md, "—", "a null cost CI must render an em-dash, never $0")
 	})
+}
+
+// TestCostQualityScatter locks REPORT-04: renderCostQuality additionally emits a
+// deterministic fenced ASCII scatter of cost (x) vs verified_correctness (y) per
+// (mode x benchmark), sourced from the SAME verified_correctness reduce as the
+// leaderboard. The existing cost table + valid_until footer are preserved; a null
+// cost or verified point is never plotted as a fabricated 0; the scatter is
+// byte-stable.
+func TestCostQualityScatter(t *testing.T) {
+	rows := []CostRow{
+		{Mode: "full", Benchmark: "internal-toolbench", CostPerSolved: ci(0.0045, 0.0045, 0.0045)},
+		{Mode: "no_lsp", Benchmark: "internal-toolbench", CostPerSolved: ci(0.0150, 0.0150, 0.0150)},
+	}
+	points := []ScatterPoint{
+		{Mode: "full", Benchmark: "internal-toolbench",
+			Cost: ci(0.0045, 0.0045, 0.0045), VerifiedCorrectness: ci(0.90, 0.90, 0.90)},
+		{Mode: "no_lsp", Benchmark: "internal-toolbench",
+			Cost: ci(0.0150, 0.0150, 0.0150), VerifiedCorrectness: ci(0.40, 0.40, 0.40)},
+		// A null-cost point must NOT plot a fabricated origin.
+		{Mode: "baseline_plain", Benchmark: "internal-toolbench",
+			Cost: nullCI(), VerifiedCorrectness: ci(0.50, 0.50, 0.50)},
+	}
+	md := renderCostQuality(rows, points, testFooter())
+
+	// The existing table + footer are preserved.
+	assert.Contains(t, md, "cost_per_solved_task", "the existing cost table is preserved")
+	assert.Contains(t, md, "2027-01-28", "the valid_until footer citation is preserved")
+	// A fenced scatter block is emitted, labelled by axis.
+	assert.Contains(t, md, "```", "the scatter is rendered as a fenced block")
+	assert.Contains(t, strings.ToLower(md), "verified_correctness",
+		"the scatter y-axis is verified_correctness")
+	assert.Contains(t, strings.ToLower(md), "cost", "the scatter x-axis is cost")
+
+	// Byte-stable across renders.
+	md2 := renderCostQuality(rows, points, testFooter())
+	assert.Equal(t, md, md2, "cost_quality.md (incl. scatter) must be byte-stable")
 }

@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 84-03-PLAN.md
-last_updated: "2026-06-21T02:42:55.550Z"
+last_updated: "2026-06-21T02:54:52.780Z"
 last_activity: 2026-06-21 -- Phase 85 execution started
 progress:
   total_phases: 15
   completed_phases: 10
   total_plans: 56
-  completed_plans: 51
+  completed_plans: 52
   percent: 67
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 85 (aider-polyglot-adapter-7-remaining-per-language-runners) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-06-21 -- Phase 85 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T02:42:33.542Z
+Last session: 2026-06-21T02:54:46.581Z
 Stopped at: Completed 84-03-PLAN.md
 Resume file: None
 
@@ -118,6 +118,7 @@ Resume file: None
 | Phase 84 P04 | ~6min | 2 tasks | 3 files |
 | Phase 85 P01 | 25min | 2 tasks | 7 files |
 | Phase 85 P02 | ~12min | 2 tasks | 3 files |
+| Phase 85 P03 | 25m | 3 tasks | 34 files |
 
 ## Decisions
 
@@ -193,3 +194,5 @@ Resume file: None
 - [Phase ?]: Plan 02: cacheDir() copied verbatim from bench/ragindex; Ensure publishes via verified-then-rename + .container-cache-ok sentinel; DiskGuard injectable availFn with build-tag-split unix.Statfs/GetDiskFreeSpaceEx at 50 GiB; extracted procGroupAttr() seam to unblock engine.go windows cross-compile.
 - [Phase 84 P03]: CONTAINER-03 runtime half DONE — VerifyImage(manifestBytes,bundleBytes) clones internal/upgrade/verify.go's sigstore-go keyless verifier (NewSignedEntityVerifier + NewShortCertificateIdentity, pinnedOIDCIssuer unchanged, pinnedSANRegexLiteral RE-PINNED to bench-mirror.yml@refs/heads/main — couples to Plan 04 publish ref). Single canonical "signature verification FAILED" at all 5 failure branches, no Rekor-unreachable exception (no offline UX here); error-text-identity test + comment-stripped grep gate (>=5) guard Pitfall 4. testTrustedRootOverride seam only — NO embedded prod root this phase (deferred to Plan 04 live mirror; production callers fail closed). VirtualSigstore fixtures committed (canonical/wrong-org/wrong-issuer + sample manifest). VerifyThenPull(ctx,repo,digest,opts) orders digest/repo fail-closed → daemon-free crane.Config arch inspect → ArchGate (Pitfall 5, before verify/pull) → Ensure with verify-then-pull INSIDE the fetch closure so a verify failure publishes ZERO cache bytes (Pitfall 3 TOCTOU); hermetic order/no-bytes/arch-gate/cache-hit siblings prove SC#3 without the gated live test (HELIX_BENCH_MIRROR+engine). Unexported Option seams (withVerifyFn/withArchFn/withFetchMetaFn/withPullFn/withEnsureFn/withHostArch); live fetch/pull deferred to Plan 04 (fail-closed notWired sentinels). Fixture build tag = `fixturegen` not `ignore` (Go 1.26 `-tags ignore` re-enables stdlib gen-tool import-cycle cascade). crane added via pinned go get @v0.20.7 (full tidy blocked by pre-existing s2a-go failure). [Rule 1] verify-no-docker-sdk gate grep anchored to 'github.com/docker/docker<ws>' so crane's transitive docker-credential-helpers (registry-auth, NOT Engine SDK) stops false-positiving SC#1.
 - [Phase 85 P02]: ADAPTER-AIDER-01 SC#3 run seam DONE — bench/container.runArgs builds fixed argv [run --rm (--network=none)? (-v src:dst)* -- image cmd...] mirroring pullArgs; (*Engine).Run mirrors PullByDigest exactly (exec.CommandContext + procGroupAttr + allowlistEnv PATH/HOME/HELIX_CACHE_DIR only, no shell, no docker Go SDK). --network=none present iff netNone is the SC#3 network policy (T-85-02-02), hermetically asserted in the exact argv golden WITHOUT a live engine; live Run t.Skips on errEngineUnavailable (never sole proof). Rule 3: isValidImageRef added (isValidRepo forbids '@', cannot validate <repo>@sha256:<hex>) — splits on @sha256: and reuses isValidRepo+isHexSHA256. errBadMount + isValidMountPath (ToSlash+Clean-equality+':'-ban, host-OS-independent for windows cross-compile). make verify-no-docker-sdk + make vet green.
+- [Phase ?]: 85-03: cloned go/runner.go x3 for python/java/csharp; Passed=exitCode==0 gate + ctx/ExitError split kept verbatim
+- [Phase ?]: 85-03: Java surefire golden sourced verbatim from apache/maven-surefire@5ee132b; TestJavaFixtureProvenance gate enforces non-placeholder (A5)

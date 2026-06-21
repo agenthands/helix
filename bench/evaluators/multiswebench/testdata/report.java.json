@@ -1,0 +1,16 @@
+{
+  "FasterXML__jackson-core-2002": {
+    "org": "FasterXML",
+    "repo": "jackson-core",
+    "number": 2002,
+    "instance_id": "FasterXML__jackson-core-2002",
+    "resolved": true
+  },
+  "FasterXML__jackson-databind-2004": {
+    "org": "FasterXML",
+    "repo": "jackson-databind",
+    "number": 2004,
+    "instance_id": "FasterXML__jackson-databind-2004",
+    "resolved": false
+  }
+}

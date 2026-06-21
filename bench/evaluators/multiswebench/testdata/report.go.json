@@ -1,0 +1,17 @@
+{
+  "golang__go-1001": {
+    "org": "golang",
+    "repo": "go",
+    "number": 1001,
+    "instance_id": "golang__go-1001",
+    "resolved": true,
+    "future_unknown_key": "tolerated"
+  },
+  "golang__go-1003": {
+    "org": "golang",
+    "repo": "go",
+    "number": 1003,
+    "instance_id": "golang__go-1003",
+    "resolved": false
+  }
+}

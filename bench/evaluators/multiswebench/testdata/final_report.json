@@ -1,0 +1,15 @@
+{
+  "total_instances": 4,
+  "resolved_instances": 2,
+  "unresolved_instances": 2,
+  "resolved_ids": [
+    "golang__go-1001",
+    "FasterXML__jackson-core-2002"
+  ],
+  "unresolved_ids": [
+    "golang__go-1003",
+    "FasterXML__jackson-databind-2004"
+  ],
+  "schema_version": 1,
+  "future_unknown_key": "tolerated"
+}

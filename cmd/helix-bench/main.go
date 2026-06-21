@@ -85,7 +85,7 @@ func newRootCmd() *cobra.Command {
 
 Subcommands:
   run                 run the bench suite (expands the matrix and dispatches cells)
-  fetch-datasets      download / refresh bench datasets (not yet implemented)
+  fetch-datasets      download / refresh bench datasets (CrossCodeEval + RepoBench)
   doctor              check host prerequisites; exits 0 on a clean host
   report              render bench reports (not yet implemented)
   validate-cost-table HARD-FAIL strict validator for bench/datasets/cost-table.yaml

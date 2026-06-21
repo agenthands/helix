@@ -1,206 +1,397 @@
 //go:build integration || llm || llmjudge
 
-// Golden output tests for every accessible MCP tool (CONT-01).
+// Golden output tests for the frozen Phase 92 terse CLI output contract
+// (TEST-02, OUT-06, OUT-07).
 //
-// First run MUST use GOLDEN_UPDATE=1 to generate baseline golden files:
-//   GOLDEN_UPDATE=1 go test -tags integration -run TestGolden -count=1 -timeout 5m ./test/oracle/contract/...
+// Re-targeted from the pre-92 MCP `TextContent` goldens to REAL
+// `helix <verb> --flags` SUBPROCESS stdout: golden capture now drives a real
+// helix binary against a live daemon (brought up via internal/eval/sandbox) and
+// freezes the terse `relpath:line:col<TAB>payload` shape, the `--abs` absolute
+// form (OUT-07), and the `--color=never` zero-ANSI form (OUT-06). This is the
+// authoritative freeze of the renderer's output, asserted against real CLI
+// output — not the unit layer and not MCP TextContent.
 //
-// Subsequent runs compare against the golden files:
-//   go test -tags integration -run TestGolden -count=1 -timeout 5m ./test/oracle/contract/...
+// Gating (mirrors the dial oracle in internal/cli/cli_e2e_test.go): the test
+// SKIPs cleanly when HELIX_BIN is unresolvable; the phase verify step builds the
+// binary and points HELIX_BIN at it so the test RUNS (not vacuously skips).
+//
+// First run MUST use GOLDEN_UPDATE=1 to (re)generate baseline golden files:
+//   HELIX_BIN=<built> GOLDEN_UPDATE=1 go test -tags integration -run TestGolden -count=1 -timeout 5m ./test/oracle/contract/...
+//
+// Subsequent runs compare against the golden files (idempotent, deterministic —
+// the 92-02 renderer sorts+dedups loci CLI-side so a second run is byte-identical):
+//   HELIX_BIN=<built> go test -tags integration -run TestGolden -count=1 -timeout 5m ./test/oracle/contract/...
 
 package contract_test
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/agenthands/helix/internal/eval/sandbox"
+	"github.com/agenthands/helix/internal/forwarder"
 	"github.com/agenthands/helix/test/harness"
 )
 
-// normalizeResponse replaces non-deterministic values with stable placeholders (D-04).
+// resolveHelixBin returns the helix binary that drives the golden subprocess
+// capture, or "" if none is available (the caller SKIPs). It prefers the
+// HELIX_BIN env override (CI / a freshly-built binary) then falls back to `helix`
+// on PATH — mirroring internal/cli/cli_e2e_test.go's resolveHelixBin exactly.
+func resolveHelixBin() string {
+	if env := os.Getenv("HELIX_BIN"); env != "" {
+		if _, err := os.Stat(env); err == nil {
+			return env
+		}
+	}
+	if p, err := exec.LookPath("helix"); err == nil {
+		return p
+	}
+	return ""
+}
+
+// goldenFixtureMain is the seeded Go source the golden subprocess verbs operate
+// on. It carries a top-level Helper function (a go_to_definition / find_references
+// target whose snippet line is asserted by the behavioral oracle) and a
+// DemoStruct type. Kept deterministic and self-contained so the goldens never
+// depend on stdlib results that vary by Go version.
+const goldenFixtureMain = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, Go!")
+	Helper()
+}
+
+// Helper is a top-level function used for go_to_definition and find_references tests.
+func Helper() {
+	fmt.Println("Helper function called")
+}
+
+// DemoStruct has a known field and method for symbol retrieval tests.
+type DemoStruct struct {
+	Field int
+}
+
+// Value returns the field value. Used for method resolution tests.
+func (d *DemoStruct) Value() int {
+	return d.Field
+}
+
+// UsingHelper calls Helper to create a cross-reference for find_references tests.
+func UsingHelper() {
+	Helper()
+}
+`
+
+// goldenEnv stands up a live daemon over a seeded Go fixture and exposes the
+// helix binary + socket the subprocess verbs dial. It is the shared bringup the
+// goldenCase loop reuses.
+type goldenEnv struct {
+	helixBin string
+	socket   string
+	repoDir  string
+}
+
+// newGoldenEnv builds a sandbox, seeds a Go workspace, starts a real daemon, and
+// activates the workspace over MCP (the path that sets the daemon's
+// active-workspace state the file/nav tools read). Reaped via t.Cleanup.
+func newGoldenEnv(t *testing.T) *goldenEnv {
+	t.Helper()
+
+	helixBin := resolveHelixBin()
+	if helixBin == "" {
+		t.Skip("helix binary not resolvable (set HELIX_BIN or 'go build -o helix ./cmd/helix'); skipping golden oracle")
+	}
+	// LS-backed verbs (go-to-definition / find-references / search-symbols /
+	// get-symbol-overview / get-hover-info) need gopls; skip cleanly if absent.
+	harness.RequireGopls(t)
+
+	const (
+		taskID = "contract-golden"
+		mode   = "full"
+	)
+
+	sb, err := sandbox.NewSandbox("golden", helixBin)
+	if err != nil {
+		t.Fatalf("sandbox.NewSandbox: %v", err)
+	}
+	t.Cleanup(func() { _ = sb.Cleanup() })
+
+	if err := sb.Prepare(taskID, mode); err != nil {
+		t.Fatalf("sandbox.Prepare: %v", err)
+	}
+
+	repoDir := sb.RepoFor(taskID, mode)
+	if err := os.WriteFile(filepath.Join(repoDir, "main.go"), []byte(goldenFixtureMain), 0o600); err != nil {
+		t.Fatalf("seed main.go: %v", err)
+	}
+	// A minimal go.mod keeps gopls happy (single-module workspace).
+	if err := os.WriteFile(filepath.Join(repoDir, "go.mod"), []byte("module goldenfixture\n\ngo 1.21\n"), 0o600); err != nil {
+		t.Fatalf("seed go.mod: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+
+	h, err := sb.StartDaemon(ctx, taskID, mode, "", "")
+	if err != nil {
+		t.Fatalf("sandbox.StartDaemon: %v", err)
+	}
+	t.Cleanup(func() { _ = h.Kill() })
+
+	socket := sb.SocketFor(taskID, mode)
+
+	// Activate over MCP (sets the daemon's active-workspace state; the gRPC
+	// activate RPC sets only kernel state).
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	res, err := forwarder.CallTool(ctx, socket, logger, "contract-golden",
+		"activate_project", map[string]any{"repo_path": repoDir})
+	if err != nil {
+		t.Fatalf("MCP activate_project: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("MCP activate_project reported error")
+	}
+
+	return &goldenEnv{helixBin: helixBin, socket: socket, repoDir: repoDir}
+}
+
+// runVerb runs a REAL `helix <verb> --flags...` subprocess against the env's
+// daemon socket and returns its stdout. The subprocess CWD is set to the
+// workspace root so the renderer's os.Getwd()-derived workspaceRoot relativizes
+// loci correctly (92-02 Open Q1 lock) and the CLI-side snippet read resolves.
+// stdout and stderr are captured separately so the golden holds stdout only.
+func (e *goldenEnv) runVerb(t *testing.T, args ...string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, e.helixBin, args...)
+	cmd.Dir = e.repoDir
+	cmd.Env = []string{
+		"HELIX_SOCKET=" + e.socket,
+		"HOME=" + os.Getenv("HOME"),
+		"PATH=" + os.Getenv("PATH"),
+		// Force deterministic, TTY-independent color resolution so `auto` golden
+		// captures are byte-stable regardless of the harness's stdout being a pipe
+		// (belt-and-suspenders; the renderer already leaves auto == never off-TTY).
+		"NO_COLOR=1",
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		// Non-zero exit is acceptable for some verbs (e.g. a nav with no result
+		// may still exit 0; we do not assert exit code here — the golden is the
+		// stdout SHAPE). Surface stderr only on a hard failure to aid debugging.
+		t.Logf("helix %v exited with %v (stderr: %s)", args, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String()
+}
+
+// normalizeResponse replaces non-deterministic values with stable placeholders.
+// The workspace dir is scrubbed to <WORKSPACE> FIRST (T-92-06: no contributor's
+// absolute host path is committed, including in the --abs variant). The default
+// terse form is already workspace-relative, so the substitution is a no-op for
+// relpath goldens and load-bearing only for --abs goldens.
 func normalizeResponse(text string, workspaceDir string) string {
-	// Replace workspace dir first (most specific).
 	if workspaceDir != "" {
 		text = strings.ReplaceAll(text, workspaceDir, "<WORKSPACE>")
 	}
-	// Normalize absolute paths containing /testdata/fixtures/.
+	// Normalize absolute paths containing /testdata/fixtures/ (defensive).
 	text = regexp.MustCompile(`/[^\s"]+/testdata/fixtures/`).ReplaceAllString(text, "<FIXTURE_ROOT>/")
-	// Normalize /tmp/ and /var/folders/ paths.
+	// Normalize /tmp/ and /var/folders/ paths (the sandbox repo lives under one).
 	text = regexp.MustCompile(`(?:/tmp|/var/folders)/[^\s"]+`).ReplaceAllString(text, "<TMPDIR>")
-	// Normalize ISO timestamps (e.g. 2026-04-11T19:33:13Z).
+	// Normalize ISO timestamps.
 	text = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s"]*`).ReplaceAllString(text, "<TIMESTAMP>")
-	// Normalize short date-time in list_directory output (e.g. "2026-04-11 19:33").
-	text = regexp.MustCompile(`\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}`).ReplaceAllString(text, "<DATETIME>")
-	// Normalize session IDs with embedded timestamps (e.g. session-2026-04-11T19-33-13).
-	text = regexp.MustCompile(`session-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}`).ReplaceAllString(text, "session-<TIMESTAMP>")
 	// Normalize UUIDs.
 	text = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`).ReplaceAllString(text, "<UUID>")
 	return text
 }
 
-// filterWorkspaceLines keeps only lines containing <WORKSPACE> from multi-line
-// output. This strips non-deterministic stdlib results from search_symbols output
-// that vary by Go version and platform, keeping only workspace-local results.
-// Lines are sorted for stability.
+// filterWorkspaceLines keeps only lines mentioning the fixture file (main.go) so
+// search_symbols stdlib results that vary by Go version/platform do not leak into
+// the golden. Lines are sorted for stability.
 func filterWorkspaceLines(text string) string {
 	var kept []string
 	for _, line := range strings.Split(text, "\n") {
-		if strings.Contains(line, "<WORKSPACE>") {
+		if strings.Contains(line, "main.go") {
 			kept = append(kept, line)
 		}
 	}
 	sort.Strings(kept)
 	if len(kept) == 0 {
-		return text // fallback: return original if no workspace lines
+		return text
 	}
 	return strings.Join(kept, "\n") + "\n"
 }
 
-// goldenDir returns the root directory for golden output files (D-05).
+// goldenDir returns the root directory for golden output files.
 func goldenDir() string {
 	return filepath.Join(harness.ProjectRoot(), "test", "oracle", "contract", "testdata", "golden")
 }
 
-// goldenCase describes one tool invocation for golden output capture.
+// goldenCase describes one CLI verb invocation captured into a golden. tool is
+// the underlying tool name (the golden subdir); verb is the kebab CLI verb; args
+// are the verb's CLI flags (1-indexed line/column per verbs_gen.go help text).
 type goldenCase struct {
-	tool           string
-	args           map[string]any
-	needsWorkspace bool   // true if tool requires activate_project
-	needsLS        bool   // true if tool requires running language server
-	needsMemory    string // if non-empty, write this memory name before calling
-	workspaceOnly  bool   // if true, filter output to workspace-local lines only
+	tool          string   // golden subdir name (underlying tool name)
+	verb          string   // kebab CLI verb
+	args          []string // CLI flags
+	goldenName    string   // golden file basename (default "success.golden")
+	workspaceOnly bool     // keep only main.go lines (search_symbols)
+	wantRelpath   bool     // assert output carries a relpath:line:col form
+	wantNoEsc     bool     // assert output has zero ESC (0x1b) bytes (--color=never)
 }
 
-// noWorkspaceCases returns tools that need no workspace (memory tools, onboarding tools).
-func noWorkspaceCases() []goldenCase {
+// goldenName returns the golden file basename for a case.
+func (c goldenCase) name() string {
+	if c.goldenName != "" {
+		return c.goldenName
+	}
+	return "success.golden"
+}
+
+// goldenCases is the re-targeted CLI verb capture set. Line/column are 1-indexed
+// (the verb flags are 1-based per verbs_gen.go). Line 11 col 6 targets "Helper"
+// in "func Helper() {" of the seeded fixture.
+//
+// Coverage spans the three render classes:
+//   - locus-list (terse relpath:line:col<TAB>payload): go-to-definition,
+//     find-references, search-symbols, search-in-files
+//   - tree (shape-only passthrough): get-symbol-overview
+//   - opaque (markdown passthrough): get-hover-info
+//
+// plus the two flag-variant goldens that freeze OUT-06/OUT-07 against real CLI
+// output: a `--abs` go-to-definition golden (absolute <WORKSPACE>/...:L:C form)
+// and a `--color=never` find-references golden (zero ESC bytes).
+func goldenCases() []goldenCase {
 	return []goldenCase{
-		{tool: "list_memories", args: map[string]any{}},
-		{tool: "write_memory", args: map[string]any{"name": "golden-test", "content": "test content for golden"}},
-		{tool: "read_memory", args: map[string]any{"name": "golden-test"}, needsMemory: "golden-test"},
-		{tool: "search_memories", args: map[string]any{"query": "golden"}, needsMemory: "golden-test"},
-		{tool: "onboard_project", args: map[string]any{}},
-		{tool: "prepare_for_new_conversation", args: map[string]any{}},
-		{tool: "switch_mode", args: map[string]any{"target_mode": "read"}},
+		// --- locus-list (terse) ---
+		{
+			tool: "go_to_definition", verb: "go-to-definition",
+			args:        []string{"--path=main.go", "--line=7", "--column=2"},
+			wantRelpath: true,
+		},
+		{
+			tool: "find_references", verb: "find-references",
+			args:        []string{"--path=main.go", "--line=11", "--column=6"},
+			wantRelpath: true,
+		},
+		{
+			tool: "search_symbols", verb: "search-symbols",
+			args:          []string{"--query=Helper"},
+			workspaceOnly: true,
+		},
+		{
+			tool: "search_in_files", verb: "search-in-files",
+			args:        []string{"--pattern=func"},
+			wantRelpath: true,
+		},
+		// --- tree (shape-only passthrough) ---
+		{
+			tool: "get_symbol_overview", verb: "get-symbol-overview",
+			args: []string{"--path=main.go"},
+		},
+		// --- opaque (markdown passthrough) ---
+		{
+			tool: "get_hover_info", verb: "get-hover-info",
+			args: []string{"--path=main.go", "--line=11", "--column=6"},
+		},
+		// --- OUT-07: --abs variant freezes the absolute <WORKSPACE>/...:L:C form ---
+		{
+			tool: "go_to_definition", verb: "go-to-definition",
+			args:        []string{"--abs", "--path=main.go", "--line=7", "--column=2"},
+			goldenName:  "abs.golden",
+			wantRelpath: true,
+		},
+		// --- OUT-06: --color=never variant freezes the zero-ANSI form ---
+		{
+			tool: "find_references", verb: "find-references",
+			args:       []string{"--color=never", "--path=main.go", "--line=11", "--column=6"},
+			goldenName: "color_never.golden",
+			wantNoEsc:  true,
+		},
 	}
 }
 
-// workspaceNoLSCases returns tools that need a workspace but not a language server.
-func workspaceNoLSCases() []goldenCase {
-	return []goldenCase{
-		// activate_project is tested separately since it creates the workspace.
-		{tool: "read_file", args: map[string]any{"path": "main.go"}, needsWorkspace: true},
-		{tool: "list_directory", args: map[string]any{"path": "."}, needsWorkspace: true},
-		{tool: "find_files", args: map[string]any{"pattern": "*.go"}, needsWorkspace: true},
-		{tool: "search_in_files", args: map[string]any{"pattern": "func"}, needsWorkspace: true},
-	}
-}
-
-// workspaceLSCases returns tools that need a running language server.
-// Line/column values are 0-indexed per the tool schemas.
-// Line 4, col 5 targets "main" in "func main() {" (fixture main.go).
-func workspaceLSCases() []goldenCase {
-	return []goldenCase{
-		// search_symbols returns stdlib results that vary by Go version; keep workspace-local only.
-		{tool: "search_symbols", args: map[string]any{"query": "main"}, needsWorkspace: true, needsLS: true, workspaceOnly: true},
-		{tool: "get_symbol_overview", args: map[string]any{"path": "main.go"}, needsWorkspace: true, needsLS: true},
-		{tool: "get_hover_info", args: map[string]any{"path": "main.go", "line": 4, "column": 5}, needsWorkspace: true, needsLS: true},
-		{tool: "go_to_definition", args: map[string]any{"path": "main.go", "line": 4, "column": 5}, needsWorkspace: true, needsLS: true},
-		{tool: "find_references", args: map[string]any{"path": "main.go", "line": 4, "column": 5}, needsWorkspace: true, needsLS: true},
-		{tool: "get_call_hierarchy", args: map[string]any{"path": "main.go", "line": 4, "column": 5}, needsWorkspace: true, needsLS: true},
-		// get_type_hierarchy and find_implementations need a type, not a function.
-		// Line 15, col 5 targets DemoStruct in the fixture (0-indexed).
-		{tool: "get_type_hierarchy", args: map[string]any{"path": "main.go", "line": 15, "column": 5}, needsWorkspace: true, needsLS: true},
-		{tool: "find_implementations", args: map[string]any{"path": "main.go", "line": 15, "column": 5}, needsWorkspace: true, needsLS: true},
-		{tool: "get_diagnostics", args: map[string]any{"path": "main.go"}, needsWorkspace: true, needsLS: true},
-		{tool: "format_code", args: map[string]any{"path": "main.go"}, needsWorkspace: true, needsLS: true},
-		// get_code_actions uses 1-indexed line/column. Line 5, col 5 targets "main".
-		{tool: "get_code_actions", args: map[string]any{"path": "main.go", "line": 5, "column": 5}, needsWorkspace: true, needsLS: true},
-	}
-}
-
-// TestGolden_ToolOutputs captures golden output for every accessible MCP tool (CONT-01).
-// Tools are grouped by their requirements: no-workspace, workspace-no-LS, workspace-LS.
-// LS-dependent tools skip cleanly when gopls is unavailable.
-func TestGolden_ToolOutputs(t *testing.T) {
+// TestGolden_CLIStdout captures golden output for each CLI verb as REAL
+// `helix <verb> --flags` subprocess stdout in the frozen terse shape (TEST-02),
+// plus the --abs (OUT-07) and --color=never (OUT-06) flag variants. It SKIPs
+// cleanly when HELIX_BIN (or gopls) is unavailable.
+func TestGolden_CLIStdout(t *testing.T) {
+	env := newGoldenEnv(t)
 	gDir := goldenDir()
 
-	// --- Group 1: No-workspace tools ---
-	t.Run("no_workspace", func(t *testing.T) {
-		runner := harness.StartRunner(t, harness.RunnerOptions{SkipLS: true})
-
-		// Pre-write memory for tools that need it.
-		harness.CallTool(t, runner.Session, "write_memory", map[string]any{
-			"name": "golden-test", "content": "test content for golden",
-		})
-
-		for _, tc := range noWorkspaceCases() {
-			tc := tc
-			t.Run(tc.tool, func(t *testing.T) {
-				result := harness.CallTool(t, runner.Session, tc.tool, tc.args)
-				text := harness.TextContent(result)
-				normalized := normalizeResponse(text, "")
-				goldenPath := filepath.Join(gDir, tc.tool, "success.golden")
-				harness.AssertGolden(t, goldenPath, []byte(normalized))
-			})
+	for _, tc := range goldenCases() {
+		tc := tc
+		runName := tc.verb
+		if tc.goldenName != "" {
+			runName = tc.verb + "/" + strings.TrimSuffix(tc.goldenName, ".golden")
 		}
-	})
+		t.Run(runName, func(t *testing.T) {
+			out := env.runVerb(t, append([]string{tc.verb}, tc.args...)...)
 
-	// --- Group 2: Workspace tools (no LS) ---
-	t.Run("workspace_no_ls", func(t *testing.T) {
-		fixtureDir := harness.PrepareFixture(t, "go")
-		runner := harness.StartRunner(t, harness.RunnerOptions{
-			WorkspaceDir: fixtureDir,
-			SkipLS:       true,
-		})
+			normalized := normalizeResponse(out, env.repoDir)
+			if tc.workspaceOnly {
+				normalized = filterWorkspaceLines(normalized)
+			}
 
-		// Test activate_project separately (it activates the workspace itself).
-		t.Run("activate_project", func(t *testing.T) {
-			// Runner already activated the workspace; call it again to get the output.
-			result := harness.CallTool(t, runner.Session, "activate_project", map[string]any{
-				"repo_path": fixtureDir,
-			})
-			text := harness.TextContent(result)
-			normalized := normalizeResponse(text, fixtureDir)
-			goldenPath := filepath.Join(gDir, "activate_project", "success.golden")
+			// Behavioral assertions on the captured shape (run pre-golden so a
+			// regenerate with GOLDEN_UPDATE=1 still exercises them).
+			if tc.wantRelpath {
+				assertRelpathForm(t, normalized)
+			}
+			if tc.wantNoEsc {
+				if bytes.IndexByte([]byte(out), 0x1b) >= 0 {
+					t.Errorf("--color=never output contains an ESC (0x1b) byte; OUT-06 requires zero ANSI.\noutput: %q", out)
+				}
+			}
+
+			goldenPath := filepath.Join(gDir, tc.tool, tc.name())
 			harness.AssertGolden(t, goldenPath, []byte(normalized))
 		})
-
-		for _, tc := range workspaceNoLSCases() {
-			tc := tc
-			t.Run(tc.tool, func(t *testing.T) {
-				result := harness.CallTool(t, runner.Session, tc.tool, tc.args)
-				text := harness.TextContent(result)
-				normalized := normalizeResponse(text, fixtureDir)
-				goldenPath := filepath.Join(gDir, tc.tool, "success.golden")
-				harness.AssertGolden(t, goldenPath, []byte(normalized))
-			})
-		}
-	})
-
-	// --- Group 3: Workspace tools (with LS) ---
-	t.Run("with_ls", func(t *testing.T) {
-		harness.RequireGopls(t)
-
-		fixtureDir := harness.PrepareFixture(t, "go")
-		runner := harness.StartRunner(t, harness.RunnerOptions{
-			WorkspaceDir: fixtureDir,
-		})
-
-		for _, tc := range workspaceLSCases() {
-			tc := tc
-			t.Run(tc.tool, func(t *testing.T) {
-				result := harness.CallTool(t, runner.Session, tc.tool, tc.args)
-				text := harness.TextContent(result)
-				normalized := normalizeResponse(text, fixtureDir)
-				if tc.workspaceOnly {
-					normalized = filterWorkspaceLines(normalized)
-				}
-				goldenPath := filepath.Join(gDir, tc.tool, "success.golden")
-				harness.AssertGolden(t, goldenPath, []byte(normalized))
-			})
-		}
-	})
+	}
 }
+
+// relpathFormRe matches a terse "relpath:line:col" (or absolute "<WORKSPACE>/...:L:C")
+// locus prefix anywhere in a line. It deliberately does NOT match a "file://"
+// URI-scheme prefix — the re-targeted shape is scheme-less (the unit renderer
+// strips the formatLocations "file://<abs>" prefix to a relpath).
+var relpathFormRe = regexp.MustCompile(`(?m)^(?:<WORKSPACE>/)?[^\s:]+:\d+:\d+`)
+
+// assertRelpathForm asserts the normalized output carries at least one
+// relpath:line:col locus and no absolute "file://" URI-scheme prefix (the freeze
+// is the scheme-less terse form). It tolerates a "(no results)" passthrough body
+// (some LS setups return no definition for a stdlib-resolved target) — in that
+// case the freeze is the passthrough text, captured by the golden directly.
+func assertRelpathForm(t *testing.T, normalized string) {
+	t.Helper()
+	if strings.Contains(normalized, "file://") { //nolint - the contract forbids this scheme prefix
+		t.Errorf("output carries an absolute file:// URI-scheme prefix; the frozen shape is scheme-less relpath:line:col.\noutput:\n%s", normalized)
+	}
+	if strings.TrimSpace(normalized) == "" {
+		return
+	}
+	if strings.Contains(normalized, "(no results)") {
+		return
+	}
+	if !relpathFormRe.MatchString(normalized) {
+		t.Errorf("output does not carry a relpath:line:col locus form.\noutput:\n%s", normalized)
+	}
+}
+
+// _ keeps fmt imported for ad-hoc debugging during golden bring-up without a
+// churny import toggle; it is a no-op at runtime.
+var _ = fmt.Sprintf

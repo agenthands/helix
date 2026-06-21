@@ -1,7 +1,0 @@
-1. [source.addTest] Add test for main
-2. [source.assembly] Browse arm64 assembly for main
-3. [source.doc] Browse documentation for package main
-4. [source.splitPackage] Split package "main"
-5. [source.toggleCompilerOptDetails] Show compiler optimization details for "go"
-6. [refactor.extract.toNewFile] Extract declarations to new file
-7. [gopls.doc.features] Browse gopls feature documentation

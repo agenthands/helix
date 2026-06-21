@@ -1,3 +1,12 @@
 ```go
-func main()
+func Helper()
 ```
+
+---
+
+Helper is a top-level function used for go\_to\_definition and find\_references tests.
+
+
+---
+
+[`main.Helper` on pkg.go.dev](https://pkg.go.dev/goldenfixture#Helper)

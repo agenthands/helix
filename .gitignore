@@ -258,6 +258,11 @@ test/bench/baselines/local.txt
 # cwd; generated runtime artifact, never tracked.
 /internal/cli/.helix/
 
+# Contract golden oracle (92-03) drives a real helix subprocess; the activated
+# daemon writes a cwd-relative .helix/semantic.duckdb under the test package dir.
+# Generated runtime artifact, never tracked.
+/test/oracle/contract/.helix/
+
 # Eval harness runtime artifacts
 /eval/reports/
 /cmd/helix-eval/eval/

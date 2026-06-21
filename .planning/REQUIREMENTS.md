@@ -64,7 +64,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 - [ ] **VERIFIED-01**: `verified_correctness` is computed independently of `task_success` — multi-oracle verdict: (a) all canonical tests pass, (b) all augmented tests pass (UTBoost or equivalent for benchmarks that have them), (c) no pre-existing tests regress. _Acceptance:_ a known-buggy patch that passes only canonical tests gets `task_success=true`, `verified_correctness=false`.
 - [ ] **VERIFIED-02**: SWE-bench Verified runs report **both** raw upstream score and UTBoost-augmented rescored score side-by-side. _Acceptance:_ SWE-bench Verified report has both columns; UTBoost augmented suite is wired and reproducible.
-- [ ] **VERIFIED-03**: Multi-oracle gate for non-test-bearing benchmarks (CrossCodeEval, RepoBench): EM + edit-similarity + identifier match all required to pass; abstain mode for low-confidence completions. _Acceptance:_ gate documented in `bench/evaluators/VERIFIED.md`; threshold per oracle configurable.
+- [x] **VERIFIED-03**: Multi-oracle gate for non-test-bearing benchmarks (CrossCodeEval, RepoBench): EM + edit-similarity + identifier match all required to pass; abstain mode for low-confidence completions. _Acceptance:_ gate documented in `bench/evaluators/VERIFIED.md`; threshold per oracle configurable.
 
 ### Statistical Rigor (STATS-*)
 

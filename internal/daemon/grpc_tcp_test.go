@@ -36,6 +36,10 @@ func TestValidateGRPCAddr(t *testing.T) {
 		{name: "localhost", addr: "localhost:9099", wantErr: false},
 		{name: "loopback_v6", addr: "[::1]:9099", wantErr: false},
 		{name: "auto_port", addr: "127.0.0.1:0", wantErr: false},
+		// CR-01: empty/wildcard host makes net.Listen bind ALL interfaces.
+		{name: "wildcard_empty_host", addr: ":9099", wantErr: true, errHas: "REMOTE-01"},
+		{name: "wildcard_empty_host_zero", addr: ":0", wantErr: true, errHas: "REMOTE-01"},
+		{name: "wildcard_v6", addr: "[::]:9099", wantErr: true, errHas: "REMOTE-01"},
 		{name: "zero_bind", addr: "0.0.0.0:9099", wantErr: true, errHas: "REMOTE-01"},
 		{name: "lan_bind", addr: "192.168.1.5:9099", wantErr: true, errHas: "REMOTE-01"},
 		{name: "dns_host", addr: "example.com:9099", wantErr: true, errHas: "REMOTE-01"},

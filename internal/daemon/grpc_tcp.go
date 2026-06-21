@@ -57,24 +57,42 @@ func (d *Daemon) newForwarderServiceHandler() *forwarderServiceHandler {
 }
 
 // validateGRPCAddr ensures the configured gRPC TCP address is loopback-only.
-// It is a line-for-line analog of validateAdminAddr (telemetry.go:108): empty is
-// valid (disabled); net.IP.IsLoopback() is the single source of truth for the
-// loopback decision (no hand-rolled allowlist). Non-loopback addresses are
-// refused with an error that points at REMOTE-01 (the deferred remote/auth
-// scope recorded in REMOTE-SCOPE-ADR.md).
+// Empty is valid (disabled). Unlike the pre-existing validateAdminAddr
+// (telemetry.go:108), an EMPTY host (":9099" / ":0") is REFUSED here: that form
+// makes net.Listen("tcp", addr) bind ALL interfaces (0.0.0.0 + ::), which would
+// expose the full ForwarderService.StreamMCP MCP tool surface — read/edit/
+// refactor tools behind all middlewares — plaintext and unauthenticated on the
+// LAN (RETIRE-04: "no unauthenticated non-loopback exposure by default").
+// net.IP.IsLoopback() is the source of truth for explicit hosts; wildcard and
+// non-loopback addresses are refused, pointing at REMOTE-01 (the deferred
+// remote/auth scope recorded in REMOTE-SCOPE-ADR.md).
+//
+// NOTE: validateAdminAddr has the SAME empty-host gap, but the admin path only
+// exposes instrumentation endpoints (/healthz, /metrics, opt-in pprof). The gap
+// is materially worse on this surface (the full MCP runtime), so it is closed
+// here regardless of the admin precedent. See REVIEW-FIX.md (CR-01) for the
+// admin-sibling note.
 func validateGRPCAddr(addr string) error {
 	if addr == "" {
-		return nil // disabled is valid
+		return nil // disabled is valid (unix-socket only — the default)
 	}
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return fmt.Errorf("invalid grpc addr %q: %w", addr, err)
 	}
 	switch host {
-	case "", "localhost", "127.0.0.1", "::1":
+	case "localhost", "127.0.0.1", "::1":
 		return nil
+	case "":
+		// ":9099" / ":0" → net.Listen binds ALL interfaces. Refuse: the
+		// loopback gate must name an explicit loopback host.
+		return fmt.Errorf("grpc addr must name an explicit loopback host, got wildcard %q "+
+			"(use 127.0.0.1:PORT or [::1]:PORT; non-loopback gRPC bind is deferred to REMOTE-01)", addr)
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+	// IsUnspecified() defends against 0.0.0.0 / :: should the explicit branch
+	// ever be reordered (those are already rejected as non-loopback today, but
+	// the guard documents the intent: never accept a wildcard bind).
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() && !ip.IsUnspecified() {
 		return nil
 	}
 	return fmt.Errorf("grpc addr must be loopback, got %q (non-loopback gRPC bind is deferred to REMOTE-01)", host)

@@ -22,10 +22,13 @@ import (
 // parameter rather than imported because internal/cli imports internal/forwarder,
 // so forwarder importing cli would create an import cycle.
 //
-// Teardown is ordered (RESEARCH Pitfall 3): session.Close() is deferred BEFORE
-// conn.Close() so the SDK flushes its shutdown over the stream before the gRPC
-// connection drops — otherwise the daemon records the session with an `error`
-// outcome and helix_session_lifecycle{outcome="error"} climbs per CLI call.
+// Teardown is ordered (RESEARCH Pitfall 3): session.Close() flushes the SDK
+// shutdown over the stream, then stream.CloseSend() half-closes the send
+// direction so the daemon's stream.Recv() observes a clean io.EOF, then
+// conn.Close() (deferred earliest, runs last) drops the gRPC connection.
+// Without the explicit CloseSend the daemon would see a non-EOF RST when the
+// conn drops and record the session with an `error` outcome, so
+// helix_session_lifecycle{outcome="error"} would climb per CLI call (WR-03).
 func CallTool(
 	ctx context.Context,
 	socketPath string,
@@ -59,8 +62,19 @@ func CallTool(
 	if err != nil {
 		return nil, fmt.Errorf("connecting MCP session: %w", err)
 	}
-	// Ordered teardown: session first (flush), then conn (defer above runs last).
-	defer session.Close()
+	// Ordered teardown (RESEARCH Pitfall 3): session.Close() first so the SDK
+	// flushes its shutdown over the stream, THEN stream.CloseSend() so the
+	// daemon's stream.Recv() observes a clean io.EOF and records the session with
+	// outcome="ended" — NOT the non-EOF RST abort it would see from conn.Close()
+	// alone, which inflates helix_session_lifecycle{outcome="error"} per CLI call
+	// (WR-03). This mirrors the long-lived forwarder's CloseSend at
+	// forwarder.go:95. conn.Close() (deferred above) still runs LAST.
+	defer func() {
+		session.Close()
+		// Half-close the send direction so the daemon sees clean EOF. Best-effort:
+		// a CloseSend error on an already-aborted stream is not actionable here.
+		_ = stream.CloseSend()
+	}()
 
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
 		Name:      name,

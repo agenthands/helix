@@ -5,16 +5,16 @@ milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 91
 current_phase_name: Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
 status: executing
-stopped_at: Completed 91-02-PLAN.md
-last_updated: "2026-06-21T14:20:39.518Z"
+stopped_at: Completed 91-03-PLAN.md
+last_updated: "2026-06-21T14:33:02Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 91 execution started
+last_activity_desc: Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
-  percent: 17
+  completed_plans: 7
+  percent: 19
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Phase: 91 (Code-Generated Verb Surface + tools/call Profile/Mode Enforcement) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 — Phase 91 execution started
+Last activity: 2026-06-21 — Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 19%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 90 P04 | 35min | 3 tasks | 5 files |
 | Phase 91 P01 | 17min | 3 tasks | 12 files |
 | Phase 91 P02 | 3min | 2 tasks | 3 files |
+| Phase 91 P03 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -86,8 +87,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:20:39.512Z
-Stopped at: Completed 91-02-PLAN.md
+Last session: 2026-06-21T14:33:02Z
+Stopped at: Completed 91-03-PLAN.md
 Resume file: None
 
 ## Decisions
@@ -103,3 +104,6 @@ Resume file: None
 - [Phase ?]: 91-01: internal/cli.VerbToolNames() is the read-only catalog seam for 91-03 integration tests
 - [Phase ?]: SEC-01: tools/call authz returns typed serr.PermissionDenied as an error (not IsError) so errors.Is round-trips CLI-side
 - [Phase ?]: ProfileEnforcementMiddleware installed between Guardrail and LazyInit (step 14b.6); LIFO keeps LazyInit first, ProfileEnforce before Guardrail
+- [Phase ?]: SEC-02: CLI verb surface = intersection(cli.VerbToolNames(), listSessionTools(profile)); byte-identical to profile allowed set via 91-01 parity, compares cleanly vs unchanged goldens; oracle re-pointed in TestProfile_Contract_Golden
+- [Phase ?]: SEC-02: hidden-AND-refused contract — TestProfile_CLI_Surface_Refusal asserts an out-of-profile destructive verb (replace_symbol_body) is absent from CLI surface AND CallTool returns a Go error (91-02 PermissionDenied)
+- [Phase ?]: 91-03 deferred: TestProfile_ExcludedToolNotInvocable + TestProfile_ModeAndBudget/switch_mode fail pre-existing under 91-02 enforcement (expect IsError, now get Go error) — out of 91-03 file scope, logged to deferred-items.md

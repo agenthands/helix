@@ -87,7 +87,7 @@ Subcommands:
   run                 run the bench suite (expands the matrix and dispatches cells)
   fetch-datasets      download / refresh bench datasets (CrossCodeEval + RepoBench)
   doctor              check host prerequisites; exits 0 on a clean host
-  report              render bench reports (not yet implemented)
+  report              regenerate all 4 reports for a run tree (--run-id)
   validate-cost-table HARD-FAIL strict validator for bench/datasets/cost-table.yaml
   aggregate           reduce a multi-run tree into leaderboard.md + cost_quality.md
 
@@ -413,15 +413,6 @@ func newFetchDatasetsCmd() *cobra.Command {
 			fmt.Fprintf(out, "fetch-datasets: %d ok, %d failed\n", ok, failed)
 			return nil
 		},
-	}
-}
-
-// newReportCmd returns the 'report' subcommand (skeleton).
-func newReportCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "report",
-		Short: "Render bench reports",
-		RunE:  notYetImplemented("report"),
 	}
 }
 

@@ -169,24 +169,52 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 	// excluded cell is auditable — never silently dropped.
 	rep.Contaminated = contaminatedCells(loaded, tasks, modes)
 
+	// Render + atomically write ALL 4 artifacts through the shared renderAll path
+	// (only reached on success). renderAll is the SINGLE render entry point both
+	// Aggregate and the helix-bench `report --run-id` subcommand call, so the two
+	// surfaces are byte-identical by construction (REPORT-05 byte-reproducibility).
+	if err := renderAll(rep, runDir); err != nil {
+		return nil, err
+	}
+	return rep, nil
+}
+
+// renderAll is the Phase 89 (REPORT-05) SHARED render path: it turns a reduced
+// *Report into ALL 4 byte-stable markdown artifacts — leaderboard.md (incl. the
+// INFRA-05 contamination footnote), cost_quality.md (incl. the REPORT-04 scatter),
+// per_language.md (REPORT-02), and ablations.md (REPORT-03) — and atomically writes
+// each into runDir via writeReport. It is the SINGLE render entry point both
+// Aggregate and `helix-bench report --run-id` invoke, so the two surfaces produce
+// byte-identical reports over the same run tree (no render drift — T-89-03-02). It
+// is pure-deterministic: every renderer sorts before emit and consumes NO RNG, so a
+// second renderAll over the same *Report yields the same bytes (double-render
+// diff-empty). The scatter is built HERE (not by the caller) so report and aggregate
+// share the exact same single-source cost/verified_correctness join.
+func renderAll(rep *Report, runDir string) error {
 	// Phase 89 (REPORT-04) scatter points: SINGLE-SOURCE cost from rep.Cost and
 	// verified_correctness from rep.Leaderboard, joined by (mode x benchmark), so
 	// the scatter's axes are the same numbers the leaderboard/cost tables publish.
 	scatter := buildScatterPoints(rep.Leaderboard, rep.Cost)
 
-	// Render + atomically write both artifacts (only reached on success).
 	// INFRA-05: append the contamination footnote to the rendered leaderboard so the
 	// excluded (task,mode) cells are auditable in the published artifact.
 	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
 	lb = appendContaminationFootnote(lb, rep.Contaminated)
 	cq := renderCostQuality(rep.Cost, scatter, rep.Footer)
-	if err := writeReport(runDir, "leaderboard.md", lb); err != nil {
-		return nil, err
+	pl := renderPerLanguage(rep.ByLanguage, rep.Footer)
+	ab := renderAblations(rep.Ablations, rep.Footer)
+
+	for _, out := range []struct{ name, content string }{
+		{"leaderboard.md", lb},
+		{"cost_quality.md", cq},
+		{"per_language.md", pl},
+		{"ablations.md", ab},
+	} {
+		if err := writeReport(runDir, out.name, out.content); err != nil {
+			return err
+		}
 	}
-	if err := writeReport(runDir, "cost_quality.md", cq); err != nil {
-		return nil, err
-	}
-	return rep, nil
+	return nil
 }
 
 // discoverModes returns the sorted set of modes present across all tasks, so the

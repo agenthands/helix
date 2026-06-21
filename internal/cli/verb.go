@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
@@ -26,6 +27,14 @@ const (
 	flagString flagKind = iota
 	flagInt
 	flagBool
+	// flagStringSlice maps a `[]string` tool argument to a cobra StringSlice
+	// flag (repeatable / comma-separated).
+	flagStringSlice
+	// flagJSON maps a non-scalar/opaque tool argument (e.g.
+	// []guardrails.ReceiptID, maps) to a `--<name>-json` string flag whose value
+	// is JSON-unmarshalled into the args map at dial time. This is the
+	// generator's deterministic policy for arg types with no scalar flag mapping.
+	flagJSON
 )
 
 // verbFlag describes a single flag a verb accepts and how it maps to a tool
@@ -55,55 +64,49 @@ func (f verbFlag) argKey() string {
 type verbSpec struct {
 	toolName string
 	short    string
-	flags    []verbFlag
+	// groupID is the cobra command-group the generated verb attaches to on the
+	// ROOT command (one of the 6 capability groups). Empty for the legacy spine
+	// verb (which attaches under the workspace group via newVerbCommand).
+	groupID string
+	flags   []verbFlag
 }
 
-// representativeVerb is the single spine verb this phase ships. Phase 91
-// generates the full verb set from the tool registry; here one representative
-// verb proves the load-bearing one-shot round-trip end to end.
-const representativeVerb = "search"
-
-// verbSpecs is the verb→tool registry. Phase 91 will populate this from the
-// generated tool catalog; this plan carries exactly one representative entry.
-var verbSpecs = map[string]verbSpec{
-	representativeVerb: {
-		// search_in_files is the real registered workspace-search tool. (The
-		// 90-03 spine pointed at a non-existent "search_for_pattern"; the daemon
-		// rejects it with `unknown tool`. Fixed here so the verb round-trips a
-		// successful tools/call — see 90-04 SUMMARY deviations.)
-		toolName: "search_in_files",
-		short:    "Search the active workspace for a regex pattern (representative one-shot verb)",
-		flags: []verbFlag{
-			// --query maps to the tool's `pattern` (regex) argument. search_in_files
-			// operates on the daemon's ACTIVE workspace; the SDK rejects unknown
-			// args (e.g. repo_path) for this tool, so workspace activation is a
-			// separate concern (activate_project / lazy-init), not a search arg.
-			{name: "query", toolArg: "pattern", kind: flagString, required: true, help: "Regex pattern to search for"},
-			{name: "max-results", toolArg: "max_results", kind: flagInt, required: false, help: "Maximum results to return"},
-			{name: "context-lines", toolArg: "context_lines", kind: flagInt, required: false, help: "Context lines before/after each match"},
-		},
-	},
-}
-
-// newVerbCommand builds the verb-dispatch spine: a parent command with one
-// subcommand per registered verb. Each subcommand maps its flags to a tool
-// arguments map (validated pre-dial) and issues a single MCP tools/call via the
-// one-shot helper over the existing StreamMCP wire.
-func newVerbCommand() *cobra.Command {
-	parent := &cobra.Command{
-		Use:           "call",
-		Short:         "Run a single code-intelligence tool call against the warm daemon",
-		Long:          "Dispatches a one-shot MCP tools/call to the Helix daemon (auto-starting it if needed) and prints the result. Phase 91 generates the full always-visible verb set; this spine ships one representative verb.",
-		GroupID:       groupWorkspace,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+// VerbToolNames returns the sorted set of underlying tool names from the verb
+// catalog (verbSpecs), one entry per verb. It is the read-only seam
+// out-of-package consumers (e.g. the 91-03 integration tests) use to read the
+// generated verb surface without touching internal state — the returned slice
+// is a fresh copy, so mutating it does not affect verbSpecs.
+func VerbToolNames() []string {
+	names := make([]string, 0, len(verbSpecs))
+	for _, spec := range verbSpecs {
+		names = append(names, spec.toolName)
 	}
-
-	for verb, spec := range verbSpecs {
-		parent.AddCommand(newVerbSubcommand(verb, spec))
-	}
-	return parent
+	sort.Strings(names)
+	return names
 }
+
+// registerGeneratedVerbs attaches one root subcommand per entry in verbSpecs,
+// grouped by capability (flatten-onto-root per Open Q1; replaces the legacy
+// `call` parent). Each verb reuses the spine's newVerbSubcommand so the pre-dial
+// required-flag validation in buildVerbArgs is preserved for free.
+func registerGeneratedVerbs(rootCmd *cobra.Command) {
+	verbs := make([]string, 0, len(verbSpecs))
+	for v := range verbSpecs {
+		verbs = append(verbs, v)
+	}
+	sort.Strings(verbs)
+	for _, v := range verbs {
+		spec := verbSpecs[v]
+		sub := newVerbSubcommand(v, spec)
+		sub.GroupID = spec.groupID
+		rootCmd.AddCommand(sub)
+	}
+}
+
+// verbSpecs is the verb→tool catalog. It is GENERATED into verbs_gen.go by
+// cmd/helix-cligen (one entry per live-registry tool) and must NOT be hand-
+// edited. The generator owns this variable; the drift gate
+// (`go run ./cmd/helix-cligen --check`) fails CI if it is stale.
 
 // newVerbSubcommand builds the cobra subcommand for a single verb.
 func newVerbSubcommand(verb string, spec verbSpec) *cobra.Command {
@@ -124,6 +127,10 @@ func newVerbSubcommand(verb string, spec verbSpec) *cobra.Command {
 			sub.Flags().Int(f.name, 0, f.help)
 		case flagBool:
 			sub.Flags().Bool(f.name, false, f.help)
+		case flagStringSlice:
+			sub.Flags().StringSlice(f.name, nil, f.help)
+		case flagJSON:
+			sub.Flags().String(f.name, "", f.help)
 		}
 	}
 	return sub
@@ -164,6 +171,25 @@ func buildVerbArgs(cmd *cobra.Command, spec verbSpec) (map[string]any, error) {
 				return nil, err
 			}
 			args[key] = v
+		case flagStringSlice:
+			v, err := cmd.Flags().GetStringSlice(f.name)
+			if err != nil {
+				return nil, err
+			}
+			args[key] = v
+		case flagJSON:
+			raw, err := cmd.Flags().GetString(f.name)
+			if err != nil {
+				return nil, err
+			}
+			// Unmarshal the raw JSON into a generic value so the daemon receives
+			// the structured argument (e.g. a []ReceiptID array) rather than a
+			// string. An empty value for a non-required flag is skipped above.
+			var decoded any
+			if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+				return nil, fmt.Errorf("flag --%s: invalid JSON: %w", f.name, err)
+			}
+			args[key] = decoded
 		}
 	}
 	return args, nil

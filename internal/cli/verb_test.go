@@ -11,69 +11,62 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// findSubcommand returns the named subcommand of the verb spine, failing the
-// test if it is not registered.
-func findSubcommand(t *testing.T, root *cobra.Command, name string) *cobra.Command {
+// findRootVerb returns the named generated verb subcommand attached to the root
+// command, failing the test if it is not registered.
+func findRootVerb(t *testing.T, name string) (*cobra.Command, verbSpec) {
 	t.Helper()
+	root := NewRootCommand()
 	for _, c := range root.Commands() {
 		if c.Name() == name {
-			return c
+			return c, verbSpecs[name]
 		}
 	}
-	t.Fatalf("subcommand %q not found under verb spine", name)
-	return nil
+	t.Fatalf("generated verb %q not found on root command", name)
+	return nil, verbSpec{}
 }
 
 // Test 1: flag→args mapping (no daemon). Parsing typed flags produces the
 // expected Arguments map with the correct Go value types, asserted WITHOUT
 // dialing a daemon (buildVerbArgs is isolated from the network call).
 func TestVerb_FlagToArgsMapping(t *testing.T) {
-	cmd := newVerbCommand()
-	// Locate the representative subcommand spine carries.
-	sub := findSubcommand(t, cmd, representativeVerb)
+	sub, spec := findRootVerb(t, "go-to-definition")
 
-	if err := sub.Flags().Set("query", "needle"); err != nil {
-		t.Fatalf("set query: %v", err)
+	if err := sub.Flags().Set("path", "src/main.go"); err != nil {
+		t.Fatalf("set path: %v", err)
 	}
-	if err := sub.Flags().Set("max-results", "7"); err != nil {
-		t.Fatalf("set max-results: %v", err)
+	if err := sub.Flags().Set("line", "10"); err != nil {
+		t.Fatalf("set line: %v", err)
 	}
-	if err := sub.Flags().Set("context-lines", "2"); err != nil {
-		t.Fatalf("set context-lines: %v", err)
+	if err := sub.Flags().Set("column", "5"); err != nil {
+		t.Fatalf("set column: %v", err)
 	}
 
-	args, err := buildVerbArgs(sub, verbSpecs[representativeVerb])
+	args, err := buildVerbArgs(sub, spec)
 	if err != nil {
 		t.Fatalf("buildVerbArgs: %v", err)
 	}
-
-	// Flags map to the underlying tool's schema keys (toolArg indirection):
-	// --query -> pattern, --max-results -> max_results,
-	// --context-lines -> context_lines.
-	if got, ok := args["pattern"].(string); !ok || got != "needle" {
-		t.Fatalf("pattern arg = %v (%T), want string needle", args["pattern"], args["pattern"])
+	if got, ok := args["path"].(string); !ok || got != "src/main.go" {
+		t.Fatalf("path arg = %v (%T), want string src/main.go", args["path"], args["path"])
 	}
-	if got, ok := args["max_results"].(int); !ok || got != 7 {
-		t.Fatalf("max_results arg = %v (%T), want int 7", args["max_results"], args["max_results"])
+	if got, ok := args["line"].(int); !ok || got != 10 {
+		t.Fatalf("line arg = %v (%T), want int 10", args["line"], args["line"])
 	}
-	if got, ok := args["context_lines"].(int); !ok || got != 2 {
-		t.Fatalf("context_lines arg = %v (%T), want int 2", args["context_lines"], args["context_lines"])
+	if got, ok := args["column"].(int); !ok || got != 5 {
+		t.Fatalf("column arg = %v (%T), want int 5", args["column"], args["column"])
 	}
 }
 
-// Test 2: tool-name resolution. The representative verb name maps to the
-// intended underlying tool Name passed in CallToolParams.
+// Test 2: tool-name resolution. The verb name maps to the intended underlying
+// tool Name passed in CallToolParams.
 func TestVerb_ToolNameResolution(t *testing.T) {
-	spec, ok := verbSpecs[representativeVerb]
+	spec, ok := verbSpecs["go-to-definition"]
 	if !ok {
-		t.Fatalf("representative verb %q not registered", representativeVerb)
+		t.Fatalf("verb go-to-definition not registered")
 	}
-	if spec.toolName == "" {
-		t.Fatalf("representative verb %q has empty toolName", representativeVerb)
+	if spec.toolName != "go_to_definition" {
+		t.Fatalf("toolName = %q, want go_to_definition", spec.toolName)
 	}
 
-	// End-to-end through the seam: invoking the command must pass spec.toolName
-	// as the tool Name to the one-shot helper.
 	var gotName string
 	var gotArgs map[string]any
 	restore := callToolFn
@@ -84,22 +77,21 @@ func TestVerb_ToolNameResolution(t *testing.T) {
 	}
 	defer func() { callToolFn = restore }()
 
-	cmd := newVerbCommand()
-	cmd.SetArgs([]string{representativeVerb, "--query=x"})
+	cmd := NewRootCommand()
+	cmd.SetArgs([]string{"go-to-definition", "--path=x.go", "--line=1", "--column=1"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if gotName != spec.toolName {
 		t.Fatalf("tool Name = %q, want %q", gotName, spec.toolName)
 	}
-	// --query maps to the tool's `pattern` argument (toolArg indirection).
-	if gotArgs["pattern"] != "x" {
-		t.Fatalf("pattern arg not forwarded: %v", gotArgs["pattern"])
+	if gotArgs["path"] != "x.go" {
+		t.Fatalf("path arg not forwarded: %v", gotArgs["path"])
 	}
 }
 
-// Test 3: missing-required arg errors BEFORE dialing. A required flag left
-// unset returns an error before any ConnectOrStartDaemon / callToolFn call.
+// Test 3: missing-required arg errors BEFORE dialing. A required flag left unset
+// returns an error before any ConnectOrStartDaemon / callToolFn call.
 func TestVerb_MissingRequiredArgErrorsBeforeDial(t *testing.T) {
 	dialed := false
 	restore := callToolFn
@@ -109,9 +101,9 @@ func TestVerb_MissingRequiredArgErrorsBeforeDial(t *testing.T) {
 	}
 	defer func() { callToolFn = restore }()
 
-	cmd := newVerbCommand()
-	// Omit the required --query flag (pass only an optional flag).
-	cmd.SetArgs([]string{representativeVerb, "--max-results=5"})
+	cmd := NewRootCommand()
+	// Omit the required --path flag.
+	cmd.SetArgs([]string{"go-to-definition", "--line=1"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected an error for missing required flag, got nil")

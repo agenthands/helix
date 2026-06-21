@@ -51,6 +51,17 @@ const (
 	groupRuntime = "runtime"
 	// groupMaintenance: self-update / upgrade of the helix binary.
 	groupMaintenance = "maintenance"
+
+	// The 6 generated-verb capability groups (Phase 91). These IDs are part of
+	// the help contract and MUST match the categoryToGroup map in
+	// cmd/helix-cligen/render.go — the generator emits these literals into
+	// verbSpecs[*].groupID.
+	groupNavigation  = "navigation"
+	groupEdit        = "edit"
+	groupFileops     = "fileops"
+	groupDiagnostics = "diagnostics"
+	groupRepomap     = "repomap"
+	groupMemory      = "memory"
 )
 
 // runForwarderFn / runDaemonFn are overridable seams over the real
@@ -79,11 +90,19 @@ func NewRootCommand() *cobra.Command {
 	}
 
 	// Command groups organize the help screen by capability (cobra AddGroup).
-	// Phase 91 will register the generated verb groups on top of this scaffold.
+	// Phase 91 adds the 6 generated-verb capability groups on top of the
+	// original scaffold; registerGeneratedVerbs attaches each generated verb to
+	// one of these by GroupID.
 	rootCmd.AddGroup(
 		&cobra.Group{ID: groupWorkspace, Title: "Workspace Commands:"},
 		&cobra.Group{ID: groupRuntime, Title: "Runtime Commands:"},
 		&cobra.Group{ID: groupMaintenance, Title: "Maintenance Commands:"},
+		&cobra.Group{ID: groupNavigation, Title: "Navigation:"},
+		&cobra.Group{ID: groupEdit, Title: "Edit:"},
+		&cobra.Group{ID: groupFileops, Title: "File Operations:"},
+		&cobra.Group{ID: groupDiagnostics, Title: "Diagnostics:"},
+		&cobra.Group{ID: groupRepomap, Title: "Repo Map & Semantic:"},
+		&cobra.Group{ID: groupMemory, Title: "Memory & Workflow:"},
 	)
 
 	// Transport mode: stdio (default/forwarder), http, auto
@@ -126,12 +145,16 @@ func NewRootCommand() *cobra.Command {
 	}
 	addGrouped(groupRuntime, newSetupCommand())
 	addGrouped(groupRuntime, newStatusCommand())
-	addGrouped(groupWorkspace, newVerbCommand())
 	addGrouped(groupWorkspace, newActivateCommand())
 	addGrouped(groupWorkspace, newDeactivateCommand())
 	addGrouped(groupWorkspace, newNudgeCommand())
 	addGrouped(groupMaintenance, newUpdateCommand())
 	addGrouped(groupMaintenance, newUpgradeCommand())
+
+	// Phase 91: attach the generated verb surface (one root subcommand per
+	// live-registry tool) grouped by capability. registerGeneratedVerbs sets
+	// each verb's GroupID from the generated verbSpecs catalog.
+	registerGeneratedVerbs(rootCmd)
 
 	return rootCmd
 }

@@ -71,18 +71,18 @@ func TestGenerateLanguageTable(t *testing.T) {
 
 func TestToolTableContainsKnownTools(t *testing.T) {
 	table := generateToolTable()
-	knownTools := []string{
-		"go_to_definition",
-		"replace_symbol_body",
-		"read_file",
-		"get_diagnostics",
-		"write_memory",
-		"onboard_project",
-		"switch_mode",
+	knownVerbs := []string{
+		"helix go-to-definition",
+		"helix replace-symbol-body",
+		"helix read-file",
+		"helix get-diagnostics",
+		"helix write-memory",
+		"helix onboard-project",
+		"helix switch-mode",
 	}
-	for _, tool := range knownTools {
-		if !strings.Contains(table, tool) {
-			t.Errorf("tool table missing known tool %q", tool)
+	for _, verb := range knownVerbs {
+		if !strings.Contains(table, verb) {
+			t.Errorf("tool table missing known verb %q", verb)
 		}
 	}
 }

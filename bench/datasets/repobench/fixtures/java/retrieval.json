@@ -1,0 +1,17 @@
+{
+  "provenance": "Shape + field semantics sourced from the RepoBench paper (Liu et al., ICLR 2024, arXiv:2306.03091) and the tianyang/repobench_java_v1.1 HuggingFace dataset card field list (repo_name, file_path, context[], import_statement, cropped_code, all_code, next_line, gold_snippet_index, token_num, level; splits cross_file_first/cross_file_random/in_file). RepoBench-R (retrieval) ranks the gold cross-file snippet — indexed by gold_snippet_index within context[] — among the retrieved candidates; the metric is acc@k. NOT scraped from the HF auto-loader/viewer. Values are a minimal hand-authored Java example matching that documented schema for hermetic acc@k decode/scoring proof; intentionally tiny, not a verbatim dataset row.",
+  "task": "retrieval",
+  "language": "java",
+  "split": "cross_file_random",
+  "level": "2k",
+  "repo_name": "example/javarepo",
+  "file_path": "src/main/java/com/example/Service.java",
+  "context": [
+    "public final class Helper {\n    static int alpha(int x) { return x + 1; }\n}\n",
+    "public final class Config {\n    static Map<String,String> load(String p) { return parse(p); }\n}\n",
+    "import java.util.Map;\nimport java.util.HashMap;\n"
+  ],
+  "gold_snippet_index": 1,
+  "cropped_code": "import java.util.Map;\n\npublic class Service {\n    Map<String,String> read(String p) {\n        return ",
+  "next_line": "Config.load(p);"
+}

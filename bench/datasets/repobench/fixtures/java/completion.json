@@ -1,0 +1,11 @@
+{
+  "provenance": "Shape + field semantics sourced from the RepoBench paper (Liu et al., ICLR 2024, arXiv:2306.03091) and the tianyang/repobench_java_v1.1 HuggingFace dataset card. RepoBench-C (completion) gives the model the cropped_code (in-file + retrieved cross-file context) and scores the predicted next_line with Exact Match (EM) and normalized Edit Similarity (ES), reused here via the Plan 01 exactmatch + editsim scorers. NOT scraped from the HF auto-loader/viewer. Values are a minimal hand-authored Java example matching the documented schema for hermetic EM/ES decode/scoring proof; intentionally tiny, not a verbatim dataset row.",
+  "task": "completion",
+  "language": "java",
+  "split": "in_file",
+  "level": "2k",
+  "repo_name": "example/javarepo",
+  "file_path": "src/main/java/com/example/Reader.java",
+  "cropped_code": "public class Reader {\n    int total(int[] xs) {\n        int s = 0;\n        for (int x : xs) ",
+  "next_line": "s += x;"
+}

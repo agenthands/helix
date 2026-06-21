@@ -1,0 +1,18 @@
+{
+  "provenance": "Shape + field semantics sourced from the RepoBench paper (Liu et al., ICLR 2024, arXiv:2306.03091) and the tianyang/repobench_python_v1.1 HuggingFace dataset card field list (repo_name, file_path, context[], import_statement, cropped_code, all_code, next_line, gold_snippet_index, token_num, level; splits cross_file_first/cross_file_random/in_file). RepoBench-R (retrieval) ranks the gold cross-file snippet — indexed by gold_snippet_index within context[] — among the retrieved candidates; the metric is acc@k. NOT scraped from the HF auto-loader/viewer. Values are a minimal hand-authored Python example matching that documented schema for hermetic acc@k decode/scoring proof; they are intentionally tiny, not a verbatim dataset row.",
+  "task": "retrieval",
+  "language": "python",
+  "split": "cross_file_first",
+  "level": "2k",
+  "repo_name": "example/pyrepo",
+  "file_path": "pyrepo/service.py",
+  "context": [
+    "def helper_alpha(x):\n    return x + 1\n",
+    "def load_config(path):\n    with open(path) as f:\n        return json.load(f)\n",
+    "class Cache:\n    def __init__(self):\n        self.store = {}\n",
+    "import os\nimport sys\n"
+  ],
+  "gold_snippet_index": 1,
+  "cropped_code": "import json\n\n\ndef read_settings(path):\n    cfg = ",
+  "next_line": "load_config(path)"
+}

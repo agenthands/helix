@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="6c97da56-f7cb-4752-a68a-96380bb8c643" name="@warhammer 2026-06-21 05:46:17" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-06-21T05:46:17.0513949+03:00" queuing="2026-06-21T05:46:17.0513950+03:00" start="2026-06-21T05:46:16.6707299+03:00" finish="2026-06-21T05:46:17.0568180+03:00" />
+  <TestSettings name="default" id="2e6e4264-a45e-4a8e-825a-0de86d1c2ec8">
+    <Deployment runDeploymentRoot="_warhammer_2026-06-21_05_46_17" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="0bfc8d1c-c109-4441-a902-30e8ffb8d859" testId="4740928e-831f-b2a4-ac76-64ab6eb7d575" testName="T.UnitTest1.TestFail" computerName="warhammer" duration="00:00:00.0069182" startTime="2026-06-21T05:46:16.9843629+03:00" endTime="2026-06-21T05:46:16.9843630+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0bfc8d1c-c109-4441-a902-30e8ffb8d859">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure
+Expected: True
+Actual:   False</Message>
+          <StackTrace>   at T.UnitTest1.TestFail() in /tmp/trxcap/T/UnitTest1.cs:line 8
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="40313c7e-ec8f-4e1f-af7b-0b76ef9af66c" testId="ccf4189c-df36-d695-4286-306a86ce2b7e" testName="T.UnitTest1.TestSkip" computerName="warhammer" duration="00:00:00.0010000" startTime="2026-06-21T05:46:16.9720951+03:00" endTime="2026-06-21T05:46:16.9720951+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="40313c7e-ec8f-4e1f-af7b-0b76ef9af66c">
+      <Output>
+        <ErrorInfo>
+          <Message>not ready</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2b73051e-62bf-4828-9022-f1c9d7506d04" testId="dd7232d6-37bc-591a-c40a-a645d718abc3" testName="T.UnitTest1.TestPass" computerName="warhammer" duration="00:00:00.0012271" startTime="2026-06-21T05:46:16.9701518+03:00" endTime="2026-06-21T05:46:16.9701628+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2b73051e-62bf-4828-9022-f1c9d7506d04" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="T.UnitTest1.TestPass" storage="/tmp/trxcap/t/bin/debug/net8.0/t.dll" id="dd7232d6-37bc-591a-c40a-a645d718abc3">
+      <Execution id="2b73051e-62bf-4828-9022-f1c9d7506d04" />
+      <TestMethod codeBase="/tmp/trxcap/T/bin/Debug/net8.0/T.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="T.UnitTest1" name="TestPass" />
+    </UnitTest>
+    <UnitTest name="T.UnitTest1.TestFail" storage="/tmp/trxcap/t/bin/debug/net8.0/t.dll" id="4740928e-831f-b2a4-ac76-64ab6eb7d575">
+      <Execution id="0bfc8d1c-c109-4441-a902-30e8ffb8d859" />
+      <TestMethod codeBase="/tmp/trxcap/T/bin/Debug/net8.0/T.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="T.UnitTest1" name="TestFail" />
+    </UnitTest>
+    <UnitTest name="T.UnitTest1.TestSkip" storage="/tmp/trxcap/t/bin/debug/net8.0/t.dll" id="ccf4189c-df36-d695-4286-306a86ce2b7e">
+      <Execution id="40313c7e-ec8f-4e1f-af7b-0b76ef9af66c" />
+      <TestMethod codeBase="/tmp/trxcap/T/bin/Debug/net8.0/T.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="T.UnitTest1" name="TestSkip" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="4740928e-831f-b2a4-ac76-64ab6eb7d575" executionId="0bfc8d1c-c109-4441-a902-30e8ffb8d859" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ccf4189c-df36-d695-4286-306a86ce2b7e" executionId="40313c7e-ec8f-4e1f-af7b-0b76ef9af66c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="dd7232d6-37bc-591a-c40a-a645d718abc3" executionId="2b73051e-62bf-4828-9022-f1c9d7506d04" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.22)
+[xUnit.net 00:00:00.03]   Discovering: T
+[xUnit.net 00:00:00.05]   Discovered:  T
+[xUnit.net 00:00:00.05]   Starting:    T
+[xUnit.net 00:00:00.08]       not ready
+[xUnit.net 00:00:00.09]       Assert.True() Failure
+[xUnit.net 00:00:00.09]       Expected: True
+[xUnit.net 00:00:00.09]       Actual:   False
+[xUnit.net 00:00:00.09]       Stack Trace:
+[xUnit.net 00:00:00.09]         /tmp/trxcap/T/UnitTest1.cs(8,0): at T.UnitTest1.TestFail()
+[xUnit.net 00:00:00.09]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+[xUnit.net 00:00:00.09]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.10]   Finished:    T
+Test 'T.UnitTest1.TestSkip' was skipped in the test run.
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="warhammer" outcome="Warning" timestamp="2026-06-21T05:46:16.9720470+03:00">
+        <Text>[xUnit.net 00:00:00.08]     T.UnitTest1.TestSkip [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="warhammer" outcome="Error" timestamp="2026-06-21T05:46:16.9830400+03:00">
+        <Text>[xUnit.net 00:00:00.09]     T.UnitTest1.TestFail [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

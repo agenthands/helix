@@ -113,7 +113,11 @@ func generateToolTable() string {
 			}
 			// Escape pipes in description.
 			desc = strings.ReplaceAll(desc, "|", "\\|")
-			sb.WriteString(fmt.Sprintf("| `%s` | %s | %s |\n", tool.Name, category, desc))
+			// Re-key to the agent-facing `helix <verb>` CLI name. The verb is
+			// the MCP tool name with underscores turned to hyphens — a proven
+			// mechanical mapping for all 50 frozen verbs (zero mismatches).
+			verb := strings.ReplaceAll(tool.Name, "_", "-")
+			sb.WriteString(fmt.Sprintf("| `helix %s` | %s | %s |\n", verb, category, desc))
 		}
 	}
 

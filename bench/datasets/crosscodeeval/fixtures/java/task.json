@@ -1,0 +1,7 @@
+{
+  "provenance": "Shape + field semantics sourced from the CrossCodeEval paper (arXiv:2310.11248, NeurIPS 2023) line-completion task definition and the official amazon-science/cceval repo data format (prompt = cropped in-file left context; groundtruth = the single next-line completion). NOT scraped from the Vincentvmt/CrossCodeEval HF auto-loader/viewer (known cast error, RESEARCH Pitfall 3). Values are a minimal hand-authored Java example matching that documented schema for hermetic decode/scoring proof; intentionally tiny, not a verbatim dataset row.",
+  "language": "java",
+  "split": "test",
+  "prompt": "public class Counter {\n    private int count = 0;\n\n    public int increment() {\n        ",
+  "groundtruth": "return ++count;"
+}

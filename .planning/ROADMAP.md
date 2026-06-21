@@ -41,6 +41,7 @@
 **Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, TEST-01
 
 **Success Criteria** (what must be TRUE):
+
   1. A representative verb invoked as `helix <verb>` returns the same tool result the MCP path returns, and `git diff api/proto/` is empty (zero proto changes).
   2. A first `helix` call on a cold host spawns the daemon exactly once and a warm second call reuses it; the second-call p50 meets the SLO recorded in the phase.
   3. N parallel cold `helix` invocations result in exactly one daemon process (verified by a fan-out / synctest stress test exercising the cross-process startup lock).
@@ -48,7 +49,8 @@
   5. The CLI-over-daemon E2E oracle runs a representative verb as a real subprocess against a live daemon and is green under `go test`.
 
 **Plans**: 4 plans (3 waves)
-- [ ] 90-01-PLAN.md — Cross-process startup lock (gofrs/flock) + double-checked connect; synctest race-algorithm test (CLI-03)
+
+- [x] 90-01-PLAN.md — Cross-process startup lock (gofrs/flock) + double-checked connect; synctest race-algorithm test (CLI-03)
 - [ ] 90-02-PLAN.md — No-arg `helix` → grouped help, exit 0, no stdio MCP session; cobra command groups (CLI-04)
 - [ ] 90-03-PLAN.md — Client-side gRPC↔MCP-SDK transport mirror + one-shot CallTool helper + verb-dispatch spine (CLI-01, CLI-02)
 - [ ] 90-04-PLAN.md — HELIX_BIN-gated `!windows` E2E oracle: one-shot round-trip, warm-reuse SLO, parallel-cold single-PID (TEST-01, CLI-01/02/03)
@@ -62,6 +64,7 @@
 **Requirements**: VERB-01, VERB-02, VERB-03, VERB-04, SEC-01, SEC-02
 
 **Success Criteria** (what must be TRUE):
+
   1. A parity test asserts the generated subcommand count equals the live registry tool count, enumerated by name — every registered tool has exactly one `helix` verb, with no manual per-tool edits.
   2. Editing a tool's `*Args` struct without regenerating fails CI via the `helix-cligen --check` drift gate; a regenerate makes it green.
   3. `helix --help` groups verbs by capability (navigation / edit / fileops / diagnostics / repomap / memory); a missing required flag errors before the daemon is dialed.
@@ -80,6 +83,7 @@
 **Requirements**: OUT-01, OUT-02, OUT-03, OUT-04, OUT-05, OUT-06, OUT-07, TEST-02
 
 **Success Criteria** (what must be TRUE):
+
   1. Piped output contains zero ANSI bytes, coordinates are 1-based workspace-relative, and the same query yields byte-identical sorted+deduped output across N repeated runs (per-verb goldens).
   2. `helix find-symbol` output feeds `helix replace-symbol-body` / `get-callers` verbatim, and nav verbs print locus + enclosing symbol + one snippet line so no follow-up `Read` is forced (behavioral-oracle confirmed).
   3. Each documented error kind surfaces a stable stderr prefix plus a per-kind non-zero exit code the agent can branch on.
@@ -98,6 +102,7 @@
 **Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04, TEST-03
 
 **Success Criteria** (what must be TRUE):
+
   1. `SKILL.md` validates against the Claude Code skill schema; the behavioral oracle shows it triggers on code tasks and stays dormant on unrelated ones, and records a tool-selection improvement toward `helix` versus the grep/sed/cat baseline.
   2. A code-symbol grep yields a `helix` suggestion via `additionalContext`; a README/log grep yields none; the hook never blocks (always exit 0).
   3. `helix setup claude-code` leaves the skill + hooks present and no MCP server entry; re-running is idempotent, and the teardown covers every supported client.
@@ -115,6 +120,7 @@
 **Requirements**: RETIRE-01, RETIRE-02, RETIRE-03, RETIRE-04
 
 **Success Criteria** (what must be TRUE):
+
   1. The dual-run parity test comparing CLI output against the pre-removal MCP path for a representative tool set is green in the commit immediately before the deletion commit (the strangler-fig gate).
   2. No stdio MCP server code path remains reachable and the HTTP `/mcp` endpoint is gone; `--mode http` no longer serves MCP, while the CLI still dials the daemon (Windows local-dial smoke included).
   3. The CLI can target a configured TCP daemon endpoint when opted in, and the default remains the local unix socket / named pipe.
@@ -130,6 +136,7 @@
 **Requirements**: DOCS-01, DOCS-02, DOCS-03
 
 **Success Criteria** (what must be TRUE):
+
   1. No doc claims MCP as the primary agent interface; the CLI-first framing is consistent across README, CLAUDE.md, and PROJECT.md.
   2. The CLAUDE.md tool-routing matrix cites `helix` CLI verbs end-to-end instead of MCP tool names.
   3. The generated tool table lists `helix` verbs and the docgen drift gate is green, with docgen's blank imports equal to the daemon's (three-way registry ↔ CLI ↔ docgen parity).

@@ -2,14 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-status: planning
-last_updated: "2026-06-21T14:00:00.000Z"
+current_phase: 90
+current_phase_name: CLI One-Shot Dial Spine + Race-Free Warm Reuse
+status: executing
+stopped_at: v2.0 ROADMAP.md created (phases 90-95), REQUIREMENTS.md Traceability filled (31/31 mapped), STATE.md reset to Phase 90 ready-to-plan.
+last_updated: "2026-06-21T12:06:03.831Z"
 last_activity: 2026-06-21
+last_activity_desc: Phase 90 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 90 of 95 (CLI One-Shot Dial Spine + Race-Free Warm Reuse) — first v2.0 phase
-Plan: — (ready to plan)
-Status: Ready to plan
-Last activity: 2026-06-21 — v2.0 roadmap created (6 phases 90-95, 31 REQs, 100% mapped)
+Phase: 90 (CLI One-Shot Dial Spine + Race-Free Warm Reuse) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-21 — Phase 90 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -40,6 +44,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 *Updated after each plan completion.*
+| Phase 90 P01 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -75,6 +80,11 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:00:00.000Z
+Last session: 2026-06-21T12:05:55.357Z
 Stopped at: v2.0 ROADMAP.md created (phases 90-95), REQUIREMENTS.md Traceability filled (31/31 mapped), STATE.md reset to Phase 90 ready-to-plan.
 Resume file: None
+
+## Decisions
+
+- [Phase ?]: Phase 90-01: per-socket gofrs/flock startup lock + double-checked tryConnect in ConnectOrStartDaemon; N parallel cold callers spawn exactly one daemon (CLI-03)
+- [Phase ?]: Phase 90-01: synctest seam pattern - startupGuard takes injectable seams; race test uses an in-process mutex locker since real OS flock deadlocks synctest virtual clock

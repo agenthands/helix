@@ -32,17 +32,14 @@ func TestVerb_FlagToArgsMapping(t *testing.T) {
 	// Locate the representative subcommand spine carries.
 	sub := findSubcommand(t, cmd, representativeVerb)
 
-	if err := sub.Flags().Set("workspace", "/tmp/proj"); err != nil {
-		t.Fatalf("set workspace: %v", err)
-	}
 	if err := sub.Flags().Set("query", "needle"); err != nil {
 		t.Fatalf("set query: %v", err)
 	}
 	if err := sub.Flags().Set("max-results", "7"); err != nil {
 		t.Fatalf("set max-results: %v", err)
 	}
-	if err := sub.Flags().Set("verbose", "true"); err != nil {
-		t.Fatalf("set verbose: %v", err)
+	if err := sub.Flags().Set("context-lines", "2"); err != nil {
+		t.Fatalf("set context-lines: %v", err)
 	}
 
 	args, err := buildVerbArgs(sub, verbSpecs[representativeVerb])
@@ -50,17 +47,17 @@ func TestVerb_FlagToArgsMapping(t *testing.T) {
 		t.Fatalf("buildVerbArgs: %v", err)
 	}
 
-	if got, ok := args["workspace"].(string); !ok || got != "/tmp/proj" {
-		t.Fatalf("workspace arg = %v (%T), want string /tmp/proj", args["workspace"], args["workspace"])
+	// Flags map to the underlying tool's schema keys (toolArg indirection):
+	// --query -> pattern, --max-results -> max_results,
+	// --context-lines -> context_lines.
+	if got, ok := args["pattern"].(string); !ok || got != "needle" {
+		t.Fatalf("pattern arg = %v (%T), want string needle", args["pattern"], args["pattern"])
 	}
-	if got, ok := args["query"].(string); !ok || got != "needle" {
-		t.Fatalf("query arg = %v (%T), want string needle", args["query"], args["query"])
+	if got, ok := args["max_results"].(int); !ok || got != 7 {
+		t.Fatalf("max_results arg = %v (%T), want int 7", args["max_results"], args["max_results"])
 	}
-	if got, ok := args["max-results"].(int); !ok || got != 7 {
-		t.Fatalf("max-results arg = %v (%T), want int 7", args["max-results"], args["max-results"])
-	}
-	if got, ok := args["verbose"].(bool); !ok || got != true {
-		t.Fatalf("verbose arg = %v (%T), want bool true", args["verbose"], args["verbose"])
+	if got, ok := args["context_lines"].(int); !ok || got != 2 {
+		t.Fatalf("context_lines arg = %v (%T), want int 2", args["context_lines"], args["context_lines"])
 	}
 }
 
@@ -88,15 +85,16 @@ func TestVerb_ToolNameResolution(t *testing.T) {
 	defer func() { callToolFn = restore }()
 
 	cmd := newVerbCommand()
-	cmd.SetArgs([]string{representativeVerb, "--workspace=/tmp/proj", "--query=x"})
+	cmd.SetArgs([]string{representativeVerb, "--query=x"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if gotName != spec.toolName {
 		t.Fatalf("tool Name = %q, want %q", gotName, spec.toolName)
 	}
-	if gotArgs["query"] != "x" {
-		t.Fatalf("query arg not forwarded: %v", gotArgs["query"])
+	// --query maps to the tool's `pattern` argument (toolArg indirection).
+	if gotArgs["pattern"] != "x" {
+		t.Fatalf("pattern arg not forwarded: %v", gotArgs["pattern"])
 	}
 }
 
@@ -112,8 +110,8 @@ func TestVerb_MissingRequiredArgErrorsBeforeDial(t *testing.T) {
 	defer func() { callToolFn = restore }()
 
 	cmd := newVerbCommand()
-	// Omit the required --query flag.
-	cmd.SetArgs([]string{representativeVerb, "--workspace=/tmp/proj"})
+	// Omit the required --query flag (pass only an optional flag).
+	cmd.SetArgs([]string{representativeVerb, "--max-results=5"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected an error for missing required flag, got nil")

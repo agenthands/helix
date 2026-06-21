@@ -31,10 +31,24 @@ const (
 // verbFlag describes a single flag a verb accepts and how it maps to a tool
 // argument.
 type verbFlag struct {
-	name     string
+	name string
+	// toolArg is the underlying MCP tool argument key this flag maps to. When
+	// empty the flag name is used verbatim. This indirection lets a user-facing
+	// flag (e.g. --workspace) map to the tool's actual schema key (repo_path)
+	// without forcing the CLI vocabulary to leak the tool's internal names.
+	toolArg  string
 	kind     flagKind
 	required bool
 	help     string
+}
+
+// argKey returns the tool-argument key for a flag (toolArg override or the
+// flag name).
+func (f verbFlag) argKey() string {
+	if f.toolArg != "" {
+		return f.toolArg
+	}
+	return f.name
 }
 
 // verbSpec maps a CLI verb to an underlying MCP tool Name plus its flag set.
@@ -53,13 +67,20 @@ const representativeVerb = "search"
 // generated tool catalog; this plan carries exactly one representative entry.
 var verbSpecs = map[string]verbSpec{
 	representativeVerb: {
-		toolName: "search_for_pattern",
-		short:    "Search the workspace for a pattern (representative one-shot verb)",
+		// search_in_files is the real registered workspace-search tool. (The
+		// 90-03 spine pointed at a non-existent "search_for_pattern"; the daemon
+		// rejects it with `unknown tool`. Fixed here so the verb round-trips a
+		// successful tools/call — see 90-04 SUMMARY deviations.)
+		toolName: "search_in_files",
+		short:    "Search the active workspace for a regex pattern (representative one-shot verb)",
 		flags: []verbFlag{
-			{name: "workspace", kind: flagString, required: true, help: "Workspace directory"},
-			{name: "query", kind: flagString, required: true, help: "Pattern to search for"},
-			{name: "max-results", kind: flagInt, required: false, help: "Maximum results to return"},
-			{name: "verbose", kind: flagBool, required: false, help: "Verbose output"},
+			// --query maps to the tool's `pattern` (regex) argument. search_in_files
+			// operates on the daemon's ACTIVE workspace; the SDK rejects unknown
+			// args (e.g. repo_path) for this tool, so workspace activation is a
+			// separate concern (activate_project / lazy-init), not a search arg.
+			{name: "query", toolArg: "pattern", kind: flagString, required: true, help: "Regex pattern to search for"},
+			{name: "max-results", toolArg: "max_results", kind: flagInt, required: false, help: "Maximum results to return"},
+			{name: "context-lines", toolArg: "context_lines", kind: flagInt, required: false, help: "Context lines before/after each match"},
 		},
 	},
 }
@@ -123,25 +144,26 @@ func buildVerbArgs(cmd *cobra.Command, spec verbSpec) (map[string]any, error) {
 		if !changed && !f.required {
 			continue
 		}
+		key := f.argKey()
 		switch f.kind {
 		case flagString:
 			v, err := cmd.Flags().GetString(f.name)
 			if err != nil {
 				return nil, err
 			}
-			args[f.name] = v
+			args[key] = v
 		case flagInt:
 			v, err := cmd.Flags().GetInt(f.name)
 			if err != nil {
 				return nil, err
 			}
-			args[f.name] = v
+			args[key] = v
 		case flagBool:
 			v, err := cmd.Flags().GetBool(f.name)
 			if err != nil {
 				return nil, err
 			}
-			args[f.name] = v
+			args[key] = v
 		}
 	}
 	return args, nil
@@ -156,7 +178,7 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 		return err
 	}
 
-	socketPath := config.DefaultSocketPath()
+	socketPath := resolveVerbSocket(cmd)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	res, err := callToolFn(cmd.Context(), socketPath, logger, CurrentVersion(), spec.toolName, args)
@@ -169,6 +191,32 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 		return fmt.Errorf("tool %s reported an error", spec.toolName)
 	}
 	return nil
+}
+
+// resolveVerbSocket resolves the daemon socket the one-shot call dials, with the
+// precedence: inherited root --socket flag > HELIX_SOCKET env > the per-uid
+// default (config.DefaultSocketPath). The flag lets a user point a verb at a
+// non-default daemon; the HELIX_SOCKET env is the hook the HELIX_BIN-gated E2E
+// oracle (90-04) uses to point a real `helix call` subprocess at an isolated
+// sandbox daemon socket without depending on os.TempDir layout.
+func resolveVerbSocket(cmd *cobra.Command) string {
+	// Inherited root persistent/local --socket flag (may be unset on the verb).
+	if cmd != nil {
+		if f := cmd.Flags().Lookup("socket"); f != nil {
+			if v, _ := cmd.Flags().GetString("socket"); v != "" {
+				return v
+			}
+		}
+		if root := cmd.Root(); root != nil {
+			if v, _ := root.Flags().GetString("socket"); v != "" {
+				return v
+			}
+		}
+	}
+	if env := os.Getenv("HELIX_SOCKET"); env != "" {
+		return env
+	}
+	return config.DefaultSocketPath()
 }
 
 // renderResult prints the tool result to stdout: text content verbatim,

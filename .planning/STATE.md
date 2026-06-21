@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 86-03-PLAN.md
-last_updated: "2026-06-21T04:41:55.048Z"
-last_activity: 2026-06-21 -- Completed 86-03-PLAN.md (CrossCodeEval dataset-loader-only adapter)
+stopped_at: Completed 86-05-PLAN.md
+last_updated: "2026-06-21T04:50:18.000Z"
+last_activity: 2026-06-21 -- Completed 86-05-PLAN.md (canary probe + aggregator CanaryPassRate column + real fetch-datasets CLI)
 progress:
   total_phases: 15
   completed_phases: 11
   total_plans: 61
-  completed_plans: 60
-  percent: 73
+  completed_plans: 61
+  percent: 74
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 86 (crosscodeeval-repobench-adapters-multi-oracle-completion-gate) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-21 -- Completed 86-03-PLAN.md (CrossCodeEval dataset-loader-only adapter)
+Plan: 5 of 5 (complete)
+Status: All 86 plans executed
+Last activity: 2026-06-21 -- Completed 86-05-PLAN.md (canary probe + aggregator CanaryPassRate column + real fetch-datasets CLI)
 
 ### Session Continuity
 
-Last session: 2026-06-21T04:41:49.436Z
-Stopped at: Completed 86-03-PLAN.md
+Last session: 2026-06-21T04:50:18.000Z
+Stopped at: Completed 86-05-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -126,9 +126,11 @@ Resume file: None
 | Phase 86 P01 | ~14min | 2 tasks | 6 files |
 | Phase 86 P02 | 3min | 2 tasks | 4 files |
 | Phase 86 P04 | 7 | 2 tasks | 12 files |
+| Phase 86 P05 | ~7min | 2 tasks | 7 files (TDD RED+GREEN x2) |
 
 ## Decisions
 
+- [Phase 86 P05]: SC#4 closed — minimal forward-compatible contamination-canary probe (bench/canary: known-novel Sentinel constant, deterministic InjectPrompt embedding, teeth-bearing IsContaminated verbatim-echo detector; pinned DocKeyCompletion/DocKeyContaminated for the Phase 89 reporter) + an ADDITIVE LeaderRow.CanaryPassRate aggregator column DERIVED AT SCORE TIME via rowCanary -> canary.IsContaminated over the open `completion` doc key (NO crosscodeeval/repobench loader.go edit — Plans 03/04 own them). CanaryPassRate is a flat pooled clean-fraction (degenerate [point,point] ciValue, consumes ZERO RNG so the IN-03 metric-order/presence determinism contract is untouched; bootstrapped canary CI is downstream Phase 89), populated on the struct but NOT rendered into leaderboard.md so the existing leaderboard/cost goldens stay byte-for-byte (exact ByLanguage discipline); absent completion key -> NULL ci (em-dash), never a fabricated 0. helix-bench fetch-datasets notYetImplemented stub REPLACED with a real RunE invoking crosscodeeval.Fetch(PinnedRev,lang) + repobench.Fetch(PinnedRev(lang),lang) over each adapter's Languages, HELIX_CACHE_DIR-cached, network-gated (non-fatal on a partial mirror gap; errors iff all fetches fail). ZERO new go.mod deps. go build ./..., make vet (7 vettools), go test ./... all green offline; live fetch SKIPs without HELIX_BENCH_NETWORK.
 - [Phase 86 P03]: CrossCodeEval dataset-loader-only LEAF adapter (bench/datasets/crosscodeeval) shipped — stdlib net/http + arrow-go pqarrow ONLY (no gomlx/go-huggingface, RESEARCH A1). Pinned PinnedRev=41f916e35cc48bcca5dc369664f931afd9ffa22f (real immutable refs/heads/main targetCommit of Vincentvmt/CrossCodeEval, resolved live via the HF refs API). SSRF-pinned constants-only resolveURL (T-86-03-02), io.LimitReader 256MiB body cap (T-86-03-04), validatePathSegment on rev+language before filepath.Join (T-86-03-03), isHexSHA1 mutable-ref refusal (T-86-03-01). Hermetic SOLE proof = committed testdata/sample.parquet (uncompressed, deterministic, generated once via arrow-go) + per-language fixtures/{python,java,typescript,csharp}/task.json (paper-sourced values w/ `provenance` field, NOT viewer-scraped — the mirror's HF viewer has a known cast error, Pitfall 3). decodeParquet honors an optional `language` column so Load(<lang>) over the mixed fixture yields only that language's rows (Rule 1 fix). Live TestLiveFetch is HELIX_BENCH_NETWORK-gated + skips cleanly. arrow-go@v18.5.1 promoted indirect->direct via `go get` + hand-edit go.mod + `-mod=mod` build to settle go.sum (NOT full tidy — s2a-go pre-existing failure). go build ./..., make vet, go test ./bench/datasets/... all green; leaf invariant holds (no helix internal/kernel|internal/semantic|bench/runtime deps).
 - [Phase 82 P06]: STATS-02/03/04 + COST-03 DONE — aggregator.Aggregate(runDir,cfg) is a PURE orchestrator composing Load + BCaInterval/StatMean + PassAtK + perResultUSD/costPerSolvedTask via the two-level reduction (D-07: Level 1 per-(task,mode) scalar = success-rate / mean-over-non-nil / mean-USD; Level 2 BCa across-task vector). pass@1==success-rate identity; pass@N via PassAtK. ONE seeded math/rand/v2 PCG per Aggregate threaded into every BCa => byte-deterministic (D-08), locked by committed leaderboard.golden.md/cost_quality.golden.md + TestDeterministic. STATS-04 overlap gate: ciOverlap(lo_a<=hi_b && lo_b<=hi_a) on adjacent sorted rows -> "## CI overlap warnings" section suppressing X>Y (null CI never overlaps). FAIR-03 (D-15/A2): coefVariation = sample stddev/mean of per-run USD > 0.05 -> named warning in cost_quality.md. Null discipline: nil-across-all -> null CI -> em-dash, never 0. cost solved-gate = cell success-rate>0.5 (D-12); per-task USD = MEAN over runs (A3); valid_until footer = earliest across cost-table rows. Atomic temp+rename writeReport (cell.go:writeDurable analog, T-82-06-03). Added Loaded.Modes(task) accessor (Rule 3). PURE unit, NO HELIX_BIN, zero new deps.
 - [Phase ?]: Phase 64 microbench relocated to internal/semantic/bench/ via per-path git mv (renames preserved, git log --follow continuity)

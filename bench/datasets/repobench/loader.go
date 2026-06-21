@@ -43,6 +43,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 
@@ -209,9 +210,18 @@ func decodeParquet(ctx context.Context, raw []byte, language string) ([]Task, er
 			}
 		}
 
+		// gold_snippet_index is an untrusted parquet int64. Bound-check it in
+		// int64 space BEFORE narrowing to a platform int: on a 32-bit build an
+		// int64 > 2^31-1 would wrap to a negative/unrelated value, and the error
+		// would then report the wrapped value, not the real one (WR-02). We reject
+		// an out-of-int-range value here and report the ORIGINAL int64.
 		gold := -1
 		if i < len(golds) {
-			gold = int(golds[i])
+			g := golds[i]
+			if g < math.MinInt || g > math.MaxInt {
+				return nil, fmt.Errorf("repobench: %s row %d gold_snippet_index %d out of platform int range", language, i, g)
+			}
+			gold = int(g)
 		}
 
 		t := Task{

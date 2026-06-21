@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-create_file-vs-write_memory-select-create_file",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- create_file: Create a new file with content (errors if file already exists)\n- write_memory: Write information about this project that can be useful for future tasks to a memory in md format. The memory name should be meaningful and can include \"/\" to organize into topics (e.g., \"auth/login/logic\"). Use the \"global/\" prefix for writing a memory that is shared across projects.\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I need to create a new source file with Go code in the project",
-  "response": "create_file",
-  "stop_reason": "end_turn"
-}

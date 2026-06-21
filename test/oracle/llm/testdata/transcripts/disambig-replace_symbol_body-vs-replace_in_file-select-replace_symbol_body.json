@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-replace_symbol_body-vs-replace_in_file-select-replace_symbol_body",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- replace_symbol_body: Replace a symbol's body with new content using tree-sitter for precise extraction\n- replace_in_file: Replace all occurrences of a pattern in a file (literal or regex)\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I need to change the implementation inside a function while keeping its signature",
-  "response": "replace_symbol_body",
-  "stop_reason": "end_turn"
-}

@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-get_symbol_overview-vs-get_hover_info-select-get_symbol_overview",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- get_symbol_overview: Get a hierarchical outline of all symbols in a file\n- get_hover_info: Get hover/type information for a symbol at a given position\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I want to see all the methods and fields of a class",
-  "response": "get_symbol_overview",
-  "stop_reason": "end_turn"
-}

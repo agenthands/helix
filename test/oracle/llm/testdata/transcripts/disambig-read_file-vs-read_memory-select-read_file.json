@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-read_file-vs-read_memory-select-read_file",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- read_file: Read a file's content, optionally a specific line range\n- read_memory: Read the content of a memory file. Only use if the information is relevant to the current task. Infer relevance from the memory name. Do not read the same memory multiple times in one conversation.\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I need to read the source code of a specific file in the project",
-  "response": "read_file",
-  "stop_reason": "end_turn"
-}

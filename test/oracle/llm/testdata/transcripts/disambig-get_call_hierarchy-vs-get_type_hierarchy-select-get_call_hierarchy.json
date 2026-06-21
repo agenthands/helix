@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-get_call_hierarchy-vs-get_type_hierarchy-select-get_call_hierarchy",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- get_call_hierarchy: Get call hierarchy (callers and/or callees) for a symbol\n- get_type_hierarchy: Get type hierarchy (subtypes and/or supertypes) for a symbol\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I need to trace which functions call a given function and what it calls downstream",
-  "response": "get_call_hierarchy",
-  "stop_reason": "end_turn"
-}

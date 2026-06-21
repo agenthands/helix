@@ -1,9 +1,0 @@
-{
-  "scenario_id": "skill04-blob-sizes",
-  "category": "selection",
-  "model": "deepseek-chat",
-  "system": "SKILL-04 idle-cost measurement",
-  "user_prompt": "preloaded tools/list (FormatToolList) vs embedded SKILL.md body",
-  "response": "preloaded_tools_list_bytes=2467 tool_count=39 skill_body_bytes=5999",
-  "stop_reason": "measurement"
-}

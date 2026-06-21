@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-search_symbols-vs-search_in_files-select-search_symbols",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- search_symbols: Search for symbols across the workspace by name\n- search_in_files: Search for a regex pattern across the codebase, with optional context lines\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I want to find Go functions and types whose names contain 'Handler'",
-  "response": "search_symbols",
-  "stop_reason": "end_turn"
-}

@@ -1,9 +1,0 @@
-{
-  "scenario_id": "skill-baseline-7",
-  "category": "selection",
-  "model": "deepseek-chat",
-  "system": "You are a coding agent operating in a Unix shell. The tools available to you are the standard shell utilities: grep, sed, cat, find, ls, and rg.\n\nWhen given a task, respond with ONLY the single shell command line you would run to accomplish it (the command and its arguments). No explanation, no prose, no markdown fences — just the command.",
-  "user_prompt": "Task: Find every symbol whose name contains 'Prompt' in the codebase.\n\nWhich command should you run?",
-  "response": "rg -n 'Prompt' --type-add 'all:*'",
-  "stop_reason": "stop"
-}

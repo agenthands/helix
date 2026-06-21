@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-search_symbols-vs-find_references-select-search_symbols",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- search_symbols: Search for symbols across the workspace by name\n- find_references: Find all references to a symbol at a given position\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I know part of a symbol name and want to find matching symbols",
-  "response": "search_symbols",
-  "stop_reason": "end_turn"
-}

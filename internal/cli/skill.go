@@ -123,12 +123,11 @@ func skillTargetDir(claudeDir string) string {
 // (re-running is byte-stable). It creates targetDir (MkdirAll 0755) if absent.
 //
 // Containment (T-93-01, Security V12): installSkill refuses any targetDir that is
-// not within the per-client skills root, i.e. that does not carry the
-// "skills/helix" path-segment sequence that skillTargetDir produces. A crafted
-// client/project dir whose ".." components escape that root collapses under
-// filepath.Clean and no longer carries the sequence, so it is rejected before
-// any write — the path-traversal analog of render.go readSnippetLine's
-// filepath.Rel + ".."-prefix guard.
+// not within the per-client skills root — i.e. a targetDir that does not resolve
+// (via filepath.Rel) to a path at or under its own ".../skills/helix" root, with
+// no ".." escape. A crafted client/project dir whose ".." components escape that
+// root is rejected before any write — the path-traversal analog of render.go
+// readSnippetLine's filepath.Rel + ".."-prefix guard.
 func installSkill(targetDir string) error {
 	if !withinSkillRoot(targetDir) {
 		return fmt.Errorf("refusing skill install: target %q is outside the skills/helix root", targetDir)
@@ -156,18 +155,74 @@ func installSkill(targetDir string) error {
 	return nil
 }
 
-// withinSkillRoot reports whether the cleaned targetDir carries the consecutive
-// path segments "skills" then "helix" — the root every skillTargetDir output
-// produces. A traversal-crafted path whose ".." components escape that root
-// collapses under filepath.Clean and no longer carries the sequence, so it is
-// rejected. A legitimate nested target (skills/helix/<sub>...) still carries it.
+// withinSkillRoot reports whether targetDir is contained within a per-client
+// "skills/helix" root, using a real filepath.Rel containment check rather than a
+// segment-substring scan (WR-93-02).
+//
+// It derives the DECLARED root from the LEXICAL (pre-Clean) path — the prefix up
+// to and including the first "skills/helix" segment pair — then requires the
+// CLEANED path to resolve at-or-under that declared root (filepath.Rel yields "."
+// or a non-".."-escaping subpath). Taking the root from the lexical path and
+// comparing the cleaned path is what makes ".." escapes detectable: a target like
+// "<root>/skills/helix/../../../etc" declares root "<root>/skills/helix" but
+// cleans to a path OUTSIDE it, so Rel returns a "..\"-prefixed result and the
+// guard rejects it — the path-traversal analog of render.go readSnippetLine's
+// filepath.Rel + ".."-prefix guard. A path that carries no "skills/helix" pair at
+// all is rejected outright.
 func withinSkillRoot(targetDir string) bool {
-	cleaned := filepath.ToSlash(filepath.Clean(targetDir))
-	segs := strings.Split(cleaned, "/")
+	root, ok := lexicalSkillRoot(targetDir)
+	if !ok {
+		return false
+	}
+	return containedIn(filepath.Clean(root), filepath.Clean(targetDir))
+}
+
+// lexicalSkillRoot returns the ".../skills/helix" root prefix of the LEXICAL
+// (uncleaned) path — up to and including the first "skills" then "helix" segment
+// pair — and ok=false if the path does not carry that consecutive segment pair.
+// Using the uncleaned path is deliberate: it makes a later ".." escape detectable
+// when the cleaned path is compared against this declared root.
+func lexicalSkillRoot(targetDir string) (string, bool) {
+	slashed := filepath.ToSlash(targetDir)
+	segs := strings.Split(slashed, "/")
 	for i := 0; i+1 < len(segs); i++ {
 		if segs[i] == "skills" && segs[i+1] == "helix" {
-			return true
+			root := strings.Join(segs[:i+2], "/")
+			return filepath.FromSlash(root), true
 		}
 	}
-	return false
+	return "", false
+}
+
+// containedIn reports whether target resolves at-or-under root with no ".."
+// escape, using filepath.Rel (the same pattern render.go uses for snippet paths).
+func containedIn(root, target string) bool {
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+// uninstallSkill removes <targetDir>/SKILL.md and, if it then becomes empty, the
+// targetDir itself (WR-93-01). It is best-effort and path-contained: it refuses
+// any targetDir outside the per-client skills/helix root (same guard as
+// installSkill), and a missing file/dir is a no-op (not an error) so --uninstall
+// is idempotent. Only the empty skills/helix dir is pruned; parent dirs (skills,
+// .claude) are left intact since they may hold other content.
+func uninstallSkill(targetDir string) error {
+	if !withinSkillRoot(targetDir) {
+		return fmt.Errorf("refusing skill uninstall: target %q is outside the skills/helix root", targetDir)
+	}
+
+	dst := filepath.Join(targetDir, "SKILL.md")
+	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing skill file: %w", err)
+	}
+
+	// Prune the now-(possibly-)empty skills/helix dir. os.Remove only succeeds on
+	// an empty directory, so a non-empty dir is left intact; a missing dir is a
+	// no-op. Either non-emptiness or absence is fine — swallow both.
+	_ = os.Remove(targetDir)
+	return nil
 }

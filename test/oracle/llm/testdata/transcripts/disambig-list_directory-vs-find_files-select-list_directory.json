@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-list_directory-vs-find_files-select-list_directory",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- list_directory: List directory contents with file type, size, and modification time\n- find_files: Find files matching a glob pattern (supports ** for recursive matching)\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I want to see the immediate contents of the src/ directory",
-  "response": "list_directory",
-  "stop_reason": "end_turn"
-}

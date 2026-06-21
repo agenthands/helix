@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-onboard_project-vs-list_directory-select-onboard_project",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- onboard_project: Analyze the project structure, detect languages, count files, and return onboarding instructions. Call this tool if onboarding has not been performed yet. Returns a prompt guiding you to create project memories.\n- list_directory: List directory contents with file type, size, and modification time\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I want a high-level overview of the project's architecture, conventions, and key modules",
-  "response": "onboard_project",
-  "stop_reason": "end_turn"
-}

@@ -1,9 +1,0 @@
-{
-  "scenario_id": "disambig-insert_before_symbol-vs-insert_after_symbol-select-insert_after_symbol",
-  "category": "disambiguation",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:\n\n- insert_before_symbol: Insert content immediately before a symbol\n- insert_after_symbol: Insert content immediately after a symbol\n\nWhen given a task, respond with ONLY the name of the more appropriate tool. No explanation.",
-  "user_prompt": "Task: I need to add a helper function right below an existing function",
-  "response": "insert_after_symbol",
-  "stop_reason": "end_turn"
-}

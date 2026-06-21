@@ -48,7 +48,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Profile / Mode Enforcement (SEC-*) — security-load-bearing
 
-- [ ] **SEC-01**: Profile/mode filtering is enforced on `tools/call` (not only the removed `tools/list`), so a read-mode or ci-bot agent cannot invoke destructive edit verbs via the CLI. _Acceptance:_ `helix replace-symbol-body` under read mode is refused with a typed error; the same verb succeeds under edit mode.
+- [x] **SEC-01**: Profile/mode filtering is enforced on `tools/call` (not only the removed `tools/list`), so a read-mode or ci-bot agent cannot invoke destructive edit verbs via the CLI. _Acceptance:_ `helix replace-symbol-body` under read mode is refused with a typed error; the same verb succeeds under edit mode.
 - [ ] **SEC-02**: The CLI honors the resolved profile tool-subset (`config.ResolveProfile`) — verbs outside the active profile are hidden and refused. _Acceptance:_ per-profile goldens (re-pointed from the MCP `tools/list` goldens) verify the CLI verb surface per profile.
 
 ### Skill, Nudge & Setup (SKILL-*)
@@ -119,7 +119,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | OUT-05 | Phase 92 | Pending |
 | OUT-06 | Phase 92 | Pending |
 | OUT-07 | Phase 92 | Pending |
-| SEC-01 | Phase 91 | Pending |
+| SEC-01 | Phase 91 | Complete |
 | SEC-02 | Phase 91 | Pending |
 | SKILL-01 | Phase 93 | Pending |
 | SKILL-02 | Phase 93 | Pending |

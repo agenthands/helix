@@ -5,15 +5,15 @@ milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 91
 current_phase_name: Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
 status: executing
-stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-06-21T14:14:00.405Z"
+stopped_at: Completed 91-02-PLAN.md
+last_updated: "2026-06-21T14:20:39.518Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 91 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 17
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Phase: 91 (Code-Generated Verb Surface + tools/call Profile/Mode Enforcement) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 — Phase 91 execution started
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 90 P03 | 6min | 2 tasks | 6 files |
 | Phase 90 P04 | 35min | 3 tasks | 5 files |
 | Phase 91 P01 | 17min | 3 tasks | 12 files |
+| Phase 91 P02 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,8 +86,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:13:31.353Z
-Stopped at: Completed 90-02-PLAN.md
+Last session: 2026-06-21T14:20:39.512Z
+Stopped at: Completed 91-02-PLAN.md
 Resume file: None
 
 ## Decisions
@@ -100,3 +101,5 @@ Resume file: None
 - [Phase ?]: 91-01: AST scan (go/packages+go/ast) recovers tool-name->*Args binding; no manual per-tool table (VERB-04)
 - [Phase ?]: 91-01: verbs_gen.go generated+committed; helix-cligen --check drift gate in CI + make verify-cligen (VERB-02)
 - [Phase ?]: 91-01: internal/cli.VerbToolNames() is the read-only catalog seam for 91-03 integration tests
+- [Phase ?]: SEC-01: tools/call authz returns typed serr.PermissionDenied as an error (not IsError) so errors.Is round-trips CLI-side
+- [Phase ?]: ProfileEnforcementMiddleware installed between Guardrail and LazyInit (step 14b.6); LIFO keeps LazyInit first, ProfileEnforce before Guardrail

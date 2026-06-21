@@ -107,16 +107,16 @@ func TestRunArgsRejectsFlagSmugglingImage(t *testing.T) {
 func TestRunArgsRejectsBadMount(t *testing.T) {
 	image := "ghcr.io/x/y@sha256:" + validHex
 	for _, bad := range []map[string]string{
-		{"/srv/../etc": "/work"},  // .. in source
+		{"/srv/../etc": "/work"},   // .. in source
 		{"/srv/repo": "/work/../"}, // .. in destination
-		{"-rm": "/work"},          // flag-smuggling source
-		{"/srv/repo": "-rm"},      // flag-smuggling destination
+		{"-rm": "/work"},           // flag-smuggling source
+		{"/srv/repo": "-rm"},       // flag-smuggling destination
 		{"relative/path": "/work"}, // not absolute source
 		{"/srv/repo": "relative"},  // not absolute destination
-		{"": "/work"},             // empty source
-		{"/srv/repo": ""},         // empty destination
-		{"/srv/repo:x": "/work"},  // ':' in source would break the -v pair
-		{"/srv/repo": "/work:y"},  // ':' in destination would break the -v pair
+		{"": "/work"},              // empty source
+		{"/srv/repo": ""},          // empty destination
+		{"/srv/repo:x": "/work"},   // ':' in source would break the -v pair
+		{"/srv/repo": "/work:y"},   // ':' in destination would break the -v pair
 	} {
 		if _, err := runArgs(image, []string{"true"}, bad, true); !errors.Is(err, errBadMount) {
 			t.Fatalf("runArgs(mount=%v) err = %v, want errBadMount", bad, err)

@@ -14,6 +14,11 @@ import (
 // bench/runtime/subprocess/ragserver.go discipline).
 type Engine struct {
 	bin string
+	// runShim, when non-nil, intercepts Run's os/exec invocation with the exact
+	// fixed argv runArgs produced. It exists ONLY so the hermetic argv-equivalence
+	// test (run_test.go) can prove the argv crossing the boundary without a live
+	// engine. Production callers leave it nil → Run crosses os/exec for real.
+	runShim func(args []string) error
 }
 
 // errEngineUnavailable is the sentinel returned by Detect when neither docker

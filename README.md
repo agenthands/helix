@@ -349,57 +349,57 @@ This is a deliberate first-release scope (per `SPEC-DRAFT.md`: *"scope productio
 <!-- BEGIN TOOLS -->
 | Tool | Category | Description |
 |------|----------|-------------|
-| `get_diagnostics` | diagnostics | Returns current diagnostics (errors, warnings) for a file |
-| `get_code_actions` | diagnostics | Returns available code actions/quick fixes for a position or range |
-| `format_code` | diagnostics | Formats a file via the language server and writes the result |
-| `read_file` | file-ops | Read a file's content, optionally a specific line range |
-| `create_file` | file-ops | Create a new file with content (errors if file already exists) |
-| `list_directory` | file-ops | List directory contents with file type, size, and modification time |
-| `find_files` | file-ops | Find files matching a glob pattern (supports ** for recursive matching) |
-| `search_in_files` | file-ops | Search for a regex pattern across the codebase, with optional context lines |
-| `replace_in_file` | file-ops | Replace all occurrences of a pattern in a file (literal or regex) |
-| `fuzzy_edit` | file-ops | Fuzzy-match and replace text in a file using 4-strategy cascade |
-| `get_health` | health | Get workspace health status and language server states |
-| `get_tool_help` | help | Get comprehensive documentation for any MCP tool including parameters, types, and usage examples |
-| `write_memory` | memory | Write information about this project that can be useful for future tasks to a memory in md format. |
-| `read_memory` | memory | Read the content of a memory file. |
-| `list_memories` | memory | List available memories, optionally filtered by scope ("project" or "global") and topic. |
-| `search_memories` | memory | Search memories by full-text query, optionally filtered by scope ("project" or "global"). |
-| `rename_memory` | memory | Rename or move a memory. |
-| `edit_memory` | memory | Edit a memory by replacing a search string with a replacement string. |
-| `delete_memory` | memory | Delete a memory file. |
-| `switch_mode` | profile | Switch the current session's operational mode (read/edit/review/admin) |
-| `get_token_budget` | profile | Get token budget breakdown for the current or specified profile/mode |
-| `get_repo_map` | repomap | Get a ranked structural overview of the repository. |
-| `get_context` | repomap | Get the most relevant code context for a set of files or a task. |
-| `index_semantic_graph` | semantic | Build or refresh a committed semantic snapshot. |
-| `refresh_semantic_graph` | semantic | Apply pending live source changes (read+). |
-| `get_semantic_graph_status` | semantic | Return semantic graph status (read+). |
-| `get_semantic_context` | semantic | Ranked, evidence-backed semantic context (read+). |
-| `explain_symbol_deep` | semantic | Deep symbol explanation: type chain, callers, edges, cluster (read+). |
-| `find_related_symbols` | semantic | Top-k semantically related symbols around a seed (read+). |
-| `validate_graph_edge` | semantic | Validate a (from, to, edge_kind) graph claim with confidence + evidence (read+). |
-| `get_cluster_map` | semantic | Workspace-level cluster overview: count, top-N clusters, members, representative symbols, dominant edge kinds (read+). |
-| `explain_cluster` | semantic | Full cluster member list with per-member PageRank, cohesion/conductance metrics, and dominant entry points (read+). |
-| `get_change_impact_graph` | semantic | Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+). |
-| `replace_symbol_body` | symbol-editing | Replace a symbol's body with new content using tree-sitter for precise extraction |
-| `insert_before_symbol` | symbol-editing | Insert content immediately before a symbol |
-| `insert_after_symbol` | symbol-editing | Insert content immediately after a symbol |
-| `rename_symbol` | symbol-editing | Rename a symbol across all files in the workspace |
-| `safe_delete_symbol` | symbol-editing | Delete a symbol if it has no references; reports reference count if blocked |
-| `verify_edit` | symbol-editing | Check for compilation errors after an edit; returns diagnostic summary |
-| `go_to_definition` | symbol-retrieval | Go to the definition of a symbol at a given position |
-| `find_references` | symbol-retrieval | Find all references to a symbol at a given position |
-| `get_symbol_overview` | symbol-retrieval | Get a hierarchical outline of all symbols in a file |
-| `search_symbols` | symbol-retrieval | Search for symbols across the workspace by name |
-| `get_hover_info` | symbol-retrieval | Get hover/type information for a symbol at a given position |
-| `find_implementations` | symbol-retrieval | Find all implementations of an interface or abstract method |
-| `get_call_hierarchy` | symbol-retrieval | Get call hierarchy (callers and/or callees) for a symbol |
-| `get_type_hierarchy` | symbol-retrieval | Get type hierarchy (subtypes and/or supertypes) for a symbol |
-| `analyze_blast_radius` | symbol-retrieval | Analyze the blast radius (impact) of changing a symbol |
-| `analyze_blast_radius` | symbols | Analyze the blast radius (impact) of changing a symbol |
-| `onboard_project` | workflow | Analyze the project structure, detect languages, count files, and return onboarding instructions. |
-| `prepare_for_new_conversation` | workflow | Prepare a session handoff summary for continuation in a new conversation. |
+| `helix get-diagnostics` | diagnostics | Returns current diagnostics (errors, warnings) for a file |
+| `helix get-code-actions` | diagnostics | Returns available code actions/quick fixes for a position or range |
+| `helix format-code` | diagnostics | Formats a file via the language server and writes the result |
+| `helix read-file` | file-ops | Read a file's content, optionally a specific line range |
+| `helix create-file` | file-ops | Create a new file with content (errors if file already exists) |
+| `helix list-directory` | file-ops | List directory contents with file type, size, and modification time |
+| `helix find-files` | file-ops | Find files matching a glob pattern (supports ** for recursive matching) |
+| `helix search-in-files` | file-ops | Search for a regex pattern across the codebase, with optional context lines |
+| `helix replace-in-file` | file-ops | Replace all occurrences of a pattern in a file (literal or regex) |
+| `helix fuzzy-edit` | file-ops | Fuzzy-match and replace text in a file using 4-strategy cascade |
+| `helix get-health` | health | Get workspace health status and language server states |
+| `helix get-tool-help` | help | Get comprehensive documentation for any MCP tool including parameters, types, and usage examples |
+| `helix write-memory` | memory | Write information about this project that can be useful for future tasks to a memory in md format. |
+| `helix read-memory` | memory | Read the content of a memory file. |
+| `helix list-memories` | memory | List available memories, optionally filtered by scope ("project" or "global") and topic. |
+| `helix search-memories` | memory | Search memories by full-text query, optionally filtered by scope ("project" or "global"). |
+| `helix rename-memory` | memory | Rename or move a memory. |
+| `helix edit-memory` | memory | Edit a memory by replacing a search string with a replacement string. |
+| `helix delete-memory` | memory | Delete a memory file. |
+| `helix switch-mode` | profile | Switch the current session's operational mode (read/edit/review/admin) |
+| `helix get-token-budget` | profile | Get token budget breakdown for the current or specified profile/mode |
+| `helix get-repo-map` | repomap | Get a ranked structural overview of the repository. |
+| `helix get-context` | repomap | Get the most relevant code context for a set of files or a task. |
+| `helix index-semantic-graph` | semantic | Build or refresh a committed semantic snapshot. |
+| `helix refresh-semantic-graph` | semantic | Apply pending live source changes (read+). |
+| `helix get-semantic-graph-status` | semantic | Return semantic graph status (read+). |
+| `helix get-semantic-context` | semantic | Ranked, evidence-backed semantic context (read+). |
+| `helix explain-symbol-deep` | semantic | Deep symbol explanation: type chain, callers, edges, cluster (read+). |
+| `helix find-related-symbols` | semantic | Top-k semantically related symbols around a seed (read+). |
+| `helix validate-graph-edge` | semantic | Validate a (from, to, edge_kind) graph claim with confidence + evidence (read+). |
+| `helix get-cluster-map` | semantic | Workspace-level cluster overview: count, top-N clusters, members, representative symbols, dominant edge kinds (read+). |
+| `helix explain-cluster` | semantic | Full cluster member list with per-member PageRank, cohesion/conductance metrics, and dominant entry points (read+). |
+| `helix get-change-impact-graph` | semantic | Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+). |
+| `helix replace-symbol-body` | symbol-editing | Replace a symbol's body with new content using tree-sitter for precise extraction |
+| `helix insert-before-symbol` | symbol-editing | Insert content immediately before a symbol |
+| `helix insert-after-symbol` | symbol-editing | Insert content immediately after a symbol |
+| `helix rename-symbol` | symbol-editing | Rename a symbol across all files in the workspace |
+| `helix safe-delete-symbol` | symbol-editing | Delete a symbol if it has no references; reports reference count if blocked |
+| `helix verify-edit` | symbol-editing | Check for compilation errors after an edit; returns diagnostic summary |
+| `helix go-to-definition` | symbol-retrieval | Go to the definition of a symbol at a given position |
+| `helix find-references` | symbol-retrieval | Find all references to a symbol at a given position |
+| `helix get-symbol-overview` | symbol-retrieval | Get a hierarchical outline of all symbols in a file |
+| `helix search-symbols` | symbol-retrieval | Search for symbols across the workspace by name |
+| `helix get-hover-info` | symbol-retrieval | Get hover/type information for a symbol at a given position |
+| `helix find-implementations` | symbol-retrieval | Find all implementations of an interface or abstract method |
+| `helix get-call-hierarchy` | symbol-retrieval | Get call hierarchy (callers and/or callees) for a symbol |
+| `helix get-type-hierarchy` | symbol-retrieval | Get type hierarchy (subtypes and/or supertypes) for a symbol |
+| `helix analyze-blast-radius` | symbol-retrieval | Analyze the blast radius (impact) of changing a symbol |
+| `helix analyze-blast-radius` | symbols | Analyze the blast radius (impact) of changing a symbol |
+| `helix onboard-project` | workflow | Analyze the project structure, detect languages, count files, and return onboarding instructions. |
+| `helix prepare-for-new-conversation` | workflow | Prepare a session handoff summary for continuation in a new conversation. |
 
 <!-- END TOOLS -->
 

@@ -19,6 +19,16 @@ import (
 	"strings"
 
 	// Blank imports trigger skill.Register() via init() (same as daemon/imports.go).
+	//
+	// Blank-import parity rule (reciprocal note in internal/daemon/imports.go):
+	// every tool-bearing init()-registered provider must appear in BOTH this file
+	// and the daemon so the generated README table matches the runtime tool SET.
+	// Literal import-list equality is NOT required — health/help are non-blank in
+	// the daemon by design (their explicit RegisterTools also fires init()), and
+	// guardrails contributes zero table rows. The `docgen --check` CI gate
+	// (DOCS-02) is the real anti-drift protection. Never blank-import
+	// internal/semantic/extract/* here per D-02 (a second GrammarRegistry would
+	// break the singleton).
 	_ "github.com/agenthands/helix/internal/kernel/diag"
 	_ "github.com/agenthands/helix/internal/kernel/edit"
 	_ "github.com/agenthands/helix/internal/kernel/fileops"

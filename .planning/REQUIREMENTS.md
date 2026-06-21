@@ -167,7 +167,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | ABLATE-01 | Phase 80 | TBD | Pending |
 | ABLATE-02 | Phase 76 | 76-02 | Complete |
 | ABLATE-03 | Phase 80 | TBD | Pending |
-| ABLATE-04 | Phase 83 | TBD | Pending |
+| ABLATE-04 | Phase 83 | 83-01, 83-02, 83-03 | Complete — standalone cmd/helix-bench-rag 4-tool MCP server (no kernel/semantic/mcp import, dual static+transitive gate); chromem-go per-corpus index cache; baseline_rag real drive leg reusing DefaultContract, out-of-band index (budget-excluded), embedder_id on every row |
 | ABLATE-05 | Phase 76 | TBD | Pending |
 | ABLATE-06 | Phase 81 | 81-04, 81-05 | Complete |
 | ABLATE-07 | Phase 76 | TBD | Pending |
@@ -194,10 +194,10 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | ADAPTER-SWE-01 | Phase 87 | TBD | Pending |
 | ADAPTER-MULTI-01 | Phase 88 | TBD | Pending |
 | ADAPTER-TERM-01 | Phase 88 | TBD | Pending |
-| CONTAINER-01 | Phase 84 | TBD | Pending |
-| CONTAINER-02 | Phase 84 | TBD | Pending |
-| CONTAINER-03 | Phase 84 | TBD | Pending |
-| CONTAINER-04 | Phase 84 | TBD | Pending |
+| CONTAINER-01 | Phase 84 | 84-01 | Complete — os/exec docker→podman engine (no github.com/docker/docker SDK, anchored verify-no-docker-sdk make-vet gate); arch-mismatch refusal with BENCH_ARCH_MISMATCH_OK escape |
+| CONTAINER-02 | Phase 84 | 84-02 | Complete — SHA256 digest-pinned images cached at $HELIX_CACHE_DIR/bench-images/<sha>/ (isHexSHA256 path-escape guard); cache-hit on re-run; Ensure idempotent under concurrency/crash recovery |
+| CONTAINER-03 | Phase 84 | 84-03, 84-04 | Complete (live-mirror confirmation deferred until namespace published) — in-process sigstore-go verify-before-pull (canonical error, pinned issuer/SAN, VirtualSigstore tamper/unsigned/wrong-org/wrong-issuer fixtures); bench-mirror.yml cosign keyless sign whose minted SAN byte-matches the runtime verifier pin |
+| CONTAINER-04 | Phase 84 | 84-02 | Complete — cross-platform 50 GiB disk-budget guard (x/sys Statfs / GetDiskFreeSpaceEx, injectable availFn), single-line remediation; synthetic low-disk test trips it |
 | REPORT-01 | Phase 89 | TBD | Pending |
 | REPORT-02 | Phase 89 | TBD | Pending |
 | REPORT-03 | Phase 89 | TBD | Pending |

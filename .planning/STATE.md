@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 84-03-PLAN.md
-last_updated: "2026-06-21T02:54:52.780Z"
-last_activity: 2026-06-21 -- Phase 85 execution started
+stopped_at: Completed 85-04-PLAN.md
+last_updated: "2026-06-21T06:10:00.000Z"
+last_activity: 2026-06-21 -- Completed 85-04 (C++ + Rust language runners)
 progress:
   total_phases: 15
   completed_phases: 10
   total_plans: 56
-  completed_plans: 52
-  percent: 67
+  completed_plans: 53
+  percent: 68
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 85 (aider-polyglot-adapter-7-remaining-per-language-runners) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 85 execution started
+Last activity: 2026-06-21 -- Completed 85-04 (C++ + Rust language runners)
 
 ### Session Continuity
 
-Last session: 2026-06-21T02:54:46.581Z
-Stopped at: Completed 84-03-PLAN.md
+Last session: 2026-06-21T06:10:00.000Z
+Stopped at: Completed 85-04-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -119,6 +119,7 @@ Resume file: None
 | Phase 85 P01 | 25min | 2 tasks | 7 files |
 | Phase 85 P02 | ~12min | 2 tasks | 3 files |
 | Phase 85 P03 | 25m | 3 tasks | 34 files |
+| Phase 85 P04 | ~18min | 2 tasks | 23 files (TDD RED+GREEN x2) |
 
 ## Decisions
 
@@ -196,3 +197,4 @@ Resume file: None
 - [Phase 85 P02]: ADAPTER-AIDER-01 SC#3 run seam DONE — bench/container.runArgs builds fixed argv [run --rm (--network=none)? (-v src:dst)* -- image cmd...] mirroring pullArgs; (*Engine).Run mirrors PullByDigest exactly (exec.CommandContext + procGroupAttr + allowlistEnv PATH/HOME/HELIX_CACHE_DIR only, no shell, no docker Go SDK). --network=none present iff netNone is the SC#3 network policy (T-85-02-02), hermetically asserted in the exact argv golden WITHOUT a live engine; live Run t.Skips on errEngineUnavailable (never sole proof). Rule 3: isValidImageRef added (isValidRepo forbids '@', cannot validate <repo>@sha256:<hex>) — splits on @sha256: and reuses isValidRepo+isHexSHA256. errBadMount + isValidMountPath (ToSlash+Clean-equality+':'-ban, host-OS-independent for windows cross-compile). make verify-no-docker-sdk + make vet green.
 - [Phase ?]: 85-03: cloned go/runner.go x3 for python/java/csharp; Passed=exitCode==0 gate + ctx/ExitError split kept verbatim
 - [Phase ?]: 85-03: Java surefire golden sourced verbatim from apache/maven-surefire@5ee132b; TestJavaFixtureProvenance gate enforces non-placeholder (A5)
+- [Phase 85 P04]: cloned go/runner.go x2 for cpp/rust; Passed=exitCode==0 gate + ctx/ExitError split kept verbatim. C++ = ctest --output-junit R.xml → parseCtestJUnit (encoding/xml; child <failure> ⇒ fail). Rust = PLAIN `cargo test` → parseLibtestText (bufio.Scanner resync over `test NAME ... ok|FAILED|ignored`), NEVER --message-format=json (Pitfall 2: stable cargo emits only compiler-artifact JSON, zero per-test rows) — guarded by TestRustDoesNotUseMessageFormatJSON over a testArgv() hook. Both goldens REAL live captures this session (CMake 3.31.6 ctest-junit.xml; cargo 1.96.0 cargo-libtest.txt including the panic/failures noise so resync is exercised). C++ 7/7 declared/covered (≥6), Rust 9/9 (≥8). Gaps declared: C++ omits lsp_diagnostics/call_graph/dependency_graph; Rust omits lsp_diagnostics. TOOLBENCH-08/09 satisfied.

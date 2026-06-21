@@ -36,8 +36,8 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [ ] **TOOLBENCH-05**: Tier-1 language coverage **JavaScript** — `jest --json`. _Acceptance:_ ≥ 8/10 capabilities; eslint-based diagnostics.
 - [x] **TOOLBENCH-06**: Tier-1 language coverage **Java** — `mvn test -Dsurefire.useFile=false`. _Acceptance:_ ≥ 8/10 capabilities; jdtls-backed semantic view.
 - [x] **TOOLBENCH-07**: Tier-1 language coverage **C#** — `dotnet test --logger trx`. _Acceptance:_ ≥ 6/10 capabilities (C# has weaker LSP server coverage); gaps logged.
-- [ ] **TOOLBENCH-08**: Tier-1 language coverage **C++** — `cmake/ctest`. _Acceptance:_ ≥ 6/10 capabilities; clangd-backed semantic view.
-- [ ] **TOOLBENCH-09**: Tier-1 language coverage **Rust** — `cargo test --message-format=json`. _Acceptance:_ ≥ 8/10 capabilities; rust-analyzer-backed semantic view.
+- [x] **TOOLBENCH-08**: Tier-1 language coverage **C++** — `cmake/ctest`. _Acceptance:_ ≥ 6/10 capabilities; clangd-backed semantic view.
+- [x] **TOOLBENCH-09**: Tier-1 language coverage **Rust** — `cargo test` (libtest TEXT, NOT `--message-format=json` — Pitfall 2). _Acceptance:_ ≥ 8/10 capabilities; rust-analyzer-backed semantic view.
 - [x] **TOOLBENCH-10**: `bench/languages/<L>/runner.go` implements a common `LanguageRunner` interface (`Detect`, `Setup`, `RunTests`, `Capabilities`). _Acceptance:_ `go vet` + interface-conformance test passes for all 8 languages.
 
 ### Ablation Modes (ABLATE-*)
@@ -161,8 +161,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | TOOLBENCH-05 | Phase 85 | TBD | Pending |
 | TOOLBENCH-06 | Phase 85 | TBD | Pending |
 | TOOLBENCH-07 | Phase 85 | TBD | Pending |
-| TOOLBENCH-08 | Phase 85 | TBD | Pending |
-| TOOLBENCH-09 | Phase 85 | TBD | Pending |
+| TOOLBENCH-08 | Phase 85 | 85-04 | Complete |
+| TOOLBENCH-09 | Phase 85 | 85-04 | Complete |
 | TOOLBENCH-10 | Phase 78 (plan 01) | 78-05 | Complete |
 | ABLATE-01 | Phase 80 | TBD | Pending |
 | ABLATE-02 | Phase 76 | 76-02 | Complete |

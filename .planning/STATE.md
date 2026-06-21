@@ -4,14 +4,14 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 87-02-PLAN.md
-last_updated: "2026-06-21T05:56:35.000Z"
+last_updated: "2026-06-21T06:03:09.276Z"
 last_activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
 progress:
   total_phases: 15
   completed_phases: 12
   total_plans: 65
-  completed_plans: 63
-  percent: 82
+  completed_plans: 64
+  percent: 80
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 87 (swe-bench-verified-adapter-utboost-rescorer-multi-oracle-verified-correctness) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
 
 ### Session Continuity
 
-Last session: 2026-06-21T05:56:35.000Z
+Last session: 2026-06-21T06:02:58.204Z
 Stopped at: Completed 87-02-PLAN.md
 Resume file: None
 
@@ -129,6 +129,7 @@ Resume file: None
 | Phase 86 P05 | ~7min | 2 tasks | 7 files (TDD RED+GREEN x2) |
 | Phase 87 P01 | 6min | 5 tasks | 11 files |
 | Phase 87 P02 | 5min | 3 tasks | 10 files (TDD RED+GREEN x3, hermetic fixtures) |
+| Phase 87 P04 | 12m | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -214,3 +215,4 @@ Resume file: None
 - [Phase ?]: exit_code is *int so a clean harness exit 0 round-trips, never dropped by omitempty (Phase 87)
 - [Phase ?]: Swebench rescore key-name consts live once in bench/runtime/result.go (shared by Plan 03 producer + Plan 04 reader)
 - [Phase ?]: Phase 87 A1-A5 UTBoost upstream details resolved APPROVED-WITH-DEFERRAL; live pin confirmation deferred to a Docker+network host
+- [Phase ?]: VERIFIED-02 raw-vs-rescored columns populated on LeaderRow but not rendered (goldens byte-identical); SWE-bench render deferred to Phase 89

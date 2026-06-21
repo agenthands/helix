@@ -360,7 +360,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 87-02-PLAN.md — predictions.jsonl producer + harness report parser + harness-JSON→result.v2 ingestion (hermetic, TDD)
-- [ ] 87-04-PLAN.md — aggregator raw-vs-rescored side-by-side column (additive, byte-stable goldens, TDD)
+- [x] 87-04-PLAN.md — aggregator raw-vs-rescored side-by-side column (additive, byte-stable goldens, TDD)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

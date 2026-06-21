@@ -132,6 +132,47 @@ func TestRender_ReservedFlagDenylist(t *testing.T) {
 	}
 }
 
+// TestRender_DuplicateFlagNameFailsGeneration is the WR-02 regression: two
+// distinct fields in one verb that collapse to the same kebab flag name must
+// hard-fail generation, not emit two cobra flags with the same name (which
+// panics "flag redefined" at CLI startup). Here `foo_json` (string) renders
+// `foo-json`, and the opaque `foo` field also renders `foo-json` via the -json
+// suffix — a collision.
+func TestRender_DuplicateFlagNameFailsGeneration(t *testing.T) {
+	infos := []*argInfo{
+		{toolName: "duptool", fields: []argField{
+			{jsonKey: "foo_json", required: true, help: "string foo-json", goType: "string"},
+			{jsonKey: "foo", required: false, help: "opaque foo", goType: ""},
+		}},
+	}
+	reg := map[string]string{"duptool": "file-ops"}
+	_, err := renderVerbsGen(infos, reg)
+	if err == nil {
+		t.Fatalf("expected duplicate-flag error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate flag --foo-json") {
+		t.Errorf("expected duplicate-flag error mentioning --foo-json, got: %v", err)
+	}
+}
+
+// TestRender_NoFalseDuplicateAcrossVerbs guards that the WR-02 dedup is scoped
+// PER VERB: the same flag name appearing in two different verbs is legal (each
+// verb is its own cobra command) and must NOT trip the dedup.
+func TestRender_NoFalseDuplicateAcrossVerbs(t *testing.T) {
+	infos := []*argInfo{
+		{toolName: "verb_a", fields: []argField{
+			{jsonKey: "path", required: true, help: "p", goType: "string"},
+		}},
+		{toolName: "verb_b", fields: []argField{
+			{jsonKey: "path", required: true, help: "p", goType: "string"},
+		}},
+	}
+	reg := map[string]string{"verb_a": "file-ops", "verb_b": "file-ops"}
+	if _, err := renderVerbsGen(infos, reg); err != nil {
+		t.Fatalf("same flag in two distinct verbs must be legal, got: %v", err)
+	}
+}
+
 // TestRender_ReservedSubcommandFailsGeneration is the WR-03 regression: a
 // generated verb name that collides with a hand-written root subcommand must
 // hard-fail generation, since rootCmd.AddCommand would panic at init.

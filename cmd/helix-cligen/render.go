@@ -139,8 +139,22 @@ func renderVerbsGen(infos []*argInfo, registryNames map[string]string) (string, 
 			b.WriteString("\t\tflags:    nil,\n")
 		} else {
 			b.WriteString("\t\tflags: []verbFlag{\n")
+			// WR-02: dedupe flag names WITHIN this verb. Two distinct fields can
+			// kebab/-suffix to the same flag name; emitting both would register two
+			// cobra flags with the same name, panicking ("flag redefined") at CLI
+			// startup. Hard-fail generation so the collision surfaces at
+			// generate/CI time instead of crashing every `helix <verb>` call.
+			seenFlags := make(map[string]string, len(info.fields))
 			for _, f := range info.fields {
 				flagName, kind := flagNameAndKind(f)
+				if prev, dup := seenFlags[flagName]; dup {
+					return "", fmt.Errorf(
+						"verb %q (tool %q): duplicate flag --%s derived from fields %q and %q; "+
+							"rename one of the tool args to disambiguate",
+						verb, info.toolName, flagName, prev, f.jsonKey,
+					)
+				}
+				seenFlags[flagName] = f.jsonKey
 				b.WriteString(fmt.Sprintf(
 					"\t\t\t{name: %q, toolArg: %q, kind: %s, required: %t, help: %q},\n",
 					flagName, f.jsonKey, kind, f.required, f.help,

@@ -16,11 +16,18 @@ import (
 func newSetupCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup [client]",
-		Short: "Register Helix as MCP server for a coding agent",
-		Long: `Register Helix as an MCP server for a supported coding agent.
+		Short: "Install the Helix skill + hooks for a coding agent and remove any prior MCP registration",
+		Long: `Install the Helix Agent Skill and hooks for a supported coding agent, and
+remove any prior Helix MCP server registration.
+
+For Claude-family clients (claude-code, claude-desktop) this writes the embedded
+Agent Skill that teaches the helix CLI verbs; claude-code also installs the
+SessionStart/PreToolUse/Stop hooks. For other clients it removes any prior helix
+MCP entry (those clients do not consume Agent Skills). In all cases the helix
+binary's MCP daemon head is left intact.
 
 Run without arguments to list available clients.
-Run with a client name to register Helix for that client.`,
+Run with a client name to set up Helix for that client.`,
 		ValidArgs:     []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          runSetup,
@@ -28,12 +35,13 @@ Run with a client name to register Helix for that client.`,
 		SilenceErrors: true,
 	}
 
-	cmd.Flags().Bool("global", false, "Register globally (user-scoped) instead of project-scoped")
-	cmd.Flags().Bool("uninstall", false, "Remove Helix registration from the client")
+	cmd.Flags().Bool("global", false, "Set up globally (user-scoped) instead of project-scoped")
+	cmd.Flags().Bool("uninstall", false, "Remove Helix registration from the client (MCP entry and hooks)")
 	cmd.Flags().Bool("skip-install", false, "Skip language server pre-installation")
 	cmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
 	cmd.Flags().String("output", "", "Output path for generic client config (default: stdout)")
 	cmd.Flags().Bool("no-hooks", false, "Skip hook installation (Claude Code only)")
+	cmd.Flags().Bool("no-skill", false, "Skip Agent Skill installation (Claude-family clients only)")
 
 	return cmd
 }
@@ -80,6 +88,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	outputPath, _ := cmd.Flags().GetString("output")
 	noHooks, _ := cmd.Flags().GetBool("no-hooks")
+	noSkill, _ := cmd.Flags().GetBool("no-skill")
 
 	printer.DryRun = dryRun
 
@@ -90,6 +99,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		ProjectDir: projectDir,
 		OutputPath: outputPath,
 		NoHooks:    noHooks,
+		NoSkill:    noSkill,
 		Printer:    printer,
 	}
 
@@ -103,12 +113,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Register flow
+	// Setup flow (install skill + hooks, tear down prior MCP registration)
 	if err := registrar.Register(cfg); err != nil {
-		printer.Failure("%s registration failed: %s", clientName, err)
+		printer.Failure("%s setup failed: %s", clientName, err)
 		return err
 	}
-	printer.Success("%s registered", clientName)
+	printer.Success("%s set up", clientName)
 
 	// Language detection
 	reg, regErr := langregistry.NewRegistry()

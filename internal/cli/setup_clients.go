@@ -35,6 +35,7 @@ type RegistrationConfig struct {
 	ProjectDir string        // Current working directory
 	OutputPath string        // --output flag (generic client only)
 	NoHooks    bool          // --no-hooks flag (skip hook installation)
+	NoSkill    bool          // --no-skill flag (skip Agent Skill installation)
 	Printer    *SetupPrinter // Colored output helper
 }
 
@@ -52,14 +53,6 @@ func clientRegistry() map[string]ClientRegistrar {
 }
 
 // --- Shared helpers ---
-
-// serverConfigJSON returns the standard MCP server config for helix.
-func serverConfigJSON(binaryPath string) map[string]any {
-	return map[string]any{
-		"command": binaryPath,
-		"args":    []string{"--mode=stdio"},
-	}
-}
 
 // mergeJSONConfig reads an existing JSON config file, merges a server entry under the
 // given key, and writes back. Creates parent directories and the file if they don't exist.
@@ -129,6 +122,21 @@ func removeFromJSONConfig(path, key, serverName string) error {
 	return os.WriteFile(path, append(out, '\n'), 0644)
 }
 
+// teardownOnlyRegister implements the Phase 93 flip for non-Claude clients that
+// do NOT consume Agent Skills (gemini-cli, vscode, jetbrains, opencode, generic):
+// it tears down any prior helix MCP entry and writes no skill. The Info line
+// records that the client does not consume Agent Skills so the migration is
+// auditable. DryRun is honored inside the per-client teardownMCP.
+func teardownOnlyRegister(r ClientRegistrar, cfg RegistrationConfig, clientName string) error {
+	if err := r.teardownMCP(cfg); err != nil {
+		return fmt.Errorf("tearing down prior MCP registration: %w", err)
+	}
+	if !cfg.DryRun {
+		cfg.Printer.Info("removed any prior helix MCP entry; %s does not consume Agent Skills (no skill written)", clientName)
+	}
+	return nil
+}
+
 // userConfigDir wraps os.UserConfigDir for platform-specific config directory.
 func userConfigDir() (string, error) {
 	dir, err := os.UserConfigDir()
@@ -146,84 +154,58 @@ type ClaudeCodeRegistrar struct{}
 func (r *ClaudeCodeRegistrar) Name() string        { return "claude-code" }
 func (r *ClaudeCodeRegistrar) Description() string { return "Claude Code (Anthropic CLI agent)" }
 
+// claudeDir resolves the Claude Code `.claude` directory for skill installation:
+// <ProjectDir>/.claude (project) or ~/.claude (global). Mirrors hookSettingsPath's
+// project-vs-global choice (setup_hooks.go), including its home-dir fallback.
+func claudeDir(projectDir string, global bool) string {
+	if global {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".claude")
+		}
+	}
+	return filepath.Join(projectDir, ".claude")
+}
+
+// Register performs the Phase 93 "flip" for Claude Code: tear down any prior
+// helix MCP server entry, install the embedded Agent Skill, then install the
+// idempotent hooks. It no longer registers an MCP server (the daemon MCP head
+// remains intact — Phase 94 owns its deletion).
 func (r *ClaudeCodeRegistrar) Register(cfg RegistrationConfig) error {
-	serverJSON, err := json.Marshal(serverConfigJSON(cfg.BinaryPath))
-	if err != nil {
-		return fmt.Errorf("marshaling server config: %w", err)
-	}
-
-	scope := "project"
-	if cfg.Global {
-		scope = "user"
-	}
-
-	addArgs := []string{"mcp", "add-json", "helix", string(serverJSON), "--scope", scope}
+	skillDir := skillTargetDir(claudeDir(cfg.ProjectDir, cfg.Global))
+	settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(addArgs, " "))
+		cfg.Printer.DryRunAction("would tear down any prior helix MCP entry")
+		if !cfg.NoSkill {
+			cfg.Printer.DryRunAction("would install Agent Skill to %s/SKILL.md", skillDir)
+		}
+		if !cfg.NoHooks {
+			cfg.Printer.DryRunAction("would write hooks to %s", settingsPath)
+		}
 		return nil
 	}
 
-	if _, err := exec.LookPath("claude"); err != nil {
-		// No claude CLI — fall back to direct .mcp.json write
-		cfg.Printer.Info("claude CLI not found; writing directly to .mcp.json")
-		configPath := filepath.Join(cfg.ProjectDir, ".mcp.json")
-		if cfg.Global {
-			home, homeErr := os.UserHomeDir()
-			if homeErr != nil {
-				return fmt.Errorf("cannot determine home directory: %w", homeErr)
-			}
-			configPath = filepath.Join(home, ".claude", "settings.json")
-		}
-		if !cfg.Global {
-			return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
-		}
-		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first or add manually")
+	// 1. Tear down any prior helix MCP registration (hook-preserving, best-effort).
+	if err := r.teardownMCP(cfg); err != nil {
+		return fmt.Errorf("tearing down prior MCP registration: %w", err)
 	}
 
-	cmd := exec.Command("claude", addArgs...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// If "already exists", remove then re-add to update the config
-		if strings.Contains(string(output), "already exists") {
-			cfg.Printer.Info("helix already registered — updating")
-			rmCmd := exec.Command("claude", "mcp", "remove", "helix", "--scope", scope)
-			rmCmd.Stdout = os.Stderr
-			rmCmd.Stderr = os.Stderr
-			if rmErr := rmCmd.Run(); rmErr != nil {
-				// Remove failed — fall back to direct file write
-				cfg.Printer.Info("could not remove via CLI; writing directly to .mcp.json")
-				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
-			}
-			// Retry add after remove
-			retryCmd := exec.Command("claude", addArgs...)
-			retryCmd.Stdout = os.Stderr
-			retryCmd.Stderr = os.Stderr
-			if retryErr := retryCmd.Run(); retryErr != nil {
-				// CLI still failing — fall back to direct file write
-				cfg.Printer.Info("CLI retry failed; writing directly to .mcp.json")
-				return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
-			}
-		} else {
-			// Non-duplicate error — fall back to direct file write
-			cfg.Printer.Info("claude CLI failed (%s); writing directly to .mcp.json", strings.TrimSpace(string(output)))
-			return mergeJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
+	// 2. Install the embedded Agent Skill (unless --no-skill).
+	if !cfg.NoSkill {
+		if err := installSkill(skillDir); err != nil {
+			return fmt.Errorf("installing skill: %w", err)
 		}
+		cfg.Printer.Success("installed Helix skill to %s/SKILL.md", skillDir)
 	}
 
-	// Hook installation (per D-01, D-16).
+	// 3. Install hooks (per D-01, D-16) — non-fatal on failure.
 	if !cfg.NoHooks {
-		settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
-		if cfg.DryRun {
-			cfg.Printer.DryRunAction("would write hooks to %s", settingsPath)
-		} else {
-			if err := mergeHooksIntoSettings(settingsPath, cfg.BinaryPath); err != nil {
-				cfg.Printer.Failure("hook installation failed: %s", err)
-				cfg.Printer.Info("MCP registration succeeded; hooks can be installed manually")
-				return nil // Non-fatal per D-16.
-			}
-			cfg.Printer.Success("installed hooks (SessionStart, PreToolUse, Stop)")
+		if err := mergeHooksIntoSettings(settingsPath, cfg.BinaryPath); err != nil {
+			cfg.Printer.Failure("hook installation failed: %s", err)
+			cfg.Printer.Info("skill installed; hooks can be installed manually")
+			return nil // Non-fatal per D-16.
 		}
+		cfg.Printer.Success("installed hooks (SessionStart, PreToolUse, Stop)")
 	}
 
 	return nil
@@ -315,55 +297,10 @@ type GeminiCLIRegistrar struct{}
 func (r *GeminiCLIRegistrar) Name() string        { return "gemini-cli" }
 func (r *GeminiCLIRegistrar) Description() string { return "Gemini CLI (Google)" }
 
+// Register performs the Phase 93 flip for Gemini CLI: MCP-teardown only. Gemini
+// CLI does not consume Agent Skills, so no skill is written.
 func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
-	scope := "project"
-	if cfg.Global {
-		scope = "user"
-	}
-
-	cmdArgs := []string{"mcp", "add", "--scope", scope, "-t", "stdio", "helix", cfg.BinaryPath, "--", "--mode=stdio"}
-
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would run: gemini %s", strings.Join(cmdArgs, " "))
-		cfg.Printer.DryRunAction("would enable helix in mcp-server-enablement.json")
-		return nil
-	}
-
-	// Try CLI first
-	cliDone := false
-	if _, err := exec.LookPath("gemini"); err == nil {
-		cmd := exec.Command("gemini", cmdArgs...)
-		output, runErr := cmd.CombinedOutput()
-		if runErr == nil {
-			cliDone = true
-		} else {
-			// CLI failed — log and fall through to direct file write
-			cfg.Printer.Info("gemini CLI failed (%s); writing directly to settings file", strings.TrimSpace(string(output)))
-		}
-	} else {
-		cfg.Printer.Info("gemini CLI not found; writing directly to settings file")
-	}
-
-	if !cliDone {
-		// Fall back to direct file write for MCP server config
-		configPath, err := r.settingsPath(cfg)
-		if err != nil {
-			return err
-		}
-		if err := mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath)); err != nil {
-			return err
-		}
-	}
-
-	// Always ensure helix is enabled in the enablement file.
-	// Gemini CLI uses a separate mcp-server-enablement.json to gate which servers are active.
-	// Without this, the server is registered but invisible.
-	if err := r.ensureEnabled(cfg); err != nil {
-		cfg.Printer.Failure("could not enable helix in mcp-server-enablement.json: %s", err)
-		cfg.Printer.Info("MCP registration succeeded; enable manually in ~/.gemini/mcp-server-enablement.json")
-	}
-
-	return nil
+	return teardownOnlyRegister(r, cfg, "gemini-cli")
 }
 
 // ensureDisabled sets {"helix": {"enabled": false}} in Gemini's mcp-server-enablement.json.
@@ -384,33 +321,6 @@ func (r *GeminiCLIRegistrar) ensureDisabled() error {
 	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling enablement config: %w", err)
-	}
-
-	return os.WriteFile(enablementPath, append(data, '\n'), 0644)
-}
-
-// ensureEnabled writes {"helix": {"enabled": true}} into Gemini's mcp-server-enablement.json.
-func (r *GeminiCLIRegistrar) ensureEnabled(cfg RegistrationConfig) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	enablementPath := filepath.Join(home, ".gemini", "mcp-server-enablement.json")
-
-	existing := make(map[string]any)
-	if data, readErr := os.ReadFile(enablementPath); readErr == nil {
-		_ = json.Unmarshal(data, &existing)
-	}
-
-	existing["helix"] = map[string]any{"enabled": true}
-
-	data, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling enablement config: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(enablementPath), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
 	}
 
 	return os.WriteFile(enablementPath, append(data, '\n'), 0644)
@@ -497,24 +407,9 @@ type VSCodeRegistrar struct{}
 func (r *VSCodeRegistrar) Name() string        { return "vscode" }
 func (r *VSCodeRegistrar) Description() string { return "VS Code / Copilot (Microsoft)" }
 
+// Register performs the Phase 93 flip for VS Code: MCP-teardown only (no skill consumer).
 func (r *VSCodeRegistrar) Register(cfg RegistrationConfig) error {
-	configPath, err := r.configPath(cfg)
-	if err != nil {
-		return err
-	}
-
-	serverEntry := map[string]any{
-		"type":    "stdio",
-		"command": cfg.BinaryPath,
-		"args":    []string{"--mode=stdio"},
-	}
-
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: servers.helix = %v", configPath, serverEntry)
-		return nil
-	}
-
-	return mergeJSONConfig(configPath, "servers", "helix", serverEntry)
+	return teardownOnlyRegister(r, cfg, "vscode")
 }
 
 // teardownMCP removes the prior Helix MCP server entry for VS Code WITHOUT
@@ -564,18 +459,9 @@ type JetBrainsRegistrar struct{}
 func (r *JetBrainsRegistrar) Name() string        { return "jetbrains" }
 func (r *JetBrainsRegistrar) Description() string { return "JetBrains IDEs via Junie" }
 
+// Register performs the Phase 93 flip for JetBrains/Junie: MCP-teardown only (no skill consumer).
 func (r *JetBrainsRegistrar) Register(cfg RegistrationConfig) error {
-	configPath, err := r.configPath(cfg)
-	if err != nil {
-		return err
-	}
-
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcpServers.helix", configPath)
-		return nil
-	}
-
-	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
+	return teardownOnlyRegister(r, cfg, "jetbrains")
 }
 
 // teardownMCP removes the prior Helix MCP server entry for JetBrains/Junie
@@ -626,18 +512,33 @@ type ClaudeDesktopRegistrar struct{}
 func (r *ClaudeDesktopRegistrar) Name() string        { return "claude-desktop" }
 func (r *ClaudeDesktopRegistrar) Description() string { return "Claude Desktop app" }
 
+// Register performs the Phase 93 flip for Claude Desktop: tear down any prior
+// helix MCP entry, then install the embedded Agent Skill into the global
+// ~/.claude skills dir. Claude Desktop is global-only and has no hook installer
+// here, so only the skill is written.
 func (r *ClaudeDesktopRegistrar) Register(cfg RegistrationConfig) error {
-	configPath, err := r.configPath()
-	if err != nil {
-		return err
-	}
+	// Claude Desktop is always global; resolve the global ~/.claude skills dir.
+	skillDir := skillTargetDir(claudeDir(cfg.ProjectDir, true))
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcpServers.helix", configPath)
+		cfg.Printer.DryRunAction("would tear down any prior helix MCP entry")
+		if !cfg.NoSkill {
+			cfg.Printer.DryRunAction("would install Agent Skill to %s/SKILL.md", skillDir)
+		}
 		return nil
 	}
 
-	return mergeJSONConfig(configPath, "mcpServers", "helix", serverConfigJSON(cfg.BinaryPath))
+	if err := r.teardownMCP(cfg); err != nil {
+		return fmt.Errorf("tearing down prior MCP registration: %w", err)
+	}
+
+	if !cfg.NoSkill {
+		if err := installSkill(skillDir); err != nil {
+			return fmt.Errorf("installing skill: %w", err)
+		}
+		cfg.Printer.Success("installed Helix skill to %s/SKILL.md", skillDir)
+	}
+	return nil
 }
 
 // teardownMCP removes the prior Helix MCP server entry for Claude Desktop
@@ -702,25 +603,9 @@ type OpenCodeRegistrar struct{}
 func (r *OpenCodeRegistrar) Name() string        { return "opencode" }
 func (r *OpenCodeRegistrar) Description() string { return "OpenCode" }
 
+// Register performs the Phase 93 flip for OpenCode: MCP-teardown only (no skill consumer).
 func (r *OpenCodeRegistrar) Register(cfg RegistrationConfig) error {
-	configPath, err := r.configPath(cfg)
-	if err != nil {
-		return err
-	}
-
-	// OpenCode uses a different server config shape: "command" is an array, plus "type" and "enabled" fields.
-	serverEntry := map[string]any{
-		"type":    "local",
-		"command": []string{cfg.BinaryPath, "--mode=stdio"},
-		"enabled": true,
-	}
-
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would write to %s: mcp.helix = %v", configPath, serverEntry)
-		return nil
-	}
-
-	return mergeJSONConfig(configPath, "mcp", "helix", serverEntry)
+	return teardownOnlyRegister(r, cfg, "opencode")
 }
 
 // teardownMCP removes the prior Helix MCP server entry for OpenCode WITHOUT
@@ -771,41 +656,13 @@ type GenericRegistrar struct{}
 func (r *GenericRegistrar) Name() string        { return "generic" }
 func (r *GenericRegistrar) Description() string { return "Generic MCP stdio config (any client)" }
 
+// Register performs the Phase 93 flip for the generic client: MCP-teardown only.
+// The generic client emits no skill (no Agent Skill consumer) and no longer
+// prints an MCP server config — the agent surface is now the CLI taught by the
+// skill, not an MCP tools/list blob. When --output points at a file, any prior
+// helix MCP entry in it is removed.
 func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {
-	fullConfig := map[string]any{
-		"mcpServers": map[string]any{
-			"helix": serverConfigJSON(cfg.BinaryPath),
-		},
-	}
-
-	data, err := json.MarshalIndent(fullConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-
-	if cfg.OutputPath != "" {
-		if cfg.DryRun {
-			cfg.Printer.DryRunAction("would write MCP config to %s", cfg.OutputPath)
-			return nil
-		}
-		if err := os.MkdirAll(filepath.Dir(cfg.OutputPath), 0755); err != nil {
-			return fmt.Errorf("creating output directory: %w", err)
-		}
-		if err := os.WriteFile(cfg.OutputPath, append(data, '\n'), 0644); err != nil {
-			return fmt.Errorf("writing config to %s: %w", cfg.OutputPath, err)
-		}
-		cfg.Printer.Success("MCP config written to %s", cfg.OutputPath)
-		return nil
-	}
-
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would print MCP config JSON to stdout")
-		return nil
-	}
-
-	// Print to stdout -- this is the only registrar that writes to stdout
-	fmt.Fprintf(os.Stdout, "%s\n", data)
-	return nil
+	return teardownOnlyRegister(r, cfg, "generic")
 }
 
 // teardownMCP for the generic client is a documented no-op when the config is

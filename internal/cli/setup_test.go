@@ -183,60 +183,42 @@ func TestGeminiCLIRegistrarDryRun(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestVSCodeRegistrarRegister asserts the Phase 93 flip: VS Code Register is
+// MCP-teardown only — a pre-seeded helix entry is removed and NO skill is written.
 func TestVSCodeRegistrarRegister(t *testing.T) {
 	dir := t.TempDir()
-	printer := &SetupPrinter{}
+	configPath := filepath.Join(dir, ".vscode", "mcp.json")
+	seedMCPConfig(t, configPath, "servers")
+
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
-		DryRun:     false,
 		ProjectDir: dir,
-		Printer:    printer,
+		Printer:    &SetupPrinter{},
 	}
+	require.NoError(t, (&VSCodeRegistrar{}).Register(cfg))
 
-	r := &VSCodeRegistrar{}
-	err := r.Register(cfg)
-	require.NoError(t, err)
-
-	configPath := filepath.Join(dir, ".vscode", "mcp.json")
-	data, err := os.ReadFile(configPath)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(data, &result))
-
-	servers, ok := result["servers"].(map[string]any)
-	require.True(t, ok, "VS Code config must use 'servers' key")
-
-	entry, ok := servers["helix"].(map[string]any)
-	require.True(t, ok, "helix entry must exist")
-	assert.Equal(t, "stdio", entry["type"])
-	assert.Equal(t, "/usr/local/bin/helix", entry["command"])
+	// Prior helix MCP entry removed; unmanaged entry preserved.
+	assertHelixGoneOtherKept(t, configPath, "servers")
+	// No skill written for a non-Claude client.
+	assertNoSkillUnder(t, dir)
 }
 
+// TestJetBrainsRegistrarRegister asserts the Phase 93 flip for JetBrains:
+// MCP-teardown only, no skill written.
 func TestJetBrainsRegistrarRegister(t *testing.T) {
 	dir := t.TempDir()
-	printer := &SetupPrinter{}
+	configPath := filepath.Join(dir, ".junie", "mcp", "mcp.json")
+	seedMCPConfig(t, configPath, "mcpServers")
+
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
-		DryRun:     false,
 		ProjectDir: dir,
-		Printer:    printer,
+		Printer:    &SetupPrinter{},
 	}
+	require.NoError(t, (&JetBrainsRegistrar{}).Register(cfg))
 
-	r := &JetBrainsRegistrar{}
-	err := r.Register(cfg)
-	require.NoError(t, err)
-
-	configPath := filepath.Join(dir, ".junie", "mcp", "mcp.json")
-	data, err := os.ReadFile(configPath)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(data, &result))
-
-	servers, ok := result["mcpServers"].(map[string]any)
-	require.True(t, ok, "JetBrains config must use 'mcpServers' key")
-	assert.Contains(t, servers, "helix")
+	assertHelixGoneOtherKept(t, configPath, "mcpServers")
+	assertNoSkillUnder(t, dir)
 }
 
 func TestClaudeDesktopRegistrarDryRun(t *testing.T) {
@@ -253,64 +235,47 @@ func TestClaudeDesktopRegistrarDryRun(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestGenericRegistrarRegister asserts the Phase 93 flip for the generic client
+// with --output: a pre-seeded helix MCP entry in the output file is removed
+// (teardown-only; no MCP config is written).
 func TestGenericRegistrarRegister(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := filepath.Join(dir, "mcp-config.json")
-	printer := &SetupPrinter{}
+	seedMCPConfig(t, outputPath, "mcpServers")
+
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
-		DryRun:     false,
 		OutputPath: outputPath,
-		Printer:    printer,
+		Printer:    &SetupPrinter{},
 	}
+	require.NoError(t, (&GenericRegistrar{}).Register(cfg))
 
-	r := &GenericRegistrar{}
-	err := r.Register(cfg)
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(data, &result))
-
-	servers, ok := result["mcpServers"].(map[string]any)
-	require.True(t, ok)
-
-	entry, ok := servers["helix"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "/usr/local/bin/helix", entry["command"])
+	assertHelixGoneOtherKept(t, outputPath, "mcpServers")
 }
 
+// TestGenericRegistrarStdout asserts the Phase 93 flip for the generic client
+// without --output: it is a no-op (no MCP config printed to stdout).
 func TestGenericRegistrarStdout(t *testing.T) {
-	// Capture stdout by temporarily redirecting it.
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
 
-	printer := &SetupPrinter{}
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
-		DryRun:     false,
 		OutputPath: "", // empty = stdout
-		Printer:    printer,
+		Printer:    &SetupPrinter{},
 	}
 
-	reg := &GenericRegistrar{}
-	regErr := reg.Register(cfg)
+	regErr := (&GenericRegistrar{}).Register(cfg)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
-
 	require.NoError(t, regErr)
 
 	var buf bytes.Buffer
 	_, _ = buf.ReadFrom(r)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(buf.Bytes(), &result), "stdout should contain valid JSON")
-	assert.Contains(t, result, "mcpServers")
+	assert.Empty(t, buf.String(), "generic flip prints no MCP config to stdout")
 }
 
 // --- resolveBinaryPath test ---
@@ -672,4 +637,203 @@ func TestTeardownPriorMCP_PreservesHooks(t *testing.T) {
 	pre, ok := hooks["PreToolUse"].([]any)
 	require.True(t, ok, "PreToolUse hooks must survive teardown")
 	require.NotEmpty(t, pre, "helix_managed PreToolUse hook must survive teardown")
+}
+
+// --- Setup flip tests (Phase 93-03 Task 2) ---
+
+// assertNoSkillUnder asserts no SKILL.md was written under <root>/.claude/skills/helix.
+func assertNoSkillUnder(t *testing.T, root string) {
+	t.Helper()
+	_, err := os.Stat(filepath.Join(root, ".claude", "skills", "helix", "SKILL.md"))
+	assert.True(t, os.IsNotExist(err), "no skill should be written for this client")
+}
+
+// assertNoMCPEntry walks the project config files a client may write and asserts
+// no helix entry survives under any of the MCP keys (mcpServers / servers / mcp).
+func assertNoMCPEntry(t *testing.T, dir string) {
+	t.Helper()
+	candidates := []string{
+		filepath.Join(dir, ".mcp.json"),
+		filepath.Join(dir, ".vscode", "mcp.json"),
+		filepath.Join(dir, ".junie", "mcp", "mcp.json"),
+		filepath.Join(dir, "opencode.json"),
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue // file absent → no entry there
+		}
+		var cfg map[string]any
+		require.NoError(t, json.Unmarshal(data, &cfg))
+		for _, key := range []string{"mcpServers", "servers", "mcp"} {
+			if servers, ok := cfg[key].(map[string]any); ok {
+				assert.NotContains(t, servers, "helix", "no helix MCP entry should remain in %s under %q", path, key)
+			}
+		}
+	}
+}
+
+// TestSetupFlip_ClaudeCode_NoMCPEntry_SkillAndHooksPresent: after claude-code
+// Register against a temp ProjectDir, the skill + hooks are present and there is
+// NO helix MCP entry in any written config.
+func TestSetupFlip_ClaudeCode_NoMCPEntry_SkillAndHooksPresent(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	cfg := RegistrationConfig{
+		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir,
+		Printer:    &SetupPrinter{},
+	}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).Register(cfg))
+
+	// SKILL.md present and equal to the embedded asset.
+	skillPath := filepath.Join(dir, ".claude", "skills", "helix", "SKILL.md")
+	data, err := os.ReadFile(skillPath)
+	require.NoError(t, err, "SKILL.md must be written")
+	want := embeddedSkillMD
+	if !bytesHasTrailingNewline(want) {
+		want += "\n"
+	}
+	assert.Equal(t, want, string(data), "SKILL.md must equal the embedded asset")
+
+	// Hooks present (SessionStart, PreToolUse, Stop with helix_managed).
+	settings := readJSON(t, filepath.Join(dir, ".claude", "settings.json"))
+	hooks, ok := settings["hooks"].(map[string]any)
+	require.True(t, ok, "hooks block must be present")
+	for _, evt := range []string{"SessionStart", "PreToolUse", "Stop"} {
+		arr, ok := hooks[evt].([]any)
+		require.True(t, ok, "%s hooks must be present", evt)
+		require.NotEmpty(t, arr, "%s hooks must be present", evt)
+	}
+
+	// No MCP entry anywhere.
+	assertNoMCPEntry(t, dir)
+}
+
+// TestSetupFlip_Idempotent: running claude-code Register twice converges to a
+// byte-stable skill + hooks block (no duplicates) and still no MCP entry.
+func TestSetupFlip_Idempotent(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	cfg := RegistrationConfig{
+		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir,
+		Printer:    &SetupPrinter{},
+	}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).Register(cfg))
+
+	skillPath := filepath.Join(dir, ".claude", "skills", "helix", "SKILL.md")
+	settingsPath := filepath.Join(dir, ".claude", "settings.json")
+	skill1, err := os.ReadFile(skillPath)
+	require.NoError(t, err)
+	settings1, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	// Second run.
+	require.NoError(t, (&ClaudeCodeRegistrar{}).Register(cfg))
+	skill2, err := os.ReadFile(skillPath)
+	require.NoError(t, err)
+	settings2, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, skill1, skill2, "SKILL.md must be byte-stable across re-runs")
+	assert.Equal(t, settings1, settings2, "settings.json must be byte-stable across re-runs (no duplicate hooks)")
+
+	// No duplicate helix_managed hooks per event.
+	settings := readJSON(t, settingsPath)
+	hooks := settings["hooks"].(map[string]any)
+	for _, evt := range []string{"SessionStart", "PreToolUse", "Stop"} {
+		arr := hooks[evt].([]any)
+		managed := 0
+		for _, m := range arr {
+			if mm, ok := m.(map[string]any); ok && isHelixManaged(mm) {
+				managed++
+			}
+		}
+		assert.Equal(t, 1, managed, "exactly one helix_managed matcher per %s after re-run", evt)
+	}
+
+	assertNoMCPEntry(t, dir)
+}
+
+// TestSetupFlip_TeardownRemovesPriorMCP: a pre-seeded prior MCP entry is removed
+// by Register's teardown while the skill + hooks are installed.
+func TestSetupFlip_TeardownRemovesPriorMCP(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	seedMCPConfig(t, filepath.Join(dir, ".mcp.json"), "mcpServers")
+
+	cfg := RegistrationConfig{
+		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir,
+		Printer:    &SetupPrinter{},
+	}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).Register(cfg))
+
+	// Prior helix MCP entry gone, unmanaged entry preserved.
+	assertHelixGoneOtherKept(t, filepath.Join(dir, ".mcp.json"), "mcpServers")
+	// Skill + hooks present.
+	_, err := os.Stat(filepath.Join(dir, ".claude", "skills", "helix", "SKILL.md"))
+	require.NoError(t, err, "SKILL.md must be present after flip")
+	settings := readJSON(t, filepath.Join(dir, ".claude", "settings.json"))
+	_, ok := settings["hooks"].(map[string]any)
+	require.True(t, ok, "hooks must be present after flip")
+}
+
+// TestSetupFlip_NonClaudeClient_TeardownOnly: vscode Register removes the prior
+// MCP entry and writes NO skill.
+func TestSetupFlip_NonClaudeClient_TeardownOnly(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ".vscode", "mcp.json")
+	seedMCPConfig(t, configPath, "servers")
+
+	cfg := RegistrationConfig{
+		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir,
+		Printer:    &SetupPrinter{},
+	}
+	require.NoError(t, (&VSCodeRegistrar{}).Register(cfg))
+
+	assertHelixGoneOtherKept(t, configPath, "servers")
+	assertNoSkillUnder(t, dir)
+}
+
+// TestSetupFlip_NoSkillFlag: --no-skill skips the skill write but still tears
+// down the prior MCP entry and installs hooks.
+func TestSetupFlip_NoSkillFlag(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	seedMCPConfig(t, filepath.Join(dir, ".mcp.json"), "mcpServers")
+
+	cfg := RegistrationConfig{
+		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir,
+		NoSkill:    true,
+		Printer:    &SetupPrinter{},
+	}
+	require.NoError(t, (&ClaudeCodeRegistrar{}).Register(cfg))
+
+	// No skill written.
+	assertNoSkillUnder(t, dir)
+	// Teardown still happened.
+	assertHelixGoneOtherKept(t, filepath.Join(dir, ".mcp.json"), "mcpServers")
+	// Hooks still installed.
+	settings := readJSON(t, filepath.Join(dir, ".claude", "settings.json"))
+	_, ok := settings["hooks"].(map[string]any)
+	require.True(t, ok, "hooks must be installed even with --no-skill")
+}
+
+// readJSON reads and unmarshals a JSON file into a map (test helper).
+func readJSON(t *testing.T, path string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(data, &m))
+	return m
+}
+
+// bytesHasTrailingNewline reports whether s ends with a newline.
+func bytesHasTrailingNewline(s string) bool {
+	return len(s) > 0 && s[len(s)-1] == '\n'
 }

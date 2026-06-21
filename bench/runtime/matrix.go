@@ -68,11 +68,13 @@ type CellOutcome struct {
 	Cell    Cell
 	Result  CellResult
 	Success bool
-	// Deferred is the D-02 distinct third outcome: a fail-closed stub (baseline_rag)
+	// Deferred is the D-02 distinct third outcome: a registered-but-not-yet-real arm
 	// that produced NO result row. A deferred cell has Success==false (ResultValid is
-	// false) AND Err==nil (it is a registered stub, not an infra failure), so without
-	// this flag it would be indistinguishable from a plain verify-fail. Deferred==true
-	// lets the smoke assert "registered + deferred" — neither succeeded nor errored.
+	// false) AND Err==nil (a registered stub, not an infra failure), so without this
+	// flag it would be indistinguishable from a plain verify-fail. Deferred==true lets
+	// the matrix assert "registered + deferred" — neither succeeded nor errored. As of
+	// Phase 83 baseline_rag is a real arm and no mode sets this; the mechanism remains
+	// for any future deferred stub.
 	Deferred bool
 	// Err is the infrastructure error from RunCell (nil for a normal pass/fail run).
 	// A verify-failed cell has Err==nil and Success==false.

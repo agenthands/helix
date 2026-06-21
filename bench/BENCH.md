@@ -46,7 +46,7 @@ six modes:
 | `no_lsp` | `bench-no-lsp` | LSP subsystem disabled (ABLATE-05) |
 | `no_structured_edit` | `bench-no-structured-edit` | structured-edit tools excluded (ABLATE-07) |
 | `your_agent_no_semantic` | `bench-no-semantic` | semantic-store tools excluded; **kernel disable_semantic_subsystem gate** (ABLATE-06, Phase 81 — see below) |
-| `baseline_rag` | `baseline` (placeholder) | registered **fail-closed stub**, no row until Phase 83 |
+| `baseline_rag` | `baseline` (structural) | **retrieval-only RAG control arm**: standalone `cmd/helix-bench-rag` 4-tool MCP server over a chromem-go embedding index (ABLATE-04 — see below) |
 
 **`baseline_plain` — empty Helix inventory, no new YAML.** `baseline_plain`
 reuses the existing `baseline.yaml` profile (D-01, ABLATE-03 — there is
@@ -74,13 +74,31 @@ measurement, not a partial. `bench-no-semantic` still also excludes the 10
 semantic-store tools from the agent surface (Phase 76 tool-filter), so the gate
 is defence-in-depth over the surface filter.
 
-**`baseline_rag` — fail-closed stub, no row until Phase 83.** `baseline_rag`
-is a registered fail-closed stub. Its `MODE.md` carries a placeholder
-`profile: baseline` so the resolver parses it, but the cell wiring fail-closes
-the mode **before** any daemon spawn (detected by mode name, not a frontmatter
-marker — keeping the resolver change-free). The real RAG arm (standalone
-`cmd/helix-bench-rag` + chromem-go embedding index, ABLATE-04) is **deferred to
-Phase 83**; this mode produces **no result row** this phase.
+**`baseline_rag` — the real retrieval-only RAG control arm (ABLATE-04, Phase 83).**
+`baseline_rag` drives the agent against a **standalone** `cmd/helix-bench-rag` MCP
+server (NOT the Helix daemon) that exposes exactly four retrieval tools —
+`rag_search`, `rag_read_chunk`, `grep`, `read_file` — over a per-corpus
+**chromem-go** embedding index built by the `bench/ragindex` leaf package. The
+server shares **no** code with the daemon (no `internal/kernel` / `internal/semantic`
+/ `internal/mcp`; enforced by `make vet` + a transitive import-boundary test). The
+arm is detected **by mode name** in the cell wiring (its `MODE.md` keeps the
+structural two-key `profile: baseline` frontmatter — the resolver is
+`KnownFields`-strict — but no Helix profile is applied to the standalone server).
+
+**Same model, same budget, embedding cost excluded (criterion #4).** baseline_rag
+reuses `runners.DefaultContract` **verbatim** — the SAME model snapshot
+(`claude-sonnet-4-5-20250929`) and per-task budget as `your_agent_full`, never a
+separate config. The embedding index is built/loaded **out-of-band**, BEFORE the
+timed agent span (mirroring how `prePatchSnapshot` runs before the agent drive), so
+embedding-API tokens are **NOT charged** to the agent's per-task `tokens_input` /
+`tokens_output` budget — only the agent's `rag_search` queries over the
+already-built index run inside the timed span. Every baseline_rag row records its
+**`embedder_id`** (OpenAI `text-embedding-3-small` → Ollama `nomic-embed-text` →
+hermetic-CI `stub-deterministic`, each distinct so a CI row is never mistaken for a
+real measurement; see
+[`runners/baseline_rag_agent/EMBED-CHOICE.md`](runners/baseline_rag_agent/EMBED-CHOICE.md)
+for the model pin), and the arm participates as a delta operand
+(`full_minus_baseline_rag`).
 
 ## Operator prerequisites (operator-side, NOT Go build deps)
 

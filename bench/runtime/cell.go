@@ -281,10 +281,12 @@ type CellResult struct {
 	SemanticReadViolation bool
 
 	// Deferred is the D-02 fail-close signal: the cell short-circuited BEFORE any
-	// sandbox/daemon and produced NO result.v2.json (currently only baseline_rag,
-	// the registered fail-closed stub deferred to Phase 83). A deferred cell returns
-	// a nil error (it is a registered stub, not an infra failure) and is neither a
-	// success (ResultValid stays false) nor an infra error at the matrix layer.
+	// sandbox/daemon and produced NO result.v2.json. It is a GENERIC third outcome
+	// the matrix can carry for any registered-but-not-yet-real arm. As of Phase 83
+	// NO mode uses it (baseline_rag became a real arm — see runRAGCell), but the
+	// mechanism is retained for any future deferred stub. A deferred cell returns a
+	// nil error (a registered stub, not an infra failure) and is neither a success
+	// (ResultValid stays false) nor an infra error at the matrix layer.
 	Deferred bool
 	// DeferredReason is the human-readable reason the cell was deferred (names the
 	// phase the real arm lands in). Empty when Deferred is false.

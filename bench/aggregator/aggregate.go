@@ -120,6 +120,13 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 		rep.Cost = append(rep.Cost, costRow)
 	}
 
+	// Phase 85 (ADAPTER-AIDER-01) per-language pass-rate slice — the SC#1 substrate.
+	// Purely additive: it reads the same loaded rows, never touches the RNG, and
+	// does NOT alter the (mode x benchmark) leaderboard/cost output above. Rendering
+	// it into a report file is downstream Phase 89; here it only needs to exist on
+	// the returned Report and be correct.
+	rep.ByLanguage = reduceLanguageRows(loaded)
+
 	// Render + atomically write both artifacts (only reached on success).
 	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
 	cq := renderCostQuality(rep.Cost, rep.Footer)
@@ -215,6 +222,62 @@ func reduceLeaderRow(loaded *Loaded, tasks []string, mode string, cfg Config, al
 	return row
 }
 
+// reduceLanguageRows builds the Phase 85 (ADAPTER-AIDER-01) per-language pass-rate
+// slice — the SC#1 substrate. It groups EVERY loaded row across all (task,mode)
+// cells by its `language` doc key (rowLanguage), then computes a per-language
+// pass-rate via the SAME success-count scalar path reduceLeaderRow uses
+// (successCount): pass-rate == #task_success-true / #non-nil-task_success, so a
+// nil task_success is excluded from both numerator and denominator (Pitfall 4
+// null discipline — never fabricated as a failure). This is intentionally a flat
+// pooled pass-rate across the language's runs, NOT a BCa-bootstrapped CI: SC#1
+// needs the SLICE to exist and be correct; the bootstrapped per-language CI is
+// downstream (Phase 89). Rows whose language key is absent bucket under "" so a
+// pre-language run still contributes without breaking anything. The returned slice
+// is sorted by language for determinism (D-08); a language whose runs all carry a
+// nil task_success (N==0) is dropped (no honest pass-rate to report).
+func reduceLanguageRows(loaded *Loaded) []LanguageRow {
+	type acc struct{ c, n int }
+	byLang := map[string]*acc{}
+
+	for _, task := range loaded.Tasks() {
+		for _, mode := range loaded.Modes(task) {
+			rows := loaded.Rows(task, mode)
+			// Group this cell's rows by language; a single cell could in principle mix
+			// languages, so bucket per row rather than per cell.
+			perLang := map[string][]Row{}
+			for _, r := range rows {
+				lang := rowLanguage(r)
+				perLang[lang] = append(perLang[lang], r)
+			}
+			for lang, lrows := range perLang {
+				c, n := successCount(lrows)
+				a := byLang[lang]
+				if a == nil {
+					a = &acc{}
+					byLang[lang] = a
+				}
+				a.c += c
+				a.n += n
+			}
+		}
+	}
+
+	out := make([]LanguageRow, 0, len(byLang))
+	for lang, a := range byLang {
+		if a.n == 0 {
+			// No non-nil task_success for this language — no honest pass-rate.
+			continue
+		}
+		out = append(out, LanguageRow{
+			Language: lang,
+			PassRate: float64(a.c) / float64(a.n),
+			N:        a.n,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Language < out[j].Language })
+	return out
+}
+
 // reduceCostRow builds the COST-03 cost_quality.md row for one (mode x
 // benchmark): per-solved-task mean USD feeds both the cost_per_solved_task point
 // (costPerSolvedTask) and the per-solved-task USD vector for the cost BCa CI; the
@@ -292,6 +355,24 @@ func perRunUSDs(rows []Row, ct cost.CostTable, today time.Time) []float64 {
 // rowModelID reads the open provenance `model_id` from a row's preserved doc.
 func rowModelID(r Row) string {
 	raw, ok := r.Doc["model_id"]
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return s
+}
+
+// rowLanguage reads the additive open provenance `language` key from a row's
+// preserved doc (Phase 85, ADAPTER-AIDER-01), mirroring rowModelID exactly. It
+// returns "" when the key is absent — a pre-language artifact — which buckets the
+// row under the unsliced "" language. NEVER derive the language from task_id here;
+// the persisted Cell.Language is the only source (task_id parsing is the
+// documented downstream fallback only).
+func rowLanguage(r Row) string {
+	raw, ok := r.Doc["language"]
 	if !ok {
 		return ""
 	}

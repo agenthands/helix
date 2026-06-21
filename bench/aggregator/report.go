@@ -74,6 +74,20 @@ type CostRow struct {
 	VarianceFlags []VarianceFlag
 }
 
+// LanguageRow is one per-language pass-rate slice (Phase 85, ADAPTER-AIDER-01):
+// the language axis read from the additive `language` doc key, the aggregate
+// pass-rate across that language's runs, and N (the number of runs that
+// contributed a non-nil task_success). It is the SC#1 substrate ("Python
+// pass-rate") — additive, never altering the (mode x benchmark) leaderboard. A
+// pre-language run (no `language` key) buckets under Language=="". Rendering this
+// slice into a report file is downstream Phase 89; here it only needs to exist
+// and be correct.
+type LanguageRow struct {
+	Language string
+	PassRate float64
+	N        int
+}
+
 // Footer is the shared provenance block both reports cite for reproducibility
 // (D-08/D-16): seed, bootstrap iterations, CI level, run count, and the
 // cost-table valid_until snapshot.
@@ -94,8 +108,12 @@ type Footer struct {
 type Report struct {
 	Leaderboard []LeaderRow
 	Cost        []CostRow
-	PassNK      int
-	Footer      Footer
+	// ByLanguage is the Phase 85 (ADAPTER-AIDER-01) per-language pass-rate slice —
+	// the SC#1 substrate. Purely additive: it never alters the (mode x benchmark)
+	// Leaderboard. A pre-language run buckets under Language=="".
+	ByLanguage []LanguageRow
+	PassNK     int
+	Footer     Footer
 }
 
 // ciOverlap is the STATS-04 interval-intersection predicate (D-17): two CIs

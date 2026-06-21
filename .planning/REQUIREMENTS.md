@@ -75,7 +75,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 - [x] **TEST-01**: A CLI-over-daemon end-to-end oracle exercises `helix <verb>` as a subprocess against a real daemon (reusing the v1.12 bench subprocess/sandbox patterns). _Acceptance:_ the E2E suite runs a representative verb set green under `go test`.
 - [x] **TEST-02**: The contract oracle is re-targeted — goldens become CLI stdout goldens (ordering, `file:line`, error-kind prefix); schema meta-validation becomes "typed args → cobra flags" parity. _Acceptance:_ the contract oracle passes against CLI output.
-- [ ] **TEST-03**: Skill + nudge behavior is verified via the v1.4 LLM behavioral harness — confirming the skill shifts agent tool-selection toward `helix` and the nudge fires correctly. _Acceptance:_ the behavioral oracle records a tool-selection improvement vs the grep/sed/cat baseline.
+- [x] **TEST-03**: Skill + nudge behavior is verified via the v1.4 LLM behavioral harness — confirming the skill shifts agent tool-selection toward `helix` and the nudge fires correctly. _Acceptance:_ the behavioral oracle records a tool-selection improvement vs the grep/sed/cat baseline.
 
 ## v2 Requirements (deferred to future milestones)
 
@@ -134,4 +134,4 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | DOCS-03 | Phase 95 | Pending |
 | TEST-01 | Phase 90 | Complete |
 | TEST-02 | Phase 92 | Complete |
-| TEST-03 | Phase 93 | Pending |
+| TEST-03 | Phase 93 | Complete |

@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 94
 current_phase_name: retire-the-agent-facing-mcp-surface-delete
-status: executing
+status: verifying
 stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T21:39:07.862Z"
+last_updated: "2026-06-21T22:08:39.523Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 94 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 17
-  completed_plans: 16
-  percent: 67
+  completed_plans: 17
+  percent: 83
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 Phase: 94 (retire-the-agent-facing-mcp-surface-delete) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 — Phase 94 execution started
 
 Progress: [██░░░░░░░░] 19%
@@ -64,6 +64,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 93 P03 | 9min | 2 tasks | 3 files |
 | Phase 93 P04 | 310 | 2 tasks | 21 files |
 | Phase 94 P01 | 18min | 3 tasks | 14 files |
+| Phase 94 P02 | 25min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -99,7 +100,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T21:39:02.748Z
+Last session: 2026-06-21T22:08:19.660Z
 Stopped at: Completed 93-03-PLAN.md
 Resume file: None
 
@@ -128,3 +129,5 @@ Resume file: None
 - [Phase ?]: 93-02: PreToolUse nudge repurposed to per-call advisory steering grep/sed/cat to helix verbs via hookSpecificOutput.additionalContext, fail-open and exit-0 always (T-93-04)
 - [Phase ?]: 93-02: classifyBashTarget uses a static code-extension allowlist (not per-call Registry) for the hot hook path; mixed code+non-code operands classify conservatively as non-code
 - [Phase ?]: Phase 93-03: helix setup flipped to skill+hooks install with MCP-only hook-preserving teardown across all 7 clients; daemon MCP head intact for Phase 94
+- [Phase ?]: 94-02: CLI is the sole agent-facing MCP surface — both stdio (RunForwarder) and HTTP (/mcp) heads deleted; daemon/wire/middleware engine retained behind forwarder.CallTool
+- [Phase ?]: 94-02: --mode retained with only the auto arm; legacy stdio/http modes surface the unknown-mode error

@@ -158,7 +158,7 @@ Plans:
 
 **Wave 2** *(blocked on 94-01; deletion commit comes after the parity-proof commit)*
 
-- [ ] 94-02-PLAN.md — delete stdio head (RunForwarder + --mode=stdio + dead RunStdio; MOVE generateSessionID) + delete HTTP /mcp head (listenHTTP/HTTPHandler/httpSessionMiddleware + 9 --http-addr sites incl. startDaemon exec arg) + re-target HTTP transport tests to gRPC/in-memory + Windows local-dial smoke + zero-proto/zero-dep asserts (RETIRE-01, RETIRE-02)
+- [x] 94-02-PLAN.md — delete stdio head (RunForwarder + --mode=stdio + dead RunStdio; MOVE generateSessionID) + delete HTTP /mcp head (listenHTTP/HTTPHandler/httpSessionMiddleware + 9 --http-addr sites incl. startDaemon exec arg) + re-target HTTP transport tests to gRPC/in-memory + Windows local-dial smoke + zero-proto/zero-dep asserts (RETIRE-01, RETIRE-02)
 
 ### Phase 95: Identity & Docs Rewrite + docgen Regen
 

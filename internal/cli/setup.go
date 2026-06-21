@@ -36,7 +36,7 @@ Run with a client name to set up Helix for that client.`,
 	}
 
 	cmd.Flags().Bool("global", false, "Set up globally (user-scoped) instead of project-scoped")
-	cmd.Flags().Bool("uninstall", false, "Remove Helix registration from the client (MCP entry and hooks)")
+	cmd.Flags().Bool("uninstall", false, "Remove Helix from the client (any prior MCP entry, hooks, and the Agent Skill)")
 	cmd.Flags().Bool("skip-install", false, "Skip language server pre-installation")
 	cmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
 	cmd.Flags().String("output", "", "Output path for generic client config (default: stdout)")

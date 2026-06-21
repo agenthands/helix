@@ -259,31 +259,50 @@ func (r *ClaudeCodeRegistrar) Unregister(cfg RegistrationConfig) error {
 	cmdArgs := []string{"mcp", "remove", "helix", "--scope", scope}
 
 	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would run: claude %s", strings.Join(cmdArgs, " "))
+		cfg.Printer.DryRunAction("would run: claude %s (best-effort)", strings.Join(cmdArgs, " "))
+		cfg.Printer.DryRunAction("would remove hooks from %s", hookSettingsPath(cfg.ProjectDir, cfg.Global))
+		cfg.Printer.DryRunAction("would remove Agent Skill from %s/SKILL.md", skillTargetDir(claudeDir(cfg.ProjectDir, cfg.Global)))
 		return nil
 	}
 
-	if _, err := exec.LookPath("claude"); err != nil {
-		return fmt.Errorf("claude CLI not found in PATH; install Claude Code first")
+	// 1. MCP removal is BEST-EFFORT (CR-93-01). Post-flip, setup no longer
+	// registers an MCP entry, so `claude mcp remove helix` normally exits
+	// non-zero (no such entry). Treat that as a no-op — mirroring teardownMCP —
+	// and ALWAYS proceed to hook + skill removal, which is what --uninstall
+	// actually promises now. A missing `claude` CLI is likewise non-fatal.
+	if _, err := exec.LookPath("claude"); err == nil {
+		cmd := exec.Command("claude", cmdArgs...)
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		_ = cmd.Run() // ignore: absent MCP entry is a no-op, not a fatal error
 	}
-
-	cmd := exec.Command("claude", cmdArgs...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("claude mcp remove failed: %w", err)
+	// Direct-file MCP removal (idempotent — missing file/key → no-op), matching
+	// teardownMCP so an entry written via either path is removed.
+	if err := removeFromJSONConfig(filepath.Join(cfg.ProjectDir, ".mcp.json"), "mcpServers", "helix"); err != nil {
+		cfg.Printer.Failure("removing .mcp.json entry failed: %s", err)
 	}
-
-	// Hook removal (per D-03).
-	settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
-	if cfg.DryRun {
-		cfg.Printer.DryRunAction("would remove hooks from %s", settingsPath)
-	} else {
-		if err := removeHooksFromSettings(settingsPath); err != nil {
-			cfg.Printer.Failure("hook removal failed: %s", err)
-		} else {
-			cfg.Printer.Success("removed hooks from %s", settingsPath)
+	if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		globalSettings := filepath.Join(home, ".claude", "settings.json")
+		if err := removeFromJSONConfig(globalSettings, "mcpServers", "helix"); err != nil {
+			cfg.Printer.Failure("removing global settings entry failed: %s", err)
 		}
+	}
+
+	// 2. Hook removal (per D-03).
+	settingsPath := hookSettingsPath(cfg.ProjectDir, cfg.Global)
+	if err := removeHooksFromSettings(settingsPath); err != nil {
+		cfg.Printer.Failure("hook removal failed: %s", err)
+	} else {
+		cfg.Printer.Success("removed hooks from %s", settingsPath)
+	}
+
+	// 3. Skill removal (WR-93-01) — the skill is the primary artifact setup now
+	// installs, so --uninstall must remove it too. Best-effort, path-contained.
+	skillDir := skillTargetDir(claudeDir(cfg.ProjectDir, cfg.Global))
+	if err := uninstallSkill(skillDir); err != nil {
+		cfg.Printer.Failure("skill removal failed: %s", err)
+	} else {
+		cfg.Printer.Success("removed Agent Skill from %s/SKILL.md", skillDir)
 	}
 
 	return nil
@@ -561,12 +580,27 @@ func (r *ClaudeDesktopRegistrar) Unregister(cfg RegistrationConfig) error {
 		return err
 	}
 
+	// Claude Desktop is global-only; resolve the global ~/.claude skills dir.
+	skillDir := skillTargetDir(claudeDir(cfg.ProjectDir, true))
+
 	if cfg.DryRun {
 		cfg.Printer.DryRunAction("would remove helix from %s", configPath)
+		cfg.Printer.DryRunAction("would remove Agent Skill from %s/SKILL.md", skillDir)
 		return nil
 	}
 
-	return removeFromJSONConfig(configPath, "mcpServers", "helix")
+	// MCP removal is best-effort (a missing entry is a no-op); always proceed to
+	// skill removal so --uninstall tears down the primary artifact (WR-93-01).
+	if err := removeFromJSONConfig(configPath, "mcpServers", "helix"); err != nil {
+		cfg.Printer.Failure("removing MCP entry failed: %s", err)
+	}
+
+	if err := uninstallSkill(skillDir); err != nil {
+		cfg.Printer.Failure("skill removal failed: %s", err)
+	} else {
+		cfg.Printer.Success("removed Agent Skill from %s/SKILL.md", skillDir)
+	}
+	return nil
 }
 
 // configPath returns the platform-specific Claude Desktop config path.

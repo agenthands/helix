@@ -126,6 +126,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	addGrouped(groupRuntime, newSetupCommand())
 	addGrouped(groupRuntime, newStatusCommand())
+	addGrouped(groupWorkspace, newVerbCommand())
 	addGrouped(groupWorkspace, newActivateCommand())
 	addGrouped(groupWorkspace, newDeactivateCommand())
 	addGrouped(groupWorkspace, newNudgeCommand())

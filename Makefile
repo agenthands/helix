@@ -314,8 +314,16 @@ verify-tos:
 # Go SDK (github.com/docker/docker) must never appear in go.mod. On a match this
 # prints a CI ::error:: and exits NON-ZERO; on no match the recipe succeeds (the
 # grep exit-1 is swallowed by the `if` so the absence case is the pass).
+#
+# The pattern is anchored to `github.com/docker/docker` followed by whitespace
+# (the go.mod module/version separator) so it matches ONLY the Engine SDK module
+# line, not legitimately-distinct sibling modules whose path is a superstring —
+# e.g. github.com/docker/docker-credential-helpers, which go-containerregistry's
+# default registry-auth keychain pulls in transitively (84-03). Those are
+# registry-credential helpers, not the Docker Engine SDK; banning them would be
+# a false positive. The Engine SDK line is always `github.com/docker/docker vX`.
 verify-no-docker-sdk:
-	@if grep -q 'github.com/docker/docker' go.mod; then \
+	@if grep -Eq 'github\.com/docker/docker[[:space:]]' go.mod; then \
 		echo "::error::SC#1 violation: github.com/docker/docker present in go.mod"; \
 		exit 1; \
 	fi

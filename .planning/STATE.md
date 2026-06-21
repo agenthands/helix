@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 86-05-PLAN.md
-last_updated: "2026-06-21T05:50:20.217Z"
-last_activity: 2026-06-21 -- Phase 87 execution started
+stopped_at: Completed 87-02-PLAN.md
+last_updated: "2026-06-21T05:56:35.000Z"
+last_activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
 progress:
   total_phases: 15
   completed_phases: 12
   total_plans: 65
-  completed_plans: 62
-  percent: 80
+  completed_plans: 63
+  percent: 82
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 87 (swe-bench-verified-adapter-utboost-rescorer-multi-oracle-verified-correctness) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 87 execution started
+Last activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
 
 ### Session Continuity
 
-Last session: 2026-06-21T05:49:56.132Z
-Stopped at: Completed 86-05-PLAN.md
+Last session: 2026-06-21T05:56:35.000Z
+Stopped at: Completed 87-02-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -128,6 +128,7 @@ Resume file: None
 | Phase 86 P04 | 7 | 2 tasks | 12 files |
 | Phase 86 P05 | ~7min | 2 tasks | 7 files (TDD RED+GREEN x2) |
 | Phase 87 P01 | 6min | 5 tasks | 11 files |
+| Phase 87 P02 | 5min | 3 tasks | 10 files (TDD RED+GREEN x3, hermetic fixtures) |
 
 ## Decisions
 

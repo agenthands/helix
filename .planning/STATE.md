@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 93
-current_phase_name: SKILL.md + Nudge Repurpose + `helix setup` Flip
-status: verifying
+current_phase_name: skill-md-nudge-repurpose-helix-setup-flip
+status: executing
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T19:18:42.086Z"
+last_updated: "2026-06-21T20:02:24.833Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 92 complete, transitioned to Phase 93
+last_activity_desc: Phase 93 execution started
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 12
   percent: 50
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 92 — Terse Output Renderer + Re-Targeted Contract Oracle
+**Current focus:** Phase 93 — skill-md-nudge-repurpose-helix-setup-flip
 
 ## Current Position
 
-Phase: 93 — SKILL.md + Nudge Repurpose + `helix setup` Flip
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 92 complete, transitioned to Phase 93
+Phase: 93 (skill-md-nudge-repurpose-helix-setup-flip) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-21 — Phase 93 execution started
 
 Progress: [██░░░░░░░░] 19%
 
@@ -58,6 +58,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 92 P01 | 20min | 3 tasks | 6 files |
 | Phase 92 P02 | 6min | 2 tasks | 8 files |
 | Phase 92 P03 | ~10min | 2 tasks | 9 files |
+| Phase 93 P01 | 50m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -93,7 +94,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T18:48:37.704Z
+Last session: 2026-06-21T20:02:08.130Z
 Stopped at: Completed 91-03-PLAN.md
 Resume file: None
 
@@ -118,3 +119,4 @@ Resume file: None
 - [Phase ?]: 92-02: --json repurposed as a persistent dual-read flag (log-format on daemon path, verb-output JSON on verb path)
 - [Phase ?]: 92-02: readSnippetLine clamps the CLI-side snippet read to the workspace root before opening (T-92-04)
 - [Phase ?]: 92-03: Contract oracle re-targeted to real helix subprocess stdout goldens (HELIX_BIN-gated); MCP schema meta-validation replaced by default-suite typed-args to cobra-flags parity; OUT-04 chain + OUT-03 self-contained nav snippet proven end-to-end
+- [Phase ?]: 93-01: SKILL.md ships via go:embed (string form); installSkill writes it atomically with skills/helix containment; zero new deps, drift-gated against VerbToolNames

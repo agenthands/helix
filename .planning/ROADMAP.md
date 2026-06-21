@@ -128,7 +128,7 @@ Plans:
 
 **Wave 1** *(file-disjoint, parallel)*
 
-- [ ] 93-01-PLAN.md — SKILL.md asset + `//go:embed` + `installSkill`/`skillTargetDir` (atomic, contained) + verb-membership drift test + frontmatter/description-cap test (SKILL-01, SKILL-04 reserve)
+- [x] 93-01-PLAN.md — SKILL.md asset + `//go:embed` + `installSkill`/`skillTargetDir` (atomic, contained) + verb-membership drift test + frontmatter/description-cap test (SKILL-01, SKILL-04 reserve)
 - [ ] 93-02-PLAN.md — nudge repurpose: `classifyBashTarget` (code-vs-noncode, fail-open) + advisory `helix <verb>` steer via `hookSpecificOutput.additionalContext` JSON, always exit 0 (SKILL-03)
 
 **Wave 2** *(blocked on 93-01; file-disjoint, parallel)*

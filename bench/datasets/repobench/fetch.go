@@ -132,11 +132,42 @@ func Fetch(ctx context.Context, rev, language string) ([]byte, error) {
 		return nil, fmt.Errorf("repobench: parquet %s exceeds %d-byte cap", url, int64(maxParquetBytes))
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return nil, fmt.Errorf("repobench: mkdir cache: %w", err)
-	}
-	if err := os.WriteFile(dst, body, 0o644); err != nil {
-		return nil, fmt.Errorf("repobench: write cache %s: %w", dst, err)
+	if err := writeCacheAtomic(dst, body); err != nil {
+		return nil, err
 	}
 	return body, nil
+}
+
+// writeCacheAtomic writes the fetched parquet to a temp file in the SAME
+// directory as dst and atomically renames it into place (mirrors the
+// aggregator's writeReport temp+rename, report.go:346-370). A non-atomic
+// os.WriteFile interrupted mid-write would leave a truncated/partial cache file
+// that os.ReadFile then serves forever as a "hit" with no integrity check
+// (WR-04); the temp+rename makes a partial write never become a cache hit —
+// the rename either lands the complete file or leaves the previous cache (or
+// no cache) untouched.
+func writeCacheAtomic(dst string, body []byte) error {
+	dir := filepath.Dir(dst)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("repobench: mkdir cache: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(dst)+"-*")
+	if err != nil {
+		return fmt.Errorf("repobench: create temp cache: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(body); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("repobench: write temp cache: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("repobench: close temp cache: %w", err)
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("repobench: rename temp cache into %s: %w", dst, err)
+	}
+	return nil
 }

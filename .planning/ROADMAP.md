@@ -124,7 +124,17 @@ Plans:
   3. `helix setup claude-code` leaves the skill + hooks present and no MCP server entry; re-running is idempotent, and the teardown covers every supported client.
   4. The `SKILL.md` token-efficiency rationale records a real measured idle-skill-cost vs preloaded-full-tool-schema before/after number in `SKILL.md` or a referenced doc.
 
-**Plans**: TBD
+**Plans**: 4 plans (2 waves)
+
+**Wave 1** *(file-disjoint, parallel)*
+
+- [ ] 93-01-PLAN.md — SKILL.md asset + `//go:embed` + `installSkill`/`skillTargetDir` (atomic, contained) + verb-membership drift test + frontmatter/description-cap test (SKILL-01, SKILL-04 reserve)
+- [ ] 93-02-PLAN.md — nudge repurpose: `classifyBashTarget` (code-vs-noncode, fail-open) + advisory `helix <verb>` steer via `hookSpecificOutput.additionalContext` JSON, always exit 0 (SKILL-03)
+
+**Wave 2** *(blocked on 93-01; file-disjoint, parallel)*
+
+- [ ] 93-03-PLAN.md — `helix setup` flip: `teardownPriorMCP` (MCP-only, hook-preserving) + wire `installSkill`+hooks into each `Register` across 7 clients; idempotent; no MCP entry after setup (SKILL-02)
+- [ ] 93-04-PLAN.md — behavioral oracle skill-vs-grep-baseline (`//go:build llm`, key-gated) + dependency-free idle-cost bound + filled SKILL.md token-note (TEST-03, SKILL-04)
 
 ### Phase 94: Retire the Agent-Facing MCP Surface (DELETE)
 

@@ -297,7 +297,13 @@ Plans:
   3. A cosign-signed mirror of SWE-bench / Multi-SWE-bench / Terminal-Bench instance images is published to `ghcr.io/agenthands/helix-bench-*`; bench harness verifies the cosign signature before pulling; a tampered image is rejected.
   4. Disk-budget guard fails the run if available disk on the bench host is < 50 GB before a SWE-bench full run; the synthetic low-disk test trips the guard with a one-line remediation message.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 84-01-PLAN.md — Package foundation + os/exec docker/podman engine shim + arch-mismatch gate + go.mod docker-SDK grep gate (CONTAINER-01)
+- [ ] 84-02-PLAN.md — SHA256 digest-pinned image cache at $HELIX_CACHE_DIR/bench-images/<sha>/ + cross-platform disk-budget guard (CONTAINER-02, CONTAINER-04)
+- [ ] 84-03-PLAN.md — In-process cosign/sigstore-go verify (canonical-error) + verify-then-pull crane wiring (CONTAINER-03 runtime half)
+- [ ] 84-04-PLAN.md — bench-mirror.yml CI publish+sign of the GHCR mirror + BENCH.md container docs (CONTAINER-03 CI/publish half)
 
 ### Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners
 

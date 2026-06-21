@@ -91,9 +91,9 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 ### Container Runtime (CONTAINER-*)
 
 - [x] **CONTAINER-01**: Container orchestration uses `os/exec` to `docker` (or `podman` via drop-in compat). No Go Docker SDK in `go.mod`. _Acceptance:_ `grep "github.com/docker/docker"` in `go.mod` returns empty; bench harness works with either `docker` or `podman` on PATH.
-- [ ] **CONTAINER-02**: Per-instance images pinned by SHA256 digest, not tag. Image-cache state cached at `$HELIX_CACHE_DIR/bench-images/<sha>/`. _Acceptance:_ digest-pin test; cache hit on re-run.
+- [x] **CONTAINER-02**: Per-instance images pinned by SHA256 digest, not tag. Image-cache state cached at `$HELIX_CACHE_DIR/bench-images/<sha>/`. _Acceptance:_ digest-pin test; cache hit on re-run.
 - [ ] **CONTAINER-03**: cosign-signed mirror of SWE-bench / Multi-SWE-bench / Terminal-Bench instance images published to a Helix-controlled GHCR namespace; bench harness verifies cosign signature before pulling. _Acceptance:_ mirror exists; verify step is mandatory; tampered image is rejected.
-- [ ] **CONTAINER-04**: Disk-budget guard fails the run if available disk on the bench host is < 50 GB before SWE-bench full run. _Acceptance:_ synthetic low-disk test trips the guard.
+- [x] **CONTAINER-04**: Disk-budget guard fails the run if available disk on the bench host is < 50 GB before SWE-bench full run. _Acceptance:_ synthetic low-disk test trips the guard.
 
 ### Reports (REPORT-*)
 

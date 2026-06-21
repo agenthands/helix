@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 83-03-PLAN.md
-last_updated: "2026-06-21T01:14:39.507Z"
+last_updated: "2026-06-21T01:20:55.635Z"
 last_activity: 2026-06-21 -- Phase 84 execution started
 progress:
   total_phases: 15
   completed_phases: 9
   total_plans: 49
-  completed_plans: 46
+  completed_plans: 47
   percent: 60
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 84 (container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 -- Phase 84 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T01:14:21.041Z
+Last session: 2026-06-21T01:20:37.997Z
 Stopped at: Completed 83-03-PLAN.md
 Resume file: None
 
@@ -113,6 +113,7 @@ Resume file: None
 | Phase 83 P02 | ~30min | 2 tasks | 14 files |
 | Phase 83 P03 | 55min | 4 tasks | 14 files |
 | Phase 84 P01 | 3m22s | 2 tasks | 7 files |
+| Phase 84 P02 | 190s | 2 tasks | 9 files |
 
 ## Decisions
 
@@ -185,3 +186,4 @@ Resume file: None
 - [Phase ?]: 83-03: StartRAGServer returns a bench-owned RAGHandle (stdio MCP endpoint, not a socketed daemon); baseline_rag is an OPTIONAL delta operand (full_minus_baseline_rag)
 - [Phase ?]: 84-01: go-containerregistry promoted to direct require via go.mod hand-edit (not tidy); Plan 03 crane import makes it self-sustaining
 - [Phase ?]: 84-01: ArchGate pure host-arch-as-parameter for hermetic both-ways testing; escape hatch only on exact BENCH_ARCH_MISMATCH_OK=1
+- [Phase ?]: Plan 02: cacheDir() copied verbatim from bench/ragindex; Ensure publishes via verified-then-rename + .container-cache-ok sentinel; DiskGuard injectable availFn with build-tag-split unix.Statfs/GetDiskFreeSpaceEx at 50 GiB; extracted procGroupAttr() seam to unblock engine.go windows cross-compile.

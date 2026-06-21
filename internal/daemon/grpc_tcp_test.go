@@ -135,7 +135,9 @@ func TestListenGRPCTCP_LoopbackLifecycle(t *testing.T) {
 
 	// Dial the bound tcp address with a gRPC client and drive one StreamMCP
 	// round-trip, asserting a non-error result.
-	conn, err := grpc.NewClient("tcp://"+addr,
+	// passthrough:/// dials the tcp address verbatim (the gRPC analog of the
+	// unix:// form) — "tcp://" is NOT a valid gRPC target scheme.
+	conn, err := grpc.NewClient("passthrough:///"+addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient tcp://%s: %v", addr, err)

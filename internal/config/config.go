@@ -103,6 +103,12 @@ type DaemonConfig struct {
 	SocketPath string `koanf:"socket_path"`
 	// HTTPAddr is the listen address for Streamable HTTP (default ":8080")
 	HTTPAddr string `koanf:"http_addr"`
+	// GRPCAddr is the OPTIONAL loopback gRPC TCP listen address for split-host
+	// CLI↔daemon use (Phase 94 RETIRE-04). Empty (default) = unix-socket only;
+	// when set it MUST be loopback (127.0.0.1/localhost/::1) — non-loopback is
+	// refused (validateGRPCAddr), deferred to REMOTE-01. It reuses the same
+	// ForwarderService.StreamMCP RPC as the unix socket (no proto change).
+	GRPCAddr string `koanf:"grpc_addr"`
 	// ShutdownTimeout in seconds for graceful shutdown
 	ShutdownTimeout int `koanf:"shutdown_timeout"`
 }

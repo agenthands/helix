@@ -28,6 +28,7 @@ func DefaultConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"daemon.socket_path":                 "", // empty means auto-compute from UID
 		"daemon.http_addr":                   ":8080",
+		"daemon.grpc_addr":                   "", // empty = unix-socket only; loopback-only opt-in (Phase 94 RETIRE-04)
 		"daemon.shutdown_timeout":            10,
 		"logging.format":                     "text",
 		"logging.level":                      "info",

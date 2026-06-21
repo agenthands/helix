@@ -200,6 +200,13 @@ type Daemon struct {
 	// Plan 07 (CR-01) gate test can assert the background read pipelines are
 	// inert under the gate (build-but-block: the store/bundle stay built).
 	effSemanticDisabled bool
+
+	// testServeSession is a TEST-ONLY seam (Phase 94 RETIRE-04). When non-nil it
+	// is wired into the forwarderServiceHandler built by listenSocket /
+	// listenGRPCTCP as the StreamMCP session runner, so a daemon unit/lifecycle
+	// test can drive a real gRPC round-trip without a full MCP server. nil in
+	// production — the handler falls back to defaultSessionRunner.
+	testServeSession sessionRunner
 }
 
 // New creates a new Daemon with the given config and logger.
@@ -1313,6 +1320,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return d.listenSocket(gctx)
 	})
 
+	// Optional loopback gRPC TCP listener for split-host CLI↔daemon use
+	// (Phase 94 RETIRE-04). Gated on GRPCAddr != "" like listenHTTP/listenAdmin;
+	// default empty = unix-socket only. Serves the SAME ForwarderService.
+	if d.config.Daemon.GRPCAddr != "" {
+		g.Go(func() error {
+			return d.listenGRPCTCP(gctx)
+		})
+	}
+
 	// HTTP listener for Streamable HTTP MCP (DMN-04, MCP-02)
 	if d.config.Daemon.HTTPAddr != "" {
 		g.Go(func() error {
@@ -1334,6 +1350,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.logger.Info("daemon started",
 		"socket", d.config.Daemon.SocketPath,
 		"http_addr", d.config.Daemon.HTTPAddr,
+		"grpc_addr", d.config.Daemon.GRPCAddr,
 		"admin_addr", d.config.Observability.AdminAddr,
 		"workspaces", d.workspaces.WorkspaceCount(),
 	)
@@ -1367,19 +1384,7 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	d.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(obs.ServerStatsHandler(d.obs.TracerProvider())),
 	)
-	serenav1.RegisterForwarderServiceServer(d.grpcServer, &forwarderServiceHandler{
-		mcpServer: d.mcpServer,
-		kernel:    d.kernel,
-		logger:    d.logger,
-		// Phase 53 D-17: direct call to *obs.Metrics for stdio session
-		// lifecycle emission. observability.Metrics() is never nil per the
-		// Noop-default invariant — no nil guard needed inside the handler.
-		metrics: d.obs.Metrics(),
-		// Phase 61 P03 (B2): forward DeactivateWorkspace to the live
-		// bundle so cached enrichment leases for the workspace are
-		// released promptly per CONTEXT lines 492-494.
-		live: d.live,
-	})
+	serenav1.RegisterForwarderServiceServer(d.grpcServer, d.newForwarderServiceHandler())
 
 	// Serve in a goroutine so we can wait for context cancellation
 	serveDone := make(chan error, 1)

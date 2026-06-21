@@ -64,7 +64,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("rendering verbs_gen.go: %v", err)
 	}
-	_ = rendered
 
 	if *check {
 		existing, err := os.ReadFile(*out)

@@ -1,0 +1,15 @@
+# STALE FIXTURE — for validate-cost-table HARD-FAIL tests ONLY. Not a real
+# pricing table. Carries a PAST valid_until and a >90d last_verified relative to
+# the injected test clock (2026-06-15), so validateCostTable() must return a
+# non-nil error (D-16).
+rows:
+  -
+    provider: Anthropic
+    model_id: claude-sonnet-4-5-20250929
+    input_per_mtok: 3.0
+    output_per_mtok: 15.0
+    cached_input_per_mtok: 0.30
+    currency: USD
+    valid_until: 2026-01-01
+    last_verified: 2026-01-01
+    deprecation_at: 2027-01-28

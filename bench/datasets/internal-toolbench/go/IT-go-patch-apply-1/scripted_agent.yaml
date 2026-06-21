@@ -1,0 +1,18 @@
+# Scripted agent for the toolbench-go/sum-doubler seed task (D-03).
+#
+# Exactly one real MCP edit: replace_in_file flips the deliberately-wrong
+# `return x` body of Double to `return x * 2`, after which verify.sh's `go test`
+# passes. Keys are limited to the runner.ScriptedStep set (tool/args/expect_error)
+# so internal/eval/runner.LoadScript (strict KnownFields) accepts it.
+#
+# replace_in_file args (internal/kernel/fileops.ReplaceInFileArgs):
+#   path        — file relative to the workspace (repo) root
+#   pattern     — literal text to match (is_regex defaults false; exact anchor,
+#                 no warm LSP required — most portable, 77-RESEARCH Open Q2)
+#   replacement — text to substitute
+steps:
+  - tool: replace_in_file
+    args:
+      path: sum.go
+      pattern: "\treturn x\n"
+      replacement: "\treturn x * 2\n"

@@ -1,295 +1,342 @@
-# Feature Research — Helix v1.10 Live Semantic Index
+# Feature Research — v1.12 Bench Stack & Tool Evaluation
 
-**Domain:** Live, evidence-backed semantic graphs for coding agents (durable graph store + live overlay + LSP enrichment + agent-facing context tools + guardrails + eval harness)
-**Researched:** 2026-05-03
-**Confidence:** HIGH on adjacent-product behavior and evaluation conventions; MEDIUM on confidence-tier conventions for dynamic-language type resolution; LOW on specific guardrail-receipt schemas (no published prior art — this is novel territory).
-
-**Scope guard:** This file is *only* about v1.10 — the Live Semantic Index milestone. Existing v1.0–v1.9 features (the 41 shipped MCP tools, profile/mode gating, fuzzy edit cascade, RepoMap with PageRank, memory store, observability, signed releases) are the **baseline**, not features under research. Anywhere a feature integrates with an existing tool, the existing tool is referenced by name but not re-described.
+**Domain:** Agentic coding benchmark harness — public benchmark adapters + internal ToolBench + ablation matrix
+**Researched:** 2026-06-13
+**Confidence:** HIGH for public-benchmark mechanics and peer reporting conventions (multiple corroborating sources per benchmark); HIGH for SWE-bench "verified correctness" weakness (UTBoost is the canonical citation); MEDIUM for ToolBench-style internal contract suites (very few public exemplars — CodeAgent-style ablations and Aider's own polyglot harness are the closest analogues).
 
 ---
 
-## 0. Adjacent-Product Survey (Evidence Base)
+## Headline framing for downstream roadmap
 
-| Product | What it is | Graph model | Freshness model | Agent surface |
-|---|---|---|---|---|
-| **Sourcegraph SCIP** | Successor to LSIF; Protobuf schema with human-readable symbol IDs; per-language indexers (scip-go/java/python/clang/typescript) | Per-document occurrence + symbol roles + relationships; cross-document via stable symbol IDs | **Batch + incremental:** indexer re-runs per commit; build-system integration to re-index only changed files; full re-index on schema bump | HTTP API + LSIF/SCIP upload; no live overlay |
-| **GitHub Stack Graphs** | Tree-sitter–based name resolution that doesn't need a build; powers GitHub blob navigation | Stack-graph nodes + scopes + jump-edges; resolution is path-finding, not symbol-table lookup | Per-commit batch on push; no live update | Per-blob nav links; "best-effort" precision |
-| **Meta Glean** | Production code indexing at Meta; queryable fact store with Angle DSL | Stacked immutable databases — each layer adds/hides facts non-destructively | Stacks are append-only; "live" achieved by stacking a small recent layer on top of a large base | Angle queries; powers internal code search/nav/docs |
-| **Aider RepoMap** | Per-session ranked structural overview for LLM context | Tree-sitter tags → file dependency graph → personalized PageRank with mention/well-named/in-chat multipliers | **Recomputed per turn** from disk; no overlay, no persistence | Inline in LLM prompt; binary-search token-budget fit |
-| **Cursor index** | Workspace embedding index for semantic chunk retrieval | Embedding chunks + symbol metadata (closed source) | **Re-index cycle, ~minutes-to-hours**; users routinely use `@file` to bypass stale index | Inline retrieval; explicit `@symbol`/`@file`/`@code` mentions |
-| **Sourcegraph Cody** | RAG over remote graph + embeddings | SCIP graph + vector embeddings + zoekt | Server-side pipeline, freshness ≈ commit cadence | Chat + autocomplete; cites file ranges |
-| **Augment Context Engine** | Semantic dependency graph for cross-repo agent workflows | "Real-time indexing" + dependency analysis + commit-history lineage (closed source) | Marketed as real-time/instant across distributed repos | Long-lived agent sessions; 200k context |
-| **Kythe** | Google's older graph-based source indexer | Schema-rich fact graph (fact ↔ edge ↔ vname) | Per-build batch via build extractor | Cross-references service; not agent-facing |
+> "Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits." (PROJECT.md line 149)
 
-**Implications for Helix:**
+To land that claim externally and credibly, three things must all be true at once:
 
-1. The market has either **batch graphs without live updates** (SCIP, Glean, Stack Graphs, Kythe) or **live retrieval without a durable graph** (Aider, Cursor, Cody). Helix v1.10's combination — DuckDB-committed snapshots + fsnotify live overlay + effective-read semantics + LSP revalidation — is **not** the dominant pattern in any single shipping product. Glean's stacked-DB pattern is the closest precedent, but Glean does not expose live overlay semantics on top of source-file mutations between snapshots.
-2. Aider RepoMap is already present in Helix v1.6+. v1.10's job is to make `get_repo_map` / `get_context` *graph-backed* without losing the per-session token-budget elision that makes RepoMap useful.
-3. Every adjacent product has a freshness story; **none expose freshness as a first-class API surface to the agent**. Helix's `freshness` field on every response (fresh / structurally_fresh_semantically_pending / approximate_scores / stale) is genuinely differentiated and addresses a real Cursor pain point ("wait for the next re-index cycle, or use `@file`").
+1. **The benchmark menu must overlap with what peers publish.** Aider Polyglot, SWE-bench Verified, Multi-SWE-bench, CrossCodeEval, RepoBench, Terminal-Bench 2.0 are the *de facto* 2026 menu. Hitting any single one is dismissible; hitting the union is hard to dismiss.
+2. **The ablations must be in-house controlled.** No black-box "we beat Claude Code." Same base model, six modes, headline number reported on `your_agent_full` vs `baseline_plain` and `baseline_rag` at fixed budget.
+3. **The verified-correctness story must address the known SWE-bench test-coverage hole.** UTBoost (2026) showed 24.4 % of SWE-bench Verified rankings shift under augmented tests — peers will ask this question, and the table-stakes answer is "we report both raw-tests pass-rate AND UTBoost-augmented pass-rate side-by-side."
+
+Everything below feeds those three requirements.
 
 ---
 
 ## Feature Landscape
 
-### Table Stakes (Users Expect These)
+### Table Stakes (peers ship these — Helix must match to be credible)
 
-Features any agent-facing semantic-graph product must ship. Missing these = product is incomplete relative to the market.
+#### Category 1 — Public benchmark adapters
 
-| Feature | Why Expected | SPEC mapping | Complexity | Notes |
-|---|---|---|---|---|
-| **Durable, queryable symbol+reference graph** | SCIP, Glean, Stack Graphs, Kythe all ship this; without it, every session pays cold-start cost | §8 Store, §9 Data Model, §13 Extraction | HIGH | DuckDB choice (§4) is the differentiator; the graph itself is table stakes |
-| **Stable symbol IDs across renames/moves** | SCIP's headline feature; LSIF was rejected because globally-incrementing IDs broke incremental indexes | §11 Symbol Identity | HIGH | Hash-based stable keys with rename detection — must survive file moves |
-| **Incremental update without full reindex** | SCIP's reason for existing; agents will not tolerate multi-minute re-index per save | §16 Live Update Pipeline | HIGH | fsnotify + event coalescing + per-file overlay writes |
-| **Cross-file find-references / call-hierarchy** | LSP baseline; without this the graph adds no value over `Grep` | §12 Edge Vocabulary, §14 LSP Enrichment | MEDIUM | Already shipped via existing LSP-backed tools; v1.10 extends to graph-cached form |
-| **Token-budgeted ranked context** | Aider RepoMap is the de-facto bar; agents have hard token ceilings | §20 Retrieval Engine + integration with `get_repo_map` / `get_context` | MEDIUM | Reuse existing v1.6 RepoMap fitter; swap data source from live tags to graph scores |
-| **Tree-sitter–first extraction with LSP enrichment** | Aider/Stack Graphs prove tree-sitter is fast enough for live work; LSP for precision | §13, §14 | MEDIUM | Tree-sitter for structural facts, LSP for semantic confirmation — already proven in v1.6 RepoMap |
-| **PageRank-style importance ranking** | Aider's repomap PageRank is widely cited; agents and humans both want "what matters most" | §18 PageRank | MEDIUM | Already shipped in v1.6; v1.10 extends to multiple projections (call/reference/file-dep) |
-| **Indexing progress + status tool** | SCIP indexers, Cursor's UI all report "indexing N% complete"; agents need to know when to retry | §23.3 `get_semantic_graph_status`, §24.5 `get_health` extension | LOW | Extend existing `get_health` |
-| **Diagnostics integration after edits** | LSP basics; agent loops break without it | §24.4 edit-tool integration | LOW | Already shipped (`verify_edit`, `get_diagnostics`); v1.10 just emits live-graph events |
-| **Workspace activation + lifecycle** | Existing daemon pattern; v1.10 must hook into it without regressing it | §15 Indexing Pipeline, §39 Pipeline DAG | MEDIUM | Pipeline DAG (§39) protects this — explicit phase ordering |
-
-### Differentiators (Where v1.10 Competes)
-
-Features that materially differ from adjacent products and align with Helix's "rock-solid LSP-backed runtime" positioning. Each is justified against a specific competitor weakness.
-
-| Feature | Value Proposition | Competitive position | SPEC mapping | Complexity | Notes |
-|---|---|---|---|---|---|
-| **Effective-read semantics (committed snapshot ⊕ live overlay)** | Agents see a single coherent graph that reflects unsaved/uncomitted changes; no "wait for next reindex" UX | **vs Cursor:** Cursor's freshness gap is its top documented complaint. **vs SCIP/Glean:** neither has overlay. **vs Aider:** Aider has freshness but no persistence. | §10 Effective Read Semantics, §17 Graph Cache and Repair | HIGH | Genuinely novel combination; risk surface is overlay/snapshot consistency |
-| **First-class freshness on every response** | `freshness` field + `score_status` per projection + `pending_lsp_files` count returned with every tool call | **vs all competitors:** none expose this to agents. Cursor users discover staleness by failure. | §23.4 (and every §23.x tool), §28 Observability | LOW (once schema set) | Cheap to add, high agent-trust payoff |
-| **Tiered confidence on graph edges with explicit evidence** | Edges carry `Confidence ∈ [0.20, 1.00]`, evidence kinds (`lsp_hover`, `assignment`, `doc_comment`, `heuristic`), and `validation_state` | **vs SCIP:** SCIP edges are binary precise/fuzzy. **vs Stack Graphs:** "best-effort" with no per-edge confidence. **vs pyright/sorbet:** they have internal tiering but don't expose it. | §38.2 Type Evidence Model, §38.7 Edge Emission | MEDIUM | Confidence tiers (1.00 LSP, 0.90 annotation, …, 0.20 unknown) match pyright's `strict`/`basic`/`off` and sorbet's `# typed: true/false/strict/strong` patterns at a finer grain |
-| **Live LSP revalidation queue with priority boosts on edit** | After an edit, the touched file is bumped to the front of an LSP revalidation queue; agent can `wait_for_lsp` if it cares | **vs Cody/Cursor:** server-side reindex without per-edit prioritization. **vs Aider:** no LSP at all. | §21 LSP Revalidation Queue, §24.4 edit integration | MEDIUM | Maps cleanly to existing v1.9 LS dispatch wiring (Phase 56) |
-| **Multi-projection PageRank (call / reference / file-dep) with per-projection freshness** | Agent picks the projection matching its question (impact = call graph; relevance = reference graph; build order = file-dep) | **vs Aider:** single PageRank over file-dep only. **vs Cody:** opaque ranking. | §18 PageRank | MEDIUM | Allows `score_status: { CALL_GRAPH_PAGERANK: "approximate", REFERENCE_PAGERANK: "stale", … }` |
-| **Cluster maps + cluster explanations** | Agents get topic-level navigation ("auth subsystem", "billing pipeline") instead of raw symbol lists | **vs SCIP/Glean:** none ship clustering. **vs Cody/Augment:** "architectural understanding" claimed but not exposed as discrete clusters. | §19 Clustering, §23.7 `get_cluster_map`, §23.8 `explain_cluster` | MEDIUM | Weak-component + label-propagation is well-known; novelty is exposing it as an MCP tool |
-| **Guardrail policy engine + safety receipts** | `rename_symbol` requires a prior `find_references`/`analyze_blast_radius` receipt; missing receipts → warn / require_force / enforce per profile | **vs Copilot Cloud Agent:** Copilot has org-level guardrails (allow-lists, network policy) but not per-tool semantic pre-checks. **vs Devin:** sandbox-level only. **vs Claude Code/Codex:** hooks exist but no semantic correlation across tool calls. | §36 Guardrails, G-001..G-010 | HIGH | Genuinely novel surface; closest prior art is shell-hook style PreToolUse, but those are syntactic not semantic |
-| **Definition-of-Done per task class** | `DoD.md` codifies expectations: "rename = identify + find_references + rename_symbol + verify_edit + report" | **vs all:** task-class DoD is documentation territory in every other product, not a runtime-checkable artifact | §36.3 | MEDIUM | The runtime-checkable half is the receipts; the doc half is `DoD.md` itself |
-| **Eval harness with baseline / native / semantic / semantic_guarded modes** | A/B Helix's value with the same agent against the same tasks across four modes; reports cost, latency, success, tool-behavior, safety | **vs SWE-bench:** SWE-bench scores agents, not tools. **vs Aider polyglot:** edits-only, no tool-attribution. **vs Cursor/Cody marketing:** unverifiable claims. | §37 Evaluation Harness | HIGH | Tool-behavior scoring (§37.7) is the differentiator: +1 for `find_references` before rename, −1 for grep-only rename |
-| **Type resolution with fixpoint loop for dynamic languages** | `a.b.c.d()` resolved incrementally with confidence decay; comment fallbacks (JSDoc, PHPDoc, YARD, Python type comments) capped at 0.60 unless LSP-confirmed | **vs pyright/sorbet/Phan:** they're full type checkers; Helix's job is graph edges, not soundness. **vs SCIP-python:** SCIP indexer has no fixpoint, just per-occurrence resolution. | §38 | HIGH | Bounded fixpoint with `MaxFixpointIterations` is the safety hatch |
-| **Validate-graph-edge tool** | Agent can ask "is this edge real?" and the daemon will run live LSP definition/references to confirm | **vs all competitors:** none let the agent challenge the index | §23.10 `validate_graph_edge` | LOW | Cheap given existing LSP plumbing |
-| **Typed pipeline DAG with phase validation** | Daemon bootstrap, indexing, live update, eval all expressed as DAGs with cycle/missing-dep detection at compile time or startup | **vs all:** internal hygiene, but prevents the class of bug that bit `OnNotification` in v1.9 (Phase 56) | §39 | MEDIUM | This is the reason v1.10 won't repeat Phase-56-style "silently dropped" bugs |
-
-### Anti-Features (Looks Good, Don't Build)
-
-Things competitors ship or users will request, that Helix should explicitly refuse.
-
-| Anti-Feature | Why Tempting | Why Problematic | What to Do Instead |
+| Feature | Why expected | Complexity | Notes |
 |---|---|---|---|
-| **Vector/embedding search inside Helix** | Cursor and Cody prove embeddings work for fuzzy code Q&A | **Out of scope per PROJECT.md.** Augment/Cursor do this better; embeddings are a different cost/staleness profile (re-embed on change is expensive); pollutes the "graph + LSP" mental model | Keep `Out of Scope`. Let the agent compose Helix's graph tools with its own embedding tools (Augment, etc.) |
-| **Knowledge-graph storage (RDF/SPARQL/property-graph DB)** | Glean's Angle DSL, Kythe's vname graph, modern KG stacks | **Out of scope per PROJECT.md.** CodeGraphContext/GitNexus own this. DuckDB columnar is the right fit for *this* graph (snapshots, range scans, joins) | Keep `Out of Scope`; DuckDB choice (§4) is correct |
-| **"Real-time across the whole repo" indexing claim** | Augment markets it; sounds impressive | Sets an expectation Helix cannot meet on cold start (LSP indexing on jdtls/rust-analyzer is minutes, not seconds); creates a credibility liability | Document tiered freshness explicitly: tree-sitter fast path is sub-second; LSP enrichment is queued and reported via `pending_lsp_revalidations` |
-| **Auto-execute high-risk operations when guardrails pass** | Convenience: "if checks pass, just do it" | Conflates *guardrail satisfied* with *user authorized*. Guardrails are necessary, not sufficient. | Default `enforce` only on `review` profile; `read`/`edit` profiles `warn`; `admin` `warn` unless configured. Always require user-visible action for destructive ops |
-| **Embedding the LSP language servers in-process** | Eliminates IPC overhead | Already rejected by v1.0 architecture; jdtls/rust-analyzer are JVM/Rust processes — cannot in-process | Continue worker-pool model from v1.0; v1.10 just adds revalidation queue on top |
-| **Soundness-grade dynamic type inference (pyright/sorbet equivalent)** | Pyright produces near-tsserver precision on Python | We are not a type checker; we emit graph edges. Pyright is 60k+ LOC of dedicated type narrowing. | Stop at "tiered confidence with evidence"; cap doc-comment evidence at 0.60; let the LSP (pyright/pylsp) be the ground truth when present |
-| **"Best agent on SWE-bench" leaderboard chase** | SWE-bench is the visible benchmark; topping it is marketable | SWE-bench scores *agents*, not tools. Helix should improve any agent's SWE-bench score — that's the eval design (§37.2 modes). Optimizing for the leaderboard with a specific agent risks overfitting | §37 modes — measure delta, not absolute |
-| **Per-edge "explanation" via LLM** | Glean-style "explain why this edge exists" with natural language | Adds LLM dependency to the index; non-deterministic; makes the graph unverifiable. Evidence kinds (§38.2) are already structured and auditable | Keep evidence kinds enum; let the agent generate prose if it wants |
-| **Persistent guardrail receipts across sessions** | "Once the user did `find_references`, the agent shouldn't have to redo it next session" | Stale receipts on stale graphs are dangerous: code changed, the receipt is meaningless. Receipts must be tied to `graph_version` and `freshness` | Receipt has `GraphVersion` field (§36.4) — invalidate on graph version change |
-| **Auto-rebuild from clean on every Helix start** | Simplicity, no overlay invariants to maintain | Defeats the entire snapshot+overlay design; multi-minute startup is a regression vs v1.9 | Lazy/incremental load (§16); full reindex on schema bump only |
+| **SWE-bench Verified adapter** (500 Python tasks, Docker per instance, fail_to_pass + pass_to_pass) | Industry-default headline. Every coding-agent paper since 2024-08 reports this number. | XL | Reference harness in `swebench/harness`; each instance ships its own Docker image; 500 × ~5 min wall ≈ 40 h single-machine, parallelizable. Docker per-instance is non-negotiable for repro. |
+| **Multi-SWE-bench adapter** (1,632 instances × 7 langs: Java, TS, JS, Go, Rust, C, C++) | Only credible multilingual SWE-bench-style benchmark; covers 7 of 8 Tier-1 langs (gap: C#). | XL | Driven by `multi_swe_bench.harness.run_evaluation --config`; produces `final_report.json` with resolved/unresolved counts. Per-instance Dockerfiles same shape as SWE-bench. |
+| **Aider Polyglot adapter** (225 hardest Exercism tasks × 6 langs: C++, Go, Java, JS, Py, Rust) | The peer benchmark every coding model gets compared on; covers 6 of 8 Tier-1 langs (gap: TS, C#). Cheap and fast. | M | Two attempts per task with test-error feedback after attempt 1. Two metrics: `percent_correct` and `correct_edit_format`. Edit-format is a separate axis Helix should track. |
+| **CrossCodeEval adapter** (cross-file completion × Py, Java, TS, C#) | Covers cross-file completion as a separate skill from issue-fixing; covers 4 of 8 Tier-1 langs including C# (only public benchmark in our menu that does). | M | Static-analysis-validated tasks that *require* cross-file context. Metrics: EM, ES on code; identifier-match for API names. |
+| **RepoBench adapter** (RepoBench-R/C/P × Py, Java) | Forces retrieval to be measured separately from generation — a clean win condition for Helix's RepoMap. | M | Three sub-tasks: R (retrieval `acc@k`), C (next-line `EM`/`ES`), P (pipeline). Python @ 12k token context, Java @ 24k. |
+| **Terminal-Bench 2.0 adapter** (89 hard containerized long-horizon tasks) | Snorkel's frontier agentic benchmark; the only one in the menu that tests "do real engineering work in a shell," not "fix this bug." | XL | Each task = (instruction, Dockerfile, pytest verifier, oracle script). Completion judged purely by terminal-state pytest. Frontier models < 65 %. Long wall (some tasks > 1 day). |
+| **Per-benchmark Docker isolation** | All four issue-fixing benchmarks (SWE-bench, Multi-SWE-bench, Terminal-Bench, parts of Aider) require per-instance container isolation; "I tried to run it on bare host" is an instant disqualifier. | L | One shared `bench/runners/docker.go` with image-pull, cgroup limits, log capture, cleanup. |
+| **Patch capture + replay** | Every benchmark above scores agents on the patch they emit, not on transcript inspection. Patches must be persisted per task per run. | M | Already partially in `eval/` from Phase 67; needs to extend to multi-language and multi-attempt (Aider). |
+| **Deterministic task ordering + seedable shuffles** | Required for any cross-run statistical claim. | S | — |
+
+#### Category 2 — Internal ToolBench
+
+| Feature | Why expected | Complexity | Notes |
+|---|---|---|---|
+| **10-capability tool-contract suite** (semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling) | This is the *deterministic* source of truth — public benchmarks have variance; ToolBench should be exact-equality, < 60s wall. Mirrors the role of Aider's own polyglot harness within Aider's repo. | L | Per-capability, per-Tier-1-language test matrix (10 × 8 = 80 deterministic checks). Direct MCP calls — no LLM in the loop. |
+| **Tool contract = (input fixture, MCP call, golden output)** | Standard Helix oracle pattern from v1.4 Phase 19/20 — already in place for `test/oracle/contract` and `test/oracle/scenario`. ToolBench is a domain-specific extension. | M | Reuse `test/harness/` Runner; goldens diff-reviewable. |
+| **Per-language Tier-1 fixtures** (Py, TS, JS, Go, Java, C#, C++, Rust) | Required to claim 8-language coverage. | L | Eight per-capability mini-repos. C# (omnisharp or csharp-language-server) and C++ (clangd) need new LS fixtures; Java/Go/Rust/Py/TS/JS already exist from v1.4–v1.6. |
+| **Ablation-aware** (each ToolBench check must run in `your_agent_full` AND `no_lsp` / `no_semantic` / `no_structured_edit`) | Without per-mode ToolBench data, the ablation matrix collapses to a single binary "did the public benchmark pass?". Per-capability per-mode data is where the *attribution* claim lives. | L | Each capability check labels which mode-bits it depends on; runner asserts expected differential. |
+
+#### Category 3 — Ablation modes (6-mode matrix)
+
+| Feature | Why expected | Complexity | Notes |
+|---|---|---|---|
+| **`baseline_plain`** mode (shell + grep + read + edit + test only) | The "no-tools" floor. Every coding-agent paper reports against an unaided agent. | M | Same base model as `your_agent_full`; tool set restricted to a fixed minimal MCP profile. |
+| **`baseline_rag`** mode (grep + embeddings + chunk RAG) | The "RAG agent" comparison. SWE-bench's own original baseline scored 1.96 % with this exact shape (chunk → embed → top-k → patch). Modern peers (Cody, Continue's `@codebase`, older Cursor) all sit on this shape. Helix must beat it. | L | Needs an embeddings backend (local `bge-small-en-v1.5` via onnxruntime-go or external; both are off-tree dependencies). Chunking strategy: standard 500-token windows. |
+| **`your_agent_full`** mode (semantic + LSP + fuzzy + symbol graph + structured edits + diagnostics) | The Helix product. Mode definition = current full profile. | S | Already exists — it's the production daemon. |
+| **`no_lsp`** mode | Attribution: how much of the win comes from LSP-backed answers vs tree-sitter alone? | M | Disable workers in `internal/kernel/lspool/`; structural ops fall through to tree-sitter; goto-def returns `Unsupported`. |
+| **`no_semantic`** mode | Attribution: how much of the win comes from RepoMap PageRank + semantic store? | M | Disable `internal/repomap/`, semantic store reads return `NoopLookup`. |
+| **`no_structured_edit`** mode | Attribution: how much of the win comes from `replace_symbol_body` / `replace_in_file` / tree-sitter body surgery vs whole-file rewrites? | M | Restrict edit tools to `write_file` + `read_file`; fuzzy + symbol edits return `Unsupported`. |
+| **Same-model, same-budget invariant** | The headline claim *requires* model and budget to be held constant across all 6 modes. Single-mode-changes-model results are uninterpretable. | S | Runner config enforces `model_id` and `max_tokens` are identical across the mode sweep; refuses to start otherwise. |
+
+#### Category 4 — Metrics + statistics
+
+| Feature | Why expected | Complexity | Notes |
+|---|---|---|---|
+| **12+ normalized per-task result schema** (`task_success`, `verified_correctness`, `tokens_in/out`, `tool_calls`, `wall_time_s`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`, `semantic_tool_calls`, `edit_distance_patch`, `retry_count`) | PROJECT.md mandates this list. Without normalized per-task records, no cross-benchmark aggregation is possible. | M | One JSON-line per task per mode per run; runner-agnostic. |
+| **`pass@1`, `pass@k`** (Codex/HumanEval convention: unbiased estimator `1 - C(n-c,k)/C(n,k)`) | Industry default; every coding paper reports both. | S | k=3 default with N≥3 attempts per task. |
+| **Bootstrap CI** (BCa or percentile, 1000 resamples default) | Single-run results are *not publishable* per PROJECT.md. Bootstrap CI is the standard convention. | S | Reuse `gonum.org/v1/gonum/stat`. Report 95 % CI on aggregated pass@1. |
+| **N ≥ 3 runs per task default** | Industry default for nondeterministic agents; SWE-bench papers typically report n=3–5. | S | Config-overridable; CI runs at n=1 for speed, nightly at n=3. |
+| **`cost_per_solved_task`** ($) — reopens Phase 67 deferred item | Cost-per-task is now a standard 2026 leaderboard column (morphllm, ssojet, SWE-bench Pro all report it). Without it, the "fewer tokens" half of the headline claim is unfalsifiable. | M | Static price table per provider × model (`bench/pricing.yaml`); recompute on every run. |
+| **`edit_locality`** (fraction of edits that fall inside the intended target symbol/file vs spill outside) | Direct measurement of one Helix differentiator (structured edits don't spill). | M | Diff parse → symbol-range overlap via tree-sitter. |
+| **`regression_rate`** (pass_to_pass tests that flip from pass to fail) | SWE-bench already requires `pass_to_pass`; reporting it as a *separate* metric — not just as a precondition for pass@1 — exposes "looked like a solve but broke other things." | S | Already in SWE-bench harness output; surface in normalized record. |
+| **Verified correctness — *augmented* tests** (UTBoost-style or equivalent) | The user explicitly called this out. SWE-bench Verified has documented 24.4 % ranking shift under UTBoost-augmented tests (Kang 2026); 31 % of "passed" patches rely on insufficient tests. Peers will ask. | XL | Either (a) consume UTBoost's published augmented test suite (preferred — already public for SWE-bench Verified and Lite), or (b) generate our own augmented tests with the runner's LLM. Report both raw and augmented pass-rates side-by-side. |
+| **EM, ES, identifier-match** (for CrossCodeEval, RepoBench-C) | Standard for completion benchmarks. EM = exact match on the held-out span; ES = char-level edit similarity ratio. | S | `internal/eval/metrics/em_es.go`; pure Go. |
+| **`acc@k`** (for RepoBench-R) | Standard for retrieval-eval. | S | — |
+
+#### Category 5 — Reports
+
+| Feature | Why expected | Complexity | Notes |
+|---|---|---|---|
+| **`leaderboard.md`** — top-line aggregate (mode × pass@1 with CI, $/solve, tokens, files-read) | PROJECT.md mandates. Mirrors Aider's `docs/leaderboards/edit.html` and Epoch AI's benchmark pages. | M | Auto-generated from per-run JSON. |
+| **`per_language.md`** — breakdown by Tier-1 language × benchmark | PROJECT.md mandates. C# and TS will be the most-watched rows (least covered by public benchmarks). | M | — |
+| **`ablations.md`** — 6-mode × benchmark matrix; this is *the* attribution doc | PROJECT.md mandates. This is the load-bearing report for the headline claim. | M | — |
+| **`cost_quality.md`** — Pareto frontier ($/solve vs pass@1) | PROJECT.md mandates. Cost-quality plots are the modern way to publish coding-agent results (morphllm 2026, SSOJet 2026, Galileo 2026). | M | — |
+| **JSON-line raw output** alongside Markdown | Re-aggregation, third-party analysis, internal historical tracking. | S | Already in eval/ shape. |
+| **Provider TOS attestation** carried forward from Phase 67 | Required to publish externally. | S | Already done in `eval/EVAL.md`. |
+
+#### Category 6 — Developer experience
+
+| Feature | Why expected | Complexity | Notes |
+|---|---|---|---|
+| **`make bench`** — full run, all benchmarks, all modes, all langs, nightly-scale | The expected entrypoint, per peer convention. | S | — |
+| **`make bench-quick`** — synthetic + ToolBench only, <5 min | Required to keep CI honest without running 40 h SWE-bench in PR. | S | Mirrors existing `make eval-quick`. |
+| **`make bench-<suite>`** — single benchmark (`bench-swe`, `bench-aider`, `bench-crosscodeeval`, `bench-repobench`, `bench-multi-swe`, `bench-terminal`, `bench-toolbench`) | Required for iterating on a single adapter. | S | — |
+| **Per-suite registries with shared task schema** | Adapters must report into a *single* normalized format for `leaderboard.md` to aggregate. | M | `bench/datasets/`, `bench/runners/`, `bench/evaluators/`. |
+| **Hermetic Docker pulls + image cache** | Public benchmarks ship as ~500–2000 per-instance Docker images. Pulling them fresh per run is impossible (hours of network + ToS issues). Image cache + pinned digests are table-stakes. | L | SWE-bench official images: `ghcr.io/swebench/sweb.eval.x86_64.<instance_id>`. |
+| **CI gate on ToolBench only** | Per existing project rule "benchmarks local-only" (Phase 50 decision, v1.9). Public benchmarks run nightly, never PR-gating. | S | Existing convention; preserve. |
+
+---
+
+### Differentiators (Helix-specific wins — net-new, peers don't ship)
+
+| Feature | Value proposition | Complexity | Notes |
+|---|---|---|---|
+| **6-mode ablation matrix with same-model invariant** | No peer publishes a 6-mode breakdown holding model + budget constant. CodeAgent (2024) does single-tool ablations, Aider does edit-format ablations, neither holds model fixed across a *layered* tool subtractive sweep. This is the load-bearing differentiator for the headline claim. | M | The matrix itself is logic+config; the win is committing to it in writing. |
+| **Per-capability ToolBench (10 × 8 Tier-1 langs)** | The deterministic ground truth that public-benchmark variance can't drown out. Mirrors the role of unit-tests in code: when SWE-bench Verified is too noisy to attribute a 1.2 % delta, ToolBench tells you with zero variance whether `rename_symbol` regressed on Java. | L | Helix is uniquely positioned to ship this because Helix already *owns* the tools being tested. |
+| **`no_lsp` / `no_semantic` / `no_structured_edit` controlled subtractives** | The peer ablations in the literature (CodeAgent, HyperAgent) drop *one tool at a time*. Helix's ablation drops *whole capability layers*, which directly maps subsystem → benchmark delta. This is the headline-claim attribution mechanism. | M | (Same as the modes in Category 3 above — here counted as a *combined differentiator* because the *combination* is what's net-new.) |
+| **Raw + UTBoost-augmented SWE-bench pass-rates reported side-by-side** | Pre-empts the #1 critique of any SWE-bench result in 2026: "your tests are weak." Almost no published agent has done this explicitly. | L | Consume UTBoost's published augmented suite (preferred); regenerate only if missing. |
+| **Edit-locality + regression-rate as first-class metrics** | The "fewer destructive edits" half of the headline claim. No public benchmark reports these as primary metrics today — most report pass@1 and stop. | M | Tree-sitter range overlap + p2p flip count. |
+| **Cost-per-solve at fixed budget, comparable across modes** | Modern leaderboards (morphllm 2026, SWE-bench Pro) report $/task, but none publish per-ablation-mode breakdowns. "$/solve falls 60 % between `baseline_rag` and `your_agent_full`" is a defensible external claim. | M | Phase 67 deferred this; v1.12 reopens. |
+| **Single canonical bench/ tree separate from legacy eval/** | The Phase 67 `eval/` corpus is synthetic. Mixing it with the public-benchmark numbers would muddy the report. Clean tree = clean external story. | S | PROJECT.md already mandates `bench/datasets/`, `bench/runners/`, `bench/languages/`, `bench/evaluators/`, `bench/reports/`. |
+
+---
+
+### Anti-features (commonly requested but problematic)
+
+| Feature | Why requested | Why problematic | Alternative |
+|---|---|---|---|
+| **HumanEval / MBPP / MultiPL-E as primary score** | "It's fast, it's famous, it has Tier-1 langs." | Toy single-function generation; doesn't exercise *any* Helix capability (no cross-file, no LSP, no editing). Reporting it as primary signals "we benchmark on the easy stuff." PROJECT.md already excludes it. | Smoke-only via MultiPL-E / HumanEval-X / McEval if needed; never primary. |
+| **Comparing Helix-agent vs Claude Code / Cursor as black boxes** | "Most striking marketing claim." | Different base model, different scaffolding, different prompts → confounded. The result is uninterpretable. PROJECT.md already excludes it. | Controlled baselines using the *same* base model only (`baseline_plain`, `baseline_rag`). |
+| **LLM-judge as CI gate / leaderboard ranker** | "Judges catch quality issues tests don't." | Nondeterministic; per Phase 67 EVAL-07 we already learned this the hard way. Four-layer mitigation already in place. | Judge stays informational; never CI-actionable. Report judge output in a separate file with explicit `INFORMATIONAL` banner. |
+| **Submitting to public leaderboards as the primary deliverable** | "External credibility." | Leaderboard submission infra is its own deferred milestone (per PROJECT.md). Mixing it with the harness milestone explodes scope (submission validation, anonymization, repro packaging, paper-style report). | Generate locally; defer public submission to a later milestone. Publish results in our own `leaderboard.md`. |
+| **Multi-attempt with unbounded retry budget** | "Maximize pass@1." | Confounds quality with budget. Aider's polyglot is 2 attempts; SWE-bench is conventionally 1; mixing budgets across modes invalidates the same-budget invariant. | Fixed per-suite attempt count from the upstream benchmark spec; never override. |
+| **Tier-2 / Tier-3 languages in v1.12** | "Helix supports 52 languages, let's show that." | The story is "Helix improves Tier-1 agent work." Adding PHP/Ruby/Kotlin/Swift fixtures dilutes the per-language signal, doubles the matrix, and most public benchmarks don't cover them anyway. PROJECT.md already excludes them. | Future milestones; v1.12 explicitly Tier-1 only. |
+| **Custom internal benchmark replacing public benchmarks** | "Public benchmarks are noisy / leaked / gamed." | True, but a pure-internal-benchmark result is dismissible — peers can't reproduce it. ToolBench is the deterministic *complement*, not a replacement. | Run both: public for external comparability, ToolBench for internal attribution. |
+| **Reporting only `pass@1` without `pass@k`, CI, or cost** | "Cleaner leaderboard." | Modern peers (Aider, Epoch AI, vals.ai, morphllm) all report multi-axis. Single-axis pass@1 in 2026 reads as either lazy or hiding variance. | Always: pass@1, pass@k, 95% CI, $/solve, tokens/solve. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Store contract §8] ──> [Data model §9] ──> [Symbol identity §11]
-                                                |
-                                                v
-[Extraction §13] ──> [Indexing pipeline §15] ──> [Snapshot]
-                                                    |
-                                                    v
-[Live update §16] ──> [Overlay] ──> [Effective read §10]
-                                          |
-                                          v
-[Graph cache + repair §17]
-        |
-        +──> [PageRank §18] ──> [Clustering §19]
-        |              |
-        |              v
-        +──> [Retrieval engine §20]
-                       |
-                       +──> [`get_semantic_context` §23.4]
-                       +──> [`find_related_symbols` §23.6]
-                       +──> [`get_cluster_map` §23.7]
-                       +──> [`get_change_impact_graph` §23.9]
+Same-model, same-budget invariant
+    └──requires──> 6-mode ablation matrix (baseline_plain, baseline_rag,
+                                           your_agent_full, no_lsp,
+                                           no_semantic, no_structured_edit)
+                       └──requires──> Normalized per-task result schema
+                                            └──requires──> Patch capture + replay
+                                            └──requires──> Token/cost accounting
+                                            └──requires──> Trace merging (Helix daemon + agent CLI)
 
-[LSP enrichment §14] ──> [Revalidation queue §21] ──> [`validate_graph_edge` §23.10]
-                                                  └─> [validation_state on edges §38.7]
+baseline_rag mode
+    └──requires──> Embedding backend (off-tree dep — onnxruntime-go + bge-small)
+                                            
+SWE-bench Verified adapter
+    └──requires──> Per-instance Docker image cache
+    └──requires──> Patch capture + replay
+    └──enhanced-by──> UTBoost-augmented test suite (verified-correctness story)
 
-[Type resolution §38] ──depends on──> [Extraction §13] + [LSP enrichment §14]
-                     ──emits──> [RESOLVES_TO / CALLS / USES_TYPE edges §12]
+Multi-SWE-bench adapter
+    └──requires──> Per-instance Docker image cache (shared with SWE-bench)
+    └──requires──> 7-language LS fixtures (Java/TS/JS/Go/Rust/C/C++)
 
-[Existing tools §24] ──read from──> [Effective read §10]
-[Edit tools §24.4] ──emit events to──> [Live update queue §16]
+Terminal-Bench 2.0 adapter
+    └──requires──> Per-instance Docker image cache (heaviest — long-horizon)
+    └──requires──> Wall-time budgets (some tasks expected > 1 day)
 
-[Guardrails §36] ──reads──> [graph + receipts]
-                ──gates──> [rename_symbol, safe_delete_symbol, replace_symbol_body, fuzzy_edit]
+Aider Polyglot adapter
+    └──requires──> 6-language Exercism task corpus (C++, Go, Java, JS, Py, Rust)
+    └──requires──> 2-attempt-with-feedback runner pattern
 
-[Eval harness §37] ──exercises──> [all of the above across 4 modes]
+CrossCodeEval adapter
+    └──requires──> Static-analysis-validated task corpus (Py, Java, TS, C#)
+    └──requires──> EM, ES, identifier-match metrics
 
-[Pipeline DAG §39] ──validates──> [bootstrap order, indexing order, live-update order]
+RepoBench adapter
+    └──requires──> Retrieval-task corpus (R/C/P × Py @ 12k, Java @ 24k)
+    └──requires──> acc@k, EM, ES metrics
+
+Internal ToolBench
+    └──requires──> 8 × Tier-1-language fixtures (one per capability per lang)
+    └──requires──> Direct-MCP-call runner (no LLM in loop)
+    └──enhances──> All public-benchmark results (deterministic attribution complement)
+
+leaderboard.md / per_language.md / ablations.md / cost_quality.md
+    └──requires──> All of: SWE-bench, Multi-SWE-bench, Aider Polyglot,
+                  CrossCodeEval, RepoBench, Terminal-Bench, ToolBench results
+                  in normalized per-task JSON
+
+Cost-per-solve
+    └──requires──> Static pricing table per (provider × model)
+    └──requires──> Token accounting in normalized record
 ```
 
-### Critical Dependency Notes
+### Dependency notes
 
-- **Effective read (§10) is the keystone.** Every retrieval tool reads through it; every edit/fsnotify event writes through the overlay path. Get this wrong and every downstream tool returns inconsistent results. **Land §8/§9/§10/§11 before any §23 tool.**
-- **Symbol identity (§11) blocks rename detection.** Without stable IDs across moves/renames, the live update pipeline cannot distinguish "symbol moved" from "symbol deleted + new symbol added", which corrupts call graphs.
-- **PageRank (§18) and clustering (§19) consume the graph but do not block tool exposure** — `freshness=approximate` covers the gap during recompute.
-- **LSP revalidation queue (§21) is downstream of §14 enrichment and §16 live update.** It can ship after the structural pipeline works.
-- **Guardrails (§36) require graph + receipts but NOT clustering/PageRank.** Can ship in parallel with §18/§19.
-- **Eval harness (§37) requires everything above to be addressable.** Lands last but design (§37.4 schema, §37.2 modes) should be locked early so other phases emit the right traces.
-- **Existing tools (§24)** must keep working with semantic index *disabled* (config `semantic_index.enabled: false` in §25). Non-negotiable: this is the rollback story.
+- **`baseline_rag` requires an embedding backend** that doesn't currently exist in Helix. Options: `onnxruntime-go` + `bge-small-en-v1.5` (off-tree CGO dep), or a tiny external Python sidecar at bench time (per-bench, never in prod daemon). The product decision out of this milestone is: *only* used during `baseline_rag` runs, never in the daemon. Helix itself does not become a vector-search product (PROJECT.md "Out of Scope" preserved).
+- **UTBoost-augmented tests** are public for SWE-bench Verified and Lite — consume, don't regenerate.
+- **Docker image cache is the single biggest infra dependency.** SWE-bench (500) + Multi-SWE-bench (1,632) + Terminal-Bench (89) = 2,221 images. At ~1 GB each, that's ~2 TB; in practice ~200–400 GB after dedup. Pinned `--digest` only; no `:latest`.
+- **C# coverage** comes from CrossCodeEval only. There is no public SWE-bench-style benchmark for C# as of 2026-Q2 (SWE-Sharp-Bench is announced but not at scale). ToolBench is therefore *the* C# story.
+- **TS coverage** comes from CrossCodeEval + Multi-SWE-bench. (Aider Polyglot is JS, not TS.)
+- **Phase 67 cost-conversion deferred item** is a hard dependency for `cost_quality.md` and the headline claim's "fewer tokens" half.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1.10.0)
+### Launch with (v1.12 — must ship to land the headline claim)
 
-Minimum to ship a credible "Live Semantic Index" milestone.
+- [ ] `bench/` tree skeleton (`datasets/`, `runners/`, `languages/`, `evaluators/`, `reports/`) — clean break from legacy `eval/`
+- [ ] **Internal ToolBench** — 10 capabilities × 8 Tier-1 langs, deterministic, < 60 s wall, runs in `make bench-quick` and `make test`
+- [ ] **6-mode ablation matrix** — all six modes operational, same-model-same-budget invariant enforced
+- [ ] **`baseline_plain` and `baseline_rag` modes** — both controlled baselines functional
+- [ ] **Aider Polyglot adapter** — cheapest public benchmark, 6 of 8 Tier-1 langs, fastest path to first external number
+- [ ] **CrossCodeEval adapter** — covers C# (the language gap in every issue-fixing benchmark) and TS
+- [ ] **SWE-bench Verified adapter** — the headline external benchmark
+- [ ] **Normalized per-task result schema** — JSON-line per (task, mode, run); all metrics from PROJECT.md present
+- [ ] **`pass@1`, `pass@k` (k=3), 95 % bootstrap CI** — single-run results not publishable
+- [ ] **`cost_per_solved_task`** — reopens Phase 67 deferral; pricing table per provider × model
+- [ ] **UTBoost-augmented SWE-bench pass-rate** reported alongside raw pass-rate
+- [ ] `leaderboard.md`, `per_language.md`, `ablations.md`, `cost_quality.md` — all four auto-generated from JSON
+- [ ] `make bench` (full) / `make bench-quick` (ToolBench + smoke) / `make bench-<suite>` (single adapter)
+- [ ] Per-instance Docker image cache with pinned digests
+- [ ] CI gate on ToolBench only (existing "benchmarks local-only" rule preserved)
 
-- [ ] **Store + schema + snapshot writer** (§8, §9, §32 migration plan) — DuckDB schema, snapshot commit, schema versioning
-- [ ] **Tree-sitter extraction for Go / TS+JS / Python** (§13) — first-class languages per spec
-- [ ] **Stable symbol IDs across renames** (§11) — graph-foundational
-- [ ] **Effective-read semantics** (§10) — overlay ⊕ snapshot single-API
-- [ ] **Live update pipeline** (§16) — fsnotify + event coalescing + overlay writes + cache repair
-- [ ] **LSP enrichment for hover/definition/references** (§14 subset) — minimum for confidence promotion
-- [ ] **`index_semantic_graph`, `refresh_semantic_graph`, `get_semantic_graph_status`** (§23.1–23.3) — control plane
-- [ ] **`get_semantic_context`** (§23.4) — the headline retrieval tool
-- [ ] **Integration: `get_repo_map` / `get_context` delegate to graph when present** (§24.1, §24.2) — preserves existing UX
-- [ ] **Integration: edit tools emit `ChangeHelixEdit` events** (§24.4) — closes the write loop
-- [ ] **`get_health` semantic section** (§24.5) — observability minimum
-- [ ] **Guardrails G-001..G-005 with `warn` enforcement default** (§36.2) — covers the highest-risk operations (rename, delete, public API edit, large fuzzy edit, dependency edits)
-- [ ] **Safety receipts schema + evaluator** (§36.4, §36.5) — even if only `warn`, the receipts must be emitted to enable later `enforce`
-- [ ] **Single-projection PageRank (call graph)** (§18 subset) — multi-projection can wait
-- [ ] **Eval harness skeleton with baseline / native / semantic modes** (§37.2 minus `semantic_guarded`) — proves the value
-- [ ] **Pipeline DAG validation for bootstrap + indexing + live-update** (§39) — prevents Phase-56-style regressions
-- [ ] **Configuration surface** (§25) — including `semantic_index.enabled: false` rollback switch
-- [ ] **v1.9 carry-over: PKG-01 SC-3** — first signed release with real minisign keypair (blocking distribution; engineering-complete)
+### Add after validation (v1.12.x or v1.13)
 
-### Add After Validation (v1.10.x)
+- [ ] **Multi-SWE-bench adapter** — 1,632 instances, 7 langs; expensive (~80 h) but covers the remaining Tier-1 gaps (Java/Go/Rust/TS/JS/C/C++) at scale
+- [ ] **RepoBench adapter** — clean retrieval-only story; valuable for RepoMap attribution but RepoMap already has tests
+- [ ] **Terminal-Bench 2.0 adapter** — long-horizon work; the most expensive adapter; runs nightly only
+- [ ] **Public leaderboard submissions** — submission packaging, repro Docker images, anonymized identity flow
+- [ ] **Continuous benchmarking dashboard** — track per-commit deltas on ToolBench + Aider Polyglot
 
-- [ ] **Multi-projection PageRank** (§18 full) — call / reference / file-dep with per-projection freshness — trigger: agents asking "rank by impact vs by relevance"
-- [ ] **Clustering + `get_cluster_map` / `explain_cluster`** (§19, §23.7, §23.8) — trigger: positive eval signal on context-quality metrics
-- [ ] **`find_related_symbols`, `get_change_impact_graph`, `explain_symbol_deep`, `validate_graph_edge`** (§23.5, 23.6, 23.9, 23.10) — trigger: §23.4 retrieval is stable
-- [ ] **`semantic_guarded` eval mode** (§37.2) — trigger: G-001..G-005 receipts emitted reliably
-- [ ] **Guardrails G-006..G-010** (§36.2) — trigger: G-001..G-005 produce no false positives in eval
-- [ ] **Type resolution + access-chain resolver** (§38) — trigger: ≥1 dynamic-language workspace in eval suite shows graph-recall gap vs static-language workspaces
-- [ ] **Comment-based type fallback (JSDoc/PHPDoc/YARD/Python comments)** (§38.6) — trigger: JS/Python real-repo eval shows annotation density >20%
-- [ ] **Idle compaction** (§22) — trigger: overlay rows > N or snapshot age > T
+### Future consideration (v2+)
 
-### Future Consideration (v1.11+)
-
-- [ ] **Java first-class extraction tier** — Helix already supports Java via jdtls; tree-sitter extraction tier is incremental work
-- [ ] **Rust first-class extraction tier** — same rationale, deferred because rust-analyzer readiness signals are complex
-- [ ] **PHP / Ruby type resolution with full doc-format fallback chains** — niche relative to JS/Python; defer until eval shows demand
-- [ ] **Cross-repo semantic graph (multi-workspace clustering)** — Augment-style; large scope, defer until single-repo case is proven
-- [ ] **`enforce` enforcement default for `review` profile** — only after `warn` mode proves no false positives in eval
-- [ ] **Persistent receipts across sessions tied to immutable git commits** — interesting if `graph_version` ↔ commit-hash mapping becomes reliable
-- [ ] **PKG-DEFER-03/04/05** — Homebrew tap, Scoop bucket, native Linux package — re-evaluate post-v1.10 release shape
+- [ ] **Tier-2 / Tier-3 language ToolBench fixtures** (PHP, Ruby, Kotlin, Swift, C, Scala, …)
+- [ ] **Custom Helix-authored benchmark** focused on semantic-tool stress tests (only after public-benchmark story is solid)
+- [ ] **Cross-vendor head-to-head** (Helix-agent vs Cursor / Cody / Continue) — only with explicit-same-base-model and explicit-same-task-set guarantees, otherwise stays out of scope
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Cost | Priority | Justification |
-|---|---|---|---|---|
-| Effective-read (§10) | HIGH | HIGH | **P0** | Keystone for every other tool |
-| Symbol identity (§11) | HIGH | HIGH | **P0** | Blocks rename detection in live updates |
-| Live update pipeline (§16) | HIGH | HIGH | **P0** | Without this, "live" claim is false |
-| Tree-sitter extraction Go/TS/JS/Py (§13) | HIGH | MEDIUM | **P0** | Existing v1.6 RepoMap pattern; proven |
-| `get_semantic_context` (§23.4) | HIGH | MEDIUM | **P0** | The headline tool agents will reach for first |
-| LSP enrichment for hover/def/refs (§14 subset) | HIGH | MEDIUM | **P0** | Confidence promotion; needed for evidence model |
-| Edit-tool integration (§24.4) | HIGH | LOW | **P0** | Closes the write loop; cheap given existing tools |
-| `get_health` semantic section (§24.5) | MEDIUM | LOW | **P0** | Operational must-have |
-| Guardrails G-001..G-005 + receipts (§36) | HIGH | MEDIUM | **P0** | Defining differentiator; warn-mode is low-friction |
-| Pipeline DAG validation (§39) | MEDIUM | LOW | **P0** | Prevents Phase-56-style regressions; cheap |
-| Single-projection PageRank (§18 subset) | HIGH | MEDIUM | **P0** | Reuses v1.6 implementation |
-| Eval harness baseline/native/semantic modes (§37 subset) | HIGH | HIGH | **P0** | Proves value; without it the milestone is unverifiable |
-| Multi-projection PageRank (§18 full) | MEDIUM | MEDIUM | **P1** | Differentiator but `semantic` mode works with one projection |
-| Clustering (§19) + cluster tools (§23.7/8) | MEDIUM | MEDIUM | **P1** | Differentiator; not blocking core retrieval |
-| Type resolution + access chains (§38) | MEDIUM | HIGH | **P1** | Critical for dynamic languages but Go/TS get LSP coverage from v1 |
-| `find_related_symbols`, `get_change_impact_graph` (§23.6, 23.9) | MEDIUM | LOW | **P1** | Cheap once core graph exists |
-| `validate_graph_edge` (§23.10) | MEDIUM | LOW | **P1** | Cheap; high agent-trust value |
-| Guardrails G-006..G-010 (§36.2) | MEDIUM | MEDIUM | **P1** | Lower-frequency operations |
-| `semantic_guarded` eval mode (§37.2) | MEDIUM | LOW | **P1** | Reuses harness from P0 |
-| `explain_symbol_deep` (§23.5) | MEDIUM | LOW | **P1** | Nice agent affordance |
-| Comment-based type fallbacks (§38.6) | LOW (Go-heavy users) / HIGH (JS/Py users) | MEDIUM | **P2** | Defer until eval signal |
-| Idle compaction (§22) | LOW | LOW | **P2** | Operational hygiene; not user-facing |
-| Java/Rust first-class extraction | MEDIUM | HIGH | **P2** | jdtls/rust-analyzer LSP path already works; tree-sitter parity is incremental |
-| Cross-repo / multi-workspace | LOW | HIGH | **P3** | Out of v1.10 scope |
+| Feature | User value | Implementation cost | Priority |
+|---|---|---|---|
+| `bench/` tree skeleton | HIGH | LOW | **P1** |
+| Internal ToolBench (10 × 8) | HIGH | MEDIUM | **P1** |
+| 6-mode ablation matrix | HIGH | MEDIUM | **P1** |
+| `baseline_plain` mode | HIGH | LOW | **P1** |
+| `baseline_rag` mode | HIGH | MEDIUM (embedding dep) | **P1** |
+| `no_lsp` / `no_semantic` / `no_structured_edit` modes | HIGH | MEDIUM | **P1** |
+| Aider Polyglot adapter | HIGH | MEDIUM | **P1** |
+| CrossCodeEval adapter | HIGH | MEDIUM | **P1** |
+| SWE-bench Verified adapter | HIGH | HIGH (Docker, scale) | **P1** |
+| Normalized per-task result schema | HIGH | LOW | **P1** |
+| `pass@1` + `pass@k` + bootstrap CI | HIGH | LOW | **P1** |
+| `cost_per_solved_task` | HIGH | LOW | **P1** |
+| UTBoost-augmented SWE-bench rescoring | HIGH | MEDIUM | **P1** |
+| Four reports (`leaderboard`, `per_language`, `ablations`, `cost_quality`) | HIGH | MEDIUM | **P1** |
+| `make bench` / `bench-quick` / `bench-<suite>` | HIGH | LOW | **P1** |
+| Docker image cache | HIGH | MEDIUM | **P1** |
+| Multi-SWE-bench adapter | HIGH | HIGH (scale) | **P2** |
+| RepoBench adapter | MEDIUM | MEDIUM | **P2** |
+| Terminal-Bench 2.0 adapter | MEDIUM | HIGH (long wall) | **P2** |
+| Edit-locality metric | HIGH | MEDIUM | **P1** |
+| Regression-rate metric | HIGH | LOW | **P1** |
+| Public leaderboard submission infra | LOW | HIGH | **P3** |
+| Continuous benchmarking dashboard | MEDIUM | HIGH | **P3** |
 
 ---
 
-## Competitor Feature Comparison (Direct)
+## Competitor Feature Analysis
 
-| Feature | Sourcegraph SCIP | GitHub Stack Graphs | Meta Glean | Aider | Cursor / Cody | Helix v1.10 |
+| Feature | Aider's own polyglot | SWE-bench official harness | Multi-SWE-bench | Cody / Continue / Cursor (black-box) | CodeAgent (paper) | Helix v1.12 |
 |---|---|---|---|---|---|---|
-| Durable graph store | ✓ (SCIP files) | ✓ (per-repo) | ✓ (stacked DBs) | ✗ | partial (server-side) | ✓ (DuckDB) |
-| Live overlay | ✗ | ✗ | append-layer (not live) | per-turn rebuild | ✗ (re-index cycle) | ✓ (§10) |
-| Stable symbol IDs | ✓ | ✓ (path-based) | ✓ (vname) | ✗ | opaque | ✓ (§11) |
-| Incremental update | ✓ (per-commit) | ✓ (per-commit) | ✓ (stack-layer) | ✓ (per-turn) | partial | ✓ (per-event) |
-| Tree-sitter + LSP enrichment | per-language indexer | tree-sitter only | LSP-style facts | tree-sitter only | embeddings + LSP | ✓ (§13 + §14) |
-| PageRank ranking | ✗ | ✗ | ✗ | ✓ (single-projection) | opaque | ✓ (multi-projection in P1) |
-| Clustering | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (P1, §19) |
-| Tiered confidence on edges | ✗ (binary) | ✗ ("best-effort") | per-fact provenance | ✗ | ✗ | ✓ (§38) |
-| Freshness exposed to agent | ✗ | ✗ | ✗ | ✗ | ✗ (implicit, by failure) | ✓ (every response) |
-| Agent guardrails / receipts | n/a | n/a | n/a | n/a | hooks (syntactic) | ✓ (§36, semantic) |
-| Eval harness comparing modes | n/a | n/a | n/a | external benchmarks | external benchmarks | ✓ (§37, baseline/native/semantic/semantic_guarded) |
+| Public-benchmark adapter | 1 (their own) | 1 (SWE-bench) | 1 (Multi-SWE-bench) | unknown (proprietary) | 1 (CodeAgentBench) | **6** (Aider, CrossCodeEval, SWE-bench, Multi-SWE-bench, RepoBench, Terminal-Bench) + ToolBench |
+| Languages covered | 6 (C++, Go, Java, JS, Py, Rust) | 1 (Py) | 7 (Java, TS, JS, Go, Rust, C, C++) | usually unreported | 1 (Py) | **8 Tier-1** (Py, TS, JS, Go, Java, C#, C++, Rust) |
+| Ablation depth | Edit-format only | None | None | None (black-box) | One tool at a time | **6-mode layered subtractive** |
+| Same-model invariant | Per row | Per submission | Per submission | Not enforced (black-box) | Yes | **Yes — runner-enforced** |
+| pass@k + bootstrap CI | pass@1, pass@2, no CI | pass@1 (resolved %) | pass@1 (resolved %) | not reported | pass@1 | **pass@1, pass@3, 95 % bootstrap CI** |
+| Cost per solve | Yes (per row) | Not in official report | Not in official report | Sometimes (morphllm, ssojet aggregate) | Not | **Yes (`cost_quality.md`)** |
+| Verified-correctness via augmented tests | No | No (UTBoost is third-party) | No | No | No | **Yes (raw + UTBoost-augmented side-by-side)** |
+| Edit-locality / regression-rate | No | p2p tests gate pass; not reported separately | p2p tests gate pass | No | No | **Yes — separate metrics** |
+| Internal tool-contract suite | Implicit (their own polyglot runner) | N/A | N/A | Not public | Implicit | **Explicit — 10 capabilities × 8 langs deterministic** |
+| Reports | Markdown table + cost ranking | `final_report.json` | `final_report.json` + leaderboard | Marketing pages | Paper tables | **4 markdown reports + JSON-line raw** |
+
+The differentiator pattern: **Helix v1.12 is the *only* harness in the table that holds model fixed across a layered subtractive ablation of its own tool surface, and reports both raw and augmented-test pass-rates.** That combination is the load-bearing external claim.
 
 ---
 
 ## Sources
 
-**Adjacent products:**
-- [SCIP — a better code indexing format than LSIF (Sourcegraph blog)](https://sourcegraph.com/blog/announcing-scip)
-- [SCIP Code Intelligence Protocol (GitHub)](https://github.com/sourcegraph/scip)
-- [Indexing code at scale with Glean (Engineering at Meta)](https://engineering.fb.com/2024/12/19/developer-tools/glean-open-source-code-indexing/)
-- [Glean (GitHub)](https://github.com/facebookincubator/Glean)
-- [Introducing stack graphs (GitHub Blog)](https://github.blog/open-source/introducing-stack-graphs/)
-- [Stack graphs: Name resolution at scale (Creager, arXiv)](https://arxiv.org/pdf/2211.01224)
+### Public benchmark mechanics (HIGH confidence — multiple corroborating sources per benchmark)
 
-**Agent-facing context retrieval:**
-- [Aider Repository map docs](https://aider.chat/docs/repomap.html)
-- [Building a better repository map with tree sitter (Aider)](https://aider.chat/2023/10/22/repomap.html)
-- [Repository Mapping System (Aider DeepWiki)](https://deepwiki.com/Aider-AI/aider/4.1-repository-mapping-system)
-- [How Cursor Actually Indexes Your Codebase (Towards Data Science)](https://towardsdatascience.com/how-cursor-actually-indexes-your-codebase/)
-- [Sourcegraph Cody vs Cursor vs Augment Code (Augment)](https://www.augmentcode.com/tools/sourcegraph-cody-vs-cursor-vs-augment-code-for-enterprise-development)
-- [Cursor vs Sourcegraph Cody: Embeddings and Monorepo at Scale (Augment)](https://www.augmentcode.com/tools/cursor-vs-sourcegraph-cody-embeddings-and-monorepo-scale)
+- [SWE-bench official Harness reference](https://www.swebench.com/SWE-bench/reference/harness/) — canonical evaluation methodology
+- [SWE-bench Verified — OpenAI announcement](https://openai.com/index/introducing-swe-bench-verified/) — 500-instance human-validated subset
+- [Epoch AI — How to run SWE-bench Verified in one hour on one machine](https://epoch.ai/blog/swebench-docker) — Docker harness operational notes
+- [vals.ai — SWE-bench Verified leaderboard](https://www.vals.ai/benchmarks/swebench) — reporting conventions
+- [BenchmarkingAgents — SWE-bench Verified Explained: 2026 Methodology, Tiers, Caveats](https://benchmarkingagents.com/swe-bench/) — 2026 methodology summary
+- [Aider — Code editing leaderboard](https://aider.chat/docs/leaderboards/edit.html) — reporting convention
+- [Aider — Polyglot leaderboard intro](https://aider.chat/2024/12/21/polyglot.html) — 225-task selection method (problems solved by ≤ 3 of 7 top models)
+- [Epoch AI — Aider Polyglot](https://epoch.ai/benchmarks/aider-polyglot) — independent leaderboard
+- [Aider — Edit formats](https://aider.chat/docs/more/edit-formats.html) — whole / diff / udiff / SEARCH-REPLACE
+- [Aider — Benchmark notes](https://aider.chat/docs/leaderboards/notes.html) — operational notes
+- [CrossCodeEval project page](https://crosscodeeval.github.io/) — EM, ES, identifier-match metrics
+- [CrossCodeEval paper (arXiv 2310.11248)](https://arxiv.org/pdf/2310.11248) — static-analysis task validation methodology
+- [RepoBench paper (arXiv 2306.03091)](https://arxiv.org/abs/2306.03091) — RepoBench-R/C/P, acc@k / EM / ES
+- [RepoBench Leaderboard](https://llm-stats.com/benchmarks/repobench) — token thresholds (Python 12k, Java 24k)
+- [Multi-SWE-bench GitHub](https://github.com/multi-swe-bench/multi-swe-bench) — 1,632 instances, 7 langs, `multi_swe_bench.harness.run_evaluation`
+- [Multi-SWE-bench paper (arXiv 2504.02605)](https://arxiv.org/pdf/2504.02605) — methodology
+- [Multi-SWE-bench HF dataset](https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench) — final_report.json shape
+- [Terminal-Bench 2.0 — Snorkel announcement](https://snorkel.ai/blog/terminal-bench-2-0-raising-the-bar-for-ai-agent-evaluation/) — 89 tasks, 10 domains, frontier < 65 %
+- [Terminal-Bench paper (arXiv 2601.11868)](https://arxiv.org/abs/2601.11868) — container methodology
+- [VentureBeat — Terminal-Bench 2.0 launch + Harbor framework](https://venturebeat.com/ai/terminal-bench-2-0-launches-alongside-harbor-a-new-framework-for-testing) — frontier results
 
-**Guardrails for coding agents:**
-- [Building guardrails for GitHub Copilot cloud agent (GitHub Docs)](https://docs.github.com/en/copilot/tutorials/cloud-agent/build-guardrails)
-- [AI Coding Agent Security: Practical Guardrails for Claude Code, Copilot, and Codex (DEV)](https://dev.to/maxkrivich/ai-coding-agent-security-practical-guardrails-for-claude-code-copilot-and-codex-och)
-- [Protecting from Dangerous AI Commands with Copilot CLI Hooks](https://thebrasstacksjournal.substack.com/p/protecting-yourself-from-dangerous)
-- [Guardrails for Generative AI: Securing Developer Workflows (Microsoft)](https://techcommunity.microsoft.com/blog/azureinfrastructureblog/guardrails-for-generative-ai-securing-developer-workflows/4505801)
+### Verified-correctness weakness (HIGH confidence — UTBoost is the canonical 2026 citation)
 
-**Eval harness conventions:**
-- [SWE-bench Leaderboards](https://www.swebench.com/)
-- [SWE-bench Overview](https://www.swebench.com/SWE-bench/)
-- [SWE-Bench Pro Public Leaderboard (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
-- [SWE-Bench Verified Leaderboard (llm-stats)](https://llm-stats.com/benchmarks/swe-bench-verified)
+- [UTBoost: Rigorous Evaluation of Coding Agents on SWE-Bench (arXiv 2506.09289)](https://arxiv.org/pdf/2506.09289) — 24.4 % ranking shift, 26 instances with insufficient tests, parser-error correction
+- [Daniel Kang — SWE-bench Verified is Flawed Despite Expert Review (Medium)](https://medium.com/@danieldkang/swe-bench-verified-is-flawed-despite-expert-review-utboost-exposes-gaps-in-test-coverage-4b75c6b940c6) — 31.08 % of passed patches rely on insufficient tests; 33.04 % have direct solution leaks
+- [Establishing Best Practices for Building Rigorous Agentic Benchmarks (arXiv 2507.02825)](https://arxiv.org/pdf/2507.02825) — agentic benchmark methodology
 
-**Type resolution prior art (training-data MEDIUM confidence; not separately searched here because the spec §38 is opinionated and self-consistent):**
-- pyright (Microsoft) — `strict`/`basic`/`off` tiers, structural narrowing
-- Sorbet (Stripe) — `# typed: false/true/strict/strong` per-file gradient
-- Phan / Psalm — PHP, doc-comment-driven inference
-- TypeScript `tsserver` — full LSP with structural types
+### Reporting conventions (HIGH confidence)
 
-**SPEC source of truth:**
-- `/Users/Janis_Vizulis/go/src/github.com/agenthands/helix/SPEC-DRAFT.md` (sections 8–24, 36–39 — the canonical contract this research maps to)
-- `/Users/Janis_Vizulis/go/src/github.com/agenthands/helix/.planning/PROJECT.md` (v1.10 milestone goal + Out of Scope guardrails)
-- `/Users/Janis_Vizulis/go/src/github.com/agenthands/helix/TOOL.md` (existing 41-tool baseline)
+- [How pass@k is used to evaluate LLM coding performance (Medium)](https://medium.com/@ggfincke/how-pass-k-is-used-to-evaluate-llm-coding-performance-296e5c4565bc) — unbiased estimator formulation
+- [IBM — What Is HumanEval?](https://www.ibm.com/think/topics/humaneval) — pass@k as functional-correctness metric
+- [Holistic Agent Leaderboard (arXiv 2510.11977)](https://arxiv.org/pdf/2510.11977) — modern multi-axis leaderboard infrastructure
+- [Cost-Per-Successful-Task: A New AI Evaluation Metric — Digital Applied](https://www.digitalapplied.com/blog/cost-per-successful-task-new-ai-evaluation-metric) — cost-per-task definition
+- [morphllm — Best AI Model for Coding (June 2026): SWE-bench Pro + cost per task](https://www.morphllm.com/best-ai-model-for-coding) — 2026 leaderboard conventions
+- [SSOJet — 8 AI Coding Models Ranked by Cost-per-Task](https://ssojet.com/blog/cheapest-ai-coding-models) — cost-per-task reporting
+
+### Ablation methodology (MEDIUM-HIGH confidence)
+
+- [CodeAgent (arXiv 2401.07339)](https://arxiv.org/html/2401.07339v2) — per-tool ablation methodology; semantic-retrieval removal drops resolution 25.58 % → 19.37 %
+- [HyperAgent (arXiv 2409.16299)](https://arxiv.org/pdf/2409.16299) — multi-agent ablation by role replacement
+- [FeatBench (arXiv 2509.22237)](https://arxiv.org/pdf/2509.22237) — RT % (Regression Test pass rate) and FV % (Feature Validation) as primary metrics
+- [Anthropic — Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) — eval design principles
+
+### Baseline RAG patterns (HIGH confidence)
+
+- [Agentic, Semantic, or Both? Notes from the Code Search Debate (2026-05)](https://wowelec.wordpress.com/2026/05/18/agentic-semantic-or-both-notes-from-the-code-search-debate/) — 2026 grep-vs-embeddings landscape
+- [AI Agents Don't Need Vector Search Anymore (Medium, 2026-05)](https://buzzgrewal.medium.com/ai-agents-dont-need-vector-search-anymore-inside-the-agentic-search-stack-replacing-rag-in-2026-58efcabe4f6f) — 2026 paradigm shift; SWE-grep, Windsurf
+- [Aider — File editing problems](https://aider.chat/docs/troubleshooting/edit-errors.html) — edit-format failure modes
+
+### Internal Helix references (HIGH confidence — read in-line)
+
+- `/.planning/PROJECT.md` (v1.12 milestone section, lines 147–187) — milestone scope and explicit out-of-scope list
+- `/eval/EVAL.md` — Phase 67 v1.10 baseline (provider TOS, eval-quick vs eval distinction, EVAL-07 judge mitigation)
+- `/SPEC-DRAFT.md` (ADR-007, §391 `internal/eval/` layout, §2585 eval config, §3250 Phase 10 Evaluation Harness) — original eval-harness shape from spec draft
 
 ---
-
-## Confidence Assessment
-
-| Area | Level | Reason |
-|---|---|---|
-| Adjacent products' graph models (SCIP, Glean, Stack Graphs, Aider) | HIGH | Verified against official blogs/docs; well-documented designs |
-| Cursor / Cody / Augment freshness behavior | MEDIUM | Closed-source; relying on vendor docs and third-party comparisons (Augment-authored comparisons noted as biased — used for technical claims, not value judgments) |
-| Guardrail prior art (Copilot Cloud Agent, Claude Code hooks) | MEDIUM | Public docs cover capabilities, not specifically "semantic pre-check receipts" — Helix's design here is genuinely novel |
-| Eval harness conventions (SWE-bench, Aider polyglot) | HIGH | Public leaderboards and benchmark repos |
-| Type-resolution tiering precedent (pyright/sorbet) | MEDIUM | Training-data; not separately verified in this pass — the spec §38 design is self-consistent and doesn't claim to match any specific competitor's tier numbers |
-| Mapping to SPEC-DRAFT.md sections | HIGH | Read directly from the spec |
-
----
-
-*Feature research for v1.10 Live Semantic Index milestone — 2026-05-03*
+*Feature research for: agentic coding benchmark harness — v1.12 Bench Stack & Tool Evaluation*
+*Researched: 2026-06-13*

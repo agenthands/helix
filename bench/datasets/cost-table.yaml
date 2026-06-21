@@ -1,0 +1,26 @@
+# bench/datasets/cost-table.yaml — COST-01 / D-13 pricing + staleness contract.
+#
+# This is the committed, good cost table. Each row pins per-MTok pricing for a
+# DATED model snapshot (FAIR-02 — never a bare runtime alias) plus three
+# staleness/lifecycle dates (Go layout 2006-01-02):
+#
+#   valid_until    — the pricing is asserted accurate up to this date; a past
+#                    date HARD-FAILS `make validate-cost-table` (D-16).
+#   last_verified  — when the pricing was last checked against the provider;
+#                    more than 90 days stale HARD-FAILS (D-16).
+#   deprecation_at — the model snapshot's scheduled deprecation; feeds the
+#                    FAIR-02 deprecation-calendar gate (Plan 04). Kept well
+#                    beyond the 30-day fairness window.
+#
+# `model_id` MUST match bench/runners/fairness_contract.go DefaultContract.ModelID.
+rows:
+  -
+    provider: Anthropic
+    model_id: claude-sonnet-4-5-20250929
+    input_per_mtok: 3.0
+    output_per_mtok: 15.0
+    cached_input_per_mtok: 0.30
+    currency: USD
+    valid_until: 2027-01-28
+    last_verified: 2026-06-15
+    deprecation_at: 2027-01-28

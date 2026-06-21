@@ -327,6 +327,16 @@ func registerReplaceBody(server *mcp.SerenaMCPServer, k *kernel.Kernel, extracto
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_body").
 				WithTool("replace_symbol_body").Error()), nil, nil
 		}
+		// Phase 76 ABLATE-07 (D-04): runtime backstop for the structured-edit
+		// ablation arm. If reached via any back-channel under the flag, refuse
+		// with a typed Unsupported error carrying the greppable
+		// subsystem_disabled: prefix (kinds.go convention).
+		if k.StructuredEditDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: replace_symbol_body requires the structured-edit subsystem; use replace_in_file").
+				WithTool("replace_symbol_body").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx so the
 		// compaction gate sees BlockedEditTxActive while this tool runs.
@@ -420,6 +430,13 @@ func registerInsertBefore(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
 				WithTool("insert_before_symbol").Error()), nil, nil
 		}
+		// Phase 76 ABLATE-07 (D-04): structured-edit ablation backstop.
+		if k.StructuredEditDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: insert_before_symbol requires the structured-edit subsystem; use replace_in_file").
+				WithTool("insert_before_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
 		defer k.BeginEditTx(wsKey)()
@@ -491,6 +508,13 @@ func registerInsertAfter(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagStor
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: content").
 				WithTool("insert_after_symbol").Error()), nil, nil
 		}
+		// Phase 76 ABLATE-07 (D-04): structured-edit ablation backstop.
+		if k.StructuredEditDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: insert_after_symbol requires the structured-edit subsystem; use replace_in_file").
+				WithTool("insert_after_symbol").Error()), nil, nil
+		}
 		wsKey := wsKeyFn()
 		// Phase 63 P63-02 Task 1: stamp in-flight edit-tx for the gate.
 		defer k.BeginEditTx(wsKey)()
@@ -557,6 +581,18 @@ func registerRenameSymbol(server *mcp.SerenaMCPServer, k *kernel.Kernel, diagSto
 		if args.NewName == "" {
 			outcome = "internal"
 			return errorResult(serr.New(serr.InvalidArgs, "missing required field: new_name").
+				WithTool("rename_symbol").Error()), nil, nil
+		}
+		// Phase 76 WR-02: rename_symbol leases a live LS worker, so it belongs
+		// to the no_lsp ablation surface as well as the edit surface. Add the
+		// LSPSubsystemDisabled() runtime backstop (mirroring the symbols
+		// acquireLease guard) so a back-channel tools/call under the flag
+		// refuses with a typed Unsupported error instead of leasing a worker
+		// and emitting lspool.lsp.* spans.
+		if k.LSPSubsystemDisabled() {
+			outcome = "unsupported"
+			return errorResult(serr.New(serr.Unsupported,
+				"subsystem_disabled: rename_symbol requires the LSP subsystem, which is disabled").
 				WithTool("rename_symbol").Error()), nil, nil
 		}
 		wsKey := wsKeyFn()

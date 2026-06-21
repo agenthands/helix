@@ -1,46 +1,38 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T15:25:14.268Z",
-  "phase": "53",
-  "phase_name": "obs-metrics-gaps",
-  "phase_dir": ".planning/phases/53-obs-metrics-gaps",
+  "timestamp": "2026-06-16T15:25:48.018Z",
+  "phase": "76",
+  "phase_name": "ablation-profiles-kernel-subsystem-disable-flags",
+  "phase_dir": ".planning/phases/76-ablation-profiles-kernel-subsystem-disable-flags",
   "plan": null,
   "task": null,
-  "total_tasks": 17,
+  "total_tasks": 0,
   "status": "paused",
-  "stage": "post-plan, pre-execute",
+  "stage": "between-discuss-and-plan",
   "completed_tasks": [
-    {"id": "context", "name": "Phase 53 CONTEXT.md gathered (D-01..D-17)", "status": "done", "commit": "6fcdb1af"},
-    {"id": "research", "name": "Phase 53 RESEARCH.md (validation arch + open questions)", "status": "done", "commit": "170a46ec"},
-    {"id": "validation", "name": "Phase 53 VALIDATION.md created", "status": "done", "commit": "ab7ff66d"},
-    {"id": "plans", "name": "6 PLAN.md files (53-01..53-06) generated previously", "status": "done", "commit": "untracked-or-prior"},
-    {"id": "verify-pass-1", "name": "gsd-plan-checker iter 1 → 3 BLOCKERS + 5 WARNINGS", "status": "done", "commit": null},
-    {"id": "doc-reconcile", "name": "Amend CONTEXT D-11/D-12 + mark RESEARCH Q-1..Q-4 RESOLVED", "status": "done", "commit": "8ac614d2"},
-    {"id": "verify-pass-2", "name": "gsd-plan-checker iter 2 → VERIFICATION PASSED", "status": "done", "commit": null}
+    {"id": 1, "name": "Promote Phase 76 detail into active ROADMAP.md (was milestone-roadmap-only; unblocks discuss/plan tooling)", "status": "done", "commit": "7ef50092"},
+    {"id": 2, "name": "Run /gsd-discuss-phase 76 — lock 5 implementation decisions, write 76-CONTEXT.md + 76-DISCUSSION-LOG.md", "status": "done", "commit": "4be30cc2"},
+    {"id": 3, "name": "Record context session in STATE.md", "status": "done", "commit": "7cac79a6"},
+    {"id": 4, "name": "Auto-advance into /gsd-plan-phase 76 --auto: read init + workflow", "status": "in_progress", "progress": "init resolved (phase Pending, CONTEXT.md present, research/nyquist/plan-checker/pattern-mapper enabled, TDD on, granularity coarse). NO subagents spawned yet — paused before the gsd-phase-researcher spawn (workflow step 5)."}
   ],
   "remaining_tasks": [
-    {"id": "execute-wave-1", "name": "Plan 53-01: vectors + helpers + cardinality lint (5 new families)", "status": "not_started", "wave": 1},
-    {"id": "execute-wave-2-lspool", "name": "Plan 53-02: lspool MetricsSink extension + AcquireLease emission", "status": "not_started", "wave": 2, "depends_on": ["53-01"]},
-    {"id": "execute-wave-2-repomap", "name": "Plan 53-03: repomap MetricsSink + TagCache lookup + per-extractor latency (Q-2 Option 2)", "status": "not_started", "wave": 2, "depends_on": ["53-01"]},
-    {"id": "execute-wave-2-edit", "name": "Plan 53-04: mcp.RecordEditOutcome + 7 edit/fileops handler instrumentation", "status": "not_started", "wave": 2, "depends_on": ["53-01"]},
-    {"id": "execute-wave-2-session", "name": "Plan 53-05: forwarder stdio lifecycle + new http_session_middleware.go (Q-1 Option 2)", "status": "not_started", "wave": 2, "depends_on": ["53-01"]},
-    {"id": "execute-wave-3-docs", "name": "Plan 53-06: USAGE.md docs (5 metric rows + 2 PromQL examples + http best-effort caveat) + ROADMAP serena→helix correction", "status": "not_started", "wave": 3, "depends_on": ["53-01", "53-02", "53-03", "53-04", "53-05"]}
+    {"id": 5, "name": "Spawn gsd-phase-researcher → write 76-RESEARCH.md", "status": "not_started"},
+    {"id": 6, "name": "Create 76-VALIDATION.md (Nyquist) if RESEARCH has Validation Architecture", "status": "not_started"},
+    {"id": 7, "name": "Spawn gsd-pattern-mapper → 76-PATTERNS.md", "status": "not_started"},
+    {"id": 8, "name": "Spawn gsd-planner → 76-*-PLAN.md (TDD mode, coarse granularity)", "status": "not_started"},
+    {"id": 9, "name": "Spawn gsd-plan-checker → revision loop (max 3) until VERIFICATION PASSED", "status": "not_started"},
+    {"id": 10, "name": "Requirements + decision coverage gates; commit plans; record planned-phase in STATE.md", "status": "not_started"}
   ],
   "blockers": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "Resolve plan-checker blockers via doc reconciliation rather than plan rewrites", "rationale": "Plans 01-06 already implement the correct shape (real fuzzy.Strategy values, real edit tools); CONTEXT D-11/D-12 and RESEARCH open questions were the stale source of truth", "phase": "53"},
-    {"decision": "Strategy enum locked at 4 values {exact, whitespace_normalized, indentation_flexible, none}; cardinality bound 7×6×4=168", "rationale": "fuzzy.Strategy in code only declares 3 real values + StrategyFailed (filtered to outcome bucket); 'ellipsis' was never in the enum", "phase": "53"},
-    {"decision": "Tool scope = 7 tools including safe_delete_symbol; delete_lines excluded", "rationale": "delete_lines does not exist in internal/kernel/edit/tools.go; safe_delete_symbol does (line 407)", "phase": "53"},
-    {"decision": "Q-1 → Option 2 (http_session_middleware.go); Q-2 → Option 2 (skill.go dispatcher observes); Q-3 → outcome=internal for invalid_args; Q-4 → include safe_delete_symbol", "rationale": "All four resolutions stamped during plan verification 2026-04-30", "phase": "53"}
-  ],
-  "warnings_remaining": [
-    {"id": "W1", "description": "VALIDATION.md still has TBD-NN placeholders, nyquist_compliant: false, approval pending. Documentation hygiene; non-blocking — VALIDATION.md exists and per-task <automated> verifies are present.", "severity": "advisory", "action": "Replace TBD-NN with real plan-task IDs (53-01-1.1 etc.) during execution Wave 0; flip nyquist_compliant/wave_0_complete to true; sign off."},
-    {"id": "W2", "description": "Plan 53-04 Task 4.2 brittle `! grep -q '\"failed\"' internal/kernel/edit/tools.go`; collides with comments/log strings.", "severity": "advisory", "action": "Tighten to `! grep -qE 'EditOutcomeInc\\([^)]*\"failed\"\\)' internal/kernel/edit/tools.go` or `strategy *[:=] *\"failed\"` form."},
-    {"id": "W3", "description": "Plan 53-03 Task 3.2 leaves binary architectural choice (constructor vs SetMetricsSink). Plan 03 Task 3.4 (daemon wiring) assumes setter.", "severity": "advisory", "action": "Pre-decide setter pattern at execution start; if NewTagCache constructor route is chosen, update Task 3.4 daemon wiring acceptance accordingly."},
-    {"id": "W4", "description": "Plan 53-04 Task 4.2 references error sentinels (fuzzy.ErrNoMatch, fuzzy.ErrAmbiguous, verify.ErrValidationFailed, edit.ErrLSError) that may not exist; instructed to ADD if missing.", "severity": "advisory", "action": "Grep internal/fuzzy/, internal/kernel/edit/ for actual sentinels at start of Task 4.2; if missing, add a short Wave 0 introduce-sentinels task."}
+    {"decision": "Hybrid profile↔kernel-flag coupling: bench YAMLs declare disable flags; daemon CLI can override (CLI > profile > default-off)", "rationale": "One reviewable artifact fully describes each ablation arm; mirrors baseline.yaml. CONTEXT D-01/D-02/D-03", "phase": "76"},
+    {"decision": "Disabled structured-edit tools: filter from tools/list AND kernel guard returns typed Unsupported (defense-in-depth); replace_in_file falls through to exact-match only", "rationale": "Reconciles ABLATE-07 'inventory excludes' with roadmap #3 'return Unsupported'. CONTEXT D-04/D-05/D-06", "phase": "76"},
+    {"decision": "vet-ablation-leakage = import-boundary analyzer (noduckdb pattern) + deliberate testdata violation; scope is compile-time import leakage only", "rationale": "Matches house lint precedent + Phase 75 D-08 philosophy; kernel Unsupported guard is the runtime backstop. CONTEXT D-07/D-08", "phase": "76"},
+    {"decision": "no_lsp enforcement = null-object injection at daemon init (no-op EditNotifier, skip SetEnrichFn, no LS pool)", "rationale": "Structurally guarantees zero lsp.* spans vs scattered callsite checks. CONTEXT D-09/D-10", "phase": "76"},
+    {"decision": "bench-no-semantic.yaml ships as a tool-filter arm now (excludes semantic-store P1 tools); kernel disable_semantic_subsystem flag deferred to Phase 81 (ABLATE-06)", "rationale": "Phase 65 SemanticLookup un-wiring dependency; only LSP + structured-edit kernel flags land in 76. CONTEXT D-11/D-12", "phase": "76"}
   ],
   "uncommitted_files": [],
-  "next_action": "Run /gsd-execute-phase 53 to start Wave 1 (Plan 53-01: vectors + helpers + cardinality lint).",
-  "context_notes": "Plan-phase finished iteration 2 verification with VERIFICATION PASSED. The 6 plans are coherent: Wave 1 (53-01) creates 5 new helix_* metric vectors and a 168-bound cardinality test; Wave 2 (53-02..53-05) wires emission at canonical observable boundaries — lspool AcquireLease, repomap GetOrExtract + skill.go dispatcher, mcp.RecordEditOutcome + 7 edit/fileops handlers, daemon stdio + new http_session_middleware.go; Wave 3 (53-06) updates USAGE.md and corrects ROADMAP serena→helix wording. All 4 success criteria covered; OBS-03 covered by all 6 plans. The 4 remaining warnings are all in plan-04 / plan-03 task instructions and are tractable at execution time. CONTEXT.md and RESEARCH.md are now in lockstep with plans (commit 8ac614d2)."
+  "next_action": "Re-run /gsd-plan-phase 76 (or /gsd-resume-work). It will start by spawning gsd-phase-researcher. NOTE: workflow.auto_advance is true, so a completed plan-phase will auto-chain into /gsd-execute-phase 76 (a long autonomous run). If you do NOT want the autonomous execute chain on resume, run /gsd-plan-phase 76 and stop after planning, or disable with: gsd-tools.cjs query config-set workflow.auto_advance false",
+  "context_notes": "Phase 76 is the only invasive-daemon phase in v1.12. Discuss-phase is fully done and committed; planning had not begun (no agents spawned, no RESEARCH/PLAN/VALIDATION/PATTERNS files exist). 76-CONTEXT.md holds the authoritative 5 decisions (D-01..D-12) plus an explicit 'Planner notes' block in <deferred>. Phase Pending, not gated. Working tree has pre-existing unrelated dirt (.serena/project.yml, helix-bench binary, .smtc-cache/, a stray 75-PATTERNS.md, and ~380 staged .planning archival deletions from before this session) — none are part of this session's work, which is fully committed."
 }

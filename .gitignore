@@ -196,11 +196,10 @@ dmypy.json
 pylint.html
 .pylint.d
 
-# Serena-specific
+# Project-local config / scratch
 /*.yml
 !*.template.yml
 /agent-ui
-/legacy/test/**/.serena
 
 # clojure-lsp temporary files
 .calva/
@@ -218,44 +217,12 @@ tmp/
 # Claude settings
 .claude/settings.local.json
 
-# Elixir
-/legacy/test/resources/repos/elixir/test_repo/deps
-# Exception: Don't ignore Elixir test repository lib directory (contains source code)
-!/legacy/test/resources/repos/elixir/test_repo/lib
-
-#Cpp
-/legacy/test/resources/repos/cpp/test_repo/.ccls-cache
-
-# Exception: Don't ignore Nix test repository lib directory (contains source code)
-!/legacy/test/resources/repos/nix/test_repo/lib
-
-# Exception: Don't ignore OCaml test repository lib directory (contains source code)
-!/legacy/test/resources/repos/ocaml/test_repo/lib
-
-# Exception: Don't ignore Julia test repository lib directory (contains source code)
-!/legacy/test/resources/repos/julia/test_repo/lib
-
-# Exception: Don't ignore Solidity test repository lib directory (contains source code)
-!/legacy/test/resources/repos/solidity/test_repo/contracts/lib
-
-# Swift
-/legacy/test/resources/repos/swift/test_repo/.build
-/legacy/test/resources/repos/swift/test_repo/.swiftpm
-
-# OCaml
-/legacy/test/resources/repos/ocaml/test_repo/_build
-
-# Elm
-/legacy/test/resources/repos/elm/test_repo/.elm/
-/legacy/test/resources/repos/elm/test_repo/elm-stuff/
-
 # Scala
 .metals/
 .bsp/
 .scala-build/
 .bloop/
 bootstrap
-legacy/test/resources/repos/scala/.bloop/
 
 # Haskell
 .stack-work/
@@ -283,3 +250,7 @@ test/bench/baselines/local.txt
 # Eval harness runtime artifacts
 /eval/reports/
 /cmd/helix-eval/eval/
+
+# Bench stack runtime reports (generated per-run; keep the tracked .gitkeep)
+/bench/reports/*
+!/bench/reports/.gitkeep

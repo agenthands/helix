@@ -1,0 +1,49 @@
+# Scripted agent for the incremental_update capability fixture
+# (internal-toolbench/go/IT-go-incremental-update-1) — the ONE store-ON cell.
+#
+# Capability: incremental_update. Its named tool is refresh_semantic_graph
+# (D-05), which drives the Phase 70 live overlay-drain. This cell runs store-ON
+# (task.json capability=incremental_update -> StoreOptIn=true -> semantic_index
+# enabled + per-cell WithWorkingDir, D-01/D-02/D-03), so the daemon opens a
+# per-cell .helix/semantic.duckdb and the live overlay is active.
+#
+# Sequence (the real incremental-update workflow):
+#   1. replace_in_file — edit registry.go: flip the registered capability token
+#      "legacy" -> "incremental", wiring Update() to the incrementalHandler.
+#   2. refresh_semantic_graph{wait_for_lsp:true} — drive the overlay-drain so the
+#      live semantic graph reflects the edit (RefreshSemanticGraphArgs:
+#      paths/wait_for_lsp/max_wait_ms; wait_for_lsp blocks on the LSP enrichment
+#      queue draining, capped by max_wait_ms).
+#   3. get_semantic_context — a semantic query anchored on the edited symbol; its
+#      result must reflect the post-refresh state (it can only see the new
+#      "incremental" wiring because step 2 drained the overlay).
+#
+# Grading is carried by go test (GoRunner.RunTests): registry_test.go passes only
+# after the edit lands (Update increments). Keys are limited to the
+# runner.ScriptedStep set (tool/args/expect_error) so runner.LoadScript (strict
+# KnownFields) accepts the file.
+steps:
+  # (1) The edit that the increment depends on.
+  - tool: replace_in_file
+    args:
+      path: registry.go
+      pattern: "\treturn \"legacy\"\n"
+      replacement: "\treturn \"incremental\"\n"
+
+  # (2) Drive the Phase 70 overlay-drain refresh so the live graph reflects the edit.
+  - tool: refresh_semantic_graph
+    args:
+      paths:
+        - registry.go
+      wait_for_lsp: true
+      max_wait_ms: 5000
+
+  # (3) A semantic query that must reflect the post-refresh state.
+  - tool: get_semantic_context
+    args:
+      task: "verify the registered capability token wiring in Update"
+      files:
+        - registry.go
+      symbols:
+        - registeredCapability
+        - Update

@@ -1,0 +1,20 @@
+# Scripted agent for IT-go-context-min-1 (capability: context_minimization, D-05).
+#
+# Step 1 EXPLICITLY calls get_context on shipping.go to surface the relevant
+# symbol (ShippingCost) out of the noise helpers. Step 2 applies the targeted
+# replace_in_file fix to ShippingCost only. shipping_test.go pins the corrected
+# ShippingCost AND spot-checks the noise helpers stayed unchanged, so the fix
+# must be minimal and act on the context get_context minimized (D-05).
+#
+# get_context args (internal/skill/repomap): files is a required array of paths.
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only).
+steps:
+  - tool: get_context
+    args:
+      files:
+        - shipping.go
+  - tool: replace_in_file
+    args:
+      path: shipping.go
+      pattern: "func ShippingCost(weight int) int {\n\treturn 0\n}"
+      replacement: "func ShippingCost(weight int) int {\n\treturn weight * ratePerKg\n}"

@@ -1,0 +1,22 @@
+# Scripted agent for IT-go-failure-handling-1 (capability: failure_handling, D-05).
+#
+# Step 1 deliberately targets a non-existent path (typo.go) with
+# expect_error:true — exercising the tool's error path (the capability under
+# test). ScriptedStep.ExpectError records this as an expected failure without
+# aborting the script. Step 2 RECOVERS by editing the correct file (math.go),
+# flipping `return n` to `return -n`. math_test.go passes only after the recovery
+# edit lands, so the fixture grades the error-then-recover flow (D-05).
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only).
+steps:
+  - tool: replace_in_file
+    args:
+      path: typo.go
+      pattern: "\treturn n\n"
+      replacement: "\treturn -n\n"
+    expect_error: true
+  - tool: replace_in_file
+    args:
+      path: math.go
+      pattern: "\treturn n\n"
+      replacement: "\treturn -n\n"

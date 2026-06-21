@@ -157,6 +157,7 @@ func TestMergeUsageFromCC(t *testing.T) {
 			InputTokens:  1234,
 			OutputTokens: 567,
 		},
+		UsagePresent: true,
 	}
 
 	mt, err := trace.Merge(in)
@@ -168,6 +169,38 @@ func TestMergeUsageFromCC(t *testing.T) {
 	}
 	if mt.Usage.OutputTokens != 567 {
 		t.Errorf("Usage.OutputTokens = %d, want 567", mt.Usage.OutputTokens)
+	}
+	if !mt.UsagePresent {
+		t.Error("UsagePresent = false, want true (threaded from CCTapResult)")
+	}
+}
+
+// TestMergeUsageAbsentSignal verifies the UsagePresent presence flag is threaded
+// independently of Usage values: an all-zero CC usage that WAS present stays
+// present, and a CC result with no usage block stays absent (MD-01).
+func TestMergeUsageAbsentSignal(t *testing.T) {
+	t.Parallel()
+
+	// Present-and-zero: a real provider usage block of all zeros.
+	in := baseInput()
+	in.CC = trace.CCTapResult{Usage: trace.Usage{}, UsagePresent: true}
+	mt, err := trace.Merge(in)
+	if err != nil {
+		t.Fatalf("Merge error: %v", err)
+	}
+	if !mt.UsagePresent {
+		t.Error("present-and-zero: UsagePresent = false, want true")
+	}
+
+	// Absent: no usage block (scripted leg).
+	in = baseInput()
+	in.CC = trace.CCTapResult{Usage: trace.Usage{}, UsagePresent: false}
+	mt, err = trace.Merge(in)
+	if err != nil {
+		t.Fatalf("Merge error: %v", err)
+	}
+	if mt.UsagePresent {
+		t.Error("absent: UsagePresent = true, want false")
 	}
 }
 

@@ -106,7 +106,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-_v1.10 requirements to be defined via `/gsd-new-milestone`._
+_v1.12 requirements to be defined via `/gsd-new-milestone`._
 
 Carry-over follow-ups (resolved at v1.10 Phase 58):
 - [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
@@ -144,29 +144,55 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.11 progress (2026-05-21):** Phase 73 complete — P1 Tools Integration & E2E Verification, the final phase of milestone v1.11. All 6 P1 MCP tools (`explain_symbol_deep`, `find_related_symbols`, `validate_graph_edge`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`) are now exposed through `SemanticSkill.Tools()` (10-tool ToolProvider surface) and gated across the full 5-profile × 4-mode matrix — `get_change_impact_graph` (review+) excluded from read/edit mode YAMLs, the other five visible at read+. Verified by an inline table-driven profile-filter golden suite (40 subtests). All 6 `*Help` consts standardized to a 4-section template with `get_tool_help` param-doc coverage tests via `jsonschema.For[T]`. SC#3 enforced by a new in-tree static gate (`wrapper_consistency_test.go`) asserting every P1 handler calls `checkMode` + emits `FreshnessV2` + is registered in `RegisterAll`. SC#4 proven by a real-store E2E suite (`buildP1E2EFixture`: real DuckDB `*Store` + bleve in a tempdir) running all 6 tools with closed-enum envelope assertions; `get_change_impact_graph` additionally asserts a non-degenerate subgraph. P1TOOL-07/08/09 all validated; 5/5 must-haves verified; both custom vet gates green; race-clean. Code review: 0 critical, 5 warning (WR-01/04/05 pre-existing Phase 72 code), 6 info.
 
-## Current Milestone: v1.11 Semantic Index Completion & P1 MCP Tools
+**v1.12 progress (2026-06-15):** Phase 75 complete — Schema, Fairness Contract & Tree Skeleton, the foundation phase. All 11 in-scope REQs (BENCH-01/02/03/06, FAIR-01/02/03, COST-01, INFRA-01/02/03) accounted for; 5/5 ROADMAP success criteria + 11/11 must-haves verified. Wave 0 relocated the Phase 64 semantic microbench to `internal/semantic/bench/` via atomic `git mv` (history continuity preserved, eval↔bench reciprocal INFRA-03 links). The six-dir `bench/` skeleton (`datasets/runners/languages/evaluators/reports/schema`) now hosts the contracts every downstream phase (76–89) writes into: `bench/schema/result.v2.schema.json` (Draft 2020-12, required `schema_version` const "v2", additive-only=minor / breaking=v3, FAIR-03 substrate cached-token columns + `fairness.overrides[]`) with a self-enforcing golden-validate test; `bench/runners/fairness_contract.go` (`var DefaultContract` pinning a dated `ModelID`, `ModeOverride` waiver loader that fatals on empty `WaiverReason`, injected-clock 30-day deprecation gate); and the `cmd/helix-bench` cobra CLI (5 subcommands) + `bench/datasets/cost-table.yaml` + hard-fail `make validate-cost-table` / `make verify-tos` gates. FAIR-03 ships schema substrate only (variance detector → Phase 82, `cost_quality.md` warning → Phase 89). TOS attestation flags set to permissive defaults and confirmed by the user (live-TOS legal verification handled going forward); a code-review BLOCKER (CR-01: `verify-tos` silently skipping the Anthropic attestation via a Markdown horizontal-rule fence desync) was found and fixed with a regression test. Zero new dependencies (jsonschema/v6, yaml.v3, cobra all pre-vendored). Two pre-existing `test/bench` failures (MCP registry 53-vs-47 tool drift) are unrelated and logged in deferred-items.md.
 
-**Goal:** Complete the v1.10 semantic-index foundation by closing tier-3-approximation tech debt and shipping the 6 P1 MCP tools (`explain_symbol_deep`, `find_related_symbols`, `get_cluster_map`, `explain_cluster`, `get_change_impact_graph`, `validate_graph_edge`) that were SPEC'd but deferred. Make `graph_version` advancement precise per-symbol; surface real status from production accessors; make `refresh_semantic_graph` actually incremental.
+**v1.12 progress (2026-06-16):** Phase 76 complete — Ablation Profiles + Kernel Subsystem Disable Flags, the only invasive-daemon phase of v1.12. All 4 in-scope REQs verified (4/4 must-haves, all 4 ROADMAP success criteria + both hard-fail gates): ABLATE-07 (two kernel flags `KernelConfig.DisableLSPSubsystem`/`DisableStructuredEditSubsystem` + accessors; structured-edit handlers return greppable `subsystem_disabled:`-prefixed `serr.Unsupported` under the flag; `replace_in_file` falls through to exact-match-only), ABLATE-02 (4 bench profile YAMLs `bench-full`/`bench-no-lsp`/`bench-no-semantic`/`bench-no-structured-edit` + first-class `Profile` disable fields + golden tool-surface tests + fail-closed loader rejection of unknown mode names), ABLATE-05 (no_lsp enforced by null-object injection at the daemon composition root — skip `SetEnrichFn`/`SetFallbackDeps`, no-op `EditNotifier`, neutralized diag `leaseFn` — proven by a zero-`lspool.lsp.*`-span trace-tap test), ABLATE-08 (`vet-ablation-leakage` import-boundary analyzer wired into `make vet`, forbidden edge `bench/runners → lspool|semantic/store` NOT the legitimate `kernel→fuzzy`, green→red via analysistest testdata). All TDD (RED→GREEN per plan). Per D-11/D-12, `bench-no-semantic` ships tool-filter-only; the kernel `disable_semantic_subsystem` flag (ABLATE-06) is deferred to Phase 81 (Phase 65 SemanticLookup un-wiring dependency). Code review: 0 blockers, 3 warnings (WR-01: structured-edit guards emit `outcome="unsupported"` which is outside the closed `editOutcomeEnum` → metric silently dropped; WR-02: direct LS-leasing tools lack a kernel runtime guard under no_lsp; WR-03: `Validate()` not re-run after `LoadOverrides()`) flagged for a follow-up `--fix` pass. Pre-existing `test/bench` 53-vs-47 tool-drift failures (last touched Phase 66) confirmed unrelated; logged in deferred-items.md.
+
+**v1.12 progress (2026-06-17):** Phase 77 complete — Bench Runtime & First E2E Smoke, the last phase of the v1.12 active roadmap. Both in-scope REQs (BENCH-04, BENCH-05) and all 4 ROADMAP success criteria verified by real execution (16/16 must-haves). The `notYetImplemented("run")` stub at `cmd/helix-bench/main.go` is now a working `run` subcommand (`--benchmarks`/`--modes`/`--tasks`/`--parallel`/`--out`/`--agent`): `helix-bench run --benchmarks=toolbench-go --modes=your_agent_full --tasks=sum-doubler` runs one cell end-to-end in ~0.4–2s (≤30s) and writes a schema-valid `result.v2.json` (outcome+fairness+tokens+`trace_ref`+`model_id`+`schema_version:"v2"`; rich metrics edit_locality/regression_rate/pass@k intentionally absent → Phase 79). `bench/runtime/sandbox` struct-embeds `internal/eval/sandbox.Sandbox` (reuse-don't-fork, D-07); `bench/runtime/subprocess` spawns the per-cell `helix` daemon over a Unix domain socket (HTTP disabled → no port collisions by construction, D-06); the cell spine (drive→kill→PID-gated `TapDaemonLog`→2-leg `trace.Merge`→`BuildResult`/`Validate`→durable write under `bench/reports/<run_id>/<task>/<mode>/`, preserve-on-failure D-08) mirrors `internal/eval/runner/daemon_tap_integration_test.go`. The agent-tap leg is synthesized as a `CCTapResult` from the scripted agent's `[]StepResult` (D-02) so the Nyquist 3-assertion boundary (2-leg trace `ToolCallSummary.Total>=1` + CC leg present; `RejectedForeignPid==0`; result.v2 schema-valid) is a hermetic CI gate — proven by `TestDaemonTap` + `TestCrossCell` (run for real with a built helix, SKIP cleanly without one). `make bench-quick` exits 0 in ~4s (≤90s, 1/1 task) on the hermetic scripted `your_agent_full` path; the `make bench` target-name collision with the existing Go microbench was reconciled (microbench → `bench-micro`, new `bench`/`bench-<suite>` invoke `helix-bench run`). Real `claude` CLI path wired (`--agent=claude`, `ErrClaudeNotFound` clean) but NOT a CI gate (D-01). One in-scope deviation: per-cell `semantic_index` disabled via `--config` to avoid a shared cwd-relative DuckDB-store deadlock under parallel cells (bench-full tool surface otherwise intact; flagged for Phase 78+). Code review: 0 blockers, 6 warnings (WR-01 timeout-as-failure signal conflation, WR-02/03 drive.go goroutine-leak/out-of-order handling, WR-04 dotfile in dataset dir, WR-05 process-group `Setpgid` reaping, WR-06 trace start-time sampling) — all advisory refinements that bite only at Phase-78+ corpus/parallel scale; recommend tracking WR-01/WR-05, logged for a follow-up `--fix` pass. TDD plans 77-01/77-02 followed RED→GREEN.
+
+**v1.12 progress (2026-06-19):** Phase 80 complete — Five-of-Six Ablation Runners + Fairness Enforcement. Both in-scope REQs (ABLATE-01, ABLATE-03) + all 4 ROADMAP success criteria verified by real execution (20/20 must-haves; `TestFiveOfSixSmoke` ran live with a spawned daemon). Grew Phase 77's filesystem-as-table mode resolver from 1→6 modes with ZERO resolver Go change — 5 new `bench/runners/<mode>/MODE.md` dirs (`baseline_plain`→baseline, `no_lsp`/`no_structured_edit`/`your_agent_no_semantic`→their `bench-*` profiles, `baseline_rag`→baseline placeholder). Two asymmetric deferred modes (D-02): `your_agent_no_semantic` emits a REAL row marked `ablation_status: guarantee_pending_phase_81` (kernel zero-DuckDB guarantee ABLATE-06 → Phase 81); `baseline_rag` is a fail-closed stub emitting NO row + a distinct matrix `Deferred` outcome (real RAG arm ABLATE-04 → Phase 83). Fairness is two layers (D-04): `RunCell` calls `runners.DefaultContract.Validate()` at startup (fatal, before sandbox) + a new unconditional hermetic CI contract test (`bench/runners/contract_test.go::TestEffectiveConfigMatchesContract`) asserting projected `model_id == DefaultContract.ModelID` (Open-Q1 scope A — the live `claude` argv projects only model_id today; the other 5 contract fields documented wired-not-enforced). Additive `ablation_status` field on the result.v2 builder + open schema (no v3 bump, D-03). Minimal single-run 3-delta pass (`bench/runtime/deltas.go::ComputeAndWriteDeltas`, D-05) computes `full − baseline_plain` / `full − no_lsp` / `full − no_structured_edit` post-`RunMatrix` and writes them back into each real row; the full aggregator/BCa/pass@k/variance gate stays Phase 82. baseline_plain reuses `internal/profile/profiles/baseline.yaml` (ABLATE-03, no new YAML; empty inventory documented in `bench/BENCH.md`). All TDD plans (80-02/03/04/05) followed RED→GREEN. Code review: 0 blockers, 5 warnings (WR-01/02 durable-layout test-path drift, WR-03 latent non-deterministic `fairness.overrides[]` ordering, WR-04/05 stale comments) — advisory, logged for a follow-up `--fix` pass.
+
+## Current Milestone: v1.12 Bench Stack & Tool Evaluation
+
+**Goal:** Prove Helix's semantic / LSP / edit tooling improves agent success, cost, and safety on real public benchmarks across 8 Tier-1 languages — with controlled ablations and an internal ToolBench as the deterministic source of truth. Headline claim to land: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 
 **Target features:**
 
-- **Precise FileFactDiff populator** — Replace Tier-3 synthetic-marker floor with Tier-1 (full diff old↔new FileFact) and Tier-2 (added-only) populators in the live handler. Pre-edit FileFact accessor in `internal/semantic/live/handler/`. Closes DEF-67-F01-FULL-DIFF.
-- **Production status accessors** — Replace `semantic_wiring.go:408,441,450` placeholders. `ClusterStatus` returns real values from Phase 62 cluster engine; retrieval status accessors return real values from the bleve engine + corpus state. Closes TOOL-03/TOOL-04 placeholder annotations.
-- **Incremental refresh overlay-drain** — `collectCandidatePaths` wired through the overlay-drain seam in `internal/semantic/live/`. `refresh_semantic_graph` becomes truly incremental instead of full-walk fallback.
-- **6 P1 MCP tools** (build on existing v1.10 graph + cluster + integ.SemanticLookup infrastructure):
-  - `explain_symbol_deep` — deep symbol explanation with type chain, callers, edges, freshness
-  - `find_related_symbols` — semantic-graph + cluster-aware sibling discovery
-  - `get_cluster_map` — workspace-level cluster overview with weak-component summaries
-  - `explain_cluster` — per-cluster rationale + member symbols + ranking
-  - `get_change_impact_graph` — pre-edit blast-radius via the semantic graph
-  - `validate_graph_edge` — confidence + evidence for a specific edge claim
+*Foundation — Internal ToolBench (Option A):*
 
-**Out of scope (deferred to v1.11.x point releases or won't-do):**
+- **Net-new `bench/` tree** — `datasets/`, `runners/`, `languages/`, `evaluators/`, `reports/`. `eval/` (Phase 67 / v1.10) left as legacy; synthetic corpus may migrate later but is not the source of truth.
+- **Internal ToolBench** — deterministic, per-language tool-contract tests for 10 capabilities: semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling.
+- **8 Tier-1 languages** — Python, TypeScript, JavaScript, Go, Java, C#, C++, Rust.
+- **6-mode ablation matrix** — `baseline_plain` (shell+grep+read+edit+test), `baseline_rag` (grep + embeddings + chunk RAG), `your_agent_full` (semantic + LSP + fuzzy + symbol graph + structured edits + diagnostics), `no_lsp`, `no_semantic`, `no_structured_edit`. Same model + same budget across all modes.
+- **Metrics layer (12+)** — `task_success`, `verified_correctness`, `tokens_input/output`, `tool_calls`, `wall_time_seconds`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`, `semantic_tool_calls`, `edit_distance_patch`, `retry_count`. Normalized per-task result object.
+- **Statistical rigor** — multi-run per task (N ≥ 3 by default), bootstrap confidence intervals, `pass@1` and `pass@k`. Single-run results are not publishable.
+- **Dollar-cost conversion** — static price table per provider × model, computed `cost_per_solved_task` (reopens Phase 67 deferred item).
 
-- Apple Developer ID notarization (DEF-59-NOTARIZE), darwin canary in CI (DEF-59-DARWIN-CANARY), Windows arm64 restore (DEF-59-WIN-ARM64-RESTORE) — handled as v1.11.x patches if/when needed.
-- Package-manager distribution (Homebrew, Scoop, deb/rpm/AUR, etc.) — **hard project rule:** Helix ships signed binary archives only. No package surfaces, ever.
+*Public benchmarks (Option B):*
 
-**Source of truth:** `SPEC-DRAFT.md` (40 sections) for the 6 P1 tool contracts; `.planning/milestones/v1.10-ROADMAP.md` for the completion-item anchors.
+- **Aider Polyglot** — 225 Exercism tasks across C++, Go, Java, JS, Python, Rust.
+- **CrossCodeEval** — cross-file completion across Python, Java, TS, C#.
+- **RepoBench** — retrieval + completion across Python, Java.
+
+*External credibility (Option C):*
+
+- **SWE-bench Verified** — 500 human-validated Python tasks.
+- **Multi-SWE-bench** — 1,632 instances across Java, TS, JS, Go, Rust, C, C++.
+- **Terminal-Bench 2.0** — 89 hard containerized long-horizon tasks.
+
+*Reports:*
+
+- `leaderboard.md`, `per_language.md`, `ablations.md`, `cost_quality.md`.
+
+**Out of scope (deferred or won't-do):**
+
+- HumanEval-style toy benchmarks as primary scoring (smoke-only via MultiPL-E / HumanEval-X / McEval if needed).
+- Tier-2 (PHP, Ruby, Kotlin, Swift, C, Scala) and Tier-3 languages — future milestones.
+- LLM judge as CI gate (per Phase 67 EVAL-07, judge stays informational).
+- Comparing against Claude Code / Cursor as black boxes — controlled baselines using the *same* base model only.
+- Public-benchmark *leaderboard submissions* — generating local results sufficient; submission infra deferred.
+
+**Source of truth:** This PROJECT.md milestone section, the upcoming v1.12 `.planning/REQUIREMENTS.md`, and the user's BENCH-PLAN dump captured in the discuss-milestone transcript (2026-06-13).
 
 ## Context
 
@@ -257,4 +283,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 — v1.11 Phase 73 complete (P1 Tools Integration & E2E Verification; P1TOOL-07/08/09 validated; 5/5 must-haves verified; final phase of milestone v1.11)*
+*Last updated: 2026-06-19 — Phase 80 (five-of-six ablation runners + fairness enforcement) complete and verified; v1.12 milestone underway (6/15 phases).*

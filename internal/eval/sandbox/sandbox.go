@@ -194,6 +194,13 @@ func (h *DaemonHandle) Kill() error {
 	if h.cmd == nil || h.cmd.Process == nil {
 		return nil
 	}
+	pid := h.cmd.Process.Pid
+	// WR-01: the daemon is its own group leader (Setpgid in StartDaemon), so
+	// SIGKILL the whole group on the normal path — not just the leader — to reap
+	// any descendants (language servers, a `go test` child). Doing this only in
+	// the 5s-timeout fallback leaked children on the common happy path under
+	// --parallel. The group kill is best-effort (ESRCH once the group is gone).
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
 	if err := h.cmd.Process.Kill(); err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
 			// Process already finished — reap the zombie if not already reaped.
@@ -209,11 +216,12 @@ func (h *DaemonHandle) Kill() error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		// Send SIGKILL to the entire process group to ensure child processes
-		// spawned by the daemon are also reaped (WR-03 fix). Use negative PID
-		// to target the process group rather than just the daemon process.
-		pid := h.cmd.Process.Pid
+		// Re-send SIGKILL to the entire process group, then WR-02: drain the
+		// in-flight Wait() goroutine so the process is confirmed reaped before we
+		// return. The done channel is buffered (cap 1) so the goroutine's send
+		// never blocks, and Wait() returns once the group SIGKILL lands.
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		<-done
 		return fmt.Errorf("sandbox: daemon %s/%s did not exit within 5s after kill", h.taskID, h.mode)
 	}
 	return nil
@@ -228,7 +236,33 @@ func (h *DaemonHandle) Kill() error {
 //   - HELIX_LOG_LEVEL=info
 //
 // The daemon stderr is redirected to <modeDir>/daemon.log.
-func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cfgPath string) (*DaemonHandle, error) {
+//
+// Optional DaemonOptions tune the spawn additively (P77 D-07: extend, do not
+// fork). Existing 5-arg callers compile unchanged.
+//
+// daemonOpts holds the resolved optional spawn settings.
+type daemonOpts struct {
+	workDir string
+}
+
+// DaemonOption configures an optional StartDaemon behavior.
+type DaemonOption func(*daemonOpts)
+
+// WithWorkingDir sets the daemon subprocess's working directory (cmd.Dir). The
+// bench harness uses this for per-cell store isolation (D-03): pointing cmd.Dir
+// at the per-cell repo makes the eager .helix/semantic.duckdb open resolve
+// per-cell, avoiding a shared-lock deadlock under --parallel. An empty dir is a
+// no-op (cmd.Dir stays the default).
+func WithWorkingDir(dir string) DaemonOption {
+	return func(o *daemonOpts) { o.workDir = dir }
+}
+
+func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cfgPath string, opts ...DaemonOption) (*DaemonHandle, error) {
+	var o daemonOpts
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	sockPath := s.SocketFor(taskID, mode)
 	homePath := s.HomeFor(taskID, mode)
 	modeDir := s.ModeDir(taskID, mode)
@@ -242,6 +276,20 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	}
 
 	cmd := exec.CommandContext(ctx, s.helixBin, args...)
+
+	// D-03: per-cell store isolation. When set, run the daemon with cwd at the
+	// per-cell repo so the eager .helix/semantic.duckdb open resolves per-cell.
+	if o.workDir != "" {
+		cmd.Dir = o.workDir
+	}
+
+	// WR-05: put the daemon in its OWN process group so the Kill 5s-timeout
+	// fallback's syscall.Kill(-pid, SIGKILL) targets exactly the daemon and its
+	// descendants (language servers, `go test`). Without Setpgid the daemon shares
+	// the harness's group, so -pid keys a group the daemon does not lead, the kill
+	// returns ESRCH, and the children it claims to reap survive — a real leak under
+	// --parallel.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Env allowlist.
 	env := []string{

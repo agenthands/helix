@@ -1,0 +1,47 @@
+# Scripted agent for IT-go-rename-safety-1 (capability: rename_safety, D-05).
+#
+# Steps 1-2 EXPLICITLY exercise the rename_safety capability surface:
+# find_references on the Foo declaration (widget.go line 13, "Foo" at column 6)
+# then rename_symbol Foo -> Bar. Both are LSP-backed (gopls) tools; in the
+# store-OFF hermetic scripted bench path there is no WARM gopls, so they return
+# an `internal` result — hence expect_error:true. This is deterministic (no
+# flake: store-off never warms an LSP for a fresh per-cell clone) and still
+# names the capability's tools by-construction (D-05). The store-ON path (Plan
+# 04 wiring) would resolve them; the scripted smoke does not require it.
+#
+# Steps 3-4 perform the ACTUAL Foo -> Bar rename at EVERY reference the rename
+# spans — the definition in widget.go and the call site in consumer.go — via the
+# store-off-stable replace_in_file (mirroring how IT-go-call-graph-1 grades its
+# guards). rename_test.go references the new name Bar AND exercises Describe (the
+# renamed caller), so the package compiles only if BOTH references were renamed:
+# the test fails unless the full reference set was acted on (D-05).
+#
+# No Receipts needed: default enforcement is LevelWarn, G-001 is a no-op stub
+# (78-RESEARCH "Guardrail receipts NOT a blocker").
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only).
+steps:
+  - tool: find_references
+    args:
+      path: widget.go
+      line: 13
+      column: 6
+      include_declaration: true
+    expect_error: true
+  - tool: rename_symbol
+    args:
+      path: widget.go
+      line: 13
+      column: 6
+      new_name: Bar
+    expect_error: true
+  - tool: replace_in_file
+    args:
+      path: widget.go
+      pattern: "func Foo() string {"
+      replacement: "func Bar() string {"
+  - tool: replace_in_file
+    args:
+      path: consumer.go
+      pattern: "\treturn \"this is a \" + Foo()\n"
+      replacement: "\treturn \"this is a \" + Bar()\n"

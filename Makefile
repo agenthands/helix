@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench bench-baseline release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos
 
 BINARY=helix
 GO=go
@@ -21,6 +21,7 @@ VETTOOL=$(shell go env GOPATH)/bin/vet-noduckdb
 VETTOOL_NOKERNEL2SEMANTIC=$(shell go env GOPATH)/bin/vet-nokernel2semantic
 VETTOOL_NOSEMANTIC2KERNEL=$(shell go env GOPATH)/bin/vet-nosemantic2kernel
 VETTOOL_COMPACT_USES_STORE=$(shell go env GOPATH)/bin/vet-compact-uses-store
+VETTOOL_ABLATION_LEAKAGE=$(shell go env GOPATH)/bin/vet-ablation-leakage
 
 # Phase 61 ENRICH-01: enforce semantic does not import kernel (carve-out:
 # internal/kernel/lspool). The vet-nosemantic2kernel singlechecker is the
@@ -30,12 +31,19 @@ VETTOOL_COMPACT_USES_STORE=$(shell go env GOPATH)/bin/vet-compact-uses-store
 # Phase 63 P63-02 Task 3: vet-compact-uses-store enforces the
 # compact→store boundary — internal/semantic/compact MUST NOT import
 # duckdb-go directly. Belt-and-braces over vet-noduckdb.
-vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE)
+#
+# Phase 76 ABLATE-08: vet-ablation-leakage enforces the ablation import
+# boundary — the bench-runner namespace (github.com/agenthands/helix/bench/
+# runners) MUST NOT import the disabled-subsystem packages
+# internal/kernel/lspool or internal/semantic/store. Static, compile-time
+# complement to the kernel Unsupported runtime guard (Plan 76-01).
+vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOSEMANTIC2KERNEL) ./...
 	$(GO) vet -vettool=$(VETTOOL_COMPACT_USES_STORE) ./...
+	$(GO) vet -vettool=$(VETTOOL_ABLATION_LEAKAGE) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
@@ -48,6 +56,9 @@ $(VETTOOL_NOSEMANTIC2KERNEL): cmd/vet-nosemantic2kernel/main.go internal/lint/no
 
 $(VETTOOL_COMPACT_USES_STORE): cmd/vet-compact-uses-store/main.go internal/lint/compactusesstore/*.go
 	$(GO) install ./cmd/vet-compact-uses-store
+
+$(VETTOOL_ABLATION_LEAKAGE): cmd/vet-ablation-leakage/main.go internal/lint/ablationleakage/*.go
+	$(GO) install ./cmd/vet-ablation-leakage
 
 fmt:
 	gofmt -w .
@@ -81,11 +92,47 @@ bench-jdtls-warm: ## Run Java integration suite cold then warm; print both wall-
 	@echo "=== jdtls WARM run ==="
 	-@time $(GO) test -run 'Java' ./test/integration/... -count=1
 
-bench: ## Run the bench suite once and print results to stdout
+# bench-micro: the Phase 64 Go microbenchmark suite (formerly `make bench`).
+# RENAMED in Phase 77 (BENCH-05, RESEARCH Pitfall 1): the `bench` target name was
+# reclaimed by the v1.12 milestone bench stack (`cmd/helix-bench run`). The original
+# microbench recipe is preserved verbatim here under the unambiguous `bench-micro`
+# name. `make bench-baseline` still captures a local baseline from this same recipe.
+bench-micro: ## Run the Go microbenchmark suite once and print results to stdout (formerly `make bench`)
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/...
 
-bench-baseline: ## Capture a local baseline into test/bench/baselines/local.txt (gitignored, overwrites)
+bench-baseline: ## Capture a local microbench baseline into test/bench/baselines/local.txt (gitignored, overwrites)
 	$(GO) test -short -bench=. -benchmem -count=10 -run=^$$ ./test/bench/... | tee test/bench/baselines/local.txt
+
+# ─── v1.12 milestone bench stack (BENCH-05) ────────────────────────────────────
+# `bench`, `bench-quick`, and `bench SUITE=<suite>` invoke `cmd/helix-bench run`
+# (NOT the Go microbench — that is now `bench-micro`). These mirror the eval-quick /
+# eval local-only, no-network discipline: the scripted agent makes zero external
+# network calls and uses no API key (D-01). See bench/BENCH.md for the operator
+# contract and the result.v2 provenance key names.
+#
+# SUITE selects the benchmark suite (the `bench-<suite>` parameterization, RESEARCH
+# Open Question 1): `make bench SUITE=internal-toolbench`. Defaults to internal-toolbench.
+SUITE ?= internal-toolbench
+
+bench: ## Run the milestone bench suite via cmd/helix-bench (use SUITE=<suite>; default internal-toolbench)
+	$(GO) run ./cmd/helix-bench run --benchmarks=$(SUITE)
+
+# bench-quick: the hermetic scripted CI smoke gate (BENCH-05 criterion #2, <=90s,
+# >=1 task succeeds). Builds the helix daemon binary FIRST (RESEARCH build-sequencing
+# note: the subprocess-daemon / forwarder-drive path SKIPs if `helix` is absent),
+# then runs the scripted `your_agent_full` smoke on the single IT-go-patch-apply-1
+# seed task. Local-only, no network, no API key (scripted agent, D-01). The absolute
+# --helix-bin ensures the daemon resolves from the per-cell ephemeral scratch cwd.
+bench-quick: ## Build helix, then run the hermetic scripted bench smoke (<=90s CI gate)
+	$(GO) build -o $(BINARY) ./cmd/helix
+	$(GO) run ./cmd/helix-bench run \
+		--benchmarks=$(SUITE) \
+		--languages=go \
+		--modes=your_agent_full \
+		--tasks=IT-go-patch-apply-1 \
+		--agent=scripted \
+		--helix-bin=$(CURDIR)/$(BINARY) \
+		--out bench/reports
 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \
@@ -236,3 +283,17 @@ eval:
 # warn-only step (continue-on-error: true) — never blocks merges.
 eval-attestation-check:
 	go run ./cmd/eval-attestation-check eval/EVAL.md
+
+# validate-cost-table: HARD-FAIL strict validator for bench/datasets/cost-table.yaml
+# (COST-01/D-13/D-16). Exits NON-ZERO on an unknown key, an unparseable date, a
+# past valid_until, or a last_verified more than 90 days stale. This is a build
+# gate — NO continue-on-error (the deliberate inversion of eval-attestation-check).
+validate-cost-table:
+	go run ./cmd/helix-bench validate-cost-table bench/datasets/cost-table.yaml
+
+# verify-tos: HARD-FAIL freshness gate for bench/PROVIDERS.md TOS attestations
+# (D-14/D-16). Exits NON-ZERO on a malformed/unknown-key frontmatter block, a
+# missing required field, or an attested_on more than 90 days stale. Build gate —
+# NO continue-on-error. Checks freshness/parse validity only, not legal accuracy.
+verify-tos:
+	go run ./cmd/helix-bench verify-tos bench/PROVIDERS.md

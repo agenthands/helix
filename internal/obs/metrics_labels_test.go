@@ -50,6 +50,11 @@ var carveOuts = map[string]map[string]bool{
 	// Phase 57: closed-enum "outcome" ∈ {opened, quarantined, created} on
 	// semantic store open counter. workspace_label is bounded.
 	"helix_semantic_store_open_total": {"workspace_label": true, "outcome": true},
+	// Phase 81 ABLATE-06: labelless read counter — no label dimensions, so
+	// nothing to carve. The entry exists for documentation parity with the
+	// rest of the helix_semantic_store_* family and to mark the metric as
+	// intentionally labelless (a faithful "any read" signal).
+	"helix_semantic_store_reads_total": {},
 	// Phase 59 P02: bounded-label allowlist for tree-sitter extraction
 	// outcome counter. "language" ∈ {go, typescript, python, other};
 	// "outcome" ∈ {ready, partial, unsupported, failed}. Both labels are
@@ -203,6 +208,9 @@ func TestMetricsLabelsAllowlist(t *testing.T) {
 	// dropped by Gather()).
 	m.SemanticStoreQuarantine.WithLabelValues("ws-aaa", "corrupt_file").Inc()
 	m.SemanticStoreOpen.WithLabelValues("ws-aaa", "opened").Inc()
+	// Phase 81 ABLATE-06: prime the labelless read counter so Gather()
+	// returns its family (empty families are dropped by Gather()).
+	m.SemanticStoreReadsInc()
 	// Phase 59 P02: prime the tree-sitter extraction vector.
 	m.SemanticExtraction.WithLabelValues("go", "ready").Inc()
 	// Phase 60 D-07 (60-05B): prime the live-update outcome vector so
@@ -424,15 +432,16 @@ func TestSemanticExtractionTotal_BoundedLabels(t *testing.T) {
 }
 
 // TestMetrics_CardinalityBounds_EditOutcome asserts the closed-enum bound:
-// 7 tools × 6 outcomes × 4 strategies = 168 combos.
+// 7 tools × 7 outcomes × 4 strategies = 196 combos.
 //
 // Cardinality bound: 7 tools (replace_symbol_body, insert_before_symbol,
 // insert_after_symbol, rename_symbol, safe_delete_symbol, replace_in_file,
-// fuzzy_edit) × 6 outcomes (success, no_match, ambiguous_match,
-// validation_failed, ls_error, internal) × 4 strategies (exact,
-// whitespace_normalized, indentation_flexible, none) = 168. `failed` is not
+// fuzzy_edit) × 7 outcomes (success, no_match, ambiguous_match,
+// validation_failed, ls_error, internal, unsupported) × 4 strategies (exact,
+// whitespace_normalized, indentation_flexible, none) = 196. `failed` is not
 // emitted as a strategy — fuzzy.StrategyFailed paths map to outcome=no_match
-// with strategy=none per Q-4 (D-11 amended 2026-04-30).
+// with strategy=none per Q-4 (D-11 amended 2026-04-30). `unsupported` was
+// added in Phase 76 for the structured-edit ablation guards.
 func TestMetrics_CardinalityBounds_EditOutcome(t *testing.T) {
 	m := newMetrics()
 	tools := []string{
@@ -444,7 +453,7 @@ func TestMetrics_CardinalityBounds_EditOutcome(t *testing.T) {
 		"replace_in_file",
 		"fuzzy_edit",
 	}
-	outcomes := []string{"success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal"}
+	outcomes := []string{"success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal", "unsupported"}
 	strategies := []string{"exact", "whitespace_normalized", "indentation_flexible", "none"}
 	for _, tool := range tools {
 		for _, outcome := range outcomes {
@@ -457,8 +466,39 @@ func TestMetrics_CardinalityBounds_EditOutcome(t *testing.T) {
 	if mf == nil {
 		t.Fatal("helix_edit_outcome_total not registered")
 	}
-	if got, max := len(mf.GetMetric()), 168; got > max {
-		t.Errorf("helix_edit_outcome_total cardinality = %d, want ≤ %d (7 tools × 6 outcomes × 4 strategies)", got, max)
+	if got, max := len(mf.GetMetric()), 196; got > max {
+		t.Errorf("helix_edit_outcome_total cardinality = %d, want ≤ %d (7 tools × 7 outcomes × 4 strategies)", got, max)
+	}
+}
+
+// TestMetrics_EditOutcomeInc_UnsupportedCounted asserts that the Phase 76
+// "unsupported" outcome — emitted by the structured-edit ablation guards —
+// is inside the closed enum and therefore COUNTED rather than silently
+// dropped by the EditOutcomeInc default branch (WR-01).
+func TestMetrics_EditOutcomeInc_UnsupportedCounted(t *testing.T) {
+	m := newMetrics()
+	m.EditOutcomeInc("replace_symbol_body", "unsupported", "none")
+	mf := gatherFamily(t, m.Registry(), "helix_edit_outcome_total")
+	if mf == nil {
+		t.Fatal("helix_edit_outcome_total not registered")
+	}
+	var found bool
+	for _, metric := range mf.GetMetric() {
+		var outcome string
+		for _, lp := range metric.GetLabel() {
+			if lp.GetName() == "outcome" {
+				outcome = lp.GetValue()
+			}
+		}
+		if outcome == "unsupported" {
+			found = true
+			if got := metric.GetCounter().GetValue(); got != 1 {
+				t.Errorf("unsupported outcome counter = %v, want 1", got)
+			}
+		}
+	}
+	if !found {
+		t.Error("EditOutcomeInc(\"unsupported\") was dropped; expected it to be counted (WR-01)")
 	}
 }
 

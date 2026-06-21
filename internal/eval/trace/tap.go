@@ -139,6 +139,11 @@ type CCTapResult struct {
 	Events []Event
 	// Usage is populated from the "result" event's usage block.
 	Usage Usage
+	// UsagePresent is true when a "result" event actually carried a usage block
+	// (env.Usage != nil). It is the out-of-band presence signal that lets
+	// downstream token grading distinguish a genuine all-zero provider usage
+	// from "no usage block at all" — Usage alone cannot (D-01/D-03).
+	UsagePresent bool
 	// UnknownTypes counts lines with an unrecognized "type" field (CC version drift).
 	UnknownTypes int
 	// FinalSessionID is the session_id from the "result" event.
@@ -289,6 +294,7 @@ func TapCCStream(path string) (CCTapResult, error) {
 					CacheReadTokens:     env.Usage.CacheReadInputTokens,
 					CacheCreationTokens: env.Usage.CacheCreationInputTokens,
 				}
+				res.UsagePresent = true // a provider usage block was parsed
 			}
 			res.FinalSessionID = env.SessionID
 

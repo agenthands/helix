@@ -1,7 +1,7 @@
 // Bench-only DuckDB FTS5 probe — intentionally lives inside
 // internal/semantic/store/ to honor the STORE-06 noduckdb boundary
 // (cmd/vet-noduckdb). Used exclusively by Phase 64-01's bleve-vs-DuckDB
-// gate benchmark in bench/semantic_bench_test.go.
+// gate benchmark in internal/semantic/bench/semantic_bench_test.go.
 //
 // This file does NOT participate in production code paths. The build tag
 // keeps it out of the standard build; bench tests can still pull it in

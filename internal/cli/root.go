@@ -69,6 +69,17 @@ func NewRootCommand() *cobra.Command {
 	// Admin listener bind address (Phase 10 observability). Empty = disabled.
 	// Must be loopback (127.0.0.1/localhost/::1); non-loopback deferred to v1.3 auth.
 	rootCmd.Flags().String("admin-addr", "", "Loopback admin listener address (e.g. 127.0.0.1:9090); empty = disabled")
+	// Phase 76 ABLATE-05/07 ablation overrides. Default false (opt-in
+	// disable). When set, force-disables the named subsystem regardless of
+	// the resolved profile (CLI > profile > default-off precedence, D-02/D-03).
+	rootCmd.Flags().Bool("disable-lsp-subsystem", false, "Ablation override: force-disable the LSP subsystem (no LS workers, no enrichment)")
+	rootCmd.Flags().Bool("disable-structured-edit-subsystem", false, "Ablation override: force-disable structured-edit tools (replace_symbol_body, fuzzy_edit, insert_*)")
+	// Phase 81 ABLATE-06: force-disable the semantic-store read seam (the
+	// `no_semantic` arm). Build-but-block — the store still builds but every
+	// SemanticLookup read is forced to NoopLookup (D-04). Maps to the NESTED
+	// koanf key semantic_index.bench_disabled (distinct from the top-level
+	// disable_lsp_subsystem path).
+	rootCmd.Flags().Bool("disable-semantic-subsystem", false, "Ablation override: force-disable the semantic-store read seam (reads forced to tree-sitter fallback)")
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
@@ -143,6 +154,9 @@ func runDaemon(cmd *cobra.Command) error {
 	configPath, _ := cmd.Flags().GetString("config")
 	profileName, _ := cmd.Flags().GetString("profile")
 	adminAddr, _ := cmd.Flags().GetString("admin-addr")
+	disableLSP, _ := cmd.Flags().GetBool("disable-lsp-subsystem")
+	disableStructuredEdit, _ := cmd.Flags().GetBool("disable-structured-edit-subsystem")
+	disableSemantic, _ := cmd.Flags().GetBool("disable-semantic-subsystem")
 
 	logger := newLogger(jsonLog)
 
@@ -161,6 +175,22 @@ func runDaemon(cmd *cobra.Command) error {
 	// blank CLI invocation cannot wipe a project config value.
 	if adminAddr != "" {
 		overrides["observability.admin_addr"] = adminAddr
+	}
+	// Phase 76 ABLATE-05/07: only apply the disable overrides when the flag
+	// was explicitly set so a blank invocation cannot wipe a profile/config
+	// value (these are opt-in force-disables; the effective flag is the OR
+	// of CLI and resolved-profile fields at the daemon composition root).
+	if disableLSP {
+		overrides["disable_lsp_subsystem"] = true
+	}
+	if disableStructuredEdit {
+		overrides["disable_structured_edit_subsystem"] = true
+	}
+	// Phase 81 ABLATE-06: only-when-set so a blank invocation cannot clear a
+	// profile value. Note the NESTED koanf path (semantic_index.bench_disabled),
+	// distinct from the top-level disable_lsp_subsystem key above.
+	if disableSemantic {
+		overrides["semantic_index.bench_disabled"] = true
 	}
 
 	cfg, err := config.Load("", configPath, overrides)

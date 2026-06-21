@@ -28,6 +28,7 @@ import (
 	_ "github.com/agenthands/helix/internal/profile"
 	_ "github.com/agenthands/helix/internal/skill/memory"
 	_ "github.com/agenthands/helix/internal/skill/repomap"
+	_ "github.com/agenthands/helix/internal/skill/semantic"
 	_ "github.com/agenthands/helix/internal/skill/workflow"
 
 	"github.com/agenthands/helix/internal/langregistry"

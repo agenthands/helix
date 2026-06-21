@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-lsp-diagnostics-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "lsp_diagnostics",
+  "prompt": "broken.go has three compile errors (an unused import, a wrong return type, and an undefined variable), so the package does not build and TestGreeting cannot run. Run get_diagnostics on broken.go to enumerate every error, then fix each one. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

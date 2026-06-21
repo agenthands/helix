@@ -30,6 +30,19 @@ type Config struct {
 	// guard `daemon.SemanticStore() == nil`.
 	Enabled bool `koanf:"enabled"`
 
+	// BenchDisabled is the DISTINCT ablation gate for the `no_semantic` bench
+	// arm (Phase 81 ABLATE-06, D-01). It is NOT a reuse of Enabled: when
+	// BenchDisabled is true the daemon STILL builds and maintains the semantic
+	// bundle/store (build-but-block, D-04) — but every SemanticLookup read
+	// consumer is forced to `integ.NoopLookup{}` and a disabled ConfigGate so
+	// zero DuckDB semantic-store reads occur during a `no_semantic` run.
+	// Default false = subsystem ENABLED (opt-in disable, D-02). Resolved once
+	// at the daemon composition root (Plan 81-04) where it is OR'd with the
+	// profile field (Profile.DisableSemanticSubsystem) and the
+	// `--disable-semantic-subsystem` CLI override (precedence CLI > profile >
+	// default-off, D-03). The koanf key is the NESTED `semantic_index.bench_disabled`.
+	BenchDisabled bool `koanf:"bench_disabled"`
+
 	// Store holds the DuckDB embedded fact-store settings (path, memory,
 	// thread budget). See SPEC-DRAFT.md §25.store.*.
 	Store StoreConfig `koanf:"store"`

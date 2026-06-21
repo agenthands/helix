@@ -13,30 +13,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always run go vet and go test before completing any Go task.**
 
-## Legacy Python Commands (run from legacy/ directory)
-
-- `cd legacy && uv run poe format` - Format Python code (RUFF)
-- `cd legacy && uv run poe type-check` - Run mypy type checking
-- `cd legacy && uv run poe test` - Run Python tests with default markers (excludes java/rust)
-- `cd legacy && uv run poe test -m "python or go"` - Run specific language tests
-- `cd legacy && uv run poe lint` - Check Python code style without fixing
-
-**Test Markers:**
-Available pytest markers for selective testing:
-- `python`, `go`, `java`, `rust`, `typescript`, `vue`, `php`, `perl`, `powershell`, `csharp`, `elixir`, `terraform`, `clojure`, `swift`, `bash`, `ruby`, `ruby_solargraph`
-- `snapshot` - for symbolic editing operation tests
-
 ## Project
 
 **Helix** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
 
-Helix provides 41+ MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
+Helix provides 53 MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
 
 Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need symbol-level operations — go-to-definition, find references, rename across files, replace symbol body, blast-radius analysis — backed by real language servers with warm persistent caching, a ranked RepoMap for structural context, and fuzzy editing that tolerates LLM output drift.
 
 **Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, serves ranked structural context on demand, and exposes semantic code operations as agent tools — all from a single binary with one-command client setup.
 
-**Legacy reference:** The `legacy/` directory contains the original Python Serena as a read-only reference. All active development is in Go. Helix is a standalone Go product originally inspired by Python Serena, not a port or rewrite. The product was renamed Serena → Helix at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes); the `legacy/` tree retains the historical Serena name.
+**Lineage:** Helix is a standalone, Go-native product — not a fork, port, or rewrite. It is partially inspired by prior art including Serena, Aider, Graphify, and others, but its kernel, daemon, and tooling are its own. The project carried an earlier name through v1.8 and was renamed to `helix` at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes). The original Python reference codebase (formerly under `legacy/`) has been removed from the tree; see git history prior to v1.12 if you need it.
 
 ## Architecture
 
@@ -143,7 +130,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - Skill tools use `ToolProvider.Tools()` returning `[]*mcp.ToolDef`, daemon registers centrally
 - Kernel tools wrapped as thin skill adapters for uniform ToolProvider interface
 - "Skills for composition, tool names for execution"
-- Full tool inventory (41+ callable tools with profile/mode matrix) is auto-generated in `README.md`; do not hand-edit the tool table
+- Full tool inventory (53 callable tools with profile/mode matrix) is auto-generated in `README.md`; do not hand-edit the tool table
 
 ### Skill System
 - Caddy-style `init()` registration: `skill.Register(&MySkill{})`
@@ -191,7 +178,7 @@ LazyInit MUST run first so the workspace is activated before `TelemetryMiddlewar
 - **Language**: Go -- single binary, native concurrency
 - **Protocol**: MCP (Model Context Protocol) -- primary interface
 - **LSP only**: No JetBrains or proprietary backends
-- **Repo**: Same repo, Python in `legacy/`
+- **Repo**: Go-only; the historical Python reference tree has been removed (see git history)
 
 ## GSD Workflow Enforcement
 

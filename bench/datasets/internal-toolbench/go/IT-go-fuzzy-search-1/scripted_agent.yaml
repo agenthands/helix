@@ -1,0 +1,17 @@
+# Scripted agent for IT-go-fuzzy-search-1 (capability: fuzzy_search, D-05).
+#
+# The single step EXPLICITLY calls fuzzy_edit. The `search` text uses SPACE
+# indentation, but price.go indents the body with a TAB — so an exact match
+# would miss. fuzzy_edit's whitespace-normalized strategy (the exercised
+# capability) matches it and replaces `return price` with the 10% discount.
+# price_test.go fails unless the body was actually edited, so the test requires
+# the fuzzy match to have succeeded (D-05).
+#
+# fuzzy_edit args (internal/kernel/fileops.FuzzyEditArgs): path/search/replacement.
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only).
+steps:
+  - tool: fuzzy_edit
+    args:
+      path: price.go
+      search: "func Discount(price int) int {\n    return price\n}"
+      replacement: "func Discount(price int) int {\n\treturn price * 9 / 10\n}"

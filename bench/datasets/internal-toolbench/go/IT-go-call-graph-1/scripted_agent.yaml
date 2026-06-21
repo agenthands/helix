@@ -1,0 +1,42 @@
+# Scripted agent for IT-go-call-graph-1 (capability: call_graph, D-05 EXEMPLAR).
+#
+# Step 1 EXPLICITLY calls get_call_hierarchy on the Compute declaration
+# (compute.go line 14, the "Compute" identifier at column 6) with
+# direction=incoming to enumerate every caller (RunA, RunB, RunC). It is
+# expect_error:true store-OFF (no warm gopls; see the inline note). The following
+# replace_in_file steps add a zero-divisor guard at EVERY surfaced call site —
+# compute_test.go panics on any unguarded caller, so the test requires the FULL
+# incoming-call hierarchy to be acted on (D-05).
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only). Patterns are
+# exact literal anchors (is_regex default false).
+steps:
+  - tool: get_call_hierarchy
+    args:
+      path: compute.go
+      line: 14
+      column: 6
+      direction: incoming
+    # get_call_hierarchy is LSP-backed (gopls). In the store-OFF hermetic
+    # scripted bench path there is no WARM gopls for a fresh per-cell clone, so
+    # this returns an `internal` result — deterministic (never flakes), and the
+    # step still names the capability tool by-construction (D-05). The
+    # replace_in_file guards below do the store-off-stable grading work. The
+    # store-ON path (Plan 04 wiring) resolves the hierarchy; the scripted smoke
+    # does not require it.
+    expect_error: true
+  - tool: replace_in_file
+    args:
+      path: compute.go
+      pattern: "func RunA(divisor int) int {\n\treturn Compute(divisor)\n}"
+      replacement: "func RunA(divisor int) int {\n\tif divisor == 0 {\n\t\treturn -1\n\t}\n\treturn Compute(divisor)\n}"
+  - tool: replace_in_file
+    args:
+      path: compute.go
+      pattern: "func RunB(divisor int) int {\n\treturn Compute(divisor)\n}"
+      replacement: "func RunB(divisor int) int {\n\tif divisor == 0 {\n\t\treturn -1\n\t}\n\treturn Compute(divisor)\n}"
+  - tool: replace_in_file
+    args:
+      path: compute.go
+      pattern: "func RunC(divisor int) int {\n\treturn Compute(divisor)\n}"
+      replacement: "func RunC(divisor int) int {\n\tif divisor == 0 {\n\t\treturn -1\n\t}\n\treturn Compute(divisor)\n}"

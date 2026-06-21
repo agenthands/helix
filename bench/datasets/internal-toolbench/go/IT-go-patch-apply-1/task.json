@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "patch_apply",
+  "prompt": "The Double function in sum.go is supposed to return twice its argument but currently returns the argument unchanged, so TestDouble fails. Edit sum.go so Double returns x * 2, then ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

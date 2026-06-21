@@ -1,288 +1,324 @@
-# Technology Stack — v1.10 Live Semantic Index (Additions)
+# STACK.md — v1.12 Bench Stack & Tool Evaluation (Additions)
 
-**Project:** Helix v1.10 Live Semantic Index
-**Researched:** 2026-05-03
-**Scope:** NEW dependencies only — existing v1.9 stack (Go 1.25.1, MCP SDK, koanf, modernc.org/sqlite, go-tree-sitter, gRPC, Prometheus, OTel, cobra, koanf, fsnotify v1.9.0) is fixed and not re-evaluated.
+**Project:** Helix v1.12 Bench Stack & Tool Evaluation
+**Researched:** 2026-06-13
+**Scope:** NEW dependencies / runtime requirements for the new `bench/` tree only. The existing v1.11 stack (Go 1.25.1, MCP SDK, koanf v2, modernc.org/sqlite, duckdb-go v2.10502.0, go-tree-sitter + 23 grammars, gRPC, Prometheus, OTel, cobra, fsnotify v1.9.0, anthropic-sdk-go v1.35.0, openai-go v1.12.0, tiktoken-go/tokenizer **already chosen for `eval/` at v1.10**, bluekeyes/go-gitdiff **already chosen for `eval/` at v1.10**, sigstore-go, gonum test-only) is fixed and not re-evaluated.
+
+**Mandatory upstream-tool tag for every adapter row in this doc:**
+- `subprocess-shellout` — run upstream's reference harness as-is via `os/exec` (lowest effort, highest fidelity)
+- `dataset-loader-only` — pull dataset, run our own scorer (medium effort, full control over modes)
+- `go-native-rewrite` — reimplement the harness in Go (highest effort; only if the upstream harness is unusable from outside Python or we need deep ablation hooks)
 
 ---
 
 ## TL;DR — Recommended Additions
 
-| Component | Library | Version | CGO | Confidence |
-|-----------|---------|---------|-----|------------|
-| Fact store driver | `github.com/duckdb/duckdb-go` | v2.10502.0 (DuckDB 1.5.2) | **REQUIRES CGO=1** | HIGH |
-| File watcher | `github.com/fsnotify/fsnotify` (already in go.mod) | v1.9.0 | none | HIGH |
-| Graph algorithms (validation only) | `gonum.org/v1/gonum` | v0.16.x | none | HIGH |
-| PageRank / clustering (production) | hand-rolled in `internal/semantic/rank/` and `internal/semantic/graph/` | — | none | HIGH |
-| Pipeline DAG | stdlib only (Kahn topo sort, ~80 LOC) | — | none | HIGH |
-| Token counting (eval) | `github.com/tiktoken-go/tokenizer` | v0.6.x | none (pure Go, embedded vocab) | MEDIUM |
-| Patch apply (eval) | `github.com/bluekeyes/go-gitdiff` | v0.8.x | none | MEDIUM |
+| Component | Library / Tool | Version | CGO | Runtime needed | Confidence |
+|-----------|----------------|---------|-----|----------------|-----------|
+| Docker SDK (container orchestration for SWE-bench / Multi-SWE-bench / Terminal-Bench) | `github.com/docker/docker` (engine-api `client`) | v27.x | no (Unix socket / TCP) | Docker Engine ≥ 24 on the host | HIGH |
+| Container test ergonomics (optional, dev-time only) | `github.com/testcontainers/testcontainers-go` | v0.36.x (Apr 2026) | no | Docker Engine | MEDIUM (only if Go-side container reuse becomes painful) |
+| SWE-bench harness | upstream `swebench` PyPI | v4.x (2026) | n/a — `subprocess-shellout` | Python 3.11+, Docker Engine | HIGH |
+| Multi-SWE-bench harness | upstream `multi-swe-bench` (github) | main (no PyPI release) | n/a — `subprocess-shellout` | Python 3.11+, Docker Engine | HIGH |
+| Terminal-Bench 2.0 + Harbor | upstream `terminal-bench` (`tb` CLI) | 2.x (Nov 2025) | n/a — `subprocess-shellout` | Python (uv/pipx), Docker Engine | HIGH |
+| Aider Polyglot dataset | `Aider-AI/polyglot-benchmark` repo | shallow git clone, pin sha | n/a — `dataset-loader-only` | per-language toolchains | HIGH |
+| CrossCodeEval dataset | HF `crosscodeeval` (jsonl) | v1 | n/a — `dataset-loader-only` | none (completion-only scoring) | HIGH |
+| RepoBench dataset | HF `tianyang/repobench_python_v1.1` / `_java_v1.1` | v1.1 | n/a — `dataset-loader-only` | none (completion-only scoring) | HIGH |
+| HF dataset/parquet fetcher | `github.com/gomlx/go-huggingface` | v0.x | no | none | MEDIUM |
+| Parquet reader (lower-level fallback) | `github.com/apache/arrow-go/v18` (already indirect in go.sum) | v18.5.1 | no | none | HIGH |
+| RAG baseline — embedding provider | OpenAI `text-embedding-3-small` via existing `openai-go` v1.12.0 (primary); Ollama `nomic-embed-text` over HTTP for offline (secondary) | n/a | no | network OR local Ollama daemon | HIGH |
+| RAG baseline — in-process vector store | `github.com/philippgille/chromem-go` | v0.7.x | no (zero deps) | none | HIGH |
+| Bootstrap CIs, percentiles, BCa | `gonum.org/v1/gonum/stat` (promoted from test-only to runtime for bench/) + ~40 LOC BCa helper in `bench/evaluators/statx` | v0.16.x | no | none | HIGH |
+| Per-language test runner shellouts | stdlib `os/exec` + per-language toolchain (already runs in CI) | n/a | no | go, python, node, java (jdk), dotnet, msvc/clang/cmake, cargo, rustc | HIGH |
+| Cost table format | static YAML in `bench/datasets/cost-table.yaml`, parsed via koanf v2 (existing) | n/a | no | none | HIGH |
+| Trace merging | reuse existing OTel pipeline + Phase 67's `internal/eval/trace` merger; no new lib | n/a | no | none | HIGH |
+| Token counting | `github.com/tiktoken-go/tokenizer` (already in eval/) v0.6.x **+** `anthropic-sdk-go` server-side count | v0.6.0 | no | none / network for exact Claude | HIGH |
+| Patch apply (SWE-bench-style prediction patches) | `github.com/bluekeyes/go-gitdiff` (already in eval/) v0.8.x | v0.8.0 | no | none | HIGH |
 
-**CGO posture impact:** v1.10 BREAKS the CGO=0 stub policy at the runtime level for the semantic-index feature. Must extend the existing Phase 51.1 stub pattern (`//go:build cgo` / `!cgo`) to `internal/semantic/store/duckdb.go` so CGO=0 builds compile but `semantic_index.enabled=true` produces a structured "feature requires CGO=1 build" error at activation. This is a continuation of policy, not a violation — the stub path was *designed* for exactly this case.
-
----
-
-## 1. DuckDB Go Bindings
-
-### Recommended: `github.com/duckdb/duckdb-go` v2.10502.0
-
-**Why this one:**
-- Official DuckDB org repository — `marcboeker/go-duckdb` was donated to DuckDB Labs and v2.5.0+ lives at `duckdb/duckdb-go`. Use the canonical path going forward; pin to a specific tag.
-- Versioning encodes upstream DuckDB: `v2.MAJOR_MINOR_PATCH.x` → `v2.10502.0` ⇒ DuckDB 1.5.2.
-- Implements `database/sql.Driver` (works with the existing `database/sql` patterns we already use for `modernc.org/sqlite`), plus a lower-level Appender API for bulk-loading symbol/reference rows during full reindex.
-- Pre-built static libs bundled for darwin/{amd64,arm64}, linux/{amd64,arm64}, windows/amd64 — matches our 6-archive goreleaser matrix exactly. **No FreeBSD** (dropped at v2; we don't ship FreeBSD).
-- Default build links the bundled static lib — no `libduckdb.so` required on user systems. Single-binary property preserved at the goreleaser archive level.
-
-**CGO Reality (HARD CONSTRAINT):**
-- `CGO_ENABLED=1` REQUIRED. There is no pure-Go DuckDB driver and there will not be one — DuckDB itself is a 200kLOC C++ analytical engine; the maintainers explicitly rejected a native-Go port discussion (see Discussion #232).
-- Cross-compilation requires `CC=<cross-toolchain> CGO_ENABLED=1`. Goreleaser already runs per-arch builders for the v1.9 release matrix, so this is incremental, not net-new infra.
-- Build tags: default = bundled static link (what we want). `-tags=duckdb_use_lib` (system dynamic link) and `-tags=duckdb_use_static_lib` (custom prebuilt) are alternatives we should NOT use — bundled static is the single-binary path.
-- `-tags=duckdb_arrow` is **opt-in** at v2 — leave OFF (Arrow connections are not pool-safe and we don't need Arrow IPC).
-
-**Concurrency model:**
-- Single DuckDB database file is a process-wide singleton. Use one `*sql.DB` per workspace, with `MaxOpenConns=N` to leverage `database/sql`'s pool.
-- DuckDB is *single-writer, multi-reader* at the file level. Live overlay writes must be serialized (single goroutine queue feeding the writer) — fits ADR-002's overlay model naturally. Snapshot reads run on read-only connections.
-- Snapshot/checkpoint operations (`CHECKPOINT`, `EXPORT DATABASE`) require quiescence — coordinate with the live update queue's compaction trigger.
-
-### Alternatives Considered (and rejected)
-
-| Alternative | Why Not |
-|-------------|---------|
-| `marcboeker/go-duckdb` v1 | Donated upstream; v1 is unmaintained going forward. Use `duckdb/duckdb-go`. |
-| `duckdb/duckdb-go-bindings` | Lower-level CGO-only bindings, no `database/sql` driver. Too much surface area for us. |
-| Pure-Go SQLite + manual columnar | We already use `modernc.org/sqlite` for FTS5 memory. Re-purposing for analytical workloads (200k symbols × millions of references with PageRank-friendly aggregation) loses 10–100× on the queries SPEC §8 implies. ADR-001 explicitly chose DuckDB; revisiting that is out of scope. |
-| `chDB-go` (ClickHouse embedded) | Same CGO requirement as DuckDB but heavier runtime, less mature Go binding, and no `database/sql` driver. No advantage. |
-| Gonum-based in-memory store | Loses durability (ADR-002 requires committed snapshots survive restart) and reproducibility (ADR-007 eval needs deterministic snapshots). |
-| BadgerDB / Pebble (KV) | Wrong shape — we need analytical SQL with joins across symbols/references/edges, not KV. |
-
-**Decision rationale:** ADR-001 already made this call. The research question for v1.10 is *which DuckDB binding*, not *whether DuckDB*. Answer: official `duckdb/duckdb-go` v2.10502.0, default static-bundled build.
-
-### CGO Policy Reconciliation
-
-v1.9 Phase 51.1 established the `//go:build cgo` stub pattern so `CGO_ENABLED=0` builds still compile (with a runtime refusal). v1.10 extends that pattern:
-
-```
-internal/semantic/store/duckdb.go        // //go:build cgo
-internal/semantic/store/duckdb_stub.go   // //go:build !cgo
-```
-
-The stub path returns a `Kind: Unsupported` error when `semantic_index.enabled=true` on a CGO=0 build, with remediation text pointing at the CGO=1 install instructions. CGO=0 builds keep working for everything except the new semantic feature — same shape as the v1.9 tree-sitter stub. **Document this in EMBED-AUDIT.md and CONTRIBUTING.md.**
+**Runtime posture impact (single most important issue):**
+v1.12 introduces three **non-Go runtime dependencies on the bench host**: Python 3.11+ (for upstream SWE-bench / Multi-SWE-bench / Terminal-Bench harnesses), Docker Engine (for those same harnesses' per-instance environment images), and per-language toolchains (Go/Python/Node/JDK/dotnet/clang+cmake/cargo) for ToolBench test execution. None of these enter the `helix` shipping binary — they are **operator-side** requirements for the `helix-bench` binary's `run` subcommand. This must be called out in `bench/BENCH.md` the way `eval/EVAL.md` calls out ZDR. The single-binary distribution rule of the `helix` daemon is **not** violated; the bench harness is an out-of-band benchmarking tool.
 
 ---
 
-## 2. File Watcher
+## 1. Container Orchestration (SWE-bench, Multi-SWE-bench, Terminal-Bench 2.0)
 
-### Recommended: `github.com/fsnotify/fsnotify` v1.9.0 (already vendored)
+### Recommended: subprocess-shellout to upstream Python harnesses + Docker Engine via `docker/docker` client
 
-**Why no change:**
-- Already in `go.mod` (used by memory FTS index watcher). Adding a second watching library is gratuitous.
-- Cross-platform backend selection is automatic: inotify (Linux), FSEvents (macOS), kqueue (BSD), ReadDirectoryChangesW (Windows).
-- v1.9.0 (current) is the actively maintained line.
+**Why subprocess-shellout, not Go-native rewrite:**
 
-**Critical gaps fsnotify imposes (we own the workarounds):**
+- SWE-bench's evaluation harness is its own quality gate — it ships a 3-layer Docker image hierarchy (base → environment → instance) covering ~60 Python repo environments with exact dep pins. Reimplementing this in Go would be a multi-month project that reproduces, but does not improve, the upstream behavior. Worse, results would not be comparable to other leaderboard entries unless we bit-for-bit reproduce the upstream's harness behavior — which is itself the canonical definition.
+- The upstream harness is invoked as `python -m swebench.harness.run_evaluation --dataset_name ... --predictions_path ... --run_id ...`. This is well-defined and stable.
+- Multi-SWE-bench uses essentially the same pattern: `python -m multi_swe_bench.harness.run_evaluation --config <config.json>` and produces `final_report.json`. It is a Multi-SWE-bench-org fork of the SWE-bench harness with Java/TS/JS/Go/Rust/C/C++ environment images.
+- Terminal-Bench 2.0 ships its own `tb` CLI (`uv tool install terminal-bench` per upstream) and the new Harbor container-test framework. Same shellout pattern.
 
-| Gap | Impact | Mitigation |
-|-----|--------|------------|
-| No recursive watch on Linux/Windows | Each subdirectory is a separate watch FD. 10k-file repo ≈ ~1k–3k dirs. | Walk repo once at start, register each dir; on `Create`(dir) events, register the new dir; on `Remove`(dir), unregister. Mirrors the pattern in `rfsnotify` but in-tree (≈150 LOC). |
-| Linux `inotify` per-user watch limit (`fs.inotify.max_user_watches`, default 8192–524288) | Repos with >8k dirs blow the limit on stock Ubuntu. | (a) Detect `ENOSPC` from fsnotify and degrade to manifest polling for that workspace. (b) Surface the limit in `get_semantic_graph_status` and include a sysctl-tuning runbook. (c) Already covered by SPEC §27.2 "Watcher Misses" mitigation. |
-| macOS FSEvents coalesces and may drop events under load | Edit storms can lose events | SPEC §27.2 already mandates "periodic manifest check" + content-hash check on query. Implement these as belt-and-suspenders. |
-| Symlinks not followed automatically | `node_modules`-style symlinked sub-projects miss events | Resolve symlinks during the initial walk, watch the resolved target if inside workspace; otherwise skip and document. |
-| No event-ordering guarantees | Rename = (Remove, Create) pair, possibly out of order | Coalesce by path with debounce (SPEC §16.2 already specifies `debounce_ms: 250`, `bulk_change_threshold: 200`). |
+**Helix's role in the loop:** the agent (Helix-enabled or baseline) produces `predictions.jsonl` (one prediction per task, where each prediction is a unified diff against the instance's base commit). The bench harness then shells out to the upstream Python harness, which spins the per-instance Docker container, applies the predicted patch, runs the test patch, and produces a results JSON. Helix's contribution is on the **prediction generation** side — and that is where the 6-mode ablation matrix lives.
+
+**Docker SDK choice:** for our own container ops (Terminal-Bench task spawn, ToolBench per-language test isolation if we choose container isolation, bench-side cleanup), use the official Docker engine API client `github.com/docker/docker/client`. Tagged release v27.x corresponds to Docker 27.x. This is the same client used by goreleaser internally and is the canonical Go SDK. **Do not** pull testcontainers-go into the runtime path — its strength is dev-time test ergonomics with reapers, networks, and waitstrategies; for our hands-on container orchestration it adds abstraction we don't need. Keep it as a **test-time-only** dependency if at all (e.g., to spin a per-test postgres for harness-of-the-harness unit tests).
+
+**ToolBench per-language isolation:**
+- **Default:** no container — run the per-language test runner directly in a temp dir. Same model as Phase 67's sandbox isolation (`internal/eval/sandbox`).
+- **Optional `--container-isolate`:** wrap each (task × mode) in a thin Docker container using a curated per-language base image. Only flip on for hostile-task corpora; default off for speed.
 
 ### Alternatives Considered
 
 | Alternative | Why Not |
 |-------------|---------|
-| `andreaskoch/go-fswatch` (polling) | Avoids inotify limits but O(N) polling cost on 10k files. Dead-last on latency. Useful only as a fallback. |
-| `rjeczalik/notify` | Has recursive watch on macOS/Windows but Linux still emulates by walk-and-register, and the project is much less actively maintained than fsnotify. Not worth the swap. |
-| `rfsnotify` wrapper | Thin wrapper over fsnotify; we'd inherit the same fd-per-dir cost AND a third-party dep. Implement the wrapper logic in-tree instead. |
-
-**Decision:** Keep fsnotify v1.9.0. Build the recursive walker + ENOSPC fallback in `internal/semantic/live/watcher.go` (already in SPEC §6 package layout). No new dependency.
+| Go-native SWE-bench harness | 6+ months of work to reproduce environment images, would not be comparable to upstream-published numbers, and locks us into maintaining 60+ environment fingerprints forever. |
+| `testcontainers-go` in runtime path | Adds ryuk reaper, network-attach magic, waitstrategy abstractions we don't need for batch runs. Strictly more code in prod hot path. |
+| podman / containerd direct | Most upstream harnesses assume `docker` socket; mismatched container runtime is a foot-gun. Operators wanting podman can use the podman-docker shim. |
+| `nerdctl` | Same as above. |
+| `swebench` PyPI 2.0.2 (pinned) | Older releases (`pip install swebench==2.0.2`) work but lack post-Verified curation/harness improvements; pin to current v4.x stable. |
 
 ---
 
-## 3. Graph Algorithms
+## 2. Public Benchmark Adapters — Per-Benchmark Disposition
 
-### Recommended: hand-rolled in production, gonum for **validation/testing only**
+| Benchmark | Tasks | Languages | Disposition | Helix's adapter does |
+|-----------|-------|-----------|-------------|----------------------|
+| **SWE-bench Verified** | 500 | Python | `subprocess-shellout` | (a) load HF `SWE-bench/SWE-bench_Verified` via `gomlx/go-huggingface` parquet reader; (b) drive Helix-enabled or baseline agent to produce `predictions.jsonl`; (c) shell out to upstream `python -m swebench.harness.run_evaluation`; (d) ingest `<run_id>.json` results into bench result schema. |
+| **Multi-SWE-bench** | 1,632 (full) / 400 (mini) | Java, TS, JS, Go, Rust, C, C++ (full); +Python in mini | `subprocess-shellout` | Same loop as SWE-bench but with `python -m multi_swe_bench.harness.run_evaluation --config <config.json>`. Per-language ablation slicing built into our reporter, not the upstream harness. |
+| **Terminal-Bench 2.0** | 89 | shell / polyglot | `subprocess-shellout` | Drive agent through Harbor's `tb run` CLI, which spawns containers and applies the agent's terminal commands. Score from `tb`'s emitted JSON. |
+| **Aider Polyglot** | 225 | C++, Go, Java, JS, Python, Rust | `dataset-loader-only` | Shallow clone `Aider-AI/polyglot-benchmark` at a pinned sha, treat each Exercism task as a (problem.md, stub source, hidden test) triple. Agent produces edits; we run the per-language test command ourselves (Go: `go test`, Python: `pytest`, etc.). 2-attempt protocol baked into our runner (re-prompt with test stderr on fail). |
+| **CrossCodeEval** | ~10k examples (filtered) | Python, Java, TS, C# | `dataset-loader-only` | JSONL completion task. Score is **EM** + **edit similarity** + **identifier match** (per CCE paper). No test execution required — this is line-completion, not patch-apply. Adapter purely fetches dataset and runs our own scorer. |
+| **RepoBench** | 1,075 Python + 594 Java test instances | Python, Java | `dataset-loader-only` | Three sub-tasks (RepoBench-R retrieval / RepoBench-C completion / RepoBench-P pipeline). EM + edit-similarity scoring, no test execution. Load via HF `tianyang/repobench_python_v1.1` and `_java_v1.1`. |
+| **MultiPL-E / HumanEval-X / McEval** (smoke only) | varies | many | `dataset-loader-only` | Per PROJECT.md "Out of scope for v1.12 primary scoring" — kept as health-check smoke only. |
 
-**Production code (in `internal/semantic/rank/` and `internal/semantic/graph/`):**
+**Practical effort budget the roadmapper should plan around:**
 
-| Algorithm | Why hand-rolled |
-|-----------|-----------------|
-| Weighted PageRank (multiple projections) | SPEC §18.2 specifies edge-weight + damping + sparse iteration. Existing repomap PageRank is ~60 LOC. v1.10 needs (a) per-projection weight, (b) personalized restart vector, (c) **incremental local repair** (SPEC §18.4). Gonum's `network.PageRank` does (a) but not (b) or (c). Forking it is more code than writing it. |
-| Personalized PageRank | Not in gonum. Custom restart vector ⇒ trivial extension of weighted PR (~20 LOC delta). |
-| Incremental local PageRank repair | Not in gonum. Bounded-BFS frontier + local power iteration. Custom — this is core v1.10 IP per ADR-005. |
-| Weak components | Stdlib-friendly union-find, ~40 LOC. Gonum has it but we don't want to load gonum's `graph.Graph` adapter just for this. |
-| Label propagation | SPEC §19.3 needs a specific tie-break + freshness-aware variant. Not in gonum. ~80 LOC. |
-| Bounded BFS / reverse reachability | Stdlib. ~30 LOC each. |
+- `subprocess-shellout` adapter: ≈ 1 wave (1–2 weeks) per benchmark. Mostly dataset wiring, predictions.jsonl shaping, results ingestion, error handling on upstream's Docker layer.
+- `dataset-loader-only` adapter: ≈ 1–2 waves per benchmark. The work is in the per-task **runner** (must invoke real per-language test commands), not in the loader. Aider Polyglot is the biggest because of 6-language test runners.
 
-ADR-005 explicitly says: *"Implement hot graph operations directly in Go… Gonum may be used for validation or non-critical algorithms, but not as the core storage or graph model."* This research confirms that's the right call:
-- Gonum's graph model uses `int64` node IDs through its `graph.Node` interface — forcing a translation layer between our compact symbol IDs (FNV-64 of stable key, SPEC §11.1) and gonum's internal IDs.
-- Gonum's `network.PageRank` is dense-vector-friendly; our graphs are sparse and projection-filtered. We'd be adapting around it more than benefiting from it.
+---
 
-### Recommended: `gonum.org/v1/gonum` v0.16+ — **test-only dependency**
+## 3. Embedding + Vector RAG (the `baseline_rag` Mode)
 
-Use cases:
-- Cross-check our weighted PageRank against `network.PageRank` on small synthetic graphs as an oracle in unit tests.
-- `topo.ConnectedComponents` as an oracle for our weak-component impl.
-- Validate clustering output against `community.Modularize` on small fixtures.
+The `baseline_rag` ablation is essential — it answers "does Helix beat a competent grep + embedding-RAG baseline, not just a grep-only baseline?" Without it, every "we win" claim is suspect. This means the bench harness must **ship a real RAG baseline** that we are comfortable shipping with the binary.
 
-This keeps gonum out of the runtime closure (it pulls in a chunk of `gonum/blas/cgo`-adjacent transitive deps if you're not careful — but the pure-Go subset under `gonum/graph` and `gonum/graph/network` does NOT require CGO).
+### Recommended primary: OpenAI `text-embedding-3-small` via existing `openai-go` v1.12.0
+
+**Why:**
+- `openai-go` is already in `go.mod`. No new dep, no new auth surface area.
+- `text-embedding-3-small` (1536-dim, $0.02/1M tokens as of 2026) is the cost-effective default and is what every "RAG baseline" in the literature uses.
+- Real, comparable to what an agent integrator would actually wire up.
+
+### Recommended offline fallback: Ollama `nomic-embed-text` via stdlib `net/http`
+
+**Why:**
+- No new dep — Ollama exposes `/api/embed`; a 30-LOC client in `bench/runners/embed/ollama.go` suffices.
+- Lets the bench harness run airgapped (operator must have Ollama installed, but that's a documented prereq, not a Helix install requirement).
+- 768-dim, runs on CPU, "good enough" embedding for RAG-baseline purposes.
+
+### Recommended in-process vector store: `philippgille/chromem-go` v0.7.x
+
+**Why:**
+- Embeddable, **zero third-party dependencies** (matches our "be careful what enters go.mod" discipline).
+- In-memory with optional persistence — exactly the shape we want (per-bench-run index, throwaway).
+- Chroma-like API surface makes it familiar.
+- No CGO. Single binary preserved.
+
+### Alternatives Considered
+
+| Alternative | Why Not |
+|-------------|---------|
+| FAISS / `bleve` semantic vectors | bleve is already in go.sum (semantic store v1.10). Reusing it for the **RAG baseline** would let our `baseline_rag` mode read our own production indexes — that taints the comparison. The whole point of `baseline_rag` is to be a *naive* baseline. Keep it separate. |
+| `weaviate-go-client` | Weaviate is not embeddable in Go; would require operator to stand up a Weaviate server. Inflates the bench host requirement; we already have Docker as a hard prereq from SWE-bench. |
+| `milvus` / pinecone | External vector DB; same problem. |
+| Pure-Go `all-MiniLM-L6-v2` via `clems4ever/all-minilm-l6-v2-go` | Tempting (no network, no Ollama). But the project is single-maintainer, pre-1.0, and embedding quality differs from the standard baselines. Operators wanting fully offline can use Ollama. |
+| `gomlx/onnx-gomlx` + sentence-transformers ONNX | Promising but immature for production embeddings as of 2026; reopen path captured for v1.13+. |
+
+**Decision:** OpenAI primary, Ollama secondary, chromem-go as the vector store. RAG mode docs note the precise embedding model + index params so the baseline is reproducible.
+
+---
+
+## 4. Statistics — Bootstrap CIs, pass@k, BCa
+
+### Recommended: `gonum.org/v1/gonum/stat` + ~40 LOC BCa helper
+
+**Promotion from test-only to runtime:**
+v1.10 STACK explicitly scoped gonum to test-only oracle use. For v1.12, the **bench harness** (a new binary, `cmd/helix-bench`) needs `gonum/stat` in runtime for percentile, mean, variance, and as the base layer for bootstrap. This does **not** affect the main `helix` daemon binary — `cmd/helix` does not import `cmd/helix-bench`'s packages. The gonum-not-in-prod rule (ADR-005 from v1.10) was about the kernel/semantic graph hot path; the bench evaluator is not a hot path and is a separate binary.
+
+**What we hand-roll on top:**
+- **Bootstrap percentile CI**: ~20 LOC over `math/rand/v2` + `gonum/stat.Quantile`.
+- **BCa (bias-corrected accelerated)**: ~40 LOC. Needed for skewed metrics (cost-per-solved, edit-distance) where percentile CI is biased.
+- **pass@k**: closed-form from `(c, n, k)` per the HumanEval paper: `pass@k = 1 - C(n-c, k)/C(n, k)`. ~10 LOC.
+- **N≥3 per task** is enforced in the matrix runner, not the stat library.
+
+### Alternatives Considered
+
+| Alternative | Why Not |
+|-------------|---------|
+| Pure stdlib | Would have to reimplement quantile, mean-variance one-pass, etc. Gonum is the canonical Go scientific lib for this; the cost of bringing it in is ~10 MB of go.sum noise, no runtime weight. |
+| Port Python `scipy.stats.bootstrap` | Translation toil with no upside. |
+| `aclements/go-moremath/stats` | Excellent for benchmark stats (it backs `benchstat`), but its bootstrap surface is narrow — UTests, not arbitrary metric resamples. Use gonum. |
+
+---
+
+## 5. Per-Language Test Runners (ToolBench, 8 Tier-1 languages)
+
+ToolBench is the deterministic core. Each language needs a real test invocation per capability test. The bench runner shells out via stdlib `os/exec` — **no per-language Go bindings**.
+
+| Language | Test invocation | Toolchain prereq | Helix's adapter detects via |
+|----------|----------------|-----------------|------------------------------|
+| Go | `go test ./...` with `-json` | go 1.25+ | `go.mod` |
+| Python | `pytest -q --json-report` (`pytest-json-report`) | python 3.11+, pip | `pyproject.toml` / `setup.py` / `requirements*.txt` |
+| TypeScript | `npx jest --json` or `npx vitest --reporter=json` | node 20+, npm/pnpm | `package.json` + `tsconfig.json` |
+| JavaScript | `npx jest --json` or `npx mocha --reporter json` | node 20+, npm/pnpm | `package.json` (no tsconfig) |
+| Java | `mvn -q test -Dsurefire.useFile=false` or `gradle test --console=plain` (parse Surefire XML) | JDK 17+, Maven 3.9+ or Gradle 8+ | `pom.xml` / `build.gradle` |
+| C# | `dotnet test --logger "trx;LogFileName=test-results.trx"` | .NET 8 SDK | `*.csproj` / `*.sln` |
+| C++ | `cmake -S . -B build && cmake --build build && ctest --output-on-failure -T Test` (parse CTest XML) | CMake 3.25+, clang/gcc/msvc | `CMakeLists.txt` |
+| Rust | `cargo test --message-format=json` | rustc 1.80+, cargo | `Cargo.toml` |
+
+**Pattern:** one Go adapter per language in `bench/languages/<lang>/runner.go`, each implementing a `LanguageRunner` interface:
 
 ```go
-// in test file only
-require gonum.org/v1/gonum v0.16.0 // test-only oracle
+type LanguageRunner interface {
+    Detect(repoRoot string) bool
+    Setup(ctx context.Context, repoRoot string) error      // install deps, e.g. `go mod download`
+    RunTests(ctx context.Context, repoRoot string) (TestResult, error)
+    Capabilities() []CapabilityKind                         // which ToolBench capabilities this language supports
+}
 ```
+
+**Output normalization:** each adapter parses its native runner's JSON/XML into a common `TestResult{Passed, Failed, Skipped, Errors, RawJSON}`. The bench harness's scorer is language-agnostic.
+
+**No new Go deps required.** All toolchains are operator-side prereqs documented in `bench/BENCH.md`. The `helix setup` command's language-detection plumbing (`internal/cli/setup_detect.go`) can be reused for detection — same extension-scan logic.
+
+---
+
+## 6. HuggingFace Dataset Loading
+
+### Recommended: `github.com/gomlx/go-huggingface` v0.x for the top-level fetch + iterate API; fall back to `apache/arrow-go/v18` (already in go.sum) for raw parquet.
+
+**Why:**
+- `go-huggingface` provides `IterParquetFromDataset` and handles HF's `refs/convert/parquet` branch resolution. Saves us from re-implementing HF's URL convention.
+- Pure Go, no CGO. Single binary preserved.
+- For datasets that don't fit the parquet convention (rare — most v1.12 benchmarks publish parquet), fall back to direct `http.Get` of the raw JSONL on the HF CDN, or DuckDB's HF integration (we already have DuckDB linked).
+
+**Caching:** stash downloaded datasets under `$HELIX_CACHE_DIR/bench-datasets/<hf-repo>/<sha>/` so repeat runs are offline. xxhash of dataset content for verification.
 
 ### Alternatives Considered
 
 | Alternative | Why Not |
 |-------------|---------|
-| Gonum in production | ADR-005 already rejected. Translation layer overhead, doesn't cover personalized/incremental cases. |
-| `alixaxel/pagerank` | Single-file, weighted only, no personalized/incremental. Strictly subset of what we need. |
-| `dominikbraun/graph` | Generic graph library, but we'd still write PR ourselves; doesn't help. |
+| `huggingface-hub` (Python) shellout | We already have Python as a prereq for SWE-bench. Adding it for dataset download would mean coordinating two Python virtualenvs (upstream harness's vs ours). Cleaner to keep Go-native fetching. |
+| DuckDB `read_parquet('hf://...')` | DuckDB does support HF URIs as of 1.x, but pulling it into the bench runner for *download* (it's already loaded for semantic store, but in a different binary) doubles the surface area we'd test. Use go-huggingface. |
+| Hand-rolled HF API client | The HF "list parquet files" + "convert dataset to parquet branch" logic is non-trivial. go-huggingface already wraps it. |
 
 ---
 
-## 4. Eval Harness Dependencies
+## 7. Cost Table
 
-### Token Counting: `github.com/tiktoken-go/tokenizer` v0.6.x
+### Recommended: static YAML in `bench/datasets/cost-table.yaml`, parsed via koanf v2
 
-**Why this one:**
-- **Pure Go**, no CGO, embeds OpenAI vocabularies as Go maps at compile time (no runtime download, important for our offline/single-binary stance).
-- Covers `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base` (GPT-3.5/4/4o family).
-- For Anthropic Claude: we already have `github.com/anthropics/anthropic-sdk-go v1.35.0` in go.mod, which has the official `messages.CountTokens` server-side endpoint. Use that for Claude exact counts; use tiktoken locally as a heuristic fallback when we don't want to hit the network.
+**Why:**
+- koanf is the established config lib for Helix (4-layer precedence already).
+- A static price table doesn't need provider-API discovery — pricing pages move slowly enough that updating a YAML on release is fine.
 
-**NOT recommended:** `pkoukk/tiktoken-go` — downloads vocab to a cache dir on first use. Breaks the offline/airgapped story and adds a network failure mode to eval runs. Strictly worse than `tiktoken-go/tokenizer` for our use case.
+**Format:**
 
-**For DeepSeek / other OpenAI-compatible providers:** they re-use `cl100k_base` or `o200k_base`; tiktoken-go/tokenizer covers them.
+```yaml
+# bench/datasets/cost-table.yaml
+# Last updated: 2026-06-13 — verify against provider pricing pages quarterly.
+providers:
+  anthropic:
+    models:
+      claude-opus-4-7: { input_per_mtok: 15.00, output_per_mtok: 75.00, currency: USD }
+      claude-sonnet-4-5: { input_per_mtok: 3.00, output_per_mtok: 15.00, currency: USD }
+  openai:
+    models:
+      gpt-5: { input_per_mtok: 1.25, output_per_mtok: 10.00, currency: USD }
+      gpt-5-mini: { input_per_mtok: 0.25, output_per_mtok: 2.00, currency: USD }
+      o3: { input_per_mtok: 15.00, output_per_mtok: 60.00, currency: USD }
+  deepseek:
+    models:
+      deepseek-chat: { input_per_mtok: 0.27, output_per_mtok: 1.10, currency: USD }
+      deepseek-reasoner: { input_per_mtok: 0.55, output_per_mtok: 2.19, currency: USD }
+last_verified: "2026-06-13"
+```
 
-### Patch Application: `github.com/bluekeyes/go-gitdiff` v0.8.x
-
-**Why this one:**
-- Pure Go, parses git-style and standard unified diffs, exposes an `Apply` function for both text and binary patches.
-- Maintained by Palantir (active 2025–2026 commits on main).
-- The eval harness needs to apply LLM-emitted patches to a repo snapshot, run tests, and score. `go-gitdiff` is the cleanest "patch in, mutated bytes out" API in Go.
-
-**NOT recommended:** `sourcegraph/go-diff` is parser-only (no apply), `sourcegraph/go-diff-patch` only generates patches. Both are incomplete for the eval use case.
-
-**Note:** The original prompt asked about `bluekeyes/go-patch` — that's not the actual repo name. The library is `bluekeyes/go-gitdiff`.
-
-### Test Runner Orchestration: stdlib `os/exec` + `context`
-
-The eval harness runs `go test`, `pytest`, etc. as subprocesses with bounded timeouts. No new library needed — `os/exec.CommandContext` + `errgroup` (already in go.mod via `golang.org/x/sync`) covers it. Anything heavier (e.g., a dedicated test-runner abstraction) is over-engineering for SPEC §32's eval modes.
-
----
-
-## 5. Pipeline DAG (ADR-010)
-
-### Recommended: stdlib only
-
-**Rationale:** Kahn's topological sort over `map[Phase][]Phase` adjacency is ~30 LOC. Cycle detection is the same pass (if not all nodes are emitted, there's a cycle). DOT-format dump for `dump_dot_on_error: true` (SPEC §25) is another ~20 LOC. Total: ~80 LOC in `internal/semantic/phasegraph/`.
-
-**No third-party DAG/workflow library is justified.** Anything we'd consider (`graphkit`, `dag`, etc.) brings:
-- Generics gymnastics or `interface{}`-flavored APIs.
-- Extra abstractions (Pipeline, Step, Worker) we don't want.
-- Test-and-maintenance burden for code we'd write in an afternoon.
-
-This matches the v1.6 RepoMap precedent: hand-rolled PageRank in ~60 LOC was cheaper and clearer than pulling gonum.
+**Cost computation:** `cost_per_solved_task = sum(model.input_tokens * provider.input_per_mtok / 1e6) + ... / count(solved_tasks)`. Token totals come from the existing eval harness's token-counting layer (tiktoken + Anthropic API).
 
 ---
 
-## 6. Type Resolution / Fixpoint Iteration
+## 8. Trace Merging
 
-### Recommended: no library
+**Recommended:** reuse existing OTel pipeline + Phase 67's `internal/eval/trace` merger. No new dep.
 
-**Rationale:** Fixpoint iteration is a `for { changed := false; ... if !changed { break } }` loop. The complexity is in the *resolution rules per language* (JSDoc/PHPDoc/YARD/Python typing comments per ADR-009), not in the iteration scaffolding.
-
-Worth studying for patterns:
-- **Go's `go/types` package** — its iterative method-set resolution is a clean reference for tiered confidence + fixpoint iteration. Stdlib, no dep.
-- **gopls' `internal/typeparams`** — similar.
-
-For **comment-based fallback parsing** (JSDoc, PHPDoc, YARD, Python type comments):
-
-| Language | Parser source |
-|----------|---------------|
-| JSDoc | Hand-roll lightweight comment scanner; full JSDoc is huge but we only need `@param {Type}` / `@returns {Type}` / `@type` / `@typedef`. ~200 LOC. |
-| PHPDoc | Same shape as JSDoc. Hand-roll. |
-| YARD (Ruby) | `# @param [Type] name` — regex-tractable. Hand-roll. |
-| Python typing comments / docstrings | `# type: T` + `:type x:` — regex-tractable. Hand-roll. For full docstring parsing later, defer to v1.11. |
-
-Pulling JS/PHP/Ruby AST libraries to parse comments is overkill — comments are line-based and the syntax we need is a tiny subset. Tree-sitter already gives us the comment node positions; we just regex inside.
-
-**No new dependency.**
+The Helix daemon already emits OTel traces via otelgrpc/otlptrace (v1.43.0). Phase 67 added a tap that merges Claude CLI's tool-call trace with the daemon's tool-call span graph (via the forwarder→daemon trace continuity wired at v1.10 Phase 58 REL-06). Bench's per-(task,mode) runs ride the same rails — they get a unique `bench.run_id` span attribute injected at the matrix-runner boundary, then the existing exporter handles the rest.
 
 ---
 
-## 7. Trace / Metrics Additions
+## 9. Token Counting & Patch Apply — Already Decided
 
-### Existing infra reused
+These were already evaluated and chosen at v1.10 (Phase 67):
 
-All v1.10 metrics (SPEC §28.1, 25 new families) plug into the existing `internal/obs/` Prometheus registry. The v1.9 PromQL validator (registry-driven, fail-closed) extends to cover them automatically — same `RegisterCounter`/`RegisterHistogram` pattern, same bounded-label discipline.
+- `github.com/tiktoken-go/tokenizer` v0.6.x — pure Go, embedded vocab, no network on first use.
+- `github.com/anthropics/anthropic-sdk-go` v1.35.0 — server-side `messages.CountTokens` for exact Claude counts.
+- `github.com/bluekeyes/go-gitdiff` v0.8.x — pure Go, parses + applies git-style and unified diffs.
 
-All v1.10 tracing spans (SPEC §28.2, 14 new spans) use the existing OTel tracer; spans nest under the v1.9 `tools/call` parent span. No new exporter or instrumentation library needed.
-
-### Cardinality concerns flagged
-
-The bounded-label allowlist must extend to:
-
-| Label | Allowed values | Cardinality risk if not bounded |
-|-------|----------------|----------------------------------|
-| `language` | enum of 23 grammars + `unknown` | LOW (closed set) |
-| `mode` (live update kind) | `change`, `create`, `delete`, `rename`, `bulk` | LOW |
-| `outcome` | `success`, `timeout`, `error`, `circuit_open`, `skipped`, `degraded` | LOW |
-| `projection` | `imports`, `references`, `calls`, `types`, `mixed` | LOW |
-| `algorithm` | `pagerank`, `personalized_pagerank`, `weak_components`, `label_propagation` | LOW |
-| `edge_kind` | enum from SPEC §12.1/§12.2 (~15 values) | LOW |
-| `confidence_tier` | `high`, `medium`, `low`, `unresolved` | LOW |
-| `query_kind` | enum of named query templates | **MEDIUM — must be a closed allowlist, not free-form SQL hashes** |
-| `phase` | enum of registered phase names | LOW |
-| `repo_state` | `idle`, `bulk_change`, `live`, `compacting` | LOW |
-
-**Anti-cardinality rules (must encode in `internal/obs/labels.go`):**
-- `tool_name` must remain restricted to the registered MCP tool set (already enforced in v1.9).
-- NEVER include `repo_id`, `file_path`, `symbol_name`, `cluster_id`, `snapshot_id` as label values. Use trace span attributes for those (high-cardinality, but traces are sampled). SPEC §28.1's bounded-labels list does not include any of these — keep it that way.
-- Histograms cost 10× their label cardinality (one series per bucket). Watch `helix_semantic_lsp_enrichment_duration_seconds{language}` — 23 languages × 10 buckets = 230 series, fine.
-
-The v1.9 cardinality test (`TestMetricsBoundedCardinality` per Phase 53) must extend to the new families. Add a test fixture enumerating the allowed label combinations and assert no unbounded labels are registered.
+**v1.12 reuses all three as-is.** The bench harness imports them from `internal/eval/...` via shared sub-packages OR (if we want strict separation) copies the usage pattern. The `legacy eval/ tree stays as v1.10` rule from the milestone description means bench's `internal/bench/patch` and `internal/bench/tokens` will be **separate packages** that happen to depend on the same external libs.
 
 ---
 
-## Installation / go.mod Diff (projected)
+## 10. CGO Posture & Distribution Rule
+
+**Recap of constraints from CLAUDE.md / EMBED-AUDIT.md:**
+- Source tree is single-mode `CGO_ENABLED=1` (Phase 59.1 removed the CGO=0 stub apparatus).
+- The `helix` daemon binary ships from `cmd/helix` — that single binary is the distribution unit.
+- `cmd/helix-eval` (Phase 67) is built but not part of the user-facing release archive.
+- `cmd/helix-bench` (v1.12, **new**) is in the same camp as `cmd/helix-eval` — built from the same module, but **not shipped in the goreleaser archives**. It is operator-side tooling.
+
+**v1.12 specifically:**
+- No new CGO dependency. duckdb is the only CGO dep and bench may or may not need it (probably not — the bench database, if any, is small enough for modernc.org/sqlite, which we already have).
+- chromem-go is zero-deps, pure Go, no CGO.
+- go-huggingface, gonum, docker/docker client — all pure Go.
+- All operator-side runtime prereqs (Python, Docker Engine, per-language toolchains) are **out of the binary**.
+
+**Embed audit impact:** chromem-go's vocab/index format is computed at runtime, not embedded. No new `embed.FS` declarations. `EMBED-AUDIT.md` does not need a new row for v1.12 bench code unless we embed the cost table (we should — it's static and small) — add one row `bench/datasets/cost-table.yaml → embedded into helix-bench`.
+
+---
+
+## 11. Installation / go.mod Diff (Projected)
 
 ```diff
 require (
-+   github.com/duckdb/duckdb-go v2.10502.0
-+   github.com/tiktoken-go/tokenizer v0.6.0
-+   github.com/bluekeyes/go-gitdiff v0.8.0
-    // ... existing v1.9 deps unchanged
++   github.com/docker/docker v27.4.0
++   github.com/gomlx/go-huggingface v0.5.0   // or current stable
++   github.com/philippgille/chromem-go v0.7.0
++   gonum.org/v1/gonum v0.16.0                // promoted from test-only to runtime (bench-side)
+
+    // already present, reused:
+    github.com/tiktoken-go/tokenizer v0.6.0      // (added in v1.10 for eval)
+    github.com/bluekeyes/go-gitdiff v0.8.0       // (added in v1.10 for eval)
+    github.com/anthropics/anthropic-sdk-go v1.35.0
+    github.com/openai/openai-go v1.12.0
+    github.com/knadh/koanf/v2 v2.3.4
+    github.com/spf13/cobra v1.10.2
+    github.com/cespare/xxhash/v2 v2.3.0
 )
 
 require (
-+   gonum.org/v1/gonum v0.16.0 // test-only, used in internal/semantic/.../*_test.go
+    // test-only additions: none — testcontainers-go intentionally omitted.
 )
 ```
 
-**Build matrix impact:**
-- `make build` (CGO=1, default): adds DuckDB static-bundle link step, ~5–10s extra compile, ~12 MB binary size increase.
-- `make build-nocgo` (existing CGO=0 stub path): unchanged binary size; semantic feature returns `Unsupported` at activation.
-- Goreleaser: existing 6-archive matrix already runs CGO-aware per-arch builders for tree-sitter — no new release-pipeline work.
+**Binary size impact:** docker/docker client pulls a non-trivial dep tree (containerd protos, etc.) — ~8 MB additional compiled. Acceptable for a benchmarking binary; would be a red flag for `helix` itself.
 
 ---
 
-## Integration with Existing Daemon Bootstrap
+## 12. New Binary Surface: `cmd/helix-bench`
 
-`internal/daemon/daemon.go` currently has 14+ steps (kernel init, skill init, middleware install, etc.). v1.10 inserts:
+Lives alongside `cmd/helix-eval`. Shape (informed by `helix-eval/main.go`):
 
-1. **Step 9.5 (post-kernel, pre-skill):** `semantic.NewService(deps)` — opens DuckDB at `<workspace>/.helix/semantic.duckdb`, runs migrations, validates schema version. Fail-fast on corruption (per SPEC §29.1 — but with the timestamped-`.corrupt` rename + degraded-mode advance, NOT a hard daemon abort). On CGO=0, the stub `NewService` returns a degraded-mode service that refuses semantic operations with `Kind: Unsupported`.
-2. **Step 9.6:** Wire `service.LiveQueue()` into the file watcher; start the watcher goroutine under the daemon errgroup.
-3. **Step 9.7:** Start the LSP revalidation worker pool (single goroutine + bounded channel, per SPEC §21).
-4. **Step 9.8:** Start the idle compaction worker (single goroutine, idle-debounced, per SPEC §22).
-5. **Step 13.5 (post-skill registration):** Register the 10 new semantic MCP tools (SPEC §23) via the existing `ToolProvider` skill adapter pattern.
-6. **Step 14.5 (post-middleware):** Install the guardrail middleware (SPEC §24's edit-tool integration) — runs *after* `LazyInitMiddleware`, *before* the tool handler. Order: `LazyInit → Suggestion → ProfileFilter → Telemetry → **Guardrail** → handler`.
-7. **Shutdown order:** semantic service shuts down BEFORE the kernel (live update queue must drain into a clean overlay state before LSP workers go away). Add to the kernel-first shutdown sequence in `daemon.Stop()`.
+```
+helix-bench
+├── run                    — execute the matrix (--benchmarks, --modes, --languages, --tasks)
+├── fetch-datasets         — pre-populate $HELIX_CACHE_DIR/bench-datasets
+├── doctor                 — verify operator prereqs (python, docker, per-lang toolchains, embedding key)
+├── report                 — re-render reports from a previous run-id
+└── validate-cost-table    — sanity-check the embedded cost YAML
+```
 
-The pipeline DAG (ADR-010) describes exactly this ordering and is validated on startup (`phase_graph.validate_on_startup: true`). A cycle or missing dep dumps a `.dot` file and fails fast — this *replaces* the comment-driven middleware-order doc currently in `internal/mcp/lazy_init.go`.
+cobra v1.10 — same plumbing as the daemon.
 
 ---
 
@@ -290,16 +326,16 @@ The pipeline DAG (ADR-010) describes exactly this ordering and is validated on s
 
 | Library | Why we don't want it |
 |---------|----------------------|
-| Any pure-Go DuckDB clone (chDB-go, etc.) | Doesn't exist in mature form; ADR-001 commits to DuckDB. |
-| Heavy DAG/workflow engines (`temporalio/sdk-go`, `mvdan/sh`-style) | 80 LOC of Kahn's algorithm. |
-| Embedding/vector libs (`milvus`, `chroma-go`, FAISS bindings) | Out of Scope per PROJECT.md ("Vector/embedding search — Augment Context Engine does this better"). |
-| Graph DBs (`dgraph`, `neo4j-go-driver`) | ADR-001: graph DBs are optional later accelerators, not source of truth. |
-| Python interop (`go-python`, gopy) | Out of Scope: native Go, no Python interop. |
-| Docker / container libs | Out of Scope: single binary. |
-| `pkoukk/tiktoken-go` | Network-on-first-use breaks offline; use `tiktoken-go/tokenizer`. |
-| `sourcegraph/go-diff` | Parser-only; we need apply. |
-| `gonum` in production code | ADR-005. |
-| Recursive-watch wrappers (`rfsnotify`) | Implement in-tree on existing fsnotify. |
+| `testcontainers-go` (runtime) | Adds reaper/network/waitstrategy abstractions we don't need; use Docker engine API directly. |
+| Weaviate / Milvus / Pinecone clients | Bench host must not require a long-lived vector DB; chromem-go is the right shape. |
+| FAISS Go bindings | CGO + native libs; chromem-go covers our needs. |
+| Custom Python bridge (gopy, go-python) | "Out of scope: native Go, no Python interop" — Python stays at the subprocess boundary. |
+| `sourcegraph/go-diff` | Already rejected at v1.10 — parser only. |
+| `pkoukk/tiktoken-go` | Already rejected at v1.10 — downloads vocab. |
+| Replacement for sigstore (cosign) | Bench binary signing rides existing release pipeline. |
+| A second OTel tracer | Reuse `internal/obs/`. |
+| `cobra/viper` (viper specifically) | We use koanf. |
+| Reimplemented SWE-bench harness | 6 months for zero comparability gain. |
 
 ---
 
@@ -307,33 +343,44 @@ The pipeline DAG (ADR-010) describes exactly this ordering and is validated on s
 
 | Claim | Confidence | Source |
 |-------|------------|--------|
-| `duckdb/duckdb-go` v2.10502.0 = current, official, CGO-required | HIGH | Direct fetch from github.com/duckdb/duckdb-go README + pkg.go.dev |
-| Bundled static libs cover darwin/linux × amd64/arm64 + windows/amd64 | HIGH | duckdb-go README distribution table |
-| fsnotify lacks recursive watch; inotify watch-limit is real | HIGH | Multiple project issues, fsnotify own docs |
-| Gonum `network.PageRank` exists, supports weighted, lacks personalized/incremental | HIGH | pkg.go.dev/gonum.org/v1/gonum/graph/network direct read |
-| `tiktoken-go/tokenizer` is pure-Go with embedded vocab | MEDIUM | Project README; not directly verified at file level |
-| `bluekeyes/go-gitdiff` supports apply for text + binary | MEDIUM | Project README; recent activity confirmed via libraries.io |
-| ADR-005 (custom Go graph) is the right call vs gonum-in-prod | HIGH | ADR is in SPEC-DRAFT; research confirms gonum's missing capabilities (personalized, incremental) |
-| CGO=0 stub policy compatible via existing Phase 51.1 pattern | HIGH | Direct read of v1.9 phase outcome in PROJECT.md + CLAUDE.md |
-| Bounded-label discipline extends cleanly to new metrics | HIGH | SPEC §28.1 explicit allowlist + v1.9 PromQL validator already enforces |
+| SWE-bench Verified = 500 tasks, Python only, golden-patch + test-patch oracle, requires Docker | HIGH | Upstream SWE-bench docs + HF dataset card |
+| Multi-SWE-bench = 1,632 instances × 7 langs (Java/TS/JS/Go/Rust/C/C++), Bytedance Seed, has `python -m multi_swe_bench.harness.run_evaluation` | HIGH | Multi-SWE-bench paper + GitHub repo + HF dataset card |
+| Aider Polyglot = 225 Exercism tasks × 6 langs, 2-attempt protocol, dataset is a single git repo | HIGH | aider.chat blog + Aider-AI/polyglot-benchmark repo |
+| CrossCodeEval = Python/Java/TS/C#, completion-only, no test execution, scored via EM + identifier match | HIGH | CCE NeurIPS 2023 paper + project site |
+| RepoBench = Python + Java, 1,075 + 594 test instances, three sub-tasks (R/C/P), completion-only | HIGH | RepoBench paper + Leolty/repobench README + HF datasets |
+| Terminal-Bench 2.0 = 89 containerized tasks, ships `tb` CLI + Harbor, Nov 2025 release | HIGH | Terminal-Bench docs + VentureBeat coverage |
+| `docker/docker` engine-API client is the right Go SDK | HIGH | Canonical, used by goreleaser, k8s, etc. |
+| `chromem-go` is zero-deps embeddable vector DB suitable for `baseline_rag` | HIGH | Project README + pkg.go.dev |
+| `gomlx/go-huggingface` covers parquet iteration of HF datasets | MEDIUM | Project README; specific API stability not field-tested in our repo yet |
+| `gonum/stat` is the right base for bootstrap + BCa, BCa needs ~40 LOC on top | HIGH | gonum docs + BCa is a well-defined algorithm |
+| OpenAI text-embedding-3-small or Ollama nomic-embed-text are the right embedding choices for `baseline_rag` | HIGH | Industry-standard baselines; cited in every RAG paper of last 24 months |
+| Per-language test runners can stay as `os/exec` shellouts without per-language Go bindings | HIGH | Pattern works in CI today across 8+ languages; no upside to native bindings |
+| Helix's single-binary distribution rule survives v1.12 | HIGH | helix-bench is not in the goreleaser archive matrix |
+
+---
 
 ## Sources
 
-- [duckdb/duckdb-go (official, post-donation)](https://github.com/duckdb/duckdb-go)
-- [marcboeker/go-duckdb (legacy, pre-donation)](https://github.com/marcboeker/go-duckdb)
-- [duckdb-go on pkg.go.dev (v2)](https://pkg.go.dev/github.com/marcboeker/go-duckdb/v2)
-- [go-duckdb V2 General Discussion #232](https://github.com/marcboeker/go-duckdb/discussions/232)
-- [DuckDB Go Client Documentation](https://duckdb.org/docs/current/clients/go)
-- [fsnotify/fsnotify](https://github.com/fsnotify/fsnotify)
-- [fsnotify Issue #18: User-space recursive watcher](https://github.com/fsnotify/fsnotify/issues/18)
-- [farmergreg/rfsnotify (recursive wrapper reference)](https://github.com/farmergreg/rfsnotify)
-- [gonum graph/network package](https://pkg.go.dev/gonum.org/v1/gonum/graph/network)
-- [gonum/gonum repository](https://github.com/gonum/gonum)
-- [tiktoken-go/tokenizer (pure Go, embedded vocab)](https://github.com/tiktoken-go/tokenizer)
-- [pkoukk/tiktoken-go (rejected — downloads vocab)](https://github.com/pkoukk/tiktoken-go)
+- [SWE-bench docs — Docker Setup](https://www.swebench.com/SWE-bench/guides/docker_setup/)
+- [SWE-bench docs — Evaluation Harness](https://www.swebench.com/SWE-bench/guides/evaluation/)
+- [swe-bench/SWE-bench GitHub](https://github.com/swe-bench/SWE-bench)
+- [HF dataset: SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified)
+- [Multi-SWE-bench GitHub](https://github.com/multi-swe-bench/multi-swe-bench)
+- [HF dataset: ByteDance-Seed/Multi-SWE-bench](https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench)
+- [HF dataset: ByteDance-Seed/Multi-SWE-bench_mini](https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench_mini)
+- [Multi-SWE-bench paper (arxiv 2504.02605)](https://arxiv.org/pdf/2504.02605)
+- [Aider-AI/polyglot-benchmark GitHub](https://github.com/Aider-AI/polyglot-benchmark)
+- [Aider Polyglot launch post](https://aider.chat/2024/12/21/polyglot.html)
+- [Aider Leaderboards](https://aider.chat/docs/leaderboards/)
+- [CrossCodeEval project site](https://crosscodeeval.github.io/)
+- [CrossCodeEval NeurIPS 2023 paper](https://proceedings.neurips.cc/paper_files/paper/2023/file/920f2dced7d32ab2ba2f1970bc306af6-Paper-Datasets_and_Benchmarks.pdf)
+- [Leolty/repobench GitHub](https://github.com/Leolty/repobench)
+- [RepoBench paper (arxiv 2306.03091)](https://arxiv.org/pdf/2306.03091)
+- [Terminal-Bench 2.0 announcement (VentureBeat)](https://venturebeat.com/ai/terminal-bench-2-0-launches-alongside-harbor-a-new-framework-for-testing)
+- [Terminal-Bench paper](https://arxiv.org/html/2601.11868v1)
+- [testcontainers-go GitHub releases](https://github.com/testcontainers/testcontainers-go/releases)
+- [philippgille/chromem-go GitHub](https://github.com/philippgille/chromem-go)
+- [gomlx/go-huggingface GitHub](https://github.com/gomlx/go-huggingface)
+- [gonum.org/v1/gonum/stat docs](https://pkg.go.dev/gonum.org/v1/gonum/stat)
+- [tiktoken-go/tokenizer](https://github.com/tiktoken-go/tokenizer)
 - [bluekeyes/go-gitdiff](https://github.com/bluekeyes/go-gitdiff)
-- [bluekeyes/go-gitdiff on Libraries.io](https://libraries.io/go/github.com%2Fbluekeyes%2Fgo-gitdiff)
-- [sourcegraph/go-diff (parser-only, rejected)](https://github.com/sourcegraph/go-diff)
-- [SPEC-DRAFT.md §4 ADRs, §6 Package Layout, §25 Configuration, §28 Observability](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/SPEC-DRAFT.md)
-- [PROJECT.md v1.10 milestone declaration](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/.planning/PROJECT.md)
-- [go.mod v1.9 dependency state](file:///Users/Janis_Vizulis/go/src/github.com/agenthands/helix/go.mod)

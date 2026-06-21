@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-call-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "call_graph",
+  "prompt": "Compute(divisor int) panics on a zero divisor. Three call sites (RunA, RunB, RunC) invoke Compute and must each guard against a zero divisor by returning -1 instead. Run get_call_hierarchy on Compute with direction=incoming to enumerate every caller, then add a zero guard at each site. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

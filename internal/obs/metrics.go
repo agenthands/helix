@@ -97,6 +97,15 @@ type Metrics struct {
 	// Closed-enum "outcome" ∈ {"opened","quarantined","created"}.
 	SemanticStoreOpen *prometheus.CounterVec
 
+	// Phase 81 ABLATE-06: semantic store DuckDB read/query counter. NET-NEW —
+	// the rest of the helix_semantic_* family (open/quarantine/extraction/
+	// live-updates/enrichment/pagerank/types/compaction/vacuum) counts
+	// writes/maintenance only; none counted a read before this. Labelless:
+	// a faithful "any semantic-store read happened" signal. The no_semantic
+	// ablation arm asserts this counter == 0 after a run (D-05); every read
+	// that funnels through the s.db read chokepoint increments it.
+	SemanticStoreReads prometheus.Counter
+
 	// Phase 59 P02: tree-sitter extraction outcome counter.
 	// Closed-enum "language" ∈ {"go","typescript","python","other"};
 	// "outcome" ∈ {"ready","partial","unsupported","failed"}. Both labels
@@ -345,6 +354,15 @@ func newMetrics() *Metrics {
 			// Phase 57: closed-enum "outcome" + per-workspace hashed label.
 			[]string{"workspace_label", "outcome"},
 		),
+		// Phase 81 ABLATE-06: labelless read counter. Emitted at the single
+		// DuckDB read chokepoint (internal/semantic/store s.queryContext /
+		// s.queryRowContext). Must read 0 on the no_semantic arm (D-05).
+		SemanticStoreReads: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "helix_semantic_store_reads_total",
+				Help: "Semantic store DuckDB read/query operations (Phase 81 ABLATE-06: must be 0 on the no_semantic arm).",
+			},
+		),
 		SemanticExtraction: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "helix_semantic_extraction_total",
@@ -552,6 +570,8 @@ func newMetrics() *Metrics {
 		m.EditOutcome,
 		m.SemanticStoreQuarantine,
 		m.SemanticStoreOpen,
+		// Phase 81 ABLATE-06: semantic store read counter.
+		m.SemanticStoreReads,
 		m.SemanticExtraction,
 		m.SemanticLiveUpdates,
 		m.LiveFileFactDiff,
@@ -673,14 +693,18 @@ func (m *Metrics) SessionLifecycleInc(phase, transport string) {
 }
 
 // EditOutcomeInc increments helix_edit_outcome_total. outcome ∈
-// {"success","no_match","ambiguous_match","validation_failed","ls_error","internal"};
+// {"success","no_match","ambiguous_match","validation_failed","ls_error","internal","unsupported"};
 // strategy ∈ {"exact","whitespace_normalized","indentation_flexible","none"};
 // any other value is dropped (Phase 53 D-10/D-11/Q-4 closed enums,
 // T-53-01 mitigation). tool_name is unbounded by helper but bounded in
 // practice by the 7-tool surface (D-12).
+//
+// "unsupported" (Phase 76): emitted by the structured-edit ablation guards
+// when DisableStructuredEditSubsystem returns serr.Unsupported before any
+// edit work — lets operators measure how often agents attempt disabled tools.
 func (m *Metrics) EditOutcomeInc(toolName, outcome, strategy string) {
 	switch outcome {
-	case "success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal":
+	case "success", "no_match", "ambiguous_match", "validation_failed", "ls_error", "internal", "unsupported":
 	default:
 		return
 	}
@@ -715,6 +739,19 @@ func (m *Metrics) SemanticStoreOpenInc(workspaceLabel, outcome string) {
 		return
 	}
 	m.SemanticStoreOpen.WithLabelValues(workspaceLabel, outcome).Inc()
+}
+
+// SemanticStoreReadsInc increments helix_semantic_store_reads_total by one.
+// Phase 81 ABLATE-06: called at the single DuckDB read chokepoint
+// (internal/semantic/store s.queryContext / s.queryRowContext) so EVERY
+// semantic-store read bumps the counter. Labelless (a faithful "a read
+// happened" signal); the no_semantic ablation arm asserts the total == 0.
+// Nil-receiver safe so store code can call it without a metrics guard.
+func (m *Metrics) SemanticStoreReadsInc() {
+	if m == nil || m.SemanticStoreReads == nil {
+		return
+	}
+	m.SemanticStoreReads.Inc()
 }
 
 // --- Phase 59 P02 helper (T-59-02-02 mitigation: bounded-label allowlist) ---

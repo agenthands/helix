@@ -1,0 +1,60 @@
+# bench-no-lsp.yaml — Bench ablation arm: LSP subsystem disabled (Phase 76 ABLATE-05).
+#
+# Tool surface EXCLUDES the LSP-backed symbol-retrieval + diagnostics skills by
+# OMITTING them from the `skills` list (EMPTY-LISTS / skill-selection mechanism,
+# baseline.yaml header). tree-sitter repomap, file-ops, memory, workflow, help,
+# and the duckdb-backed semantic skill remain (RESEARCH Q3, D-09).
+#
+# Pairs with the kernel disable_lsp_subsystem flag (D-01): the daemon reads this
+# first-class field at the composition root (Plan 76-04) and wires the LSP
+# null-object (skip SetEnrichFn, no live LS pool) so zero lsp.* spans are emitted.
+name: bench-no-lsp
+description: >
+  Bench ablation arm: LSP subsystem disabled. Tool surface excludes the
+  LSP-backed symbol-retrieval + diagnostics tools; tree-sitter repomap,
+  file-ops, memory, workflow, and semantic tools remain. Pairs with kernel
+  disable_lsp_subsystem. Bench-only: not for general use.
+
+prompt: |
+  You are the no_lsp ablation arm. LSP-backed code intelligence (go-to-def,
+  find-references, diagnostics) is unavailable. Rely on tree-sitter repomap,
+  file search, and the semantic graph for code understanding.
+
+# symbol-retrieval + diagnostics OMITTED (LSP-backed) — D-09.
+skills:
+  - memory
+  - workflow
+  - file-ops
+  - repomap
+  - health
+  - help
+  - semantic
+
+tools: []
+
+exclude_tools: []
+
+disable_lsp_subsystem: true
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+guardrails:
+  enforcement: off
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

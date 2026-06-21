@@ -1,0 +1,8 @@
+{
+  "id": "IT-go-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "go",
+  "capability": "failure_handling",
+  "prompt": "Negate in math.go returns n instead of -n, so TestNegate fails. A first edit attempt against a wrong path (typo.go) is expected to fail; recover by editing the correct file math.go. Ensure `go test ./...` passes.",
+  "verify": "verify.sh"
+}

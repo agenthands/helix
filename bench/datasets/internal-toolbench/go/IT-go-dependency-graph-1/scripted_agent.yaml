@@ -1,0 +1,33 @@
+# Scripted agent for IT-go-dependency-graph-1 (capability: dependency_graph, D-05).
+#
+# Step 1 EXPLICITLY calls get_repo_map to surface the package dependency graph —
+# which packages (alpha, beta, gamma) depend on core. The following
+# replace_in_file steps wire core.Tag() into EVERY dependent's Label.
+# wiring_test.go imports all three dependents and fails any with an empty Label,
+# so the test requires the FULL dependency-graph output to be acted on (D-05).
+#
+# Store-OFF (A2): for this small hermetic Go module the live RepoMap /
+# tree-sitter path resolves the cross-package edges deterministically; no
+# semantic_index opt-in (D-02 default).
+#
+# Keys conform to runner.ScriptedStep (tool/args/expect_error only). Patterns are
+# exact literal anchors (is_regex default false).
+steps:
+  - tool: get_repo_map
+    args:
+      token_budget: 4096
+  - tool: replace_in_file
+    args:
+      path: alpha/alpha.go
+      pattern: "\t_ = core.Tag\n\treturn \"\""
+      replacement: "\treturn \"core:\" + core.Tag()"
+  - tool: replace_in_file
+    args:
+      path: beta/beta.go
+      pattern: "\t_ = core.Tag\n\treturn \"\""
+      replacement: "\treturn \"core:\" + core.Tag()"
+  - tool: replace_in_file
+    args:
+      path: gamma/gamma.go
+      pattern: "\t_ = core.Tag\n\treturn \"\""
+      replacement: "\treturn \"core:\" + core.Tag()"

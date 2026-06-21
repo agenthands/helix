@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agenthands/helix/bench/schema/result.v2.schema.json",
+  "title": "Helix bench result.v2",
+  "description": "Versioned per-task result contract written by every downstream bench phase (76-89) and validated against this schema. BENCH-03 / FAIR-03 (substrate only).",
+  "$comment": "Versioning policy (D-03/D-04): schema_version is a single flat greppable top-level string pinned to \"v2\". Additive-only changes are MINOR: new fields land OPTIONAL and additionalProperties is left OPEN at the top level so adding a field never requires a schema bump. A BREAKING change (removing/renaming a field, tightening a constraint, or making a new field required) bumps the major version to v3 (a new result.v3.schema.json). FAIR-03 SCOPE: this schema carries only the FAIR-03 SUBSTRATE — the cached-input token columns (tokens_input_cached_read, tokens_input_cache_write, D-12) and the fairness.overrides[] array (D-10). The >5% between-run variance DETECTOR and the cost_quality.md fairness WARNING are NOT part of this schema; they land in Phase 82 (variance gate, consumes STATS-01 N>=3) and Phase 89 (reports).",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "const": "v2",
+      "description": "Result-contract version. Flat, greppable, pinned to the string \"v2\" (D-04). The ONLY required field (D-03/Pitfall 5) so every other field can be added optionally without a major bump."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Stable identifier of the benchmark task this result describes (e.g. \"swe-bench-lite/django__django-12345\")."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Helix profile mode exercised for this run (e.g. read, edit, review, admin)."
+    },
+    "benchmark": {
+      "type": "string",
+      "description": "Name of the benchmark suite this task belongs to (e.g. \"swe-bench-lite\")."
+    },
+    "run_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero- or one-based repetition index for this task within a multi-run sample (STATS-01 N>=3 consumes this downstream in Phase 82)."
+    },
+    "tokens_input": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Total input (prompt) tokens billed for this run. Relaxed to nullable (Phase 79, Open Q5): the canonical home for metrics is now the `metrics` object — this top-level column is retained nullable for additive-only backward compatibility with metric-sparse fixtures."
+    },
+    "tokens_output": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Total output (completion) tokens billed for this run. Relaxed to nullable (Phase 79, Open Q5) — see tokens_input; the `metrics` object is the canonical home."
+    },
+    "tokens_input_cached_read": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "FAIR-03 substrate (D-12): input tokens served from a prompt cache read, billed at the cached-read rate. Tracked as a separate column so fairness accounting can distinguish cache hits from fresh input."
+    },
+    "tokens_input_cache_write": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "FAIR-03 substrate (D-12): input tokens written into the prompt cache, billed at the cache-write rate. Separate column per D-12."
+    },
+    "fairness": {
+      "type": "object",
+      "description": "FAIR-03 substrate: fairness accounting attached to this result. Substrate only — the variance detector + cost_quality.md warning are Phase 82/89.",
+      "properties": {
+        "overrides": {
+          "type": "array",
+          "description": "FAIR-03 substrate (D-10): per-mode deviations from the pinned fairness contract, each carrying a free-text waiver_reason and a maintainer approved_by. An empty waiver_reason is rejected at load time by the runtime fairness loader (Phase 80+), not by this schema.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "description": "The profile mode this override applies to."
+              },
+              "waiver_reason": {
+                "type": "string",
+                "description": "Free-text justification for deviating from the fairness contract (D-10)."
+              },
+              "approved_by": {
+                "type": "string",
+                "description": "Maintainer signoff for this override (D-10)."
+              }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "METRIC-01/D-06 canonical metric record. Every metric is nullable; a missing metric is an explicit JSON null (D-07), never an omission. Carries the 17 METRIC-01/02 metrics plus the 2 FAIR-03 cached-token columns (D-03). Mirrors the Go evaluators.Metrics struct json tags 1:1 (snake_case key parity is the contract every Wave-2 grader and Wave-3 wiring consumes).",
+      "properties": {
+        "task_success": {
+          "type": ["boolean", "null"],
+          "description": "Whether the task's success oracle passed (METRIC-01)."
+        },
+        "verified_correctness": {
+          "type": ["boolean", "null"],
+          "description": "Whether the stronger verified-correctness oracle passed (METRIC-01)."
+        },
+        "tokens_input": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total input (prompt) tokens billed for this run."
+        },
+        "tokens_output": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total output (completion) tokens billed for this run."
+        },
+        "tokens_input_cached_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "FAIR-03 substrate (D-03): input tokens served from a prompt cache read."
+        },
+        "tokens_input_cache_write": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "FAIR-03 substrate (D-03): input tokens written into the prompt cache."
+        },
+        "tool_calls": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total number of tool calls made during the run."
+        },
+        "wall_time_seconds": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Wall-clock duration of the run in seconds."
+        },
+        "files_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of files read during the run."
+        },
+        "bytes_read": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Total bytes read during the run."
+        },
+        "files_modified": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of files modified during the run."
+        },
+        "edit_locality": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of edits concentrated in the intended region (0..1)."
+        },
+        "regression_rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Rate of newly-introduced regressions."
+        },
+        "lsp_diagnostics_used": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of LSP diagnostics consulted during the run."
+        },
+        "semantic_tool_calls": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of semantic (SMTC) tool calls made during the run."
+        },
+        "edit_distance_patch": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Edit distance between the produced patch and the reference patch."
+        },
+        "retry_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of retries during the run."
+        },
+        "compile_errors_before": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Compile error count before the agent's edits."
+        },
+        "compile_errors_after": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Compile error count after the agent's edits."
+        }
+      }
+    },
+    "ablation_status": {
+      "type": "string",
+      "description": "OPTIONAL D-03 machine-checkable ablation deferral marker. Additive-only (no schema major bump; schema_version stays \"v2\"). Honest modes OMIT this key entirely (the Go builder uses omitempty); it is present only on a partial ablation arm. Greppable enum values: \"guarantee_pending_phase_81\" marks the no_semantic arm whose kernel disable_semantic_subsystem guarantee is deferred to Phase 81 (SET by the cell wiring in Plan 03); honest modes omit it (and may set \"enforced\" once Phase 81 lands). The Phase 82 aggregator reads it to distinguish a partial no_semantic row from a clean measurement."
+    },
+    "metric_errors": {
+      "type": "array",
+      "description": "D-07 per-metric grader-failure annotations. When a grader cannot compute a metric it leaves the metrics field null and records why here. Mirrors the Go evaluators.MetricError struct.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "Name of the metric the grader failed to compute (matches a metrics property key)."
+          },
+          "grader": {
+            "type": "string",
+            "description": "Identifier of the grader that failed."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Free-text explanation of why the metric could not be computed."
+          }
+        }
+      }
+    }
+  }
+}

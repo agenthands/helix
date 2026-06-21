@@ -792,7 +792,7 @@ func (s *Store) LatestCommittedSnapshotBaseEpoch(ctx context.Context, repoID str
 	if repoID == "" {
 		return 0, false, fmt.Errorf("LatestCommittedSnapshotBaseEpoch: empty repoID")
 	}
-	row := s.db.QueryRowContext(ctx, `
+	row := s.queryRowContext(ctx, `
 		SELECT base_overlay_epoch
 		  FROM semantic_snapshots
 		 WHERE repo_id = ? AND status = 'committed'

@@ -374,7 +374,3 @@ Expected behavior: Helix starts a background daemon, launches a language server 
 
 - [USAGE.md](USAGE.md) -- Configuration, profiles, modes, observability, and performance tuning
 - [README.md](README.md) -- Feature overview, architecture, and full tool list
-
-## Legacy Python
-
-The `legacy/` directory contains the original Python Serena for reference only. It is not actively developed.

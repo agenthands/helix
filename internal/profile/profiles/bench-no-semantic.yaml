@@ -1,0 +1,80 @@
+# bench-no-semantic.yaml — Bench ablation arm: semantic-store tools removed
+# (Phase 76 ABLATE-02 + Phase 81 ABLATE-06 kernel gate).
+#
+# Defense-in-depth: keeps the FULL skill set but uses `exclude_tools` to drop
+# the 10 semantic-store-backed (duckdb) tools from the AGENT surface (RESEARCH
+# Q4), AND now carries the kernel-level `disable_semantic_subsystem: true` gate
+# (Phase 81, D-03). get_repo_map / get_context REMAIN exposed — the kernel gate
+# forces their SemanticLookup reads to NoopLookup so they degrade to tree-sitter
+# (source==tree_sitter, the v1.9 path) via the Phase 65 strangler. The gate is
+# build-but-block (D-04): the store is still built, reads are blocked.
+name: bench-no-semantic
+description: >
+  Bench ablation arm: semantic graph tools removed. Tool surface excludes the
+  10 semantic-store (duckdb) tools; get_repo_map/get_context remain (tree-sitter
+  fallback). Tool-filter-only this phase — the kernel disable_semantic_subsystem
+  guard lands in Phase 81. Bench-only: not for general use.
+
+prompt: |
+  You are the no_semantic ablation arm. The semantic graph tools
+  (index/refresh/get_semantic_*, explain_*, find_related_symbols, cluster maps,
+  change-impact) are unavailable. Use LSP symbol tools and the tree-sitter
+  repomap for code understanding.
+
+skills:
+  - symbol-retrieval
+  - symbol-editing
+  - diagnostics
+  - memory
+  - workflow
+  - file-ops
+  - repomap
+  - health
+  - help
+  - semantic
+
+tools: []
+
+# The 10 semantic-store-backed tools (RESEARCH Q4). get_repo_map/get_context
+# are NOT excluded — they fall back to tree-sitter (D-11).
+exclude_tools:
+  - index_semantic_graph
+  - refresh_semantic_graph
+  - get_semantic_graph_status
+  - get_semantic_context
+  - explain_symbol_deep
+  - find_related_symbols
+  - validate_graph_edge
+  - get_cluster_map
+  - explain_cluster
+  - get_change_impact_graph
+
+tool_description_overrides: {}
+
+default_mode: edit
+single_project: false
+
+# Phase 81 ABLATE-06 (D-03): kernel-level gate. Forces every SemanticLookup
+# read consumer (get_repo_map, get_context, find_related_symbols,
+# explain_symbol_deep, validate_graph_edge, analyze_blast_radius, RankFiles,
+# ExpandFrom) to NoopLookup + a disabled ConfigGate at the daemon composition
+# root. Resolves to the distinct semantic_index.bench_disabled koanf field.
+disable_semantic_subsystem: true
+
+guardrails:
+  enforcement: off
+
+allowed_mode_transitions:
+  read:
+    - edit
+    - review
+  edit:
+    - read
+    - review
+  review:
+    - edit
+    - read
+  admin:
+    - read
+    - edit
+    - review

@@ -40,10 +40,10 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/compact"
 	"github.com/agenthands/helix/internal/semantic/extract"
-	"github.com/agenthands/helix/internal/semantic/integ"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
+	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
@@ -269,9 +269,44 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		poolCfg = lspool.DefaultPoolConfig()
 	}
 
+	// 4b. Resolve the active profile early (hoisted from former step 8) so
+	// the kernel can be constructed with the effective subsystem-disable
+	// flags. Phase 76 ABLATE-05/07: the composition root owns the kernel-
+	// config concern (D-02/D-03); the effective flag is (CLI override OR
+	// resolved-profile field) — a one-way force-disable because both default
+	// OFF and the flags are opt-in disables (RESEARCH Pattern 2).
+	globalDir := filepath.Join(homeDir, ".helix")
+	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving profile: %w", err)
+	}
+	logger.Info("profile resolved",
+		"profile", cfg.Profile,
+		"default_mode", activeProfile.DefaultMode,
+	)
+	effDisableLSP := cfg.DisableLSPSubsystem || activeProfile.DisableLSPSubsystem
+	effDisableSE := cfg.DisableStructuredEditSubsystem || activeProfile.DisableStructuredEditSubsystem
+	// Phase 81 ABLATE-06 (D-02): resolve effSemanticDisabled ONCE here, OR'ing
+	// the config field with the active profile field (precedence already
+	// collapsed upstream, D-03). Threaded into every back-channel semantic read
+	// consumer below to force integ.NoopLookup{} + a DISABLED ConfigGate
+	// (build-but-block, D-04 — the bundle/store is STILL built).
+	effSemanticDisabled := resolveSemanticDisabled(cfg, activeProfile)
+	if effDisableLSP || effDisableSE || effSemanticDisabled {
+		logger.Info("subsystem ablation flags resolved",
+			"disable_lsp_subsystem", effDisableLSP,
+			"disable_structured_edit_subsystem", effDisableSE,
+			"disable_semantic_subsystem", effSemanticDisabled,
+		)
+	}
+
 	// 5. Create kernel (fail-fast). obs.Metrics is wired as the lspool sink;
 	// the compile-time check lives in internal/daemon/wiring_test.go.
-	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{Pool: poolCfg}, pressure, logger, observability.Metrics(), observability.Tracer())
+	k := kernel.NewKernel(workspaces, langReg, installer, kernel.KernelConfig{
+		Pool:                           poolCfg,
+		DisableLSPSubsystem:            effDisableLSP,
+		DisableStructuredEditSubsystem: effDisableSE,
+	}, pressure, logger, observability.Metrics(), observability.Tracer())
 
 	// 6b. Open semantic fact store when enabled (Phase 57, STORE-01..06).
 	//     Fail-fast core subsystem; on Tier-2 corruption auto-quarantines to
@@ -342,15 +377,26 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// On non-nil return: kernel.SetEditNotifier is installed and
 	// scheduler.SetIncrementalHandler is wired. Per-workspace lifecycle
 	// hooks (Start/Stop) fire from SetActivateCallback below.
-	live := buildLiveBundle(
-		cfg.SemanticIndex.LiveUpdates,
-		cfg.SemanticIndex.LSPEnrichment,
-		semanticStore,
-		semanticScheduler,
-		k,
-		observability.Metrics(),
-		logger,
-	)
+	// Phase 76 D-09 null-object injection: under effDisableLSP the live-update
+	// bundle is NOT built. buildLiveBundle is what installs the kernel
+	// EditNotifier (live_wiring.go SetEditNotifier) + the LSP-enrichment
+	// manager; skipping it leaves EditNotifier() nil so all 4 fileops OnEdit
+	// hooks no-op via the existing nil-check contract (notifier.go) and no
+	// LSP-enrichment worker is started. The default arm is unchanged.
+	var live *liveBundle
+	if !effDisableLSP {
+		live = buildLiveBundle(
+			cfg.SemanticIndex.LiveUpdates,
+			cfg.SemanticIndex.LSPEnrichment,
+			semanticStore,
+			semanticScheduler,
+			k,
+			observability.Metrics(),
+			logger,
+		)
+	} else {
+		logger.Info("no_lsp: skipping live-update bundle (EditNotifier stays nil, OnEdit hooks no-op)")
+	}
 	if live != nil {
 		logger.Info("live-update pipeline wired",
 			"watcher_enabled", cfg.SemanticIndex.LiveUpdates.WatcherEnabled,
@@ -481,6 +527,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			observability.Metrics(),
 			nil, // getSession wired below in step 14b.5 after getSessionFn is constructed
 			wsKeyFn,
+			effSemanticDisabled, // Phase 81 ABLATE-06: gate the Set*Accessor block (Pitfall 3 / A5)
 		)
 		// Phase 69-05 / STATUS-02: bind the compactBundle bleveMetaFn so
 		// every per-workspace compactor receives the matching bleve
@@ -542,16 +589,9 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// 7. Create MCP server.
 	mcpServer := helixMCP.NewSerenaMCPServer(workspaces, logger, observability.Tracer())
 
-	// 8. Resolve profile per D-08.
-	globalDir := filepath.Join(homeDir, ".helix")
-	profileStore, activeProfile, err := config.ResolveProfile(cfg, globalDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolving profile: %w", err)
-	}
-	logger.Info("profile resolved",
-		"profile", cfg.Profile,
-		"default_mode", activeProfile.DefaultMode,
-	)
+	// 8. Profile already resolved at step 4b (hoisted in Phase 76 so the
+	// kernel can be built with effective subsystem-disable flags).
+	// profileStore / activeProfile / globalDir are in scope from there.
 
 	// 9. Initialize skills per D-07 (degraded mode for optional providers).
 	skillDeps := skill.SkillDeps{
@@ -577,13 +617,12 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// the SetSemanticLookup post-init wiring used by RepoMapSkill in 65-05).
 	// nil sBndl is normalized to NoopLookup{} so ChooseSource always sees a
 	// valid SemanticLookup interface value.
-	symbolsLookupFn := func() integ.SemanticLookup {
-		if sBndl != nil {
-			return sBndl.integLookupAccessor()
-		}
-		return integ.NoopLookup{}
-	}
-	symbolsCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	// Phase 81 ABLATE-06 gate point 1 (D-04 / Pitfall 4): under
+	// effSemanticDisabled the closure returns integ.NoopLookup{} as its FIRST
+	// line (build-but-block — the bundle stays built) and the cfgGate reports
+	// DISABLED so ChooseSource yields source=tree_sitter, not fallback.
+	symbolsLookupFn := gatedSymbolsLookupFn(sBndl, effSemanticDisabled)
+	symbolsCfgGate := gatedCfgGate(cfg, effSemanticDisabled)
 	symbols.RegisterTools(mcpServer, k, wsKeyFn, symbolsLookupFn, symbolsCfgGate)
 
 	// Phase 65 65-07 INTEG-04 / INTEG-05: capture the wired SemanticLookup
@@ -592,22 +631,37 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// nil (semantic disabled) so integ.ChooseSource always sees a valid
 	// SemanticLookup interface value, and the SemanticIndexAccessor adapter
 	// always has a non-nil delegate.
+	// Phase 81 ABLATE-06 gate point 2 (health): healthLookup inherits the gated
+	// symbolsLookupFn (Noop under the gate); healthCfgGate is disabled under the
+	// gate to match (Pitfall 4 — source=tree_sitter on the get_health stamp).
 	healthLookup := symbolsLookupFn()
 	healthSemIndex := &daemonSemIndexAccessor{lookup: healthLookup}
-	healthCfgGate := &daemonCfgGate{enabled: cfg.SemanticIndex.Enabled}
+	healthCfgGate := gatedCfgGate(cfg, effSemanticDisabled)
 	edit.RegisterTools(mcpServer, k, bodyExtractor, diagStore, wsKeyFn)
 	// Phase 60 D-03: fileops.RegisterTools now threads *kernel.Kernel +
 	// wsKeyFn so the create_file / replace_in_file / fuzzy_edit register*
 	// closures can fire the EditNotifier.OnEdit hook on the success path.
 	fileops.RegisterTools(mcpServer, k, workspaceRootFn, wsKeyFn, observability.Tracer())
 
-	// Diag lease provider.
-	leaseFn := func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
-		key := activeWSKey
-		if key.Language == "" && activeWSLang != "" {
-			key.Language = activeWSLang
+	// Diag lease provider. Phase 76 D-10 audit: this leaseFn is NOT
+	// profile-gated (it is wired directly here, not behind a tool the
+	// bench-no-lsp profile can exclude), so under effDisableLSP it must be
+	// neutralized to a stub that returns serr.Unsupported WITHOUT touching
+	// k.Pool() — otherwise a diagnostics tool call could acquire a live
+	// worker and emit an lspool.lsp.* span on the no_lsp arm.
+	var leaseFn diag.LeaseProvider
+	if effDisableLSP {
+		leaseFn = func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
+			return nil, serr.New(serr.Unsupported, "subsystem_disabled: LSP subsystem disabled; diagnostics unavailable")
 		}
-		return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
+	} else {
+		leaseFn = func(ctx context.Context, uri string) (*lspool.WorkerLease, error) {
+			key := activeWSKey
+			if key.Language == "" && activeWSLang != "" {
+				key.Language = activeWSLang
+			}
+			return k.Pool().AcquireLease(ctx, "diag-"+uri, key, false)
+		}
 	}
 	diag.RegisterTools(mcpServer, diagStore, workspaceRootFn, leaseFn, observability.Tracer())
 	// WR-2 / IN-04 (Phase 65 65-11 Task 2): the probe carries the bundle
@@ -656,33 +710,52 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	}
 
 	// 12b. Wire repomap skill LSP enrichment callback (RMAP-08).
+	// Phase 76 D-09: SKIP entirely under effDisableLSP so the repomap engine
+	// falls back to tree-sitter only — enrichRepoMapFromLSP is the seam that
+	// would lease an LS worker and emit lspool.lsp.* spans.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		tagCache := rs.Cache()
-		rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
-			wsKey := activeWSKey
-			if wsKey.RepoRoot == "" {
-				return
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			enrichRepoMapFromLSP(ctx, k, wsKey, g, tagCache, logger)
-		})
+		if effDisableLSP {
+			// Explicit null-object: clear any previously-set enrich fn so the
+			// wiring is idempotent (the skill is a process-global singleton).
+			rs.SetEnrichFn(nil)
+		} else {
+			tagCache := rs.Cache()
+			rs.SetEnrichFn(func(g *repomapPkg.FileGraph) {
+				wsKey := activeWSKey
+				if wsKey.RepoRoot == "" {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				enrichRepoMapFromLSP(ctx, k, wsKey, g, tagCache, logger)
+			})
+		}
 	}
 
 	// 12c. Wire repomap skill fallback extraction for non-tree-sitter languages (RMAP-02).
+	// Phase 76 D-10 audit: the AcquireFn here calls k.Pool().AcquireLease and
+	// is NOT profile-gated, so under effDisableLSP the whole SetFallbackDeps
+	// wiring is skipped — leaving the skill without a pool-leasing fallback so
+	// no live worker (and no lspool.lsp.* span) is reachable on the no_lsp arm.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
-			Extractor: repomapPkg.NewFallbackExtractor(),
-			AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
-				wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}
-				sessionID := fmt.Sprintf("fallback-%s", lang)
-				lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
-				if err != nil {
-					return nil, nil, err
-				}
-				return lease, func() { k.Pool().ReleaseLease(sessionID) }, nil
-			},
-		})
+		if effDisableLSP {
+			// Explicit null-object: clear any previously-set pool-leasing
+			// fallback deps so the wiring is idempotent on the singleton.
+			rs.SetFallbackDeps(nil)
+		} else {
+			rs.SetFallbackDeps(&repomapSkill.FallbackDeps{
+				Extractor: repomapPkg.NewFallbackExtractor(),
+				AcquireFn: func(ctx context.Context, lang string) (repomapPkg.SymbolRequester, func(), error) {
+					wsKey := workspace.WorkspaceKey{RepoRoot: activeWSKey.RepoRoot, Language: lang}
+					sessionID := fmt.Sprintf("fallback-%s", lang)
+					lease, err := k.Pool().AcquireLease(ctx, sessionID, wsKey, false)
+					if err != nil {
+						return nil, nil, err
+					}
+					return lease, func() { k.Pool().ReleaseLease(sessionID) }, nil
+				},
+			})
+		}
 	}
 
 	// 12d. Wire repomap skill metrics sink (Phase 53 D-15). *obs.Metrics
@@ -711,9 +784,18 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	// steady-state path renders source="tree_sitter" instead of
 	// source="fallback" + reason="index_disabled" when the feature is off
 	// (D-04 / Pitfall §3).
+	//
+	// Phase 81 ABLATE-06 gate point 3 (repomap, get_repo_map / get_context):
+	// the ConfigGate is gated DISABLED under effSemanticDisabled (Pitfall 4 →
+	// source=tree_sitter), and the SemanticLookup is EXPLICITLY nulled
+	// (idempotent null-object, Pitfall 5 — mirror SetEnrichFn(nil) above) rather
+	// than skipping the setter, so a stale real lookup cannot persist on the
+	// process-global RepoMapSkill singleton.
 	if rs := repomapSkill.GetRepoMapSkill(); rs != nil {
-		rs.SetConfigGate(&daemonCfgGate{enabled: cfg.SemanticIndex.Enabled})
-		if sBndl != nil {
+		rs.SetConfigGate(gatedCfgGate(cfg, effSemanticDisabled))
+		if effSemanticDisabled {
+			rs.SetSemanticLookup(nil)
+		} else if sBndl != nil {
 			rs.SetSemanticLookup(sBndl.integLookupAccessor())
 		}
 	}
@@ -764,8 +846,13 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		guardrails.SetReceiptIssueSink(func(ctx context.Context, class guardrails.ReceiptClass, scope guardrails.ReceiptScope, tool string) (guardrails.ReceiptID, error) {
 			return guardrailStore.Issue(activeWSKey, class, scope, guardrails.IssueFields{IssuingTool: tool})
 		})
+		// Phase 81 ABLATE-06: the guardrail middleware is a FOURTH
+		// integLookupAccessor hand-out (the SessionContext.Lookup consumed by
+		// rule predicates G-001..G-005). Gate it under effSemanticDisabled so the
+		// no_semantic arm sees integ.NoopLookup{} here too (T-81-04-01: no
+		// back-channel read consumer may leak a semantic read onto the gated arm).
 		var semanticLookup integ.SemanticLookup = integ.NoopLookup{}
-		if sBndl != nil {
+		if sBndl != nil && !effSemanticDisabled {
 			semanticLookup = sBndl.integLookupAccessor()
 		}
 		guardrailDeps := newGuardrailDeps(

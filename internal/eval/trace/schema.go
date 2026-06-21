@@ -150,6 +150,13 @@ type MergedTrace struct {
 	Outcome       string          `json:"outcome"`
 	Events        []Event         `json:"events"`
 	Usage         Usage           `json:"usage"`
+	// UsagePresent is the out-of-band presence signal for Usage: true when a CC
+	// `result` event actually carried a provider usage block (set by the tap at
+	// env.Usage != nil). Because Usage is a plain value struct, a genuine absence
+	// and a real all-zero usage block are indistinguishable from the values alone;
+	// downstream token grading (token_meter / D-01/D-03) MUST consult this flag
+	// rather than infer presence from a value threshold.
+	UsagePresent  bool            `json:"usage_present"`
 	ToolCallSummary ToolCallSummary `json:"tool_call_summary"`
 	Guardrails    GuardrailCounts `json:"guardrails"`
 	// FailureReason is set when Outcome == "failed" due to an invariant violation

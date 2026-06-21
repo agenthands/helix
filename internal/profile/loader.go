@@ -22,7 +22,45 @@ func LoadEmbedded() (*ProfileStore, error) {
 		return nil, fmt.Errorf("loading embedded modes: %w", err)
 	}
 
+	// ABLATE-02 fail-closed: reject any profile whose default_mode or mode
+	// transitions reference an unknown mode name, rather than silently producing
+	// a nil allow-list at session start (T-76-03 Tampering / measurement validity).
+	if err := store.Validate(); err != nil {
+		return nil, fmt.Errorf("validating embedded profiles: %w", err)
+	}
+
 	return store, nil
+}
+
+// Validate fail-closes on any profile that references an unknown mode name.
+// For each loaded profile it verifies that DefaultMode resolves to a loaded mode
+// and that every source and target mode in AllowedModeTransitions resolves too.
+// Returns a typed error naming the offending profile and mode on the first miss.
+//
+// Phase 76 ABLATE-02 (T-76-03): a malformed/unknown mode name would otherwise
+// silently no-op the profile's tool filter (resolveAllowedToolsForMode returns
+// nil on a missed store.Mode(name)), defeating an ablation arm. Validate makes
+// that a load-time error instead.
+func (s *ProfileStore) Validate() error {
+	for _, name := range s.ProfileNames() {
+		p := s.profiles[name]
+		if p.DefaultMode != "" {
+			if _, ok := s.Mode(p.DefaultMode); !ok {
+				return fmt.Errorf("profile %q references unknown mode %q (default_mode)", p.Name, p.DefaultMode)
+			}
+		}
+		for src, targets := range p.AllowedModeTransitions {
+			if _, ok := s.Mode(src); !ok {
+				return fmt.Errorf("profile %q references unknown mode %q (transition source)", p.Name, src)
+			}
+			for _, dst := range targets {
+				if _, ok := s.Mode(dst); !ok {
+					return fmt.Errorf("profile %q references unknown mode %q (transition target from %q)", p.Name, dst, src)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // LoadOverrides reads YAML files from disk directories and merges them into

@@ -4,12 +4,17 @@ create_file: Write content to a file, creating it if needed
 delete_memory: Delete a memory file by name
 echo: Echo arguments back as-is for debugging
 edit_memory: Edit a memory using search and replace
+explain_cluster: Cluster member detail
+explain_symbol_deep: Deep symbol explanation
 find_files: Search for files by name pattern
 find_implementations: Find all implementations of an interface or abstract method
 find_references: Find all references to a symbol
+find_related_symbols: Related symbols around a seed
 format_code: Format a file using the language server formatter
 fuzzy_edit: Apply a fuzzy text edit using search/replace with context matching
 get_call_hierarchy: Find all callers or callees of a function or method
+get_change_impact_graph: Change impact subgraph
+get_cluster_map: Workspace cluster overview
 get_code_actions: Get available code actions (quick fixes) for a location
 get_context: Get relevant code context for a set of files
 get_diagnostics: Get compiler errors and warnings for a file
@@ -43,5 +48,6 @@ search_in_files: Search file contents using regex patterns
 search_memories: Full-text search across all memory files
 search_symbols: Search for symbols by name across the workspace
 switch_mode: Switch operational mode (read/edit/review/admin)
+validate_graph_edge: Validate a graph edge claim
 verify_edit: Check for compilation errors after an edit
 write_memory: Save project knowledge to a named memory file

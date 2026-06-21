@@ -209,6 +209,8 @@ var outcomeEnum = []string{
 //   - validation_failed — post-edit verifier flagged regression
 //   - ls_error          — upstream LS failure
 //   - internal          — catch-all for unclassified errors
+//   - unsupported       — structured-edit ablation guard rejected the call
+//     (Phase 76 DisableStructuredEditSubsystem)
 //
 // Q-3 (RESOLVED 2026-04-30): "missing required field" validations bucket as
 // "internal" — preserves the locked D-10 enum; classified as a known
@@ -221,6 +223,7 @@ const (
 	editOutcomeValidationFailed = "validation_failed"
 	editOutcomeLSError          = "ls_error"
 	editOutcomeInternal         = "internal"
+	editOutcomeUnsupported      = "unsupported"
 )
 
 var editOutcomeEnum = []string{
@@ -230,6 +233,7 @@ var editOutcomeEnum = []string{
 	editOutcomeValidationFailed,
 	editOutcomeLSError,
 	editOutcomeInternal,
+	editOutcomeUnsupported,
 }
 
 // strategyEnum is the closed-enum vocabulary for the helix_edit_outcome_total
@@ -237,8 +241,9 @@ var editOutcomeEnum = []string{
 //
 // Q-4: NO "failed" entry — fuzzy.StrategyFailed paths emit outcome="no_match"
 // with strategy="none" instead of propagating "failed" as a strategy label
-// value. Cardinality bound 7 tools × 6 outcomes × 4 strategies = 168 (per
-// AMENDED D-11/D-12 in 53-CONTEXT.md, dropping ellipsis from the enum).
+// value. Cardinality bound 7 tools × 7 outcomes × 4 strategies = 196 (per
+// AMENDED D-11/D-12 in 53-CONTEXT.md, dropping ellipsis from the enum;
+// Phase 76 added the "unsupported" outcome lifting 6→7 outcomes).
 const (
 	strategyExact           = "exact"
 	strategyWhitespaceNorm  = "whitespace_normalized"
@@ -451,8 +456,8 @@ func OutcomeEnumForTest() []string {
 }
 
 // EditOutcomeEnumForTest returns a copy of the closed edit-outcome enum
-// (Phase 53 D-10) for test assertions that the 6-value vocabulary is
-// preserved.
+// (Phase 53 D-10 + Phase 76 "unsupported") for test assertions that the
+// 7-value vocabulary is preserved.
 func EditOutcomeEnumForTest() []string {
 	out := make([]string, len(editOutcomeEnum))
 	copy(out, editOutcomeEnum)

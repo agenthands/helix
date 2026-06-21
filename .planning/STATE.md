@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 90
 current_phase_name: CLI One-Shot Dial Spine + Race-Free Warm Reuse
-status: executing
+status: verifying
 stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-06-21T12:24:19.752Z"
+last_updated: "2026-06-21T12:47:26.812Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 90 execution started
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 17
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 Phase: 90 (CLI One-Shot Dial Spine + Race-Free Warm Reuse) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 — Phase 90 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -48,6 +48,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 90 P02 | 3min | 1 tasks | 2 files |
 | Phase 90 P02 | 3min | 1 tasks | 2 files |
 | Phase 90 P03 | 6min | 2 tasks | 6 files |
+| Phase 90 P04 | 35min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,7 +84,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T12:24:01.092Z
+Last session: 2026-06-21T12:47:05.764Z
 Stopped at: Completed 90-02-PLAN.md
 Resume file: None
 
@@ -94,3 +95,4 @@ Resume file: None
 - [Phase ?]: Phase 90-02: no-arg helix (mode=auto) prints grouped cobra help and exits 0 (CLI-04); explicit --mode=stdio still runs forwarder (Phase 94 owns head deletion); 3 command groups scaffold Phase 91 verbs
 - [Phase ?]: 90-03: client transport placed in internal/forwarder (no cycle; clirpc fallback unneeded)
 - [Phase ?]: 90-03: forwarder.CallTool takes version as a param to avoid an internal/cli↔forwarder import cycle
+- [Phase ?]: 90-04: E2E oracle fixed 3 latent 90-03 spine bugs (search_for_pattern wrong tool name, no socket override, cold-start :8080 bind); CLI-02 SLO=max(p50*5,50ms), observed p50 ~12ms

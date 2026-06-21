@@ -53,7 +53,7 @@
 - [x] 90-01-PLAN.md — Cross-process startup lock (gofrs/flock) + double-checked connect; synctest race-algorithm test (CLI-03)
 - [x] 90-02-PLAN.md — No-arg `helix` → grouped help, exit 0, no stdio MCP session; cobra command groups (CLI-04)
 - [x] 90-03-PLAN.md — Client-side gRPC↔MCP-SDK transport mirror + one-shot CallTool helper + verb-dispatch spine (CLI-01, CLI-02)
-- [ ] 90-04-PLAN.md — HELIX_BIN-gated `!windows` E2E oracle: one-shot round-trip, warm-reuse SLO, parallel-cold single-PID (TEST-01, CLI-01/02/03)
+- [x] 90-04-PLAN.md — HELIX_BIN-gated `!windows` E2E oracle: one-shot round-trip, warm-reuse SLO, parallel-cold single-PID (TEST-01, CLI-01/02/03)
 
 ### Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement
 

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 94
-current_phase_name: retire-the-agent-facing-mcp-surface-delete
+current_phase: 95
+current_phase_name: Identity & Docs Rewrite + docgen Regen
 status: verifying
 stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T22:08:39.523Z"
+last_updated: "2026-06-21T22:48:01.123Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 94 execution started
+last_activity_desc: Phase 94 complete, transitioned to Phase 95
 progress:
   total_phases: 6
   completed_phases: 5
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 94 (retire-the-agent-facing-mcp-surface-delete) — EXECUTING
-Plan: 2 of 2
+Phase: 95 — Identity & Docs Rewrite + docgen Regen
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 94 execution started
+Last activity: 2026-06-21 — Phase 94 complete, transitioned to Phase 95
 
 Progress: [██░░░░░░░░] 19%
 
@@ -45,6 +45,7 @@ Progress: [██░░░░░░░░] 19%
 | 91 | 4 | - | - |
 | 92 | 3 | - | - |
 | 93 | 4 | - | - |
+| 94 | 2 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

@@ -378,7 +378,11 @@ Plans:
   3. Long-wall scheduler accommodates tasks whose expected wall-time exceeds a day; per-cell checkpointing means a 24h Terminal-Bench task can resume after harness restart.
   4. Both adapters carry forward Phase 87's run-all-tests override pattern where applicable; per-language ablation slicing built into the reporter (not the upstream harness).
 
-**Plans**: TBD
+**Plans**: 4 plans (all wave 1, file-disjoint)
+- [ ] 88-01-PLAN.md — Multi-SWE-bench adapter (config.json producer + harness argv + resolved-gate ingestion + 7-language slicing through the existing aggregator)
+- [ ] 88-02-PLAN.md — Terminal-Bench 2.0 adapter (tb run argv with the runnerKind binary-name seam + results.json is_resolved ingestion + container-isolation gate)
+- [ ] 88-03-PLAN.md — Long-wall checkpoint/resume state machine (bench/longwall: atomic checkpoint + resume-skips-done + idempotent re-entry, injected clock, SC#3 with no 24h run)
+- [ ] 88-04-PLAN.md — Multi-SWE Mini-set fetcher (clone swebench-utboost) + bench/LICENSES.md rows (CC0 / Apache-2.0) + A1-A7 human-verify checkpoint
 
 ### Phase 89: Reports, CI Policy & Contamination Canary
 

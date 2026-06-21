@@ -288,6 +288,11 @@ func (h *Harness) Run(ctx context.Context, r HarnessRun) error {
 	}
 	cmd := exec.CommandContext(ctx, h.bin, args...)
 	cmd.SysProcAttr = procGroupAttr()
+	// WR-02: override the context-cancel kill to signal the WHOLE process group,
+	// not just the leader PID. Setpgid alone places the child in its own group, so
+	// the default single-PID kill would orphan the per-instance Docker descendants.
+	// On windows this is a no-op (no POSIX process groups).
+	setGroupKillCancel(cmd)
 	cmd.Env = env
 	cmd.Dir = workDir
 	if err := cmd.Run(); err != nil {

@@ -2,7 +2,10 @@
 
 package swebench
 
-import "syscall"
+import (
+	"os/exec"
+	"syscall"
+)
 
 // procGroupAttr returns nil on windows: POSIX process groups (Setpgid) have no
 // windows analog, so cancellation falls back to exec.CommandContext's default
@@ -19,3 +22,10 @@ import "syscall"
 func procGroupAttr() *syscall.SysProcAttr {
 	return nil
 }
+
+// setGroupKillCancel is a no-op on windows (Phase-88 WR-02): POSIX process-group
+// kill has no analog, so cancellation keeps exec.CommandContext's default
+// Process.Kill of the direct child. The same Win32 Job Object limitation
+// documented on procGroupAttr applies. Build-tag-split so the windows release
+// archive still cross-compiles without the unix-only negative-pid syscall.Kill.
+func setGroupKillCancel(cmd *exec.Cmd) {}

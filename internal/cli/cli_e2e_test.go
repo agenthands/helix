@@ -48,12 +48,21 @@ import (
 )
 
 // representativeVerbName is the single spine verb (90-03) this oracle exercises.
-const representativeVerbName = "search"
+// 91-01 flattened the verb surface onto root and removed the `call` parent, so
+// the flat verb name is the full generated name (search-in-files -> the
+// search_in_files tool), not the short `search` alias the `call` parent carried.
+const representativeVerbName = "search-in-files"
 
 // searchPattern is a unique marker the seeded fixture contains exactly once, so
 // the search result is deterministic and easy to compare across the CLI path and
 // the MCP path.
 const searchPattern = "needle_marker_xyz"
+
+// representativeVerbFlag is the required pattern flag of the flat search-in-files
+// verb (its generated flag is --pattern -> the pattern tool arg; the removed
+// `call search` alias accepted --query, but the root-attached verb uses the
+// generated flag name).
+const representativeVerbFlag = "--pattern="
 
 // resolveHelixBin returns the helix binary to drive the integration tests, or ""
 // if none is available (the caller SKIPs). It prefers the HELIX_BIN env override
@@ -172,14 +181,17 @@ func (f *e2eFixture) mcpSearch(t *testing.T, ctx context.Context) string {
 	return toolText(res)
 }
 
-// runCLIVerb invokes a REAL `helix call <verb> ...` subprocess pointed at the
+// runCLIVerb invokes a REAL flat `helix <verb> ...` subprocess pointed at the
 // fixture's daemon socket (via HELIX_SOCKET — the same per-uid resolution the
 // verb spine honors). Returns combined stdout and the error (nil on exit 0). The
 // subprocess inherits a minimal env so it cannot accidentally dial the host's
 // default daemon.
+//
+// VERB-03: 91-01 flattened the generated verbs onto the root command and removed
+// the `call` parent, so the oracle drives `helix <verb> --flag=...` directly (no
+// `call` prefix) against the root-attached verb surface.
 func (f *e2eFixture) runCLIVerb(ctx context.Context, args ...string) (string, error) {
-	full := append([]string{"call"}, args...)
-	cmd := exec.CommandContext(ctx, f.helixBin, full...)
+	cmd := exec.CommandContext(ctx, f.helixBin, args...)
 	cmd.Env = []string{
 		"HELIX_SOCKET=" + f.socket,
 		"HOME=" + os.Getenv("HOME"),
@@ -219,12 +231,12 @@ func TestCLI_E2E_OneShot(t *testing.T) {
 		t.Fatalf("MCP reference result did not contain the marker; got %q", reference)
 	}
 
-	// CLI path: the same tool (search_in_files) via `helix call search --query=...`
-	// against the SAME daemon. The verb renders the tool's text content verbatim,
+	// CLI path: the same tool (search_in_files) via flat `helix search-in-files
+	// --pattern=...` against the SAME daemon. The verb renders the tool's text content verbatim,
 	// so the CLI stdout must equal the MCP-path reference text.
-	out, err := f.runCLIVerb(ctx, representativeVerbName, "--query="+searchPattern)
+	out, err := f.runCLIVerb(ctx, representativeVerbName, representativeVerbFlag+searchPattern)
 	if err != nil {
-		t.Fatalf("helix call %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
+		t.Fatalf("helix %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
 	}
 
 	gotCLI := strings.TrimRight(out, "\n")
@@ -248,7 +260,7 @@ const (
 )
 
 // TestCLI_WarmReuseSLO is Task 2 (CLI-02): against a single warm daemon, measure
-// the WARM second-call round-trip p50 across a sample of real `helix call`
+// the WARM second-call round-trip p50 across a sample of real flat `helix <verb>`
 // subprocess invocations, RECORD the SLO as a multiple of the observed median, and
 // assert the measured p50 is below that RECORDED value. The chosen verb operates on
 // the already-active workspace (warmed by the first call), so the timing isolates
@@ -262,7 +274,7 @@ func TestCLI_WarmReuseSLO(t *testing.T) {
 	// Warm the daemon: activate the workspace and run one discarded warm-up call
 	// so the very first cold/dispatch costs do not skew the sample.
 	f.mcpActivate(t, ctx)
-	if out, err := f.runCLIVerb(ctx, representativeVerbName, "--query="+searchPattern); err != nil {
+	if out, err := f.runCLIVerb(ctx, representativeVerbName, representativeVerbFlag+searchPattern); err != nil {
 		t.Fatalf("warm-up call failed: %v\n%s", err, out)
 	}
 
@@ -270,7 +282,7 @@ func TestCLI_WarmReuseSLO(t *testing.T) {
 	timings := make([]time.Duration, 0, samples)
 	for i := 0; i < samples; i++ {
 		start := time.Now()
-		out, err := f.runCLIVerb(ctx, representativeVerbName, "--query="+searchPattern)
+		out, err := f.runCLIVerb(ctx, representativeVerbName, representativeVerbFlag+searchPattern)
 		elapsed := time.Since(start)
 		if err != nil {
 			t.Fatalf("warm call %d failed: %v\n%s", i, err, out)
@@ -354,7 +366,7 @@ func TestCLI_ParallelColdSingleDaemon(t *testing.T) {
 			defer wg.Done()
 			<-gate
 			cmd := exec.CommandContext(ctx, helixBin,
-				"call", representativeVerbName, "--query="+searchPattern)
+				representativeVerbName, representativeVerbFlag+searchPattern)
 			cmd.Env = []string{
 				"HELIX_SOCKET=" + socket,
 				"HOME=" + os.Getenv("HOME"),
@@ -430,7 +442,7 @@ func reapPids(pids []int) {
 }
 
 // TestCLI_E2E_OneShotCleanShutdown is the WR-06 oracle: it locks in WR-03's
-// clean-shutdown contract. A one-shot `helix call` must tear its MCP session
+// clean-shutdown contract. A one-shot flat `helix <verb>` must tear its MCP session
 // down cleanly (session flush + stream CloseSend) so the daemon records the
 // stdio session with outcome="ended", NOT outcome="error". Before WR-03's fix
 // the one-shot path never CloseSend'd, so conn.Close() aborted the stream and
@@ -459,10 +471,10 @@ func TestCLI_E2E_OneShotCleanShutdown(t *testing.T) {
 	endedBefore := scrapeLifecycle(t, ctx, metricsURL, "ended", "stdio")
 	errorBefore := scrapeLifecycle(t, ctx, metricsURL, "error", "stdio")
 
-	// The contract-bearing call: a REAL `helix call` subprocess one-shot.
-	out, err := f.runCLIVerb(ctx, representativeVerbName, "--query="+searchPattern)
+	// The contract-bearing call: a REAL flat `helix <verb>` subprocess one-shot.
+	out, err := f.runCLIVerb(ctx, representativeVerbName, representativeVerbFlag+searchPattern)
 	if err != nil {
-		t.Fatalf("helix call %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
+		t.Fatalf("helix %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
 	}
 	if !strings.Contains(out, searchPattern) {
 		t.Fatalf("CLI result missing the marker; got %q", out)

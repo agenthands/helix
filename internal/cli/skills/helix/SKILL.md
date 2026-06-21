@@ -78,9 +78,16 @@ Verbs are grouped by capability (navigation, edit, fileops, diagnostics,
 repomap, memory). Run `helix get-tool-help` for the full argument reference of
 any verb.
 
-<!-- Token note (SKILL-04): idle skill cost ≈ <N> tokens (the description+listing
-     metadata loaded into context, bounded by the Claude Code ≤1,536-char
-     description cap — the body below loads ONLY when the skill triggers);
-     preloaded full MCP tools/list schema ≈ <M> tokens. Numbers measured and
-     filled by plan 93-04; the char-cap bound is the dependency-free upper bound
-     on idle cost asserted by the SKILL-04 test. Measured <date>. -->
+<!-- Token note (SKILL-04): idle skill cost = 599 bytes (this frontmatter
+     description, the only text loaded into context until the skill triggers;
+     the body below loads ONLY when the skill fires), with a dependency-free
+     upper bound of the Claude Code 1536-char description-listing cap (≈150
+     tokens at ~4 chars/token). Preloaded full MCP tools/list brief-description
+     blob = 2467 bytes across 39 tools (FormatToolList output, the "before"
+     baseline; ≈617 tokens, a conservative lower bound since the live
+     tools/list also ships per-tool JSON input schemas not counted here). Net:
+     the on-demand skill replaces an always-on ~2467-byte preload with a
+     ~599-byte idle listing. The 599/1536-byte idle bound is asserted by the
+     non-gated SKILL-04 unit test (no API key needed); an exact count_tokens of
+     both blobs is recorded in the keyed test/oracle/llm transcript when the
+     llm-tagged oracle is run with an API key. Measured 2026-06-21. -->

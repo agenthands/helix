@@ -121,6 +121,54 @@ func TestSkillDescriptionCap(t *testing.T) {
 	}
 }
 
+// TestSkillDescriptionAccessor asserts the production skillDescription() accessor
+// returns the non-empty frontmatter description string (SKILL-04 Task 1, Test 1).
+func TestSkillDescriptionAccessor(t *testing.T) {
+	desc, err := skillDescription()
+	if err != nil {
+		t.Fatalf("skillDescription() error: %v", err)
+	}
+	if strings.TrimSpace(desc) == "" {
+		t.Fatal("skillDescription() returned empty string")
+	}
+}
+
+// TestSkillIdleCostBound is the dependency-free SKILL-04 idle-cost proof: the
+// frontmatter description (+ when_to_use if present, via skillDescription) must
+// be within the Claude Code 1,536-char listing cap. Runs in the DEFAULT
+// (untagged) suite with NO API key — SKILL-04's hermetic non-gated proof.
+// (SKILL-04 Task 1, Test 2.)
+func TestSkillIdleCostBound(t *testing.T) {
+	desc, err := skillDescription()
+	if err != nil {
+		t.Fatalf("skillDescription() error: %v", err)
+	}
+	const cap1536 = 1536
+	if n := len([]byte(desc)); n > cap1536 {
+		t.Errorf("idle skill cost = %d bytes, exceeds Claude Code listing cap %d", n, cap1536)
+	}
+}
+
+// TestSkillTokenNoteFilled asserts the SKILL-04 token-note carries a real
+// digit-bearing idle-cost figure and that the <N>/<M> placeholders reserved in
+// 93-01 are gone. Runs in the DEFAULT suite (no API key). (SKILL-04 Task 1, Test 3.)
+func TestSkillTokenNoteFilled(t *testing.T) {
+	if strings.Contains(embeddedSkillMD, "<N>") || strings.Contains(embeddedSkillMD, "<M>") {
+		t.Error("SKILL.md token-note still contains <N>/<M> placeholders; fill with measured numbers")
+	}
+	// A real, digit-bearing idle-cost number must be present somewhere in the
+	// token-note region (the SKILL-04 acceptance: no placeholder, real number).
+	digitRe := regexp.MustCompile(`\d`)
+	noteIdx := strings.Index(strings.ToLower(embeddedSkillMD), "token note")
+	if noteIdx < 0 {
+		t.Fatal("SKILL.md missing the 'Token note' line")
+	}
+	note := embeddedSkillMD[noteIdx:]
+	if !digitRe.MatchString(note) {
+		t.Error("SKILL-04 token-note carries no digit-bearing idle-cost figure")
+	}
+}
+
 // helixVerbRe matches a backtick-fenced `helix <kebab-verb>` occurrence in the
 // SKILL.md body and captures the kebab verb.
 var helixVerbRe = regexp.MustCompile("`helix ([a-z][a-z0-9-]+)")

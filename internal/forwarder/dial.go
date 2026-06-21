@@ -126,6 +126,15 @@ func tryConnect(_ context.Context, socketPath string, tp trace.TracerProvider) (
 	return conn, client, nil
 }
 
+// daemonLogPath derives the per-socket log file the auto-started daemon's
+// stdout/stderr are redirected to (WR-05). Like lockfilePath it is a plain
+// regular file beside the socket, inheriting the per-uid 0700 socket dir
+// permissions, and is never bind()ed so the AF_UNIX sun_path length limit does
+// not apply.
+func daemonLogPath(socketPath string) string {
+	return socketPath + ".daemon.log"
+}
+
 // startDaemon starts a new daemon process in the background.
 func startDaemon(socketPath string) error {
 	exe, err := os.Executable()
@@ -142,8 +151,22 @@ func startDaemon(socketPath string) error {
 	cmd := exec.Command(exe, "--serve", "--socket="+socketPath, "--http-addr=")
 	// Detach daemon from forwarder process group (Unix only; no-op on Windows).
 	detachFromProcessGroup(cmd)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// WR-05: capture the auto-started daemon's stderr to a log file beside the
+	// socket so cold-start failures (bad config, unwritable socket dir, a port
+	// bind that kills the daemon) are diagnosable instead of surfacing only as an
+	// opaque 10s waitForDaemon timeout. The file lives in the existing per-uid
+	// 0700 socket dir, so it inherits those permissions (no new permission code).
+	// Best-effort: if the log can't be opened, fall back to discarding output
+	// rather than failing the spawn. The fd is intentionally NOT closed here — the
+	// detached child keeps writing to it for its lifetime; the OS reclaims it when
+	// this short-lived CLI process exits.
+	if logFile, lerr := os.OpenFile(daemonLogPath(socketPath), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); lerr == nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	} else {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting daemon process: %w", err)

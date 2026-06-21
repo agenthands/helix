@@ -263,7 +263,14 @@ func runOneCell(ctx context.Context, c Cell, cfg RunMatrixConfig) CellOutcome {
 	// The claude branch (D-01) needs the task prompt; the scripted gate does not.
 	var prompt string
 	if cfg.Agent == "claude" {
-		prompt = meta.Prompt
+		// INFRA-05 production canary injection (RESEARCH Open Q5): deterministically
+		// embed canary.Sentinel into a SELECT subset of task prompts (every Kth task by
+		// a stable hash of c.Task) before dispatch. A model that memorised the prompt
+		// echoes the sentinel into its completion, where the aggregator's rowCanary /
+		// cleanRows flags and EXCLUDES the cell from the headline. Pure/deterministic
+		// (keyed on the stable task id) so the matrix stays reproducible; a non-selected
+		// task's prompt is untouched.
+		prompt = InjectCanaryIfSelected(c.Task, meta.Prompt)
 	}
 
 	// StoreOptIn (D-01/D-02): the per-cell semantic store is OFF by default and is

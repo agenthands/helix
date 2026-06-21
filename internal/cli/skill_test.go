@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -167,5 +169,99 @@ func TestSkillTokenNotePresent(t *testing.T) {
 	if !strings.Contains(strings.ToLower(embeddedSkillMD), "token note") &&
 		!strings.Contains(strings.ToLower(embeddedSkillMD), "skill-04") {
 		t.Error("SKILL.md is missing the SKILL-04 token-note line")
+	}
+}
+
+// --- Task 2: installSkill atomic contained writer ---
+
+// TestSkillTargetDir asserts skillTargetDir resolves <claudeDir>/skills/helix.
+func TestSkillTargetDir(t *testing.T) {
+	got := skillTargetDir("/home/u/.claude")
+	want := filepath.Join("/home/u/.claude", "skills", "helix")
+	if got != want {
+		t.Errorf("skillTargetDir = %q, want %q", got, want)
+	}
+}
+
+// TestInstallSkillWritesContent asserts installSkill writes <dir>/SKILL.md whose
+// bytes equal embeddedSkillMD (modulo a single trailing newline). (Task 2, b1.)
+func TestInstallSkillWritesContent(t *testing.T) {
+	dir := skillTargetDir(t.TempDir())
+	if err := installSkill(dir); err != nil {
+		t.Fatalf("installSkill: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("reading written SKILL.md: %v", err)
+	}
+	want := embeddedSkillMD
+	if !strings.HasSuffix(want, "\n") {
+		want += "\n"
+	}
+	if string(got) != want {
+		t.Errorf("written SKILL.md content does not match embeddedSkillMD (modulo trailing newline)")
+	}
+}
+
+// TestInstallSkillCreatesNestedDir asserts installSkill creates a non-existent
+// nested dir. (Task 2, b2.)
+func TestInstallSkillCreatesNestedDir(t *testing.T) {
+	dir := filepath.Join(skillTargetDir(t.TempDir()), "deep", "nested")
+	if err := installSkill(dir); err != nil {
+		t.Fatalf("installSkill on nested dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Fatalf("SKILL.md not created in nested dir: %v", err)
+	}
+}
+
+// TestInstallSkillIdempotent asserts two calls leave byte-identical content.
+// (Task 2, b3.)
+func TestInstallSkillIdempotent(t *testing.T) {
+	dir := skillTargetDir(t.TempDir())
+	if err := installSkill(dir); err != nil {
+		t.Fatalf("installSkill (1): %v", err)
+	}
+	first, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read after 1st: %v", err)
+	}
+	if err := installSkill(dir); err != nil {
+		t.Fatalf("installSkill (2): %v", err)
+	}
+	second, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read after 2nd: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Error("installSkill is not byte-stable across re-runs")
+	}
+}
+
+// TestInstallSkillNoTempLeftover asserts no .tmp sibling remains after a
+// successful atomic write. (Task 2, b4.)
+func TestInstallSkillNoTempLeftover(t *testing.T) {
+	dir := skillTargetDir(t.TempDir())
+	if err := installSkill(dir); err != nil {
+		t.Fatalf("installSkill: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md.tmp")); err == nil {
+		t.Error("leftover SKILL.md.tmp after successful write")
+	}
+}
+
+// TestInstallSkillContainment asserts a target resolving outside its claudeDir
+// root is refused — no escaping write (T-93-01, mirrors readSnippetLine's
+// ..-prefix guard). (Task 2, b5.)
+func TestInstallSkillContainment(t *testing.T) {
+	root := t.TempDir()
+	// A crafted "skills/helix" subpath that climbs out of the root via "..".
+	escaping := filepath.Join(root, "skills", "helix", "..", "..", "..", "escaped")
+	if err := installSkill(escaping); err == nil {
+		t.Fatal("installSkill accepted an escaping target; expected refusal")
+	}
+	// And nothing was written outside the root.
+	if _, statErr := os.Stat(filepath.Join(filepath.Dir(root), "escaped", "SKILL.md")); statErr == nil {
+		t.Error("installSkill wrote SKILL.md outside the root")
 	}
 }

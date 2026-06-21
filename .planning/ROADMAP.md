@@ -306,7 +306,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 84-03-PLAN.md — In-process cosign/sigstore-go verify (canonical-error) + verify-then-pull crane wiring (CONTAINER-03 runtime half)
+- [x] 84-03-PLAN.md — In-process cosign/sigstore-go verify (canonical-error) + verify-then-pull crane wiring (CONTAINER-03 runtime half)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

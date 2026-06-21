@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 83-03-PLAN.md
-last_updated: "2026-06-21T01:20:55.635Z"
-last_activity: 2026-06-21 -- Phase 84 execution started
+stopped_at: Completed 84-03-PLAN.md
+last_updated: "2026-06-21T01:31:00.000Z"
+last_activity: 2026-06-21 -- Phase 84 Plan 03 executed (CONTAINER-03 runtime half)
 progress:
   total_phases: 15
   completed_phases: 9
   total_plans: 49
-  completed_plans: 47
-  percent: 60
+  completed_plans: 48
+  percent: 61
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 84 (container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 84 execution started
+Last activity: 2026-06-21 -- Phase 84 Plan 03 executed (CONTAINER-03 runtime half)
 
 ### Session Continuity
 
-Last session: 2026-06-21T01:20:37.997Z
-Stopped at: Completed 83-03-PLAN.md
+Last session: 2026-06-21T01:31:00.000Z
+Stopped at: Completed 84-03-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -114,6 +114,7 @@ Resume file: None
 | Phase 83 P03 | 55min | 4 tasks | 14 files |
 | Phase 84 P01 | 3m22s | 2 tasks | 7 files |
 | Phase 84 P02 | 190s | 2 tasks | 9 files |
+| Phase 84 P03 | ~7min | 2 tasks | 13 files (TDD RED+GREEN x2) |
 
 ## Decisions
 
@@ -187,3 +188,4 @@ Resume file: None
 - [Phase ?]: 84-01: go-containerregistry promoted to direct require via go.mod hand-edit (not tidy); Plan 03 crane import makes it self-sustaining
 - [Phase ?]: 84-01: ArchGate pure host-arch-as-parameter for hermetic both-ways testing; escape hatch only on exact BENCH_ARCH_MISMATCH_OK=1
 - [Phase ?]: Plan 02: cacheDir() copied verbatim from bench/ragindex; Ensure publishes via verified-then-rename + .container-cache-ok sentinel; DiskGuard injectable availFn with build-tag-split unix.Statfs/GetDiskFreeSpaceEx at 50 GiB; extracted procGroupAttr() seam to unblock engine.go windows cross-compile.
+- [Phase 84 P03]: CONTAINER-03 runtime half DONE — VerifyImage(manifestBytes,bundleBytes) clones internal/upgrade/verify.go's sigstore-go keyless verifier (NewSignedEntityVerifier + NewShortCertificateIdentity, pinnedOIDCIssuer unchanged, pinnedSANRegexLiteral RE-PINNED to bench-mirror.yml@refs/heads/main — couples to Plan 04 publish ref). Single canonical "signature verification FAILED" at all 5 failure branches, no Rekor-unreachable exception (no offline UX here); error-text-identity test + comment-stripped grep gate (>=5) guard Pitfall 4. testTrustedRootOverride seam only — NO embedded prod root this phase (deferred to Plan 04 live mirror; production callers fail closed). VirtualSigstore fixtures committed (canonical/wrong-org/wrong-issuer + sample manifest). VerifyThenPull(ctx,repo,digest,opts) orders digest/repo fail-closed → daemon-free crane.Config arch inspect → ArchGate (Pitfall 5, before verify/pull) → Ensure with verify-then-pull INSIDE the fetch closure so a verify failure publishes ZERO cache bytes (Pitfall 3 TOCTOU); hermetic order/no-bytes/arch-gate/cache-hit siblings prove SC#3 without the gated live test (HELIX_BENCH_MIRROR+engine). Unexported Option seams (withVerifyFn/withArchFn/withFetchMetaFn/withPullFn/withEnsureFn/withHostArch); live fetch/pull deferred to Plan 04 (fail-closed notWired sentinels). Fixture build tag = `fixturegen` not `ignore` (Go 1.26 `-tags ignore` re-enables stdlib gen-tool import-cycle cascade). crane added via pinned go get @v0.20.7 (full tidy blocked by pre-existing s2a-go failure). [Rule 1] verify-no-docker-sdk gate grep anchored to 'github.com/docker/docker<ws>' so crane's transitive docker-credential-helpers (registry-auth, NOT Engine SDK) stops false-positiving SC#1.

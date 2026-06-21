@@ -20,7 +20,13 @@ findings:
   warning: 6
   info: 5
   total: 11
-status: issues_found
+status: fixed
+fixed:
+  warning: 6
+  info: 2
+deferred:
+  info: 3
+fix_report: 90-REVIEW-FIX.md
 ---
 
 # Phase 90: Code Review Report
@@ -57,6 +63,8 @@ No structural findings block was provided for this phase.
 
 ### WR-01: Cold-start leaks the double-check probe's gRPC connection
 
+**Disposition: FIXED** (commit b3e5fda7) — `connect` seam now closes the probe conn.
+
 **File:** `internal/forwarder/dial.go:53`
 **Issue:** The `connect` seam passed into `startupGuard` discards the
 `*grpc.ClientConn` that `tryConnect` returns on success:
@@ -89,6 +97,8 @@ connect: func(sp string) error {
 
 ### WR-02: Cold-start leaks the waitForDaemon connection
 
+**Disposition: FIXED** (commit b3e5fda7) — `waitUp` seam now closes the conn (note: `waitForDaemon` returns `(client, conn, err)`, conn is the SECOND value).
+
 **File:** `internal/forwarder/dial.go:55` (and `waitForDaemon` at dial.go:136-156)
 **Issue:** Same class as WR-01. The `waitUp` seam discards the conn:
 
@@ -117,6 +127,8 @@ waitUp: func(sp string) error {
 ```
 
 ### WR-03: One-shot teardown never CloseSends — daemon records outcome="error" per call
+
+**Disposition: FIXED** (commit d6b13e49) — teardown now does `session.Close()` then `stream.CloseSend()` before conn.Close(). Verified at runtime by the new WR-06 oracle (outcome="ended" increments, outcome="error" does not).
 
 **File:** `internal/forwarder/oneshot.go:43,62-63` (vs `internal/forwarder/forwarder.go:95`)
 **Issue:** `CallTool`'s doc comment (oneshot.go:25-28) explicitly states the
@@ -153,6 +165,8 @@ one-shot call (the E2E oracle does not currently assert this — see WR-06).
 
 ### WR-04: TryLock error is silently swallowed and reclassified as contention
 
+**Disposition: FIXED** (commit ca26f285) — TryLock error is now propagated (wrapped); the contention path is unchanged.
+
 **File:** `internal/forwarder/dial_lock.go:81-88`
 **Issue:** `startupGuard` discards the error from `TryLock`:
 ```go
@@ -186,6 +200,8 @@ if !locked {
 
 ### WR-05: startDaemon redirects child stdout/stderr to the parent's fds (nil), defeating detach
 
+**Disposition: FIXED** (commit 60783c65) — auto-started daemon stdout/stderr now redirected to `<socket>.daemon.log` (best-effort, falls back to discard) so cold-start failures are diagnosable.
+
 **File:** `internal/forwarder/dial.go:122-126,132`
 **Issue:** `cmd.Stdout = nil` / `cmd.Stderr = nil` does NOT discard the
 auto-started daemon's output. Per `os/exec`, a nil Stdout/Stderr means the
@@ -212,6 +228,8 @@ At minimum, document that all auto-start daemon diagnostics are discarded.
 
 ### WR-06: E2E oracle asserts only daemon count, never the clean-shutdown contract (WR-03)
 
+**Disposition: FIXED** (commit fab67c63) — added `TestCLI_E2E_OneShotCleanShutdown`, which enables the daemon admin listener (new `sandbox.WithAdminAddr` option) and scrapes `helix_session_lifecycle_total{transport="stdio"}` to assert `outcome="ended"` increments and `outcome="error"` does not. Test RAN and PASSED under HELIX_BIN.
+
 **File:** `internal/cli/cli_e2e_test.go:318-385`
 **Issue:** `TestCLI_ParallelColdSingleDaemon` proves "exactly one daemon", and
 `TestCLI_E2E_OneShot` proves result parity, but nothing in the suite asserts
@@ -231,6 +249,8 @@ way as the other HELIX_BIN sub-tests.
 
 ### IN-01: `var _ = time.Second` import-guard hack left in committed test
 
+**Disposition: FIXED** (commit 205622fd) — removed the guard line and the unused `time` import.
+
 **File:** `internal/forwarder/dial_race_test.go:218-219`
 **Issue:** `// guard against unused import when iterating` + `var _ = time.Second`
 is scaffolding left from development. The `time` import is not otherwise used in
@@ -238,6 +258,8 @@ this file; the guard should be removed along with the import.
 **Fix:** Delete lines 218-219 and the `"time"` import (line 9) if unused.
 
 ### IN-02: tryConnect ignores the os.Stat error class
+
+**Disposition: DEFERRED** — cosmetic error-precision nit; the dial fails anyway and the message is only slightly less precise. Out of scope (advisory).
 
 **File:** `internal/forwarder/dial.go:73-75`
 **Issue:** Only `os.IsNotExist(err)` is special-cased; a stat error for any
@@ -248,6 +270,8 @@ precise than it could be.
 **Fix:** Return a wrapped stat error for non-NotExist cases.
 
 ### IN-03: defensive payload copy asymmetry between client and server drain loops
+
+**Disposition: DEFERRED** — the finding itself states no change is required in phase-90 files; the client side is correct and the server-side gap is out of this phase's change set. Tracked for separate follow-up.
 
 **File:** `internal/forwarder/grpc_client_transport.go:108-111` vs `internal/mcp/grpc_transport.go:106-109`
 **Issue:** The client drain copies the line before Send
@@ -262,6 +286,8 @@ buffer is reused).
 
 ### IN-04: representativeVerb is a single-entry map iterated for a one-element loop
 
+**Disposition: DEFERRED** — the finding explicitly defers the fix to Phase 91 ("When Phase 91 lands, iterate sorted keys"); no action in phase 90.
+
 **File:** `internal/cli/verb.go:68-86,102-105`
 **Issue:** `verbSpecs` is a one-entry map and `newVerbCommand` ranges over it.
 Map iteration order is irrelevant for one element, but once Phase 91 populates
@@ -272,6 +298,8 @@ generator sorts keys for deterministic command construction.
 slices.Sorted(maps.Keys(verbSpecs))`.
 
 ### IN-05: resolveVerbSocket checks the verb's own --socket flag that is never defined
+
+**Disposition: FIXED** (commit cd2d856e) — dropped the dead per-verb local-flag lookup; reads the inherited root `--socket` flag directly.
 
 **File:** `internal/cli/verb.go:204-209`
 **Issue:** `cmd.Flags().Lookup("socket")` on the verb subcommand will only find

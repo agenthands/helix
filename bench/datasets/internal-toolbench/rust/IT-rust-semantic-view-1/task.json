@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "semantic_view",
+  "prompt": "src/widget.rs defines a Widget struct with several impl methods. Use get_repo_map / list_file_outline to obtain the symbol outline of widget.rs, then summarize its public methods without reading the whole file. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

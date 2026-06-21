@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "rename_safety",
+  "prompt": "The function compute() is referenced across src/widget.rs and src/main.rs. Use rename_symbol to rename it to evaluate() across all call sites without breaking the build. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

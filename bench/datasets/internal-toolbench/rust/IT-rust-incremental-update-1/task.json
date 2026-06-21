@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "incremental_update",
+  "prompt": "After editing src/widget.rs, re-run only the affected test via `cargo test widget::` and confirm incremental compilation reflects the change without a full rebuild. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "fuzzy_search",
+  "prompt": "The test in src/widget.rs asserts a normalized output string, but the impl emits slightly different whitespace. Use fuzzy_edit / replace_in_file to update the offending literal despite the indentation drift. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

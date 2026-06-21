@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "patch_apply",
+  "prompt": "Apply the supplied unified diff to src/widget.rs using replace_symbol_body so the add() method clamps negative inputs to zero. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

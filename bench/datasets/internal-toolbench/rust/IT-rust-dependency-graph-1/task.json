@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "dependency_graph",
+  "prompt": "Use get_import_graph to find which modules use crate::widget before moving it, then fix the resulting `use` paths. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

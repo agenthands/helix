@@ -1,0 +1,8 @@
+{
+  "id": "IT-rust-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "rust",
+  "capability": "failure_handling",
+  "prompt": "Widget::process() unwraps an Option that can be None in src/widget.rs. Replace the unwrap with graceful error handling so the failing test passes. Ensure `cargo test` passes.",
+  "verify": "verify.sh"
+}

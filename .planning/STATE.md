@@ -6,14 +6,14 @@ current_phase: 93
 current_phase_name: skill-md-nudge-repurpose-helix-setup-flip
 status: executing
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T20:02:24.833Z"
+last_updated: "2026-06-21T20:09:02.562Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 93 execution started
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Phase: 93 (skill-md-nudge-repurpose-helix-setup-flip) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 — Phase 93 execution started
 
@@ -59,6 +59,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 92 P02 | 6min | 2 tasks | 8 files |
 | Phase 92 P03 | ~10min | 2 tasks | 9 files |
 | Phase 93 P01 | 50m | 2 tasks | 3 files |
+| Phase 93 P02 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -94,7 +95,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:02:08.130Z
+Last session: 2026-06-21T20:08:51.405Z
 Stopped at: Completed 91-03-PLAN.md
 Resume file: None
 
@@ -120,3 +121,5 @@ Resume file: None
 - [Phase ?]: 92-02: readSnippetLine clamps the CLI-side snippet read to the workspace root before opening (T-92-04)
 - [Phase ?]: 92-03: Contract oracle re-targeted to real helix subprocess stdout goldens (HELIX_BIN-gated); MCP schema meta-validation replaced by default-suite typed-args to cobra-flags parity; OUT-04 chain + OUT-03 self-contained nav snippet proven end-to-end
 - [Phase ?]: 93-01: SKILL.md ships via go:embed (string form); installSkill writes it atomically with skills/helix containment; zero new deps, drift-gated against VerbToolNames
+- [Phase ?]: 93-02: PreToolUse nudge repurposed to per-call advisory steering grep/sed/cat to helix verbs via hookSpecificOutput.additionalContext, fail-open and exit-0 always (T-93-04)
+- [Phase ?]: 93-02: classifyBashTarget uses a static code-extension allowlist (not per-call Registry) for the hot hook path; mixed code+non-code operands classify conservatively as non-code

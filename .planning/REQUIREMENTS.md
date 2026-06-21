@@ -55,7 +55,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 - [x] **SKILL-01**: Ship a `SKILL.md` (embedded via `go:embed`) with frontmatter (`name` / `description` / `allowed-tools: Bash(helix:*)`) and a `| Question | Use this | Not this |` decision table; the description fires on code-navigation/edit tasks without over-firing. _Acceptance:_ the skill validates against the Claude Code skill schema; the behavioral oracle shows it triggers on code tasks and stays dormant on unrelated ones.
 - [ ] **SKILL-02**: `helix setup <client>` installs the skill + hooks instead of registering an MCP server, idempotently, across the supported clients, and tears down any prior MCP registration (migration path). _Acceptance:_ `helix setup claude-code` leaves skill + hooks present and no MCP server entry; re-running is idempotent.
-- [ ] **SKILL-03**: The PreToolUse nudge hook is repurposed to advisory-steer grep/sed/cat → the equivalent `helix <verb>` via `additionalContext`, exiting 0, failing open on unparseable Bash and non-code targets. _Acceptance:_ a code-symbol grep yields a `helix` suggestion; a README/log grep yields none; the hook never blocks.
+- [x] **SKILL-03**: The PreToolUse nudge hook is repurposed to advisory-steer grep/sed/cat → the equivalent `helix <verb>` via `additionalContext`, exiting 0, failing open on unparseable Bash and non-code targets. _Acceptance:_ a code-symbol grep yields a `helix` suggestion; a README/log grep yields none; the hook never blocks.
 - [x] **SKILL-04**: The `SKILL.md` token-efficiency rationale is backed by a real measurement (idle skill cost vs the preloaded full-tool schema blob). _Acceptance:_ measured before/after token numbers are recorded in `SKILL.md` or a referenced doc.
 
 ### MCP Surface Retirement (RETIRE-*)
@@ -123,7 +123,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | SEC-02 | Phase 91 | Complete (91-03) |
 | SKILL-01 | Phase 93 | Complete |
 | SKILL-02 | Phase 93 | Pending |
-| SKILL-03 | Phase 93 | Pending |
+| SKILL-03 | Phase 93 | Complete |
 | SKILL-04 | Phase 93 | Complete |
 | RETIRE-01 | Phase 94 | Pending |
 | RETIRE-02 | Phase 94 | Pending |

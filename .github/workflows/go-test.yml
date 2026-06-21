@@ -105,6 +105,12 @@ jobs:
         # discipline. Regenerate with: go run ./cmd/helix-cligen
         run: go run ./cmd/helix-cligen --check
 
+      - name: docgen drift gate (DOCS-02)
+        # HARD-FAIL if README.md tool table is stale relative to the live
+        # tool registry (a tool registration without `make docs`). Closes the
+        # v1.12 docgen-drift hole. Regenerate with: go run ./cmd/docgen
+        run: go run ./cmd/docgen --check
+
       - name: eval-quick (harness validation)
         # eval-quick runs the in-process scripted-agent harness validation (<30s wall-time).
         # This is the ONLY eval target allowed in PR-gating CI (project rule: benchmarks local-only).

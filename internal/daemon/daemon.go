@@ -704,6 +704,26 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	if cfg.Mode != "" {
 		initialMode = cfg.Mode
 	}
+	// WR-01 fail-closed: validate the initial operational mode resolves to a
+	// registered mode BEFORE resolving its tool whitelist. A profile is always
+	// active here (ResolveProfile falls back to the "full" default profile), so
+	// an unresolvable mode means a misconfigured profile.DefaultMode or a bad
+	// config-file `mode:` value. Left unchecked, resolveAllowedToolsForMode would
+	// return nil, and ProfileEnforcementMiddleware treats a nil whitelist as
+	// "all tools allowed" — silently disabling tools/call enforcement for the
+	// whole session (a fail-OPEN authz default). Refuse to start instead, in
+	// line with the daemon's fail-fast-for-core-subsystems policy. The legitimate
+	// "no profile configured → nil → all tools" default is unaffected: that path
+	// never reaches here because a profile is always resolved.
+	if _, ok := profileStore.Mode(initialMode); !ok {
+		return nil, fmt.Errorf(
+			"initial operational mode %q does not resolve to a registered mode "+
+				"(profile=%s, available modes=%v); refusing to start to avoid "+
+				"fail-open tools/call enforcement — check profile.DefaultMode or the "+
+				"config-file `mode:` value",
+			initialMode, activeProfile.Name, profileStore.ModeNames(),
+		)
+	}
 	// Resolve initial AllowedTools from profile + initial mode so that tools/list
 	// is filtered from session start (not only after the first switch_mode call).
 	initialAllowedTools := resolveAllowedToolsForMode(profileStore, activeProfile, initialMode)

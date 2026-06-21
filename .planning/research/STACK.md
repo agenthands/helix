@@ -1,386 +1,277 @@
-# STACK.md — v1.12 Bench Stack & Tool Evaluation (Additions)
+# Stack Research
 
-**Project:** Helix v1.12 Bench Stack & Tool Evaluation
-**Researched:** 2026-06-13
-**Scope:** NEW dependencies / runtime requirements for the new `bench/` tree only. The existing v1.11 stack (Go 1.25.1, MCP SDK, koanf v2, modernc.org/sqlite, duckdb-go v2.10502.0, go-tree-sitter + 23 grammars, gRPC, Prometheus, OTel, cobra, fsnotify v1.9.0, anthropic-sdk-go v1.35.0, openai-go v1.12.0, tiktoken-go/tokenizer **already chosen for `eval/` at v1.10**, bluekeyes/go-gitdiff **already chosen for `eval/` at v1.10**, sigstore-go, gonum test-only) is fixed and not re-evaluated.
+**Domain:** CLI head for an existing Go daemon — 53-subcommand cobra CLI + agent SKILL.md, driving the unchanged MCP-SDK/gRPC daemon kernel via one-shot `tools/call`.
+**Researched:** 2026-06-21
+**Confidence:** HIGH
 
-**Mandatory upstream-tool tag for every adapter row in this doc:**
-- `subprocess-shellout` — run upstream's reference harness as-is via `os/exec` (lowest effort, highest fidelity)
-- `dataset-loader-only` — pull dataset, run our own scorer (medium effort, full control over modes)
-- `go-native-rewrite` — reimplement the harness in Go (highest effort; only if the upstream harness is unusable from outside Python or we need deep ablation hooks)
+> **TL;DR for the roadmapper:** This milestone needs **essentially zero new third-party dependencies.** Every load-bearing capability — cobra subcommands at scale, gRPC `StreamMCP` dialing with daemon autostart, JSON-RPC framing, struct→JSON-schema reflection — already ships in the tree and is already exercised. The real work is (1) a `go:generate` codegen that turns the existing typed-arg structs into ~53 cobra subcommands, (2) a one-shot MCP-over-gRPC client adapter (a ~150-LOC refactor of the existing forwarder loop), (3) terse per-tool output formatters, and (4) a `SKILL.md` asset + a `helix setup` flip. The stack recommendation is therefore mostly "reuse what's vendored; add one tiny generator; do not add a TUI framework or a second RPC layer."
 
 ---
 
-## TL;DR — Recommended Additions
+## Recommended Stack
 
-| Component | Library / Tool | Version | CGO | Runtime needed | Confidence |
-|-----------|----------------|---------|-----|----------------|-----------|
-| Docker SDK (container orchestration for SWE-bench / Multi-SWE-bench / Terminal-Bench) | `github.com/docker/docker` (engine-api `client`) | v27.x | no (Unix socket / TCP) | Docker Engine ≥ 24 on the host | HIGH |
-| Container test ergonomics (optional, dev-time only) | `github.com/testcontainers/testcontainers-go` | v0.36.x (Apr 2026) | no | Docker Engine | MEDIUM (only if Go-side container reuse becomes painful) |
-| SWE-bench harness | upstream `swebench` PyPI | v4.x (2026) | n/a — `subprocess-shellout` | Python 3.11+, Docker Engine | HIGH |
-| Multi-SWE-bench harness | upstream `multi-swe-bench` (github) | main (no PyPI release) | n/a — `subprocess-shellout` | Python 3.11+, Docker Engine | HIGH |
-| Terminal-Bench 2.0 + Harbor | upstream `terminal-bench` (`tb` CLI) | 2.x (Nov 2025) | n/a — `subprocess-shellout` | Python (uv/pipx), Docker Engine | HIGH |
-| Aider Polyglot dataset | `Aider-AI/polyglot-benchmark` repo | shallow git clone, pin sha | n/a — `dataset-loader-only` | per-language toolchains | HIGH |
-| CrossCodeEval dataset | HF `crosscodeeval` (jsonl) | v1 | n/a — `dataset-loader-only` | none (completion-only scoring) | HIGH |
-| RepoBench dataset | HF `tianyang/repobench_python_v1.1` / `_java_v1.1` | v1.1 | n/a — `dataset-loader-only` | none (completion-only scoring) | HIGH |
-| HF dataset/parquet fetcher | `github.com/gomlx/go-huggingface` | v0.x | no | none | MEDIUM |
-| Parquet reader (lower-level fallback) | `github.com/apache/arrow-go/v18` (already indirect in go.sum) | v18.5.1 | no | none | HIGH |
-| RAG baseline — embedding provider | OpenAI `text-embedding-3-small` via existing `openai-go` v1.12.0 (primary); Ollama `nomic-embed-text` over HTTP for offline (secondary) | n/a | no | network OR local Ollama daemon | HIGH |
-| RAG baseline — in-process vector store | `github.com/philippgille/chromem-go` | v0.7.x | no (zero deps) | none | HIGH |
-| Bootstrap CIs, percentiles, BCa | `gonum.org/v1/gonum/stat` (promoted from test-only to runtime for bench/) + ~40 LOC BCa helper in `bench/evaluators/statx` | v0.16.x | no | none | HIGH |
-| Per-language test runner shellouts | stdlib `os/exec` + per-language toolchain (already runs in CI) | n/a | no | go, python, node, java (jdk), dotnet, msvc/clang/cmake, cargo, rustc | HIGH |
-| Cost table format | static YAML in `bench/datasets/cost-table.yaml`, parsed via koanf v2 (existing) | n/a | no | none | HIGH |
-| Trace merging | reuse existing OTel pipeline + Phase 67's `internal/eval/trace` merger; no new lib | n/a | no | none | HIGH |
-| Token counting | `github.com/tiktoken-go/tokenizer` (already in eval/) v0.6.x **+** `anthropic-sdk-go` server-side count | v0.6.0 | no | none / network for exact Claude | HIGH |
-| Patch apply (SWE-bench-style prediction patches) | `github.com/bluekeyes/go-gitdiff` (already in eval/) v0.8.x | v0.8.0 | no | none | HIGH |
+### Core Technologies (all ALREADY in `go.mod` — reuse, do not re-add)
 
-**Runtime posture impact (single most important issue):**
-v1.12 introduces three **non-Go runtime dependencies on the bench host**: Python 3.11+ (for upstream SWE-bench / Multi-SWE-bench / Terminal-Bench harnesses), Docker Engine (for those same harnesses' per-instance environment images), and per-language toolchains (Go/Python/Node/JDK/dotnet/clang+cmake/cargo) for ToolBench test execution. None of these enter the `helix` shipping binary — they are **operator-side** requirements for the `helix-bench` binary's `run` subcommand. This must be called out in `bench/BENCH.md` the way `eval/EVAL.md` calls out ZDR. The single-binary distribution rule of the `helix` daemon is **not** violated; the bench harness is an out-of-band benchmarking tool.
+| Technology | Version (in tree) | Purpose for this milestone | Why it fits a single-binary Go daemon |
+|------------|-------------------|----------------------------|----------------------------------------|
+| `github.com/spf13/cobra` | **v1.10.2** | The 53-subcommand CLI head, grouped help, per-command flags | Already the root-command framework (`internal/cli/root.go`); `cmd/helix-bench` already runs 6 subcommands. v1.6+ has `AddGroup`/`GroupID` for grouped help — exactly what 53 verbs need. No new dep. |
+| `github.com/modelcontextprotocol/go-sdk` | **v1.5.0** | Stays as the daemon's *internal* dispatch+middleware engine; its bundled `jsonschema` reflector is the codegen source of truth | Architecture decision is locked: kill the agent-facing surface, keep the SDK as hat #2. The SDK's `jsonschema` package (struct→schema via reflection, `For[T]`) lets the generator read the same arg structs the daemon registers — zero schema drift. Latest upstream is v1.6.1 (2025-05); v1.5.0 in-tree is current enough and bumping is orthogonal to this milestone. |
+| `google.golang.org/grpc` | **v1.80.0** | The CLI→daemon wire (`StreamMCP` bidi stream) — unchanged | The daemon↔CLI wire already carries `tools/call` frames. `internal/forwarder/dial.go` already dials over `unix://` with keepalive + otelgrpc. The CLI reuses this verbatim. **No proto change expected** (PROJECT.md: "likely zero proto changes"). |
+| `google.golang.org/protobuf` | **v1.36.11** | `MCPMessage{payload,session_id}` envelope — unchanged | The `serena.v1.MCPMessage` wrapper already carries opaque JSON-RPC bytes; the CLI sends one request frame and reads one response frame. |
+| `github.com/knadh/koanf/v2` | **v2.3.4** | Socket-path / profile resolution for the CLI process | Already the 4-layer config engine; CLI subcommands resolve the socket via the same `config.DefaultSocketPath()` the forwarder uses. |
+| `encoding/json` (stdlib) | Go **1.25.1** | JSON-RPC request build + response parse in the one-shot client | The forwarder already treats payloads as opaque bytes and sniffs `"method":"tools/call"` with a byte match (`internal/forwarder/forwarder.go:151`). The CLI marshals one request and unmarshals one `CallToolResult`. No JSON-RPC library needed. |
 
----
+### Supporting Libraries / Internal Packages (reuse-don't-fork)
 
-## 1. Container Orchestration (SWE-bench, Multi-SWE-bench, Terminal-Bench 2.0)
+| Library / package | Version / location | Purpose | When to use |
+|-------------------|--------------------|---------|-------------|
+| `internal/forwarder` (`ConnectOrStartDaemon`, `tryConnect`, `startDaemon`, `waitForDaemon`) | in-tree | Daemon autostart + warm reuse for every CLI invocation | **The single most important reuse.** `dial.go` is already the gopls-pattern "connect-or-spawn" logic with a 10s readiness poll. The CLI's one-shot client wraps `ConnectOrStartDaemon` then opens one `StreamMCP`. Do **not** write a second autostart. |
+| `internal/mcp` `ToolRegistry` + `ToolDef` | in-tree | Enumerate the 53 tools (names, brief/help text) for the generator and for grouped-help text | `ToolDef{Name,Description,BriefDescription,HelpText}` is the existing per-tool metadata; `cmd/docgen` already walks `skill.ToolProviders()` to build the README tool table — the generator reuses that exact enumeration. |
+| `<sdk>/jsonschema` (bundled in go-sdk v1.5.0) | in-tree (transitive) | Reflect each `XxxArgs` struct → JSON schema → cobra flags (name, type, required, help) in the generator | The arg structs already carry `json:"..."` + `jsonschema:"description"` tags (e.g. `fileops/tools.go:22`). One reflection pass yields flag name, Go type→pflag type, required-ness, and `--help` text — no hand-written flag wiring per command. |
+| `text/template` (stdlib) | Go 1.25.1 | Emit the generated `*_cli_gen.go` subcommand file from the registry | Mirrors the existing `cmd/lspgen` codegen pattern (`protocol/generate.go` `//go:generate go run ../cmd/lspgen`). |
+| `os` / `golang.org/x/term` (only if needed) | stdlib + already transitive | TTY detection for `--color=auto` default-off-when-piped | Most CLI invocations from an agent are piped → color must default off. `os.Getenv("NO_COLOR")` + `term.IsTerminal(fd)` is the whole policy; see Output section. **Prefer stdlib** — do not add a color framework. |
 
-### Recommended: subprocess-shellout to upstream Python harnesses + Docker Engine via `docker/docker` client
+### Development Tools
 
-**Why subprocess-shellout, not Go-native rewrite:**
-
-- SWE-bench's evaluation harness is its own quality gate — it ships a 3-layer Docker image hierarchy (base → environment → instance) covering ~60 Python repo environments with exact dep pins. Reimplementing this in Go would be a multi-month project that reproduces, but does not improve, the upstream behavior. Worse, results would not be comparable to other leaderboard entries unless we bit-for-bit reproduce the upstream's harness behavior — which is itself the canonical definition.
-- The upstream harness is invoked as `python -m swebench.harness.run_evaluation --dataset_name ... --predictions_path ... --run_id ...`. This is well-defined and stable.
-- Multi-SWE-bench uses essentially the same pattern: `python -m multi_swe_bench.harness.run_evaluation --config <config.json>` and produces `final_report.json`. It is a Multi-SWE-bench-org fork of the SWE-bench harness with Java/TS/JS/Go/Rust/C/C++ environment images.
-- Terminal-Bench 2.0 ships its own `tb` CLI (`uv tool install terminal-bench` per upstream) and the new Harbor container-test framework. Same shellout pattern.
-
-**Helix's role in the loop:** the agent (Helix-enabled or baseline) produces `predictions.jsonl` (one prediction per task, where each prediction is a unified diff against the instance's base commit). The bench harness then shells out to the upstream Python harness, which spins the per-instance Docker container, applies the predicted patch, runs the test patch, and produces a results JSON. Helix's contribution is on the **prediction generation** side — and that is where the 6-mode ablation matrix lives.
-
-**Docker SDK choice:** for our own container ops (Terminal-Bench task spawn, ToolBench per-language test isolation if we choose container isolation, bench-side cleanup), use the official Docker engine API client `github.com/docker/docker/client`. Tagged release v27.x corresponds to Docker 27.x. This is the same client used by goreleaser internally and is the canonical Go SDK. **Do not** pull testcontainers-go into the runtime path — its strength is dev-time test ergonomics with reapers, networks, and waitstrategies; for our hands-on container orchestration it adds abstraction we don't need. Keep it as a **test-time-only** dependency if at all (e.g., to spin a per-test postgres for harness-of-the-harness unit tests).
-
-**ToolBench per-language isolation:**
-- **Default:** no container — run the per-language test runner directly in a temp dir. Same model as Phase 67's sandbox isolation (`internal/eval/sandbox`).
-- **Optional `--container-isolate`:** wrap each (task × mode) in a thin Docker container using a curated per-language base image. Only flip on for hostile-task corpora; default off for speed.
-
-### Alternatives Considered
-
-| Alternative | Why Not |
-|-------------|---------|
-| Go-native SWE-bench harness | 6+ months of work to reproduce environment images, would not be comparable to upstream-published numbers, and locks us into maintaining 60+ environment fingerprints forever. |
-| `testcontainers-go` in runtime path | Adds ryuk reaper, network-attach magic, waitstrategy abstractions we don't need for batch runs. Strictly more code in prod hot path. |
-| podman / containerd direct | Most upstream harnesses assume `docker` socket; mismatched container runtime is a foot-gun. Operators wanting podman can use the podman-docker shim. |
-| `nerdctl` | Same as above. |
-| `swebench` PyPI 2.0.2 (pinned) | Older releases (`pip install swebench==2.0.2`) work but lack post-Verified curation/harness improvements; pin to current v4.x stable. |
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `//go:generate go run ./cmd/helix-cligen` (new, tiny) | Generate the 53 subcommand wrappers from the tool registry at build time | Models the existing `protocol/generate.go` → `cmd/lspgen` precedent. Output is committed `*_gen.go` (like `protocol/gen/`), with a `--check` CI mode mirroring `cmd/docgen --check` to fail on drift. |
+| `cmd/docgen` (existing, extend) | Regenerate the README tool table against the CLI surface | PROJECT.md target feature: "auto-generated tool table regenerated against the CLI surface." docgen already enumerates the same providers; extend, don't replace. |
+| `gofmt` / `go vet ./...` | Format + vet generated code | Generator output must pass `gofmt -w` and `go vet` (project rule: "Always run go vet and go test before completing any Go task"). |
 
 ---
 
-## 2. Public Benchmark Adapters — Per-Benchmark Disposition
+## Code-Generation Feasibility for 53 Commands (concrete assessment)
 
-| Benchmark | Tasks | Languages | Disposition | Helix's adapter does |
-|-----------|-------|-----------|-------------|----------------------|
-| **SWE-bench Verified** | 500 | Python | `subprocess-shellout` | (a) load HF `SWE-bench/SWE-bench_Verified` via `gomlx/go-huggingface` parquet reader; (b) drive Helix-enabled or baseline agent to produce `predictions.jsonl`; (c) shell out to upstream `python -m swebench.harness.run_evaluation`; (d) ingest `<run_id>.json` results into bench result schema. |
-| **Multi-SWE-bench** | 1,632 (full) / 400 (mini) | Java, TS, JS, Go, Rust, C, C++ (full); +Python in mini | `subprocess-shellout` | Same loop as SWE-bench but with `python -m multi_swe_bench.harness.run_evaluation --config <config.json>`. Per-language ablation slicing built into our reporter, not the upstream harness. |
-| **Terminal-Bench 2.0** | 89 | shell / polyglot | `subprocess-shellout` | Drive agent through Harbor's `tb run` CLI, which spawns containers and applies the agent's terminal commands. Score from `tb`'s emitted JSON. |
-| **Aider Polyglot** | 225 | C++, Go, Java, JS, Python, Rust | `dataset-loader-only` | Shallow clone `Aider-AI/polyglot-benchmark` at a pinned sha, treat each Exercism task as a (problem.md, stub source, hidden test) triple. Agent produces edits; we run the per-language test command ourselves (Go: `go test`, Python: `pytest`, etc.). 2-attempt protocol baked into our runner (re-prompt with test stderr on fail). |
-| **CrossCodeEval** | ~10k examples (filtered) | Python, Java, TS, C# | `dataset-loader-only` | JSONL completion task. Score is **EM** + **edit similarity** + **identifier match** (per CCE paper). No test execution required — this is line-completion, not patch-apply. Adapter purely fetches dataset and runs our own scorer. |
-| **RepoBench** | 1,075 Python + 594 Java test instances | Python, Java | `dataset-loader-only` | Three sub-tasks (RepoBench-R retrieval / RepoBench-C completion / RepoBench-P pipeline). EM + edit-similarity scoring, no test execution. Load via HF `tianyang/repobench_python_v1.1` and `_java_v1.1`. |
-| **MultiPL-E / HumanEval-X / McEval** (smoke only) | varies | many | `dataset-loader-only` | Per PROJECT.md "Out of scope for v1.12 primary scoring" — kept as health-check smoke only. |
+**Verdict: HIGHLY FEASIBLE — the registry already holds everything the generator needs.** This is the load-bearing technical question and the answer is a clear yes.
 
-**Practical effort budget the roadmapper should plan around:**
+**What the generator reads (all already in-tree):**
+1. `skill.ToolProviders()` → the list of tools (same source `cmd/docgen` uses).
+2. Per tool: `ToolDef{Name, BriefDescription, HelpText}` for the cobra `Use`/`Short`/`Long`.
+3. Per tool: the typed `XxxArgs` struct, whose fields already carry `json:"name,omitempty"` + `jsonschema:"help text"` tags. Reflection (or the SDK's `jsonschema.For[T]`) yields, per field: flag name (`json` tag), Go type → pflag type (`String`/`Int`/`Bool`/`StringSlice`), required-ness (absence of `,omitempty`), and `--help` string (`jsonschema` tag).
 
-- `subprocess-shellout` adapter: ≈ 1 wave (1–2 weeks) per benchmark. Mostly dataset wiring, predictions.jsonl shaping, results ingestion, error handling on upstream's Docker layer.
-- `dataset-loader-only` adapter: ≈ 1–2 waves per benchmark. The work is in the per-task **runner** (must invoke real per-language test commands), not in the loader. Aider Polyglot is the biggest because of 6-language test runners.
-
----
-
-## 3. Embedding + Vector RAG (the `baseline_rag` Mode)
-
-The `baseline_rag` ablation is essential — it answers "does Helix beat a competent grep + embedding-RAG baseline, not just a grep-only baseline?" Without it, every "we win" claim is suspect. This means the bench harness must **ship a real RAG baseline** that we are comfortable shipping with the binary.
-
-### Recommended primary: OpenAI `text-embedding-3-small` via existing `openai-go` v1.12.0
-
-**Why:**
-- `openai-go` is already in `go.mod`. No new dep, no new auth surface area.
-- `text-embedding-3-small` (1536-dim, $0.02/1M tokens as of 2026) is the cost-effective default and is what every "RAG baseline" in the literature uses.
-- Real, comparable to what an agent integrator would actually wire up.
-
-### Recommended offline fallback: Ollama `nomic-embed-text` via stdlib `net/http`
-
-**Why:**
-- No new dep — Ollama exposes `/api/embed`; a 30-LOC client in `bench/runners/embed/ollama.go` suffices.
-- Lets the bench harness run airgapped (operator must have Ollama installed, but that's a documented prereq, not a Helix install requirement).
-- 768-dim, runs on CPU, "good enough" embedding for RAG-baseline purposes.
-
-### Recommended in-process vector store: `philippgille/chromem-go` v0.7.x
-
-**Why:**
-- Embeddable, **zero third-party dependencies** (matches our "be careful what enters go.mod" discipline).
-- In-memory with optional persistence — exactly the shape we want (per-bench-run index, throwaway).
-- Chroma-like API surface makes it familiar.
-- No CGO. Single binary preserved.
-
-### Alternatives Considered
-
-| Alternative | Why Not |
-|-------------|---------|
-| FAISS / `bleve` semantic vectors | bleve is already in go.sum (semantic store v1.10). Reusing it for the **RAG baseline** would let our `baseline_rag` mode read our own production indexes — that taints the comparison. The whole point of `baseline_rag` is to be a *naive* baseline. Keep it separate. |
-| `weaviate-go-client` | Weaviate is not embeddable in Go; would require operator to stand up a Weaviate server. Inflates the bench host requirement; we already have Docker as a hard prereq from SWE-bench. |
-| `milvus` / pinecone | External vector DB; same problem. |
-| Pure-Go `all-MiniLM-L6-v2` via `clems4ever/all-minilm-l6-v2-go` | Tempting (no network, no Ollama). But the project is single-maintainer, pre-1.0, and embedding quality differs from the standard baselines. Operators wanting fully offline can use Ollama. |
-| `gomlx/onnx-gomlx` + sentence-transformers ONNX | Promising but immature for production embeddings as of 2026; reopen path captured for v1.13+. |
-
-**Decision:** OpenAI primary, Ollama secondary, chromem-go as the vector store. RAG mode docs note the precise embedding model + index params so the baseline is reproducible.
-
----
-
-## 4. Statistics — Bootstrap CIs, pass@k, BCa
-
-### Recommended: `gonum.org/v1/gonum/stat` + ~40 LOC BCa helper
-
-**Promotion from test-only to runtime:**
-v1.10 STACK explicitly scoped gonum to test-only oracle use. For v1.12, the **bench harness** (a new binary, `cmd/helix-bench`) needs `gonum/stat` in runtime for percentile, mean, variance, and as the base layer for bootstrap. This does **not** affect the main `helix` daemon binary — `cmd/helix` does not import `cmd/helix-bench`'s packages. The gonum-not-in-prod rule (ADR-005 from v1.10) was about the kernel/semantic graph hot path; the bench evaluator is not a hot path and is a separate binary.
-
-**What we hand-roll on top:**
-- **Bootstrap percentile CI**: ~20 LOC over `math/rand/v2` + `gonum/stat.Quantile`.
-- **BCa (bias-corrected accelerated)**: ~40 LOC. Needed for skewed metrics (cost-per-solved, edit-distance) where percentile CI is biased.
-- **pass@k**: closed-form from `(c, n, k)` per the HumanEval paper: `pass@k = 1 - C(n-c, k)/C(n, k)`. ~10 LOC.
-- **N≥3 per task** is enforced in the matrix runner, not the stat library.
-
-### Alternatives Considered
-
-| Alternative | Why Not |
-|-------------|---------|
-| Pure stdlib | Would have to reimplement quantile, mean-variance one-pass, etc. Gonum is the canonical Go scientific lib for this; the cost of bringing it in is ~10 MB of go.sum noise, no runtime weight. |
-| Port Python `scipy.stats.bootstrap` | Translation toil with no upside. |
-| `aclements/go-moremath/stats` | Excellent for benchmark stats (it backs `benchstat`), but its bootstrap surface is narrow — UTests, not arbitrary metric resamples. Use gonum. |
-
----
-
-## 5. Per-Language Test Runners (ToolBench, 8 Tier-1 languages)
-
-ToolBench is the deterministic core. Each language needs a real test invocation per capability test. The bench runner shells out via stdlib `os/exec` — **no per-language Go bindings**.
-
-| Language | Test invocation | Toolchain prereq | Helix's adapter detects via |
-|----------|----------------|-----------------|------------------------------|
-| Go | `go test ./...` with `-json` | go 1.25+ | `go.mod` |
-| Python | `pytest -q --json-report` (`pytest-json-report`) | python 3.11+, pip | `pyproject.toml` / `setup.py` / `requirements*.txt` |
-| TypeScript | `npx jest --json` or `npx vitest --reporter=json` | node 20+, npm/pnpm | `package.json` + `tsconfig.json` |
-| JavaScript | `npx jest --json` or `npx mocha --reporter json` | node 20+, npm/pnpm | `package.json` (no tsconfig) |
-| Java | `mvn -q test -Dsurefire.useFile=false` or `gradle test --console=plain` (parse Surefire XML) | JDK 17+, Maven 3.9+ or Gradle 8+ | `pom.xml` / `build.gradle` |
-| C# | `dotnet test --logger "trx;LogFileName=test-results.trx"` | .NET 8 SDK | `*.csproj` / `*.sln` |
-| C++ | `cmake -S . -B build && cmake --build build && ctest --output-on-failure -T Test` (parse CTest XML) | CMake 3.25+, clang/gcc/msvc | `CMakeLists.txt` |
-| Rust | `cargo test --message-format=json` | rustc 1.80+, cargo | `Cargo.toml` |
-
-**Pattern:** one Go adapter per language in `bench/languages/<lang>/runner.go`, each implementing a `LanguageRunner` interface:
+**What the generator emits** (one `*_cli_gen.go`), per tool, roughly:
 
 ```go
-type LanguageRunner interface {
-    Detect(repoRoot string) bool
-    Setup(ctx context.Context, repoRoot string) error      // install deps, e.g. `go mod download`
-    RunTests(ctx context.Context, repoRoot string) (TestResult, error)
-    Capabilities() []CapabilityKind                         // which ToolBench capabilities this language supports
+// Code generated by cmd/helix-cligen. DO NOT EDIT.
+func newGoToDefinitionCmd(dial DialFunc) *cobra.Command {
+    var args symbols.GoToDefinitionArgs
+    cmd := &cobra.Command{
+        Use:     "go-to-definition",
+        Short:   "Jump to where a symbol is defined",      // from BriefDescription
+        Long:    goToDefinitionHelp,                        // from HelpText
+        GroupID: "symbols",                                 // grouped help
+        RunE: func(c *cobra.Command, _ []string) error {
+            return runTool(c.Context(), dial, "go_to_definition", args)
+        },
+    }
+    cmd.Flags().StringVar(&args.Path, "path", "", "File path ...")        // from struct tags
+    cmd.Flags().IntVar(&args.Line, "line", 0, "1-indexed line")
+    cmd.Flags().IntVar(&args.Col,  "col",  0, "1-indexed column")
+    _ = cmd.MarkFlagRequired("path")
+    return cmd
 }
 ```
 
-**Output normalization:** each adapter parses its native runner's JSON/XML into a common `TestResult{Passed, Failed, Skipped, Errors, RawJSON}`. The bench harness's scorer is language-agnostic.
+`runTool` marshals `args` into a JSON-RPC `tools/call` request, sends it through the one-shot gRPC client, and hands the `CallToolResult` to the tool's terse formatter.
 
-**No new Go deps required.** All toolchains are operator-side prereqs documented in `bench/BENCH.md`. The `helix setup` command's language-detection plumbing (`internal/cli/setup_detect.go`) can be reused for detection — same extension-scan logic.
+**Two viable codegen mechanics — pick one in the roadmap:**
 
----
+| Approach | How | Tradeoff |
+|----------|-----|----------|
+| **A. Source-reflection at generate time** (recommended) | `cmd/helix-cligen` imports the kernel/skill packages (blank-import style like docgen/daemon), reads the registry + reflects the arg structs, emits Go via `text/template`. Committed output, `--check` CI gate. | Compile-time-safe wrappers, zero per-call reflection, greppable generated code. Matches `lspgen`/`docgen` precedent exactly. **This is the idiomatic Go answer.** |
+| **B. Fully dynamic at runtime** | Build `*cobra.Command`s in a loop at `init()` from the live registry; bind flags via a generic `map[string]any` populated by reflection each call. | No generated file, but per-call reflection, weaker `--help`/typing, harder to grep, and it fights cobra's static-flag model. Use only if the tool set were truly dynamic — it isn't (53 compiled-in tools). |
 
-## 6. HuggingFace Dataset Loading
+**Grouped help** (53 verbs is too many for a flat list): cobra `AddGroup(&cobra.Group{ID:"symbols",Title:"Symbol Intelligence"})` + `GroupID` on each generated command. Natural groups already exist in the codebase layout: symbols / edit / fileops / diag / memory / repomap / semantic / workflow.
 
-### Recommended: `github.com/gomlx/go-huggingface` v0.x for the top-level fetch + iterate API; fall back to `apache/arrow-go/v18` (already in go.sum) for raw parquet.
-
-**Why:**
-- `go-huggingface` provides `IterParquetFromDataset` and handles HF's `refs/convert/parquet` branch resolution. Saves us from re-implementing HF's URL convention.
-- Pure Go, no CGO. Single binary preserved.
-- For datasets that don't fit the parquet convention (rare — most v1.12 benchmarks publish parquet), fall back to direct `http.Get` of the raw JSONL on the HF CDN, or DuckDB's HF integration (we already have DuckDB linked).
-
-**Caching:** stash downloaded datasets under `$HELIX_CACHE_DIR/bench-datasets/<hf-repo>/<sha>/` so repeat runs are offline. xxhash of dataset content for verification.
-
-### Alternatives Considered
-
-| Alternative | Why Not |
-|-------------|---------|
-| `huggingface-hub` (Python) shellout | We already have Python as a prereq for SWE-bench. Adding it for dataset download would mean coordinating two Python virtualenvs (upstream harness's vs ours). Cleaner to keep Go-native fetching. |
-| DuckDB `read_parquet('hf://...')` | DuckDB does support HF URIs as of 1.x, but pulling it into the bench runner for *download* (it's already loaded for semantic store, but in a different binary) doubles the surface area we'd test. Use go-huggingface. |
-| Hand-rolled HF API client | The HF "list parquet files" + "convert dataset to parquet branch" logic is non-trivial. go-huggingface already wraps it. |
+**Caveat for the generator:** the typed-arg structs are registered per-tool via individual `mcpsdk.AddTool` calls (e.g. `registerGoToDefinition` in `symbols/tools.go`), so the link from tool *name* → arg *struct type* is not stored in `ToolDef` today. The generator needs that mapping. Two options: (a) add a `ArgsExample any` (or `reflect.Type`) field to `ToolDef` populated at registration, or (b) keep a small generator-side name→type table. Option (a) is cleaner and makes the registry self-describing; flag it as a small enabling change in the roadmap.
 
 ---
 
-## 7. Cost Table
+## One-Shot `tools/call` Over the Existing Bidi `StreamMCP` (concrete pattern)
 
-### Recommended: static YAML in `bench/datasets/cost-table.yaml`, parsed via koanf v2
+**The problem shape:** a short-lived CLI process must do exactly one request→one response over a streaming RPC, then exit. The existing forwarder runs an *infinite* stdin↔stream pump; the CLI needs a *bounded* single exchange.
 
-**Why:**
-- koanf is the established config lib for Helix (4-layer precedence already).
-- A static price table doesn't need provider-API discovery — pricing pages move slowly enough that updating a YAML on release is fine.
+**Minimal client (reuses `forwarder.ConnectOrStartDaemon`):**
 
-**Format:**
+```go
+func runTool(ctx context.Context, socket string, toolName string, args any) (*CallToolResult, error) {
+    client, conn, err := forwarder.ConnectOrStartDaemon(ctx, socket, logger, tp) // autostart + warm reuse
+    if err != nil { return nil, err }
+    defer conn.Close()
 
+    stream, err := client.StreamMCP(ctx)
+    if err != nil { return nil, err }
+
+    req := jsonrpcRequest{JSONRPC: "2.0", ID: 1, Method: "tools/call",
+        Params: callParams{Name: toolName, Arguments: args}}
+    payload, _ := json.Marshal(req)
+    if err := stream.Send(&serenav1.MCPMessage{Payload: payload, SessionId: newSessionID()}); err != nil {
+        return nil, err
+    }
+    _ = stream.CloseSend() // half-close: we will send nothing further
+
+    // Read frames until the response whose id == our request id (skip notifications/logs).
+    for {
+        msg, err := stream.Recv()
+        if err == io.EOF { return nil, errNoResponse }
+        if err != nil { return nil, err }
+        var resp jsonrpcResponse
+        if json.Unmarshal(msg.Payload, &resp) == nil && resp.ID == 1 {
+            return resp.toCallToolResult()
+        }
+    }
+}
+```
+
+**Key correctness notes for the roadmapper:**
+- **Framing is already opaque bytes** — `MCPMessage.Payload` carries raw JSON-RPC (`internal/forwarder/forwarder.go`), so the CLI does not re-implement MCP; it speaks the same line protocol the forwarder does, just once.
+- **MCP handshake**: the daemon's MCP server may require an `initialize` request before `tools/call`. The CLI's one-shot client must either send the `initialize`/`notifications/initialized` preamble on the stream first, or the daemon must accept a bare `tools/call` on a fresh session. **This is the one real protocol question to settle early** — confirm against the daemon's MCP server handshake handling in the first CLI phase; it determines whether `runTool` sends 1 frame or 3.
+- **Half-close after the final send** (`CloseSend`) is the clean single-request idiom over a bidi stream; do **not** keep the send side open.
+- **Match on JSON-RPC `id`** and skip interleaved notifications (progress, `notifications/message`) so a log frame can't be mistaken for the result — the daemon may emit them on the same stream.
+- **Reuse the warm daemon**: `ConnectOrStartDaemon` connects to the running daemon if present and only spawns one if absent — preserving share-until-dirty across CLI calls (PROJECT.md "One-shot daemon dialing with warm reuse").
+- **Session id**: generate a fresh one per invocation (the forwarder already does, `generateSessionID()`); the daemon's `LazyInitMiddleware` activates the workspace on first call.
+- **No new RPC layer, no new proto message.** The existing bidi RPC is more than sufficient for a single round-trip — there is no reason to add a unary RPC.
+
+---
+
+## SKILL.md as a Shippable Asset (format + install)
+
+**File format (Agent Skills open standard, Claude Code superset):** a directory `<skill-name>/SKILL.md` with YAML frontmatter + markdown body.
+
+**Frontmatter — recommended for Helix:**
 ```yaml
-# bench/datasets/cost-table.yaml
-# Last updated: 2026-06-13 — verify against provider pricing pages quarterly.
-providers:
-  anthropic:
-    models:
-      claude-opus-4-7: { input_per_mtok: 15.00, output_per_mtok: 75.00, currency: USD }
-      claude-sonnet-4-5: { input_per_mtok: 3.00, output_per_mtok: 15.00, currency: USD }
-  openai:
-    models:
-      gpt-5: { input_per_mtok: 1.25, output_per_mtok: 10.00, currency: USD }
-      gpt-5-mini: { input_per_mtok: 0.25, output_per_mtok: 2.00, currency: USD }
-      o3: { input_per_mtok: 15.00, output_per_mtok: 60.00, currency: USD }
-  deepseek:
-    models:
-      deepseek-chat: { input_per_mtok: 0.27, output_per_mtok: 1.10, currency: USD }
-      deepseek-reasoner: { input_per_mtok: 0.55, output_per_mtok: 2.19, currency: USD }
-last_verified: "2026-06-13"
+---
+name: helix
+description: >
+  Semantic code navigation and editing for this repo via the `helix` CLI —
+  go-to-definition, find-references, rename, blast-radius, structured edits,
+  repo map. Use INSTEAD OF grep/sed/cat when you need symbol-level answers
+  (where is X defined, who calls Y, rename across files).
+allowed-tools: Bash(helix:*)
+---
+```
+- `name` (optional; defaults to dir name — set it to `helix` for clarity). The invoked command name comes from the directory.
+- `description` (the **only** load-bearing field): this is the ~100-token idle footprint scanned every session. **Put the "use instead of grep/sed/cat" trigger first.** Combined `description` + `when_to_use` is truncated at **1,536 characters** in the listing — stay well under.
+- `allowed-tools: Bash(helix:*)` lets the agent run `helix <verb>` without a permission prompt — the whole UX point.
+- Optional: `when_to_use` for extra trigger phrases.
+
+**Body structure** (mirror playwright-cli's proven layout, progressively disclosed): Quick Start → Commands grouped by category (symbols / edit / fileops / diag) with one terse example each → "Use instead of" decision table (grep→`helix search`, "where defined"→`helix go-to-definition`) → Raw-output/piping notes. The body loads **only when the agent decides the skill is relevant**, so it costs ~nothing idle.
+
+**Install locations (Claude Code):**
+| Level | Path written by `helix setup` | Scope |
+|-------|-------------------------------|-------|
+| Personal | `~/.claude/skills/helix/SKILL.md` | all the user's projects |
+| Project | `<repo>/.claude/skills/helix/SKILL.md` | this repo only |
+| Plugin | `<plugin>/skills/helix/SKILL.md` | where plugin enabled |
+
+**How `helix setup <client>` flips** (PROJECT.md target): instead of `claude mcp add-json ...` (current `internal/cli/setup_clients.go`), setup now (1) writes the embedded `SKILL.md` to the chosen skills dir, and (2) installs/repurposes the `PreToolUse` nudge hook (`internal/cli/nudge.go`) to redirect `grep`/`sed`/`cat` Bash calls toward `helix` verbs. Ship `SKILL.md` via Go `embed` in the binary (same mechanism as other runtime assets in EMBED-AUDIT.md) so a single binary self-installs its skill. Live change detection means a re-written `SKILL.md` is picked up within the session — no client restart.
+
+---
+
+## Terse, LLM-Oriented Output (conventions, not a framework)
+
+**This is product work, not a dependency.** The convergent convention across ripgrep / ast-grep / gh:
+
+| Convention | Rule for Helix CLI | Source precedent |
+|------------|--------------------|------------------|
+| **Color default = `auto`, off when piped** | Default `--color=auto`: emit ANSI only if stdout is a TTY **and** `NO_COLOR` unset. Agent invocations are piped → no color by construction. Honor `NO_COLOR` (any value) and a `--color never\|always\|auto` flag. | ripgrep, ast-grep both default `auto`, both honor `NO_COLOR`; ripgrep flips to `never` under `--vimgrep`. |
+| **`file:line:col` anchor** | Print locations as `path:line:col` with `:` separators (stable, greppable, the format every model already knows). 1-indexed line/col (Helix already does `userPosToLSP`). | ripgrep `--vimgrep` / grep `-n` format. |
+| **One match per line, no decoration** | Avoid boxes/tables/pretty-JSON for results an agent reads; newline-delimited records pipe into `grep`/`awk` and tokenize cheaply. | ast-grep `--json=stream` (one object per line); ripgrep default. |
+| **Optional `--json` compact** | For tools whose result is structured (blast radius, repo map), offer `--json` emitting single-line compact JSON (no whitespace) for token efficiency. Text stays the default. | ast-grep `--json=compact` "ideal for LLM agents concerned with token efficiency." |
+| **Exit codes carry signal** | `0` = found/ok, `1` = no results (grep convention), `2` = error. Lets the nudge hook and agents branch without parsing prose. | grep/ripgrep exit-code convention. |
+
+**Implementation:** stdlib only — `os.Getenv("NO_COLOR")`, `golang.org/x/term.IsTerminal(int(os.Stdout.Fd()))` (already transitively available), and `fmt`. Per-tool formatters live next to each tool (the existing `formatLocations` in `symbols/tools.go` is the seed). **No color/format library is warranted.**
+
+---
+
+## Installation
+
+```bash
+# NOTHING new to `go get` for the core path — everything is already vendored:
+#   github.com/spf13/cobra v1.10.2
+#   github.com/modelcontextprotocol/go-sdk v1.5.0  (+ bundled jsonschema)
+#   google.golang.org/grpc v1.80.0
+#   github.com/knadh/koanf/v2 v2.3.4
+
+# Generator scaffold (new internal command, no external deps):
+#   cmd/helix-cligen/main.go          # reads registry, emits internal/cli/*_gen.go
+#   internal/cli/generate.go          # //go:generate go run ./cmd/helix-cligen
+
+# Regenerate the CLI surface + README tool table:
+go generate ./internal/cli/...
+go run ./cmd/docgen            # README tool table vs CLI surface
+go vet ./... && go test ./...  # project gate
+
+# x/term is already transitive; if `go mod tidy` ever drops it, re-add:
+# go get golang.org/x/term   # (only if needed for TTY detection)
 ```
 
-**Cost computation:** `cost_per_solved_task = sum(model.input_tokens * provider.input_per_mtok / 1e6) + ... / count(solved_tasks)`. Token totals come from the existing eval harness's token-counting layer (tiktoken + Anthropic API).
+---
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to use the alternative |
+|-------------|-------------|------------------------------|
+| `go:generate` source-reflection codegen (Approach A) | Runtime-dynamic command construction (Approach B) | Only if the tool set were genuinely dynamic/plugin-loaded at runtime. Helix's 53 tools are compiled-in → static codegen wins on typing, `--help`, and greppability. |
+| Reuse `forwarder.ConnectOrStartDaemon` + `StreamMCP` | A new **unary** gRPC `CallTool(req) returns (resp)` RPC | Only if streaming chunks/progress on a single call become load-bearing for the CLI. Today one-shot over the existing bidi stream needs zero proto change; adding a unary RPC is new surface for no benefit. |
+| SDK-bundled `jsonschema` reflection for flag derivation | A separate schema library (e.g. `invopop/jsonschema`) | Never here — the daemon already derives schemas with the SDK's reflector; using the same one guarantees CLI flags match tool params with zero drift. |
+| Embedded `SKILL.md` via `go:embed` | Fetch-on-setup from a URL | Never — single-binary, offline-capable distribution is a core constraint (EMBED-AUDIT.md). Embed it. |
+| Plain `fmt` + `x/term` for output | `fatih/color`, `lipgloss`, `pterm` | Only for a human-facing TUI, which is explicitly out of scope. Agent output is piped and color-off. |
 
 ---
 
-## 8. Trace Merging
+## What NOT to Use
 
-**Recommended:** reuse existing OTel pipeline + Phase 67's `internal/eval/trace` merger. No new dep.
-
-The Helix daemon already emits OTel traces via otelgrpc/otlptrace (v1.43.0). Phase 67 added a tap that merges Claude CLI's tool-call trace with the daemon's tool-call span graph (via the forwarder→daemon trace continuity wired at v1.10 Phase 58 REL-06). Bench's per-(task,mode) runs ride the same rails — they get a unique `bench.run_id` span attribute injected at the matrix-runner boundary, then the existing exporter handles the rest.
-
----
-
-## 9. Token Counting & Patch Apply — Already Decided
-
-These were already evaluated and chosen at v1.10 (Phase 67):
-
-- `github.com/tiktoken-go/tokenizer` v0.6.x — pure Go, embedded vocab, no network on first use.
-- `github.com/anthropics/anthropic-sdk-go` v1.35.0 — server-side `messages.CountTokens` for exact Claude counts.
-- `github.com/bluekeyes/go-gitdiff` v0.8.x — pure Go, parses + applies git-style and unified diffs.
-
-**v1.12 reuses all three as-is.** The bench harness imports them from `internal/eval/...` via shared sub-packages OR (if we want strict separation) copies the usage pattern. The `legacy eval/ tree stays as v1.10` rule from the milestone description means bench's `internal/bench/patch` and `internal/bench/tokens` will be **separate packages** that happen to depend on the same external libs.
+| Avoid | Why | Use instead |
+|-------|-----|-------------|
+| **Bubble Tea / lipgloss / any TUI framework** | The CLI head is a one-shot, pipe-into-an-agent surface, not an interactive terminal app. A TUI framework adds deps, an event loop, and ANSI by default — the opposite of terse machine-readable output. | Plain `cobra` + `fmt` + newline-delimited `file:line:col`. |
+| **A new gRPC service / proto message for `tools/call`** | The `StreamMCP` bidi stream already carries opaque JSON-RPC `tools/call` frames; PROJECT.md locks "likely zero proto changes." A second RPC layer is ~5× work for zero agent-visible benefit (the same logic the milestone rejects for SDK excision). | Reuse `StreamMCP`; send one frame, `CloseSend`, read by `id`. |
+| **Excising the MCP Go SDK from the daemon** | Explicitly out of scope (Architecture decision, locked). The SDK is hat #2 (internal dispatch + 5 middlewares). Removing it forfeits the reflector that powers codegen and the middleware stack. | Keep the SDK internal; remove only the stdio-forwarder + HTTP MCP *transports* (hat #1). |
+| **A JSON-RPC client library (e.g. `sourcegraph/jsonrpc2`)** | Overkill: the CLI does one request, one response, over a byte-opaque transport. The forwarder already proves `encoding/json` + a byte-match is sufficient. | `encoding/json` struct marshal/unmarshal + `id` match. |
+| **`fatih/color` / `mattn/go-colorable` as a dependency** | Color is *off* in the dominant (piped-to-agent) path; a color lib adds a dep to do something `NO_COLOR` + a TTY check do in 3 lines. | `os.Getenv("NO_COLOR")` + `x/term.IsTerminal`. |
+| **`go-plugin` / dynamic plugin loading for subcommands** | Tools are compiled-in; the registry is known at build time. Plugins add IPC and versioning overhead for a static set. | `go:generate` over the static registry. |
+| **A second autostart/daemon-spawn implementation in the CLI** | `forwarder.dial.go` already implements gopls-pattern connect-or-spawn + readiness poll + keepalive. Duplicating it risks divergent socket/race behavior. | Call `forwarder.ConnectOrStartDaemon`. |
 
 ---
 
-## 10. CGO Posture & Distribution Rule
+## Stack Patterns by Variant
 
-**Recap of constraints from CLAUDE.md / EMBED-AUDIT.md:**
-- Source tree is single-mode `CGO_ENABLED=1` (Phase 59.1 removed the CGO=0 stub apparatus).
-- The `helix` daemon binary ships from `cmd/helix` — that single binary is the distribution unit.
-- `cmd/helix-eval` (Phase 67) is built but not part of the user-facing release archive.
-- `cmd/helix-bench` (v1.12, **new**) is in the same camp as `cmd/helix-eval` — built from the same module, but **not shipped in the goreleaser archives**. It is operator-side tooling.
+**If the generator should fail CI on drift (recommended):**
+- Add `cmd/helix-cligen --check` mirroring `cmd/docgen --check` (exit 1 if generated `*_gen.go` would change). Wire into `make vet`/CI like the existing `vet-noduckdb`/PromQL-validator gates.
+- Because the generated CLI surface must match the live 53-tool registry, this also guards the README tool table regen — closing the same class of drift the MEMORY note "Helix tool docs drift" describes (docgen's blank-imports must equal the daemon's, or a tool silently vanishes from the surface).
 
-**v1.12 specifically:**
-- No new CGO dependency. duckdb is the only CGO dep and bench may or may not need it (probably not — the bench database, if any, is small enough for modernc.org/sqlite, which we already have).
-- chromem-go is zero-deps, pure Go, no CGO.
-- go-huggingface, gonum, docker/docker client — all pure Go.
-- All operator-side runtime prereqs (Python, Docker Engine, per-language toolchains) are **out of the binary**.
+**If `tools/call` ever needs progress streaming to the CLI:**
+- The bidi `StreamMCP` already supports it — read multiple frames, render progress to stderr, keep the final `id`-matched frame as the result. Still **no proto change**; just relax the "first matching id wins" read loop. Defer until a concrete tool needs it.
 
-**Embed audit impact:** chromem-go's vocab/index format is computed at runtime, not embedded. No new `embed.FS` declarations. `EMBED-AUDIT.md` does not need a new row for v1.12 bench code unless we embed the cost table (we should — it's static and small) — add one row `bench/datasets/cost-table.yaml → embedded into helix-bench`.
+**If a target client is not Claude Code (e.g. generic / OpenCode):**
+- The Agent Skills standard (`agentskills.io`) is cross-tool; `helix setup <client>` writes `SKILL.md` to that client's skills dir. For clients with no skill mechanism, fall back to installing the nudge hook + documenting the `helix` verbs in the client's instruction file. (Setup already special-cases 7 clients in `setup_clients.go`.)
 
 ---
 
-## 11. Installation / go.mod Diff (Projected)
+## Version Compatibility
 
-```diff
-require (
-+   github.com/docker/docker v27.4.0
-+   github.com/gomlx/go-huggingface v0.5.0   // or current stable
-+   github.com/philippgille/chromem-go v0.7.0
-+   gonum.org/v1/gonum v0.16.0                // promoted from test-only to runtime (bench-side)
-
-    // already present, reused:
-    github.com/tiktoken-go/tokenizer v0.6.0      // (added in v1.10 for eval)
-    github.com/bluekeyes/go-gitdiff v0.8.0       // (added in v1.10 for eval)
-    github.com/anthropics/anthropic-sdk-go v1.35.0
-    github.com/openai/openai-go v1.12.0
-    github.com/knadh/koanf/v2 v2.3.4
-    github.com/spf13/cobra v1.10.2
-    github.com/cespare/xxhash/v2 v2.3.0
-)
-
-require (
-    // test-only additions: none — testcontainers-go intentionally omitted.
-)
-```
-
-**Binary size impact:** docker/docker client pulls a non-trivial dep tree (containerd protos, etc.) — ~8 MB additional compiled. Acceptable for a benchmarking binary; would be a red flag for `helix` itself.
-
----
-
-## 12. New Binary Surface: `cmd/helix-bench`
-
-Lives alongside `cmd/helix-eval`. Shape (informed by `helix-eval/main.go`):
-
-```
-helix-bench
-├── run                    — execute the matrix (--benchmarks, --modes, --languages, --tasks)
-├── fetch-datasets         — pre-populate $HELIX_CACHE_DIR/bench-datasets
-├── doctor                 — verify operator prereqs (python, docker, per-lang toolchains, embedding key)
-├── report                 — re-render reports from a previous run-id
-└── validate-cost-table    — sanity-check the embedded cost YAML
-```
-
-cobra v1.10 — same plumbing as the daemon.
-
----
-
-## What NOT to Pull In
-
-| Library | Why we don't want it |
-|---------|----------------------|
-| `testcontainers-go` (runtime) | Adds reaper/network/waitstrategy abstractions we don't need; use Docker engine API directly. |
-| Weaviate / Milvus / Pinecone clients | Bench host must not require a long-lived vector DB; chromem-go is the right shape. |
-| FAISS Go bindings | CGO + native libs; chromem-go covers our needs. |
-| Custom Python bridge (gopy, go-python) | "Out of scope: native Go, no Python interop" — Python stays at the subprocess boundary. |
-| `sourcegraph/go-diff` | Already rejected at v1.10 — parser only. |
-| `pkoukk/tiktoken-go` | Already rejected at v1.10 — downloads vocab. |
-| Replacement for sigstore (cosign) | Bench binary signing rides existing release pipeline. |
-| A second OTel tracer | Reuse `internal/obs/`. |
-| `cobra/viper` (viper specifically) | We use koanf. |
-| Reimplemented SWE-bench harness | 6 months for zero comparability gain. |
-
----
-
-## Confidence Assessment
-
-| Claim | Confidence | Source |
-|-------|------------|--------|
-| SWE-bench Verified = 500 tasks, Python only, golden-patch + test-patch oracle, requires Docker | HIGH | Upstream SWE-bench docs + HF dataset card |
-| Multi-SWE-bench = 1,632 instances × 7 langs (Java/TS/JS/Go/Rust/C/C++), Bytedance Seed, has `python -m multi_swe_bench.harness.run_evaluation` | HIGH | Multi-SWE-bench paper + GitHub repo + HF dataset card |
-| Aider Polyglot = 225 Exercism tasks × 6 langs, 2-attempt protocol, dataset is a single git repo | HIGH | aider.chat blog + Aider-AI/polyglot-benchmark repo |
-| CrossCodeEval = Python/Java/TS/C#, completion-only, no test execution, scored via EM + identifier match | HIGH | CCE NeurIPS 2023 paper + project site |
-| RepoBench = Python + Java, 1,075 + 594 test instances, three sub-tasks (R/C/P), completion-only | HIGH | RepoBench paper + Leolty/repobench README + HF datasets |
-| Terminal-Bench 2.0 = 89 containerized tasks, ships `tb` CLI + Harbor, Nov 2025 release | HIGH | Terminal-Bench docs + VentureBeat coverage |
-| `docker/docker` engine-API client is the right Go SDK | HIGH | Canonical, used by goreleaser, k8s, etc. |
-| `chromem-go` is zero-deps embeddable vector DB suitable for `baseline_rag` | HIGH | Project README + pkg.go.dev |
-| `gomlx/go-huggingface` covers parquet iteration of HF datasets | MEDIUM | Project README; specific API stability not field-tested in our repo yet |
-| `gonum/stat` is the right base for bootstrap + BCa, BCa needs ~40 LOC on top | HIGH | gonum docs + BCa is a well-defined algorithm |
-| OpenAI text-embedding-3-small or Ollama nomic-embed-text are the right embedding choices for `baseline_rag` | HIGH | Industry-standard baselines; cited in every RAG paper of last 24 months |
-| Per-language test runners can stay as `os/exec` shellouts without per-language Go bindings | HIGH | Pattern works in CI today across 8+ languages; no upside to native bindings |
-| Helix's single-binary distribution rule survives v1.12 | HIGH | helix-bench is not in the goreleaser archive matrix |
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| `spf13/cobra@v1.10.2` | Go 1.25.1 | `AddGroup`/`GroupID` available since v1.6.0; already in tree and exercised by `cmd/helix-bench`. |
+| `modelcontextprotocol/go-sdk@v1.5.0` | Go 1.25.1, `jsonschema` (bundled) | Bundled reflector caches schemas (perf note in v1.6.x changelog). Upstream latest is v1.6.1 (2025-05); a bump is optional and orthogonal to this milestone — do it in a separate hygiene pass if at all. |
+| `google.golang.org/grpc@v1.80.0` | `protobuf@v1.36.11`, `otelgrpc@v0.68.0` | Existing forwarder dial path; `unix://` + keepalive + single `WithStatsHandler` (Pitfall 5 already noted in `dial.go`). No change. |
+| `koanf/v2@v2.3.4` | Go 1.25.1 | Existing 4-layer config; CLI resolves socket/profile via the same path. |
+| `golang.org/x/term` | Go 1.25.1 | Transitively present; only used for `IsTerminal` in output color policy. |
 
 ---
 
 ## Sources
 
-- [SWE-bench docs — Docker Setup](https://www.swebench.com/SWE-bench/guides/docker_setup/)
-- [SWE-bench docs — Evaluation Harness](https://www.swebench.com/SWE-bench/guides/evaluation/)
-- [swe-bench/SWE-bench GitHub](https://github.com/swe-bench/SWE-bench)
-- [HF dataset: SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified)
-- [Multi-SWE-bench GitHub](https://github.com/multi-swe-bench/multi-swe-bench)
-- [HF dataset: ByteDance-Seed/Multi-SWE-bench](https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench)
-- [HF dataset: ByteDance-Seed/Multi-SWE-bench_mini](https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench_mini)
-- [Multi-SWE-bench paper (arxiv 2504.02605)](https://arxiv.org/pdf/2504.02605)
-- [Aider-AI/polyglot-benchmark GitHub](https://github.com/Aider-AI/polyglot-benchmark)
-- [Aider Polyglot launch post](https://aider.chat/2024/12/21/polyglot.html)
-- [Aider Leaderboards](https://aider.chat/docs/leaderboards/)
-- [CrossCodeEval project site](https://crosscodeeval.github.io/)
-- [CrossCodeEval NeurIPS 2023 paper](https://proceedings.neurips.cc/paper_files/paper/2023/file/920f2dced7d32ab2ba2f1970bc306af6-Paper-Datasets_and_Benchmarks.pdf)
-- [Leolty/repobench GitHub](https://github.com/Leolty/repobench)
-- [RepoBench paper (arxiv 2306.03091)](https://arxiv.org/pdf/2306.03091)
-- [Terminal-Bench 2.0 announcement (VentureBeat)](https://venturebeat.com/ai/terminal-bench-2-0-launches-alongside-harbor-a-new-framework-for-testing)
-- [Terminal-Bench paper](https://arxiv.org/html/2601.11868v1)
-- [testcontainers-go GitHub releases](https://github.com/testcontainers/testcontainers-go/releases)
-- [philippgille/chromem-go GitHub](https://github.com/philippgille/chromem-go)
-- [gomlx/go-huggingface GitHub](https://github.com/gomlx/go-huggingface)
-- [gonum.org/v1/gonum/stat docs](https://pkg.go.dev/gonum.org/v1/gonum/stat)
-- [tiktoken-go/tokenizer](https://github.com/tiktoken-go/tokenizer)
-- [bluekeyes/go-gitdiff](https://github.com/bluekeyes/go-gitdiff)
+- In-tree ground truth (HIGH): `go.mod` (versions), `internal/forwarder/{dial.go,forwarder.go}` (autostart + `StreamMCP` + JSON-RPC byte framing), `internal/cli/root.go` (cobra root + subcommands), `cmd/helix-bench/main.go` (6-subcommand cobra precedent), `protocol/generate.go` + `cmd/lspgen` (`go:generate` precedent), `internal/mcp/registry.go` (`ToolDef`/`ToolRegistry`), `internal/kernel/{symbols,fileops,...}/tools.go` (typed `XxxArgs` structs with `json`+`jsonschema` tags; per-tool `AddTool` registration), `cmd/docgen/main.go` (provider enumeration), `api/proto/serena/v1/ipc.proto` (`StreamMCP(stream MCPMessage)`), `.planning/PROJECT.md` v2.0 milestone section (architecture decision, target features, out-of-scope). — HIGH confidence (read directly).
+- [spf13/cobra releases](https://github.com/spf13/cobra/releases) — v1.10.2 latest; `AddGroup`/`GroupID` grouped help since v1.6.0. (verified against in-tree v1.10.2) — HIGH.
+- [modelcontextprotocol/go-sdk releases](https://github.com/modelcontextprotocol/go-sdk/releases) — v1.5.0 (in tree) / v1.6.1 latest; bundled `jsonschema` reflector with schema caching. — HIGH.
+- [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills) — SKILL.md frontmatter (`name`/`description`/`allowed-tools`/`when_to_use`), 1,536-char description+when_to_use cap, install dirs (`~/.claude/skills/`, `.claude/skills/`, plugin), live change detection. — HIGH.
+- [microsoft/playwright-cli SKILL.md](https://github.com/microsoft/playwright-cli/blob/main/skills/playwright-cli/SKILL.md) — reference frontmatter (`name`/`description`/`allowed-tools: Bash(playwright-cli:*)`) and progressively-disclosed body layout (Quick Start → grouped Commands → examples). The reference product for this milestone. — HIGH.
+- [Anthropic: Equipping agents with Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) + [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) — progressive disclosure (~100 tokens/skill idle footprint). — HIGH.
+- [ast-grep JSON Mode](https://ast-grep.github.io/guide/tools/json.html) + [ast-grep run reference](https://ast-grep.github.io/reference/cli/run.html) — `--json=compact` for token-efficient agent output; `--color=auto` honoring `NO_COLOR`. — HIGH.
+- [ripgrep FAQ / rg(1) manpage](https://manpages.debian.org/testing/ripgrep/rg.1.en.html) — `--color=auto` default, `NO_COLOR` honored, `--vimgrep` flips to `never` for machine-readable `file:line:col`. — HIGH.
+
+---
+*Stack research for: CLI head over an existing Go MCP daemon (v2.0 CLI-First — MCP Surface Retirement)*
+*Researched: 2026-06-21*

@@ -14,11 +14,125 @@
 - [x] **v1.9 Polish & Infra** -- Phases 46-56 (shipped 2026-05-03)
 - [x] **v1.10 Live Semantic Index** -- Phases 57-67 (shipped 2026-05-12)
 - [x] **v1.11 Semantic Index Completion & P1 MCP Tools** -- Phases 68-74 (shipped 2026-06-07) — see `.planning/milestones/v1.11-ROADMAP.md`
-- [ ] **v1.12 Bench Stack & Tool Evaluation** -- Phases 75-89 (active, started 2026-06-13) — see `.planning/milestones/v1.12-ROADMAP.md`
+- [x] **v1.12 Bench Stack & Tool Evaluation** -- Phases 75-89 (shipped 2026-06-21) — see `.planning/milestones/v1.12-ROADMAP.md`
+- [ ] **v2.0 CLI-First — MCP Surface Retirement** -- Phases 90-95 (active, started 2026-06-21)
 
 ## Phases
 
-### 🚧 v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — ACTIVE
+### 🚧 v2.0 CLI-First — MCP Surface Retirement (Phases 90-95) — ACTIVE
+
+**Milestone Goal:** The `helix` CLI becomes the *only* surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it over the existing gRPC `StreamMCP` wire, so agents use the toolset instead of falling back to grep/sed/cat.
+
+6 phases, 31 v1 requirements, 100% mapped. Strangler-fig: the CLI head is built behind the still-live MCP surface (90-93), parity is proven by dual-run, and the agent-facing MCP heads are deleted **last** (94). The security-load-bearing `tools/call` profile/mode enforcement lands in the **same** phase as the always-visible generated verbs (91). Docs/identity + docgen regen run against the frozen surface (95).
+
+- [ ] **Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse** — zero-proto `tools/call` over `StreamMCP`, cross-process spawn lock, 2nd-call SLO, E2E oracle stood up
+- [ ] **Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement** — all-tool parity codegen + the security gate that must ship with the verbs
+- [ ] **Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle** — the load-bearing `relpath:line:col` product work that freezes the output shape SKILL.md will cite
+- [ ] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration
+- [ ] **Phase 94: Retire the Agent-Facing MCP Surface (DELETE)** — drop stdio forwarder head + Streamable-HTTP `/mcp` only after dual-run parity; optional gRPC TCP bind
+- [ ] **Phase 95: Identity & Docs Rewrite + docgen Regen** — CLI-first identity across four docs; auto-generated table regenerated against the verb surface
+
+### Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse
+
+**Goal**: A `helix <verb>` invocation round-trips a single `tools/call` through the warm daemon over the existing gRPC `StreamMCP` wire (zero proto change), auto-starting the daemon on a cold host and reusing it warm thereafter — with the daemon-spawn race fixed by a cross-process startup lock and warm reuse held to a measured second-call latency SLO. A CLI-over-daemon E2E oracle is stood up here so every later phase has a real-subprocess harness to extend.
+
+**Depends on**: v1.12 Phase 89 (clean milestone base; `bench/runtime/subprocess` + `internal/eval/sandbox` patterns reused for the E2E oracle), v1.0 forwarder (`ConnectOrStartDaemon`, `StreamMCP`, `GRPCTransport` — reused as-is)
+
+**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, TEST-01
+
+**Success Criteria** (what must be TRUE):
+  1. A representative verb invoked as `helix <verb>` returns the same tool result the MCP path returns, and `git diff api/proto/` is empty (zero proto changes).
+  2. A first `helix` call on a cold host spawns the daemon exactly once and a warm second call reuses it; the second-call p50 meets the SLO recorded in the phase.
+  3. N parallel cold `helix` invocations result in exactly one daemon process (verified by a fan-out / synctest stress test exercising the cross-process startup lock).
+  4. `helix` with no arguments exits 0 with grouped command help and opens no MCP stdio session.
+  5. The CLI-over-daemon E2E oracle runs a representative verb as a real subprocess against a live daemon and is green under `go test`.
+
+**Plans**: TBD
+
+### Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement
+
+**Goal**: Every callable tool in the live registry gets a code-generated `helix <verb>` subcommand (committed `*_gen.go` behind a `--check` drift gate), with grouped `--help` and arg-struct-derived flags — and, in the *same* phase, profile/mode is enforced at the `tools/call` boundary so the moment the destructive edit verbs become always-visible, a read-mode or ci-bot agent cannot invoke them. This closes the security regression that the loss of `tools/list` filtering would otherwise open.
+
+**Depends on**: Phase 90 (the one-shot dial spine the generated verbs dispatch through)
+
+**Requirements**: VERB-01, VERB-02, VERB-03, VERB-04, SEC-01, SEC-02
+
+**Success Criteria** (what must be TRUE):
+  1. A parity test asserts the generated subcommand count equals the live registry tool count, enumerated by name — every registered tool has exactly one `helix` verb, with no manual per-tool edits.
+  2. Editing a tool's `*Args` struct without regenerating fails CI via the `helix-cligen --check` drift gate; a regenerate makes it green.
+  3. `helix --help` groups verbs by capability (navigation / edit / fileops / diagnostics / repomap / memory); a missing required flag errors before the daemon is dialed.
+  4. `helix replace-symbol-body` under read mode is refused with a typed error; the same verb succeeds under edit mode.
+  5. Per-profile goldens (re-pointed from the MCP `tools/list` goldens) verify the CLI verb surface for each profile — verbs outside the active profile are hidden and refused.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle
+
+**Goal**: Default CLI output is terse `relpath:line:col<TAB>payload` — workspace-relative, 1-based coordinates converted from LSP 0-based, deterministically sorted and deduped, no ANSI off-TTY, honoring `NO_COLOR` — with each verb's output self-contained enough to act on in one round-trip and copy-paste-able into the next verb. The v1.5 typed-error taxonomy survives as stable stderr prefixes plus per-kind exit codes, and global `--json` / `--color` flags exist. This is the load-bearing product work; the output shape is frozen here so SKILL.md (Phase 93) can cite real verbs and real output. The contract oracle is re-targeted from MCP JSON goldens to CLI stdout goldens in the same phase the shape stabilizes.
+
+**Depends on**: Phase 91 (needs the full verb surface to render and golden)
+
+**Requirements**: OUT-01, OUT-02, OUT-03, OUT-04, OUT-05, OUT-06, OUT-07, TEST-02
+
+**Success Criteria** (what must be TRUE):
+  1. Piped output contains zero ANSI bytes, coordinates are 1-based workspace-relative, and the same query yields byte-identical sorted+deduped output across N repeated runs (per-verb goldens).
+  2. `helix find-symbol` output feeds `helix replace-symbol-body` / `get-callers` verbatim, and nav verbs print locus + enclosing symbol + one snippet line so no follow-up `Read` is forced (behavioral-oracle confirmed).
+  3. Each documented error kind surfaces a stable stderr prefix plus a per-kind non-zero exit code the agent can branch on.
+  4. Global `--json` emits compact JSON lines while omitting it yields terse text; `--color=never` is byte-equivalent to piped behavior; `--abs` produces absolute paths.
+  5. The re-targeted contract oracle (CLI stdout goldens for ordering / `file:line` / error-kind prefix; "typed args → cobra flags" parity replacing MCP schema meta-validation) passes against CLI output.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip
+
+**Goal**: Ship an embedded `SKILL.md` (go:embed, frontmatter + `| Question | Use this | Not this |` decision table citing the now-frozen verbs and output) whose description fires on code-navigation/edit tasks without over-firing; repurpose the PreToolUse nudge to advisory-steer grep/sed/cat toward the equivalent `helix <verb>` (exit 0, fail-open on unparseable Bash and non-code targets); and flip `helix setup <client>` to install the skill + hooks and tear down any prior MCP registration idempotently across all supported clients. Skill + nudge behavior is verified empirically via the LLM behavioral harness.
+
+**Depends on**: Phase 92 (the skill's decision table and the nudge's substitute commands cite the frozen verbs + terse output)
+
+**Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04, TEST-03
+
+**Success Criteria** (what must be TRUE):
+  1. `SKILL.md` validates against the Claude Code skill schema; the behavioral oracle shows it triggers on code tasks and stays dormant on unrelated ones, and records a tool-selection improvement toward `helix` versus the grep/sed/cat baseline.
+  2. A code-symbol grep yields a `helix` suggestion via `additionalContext`; a README/log grep yields none; the hook never blocks (always exit 0).
+  3. `helix setup claude-code` leaves the skill + hooks present and no MCP server entry; re-running is idempotent, and the teardown covers every supported client.
+  4. The `SKILL.md` token-efficiency rationale records a real measured idle-skill-cost vs preloaded-full-tool-schema before/after number in `SKILL.md` or a referenced doc.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 94: Retire the Agent-Facing MCP Surface (DELETE)
+
+**Goal**: With the CLI proven as the sole agent surface via a dual-run parity test, delete the stdio MCP forwarder head and the Streamable-HTTP `/mcp` transport (`--mode http`) — the two agent-facing MCP heads — while retaining the daemon, the gRPC IPC, `StreamMCP`, `GRPCTransport`, the 5 middlewares, and all tool handlers behind the wire. The retained gRPC IPC optionally binds a TCP address for split-host CLI↔daemon use (loopback/unix-socket default, non-loopback opt-in and gated per the v1.2 admin-addr pattern), with an explicit remote/multi-client scope decision record replacing the removed HTTP transport's only network-transparent topology.
+
+**Depends on**: Phase 93 (the CLI must be the proven, taught, set-up sole surface before the safety net is removed)
+
+**Requirements**: RETIRE-01, RETIRE-02, RETIRE-03, RETIRE-04
+
+**Success Criteria** (what must be TRUE):
+  1. The dual-run parity test comparing CLI output against the pre-removal MCP path for a representative tool set is green in the commit immediately before the deletion commit (the strangler-fig gate).
+  2. No stdio MCP server code path remains reachable and the HTTP `/mcp` endpoint is gone; `--mode http` no longer serves MCP, while the CLI still dials the daemon (Windows local-dial smoke included).
+  3. The CLI can target a configured TCP daemon endpoint when opted in, and the default remains the local unix socket / named pipe.
+
+**Plans**: TBD
+
+### Phase 95: Identity & Docs Rewrite + docgen Regen
+
+**Goal**: Rewrite Helix's identity to CLI-first across README, CLAUDE.md, and PROJECT.md (Core Value; the Constraints "Protocol: MCP — primary interface" line) so no doc claims MCP as the primary agent interface, and update the CLAUDE.md tool-routing guidance to reference `helix <verb>` instead of MCP tool names. Regenerate the auto-generated tool table against the frozen CLI surface (`cmd/docgen` enumerates verbs; docgen blank-imports stay equal to the daemon's) behind a green drift gate.
+
+**Depends on**: Phase 94 (docs describe the final, frozen shape after the MCP heads are gone)
+
+**Requirements**: DOCS-01, DOCS-02, DOCS-03
+
+**Success Criteria** (what must be TRUE):
+  1. No doc claims MCP as the primary agent interface; the CLI-first framing is consistent across README, CLAUDE.md, and PROJECT.md.
+  2. The CLAUDE.md tool-routing matrix cites `helix` CLI verbs end-to-end instead of MCP tool names.
+  3. The generated tool table lists `helix` verbs and the docgen drift gate is green, with docgen's blank imports equal to the daemon's (three-way registry ↔ CLI ↔ docgen parity).
+
+**Plans**: TBD
+
+### ✅ v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — SHIPPED 2026-06-21
 
 15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 

@@ -103,4 +103,34 @@ Which phases cover which requirements. Filled in during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | — | Pending |
+| CLI-01 | Phase 90 | Pending |
+| CLI-02 | Phase 90 | Pending |
+| CLI-03 | Phase 90 | Pending |
+| CLI-04 | Phase 90 | Pending |
+| VERB-01 | Phase 91 | Pending |
+| VERB-02 | Phase 91 | Pending |
+| VERB-03 | Phase 91 | Pending |
+| VERB-04 | Phase 91 | Pending |
+| OUT-01 | Phase 92 | Pending |
+| OUT-02 | Phase 92 | Pending |
+| OUT-03 | Phase 92 | Pending |
+| OUT-04 | Phase 92 | Pending |
+| OUT-05 | Phase 92 | Pending |
+| OUT-06 | Phase 92 | Pending |
+| OUT-07 | Phase 92 | Pending |
+| SEC-01 | Phase 91 | Pending |
+| SEC-02 | Phase 91 | Pending |
+| SKILL-01 | Phase 93 | Pending |
+| SKILL-02 | Phase 93 | Pending |
+| SKILL-03 | Phase 93 | Pending |
+| SKILL-04 | Phase 93 | Pending |
+| RETIRE-01 | Phase 94 | Pending |
+| RETIRE-02 | Phase 94 | Pending |
+| RETIRE-03 | Phase 94 | Pending |
+| RETIRE-04 | Phase 94 | Pending |
+| DOCS-01 | Phase 95 | Pending |
+| DOCS-02 | Phase 95 | Pending |
+| DOCS-03 | Phase 95 | Pending |
+| TEST-01 | Phase 90 | Pending |
+| TEST-02 | Phase 92 | Pending |
+| TEST-03 | Phase 93 | Pending |

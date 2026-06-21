@@ -352,7 +352,12 @@ Plans:
   3. SWE-bench Verified report shows both raw upstream score and UTBoost-augmented rescored score side-by-side; UTBoost augmented suite is ingested from the published source and reproducible from a `--run-id`.
   4. Run-all-tests override is wired (not just PR-modified tests as upstream's default); `bench/evaluators/swebench/differential.go` consumes the gold patch alongside the agent patch and emits diff-overlap signal.
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 87-01-PLAN.md — substrate: additive container_id/exit_code result.v2 keys + harness subprocess argv wrapper + UTBoost pin/fetch + A1-A5 human-verify
+- [ ] 87-02-PLAN.md — predictions.jsonl producer + harness report parser + harness-JSON→result.v2 ingestion (hermetic, TDD)
+- [ ] 87-03-PLAN.md — 3-condition verified_correctness gate (SC#2 load-bearing) + differential.go + rescore + VERIFIED.md (TDD)
+- [ ] 87-04-PLAN.md — aggregator raw-vs-rescored side-by-side column (additive, byte-stable goldens, TDD)
 
 ### Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters
 

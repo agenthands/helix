@@ -897,6 +897,19 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 		logger.Warn("guardrail G-001 outline provider is a no-op stub — G-001 is structurally Allow in production until a tree-sitter outline adapter is wired (TODO phase-66.x)")
 	}
 
+	// 14b.6. Phase 91 (SEC-01): install the tools/call profile/mode enforcement
+	// middleware AFTER Guardrail (14b.5) and BEFORE LazyInit (14c) so LIFO
+	// execution = LazyInit → ProfileEnforce → Guardrail → Suggestion →
+	// ProfileFilter → Telemetry → handler. LazyInit-first invariant preserved
+	// (see internal/mcp/lazy_init.go:106-112); ProfileEnforce runs before
+	// Guardrail so an out-of-profile call is refused before receipt evaluation.
+	// Reuses the SAME getSessionFn closure as Telemetry/ProfileFilter/Guardrail
+	// (single source of truth for session state). Authz is server-side because
+	// the daemon session is authoritative and a CLI-only check is bypassable
+	// (T-91-05, T-91-06, T-91-07).
+	helixMCP.InstallProfileEnforcementMiddleware(mcpServer.SDK(), getSessionFn, logger)
+	logger.Info("profile/mode tools/call enforcement middleware installed (Phase 91 SEC-01)")
+
 	// 14c. Install lazy init middleware (LAZY-01, LAZY-02). Must be installed LAST
 	// so it runs FIRST in the LIFO middleware chain (before TelemetryMiddleware deadline).
 	lazyActivateFn := func(ctx context.Context, repoPath string) error {

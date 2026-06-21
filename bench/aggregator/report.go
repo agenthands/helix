@@ -181,6 +181,18 @@ type AblationRow struct {
 	Present    bool    // false when the other mode's rows are absent
 }
 
+// ScatterPoint is one (mode x benchmark) point on the REPORT-04 cost_quality.md
+// ASCII scatter: cost (x-axis) vs verified_correctness (y-axis). Both are sourced
+// SINGLE-SOURCE — Cost from the cost row, VerifiedCorrectness from the same
+// reduceVerifiedCorrectness the leaderboard renders. A point whose Cost or
+// VerifiedCorrectness CI is null (OK==false) is NOT plotted (never a fabricated 0).
+type ScatterPoint struct {
+	Mode                string
+	Benchmark           string
+	Cost                ciValue
+	VerifiedCorrectness ciValue
+}
+
 // ablationComparison names one fixed full-vs-other comparison and the canonical
 // on-disk mode names of its two operands.
 type ablationComparison struct {
@@ -368,7 +380,7 @@ func costSortKey(c ciValue) float64 {
 // with cost_per_solved_task as a BCa CI (null -> em-dash), a FAIR-03 variance
 // section naming any cell whose per-run USD CV exceeds the threshold, and the
 // cost-table valid_until cited in the footer.
-func renderCostQuality(rows []CostRow, footer Footer) string {
+func renderCostQuality(rows []CostRow, scatter []ScatterPoint, footer Footer) string {
 	sorted := sortCostRows(rows)
 
 	var b strings.Builder
@@ -390,9 +402,139 @@ func renderCostQuality(rows []CostRow, footer Footer) string {
 		}
 	}
 
+	// REPORT-04 ASCII scatter (cost x-axis vs verified_correctness y-axis),
+	// appended after the existing table/variance section so the existing bytes are
+	// preserved and only the scatter block is new.
+	b.WriteString(renderScatter(scatter))
+
 	b.WriteString("\n")
 	b.WriteString(renderFooter(footer))
 	return b.String()
+}
+
+// scatterRows / scatterCols are the FIXED grid dimensions for the REPORT-04 ASCII
+// scatter. A fixed grid + fixed bucketing keeps the rendered block byte-stable
+// (Pitfall 4): the same input always lands the same glyphs in the same cells.
+const (
+	scatterRows = 11 // verified_correctness axis (y), 1.0 at top -> 0.0 at bottom
+	scatterCols = 41 // cost axis (x), min-cost left -> max-cost right
+)
+
+// renderScatter renders the REPORT-04 fenced ASCII scatter of cost (x) vs
+// verified_correctness (y) per (mode x benchmark). Only points whose BOTH Cost and
+// VerifiedCorrectness CIs are present (OK) are plotted — a null point is never
+// plotted as a fabricated 0. Points are SORTED before plotting and the grid is
+// emitted row-by-row deterministically (no map-iteration order). Cost is bucketed
+// into the x-axis by min-max normalisation with fixed %.4f-style rounding; a
+// single distinct cost lands every point in the leftmost column. When no point is
+// plottable the block notes it (still byte-stable). Returns "" when there are no
+// points at all so the existing reports' golden bytes are untouched for callers
+// that pass nil (the unit tests).
+func renderScatter(points []ScatterPoint) string {
+	if len(points) == 0 {
+		return ""
+	}
+
+	// Keep only plottable points (both axes present); copy + sort for determinism.
+	plottable := make([]ScatterPoint, 0, len(points))
+	for _, p := range points {
+		if p.Cost.OK && p.VerifiedCorrectness.OK {
+			plottable = append(plottable, p)
+		}
+	}
+	sort.SliceStable(plottable, func(i, j int) bool {
+		if plottable[i].Cost.Point != plottable[j].Cost.Point {
+			return plottable[i].Cost.Point < plottable[j].Cost.Point
+		}
+		return plottable[i].Mode < plottable[j].Mode
+	})
+
+	var b strings.Builder
+	b.WriteString("\n## Cost vs verified_correctness (scatter)\n\n")
+	b.WriteString("```\n")
+	b.WriteString("y = verified_correctness (1.0 top .. 0.0 bottom), x = cost_per_solved (min left .. max right)\n")
+
+	if len(plottable) == 0 {
+		b.WriteString("(no plottable points: every point has a null cost or verified_correctness)\n")
+		b.WriteString("```\n")
+		return b.String()
+	}
+
+	// Min/max cost for x-axis normalisation, computed over the plottable points
+	// with fixed %.4f rounding so the bucketing is byte-stable (Pitfall 4).
+	minCost := round4(plottable[0].Cost.Point)
+	maxCost := minCost
+	for _, p := range plottable {
+		c := round4(p.Cost.Point)
+		if c < minCost {
+			minCost = c
+		}
+		if c > maxCost {
+			maxCost = c
+		}
+	}
+
+	// Build the grid: row 0 is verified_correctness 1.0, row scatterRows-1 is 0.0.
+	grid := make([][]byte, scatterRows)
+	for r := range grid {
+		grid[r] = make([]byte, scatterCols)
+		for c := range grid[r] {
+			grid[r][c] = ' '
+		}
+	}
+	for _, p := range plottable {
+		// y: clamp verified_correctness to [0,1] then map 1.0->row 0, 0.0->row max.
+		y := round4(p.VerifiedCorrectness.Point)
+		if y < 0 {
+			y = 0
+		} else if y > 1 {
+			y = 1
+		}
+		row := int(math.Round((1 - y) * float64(scatterRows-1)))
+		// x: min cost -> col 0, max cost -> col max; a single distinct cost -> col 0.
+		col := 0
+		if maxCost > minCost {
+			frac := (round4(p.Cost.Point) - minCost) / (maxCost - minCost)
+			col = int(math.Round(frac * float64(scatterCols-1)))
+		}
+		if row < 0 {
+			row = 0
+		} else if row >= scatterRows {
+			row = scatterRows - 1
+		}
+		if col < 0 {
+			col = 0
+		} else if col >= scatterCols {
+			col = scatterCols - 1
+		}
+		grid[row][col] = '*'
+	}
+
+	for r := 0; r < scatterRows; r++ {
+		// Left-margin y label at the top (1.0) and bottom (0.0) rows for legibility.
+		label := "    "
+		switch r {
+		case 0:
+			label = "1.0 "
+		case scatterRows - 1:
+			label = "0.0 "
+		}
+		b.WriteString(label)
+		b.WriteString("|")
+		b.Write(grid[r])
+		b.WriteString("\n")
+	}
+	// X-axis footer with the min/max cost endpoints (fixed %.4f).
+	fmt.Fprintf(&b, "    +%s\n", strings.Repeat("-", scatterCols))
+	fmt.Fprintf(&b, "     cost %.4f .. %.4f\n", minCost, maxCost)
+	b.WriteString("```\n")
+	return b.String()
+}
+
+// round4 rounds to 4 decimal places, matching fmtCI's %.4f precision so the
+// scatter bucketing is byte-stable (Pitfall 4).
+func round4(v float64) float64 {
+	return math.Round(v*1e4) / 1e4
 }
 
 // collectVarianceFlags flattens and sorts all FAIR-03 flags across rows so the

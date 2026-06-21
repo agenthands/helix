@@ -229,3 +229,20 @@ func TestCostQualityScatter(t *testing.T) {
 	md2 := renderCostQuality(rows, points, testFooter())
 	assert.Equal(t, md, md2, "cost_quality.md (incl. scatter) must be byte-stable")
 }
+
+// TestCostQualityScatterGolden locks the exact plotted grid for a populated
+// scatter (two distinct cost/verified points + one null-cost point that must NOT
+// plot). Regenerate with `-update`.
+func TestCostQualityScatterGolden(t *testing.T) {
+	points := []ScatterPoint{
+		{Mode: "full", Benchmark: "internal-toolbench",
+			Cost: ci(0.0045, 0.0045, 0.0045), VerifiedCorrectness: ci(0.90, 0.90, 0.90)},
+		{Mode: "no_lsp", Benchmark: "internal-toolbench",
+			Cost: ci(0.0150, 0.0150, 0.0150), VerifiedCorrectness: ci(0.40, 0.40, 0.40)},
+		// null cost -> must NOT plot a fabricated origin.
+		{Mode: "baseline_plain", Benchmark: "internal-toolbench",
+			Cost: nullCI(), VerifiedCorrectness: ci(0.50, 0.50, 0.50)},
+	}
+	got := renderScatter(points)
+	assertGolden(t, "cost_quality_scatter.golden.md", got)
+}

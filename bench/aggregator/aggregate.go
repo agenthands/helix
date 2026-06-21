@@ -163,9 +163,14 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 	// loaded full + no_semantic rows (deltas.go deliberately omits it — Pitfall 2).
 	rep.Ablations = reduceAblations(loaded, tasks, cfg, alpha, rng)
 
+	// Phase 89 (REPORT-04) scatter points: SINGLE-SOURCE cost from rep.Cost and
+	// verified_correctness from rep.Leaderboard, joined by (mode x benchmark), so
+	// the scatter's axes are the same numbers the leaderboard/cost tables publish.
+	scatter := buildScatterPoints(rep.Leaderboard, rep.Cost)
+
 	// Render + atomically write both artifacts (only reached on success).
 	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
-	cq := renderCostQuality(rep.Cost, rep.Footer)
+	cq := renderCostQuality(rep.Cost, scatter, rep.Footer)
 	if err := writeReport(runDir, "leaderboard.md", lb); err != nil {
 		return nil, err
 	}
@@ -496,6 +501,31 @@ func reduceAblations(loaded *Loaded, tasks []string, cfg Config, alpha float64, 
 			Present:    fullPresent && otherPresent,
 		}
 		out = append(out, row)
+	}
+	return out
+}
+
+// buildScatterPoints joins the Phase 89 (REPORT-04) scatter inputs SINGLE-SOURCE:
+// cost from the cost rows and verified_correctness from the leaderboard rows,
+// keyed by (mode x benchmark). Each leaderboard row yields one ScatterPoint whose
+// Cost is the matching cost row's CostPerSolved (null if no cost row) and whose
+// VerifiedCorrectness is the row's already-reduced value. A point whose cost or
+// verified_correctness is null is still emitted but renderScatter declines to plot
+// it (never a fabricated 0). The output order mirrors rep.Leaderboard; renderScatter
+// re-sorts deterministically before plotting.
+func buildScatterPoints(leader []LeaderRow, cost []CostRow) []ScatterPoint {
+	costByKey := make(map[string]ciValue, len(cost))
+	for _, c := range cost {
+		costByKey[c.Mode+"\x00"+c.Benchmark] = c.CostPerSolved
+	}
+	out := make([]ScatterPoint, 0, len(leader))
+	for _, l := range leader {
+		out = append(out, ScatterPoint{
+			Mode:                l.Mode,
+			Benchmark:           l.Benchmark,
+			Cost:                costByKey[l.Mode+"\x00"+l.Benchmark],
+			VerifiedCorrectness: l.VerifiedCorrectness,
+		})
 	}
 	return out
 }

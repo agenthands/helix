@@ -3,7 +3,10 @@ package swebench
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -156,15 +159,8 @@ func TestHarnessRunFailClosesBeforeShim(t *testing.T) {
 	}
 }
 
-// TestAllowlistEnvStrict (Phase 87 Task 3, T-87-02): allowlistEnv forwards ONLY
-// PATH/HOME/HELIX_CACHE_DIR and never an unrelated parent var (e.g. a secret).
-func TestAllowlistEnvStrict(t *testing.T) {
-	t.Setenv("PATH", "/usr/bin:/bin")
-	t.Setenv("HOME", "/home/runner")
-	t.Setenv("HELIX_CACHE_DIR", "/cache/helix")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "super-secret")
-
-	env := allowlistEnv()
+// parseEnvKV splits a "KEY=VALUE" slice into a key→value map for assertions.
+func parseEnvKV(env []string) map[string]string {
 	seen := map[string]string{}
 	for _, kv := range env {
 		for i := 0; i < len(kv); i++ {
@@ -174,16 +170,110 @@ func TestAllowlistEnvStrict(t *testing.T) {
 			}
 		}
 	}
+	return seen
+}
+
+// TestAllowlistEnvStrict (Phase 87 Task 3, T-87-02): allowlistEnv forwards ONLY
+// the allowlisted keys and never an unrelated parent var (e.g. a secret). The
+// base 3 keys are always present; DOCKER_* keys are only forwarded when set.
+func TestAllowlistEnvStrict(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("HOME", "/home/runner")
+	t.Setenv("HELIX_CACHE_DIR", "/cache/helix")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "super-secret")
+	// Ensure DOCKER_* are unset so this test asserts exactly the base 3.
+	t.Setenv("DOCKER_HOST", "")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	env, err := allowlistEnv()
+	if err != nil {
+		t.Fatalf("allowlistEnv returned error with PATH set: %v", err)
+	}
+	seen := parseEnvKV(env)
 	for _, want := range []string{"PATH", "HOME", "HELIX_CACHE_DIR"} {
 		if _, ok := seen[want]; !ok {
 			t.Errorf("allowlistEnv missing forwarded key %q", want)
 		}
 	}
 	if _, leaked := seen["AWS_SECRET_ACCESS_KEY"]; leaked {
-		t.Error("allowlistEnv leaked AWS_SECRET_ACCESS_KEY — only PATH/HOME/HELIX_CACHE_DIR may be forwarded")
+		t.Error("allowlistEnv leaked AWS_SECRET_ACCESS_KEY — only the allowlist may be forwarded")
 	}
 	if len(seen) != 3 {
-		t.Errorf("allowlistEnv forwarded %d keys, want exactly 3 (PATH/HOME/HELIX_CACHE_DIR)", len(seen))
+		t.Errorf("allowlistEnv forwarded %d keys, want exactly 3 (PATH/HOME/HELIX_CACHE_DIR; DOCKER_* unset)", len(seen))
+	}
+}
+
+// TestAllowlistEnvFailsOnEmptyPath (WR-04): allowlistEnv fails closed with
+// errHarnessEnv when PATH is empty — the harness shells out to `docker` and
+// locates it via PATH, so a missing PATH must be a validated refusal, never an
+// opaque subprocess crash.
+func TestAllowlistEnvFailsOnEmptyPath(t *testing.T) {
+	t.Setenv("PATH", "")
+	_, err := allowlistEnv()
+	if err == nil || !errors.Is(err, errHarnessEnv) {
+		t.Fatalf("allowlistEnv with empty PATH = %v, want errHarnessEnv", err)
+	}
+}
+
+// TestAllowlistEnvForwardsDocker (WR-04): the DOCKER_* keys are forwarded WHEN
+// SET so a non-default Docker daemon (custom socket / TLS) is reachable — still
+// an explicit allowlist, never the inherited env.
+func TestAllowlistEnvForwardsDocker(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("HOME", "/home/runner")
+	t.Setenv("HELIX_CACHE_DIR", "")
+	t.Setenv("DOCKER_HOST", "tcp://10.0.0.1:2376")
+	t.Setenv("DOCKER_TLS_VERIFY", "1")
+	t.Setenv("DOCKER_CERT_PATH", "/certs")
+
+	env, err := allowlistEnv()
+	if err != nil {
+		t.Fatalf("allowlistEnv error: %v", err)
+	}
+	seen := parseEnvKV(env)
+	for k, want := range map[string]string{
+		"DOCKER_HOST":       "tcp://10.0.0.1:2376",
+		"DOCKER_TLS_VERIFY": "1",
+		"DOCKER_CERT_PATH":  "/certs",
+	} {
+		if got, ok := seen[k]; !ok || got != want {
+			t.Errorf("allowlistEnv %s = %q (present=%v), want %q forwarded", k, got, ok, want)
+		}
+	}
+}
+
+// TestResolveWorkDir (WR-03): an explicit WorkDir must pass the clean-absolute
+// discipline and is created if absent; an invalid one fails closed with
+// errHarnessEnv; an empty one defaults under HELIX_CACHE_DIR.
+func TestResolveWorkDir(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("HELIX_CACHE_DIR", cache)
+
+	// Empty -> default under cache root, created.
+	got, err := resolveWorkDir("")
+	if err != nil {
+		t.Fatalf("resolveWorkDir(\"\") error: %v", err)
+	}
+	if !strings.HasPrefix(got, cache) || !strings.Contains(got, "swebench-runs") {
+		t.Errorf("default work dir = %q, want it under %q/swebench-runs", got, cache)
+	}
+	if fi, statErr := os.Stat(got); statErr != nil || !fi.IsDir() {
+		t.Errorf("default work dir %q must exist as a directory (stat err=%v)", got, statErr)
+	}
+
+	// Explicit valid absolute dir -> accepted and created.
+	explicit := filepath.Join(cache, "explicit-run")
+	got, err = resolveWorkDir(explicit)
+	if err != nil || got != explicit {
+		t.Fatalf("resolveWorkDir(%q) = %q, %v; want it accepted verbatim", explicit, got, err)
+	}
+
+	// Invalid (relative / traversal) -> fail closed.
+	for _, bad := range []string{"relative/dir", "/tmp/../etc/run", "/tmp/a:b/run"} {
+		if _, err := resolveWorkDir(bad); err == nil || !errors.Is(err, errHarnessEnv) {
+			t.Errorf("resolveWorkDir(%q) = %v, want errHarnessEnv", bad, err)
+		}
 	}
 }
 

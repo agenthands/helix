@@ -54,6 +54,13 @@ var errHarnessUnavailable = errors.New("bench/evaluators/swebench: python with t
 // or an out-of-range worker count can never reach the harness argv (T-87-01).
 var errBadHarnessArg = errors.New("bench/evaluators/swebench: invalid harness argument")
 
+// errHarnessEnv is returned by Run when the subprocess environment is
+// misconfigured in a way that would otherwise surface as an opaque harness crash
+// (WR-04): an empty PATH (the harness cannot locate `docker`), or an invalid
+// WorkDir (WR-03). Failing closed here turns a confusing run-time crash into a
+// clear, actionable config refusal.
+var errHarnessEnv = errors.New("bench/evaluators/swebench: invalid harness environment")
+
 // HarnessRun is the validated config for one `python -m swebench.harness.
 // run_evaluation` invocation. Every field is total-validated by RunArgs before a
 // single argv element is produced.
@@ -72,6 +79,14 @@ type HarnessRun struct {
 	MaxWorkers int
 	// CacheLevel must be one of allowedCacheLevels.
 	CacheLevel string
+	// WorkDir is the controlled working directory the harness runs in (WR-03).
+	// The swebench harness writes its logs/run_evaluation/<run_id>/... output tree
+	// relative to CWD, so rooting it under a validated dir (clean, absolute, same
+	// isValidPredictionsPath discipline) makes artifact location deterministic
+	// rather than a function of the parent process's CWD. When empty, Run defaults
+	// it to <HELIX_CACHE_DIR>/swebench-runs (created if absent) so output never
+	// lands under an uncontrolled parent CWD.
+	WorkDir string
 }
 
 // isValidRunID reports whether s is a non-empty [A-Za-z0-9_-]+ that does NOT
@@ -259,24 +274,87 @@ func (h *Harness) Run(ctx context.Context, r HarnessRun) error {
 	if h.runShim != nil {
 		return h.runShim(args)
 	}
+	// Resolve and validate the controlled working dir (WR-03) so the harness
+	// output tree is rooted deterministically, never under the parent CWD.
+	workDir, err := resolveWorkDir(r.WorkDir)
+	if err != nil {
+		return err
+	}
+	// Build the strict env and fail closed on a misconfigured one (WR-04) — an
+	// empty PATH would otherwise surface as an opaque "docker not found" crash.
+	env, err := allowlistEnv()
+	if err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, h.bin, args...)
 	cmd.SysProcAttr = procGroupAttr()
-	cmd.Env = allowlistEnv()
+	cmd.Env = env
+	cmd.Dir = workDir
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("bench/evaluators/swebench: %s run_evaluation: %w", h.bin, err)
 	}
 	return nil
 }
 
-// allowlistEnv builds the strict env passed to the harness subprocess: only PATH,
-// HOME, and HELIX_CACHE_DIR are forwarded (set keys only), never the full parent
+// resolveWorkDir validates an explicit WorkDir or derives a controlled default
+// under HELIX_CACHE_DIR (WR-03). An explicit dir MUST pass the same
+// isValidPredictionsPath discipline (clean, absolute, no ':' / '..'); the default
+// is <cacheRoot>/swebench-runs, created if absent. The returned dir is guaranteed
+// to exist so exec.Cmd.Dir is always a real directory.
+func resolveWorkDir(workDir string) (string, error) {
+	if workDir == "" {
+		workDir = filepath.Join(harnessCacheRoot(), "swebench-runs")
+	}
+	if !isValidPredictionsPath(workDir) {
+		return "", fmt.Errorf("%w: work_dir %q must be a clean absolute path without '..' or ':'", errHarnessEnv, workDir)
+	}
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return "", fmt.Errorf("%w: create work_dir %q: %v", errHarnessEnv, workDir, err)
+	}
+	return workDir, nil
+}
+
+// harnessCacheRoot resolves the cache root the default WorkDir is rooted under,
+// with the same HELIX_CACHE_DIR → os.UserCacheDir()/helix → ~/.helix/cache
+// precedence the dataset fetchers use, so the run output lands beside the caches.
+func harnessCacheRoot() string {
+	if d := os.Getenv("HELIX_CACHE_DIR"); d != "" {
+		return d
+	}
+	if d, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(d, "helix")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".helix", "cache")
+}
+
+// envAllowlist is the strict set of keys forwarded to the harness subprocess,
+// never the full parent environment (T-87-02). PATH/HOME/HELIX_CACHE_DIR are the
+// base set; the DOCKER_* keys (WR-04) are forwarded WHEN SET so a non-default
+// Docker daemon (custom socket / TLS) is reachable — the swebench harness shells
+// out to `docker`, so dropping these silently breaks a non-default setup. It is
+// still an explicit allowlist: an UNLISTED key is never forwarded.
+var envAllowlist = []string{
+	"PATH", "HOME", "HELIX_CACHE_DIR",
+	"DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH",
+}
+
+// allowlistEnv builds the strict env passed to the harness subprocess: only the
+// envAllowlist keys are forwarded (set keys only), never the full parent
 // environment. Mirrors bench/container/engine.go allowlistEnv (T-87-02).
-func allowlistEnv() []string {
-	env := make([]string, 0, 3)
-	for _, k := range []string{"PATH", "HOME", "HELIX_CACHE_DIR"} {
+//
+// It FAILS CLOSED (WR-04) when PATH resolves empty: the harness shells out to
+// `docker`, which it locates via PATH, so a missing PATH would otherwise surface
+// as an opaque subprocess crash rather than a clear config refusal.
+func allowlistEnv() ([]string, error) {
+	if os.Getenv("PATH") == "" {
+		return nil, fmt.Errorf("%w: PATH is empty — the harness needs it to locate `docker`", errHarnessEnv)
+	}
+	env := make([]string, 0, len(envAllowlist))
+	for _, k := range envAllowlist {
 		if v := os.Getenv(k); v != "" {
 			env = append(env, k+"="+v)
 		}
 	}
-	return env
+	return env, nil
 }

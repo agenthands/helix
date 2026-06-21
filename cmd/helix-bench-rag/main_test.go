@@ -88,3 +88,42 @@ func TestPathTraversalRejected(t *testing.T) {
 		t.Errorf("read_file(\"a.go\") = %v, want success", err)
 	}
 }
+
+// TestSymlinkEscapeRejected asserts an in-corpus symlink that targets an
+// absolute path OUTSIDE the corpus root is rejected even though it passes every
+// lexical containment check (WR-02 defense-in-depth).
+func TestSymlinkEscapeRejected(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOP SECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// link lives INSIDE root but points to an absolute path outside it.
+	link := filepath.Join(root, "link.txt")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	srv := &handlers{idx: newStubIndex(), root: root}
+
+	if out, err := srv.readFile("link.txt"); err == nil {
+		t.Errorf("read_file(\"link.txt\") = %q, want symlink-escape rejection", out)
+	}
+	if out, err := srv.grep("SECRET", "link.txt"); err == nil {
+		t.Errorf("grep(_, \"link.txt\") = %q, want symlink-escape rejection", out)
+	}
+
+	// A symlink that stays INSIDE the corpus root must still resolve and read.
+	target := filepath.Join(root, "inside.go")
+	if err := os.WriteFile(target, []byte("package inside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	innerLink := filepath.Join(root, "inner-link.go")
+	if err := os.Symlink(target, innerLink); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+	if _, err := srv.readFile("inner-link.go"); err != nil {
+		t.Errorf("read_file(\"inner-link.go\") = %v, want success (in-corpus symlink)", err)
+	}
+}

@@ -49,14 +49,36 @@ func (h *handlers) validatePath(rel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve corpus root: %w", err)
 	}
+	// Resolve the root through symlinks too so the prefix comparison below is
+	// apples-to-apples (the corpus root itself may live under a symlinked temp
+	// dir, e.g. macOS /var -> /private/var). A root that does not resolve is a
+	// hard configuration error.
+	rootResolved, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return "", fmt.Errorf("resolve corpus root symlinks: %w", err)
+	}
 	joined := filepath.Join(rootAbs, cleaned)
 
-	// Final containment check: the resolved absolute path must equal the root or
+	// Lexical containment check: the joined absolute path must equal the root or
 	// live strictly under it (exact-OR-separator boundary, never bare prefix).
 	if joined != rootAbs && !strings.HasPrefix(joined, rootAbs+string(os.PathSeparator)) {
 		return "", fmt.Errorf("path escapes corpus root: %q", rel)
 	}
-	return joined, nil
+
+	// Defense-in-depth (WR-02): a symlink INSIDE the corpus that targets an
+	// absolute path outside it passes every lexical check, then os.ReadFile
+	// follows it out of the sandbox. Resolve symlinks on the joined path and
+	// re-assert containment against the resolved root. EvalSymlinks requires the
+	// path to exist; a not-yet-existing path (no tool here creates files) is a
+	// clean error rather than a silent escape.
+	resolved, err := filepath.EvalSymlinks(joined)
+	if err != nil {
+		return "", fmt.Errorf("resolve path symlinks: %w", err)
+	}
+	if resolved != rootResolved && !strings.HasPrefix(resolved, rootResolved+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path escapes corpus root after symlink resolution: %q", rel)
+	}
+	return resolved, nil
 }
 
 // ragSearch runs a k-NN query against the embedding index and renders the hits.

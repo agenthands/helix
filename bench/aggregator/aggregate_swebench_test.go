@@ -140,15 +140,21 @@ func TestSwebenchColumnsAbsentIsEmDash(t *testing.T) {
 		"no swebench data -> NULL RescoredScore (em-dash), never a fabricated 0")
 }
 
-// TestSwebenchColumnsGoldenStable (Case C — the byte-stable-golden guard): Aggregate
-// over the NON-swebench golden fixture produces leaderboard.md / cost_quality.md
-// byte-identical to the committed goldens. The additive RawScore/RescoredScore
-// fields perturb nothing (zero RNG, not rendered into the existing reports — the
-// SWE-bench-specific render is downstream Phase 89).
+// TestSwebenchColumnsGoldenStable (Case C — the lockstep render guard, UPDATED in
+// Phase 89-03): its intent SHIFTED from "the additive column is invisible / perturbs
+// nothing" to "the REPORT-01 verified_correctness + cost_per_solved columns RENDER
+// CORRECTLY in leaderboard.md". The Phase 89 (REPORT-01) verified_correctness +
+// cost_per_solved columns ARE now rendered into leaderboard.md (they regenerated the
+// committed golden), so this guard asserts (a) the column headers are present, (b)
+// the rendered golden bytes are byte-stable, and (c) the additive Phase 87
+// RawScore/RescoredScore fields — which are STILL not rendered — are populated on
+// the Report without leaking into the rendered bytes. The guard is UPDATED, never
+// bypassed/deleted (Pitfall 1).
 func TestSwebenchColumnsGoldenStable(t *testing.T) {
 	dir := goldenFixture(t)
-	_, err := Aggregate(dir, aggConfig(3))
+	rep, err := Aggregate(dir, aggConfig(3))
 	require.NoError(t, err)
+	require.NotNil(t, rep)
 
 	for _, name := range []string{"leaderboard.md", "cost_quality.md"} {
 		got, err := os.ReadFile(filepath.Join(dir, name))
@@ -160,6 +166,21 @@ func TestSwebenchColumnsGoldenStable(t *testing.T) {
 		want, err := os.ReadFile(goldenPath)
 		require.NoError(t, err, "missing golden %s", goldenPath)
 		assert.Equal(t, string(want), string(got),
-			"%s drifted from its committed golden — the additive swebench column must perturb nothing", name)
+			"%s drifted from its committed golden (byte-stable render of the REPORT-01 columns)", name)
 	}
+
+	// Intent shift: the REPORT-01 columns RENDER (header present), not invisible.
+	lb, err := os.ReadFile(filepath.Join(dir, "leaderboard.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(lb), "verified_correctness",
+		"leaderboard.md must RENDER the REPORT-01 verified_correctness column header")
+	assert.Contains(t, string(lb), "cost_per_solved",
+		"leaderboard.md must RENDER the REPORT-01 cost_per_solved column header")
+
+	// The Phase 87 RawScore/RescoredScore fields are STILL additive-only (not rendered):
+	// they exist on the Report but never leak into the rendered leaderboard bytes.
+	assert.NotContains(t, string(lb), "raw_score",
+		"RawScore stays an unrendered additive field (no header leak)")
+	assert.NotContains(t, string(lb), "rescored_score",
+		"RescoredScore stays an unrendered additive field (no header leak)")
 }

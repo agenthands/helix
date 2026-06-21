@@ -195,9 +195,14 @@ func writeCanaryRowVC(t *testing.T, outDir, task, mode string, runIndex int, m e
 	writeCanaryRow(t, outDir, task, mode, runIndex, m, completion)
 }
 
-// TestAggregateCanaryAbsentIsEmDash: rows with NO completion key leave
-// CanaryPassRate as a NULL ci (OK==false) so the renderer prints an em-dash — never
-// a fabricated 0 or a crash. The existing leaderboard is unharmed (additive).
+// TestAggregateCanaryAbsentIsEmDash (lockstep render guard, UPDATED in Phase 89-03):
+// its intent SHIFTED from "the absent canary leaves a NULL field (em-dash)" alone to
+// "the contamination footnote RENDERS CORRECTLY when nothing is contaminated — i.e.
+// it is absent". Rows with NO completion key leave CanaryPassRate a NULL ci
+// (OK==false, em-dash discipline — never a fabricated 0) AND, because no row echoed
+// the canary sentinel, the rendered leaderboard.md carries NO INFRA-05 contamination
+// footnote (em-dash discipline at the render layer: no footnote is fabricated when
+// nothing was excluded). The guard is UPDATED, never bypassed/deleted (Pitfall 1).
 func TestAggregateCanaryAbsentIsEmDash(t *testing.T) {
 	dir := t.TempDir()
 	writeCostedRow(t, dir, "task-1", "full", 0, metric(true, 1000, 100, 5, 3, 0.9))
@@ -210,4 +215,13 @@ func TestAggregateCanaryAbsentIsEmDash(t *testing.T) {
 	require.Len(t, rep.Leaderboard, 1, "absent-completion rows must not break the leaderboard")
 	assert.False(t, rep.Leaderboard[0].CanaryPassRate.OK,
 		"no completion data -> NULL CanaryPassRate (em-dash), never a fabricated 0")
+
+	// Intent shift: nothing contaminated -> the rendered footnote section is ABSENT
+	// (the footnote renders correctly by NOT being fabricated).
+	assert.Empty(t, rep.Contaminated,
+		"no canary-echoing rows -> no contaminated cells carried on the Report")
+	lb, err := os.ReadFile(filepath.Join(dir, "leaderboard.md"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(lb), "Contamination canary exclusions",
+		"an uncontaminated run must render NO INFRA-05 footnote (never fabricated)")
 }

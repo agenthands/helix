@@ -107,7 +107,7 @@ Plans:
 
 - [x] 92-01-PLAN.md — Foundation (TDD): render-class map (50 verbs) + locus parse/path-rel/coord (no re-convert) + sort/dedup + serr.Kind→exit-code/stderr-prefix mapper (OUT-01/02/05)
 - [x] 92-02-PLAN.md — Renderer integration (TDD): replace renderResult seam (class dispatch, color/NO_COLOR/TTY gate, snippet read clamped to root) + persistent --color/--abs + repurpose --json + cligen denylist+regen + per-kind os.Exit (OUT-01..07)
-- [ ] 92-03-PLAN.md — Re-targeted contract oracle: CLI stdout goldens (HELIX_BIN) + typed-args→cobra-flags parity replacing MCP schema meta-validation + behavioral copy-paste chain & no-follow-up-Read (TEST-02, OUT-03/04)
+- [x] 92-03-PLAN.md — Re-targeted contract oracle: CLI stdout goldens (HELIX_BIN) + typed-args→cobra-flags parity replacing MCP schema meta-validation + behavioral copy-paste chain & no-follow-up-Read (TEST-02, OUT-03/04)
 
 ### Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip
 

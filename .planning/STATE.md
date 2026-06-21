@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 92
 current_phase_name: Terse Output Renderer + Re-Targeted Contract Oracle
-status: executing
+status: verifying
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T18:35:41.621Z"
+last_updated: "2026-06-21T18:49:08.618Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 92 execution resumed (wave continue)
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 10
-  percent: 33
+  completed_plans: 11
+  percent: 50
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 Phase: 92 (Terse Output Renderer + Re-Targeted Contract Oracle) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 — Phase 92 execution resumed (wave continue)
 
 Progress: [██░░░░░░░░] 19%
@@ -56,6 +56,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 91 P04 | 6min | 2 tasks | 2 files |
 | Phase 92 P01 | 20min | 3 tasks | 6 files |
 | Phase 92 P02 | 6min | 2 tasks | 8 files |
+| Phase 92 P03 | ~10min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -91,7 +92,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T18:35:06.092Z
+Last session: 2026-06-21T18:48:37.704Z
 Stopped at: Completed 91-03-PLAN.md
 Resume file: None
 
@@ -115,3 +116,4 @@ Resume file: None
 - [Phase ?]: 91-04: SEC-01 live proof — ci-bot daemon refuses real helix replace-symbol-body (non-zero exit + typed permission_denied); full profile allows the edit (CLI->gRPC->daemon round trip proven)
 - [Phase ?]: 92-02: --json repurposed as a persistent dual-read flag (log-format on daemon path, verb-output JSON on verb path)
 - [Phase ?]: 92-02: readSnippetLine clamps the CLI-side snippet read to the workspace root before opening (T-92-04)
+- [Phase ?]: 92-03: Contract oracle re-targeted to real helix subprocess stdout goldens (HELIX_BIN-gated); MCP schema meta-validation replaced by default-suite typed-args to cobra-flags parity; OUT-04 chain + OUT-03 self-contained nav snippet proven end-to-end

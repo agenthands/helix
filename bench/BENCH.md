@@ -115,6 +115,112 @@ operator who actually *runs benchmarks* needs them; they are never linked into `
   language's native test/build tooling (Go toolchain, `cargo`, `pytest`, a JDK, etc.).
   Only the tiers you run need their toolchain installed.
 
+## Container path (public benchmarks)
+
+SWE-bench / Multi-SWE-bench / Terminal-Bench execute each task inside a per-task
+container image. Helix's container runtime lives in the **`bench/container/`** leaf
+package (CONTAINER-*) and is **daemon-free and SDK-free**: it never imports the
+Docker Engine SDK (`github.com/docker/docker`) — image inspection uses
+go-containerregistry `crane` (manifest/config over the registry HTTP API), and the
+actual pull shells to a container engine binary. The `make verify-no-docker-sdk`
+gate (SC#1) hard-fails `make vet` if the Engine SDK ever re-enters `go.mod`
+(anchored grep so crane's `docker-credential-helpers` indirect does not
+false-positive — see 84-03 SUMMARY).
+
+### Engine detection
+
+`bench/container.Detect()` probes PATH for a container engine in order: **docker,
+then podman**. If neither is on PATH, the **live** container tests SKIP cleanly
+(they never fail for a missing engine). Every gated live test has a hermetic
+sibling, so a plain `go test ./bench/container/...` is **not** false-green — the
+verify-before-fetch ordering, arch gate, cache fill, and tamper rejection are all
+proven hermetically with VirtualSigstore fixtures even with no engine present.
+
+### Arch gate and `BENCH_ARCH_MISMATCH_OK`
+
+`ArchGate(hostArch, manifestArch)` refuses to run an image whose manifest
+architecture does not match the host. This exists because docker/podman will
+**silently** run a cross-arch image under qemu emulation — which is correct-looking
+but ~10–40× slower, silently skewing every wall-clock benchmark number. The gate
+fails loudly instead. To intentionally allow a cross-arch run (e.g. an arm64 image
+on an amd64 CI box where you accept the qemu cost), set:
+
+```sh
+export BENCH_ARCH_MISMATCH_OK=1
+```
+
+This is an explicit escape hatch only — there is no silent emulation path.
+
+### Image cache (`$HELIX_CACHE_DIR/bench-images/<sha>/`)
+
+Pulled image layers are cached, **digest-pinned**, under
+`$HELIX_CACHE_DIR/bench-images/<sha256>/` (where `<sha256>` is the image's content
+digest, never a mutable tag). `bench/container.Ensure(sha, fetch)` is the cache
+gate: on a cache **hit** (a valid `.container-cache-ok` marker present) it returns
+the existing dir and runs **no** verify/fetch/pull; on a miss it fills a staging
+dir and only publishes the marker after the fetch closure succeeds. A failed or
+unverified fetch leaves **zero** bytes under the final cache dir (TOCTOU-safe).
+
+### Cosign verify-before-pull (supply-chain gate)
+
+The mirror images are **cosign keyless-signed** (see the GHCR mirror section
+below). The runtime **verifies the signature before pulling any layer bytes**:
+`bench/container.VerifyThenPull(ctx, repo, digest, …)` orders
+**arch-gate → crane manifest inspect → `VerifyImage` (in-process sigstore-go
+keyless verify) → cache fill**. `VerifyImage` pins the OIDC issuer
+(`https://token.actions.githubusercontent.com`) and the SAN regex of the
+`bench-mirror.yml` publish workflow. Every verification failure (tampered image,
+wrong signing org, wrong issuer, unsigned) returns the **single canonical** error
+`signature verification FAILED` — no error oracle that would leak which check
+failed — and, because verify gates the fetch closure, a rejected image publishes
+**no** cache bytes under `$HELIX_CACHE_DIR/bench-images/<sha>/`.
+
+### Disk-budget guard (50 GiB)
+
+Container images are large; an unbounded mirror cache can exhaust the runner disk
+mid-run. The cache enforces a **50 GiB** budget over
+`$HELIX_CACHE_DIR/bench-images/`. When the budget would be exceeded, the guard
+fails with a one-line remediation: prune the cache (delete stale
+`$HELIX_CACHE_DIR/bench-images/<sha>/` dirs) or point `$HELIX_CACHE_DIR` at a
+larger volume, then re-run.
+
+### GHCR mirror namespace + `bench-mirror.yml` publish workflow
+
+The signed mirror is published to **`ghcr.io/agenthands/helix-bench-*`** (one
+package per suite: `helix-bench-swe`, `helix-bench-multi-swe`,
+`helix-bench-terminal`, …) by **`.github/workflows/bench-mirror.yml`**. That
+workflow (operator-triggered via `workflow_dispatch`, run from `main`) pulls each
+upstream public-benchmark image, retags it under our namespace, pushes it, and
+**`cosign sign`s the pushed DIGEST via keyless OIDC** (reusing the SHA-pinned
+Phase 58 cosign-installer flow; `id-token: write` + `packages: write`). Signing is
+**CI-only** — `cosign sign` never appears in Go runtime code.
+
+> **SAN coupling — do not break.** `bench-mirror.yml`'s file path and its publish
+> ref (`refs/heads/main`) ARE the signing identity. `bench/container/verify.go`'s
+> `pinnedSANRegexLiteral`
+> (`^https://github\.com/agenthands/helix/\.github/workflows/bench-mirror\.yml@refs/heads/main$`)
+> must match it exactly. Renaming the workflow file or publishing from a non-`main`
+> ref changes the SAN and the runtime verifier will fail-closed on every mirror
+> image — update both in lockstep.
+
+### Live-test gating contract
+
+`go test ./bench/container/...` is **hermetic by default** and runs anywhere. The
+**single** live test, `TestVerifyThenPullLive`, runs only when BOTH a container
+engine (docker/podman) is on PATH AND **`HELIX_BENCH_MIRROR`** is set to a real
+`<repo>@<digest>` of a published, signed mirror image; otherwise it SKIPs. Its
+hermetic siblings already prove the verify-before-fetch branch, so the skip is
+never a coverage hole (no skip-only-without-sibling). The `make verify-no-docker-sdk`
+SC#1 gate runs unconditionally in `make vet`.
+
+> **Deferred — live mirror tamper-rejection verification.** As of Phase 84 the
+> `ghcr.io/agenthands/helix-bench-*` namespace is **not yet published** (the
+> operator must run `bench-mirror.yml` once and set the packages PUBLIC). Until
+> then, the **live** signed-pull-accepted / tampered-pull-rejected confirmation
+> (84-VALIDATION.md, manual-only) is **DEFERRED**. The runtime decision logic
+> (verify-before-pull, single-canonical-error, no-bytes-on-reject) is already
+> proven hermetically with VirtualSigstore fixtures in `bench/container/`.
+
 ## eval ↔ bench separation note (INFRA-03)
 
 `eval/` and `bench/` are **independent siblings**. They share **no code and no pricing

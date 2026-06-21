@@ -1,0 +1,135 @@
+# bench-mirror.yml — CI publish + cosign-keyless-sign job for the GHCR bench mirror.
+#
+# Publishes a cosign-signed mirror of the public-benchmark instance images
+# (SWE-bench / Multi-SWE-bench / Terminal-Bench) to ghcr.io/agenthands/helix-bench-*.
+# This is the CI/publish half of CONTAINER-03; the runtime verify-then-pull half
+# ships in bench/container/{verify.go,pull.go} (Plan 84-03).
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ CRITICAL SAN COUPLING — DO NOT BREAK                                       │
+# │                                                                            │
+# │ The cosign keyless signature minted below carries this certificate SAN:    │
+# │   https://github.com/agenthands/helix/.github/workflows/bench-mirror.yml@refs/heads/main
+# │                                                                            │
+# │ The runtime verifier bench/container/verify.go pins the EXACT identity via │
+# │   pinnedSANRegexLiteral =                                                   │
+# │     ^https://github\.com/agenthands/helix/\.github/workflows/bench-mirror\.yml@refs/heads/main$
+# │   pinnedOIDCIssuer = https://token.actions.githubusercontent.com           │
+# │                                                                            │
+# │ Therefore this workflow MUST keep BOTH of these invariant or the runtime   │
+# │ verifier will fail-closed on every mirror image:                           │
+# │   1. File path  = .github/workflows/bench-mirror.yml  (renaming the file    │
+# │      changes the SAN → bump pinnedSANRegexLiteral in verify.go in lockstep) │
+# │   2. Publish ref = refs/heads/main  (the dispatch MUST run against the      │
+# │      default branch; running it from a feature branch mints a SAN ending    │
+# │      @refs/heads/<branch> which the runtime regex rejects).                 │
+# │                                                                            │
+# │ Any rename or ref change here MUST be mirrored in verify.go's              │
+# │ pinnedSANRegexLiteral (and bench/BENCH.md's "Container path" section).     │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Signing is CI-ONLY (RESEARCH tier note): `cosign sign` NEVER appears in Go
+# runtime code — the Helix binary has no cosign dependency and only VERIFIES.
+name: bench-mirror
+
+on:
+  # Operator-driven mirror refresh. Run from the default branch (main) so the
+  # minted SAN ends @refs/heads/main and matches the runtime pin above.
+  # NOTE: a scheduled trigger (e.g. `schedule: - cron:`) can be added later for
+  #       periodic refresh; if added it MUST still run against refs/heads/main.
+  workflow_dispatch:
+
+permissions:
+  contents: read    # checkout only
+  id-token: write   # Phase 58 D-02: cosign keyless OIDC (Fulcio short-lived cert)
+  packages: write   # push images to ghcr.io/agenthands/helix-bench-*
+
+jobs:
+  publish:
+    name: Publish + sign GHCR bench mirror
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    # Minimal, extensible source list. Each entry mirrors one upstream public
+    # benchmark instance image into ghcr.io/agenthands/helix-bench-<suite>:<instance>.
+    # Keep this list small to start; new suites/instances are added by appending
+    # matrix rows (no workflow-structure change required). The `upstream` ref is
+    # pulled, retagged under our namespace, pushed, and the PUSHED DIGEST is signed.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: swe
+            instance: smoke
+            # Upstream public SWE-bench task-runner base image (placeholder until
+            # the concrete per-instance upstream refs are pinned; the namespace
+            # and sign mechanics are identical regardless of the source ref).
+            upstream: ghcr.io/swe-bench/sweb.eval.x86_64.smoke:latest
+          - suite: multi-swe
+            instance: smoke
+            upstream: ghcr.io/multi-swe-bench/mswe.eval.smoke:latest
+          - suite: terminal
+            instance: smoke
+            upstream: ghcr.io/laude-institute/terminal-bench/smoke:latest
+
+    steps:
+      - name: Checkout
+        # SHA-pinned (copied from release.yml): actions/checkout v4.2.2.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install cosign
+        # Phase 58 D-02 keyless signing via Fulcio + Rekor. SAME SHA-pinned
+        # cosign-installer + cosign-release as the audited release.yml — no new
+        # unpinned action enters the supply chain (T-84-04-SC).
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5  # v3.10.1
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Log in to GHCR
+        # The workflow GITHUB_TOKEN already carries packages:write (permissions
+        # block above), so no PAT secret is required. docker/login-action SHA-pinned.
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567  # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror + cosign-keyless-sign by digest
+        env:
+          SUITE: ${{ matrix.suite }}
+          INSTANCE: ${{ matrix.instance }}
+          UPSTREAM: ${{ matrix.upstream }}
+        run: |
+          set -euo pipefail
+
+          DEST="ghcr.io/agenthands/helix-bench-${SUITE}:${INSTANCE}"
+          DEST_REPO="ghcr.io/agenthands/helix-bench-${SUITE}"
+
+          echo "::group::Pull upstream ${UPSTREAM}"
+          docker pull "${UPSTREAM}"
+          echo "::endgroup::"
+
+          echo "::group::Retag → ${DEST} and push"
+          docker tag "${UPSTREAM}" "${DEST}"
+          docker push "${DEST}"
+          echo "::endgroup::"
+
+          # Capture the IMMUTABLE pushed digest. cosign MUST sign by digest
+          # (repo@sha256:…), NEVER by the mutable tag (T-84-04-02 — by-digest
+          # signing). The runtime verifier (CONTAINER-02) also pins by digest.
+          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${DEST}" \
+            | awk -F'@' '{print $2}')"
+          if [ -z "${DIGEST}" ]; then
+            echo "::error::could not resolve pushed digest for ${DEST}"
+            exit 1
+          fi
+          echo "Pushed digest: ${DEST_REPO}@${DIGEST}"
+
+          echo "::group::cosign keyless sign by digest"
+          # Keyless OIDC: Fulcio short-lived cert (id-token:write) + Rekor
+          # transparency log (T-84-04-03). The minted cert SAN is the workflow
+          # path @refs/heads/main — the identity bench/container/verify.go pins.
+          cosign sign --yes "${DEST_REPO}@${DIGEST}"
+          echo "::endgroup::"
+
+          echo "Mirrored + signed: ${DEST_REPO}@${DIGEST}"

@@ -151,15 +151,19 @@ func isValidOutputPath(p string) bool {
 // (mirrors swebench RunArgs). It fail-closes — returning errBadHarnessArg and a
 // nil argv — on the FIRST bad input, BEFORE producing any argv, so a crafted
 // agent, task-id, dataset-version, or output-path can NEVER cross os/exec
-// (T-88-02-01). The argv (for defaultRunnerKind=tb) is:
+// (T-88-02-01). The argv (for kind=tb) is:
 //
 //	["run", "--agent", <agent>, "--dataset-name", "terminal-bench-core",
 //	 "--dataset-version", <ver>, "--task-id", <id>, "--output-path", <out>]
 //
-// The binary name and dataset-flag form live behind the runnerKind seam so a
-// harbor swap is one constant flip; the argv structure here is unchanged.
-func RunArgs(r HarnessRun) ([]string, error) {
-	spec := defaultRunnerKind.spec()
+// The binary name and dataset-flag form live behind the runnerKind seam: argv is
+// built for the kind k actually RESOLVED by Detect (carried on Harness.kind), NOT
+// for the global defaultRunnerKind. This closes the WR-01 mis-wiring where a
+// harbor-resolved Harness would otherwise be invoked with tb-shaped argv the
+// moment harbor's spec() diverges from tb's. The argv STRUCTURE is identical
+// across kinds; only spec() values differ.
+func RunArgs(k runnerKind, r HarnessRun) ([]string, error) {
+	spec := k.spec()
 	if !isValidArg(r.Agent) {
 		return nil, fmt.Errorf("%w: agent %q must be non-empty and not start with '-'", errBadHarnessArg, r.Agent)
 	}
@@ -188,6 +192,11 @@ func RunArgs(r HarnessRun) ([]string, error) {
 // allowlist — never a shell, never the full inherited env (mirrors swebench).
 type Harness struct {
 	bin string
+	// kind is the runnerKind Detect actually resolved (the binary that won the
+	// PATH probe). Run/RunArgs build argv for THIS kind, not the global
+	// defaultRunnerKind, so a harbor-resolved Harness gets harbor-shaped argv the
+	// moment harbor's spec() diverges from tb's (WR-01).
+	kind runnerKind
 	// runShim, when non-nil, intercepts Run's os/exec invocation with the exact
 	// argv RunArgs produced. It exists ONLY so the hermetic argv-equivalence test
 	// can prove the argv crossing the boundary without a live tb+docker.
@@ -202,7 +211,7 @@ type Harness struct {
 func Detect() (*Harness, error) {
 	for _, k := range []runnerKind{runnerKindTB, runnerKindHarbor} {
 		if p, err := exec.LookPath(k.spec().binary); err == nil {
-			return &Harness{bin: p}, nil
+			return &Harness{bin: p, kind: k}, nil
 		}
 	}
 	return nil, errHarnessUnavailable
@@ -217,7 +226,7 @@ func Detect() (*Harness, error) {
 // docker Go SDK, NO bench/container — tb owns its own DockerComposeManager
 // per-task isolation (SC#2).
 func (h *Harness) Run(ctx context.Context, r HarnessRun) error {
-	args, err := RunArgs(r)
+	args, err := RunArgs(h.kind, r)
 	if err != nil {
 		return err
 	}

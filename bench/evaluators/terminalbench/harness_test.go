@@ -27,7 +27,7 @@ func validRun() HarnessRun {
 // Hermetic seam — no live process.
 func TestRunArgsGolden(t *testing.T) {
 	r := validRun()
-	got, err := RunArgs(r)
+	got, err := RunArgs(defaultRunnerKind, r)
 	if err != nil {
 		t.Fatalf("RunArgs on a valid config returned error: %v", err)
 	}
@@ -70,6 +70,76 @@ func TestRunnerKindSeam(t *testing.T) {
 	}
 }
 
+// TestRunArgsHonorsKind (WR-01): RunArgs builds argv from the kind it is GIVEN,
+// not the global defaultRunnerKind. A harbor-kind RunArgs uses harbor's spec()
+// and a tb-kind uses tb's. This pins the Detect→Run wiring so a FUTURE harbor
+// spec divergence (a different binary name or dataset-flag form) is caught by a
+// failing test instead of silently shipping tb-shaped argv to a harbor binary.
+// The two argv slices are identical TODAY (both specs share datasetName and the
+// binary name is not part of argv) — the test exists to fail LOUDLY the moment
+// that stops being true.
+func TestRunArgsHonorsKind(t *testing.T) {
+	r := validRun()
+
+	tbArgs, err := RunArgs(runnerKindTB, r)
+	if err != nil {
+		t.Fatalf("RunArgs(tb) error: %v", err)
+	}
+	harborArgs, err := RunArgs(runnerKindHarbor, r)
+	if err != nil {
+		t.Fatalf("RunArgs(harbor) error: %v", err)
+	}
+
+	// Each kind's argv must embed THAT kind's dataset-flag value, never the other
+	// kind's. Even though the values coincide today, anchoring on spec() (not a
+	// hardcoded literal) means a future spec change is reflected here automatically.
+	wantTBDataset := runnerKindTB.spec().datasetName
+	wantHarborDataset := runnerKindHarbor.spec().datasetName
+	if !argvHasFlagValue(tbArgs, "--dataset-name", wantTBDataset) {
+		t.Errorf("tb argv %#v must carry --dataset-name %q from tb's spec", tbArgs, wantTBDataset)
+	}
+	if !argvHasFlagValue(harborArgs, "--dataset-name", wantHarborDataset) {
+		t.Errorf("harbor argv %#v must carry --dataset-name %q from harbor's spec", harborArgs, wantHarborDataset)
+	}
+}
+
+// TestRunHonorsResolvedKind (WR-01): a Harness carrying kind=harbor builds argv
+// for harbor's spec (via the runShim seam), and a Harness carrying kind=tb builds
+// argv for tb's spec — proving Detect's resolved kind, not defaultRunnerKind,
+// drives Run. This is the regression guard for the mis-wiring where Run always
+// used defaultRunnerKind regardless of which binary Detect resolved.
+func TestRunHonorsResolvedKind(t *testing.T) {
+	r := validRun()
+	for _, k := range []runnerKind{runnerKindTB, runnerKindHarbor} {
+		var captured []string
+		h := &Harness{
+			bin:     "/usr/bin/" + k.spec().binary,
+			kind:    k,
+			runShim: func(args []string) error { captured = args; return nil },
+		}
+		if err := h.Run(context.Background(), r); err != nil {
+			t.Fatalf("Run(kind=%v) via runShim error: %v", k, err)
+		}
+		want, err := RunArgs(k, r)
+		if err != nil {
+			t.Fatalf("RunArgs(kind=%v) error: %v", k, err)
+		}
+		if !reflect.DeepEqual(captured, want) {
+			t.Errorf("Run(kind=%v) argv = %#v, want %#v (Run must use h.kind, not defaultRunnerKind)", k, captured, want)
+		}
+	}
+}
+
+// argvHasFlagValue reports whether argv contains flag immediately followed by val.
+func argvHasFlagValue(argv []string, flag, val string) bool {
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == flag && argv[i+1] == val {
+			return true
+		}
+	}
+	return false
+}
+
 // TestRunArgsFailClose (Task 1, T-88-02-01): a task-id, dataset-version, or
 // output-path that is empty / leading-'-' / (output-path) relative or
 // '..'-bearing is refused with errBadHarnessArg AND a nil argv — never a partial
@@ -95,7 +165,7 @@ func TestRunArgsFailClose(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := validRun()
 			tc.mutate(&r)
-			got, err := RunArgs(r)
+			got, err := RunArgs(defaultRunnerKind, r)
 			if err == nil {
 				t.Fatalf("expected errBadHarnessArg, got nil and argv %#v", got)
 			}
@@ -122,7 +192,7 @@ func TestRunShimEquivalence(t *testing.T) {
 	if err := h.Run(context.Background(), r); err != nil {
 		t.Fatalf("Run via runShim returned error: %v", err)
 	}
-	want, err := RunArgs(r)
+	want, err := RunArgs(h.kind, r)
 	if err != nil {
 		t.Fatalf("RunArgs error: %v", err)
 	}

@@ -82,7 +82,7 @@
 **Wave 2** *(blocked on Wave 1; file-disjoint, parallel)*
 
 - [x] 91-03-PLAN.md — re-point the per-profile contract oracle from MCP `tools/list` to the CLI verb surface against the unchanged `testdata/profiles/*.tools.golden`; hidden-AND-refused sub-assertion (SEC-02)
-- [ ] 91-04-PLAN.md — HELIX_BIN-gated !windows E2E: read-profile refuses a real `helix replace-symbol-body` (typed PermissionDenied, non-zero exit), full-profile allows it; re-point the Phase 90 oracle to flat `helix <verb>` (SEC-01 live, VERB-03)
+- [x] 91-04-PLAN.md — HELIX_BIN-gated !windows E2E: read-profile refuses a real `helix replace-symbol-body` (typed PermissionDenied, non-zero exit), full-profile allows it; re-point the Phase 90 oracle to flat `helix <verb>` (SEC-01 live, VERB-03)
 
 ### Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle
 

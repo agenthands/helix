@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 91
 current_phase_name: Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
-status: executing
+status: verifying
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T14:33:02Z"
+last_updated: "2026-06-21T14:56:48.075Z"
 last_activity: 2026-06-21
 last_activity_desc: Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
-  percent: 19
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 Phase: 91 (Code-Generated Verb Surface + tools/call Profile/Mode Enforcement) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 — Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
 
 Progress: [██░░░░░░░░] 19%
@@ -52,6 +52,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 91 P01 | 17min | 3 tasks | 12 files |
 | Phase 91 P02 | 3min | 2 tasks | 3 files |
 | Phase 91 P03 | 3min | 2 tasks | 2 files |
+| Phase 91 P04 | 6min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,7 +88,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:33:02Z
+Last session: 2026-06-21T14:56:26.317Z
 Stopped at: Completed 91-03-PLAN.md
 Resume file: None
 
@@ -107,3 +108,5 @@ Resume file: None
 - [Phase ?]: SEC-02: CLI verb surface = intersection(cli.VerbToolNames(), listSessionTools(profile)); byte-identical to profile allowed set via 91-01 parity, compares cleanly vs unchanged goldens; oracle re-pointed in TestProfile_Contract_Golden
 - [Phase ?]: SEC-02: hidden-AND-refused contract — TestProfile_CLI_Surface_Refusal asserts an out-of-profile destructive verb (replace_symbol_body) is absent from CLI surface AND CallTool returns a Go error (91-02 PermissionDenied)
 - [Phase ?]: 91-03 deferred: TestProfile_ExcludedToolNotInvocable + TestProfile_ModeAndBudget/switch_mode fail pre-existing under 91-02 enforcement (expect IsError, now get Go error) — out of 91-03 file scope, logged to deferred-items.md
+- [Phase ?]: 91-04: Phase 90 dial oracle re-pointed to flat helix <verb> (search-in-files/--pattern); call parent removed in 91-01
+- [Phase ?]: 91-04: SEC-01 live proof — ci-bot daemon refuses real helix replace-symbol-body (non-zero exit + typed permission_denied); full profile allows the edit (CLI->gRPC->daemon round trip proven)

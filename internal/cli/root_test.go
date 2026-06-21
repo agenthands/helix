@@ -9,29 +9,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// withRoutingSeams swaps the package-level forwarder/daemon entry seams for
-// fakes that only record whether they were called, then restores the originals.
-// This keeps the routing assertions hermetic — no real daemon spawn, no stdio
-// MCP session, no network bind.
-func withRoutingSeams(t *testing.T) (forwarderCalled, daemonCalled *bool) {
+// withRoutingSeams swaps the package-level daemon entry seam for a fake that
+// only records whether it was called, then restores the original. This keeps the
+// routing assertions hermetic — no real daemon spawn, no network bind.
+//
+// Phase 94 RETIRE-01: the stdio forwarder head was deleted, so there is no longer
+// a forwarder seam to swap; the CLI's only routes are the daemon (--serve) and
+// the no-arg help path.
+func withRoutingSeams(t *testing.T) (daemonCalled *bool) {
 	t.Helper()
-	origFwd := runForwarderFn
 	origDaemon := runDaemonFn
 	t.Cleanup(func() {
-		runForwarderFn = origFwd
 		runDaemonFn = origDaemon
 	})
-	fwd := false
 	dmn := false
-	runForwarderFn = func(cmd *cobra.Command) error {
-		fwd = true
-		return nil
-	}
 	runDaemonFn = func(cmd *cobra.Command) error {
 		dmn = true
 		return nil
 	}
-	return &fwd, &dmn
+	return &dmn
 }
 
 // execRoot runs the root command with the given args against a captured
@@ -50,12 +46,11 @@ func execRoot(t *testing.T, args ...string) (error, string) {
 // Test 1 (no-arg help): bare `helix` prints grouped help, exits 0 (nil error),
 // and does NOT enter the forwarder (no stdio MCP session) or the daemon.
 func TestRunRoot_NoArgPrintsGroupedHelpExitsZero(t *testing.T) {
-	fwd, dmn := withRoutingSeams(t)
+	dmn := withRoutingSeams(t)
 
 	err, out := execRoot(t)
 
 	require.NoError(t, err, "no-arg helix must exit 0")
-	assert.False(t, *fwd, "no-arg helix must NOT enter the forwarder (no stdio MCP session)")
 	assert.False(t, *dmn, "no-arg helix must NOT enter the daemon")
 	// Grouped help output: cobra renders group titles as section headers, and
 	// lists the registered subcommands.
@@ -66,50 +61,37 @@ func TestRunRoot_NoArgPrintsGroupedHelpExitsZero(t *testing.T) {
 
 // Test 2 (explicit serve preserved): `--serve` still routes to the daemon.
 func TestRunRoot_ServeRoutesToDaemon(t *testing.T) {
-	fwd, dmn := withRoutingSeams(t)
+	dmn := withRoutingSeams(t)
 
 	err, _ := execRoot(t, "--serve")
 
 	require.NoError(t, err)
 	assert.True(t, *dmn, "--serve must route to the daemon")
-	assert.False(t, *fwd, "--serve must not enter the forwarder")
 }
 
-// Test 3 (explicit http preserved): `--mode=http` still routes to the daemon.
-func TestRunRoot_HTTPModeRoutesToDaemon(t *testing.T) {
-	fwd, dmn := withRoutingSeams(t)
-
-	err, _ := execRoot(t, "--mode=http")
-
-	require.NoError(t, err)
-	assert.True(t, *dmn, "--mode=http must route to the daemon")
-	assert.False(t, *fwd, "--mode=http must not enter the forwarder")
-}
-
-// Test 4 (explicit stdio preserved): `--mode=stdio` still routes to the
-// forwarder. Phase 94 owns the full forwarder-head deletion; this plan only
-// changes the no-arg/auto path.
-func TestRunRoot_StdioModeRoutesToForwarder(t *testing.T) {
-	fwd, dmn := withRoutingSeams(t)
-
-	err, _ := execRoot(t, "--mode=stdio")
-
-	require.NoError(t, err)
-	assert.True(t, *fwd, "--mode=stdio must still route to the forwarder")
-	assert.False(t, *dmn, "--mode=stdio must not enter the daemon")
-}
-
-// Test 5 (version preserved): `--version` prints the version and exits 0,
-// without entering forwarder or daemon.
+// Test 3 (version preserved): `--version` prints the version and exits 0,
+// without entering the daemon.
 func TestRunRoot_VersionPrintsAndExitsZero(t *testing.T) {
-	fwd, dmn := withRoutingSeams(t)
+	dmn := withRoutingSeams(t)
 
 	err, out := execRoot(t, "--version")
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "helix version")
-	assert.False(t, *fwd, "--version must not enter the forwarder")
 	assert.False(t, *dmn, "--version must not enter the daemon")
+}
+
+// Test 4 (legacy stdio rejected): Phase 94 RETIRE-01 deleted the stdio forwarder
+// head, so `--mode=stdio` is no longer an accepted transport — it falls through
+// to the unknown-mode error and must NOT route to the daemon.
+func TestRunRoot_StdioModeRejected(t *testing.T) {
+	dmn := withRoutingSeams(t)
+
+	err, _ := execRoot(t, "--mode=stdio")
+
+	require.Error(t, err, "stdio mode is deleted and must surface an error")
+	assert.Contains(t, err.Error(), "unknown mode")
+	assert.False(t, *dmn, "--mode=stdio must not enter the daemon")
 }
 
 // TestRunRoot_UnknownModeErrors: an unrecognized --mode still surfaces an error

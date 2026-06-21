@@ -9,7 +9,6 @@ import (
 
 	"github.com/agenthands/helix/internal/config"
 	"github.com/agenthands/helix/internal/daemon"
-	"github.com/agenthands/helix/internal/forwarder"
 	"github.com/agenthands/helix/internal/obs"
 )
 
@@ -64,14 +63,16 @@ const (
 	groupMemory      = "memory"
 )
 
-// runForwarderFn / runDaemonFn are overridable seams over the real
-// runForwarder / runDaemon entry points. Production code uses the real
-// functions; tests substitute fakes to assert routing (which entry point a
-// given invocation reaches) without spawning a daemon or opening a stdio MCP
-// session. See root_test.go.
+// runDaemonFn is an overridable seam over the real runDaemon entry point.
+// Production code uses the real function; tests substitute a fake to assert
+// routing (whether a given invocation reaches the daemon) without spawning a
+// daemon or binding a network listener. See root_test.go.
+//
+// Phase 94 RETIRE-01: the stdio forwarder head and its runForwarderFn seam were
+// deleted — the CLI no longer has a stdio MCP route, only the per-verb dial path
+// (forwarder.CallTool) and the daemon (--serve).
 var (
-	runForwarderFn = runForwarder
-	runDaemonFn    = runDaemon
+	runDaemonFn = runDaemon
 )
 
 // NewRootCommand creates the root cobra command with all flags.
@@ -105,13 +106,16 @@ func NewRootCommand() *cobra.Command {
 		&cobra.Group{ID: groupMemory, Title: "Memory & Workflow:"},
 	)
 
-	// Transport mode: stdio (default/forwarder), http, auto
-	rootCmd.Flags().String("mode", "auto", "Transport mode: stdio, http, auto")
+	// Transport mode. Phase 94 RETIRE-01/02 deleted the stdio forwarder head and
+	// the HTTP /mcp head, so the only remaining arm is "auto" (a bare `helix`
+	// prints grouped help). The flag is retained for backward-compatible
+	// invocation; "stdio"/"http" are no longer accepted MCP transports.
+	rootCmd.Flags().String("mode", "auto", "Transport mode: auto (the only MCP surface is the CLI itself)")
 	// Run as daemon directly (skip forwarder)
 	rootCmd.Flags().Bool("serve", false, "Run as daemon directly (skip forwarder)")
 	// --json is DUAL-PURPOSE and PERSISTENT (Phase 92-02, RESEARCH Pitfall 1
 	// option a). The daemon/forwarder dispatch paths read it as the log format
-	// (runForwarder/runDaemon below), while the disjoint verb path reads it as
+	// (runDaemon below), while the disjoint verb path reads it as
 	// "emit verb output as compact JSON lines" (render.go resolveRenderOpts).
 	// These two read sites never overlap for a single invocation, so one flag
 	// safely serves both. It must be persistent so generated verbs inherit it.
@@ -193,17 +197,17 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	switch mode {
-	case "stdio":
-		// Explicit stdio: still run the forwarder. Phase 94 owns the full
-		// forwarder-head deletion; CLI-04 only re-routes the no-arg/auto path.
-		return runForwarderFn(cmd)
 	case "auto":
 		// CLI-04: a bare `helix` (default mode=auto, no subcommand) prints
 		// grouped help and exits 0. It must NOT open a stdio MCP session — an
-		// agent never asked for one. Cobra dispatches subcommands before
-		// RunE, so reaching here means no verb was given.
+		// agent never asked for one (and Phase 94 RETIRE-01 deleted the stdio
+		// head entirely). Cobra dispatches subcommands before RunE, so reaching
+		// here means no verb was given.
 		return cmd.Help()
 	default:
+		// Phase 94 RETIRE-01/02: "stdio" and "http" are no longer accepted MCP
+		// transports — both heads were deleted. The only MCP surface is the CLI's
+		// own per-verb dial path; an explicit legacy mode now surfaces an error.
 		return fmt.Errorf("unknown mode: %s", mode)
 	}
 }
@@ -220,21 +224,6 @@ func newLogger(jsonLog bool) *slog.Logger {
 	}
 	handler = obs.NewContextHandler(handler)
 	return slog.New(handler)
-}
-
-// runForwarder starts the stdio forwarder that proxies MCP traffic to the daemon.
-func runForwarder(cmd *cobra.Command) error {
-	socketPath, _ := cmd.Flags().GetString("socket")
-	jsonLog, _ := cmd.Flags().GetBool("json")
-
-	logger := newLogger(jsonLog)
-
-	// Use default socket path if not specified
-	if socketPath == "" {
-		socketPath = config.DefaultSocketPath()
-	}
-
-	return forwarder.RunForwarder(cmd.Context(), socketPath, logger)
 }
 
 // runDaemon starts the Helix daemon with config loading and signal handling.

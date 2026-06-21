@@ -187,11 +187,6 @@ func (s *SerenaMCPServer) Registry() *ToolRegistry {
 	return s.registry
 }
 
-// RunStdio runs the MCP server over stdio transport (MCP-01).
-func (s *SerenaMCPServer) RunStdio(ctx context.Context) error {
-	return s.sdk.Run(ctx, &mcpsdk.StdioTransport{})
-}
-
 // HTTPHandler returns an http.Handler for Streamable HTTP transport (MCP-02).
 func (s *SerenaMCPServer) HTTPHandler() http.Handler {
 	return mcpsdk.NewStreamableHTTPHandler(func(r *http.Request) *mcpsdk.Server {

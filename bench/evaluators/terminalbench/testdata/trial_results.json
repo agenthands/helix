@@ -1,0 +1,7 @@
+{
+  "task_id": "hello-world",
+  "trial_name": "hello-world.1-of-1",
+  "is_resolved": true,
+  "container_id": "tb-ctr-hello-world-abc123",
+  "future_unknown_key": "tolerated"
+}

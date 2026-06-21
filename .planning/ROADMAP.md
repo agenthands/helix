@@ -154,7 +154,7 @@ Plans:
 
 **Wave 1** *(heads still alive — parity proof + new gated topology)*
 
-- [ ] 94-01-PLAN.md — RETIRE-04 gated gRPC TCP listener (validateGRPCAddr/listenGRPCTCP mirroring admin-addr) + --grpc-addr/daemon.grpc_addr + tryConnect tcp:// branch + RETIRE-03 dual-run parity gate (TestCLI_DualRunParity, heads alive, GREEN) + REMOTE-SCOPE-ADR.md (RETIRE-03, RETIRE-04)
+- [x] 94-01-PLAN.md — RETIRE-04 gated gRPC TCP listener (validateGRPCAddr/listenGRPCTCP mirroring admin-addr) + --grpc-addr/daemon.grpc_addr + tryConnect tcp:// branch + RETIRE-03 dual-run parity gate (TestCLI_DualRunParity, heads alive, GREEN) + REMOTE-SCOPE-ADR.md (RETIRE-03, RETIRE-04)
 
 **Wave 2** *(blocked on 94-01; deletion commit comes after the parity-proof commit)*
 

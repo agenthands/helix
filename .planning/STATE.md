@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 94
-current_phase_name: DELETE
-status: verifying
+current_phase_name: retire-the-agent-facing-mcp-surface-delete
+status: executing
 stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T20:54:47.137Z"
+last_updated: "2026-06-21T21:39:07.862Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 93 complete, transitioned to Phase 94
+last_activity_desc: Phase 94 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 17
+  completed_plans: 16
   percent: 67
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 93 — skill-md-nudge-repurpose-helix-setup-flip
+**Current focus:** Phase 94 — retire-the-agent-facing-mcp-surface-delete
 
 ## Current Position
 
-Phase: 94 — Retire the Agent-Facing MCP Surface (DELETE)
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 93 complete, transitioned to Phase 94
+Phase: 94 (retire-the-agent-facing-mcp-surface-delete) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-06-21 — Phase 94 execution started
 
 Progress: [██░░░░░░░░] 19%
 
@@ -63,6 +63,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 93 P02 | 4min | 2 tasks | 2 files |
 | Phase 93 P03 | 9min | 2 tasks | 3 files |
 | Phase 93 P04 | 310 | 2 tasks | 21 files |
+| Phase 94 P01 | 18min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -98,7 +99,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:29:55.912Z
+Last session: 2026-06-21T21:39:02.748Z
 Stopped at: Completed 93-03-PLAN.md
 Resume file: None
 

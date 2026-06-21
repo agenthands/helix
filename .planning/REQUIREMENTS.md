@@ -62,8 +62,8 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 - [ ] **RETIRE-01**: The stdio MCP forwarder head is removed; agents no longer connect via stdio MCP (the forwarder dial path is retained only for CLI→daemon gRPC). _Acceptance:_ no stdio MCP server code path remains reachable; the CLI still dials the daemon.
 - [ ] **RETIRE-02**: The Streamable-HTTP MCP transport (`/mcp`, `--mode http`) is removed. _Acceptance:_ the HTTP MCP endpoint is gone and `--mode http` no longer serves MCP.
-- [ ] **RETIRE-03**: MCP-head removal happens only after CLI parity is proven via dual-run (strangler-fig) — a parity test compares CLI output against the pre-removal MCP path for a representative tool set. _Acceptance:_ the dual-run parity test is green in the commit immediately before the deletion commit.
-- [ ] **RETIRE-04**: The retained gRPC IPC optionally binds a TCP address for split-host CLI↔daemon use (loopback/unix-socket default; non-loopback TCP opt-in, gated and documented per the v1.2 admin-addr loopback pattern). _Acceptance:_ the CLI can target a configured TCP daemon endpoint; the default remains the local unix socket.
+- [x] **RETIRE-03**: MCP-head removal happens only after CLI parity is proven via dual-run (strangler-fig) — a parity test compares CLI output against the pre-removal MCP path for a representative tool set. _Acceptance:_ the dual-run parity test is green in the commit immediately before the deletion commit.
+- [x] **RETIRE-04**: The retained gRPC IPC optionally binds a TCP address for split-host CLI↔daemon use (loopback/unix-socket default; non-loopback TCP opt-in, gated and documented per the v1.2 admin-addr loopback pattern). _Acceptance:_ the CLI can target a configured TCP daemon endpoint; the default remains the local unix socket.
 
 ### Docs & Identity (DOCS-*)
 
@@ -127,8 +127,8 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | SKILL-04 | Phase 93 | Complete |
 | RETIRE-01 | Phase 94 | Pending |
 | RETIRE-02 | Phase 94 | Pending |
-| RETIRE-03 | Phase 94 | Pending |
-| RETIRE-04 | Phase 94 | Pending |
+| RETIRE-03 | Phase 94 | Complete |
+| RETIRE-04 | Phase 94 | Complete |
 | DOCS-01 | Phase 95 | Pending |
 | DOCS-02 | Phase 95 | Pending |
 | DOCS-03 | Phase 95 | Pending |

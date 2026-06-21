@@ -392,3 +392,55 @@ func TestAggregateByLanguageAbsentKeyBucket(t *testing.T) {
 	assert.InDelta(t, 0.5, unsliced.PassRate, 1e-9)
 	assert.Equal(t, 2, unsliced.N)
 }
+
+// TestAggregateByLanguageMultiSWE (Phase 88 Task 3, SC#1): a fixture writing one
+// (task,mode) cell per language for all 7 Multi-SWE-bench languages {go, java, ts,
+// js, rust, c, cpp}, with a KNOWN pass/fail per language, yields EXACTLY 7
+// ByLanguage rows — each with the correct pooled pass-rate and N — through the
+// EXISTING reduceLanguageRows/rowLanguage. This proves the Multi-SWE per-language
+// slicing flows through the aggregator with ZERO new production code; the adapter's
+// only contribution is stamping Cell.Language (proven in the Plan 01 Task 2 ingest
+// Language stamp). It is the SC#1 hermetic proof of ADAPTER-MULTI-01's per-language
+// reporting contribution.
+func TestAggregateByLanguageMultiSWE(t *testing.T) {
+	dir := t.TempDir()
+
+	// One (task,mode) cell per Multi-SWE language at N=1, with a deterministic
+	// pass/fail per language (a clear, asymmetric mix so a swapped row is caught).
+	langs := []struct {
+		lang string
+		pass bool
+	}{
+		{"go", true},
+		{"java", true},
+		{"ts", false},
+		{"js", true},
+		{"rust", false},
+		{"c", true},
+		{"cpp", false},
+	}
+	for i, l := range langs {
+		// Distinct task id per language so each is its own (task,mode) cell.
+		writeLangRow(t, dir, l.lang+"-task", "full", l.lang, 0,
+			metric(l.pass, 1000+i, 100+i, 5, 3, 0.9))
+	}
+
+	rep, err := Aggregate(dir, aggConfig(1))
+	require.NoError(t, err)
+	require.NotNil(t, rep)
+
+	byLang := langByName(rep.ByLanguage)
+	require.Len(t, rep.ByLanguage, len(langs),
+		"a 7-language fixture must yield exactly 7 ByLanguage rows through reduceLanguageRows")
+
+	for _, l := range langs {
+		row, ok := byLang[l.lang]
+		require.True(t, ok, "expected a ByLanguage row for %q", l.lang)
+		want := 0.0
+		if l.pass {
+			want = 1.0
+		}
+		assert.InDelta(t, want, row.PassRate, 1e-9, "%s: pass=%v -> PassRate %v", l.lang, l.pass, want)
+		assert.Equal(t, 1, row.N, "%s: one cell -> N=1", l.lang)
+	}
+}

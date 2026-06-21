@@ -1322,9 +1322,22 @@ func (d *Daemon) Run(ctx context.Context) error {
 	// Optional loopback gRPC TCP listener for split-host CLI↔daemon use
 	// (Phase 94 RETIRE-04). Gated on GRPCAddr != "" like listenAdmin;
 	// default empty = unix-socket only. Serves the SAME ForwarderService.
+	//
+	// WR-01: a transient bind error (e.g. EADDRINUSE / TIME_WAIT collision on
+	// restart) on this OPTIONAL listener must NOT tear down the daemon and kill
+	// the working unix-socket transport. Mirror listenAdmin's resilience: log
+	// and continue. The non-loopback VALIDATION error is fatal-early at the CLI
+	// composition root (runDaemon → daemon.ValidateGRPCAddr, WR-02), so by the
+	// time we reach here a non-nil return can only be a transport/bind failure
+	// worth degrading on, never a misconfiguration worth refusing to start for.
 	if d.config.Daemon.GRPCAddr != "" {
 		g.Go(func() error {
-			return d.listenGRPCTCP(gctx)
+			if err := d.listenGRPCTCP(gctx); err != nil && !errors.Is(err, context.Canceled) {
+				d.logger.Error("grpc tcp listener failed; continuing on unix socket",
+					"error", err,
+					"addr", d.config.Daemon.GRPCAddr)
+			}
+			return nil // do not tear down the working unix transport
 		})
 	}
 

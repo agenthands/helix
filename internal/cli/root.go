@@ -283,6 +283,16 @@ func runDaemon(cmd *cobra.Command) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// WR-02: validate the (optional) gRPC TCP bind address at the composition
+	// root, on the RESOLVED config value (CLI override + project/user config),
+	// so a misconfigured insecure bind is refused with a clear, early error
+	// before any subsystem starts — rather than failing opaquely inside the
+	// listener goroutine. Pairs with WR-01's fatal-validation / non-fatal-bind
+	// split in daemon.Run. Empty (the default) is valid and validates as a no-op.
+	if err := daemon.ValidateGRPCAddr(cfg.Daemon.GRPCAddr); err != nil {
+		return fmt.Errorf("invalid daemon.grpc_addr: %w", err)
+	}
+
 	d, err := daemon.New(cfg, logger)
 	if err != nil {
 		return fmt.Errorf("initializing daemon: %w", err)

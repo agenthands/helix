@@ -72,6 +72,16 @@ func (d *Daemon) newForwarderServiceHandler() *forwarderServiceHandler {
 // is materially worse on this surface (the full MCP runtime), so it is closed
 // here regardless of the admin precedent. See REVIEW-FIX.md (CR-01) for the
 // admin-sibling note.
+// ValidateGRPCAddr is the exported wrapper over validateGRPCAddr for the CLI
+// composition root (WR-02). It lets runDaemon refuse a misconfigured insecure
+// bind early — before any subsystem starts — so the operator gets an actionable
+// "that address is not allowed" message instead of an opaque late "daemon
+// exited" once the listener goroutine runs. The listener still re-validates
+// internally (defense in depth); this is purely a fail-fast front door.
+func ValidateGRPCAddr(addr string) error {
+	return validateGRPCAddr(addr)
+}
+
 func validateGRPCAddr(addr string) error {
 	if addr == "" {
 		return nil // disabled is valid (unix-socket only — the default)

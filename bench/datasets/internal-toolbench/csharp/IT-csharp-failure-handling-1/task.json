@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "failure_handling",
+  "prompt": "UnitTest1.cs fails with a NullReferenceException because Widget.cs does not guard a null argument. Read the failing test output, add the missing guard, and ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

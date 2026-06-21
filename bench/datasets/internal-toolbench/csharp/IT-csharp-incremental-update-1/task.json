@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "incremental_update",
+  "prompt": "After editing Widget.cs, re-query its symbols to confirm the repo map reflects the new method without a full re-index. Apply the follow-up fix the updated outline reveals and ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

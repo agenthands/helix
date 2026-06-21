@@ -1,0 +1,8 @@
+{
+  "id": "IT-java-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "java",
+  "capability": "context_minimization",
+  "prompt": "Across a large Circle.java, only one method body is wrong. Use get_context / list_file_outline to retrieve just the failing method body (not the whole file), fix it, and ensure `mvn test` passes.",
+  "verify": "verify.sh"
+}

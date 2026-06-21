@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "semantic_view",
+  "prompt": "Widget.cs defines a Widget class with several methods. Use get_repo_map / list_file_outline to obtain the symbol outline of Widget.cs and summarize its public methods without reading the whole file. Ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

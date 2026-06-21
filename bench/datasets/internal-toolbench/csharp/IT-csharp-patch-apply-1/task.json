@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "patch_apply",
+  "prompt": "Apply the supplied unified diff to Widget.cs using replace_symbol_body so the off-by-one in the loop bound is corrected. Ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

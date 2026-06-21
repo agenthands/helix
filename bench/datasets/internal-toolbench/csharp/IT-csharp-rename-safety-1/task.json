@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "rename_safety",
+  "prompt": "The method Foo is defined in Widget.cs and called from Consumer.cs, but UnitTest1.cs expects it to be named Bar, so the build fails. Run find_references on Foo, then rename Foo to Bar so every site is updated. Ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

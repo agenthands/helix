@@ -1,0 +1,8 @@
+{
+  "id": "IT-java-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "java",
+  "capability": "dependency_graph",
+  "prompt": "Use get_import_graph to find the unnecessary cross-package dependency that breaks the module boundary in Circle.java, remove it, and ensure `mvn test` passes.",
+  "verify": "verify.sh"
+}

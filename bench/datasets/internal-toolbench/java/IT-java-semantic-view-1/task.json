@@ -1,0 +1,8 @@
+{
+  "id": "IT-java-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "java",
+  "capability": "semantic_view",
+  "prompt": "The class Circle.java defines several methods. Use get_repo_map / list_file_outline (jdtls-backed) to obtain the symbol outline of Circle.java and summarize its public methods without reading the whole file. Ensure `mvn test` passes.",
+  "verify": "verify.sh"
+}

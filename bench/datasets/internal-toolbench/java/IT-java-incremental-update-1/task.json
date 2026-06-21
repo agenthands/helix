@@ -1,0 +1,8 @@
+{
+  "id": "IT-java-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "java",
+  "capability": "incremental_update",
+  "prompt": "After editing Circle.java, re-query its symbols to confirm the repo map reflects the new method without a full re-index. Apply the follow-up fix the updated outline reveals and ensure `mvn test` passes.",
+  "verify": "verify.sh"
+}

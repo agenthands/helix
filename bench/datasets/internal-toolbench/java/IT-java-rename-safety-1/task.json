@@ -1,0 +1,8 @@
+{
+  "id": "IT-java-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "java",
+  "capability": "rename_safety",
+  "prompt": "The method foo is defined in Circle.java and called from Consumer.java, but CircleTest.java expects it to be named bar, so the build fails. Run find_references on foo, then rename foo to bar so every site is updated. Ensure `mvn test` passes.",
+  "verify": "verify.sh"
+}

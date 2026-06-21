@@ -1,0 +1,8 @@
+{
+  "id": "IT-csharp-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "csharp",
+  "capability": "context_minimization",
+  "prompt": "Across a large Widget.cs, only one method body is wrong. Use get_context / list_file_outline to retrieve just the failing method body (not the whole file), fix it, and ensure `dotnet test` passes.",
+  "verify": "verify.sh"
+}

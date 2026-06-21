@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -297,4 +298,97 @@ func TestDeterministic(t *testing.T) {
 	lb2, cq2 := build()
 	assert.Equal(t, lb1, lb2, "same seed + same input must yield byte-identical leaderboard.md")
 	assert.Equal(t, cq1, cq2, "same seed + same input must yield byte-identical cost_quality.md")
+}
+
+// writeLangRow writes a schema-valid result.v2.json carrying the given metrics,
+// the golden model_id, AND the additive `language` provenance key (Phase 85), at
+// <outDir>/<task>/<mode>/<runIndex>/result.v2.json. A "" language exercises the
+// absent-key (unsliced) bucket.
+func writeLangRow(t *testing.T, outDir, task, mode, language string, runIndex int, m evaluators.Metrics) {
+	t.Helper()
+	b, err := runtime.BuildResult(runtime.ResultInput{
+		TaskID:    task,
+		Mode:      mode,
+		Benchmark: "internal-toolbench",
+		RunIndex:  runIndex,
+		Outcome:   "pass",
+		Language:  language,
+		Metrics:   m,
+		Fairness:  runners.FairnessContract{ModelID: goldenModelID},
+	})
+	require.NoError(t, err, "BuildResult(%s/%s/%s/%d)", task, mode, language, runIndex)
+	require.NoError(t, runtime.Validate(b), "row must be schema-valid before write")
+	dir := filepath.Join(outDir, task, mode, strconv.Itoa(runIndex))
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "result.v2.json"), b, 0o600))
+}
+
+// langByName indexes a ByLanguage slice for assertions.
+func langByName(rows []LanguageRow) map[string]LanguageRow {
+	m := map[string]LanguageRow{}
+	for _, r := range rows {
+		m[r.Language] = r
+	}
+	return m
+}
+
+// TestRowLanguageReadsOpenKey (Phase 85 Task 2): rowLanguage reads the open
+// `language` doc key the same way rowModelID reads model_id, returning "" when the
+// key is absent. This is the substrate the per-language reduction groups on.
+func TestRowLanguageReadsOpenKey(t *testing.T) {
+	withLang := Row{Doc: map[string]json.RawMessage{"language": json.RawMessage(`"python"`)}}
+	assert.Equal(t, "python", rowLanguage(withLang))
+
+	noLang := Row{Doc: map[string]json.RawMessage{"model_id": json.RawMessage(`"x"`)}}
+	assert.Equal(t, "", rowLanguage(noLang), "an absent language key reads as \"\"")
+}
+
+// TestAggregateByLanguagePassRate (Phase 85 Task 2, SC#1 substrate): a fixture with
+// rows tagged language=python (1 pass) and language=rust (1 fail) yields a
+// per-language pass-rate slice reporting python=1.0, rust=0.0. This is the slice
+// SC#1's "Python pass-rate" question reads.
+func TestAggregateByLanguagePassRate(t *testing.T) {
+	dir := t.TempDir()
+	// One (task,mode) cell per language at N=1; python passes, rust fails.
+	writeLangRow(t, dir, "py-task", "full", "python", 0, metric(true, 1000, 100, 5, 3, 0.9))
+	writeLangRow(t, dir, "rs-task", "full", "rust", 0, metric(false, 2000, 200, 9, 6, 0.5))
+
+	rep, err := Aggregate(dir, aggConfig(1))
+	require.NoError(t, err)
+	require.NotNil(t, rep)
+
+	byLang := langByName(rep.ByLanguage)
+	py, ok := byLang["python"]
+	require.True(t, ok, "expected a python language row")
+	assert.InDelta(t, 1.0, py.PassRate, 1e-9, "python: 1 pass / 1 -> 1.0")
+	assert.Equal(t, 1, py.N)
+
+	rs, ok := byLang["rust"]
+	require.True(t, ok, "expected a rust language row")
+	assert.InDelta(t, 0.0, rs.PassRate, 1e-9, "rust: 0 pass / 1 -> 0.0")
+	assert.Equal(t, 1, rs.N)
+}
+
+// TestAggregateByLanguageAbsentKeyBucket (Phase 85 Task 2, backward-compat): rows
+// with NO `language` key fall into the "" (unsliced) bucket and do NOT crash the
+// existing (mode x benchmark) leaderboard. A pre-language run still aggregates.
+func TestAggregateByLanguageAbsentKeyBucket(t *testing.T) {
+	dir := t.TempDir()
+	// No language tag (the pre-language path): writeCostedRow omits the key.
+	writeCostedRow(t, dir, "task-1", "full", 0, metric(true, 1000, 100, 5, 3, 0.9))
+	writeCostedRow(t, dir, "task-1", "full", 1, metric(false, 1000, 100, 5, 3, 0.9))
+
+	rep, err := Aggregate(dir, aggConfig(2))
+	require.NoError(t, err)
+	require.NotNil(t, rep)
+
+	// Existing leaderboard is unharmed.
+	require.Len(t, rep.Leaderboard, 1, "absent-language rows must not break the (mode x benchmark) leaderboard")
+
+	// Absent-key rows bucket under "" with the right pass-rate (1 pass / 2 -> 0.5).
+	byLang := langByName(rep.ByLanguage)
+	unsliced, ok := byLang[""]
+	require.True(t, ok, "pre-language rows must bucket under the \"\" language")
+	assert.InDelta(t, 0.5, unsliced.PassRate, 1e-9)
+	assert.Equal(t, 2, unsliced.N)
 }

@@ -28,10 +28,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -83,7 +87,7 @@ type e2eFixture struct {
 // searchPattern, and starts a real daemon via sandbox.StartDaemon. The daemon is
 // reaped (h.Kill) and the sandbox removed (sb.Cleanup) via t.Cleanup so no orphan
 // processes survive a failed run (T-90-13).
-func newE2EFixture(t *testing.T, runID string) *e2eFixture {
+func newE2EFixture(t *testing.T, runID string, daemonOpts ...sandbox.DaemonOption) *e2eFixture {
 	t.Helper()
 
 	helixBin := resolveHelixBin()
@@ -119,7 +123,9 @@ func newE2EFixture(t *testing.T, runID string) *e2eFixture {
 
 	// Real daemon via the v1.12 sandbox harness (RESEARCH locked constraint).
 	// StartDaemon waits for the socket; "" profile/cfg keeps the default "full".
-	h, err := sb.StartDaemon(ctx, taskID, mode, "", "")
+	// Optional daemonOpts (e.g. WithAdminAddr) let a sub-test enable the admin
+	// listener so it can scrape helix_session_lifecycle (WR-06).
+	h, err := sb.StartDaemon(ctx, taskID, mode, "", "", daemonOpts...)
 	if err != nil {
 		t.Fatalf("sandbox.StartDaemon: %v", err)
 	}
@@ -419,6 +425,160 @@ func reapPids(pids []int) {
 	for _, pid := range pids {
 		if p, err := os.FindProcess(pid); err == nil {
 			_ = p.Kill()
+		}
+	}
+}
+
+// TestCLI_E2E_OneShotCleanShutdown is the WR-06 oracle: it locks in WR-03's
+// clean-shutdown contract. A one-shot `helix call` must tear its MCP session
+// down cleanly (session flush + stream CloseSend) so the daemon records the
+// stdio session with outcome="ended", NOT outcome="error". Before WR-03's fix
+// the one-shot path never CloseSend'd, so conn.Close() aborted the stream and
+// the daemon's stream.Recv() saw a non-EOF RST → SessionLifecycleInc("error").
+//
+// We assert this directly against the daemon's own metric: scrape
+// helix_session_lifecycle_total{transport="stdio"} before and after one CLI
+// call and require the "ended" counter to increase while "error" does not.
+func TestCLI_E2E_OneShotCleanShutdown(t *testing.T) {
+	// Reserve a fixed loopback port for the daemon's admin/metrics listener.
+	adminAddr := reserveLoopbackAddr(t)
+
+	f := newE2EFixture(t, "cleanshutdown", sandbox.WithAdminAddr(adminAddr))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	metricsURL := "http://" + adminAddr + "/metrics"
+	waitForMetrics(t, ctx, metricsURL)
+
+	f.mcpActivate(t, ctx)
+
+	// Baseline AFTER activate (activate itself is a one-shot call on the fixed
+	// fix; the WR-03 regression would inflate "error" on every such call, so the
+	// delta-based assertion below isolates THIS subprocess call regardless).
+	endedBefore := scrapeLifecycle(t, ctx, metricsURL, "ended", "stdio")
+	errorBefore := scrapeLifecycle(t, ctx, metricsURL, "error", "stdio")
+
+	// The contract-bearing call: a REAL `helix call` subprocess one-shot.
+	out, err := f.runCLIVerb(ctx, representativeVerbName, "--query="+searchPattern)
+	if err != nil {
+		t.Fatalf("helix call %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
+	}
+	if !strings.Contains(out, searchPattern) {
+		t.Fatalf("CLI result missing the marker; got %q", out)
+	}
+
+	// Give the daemon a beat to observe the half-close and record the lifecycle
+	// transition before we re-scrape.
+	endedAfter, errorAfter := pollLifecycleDelta(t, ctx, metricsURL, endedBefore, errorBefore)
+
+	if endedAfter <= endedBefore {
+		t.Fatalf("one-shot call did NOT increment helix_session_lifecycle{outcome=\"ended\",transport=\"stdio\"} "+
+			"(before=%v after=%v) — clean shutdown contract violated (WR-03)", endedBefore, endedAfter)
+	}
+	if errorAfter > errorBefore {
+		t.Fatalf("one-shot call incremented helix_session_lifecycle{outcome=\"error\",transport=\"stdio\"} "+
+			"(before=%v after=%v) — the daemon saw a non-EOF stream abort instead of clean EOF (WR-03)",
+			errorBefore, errorAfter)
+	}
+}
+
+// reserveLoopbackAddr binds a loopback TCP port, then releases it, returning the
+// "127.0.0.1:PORT" string. There is a small TOCTOU window before the daemon
+// rebinds it, but for a single isolated test process this is the standard
+// free-port idiom and good enough for the oracle.
+func reserveLoopbackAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve loopback port: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	return addr
+}
+
+// waitForMetrics polls the admin /metrics endpoint until it answers 200 or the
+// context expires, so the lifecycle scrape does not race the admin listener's
+// bind.
+func waitForMetrics(t *testing.T, ctx context.Context, url string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("admin /metrics did not come up: %v", ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	t.Fatalf("admin /metrics at %s did not answer 200 within 10s", url)
+}
+
+// lifecycleMetricRe matches a helix_session_lifecycle_total sample line and
+// captures phase, transport, and value, tolerant of label ordering.
+var lifecycleMetricRe = regexp.MustCompile(
+	`^helix_session_lifecycle_total\{([^}]*)\}\s+([0-9.eE+-]+)`)
+
+// scrapeLifecycle fetches /metrics and returns the current value of
+// helix_session_lifecycle_total for the given phase+transport (0 if absent).
+func scrapeLifecycle(t *testing.T, ctx context.Context, url, phase, transport string) float64 {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("scrape %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read metrics body: %v", err)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		m := lifecycleMetricRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		labels := m[1]
+		if !strings.Contains(labels, `phase="`+phase+`"`) ||
+			!strings.Contains(labels, `transport="`+transport+`"`) {
+			continue
+		}
+		v, err := strconv.ParseFloat(m[2], 64)
+		if err != nil {
+			t.Fatalf("parse metric value %q: %v", m[2], err)
+		}
+		return v
+	}
+	return 0
+}
+
+// pollLifecycleDelta re-scrapes until the "ended" counter advances past its
+// baseline (the daemon records the transition asynchronously after the stream
+// half-closes) or the context expires, then returns the final ended/error
+// values. It returns the latest observed values even on timeout so the caller's
+// assertions produce a precise failure message.
+func pollLifecycleDelta(t *testing.T, ctx context.Context, url string, endedBefore, errorBefore float64) (ended, errd float64) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		ended = scrapeLifecycle(t, ctx, url, "ended", "stdio")
+		errd = scrapeLifecycle(t, ctx, url, "error", "stdio")
+		if ended > endedBefore || errd > errorBefore || !time.Now().Before(deadline) {
+			return ended, errd
+		}
+		select {
+		case <-ctx.Done():
+			return ended, errd
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
 }

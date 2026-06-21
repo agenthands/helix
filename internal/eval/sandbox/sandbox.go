@@ -191,6 +191,20 @@ type DaemonHandle struct {
 	// zero value. This lets Stop and Kill both observe process termination on
 	// the same channel any number of times without ever blocking or racing.
 	exited chan error
+	// adminAddr is the loopback admin listener address the daemon was started
+	// with (via WithAdminAddr), or "" if the admin listener is disabled. Tests
+	// scrape <adminAddr>/metrics through this.
+	adminAddr string
+}
+
+// AdminAddr returns the loopback admin listener address the daemon was started
+// with (via sandbox.WithAdminAddr), or "" if the admin listener is disabled.
+// Callers append "/metrics", "/healthz", etc. to scrape the admin surface.
+func (h *DaemonHandle) AdminAddr() string {
+	if h == nil {
+		return ""
+	}
+	return h.adminAddr
 }
 
 // Pid returns the OS process ID of the daemon subprocess, or 0 if the process
@@ -297,11 +311,21 @@ func (h *DaemonHandle) Kill() error {
 //
 // daemonOpts holds the resolved optional spawn settings.
 type daemonOpts struct {
-	workDir string
+	workDir   string
+	adminAddr string
 }
 
 // DaemonOption configures an optional StartDaemon behavior.
 type DaemonOption func(*daemonOpts)
+
+// WithAdminAddr enables the daemon's loopback admin listener (/healthz,
+// /readyz, /metrics) at the given address, e.g. "127.0.0.1:0" is NOT supported
+// (the daemon must bind a concrete port the caller can scrape), so pass a fixed
+// loopback host:port. Empty addr is a no-op (admin listener stays disabled).
+// The 90-04 E2E lifecycle oracle uses this to scrape helix_session_lifecycle.
+func WithAdminAddr(addr string) DaemonOption {
+	return func(o *daemonOpts) { o.adminAddr = addr }
+}
 
 // WithWorkingDir sets the daemon subprocess's working directory (cmd.Dir). The
 // bench harness uses this for per-cell store isolation (D-03): pointing cmd.Dir
@@ -328,6 +352,9 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	}
 	if cfgPath != "" {
 		args = append(args, "--config="+cfgPath)
+	}
+	if o.adminAddr != "" {
+		args = append(args, "--admin-addr="+o.adminAddr)
 	}
 
 	cmd := exec.CommandContext(ctx, s.helixBin, args...)
@@ -392,7 +419,7 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 		return nil, fmt.Errorf("sandbox: daemon %s/%s socket did not appear: %w", taskID, mode, err)
 	}
 
-	h := &DaemonHandle{cmd: cmd, taskID: taskID, mode: mode, exited: exited}
+	h := &DaemonHandle{cmd: cmd, taskID: taskID, mode: mode, exited: exited, adminAddr: o.adminAddr}
 
 	s.mu.Lock()
 	s.handles = append(s.handles, h)

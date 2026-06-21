@@ -200,13 +200,10 @@ func runVerb(cmd *cobra.Command, spec verbSpec) error {
 // oracle (90-04) uses to point a real `helix call` subprocess at an isolated
 // sandbox daemon socket without depending on os.TempDir layout.
 func resolveVerbSocket(cmd *cobra.Command) string {
-	// Inherited root persistent/local --socket flag (may be unset on the verb).
+	// IN-05: --socket lives on the ROOT command only; newVerbSubcommand defines no
+	// per-verb --socket, so a local-flag lookup on the verb is dead code. Read the
+	// inherited root flag directly.
 	if cmd != nil {
-		if f := cmd.Flags().Lookup("socket"); f != nil {
-			if v, _ := cmd.Flags().GetString("socket"); v != "" {
-				return v
-			}
-		}
 		if root := cmd.Root(); root != nil {
 			if v, _ := root.Flags().GetString("socket"); v != "" {
 				return v

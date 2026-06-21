@@ -133,7 +133,7 @@ Plans:
 
 **Wave 2** *(blocked on 93-01; file-disjoint, parallel)*
 
-- [ ] 93-03-PLAN.md — `helix setup` flip: `teardownPriorMCP` (MCP-only, hook-preserving) + wire `installSkill`+hooks into each `Register` across 7 clients; idempotent; no MCP entry after setup (SKILL-02)
+- [x] 93-03-PLAN.md — `helix setup` flip: `teardownPriorMCP` (MCP-only, hook-preserving) + wire `installSkill`+hooks into each `Register` across 7 clients; idempotent; no MCP entry after setup (SKILL-02)
 - [ ] 93-04-PLAN.md — behavioral oracle skill-vs-grep-baseline (`//go:build llm`, key-gated) + dependency-free idle-cost bound + filled SKILL.md token-note (TEST-03, SKILL-04)
 
 ### Phase 94: Retire the Agent-Facing MCP Surface (DELETE)

@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 84-03-PLAN.md
-last_updated: "2026-06-21T02:30:39.222Z"
-last_activity: 2026-06-21 -- Phase 85 planning complete
+last_updated: "2026-06-21T02:36:49.182Z"
+last_activity: 2026-06-21 -- Phase 85 execution started
 progress:
   total_phases: 15
   completed_phases: 10
-  total_plans: 49
-  completed_plans: 49
+  total_plans: 56
+  completed_plans: 50
   percent: 67
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 84 — container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard
+**Current focus:** Phase 85 — aider-polyglot-adapter-7-remaining-per-language-runners
 
 ## Current Position
 
-Phase: 85
-Plan: Not started
+Phase: 85 (aider-polyglot-adapter-7-remaining-per-language-runners) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 85 planning complete
+Last activity: 2026-06-21 -- Phase 85 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T01:39:41.776Z
+Last session: 2026-06-21T02:36:43.605Z
 Stopped at: Completed 84-03-PLAN.md
 Resume file: None
 
@@ -116,6 +116,7 @@ Resume file: None
 | Phase 84 P02 | 190s | 2 tasks | 9 files |
 | Phase 84 P03 | ~7min | 2 tasks | 13 files (TDD RED+GREEN x2) |
 | Phase 84 P04 | ~6min | 2 tasks | 3 files |
+| Phase 85 P01 | 25min | 2 tasks | 7 files |
 
 ## Decisions
 

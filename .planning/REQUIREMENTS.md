@@ -81,7 +81,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Public Benchmark Adapters (ADAPTER-*)
 
-- [ ] **ADAPTER-AIDER-01**: Aider Polyglot adapter wired via `dataset-loader-only` — shallow git clone `Aider-AI/polyglot-benchmark` at pinned sha; 225 tasks × 6 langs (C++, Go, Java, JS, Python, Rust); 2-attempt protocol with stderr re-prompt. _Acceptance:_ full Aider Polyglot run completes; per-language pass-rate matches sanity benchmarks.
+- [x] **ADAPTER-AIDER-01**: Aider Polyglot adapter wired via `dataset-loader-only` — shallow git clone `Aider-AI/polyglot-benchmark` at pinned sha; 225 tasks × 6 langs (C++, Go, Java, JS, Python, Rust); 2-attempt protocol with stderr re-prompt. _Acceptance:_ full Aider Polyglot run completes; per-language pass-rate matches sanity benchmarks.
 - [ ] **ADAPTER-CCE-01**: CrossCodeEval adapter wired via `dataset-loader-only` — HF dataset; EM + edit-similarity + identifier-match scoring; Python, Java, TS, C#. _Acceptance:_ smoke run scores at least one task per language; scorers unit-tested against CCE paper examples.
 - [ ] **ADAPTER-REPO-01**: RepoBench adapter wired via `dataset-loader-only` — RepoBench-R + RepoBench-C + RepoBench-P sub-tasks; Python + Java. _Acceptance:_ smoke run for each sub-task; EM/ES metrics match published reference values on a sampled subset.
 - [ ] **ADAPTER-SWE-01**: SWE-bench Verified adapter wired via `subprocess-shellout` — produces `predictions.jsonl`; shells out to `python -m swebench.harness.run_evaluation`; ingests `<run_id>.json`. _Acceptance:_ smoke run of 5 tasks completes; result JSON ingested into bench schema.

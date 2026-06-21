@@ -160,15 +160,17 @@ func TestRace_DoubleCheck_TOCTOU(t *testing.T) {
 	lf := newInProcLockerFactory()
 	const socket = "/tmp/helix-toctou/daemon.sock"
 
-	// Simulate the TOCTOU window: the pre-lock probe fails, then a peer brings the
-	// daemon up while this caller is acquiring the lock. We model that by injecting
-	// a connect seam that fails once (pre-lock) then succeeds (post-lock double-check).
+	// Simulate the TOCTOU window: in production ConnectOrStartDaemon's pre-lock
+	// probe already failed (that is why we entered the guard). While THIS caller was
+	// acquiring the startup lock, a peer finished bringing the daemon up. The guard's
+	// post-lock double-check (its first and only connect call) therefore SUCCEEDS, so
+	// no spawn must occur. We model the peer-already-up state with a connect that
+	// always succeeds — representing the daemon being reachable by the time the
+	// double-check runs.
 	var calls int64
 	connect := func(socketPath string) error {
-		if atomic.AddInt64(&calls, 1) == 1 {
-			return assert.AnError // pre-lock probe miss
-		}
-		return nil // peer finished; double-check hits
+		atomic.AddInt64(&calls, 1)
+		return nil // peer finished during lock acquisition; double-check hits
 	}
 	err := startupGuard(context.Background(), socket, seams{
 		newLocker: lf,
@@ -177,6 +179,8 @@ func TestRace_DoubleCheck_TOCTOU(t *testing.T) {
 		waitUp:    d.connect,
 	})
 	require.NoError(t, err)
+	assert.GreaterOrEqual(t, atomic.LoadInt64(&calls), int64(1),
+		"the post-lock double-check probe must run")
 	assert.Equal(t, int64(0), d.spawnCount(),
 		"double-check must prevent the redundant spawn after a TOCTOU win by a peer")
 }

@@ -14,29 +14,56 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/gofrs/flock"
+
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
 	"github.com/agenthands/helix/internal/obs"
 )
+
+// newFlockLocker builds the production gofrs/flock-backed daemonLocker. It is a
+// package-level var so the algorithm tests can substitute an in-process locker
+// (real OS flock would durably-block synctest — RESEARCH Pitfall 4). Portable:
+// Unix flock + Windows LockFileEx, no CGO (RESEARCH Pitfall 6) — never the
+// non-portable raw syscall lock.
+var newFlockLocker = func(path string) daemonLocker {
+	return &flockLocker{fl: flock.New(path)}
+}
 
 // ConnectOrStartDaemon connects to a running daemon or starts one (D-03, gopls pattern).
 // The tp parameter provides an explicit TracerProvider for the otelgrpc client handler
 // (D-01: no global TracerProvider).
 func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.Logger, tp trace.TracerProvider) (serenav1.ForwarderServiceClient, *grpc.ClientConn, error) {
-	// Try connecting to existing daemon
+	// Warm-reuse fast path: try connecting to an existing daemon BEFORE taking the
+	// startup lock so the common (daemon-already-up) case is lock-free.
 	conn, client, err := tryConnect(ctx, socketPath, tp)
 	if err == nil {
 		logger.Info("connected to existing daemon", "socket", socketPath)
 		return client, conn, nil
 	}
 
-	// Daemon not running -- start it
-	logger.Info("daemon not running, starting", "socket", socketPath)
-	if err := startDaemon(socketPath); err != nil {
+	// Cold path: guard the spawn+wait window with a per-socket flock + a
+	// double-checked connect (CLI-03). startupGuard ensures that under N parallel
+	// cold callers exactly one daemon is spawned; lock losers (and TOCTOU peers)
+	// reuse the winner's daemon instead of forking their own. The exported
+	// signature is unchanged, so every caller (activate.go, RunForwarder) inherits
+	// the fix for free.
+	logger.Info("daemon not running, acquiring startup lock", "socket", socketPath)
+	if err := startupGuard(ctx, socketPath, seams{
+		newLocker: newFlockLocker,
+		connect:   func(sp string) error { _, _, e := tryConnect(ctx, sp, tp); return e },
+		spawn:     startDaemon,
+		waitUp:    func(sp string) error { _, _, e := waitForDaemon(ctx, sp, 10*time.Second, tp); return e },
+	}); err != nil {
 		return nil, nil, fmt.Errorf("starting daemon: %w", err)
 	}
 
-	// Poll for daemon readiness (up to 10 seconds)
-	return waitForDaemon(ctx, socketPath, 10*time.Second, tp)
+	// Guard returned success: the daemon is up (we spawned it, reused a peer's, or
+	// won the double-check). Obtain the real connection handles.
+	conn, client, err = tryConnect(ctx, socketPath, tp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connecting after startup: %w", err)
+	}
+	return client, conn, nil
 }
 
 // tryConnect attempts to connect to a daemon at the given socket path.

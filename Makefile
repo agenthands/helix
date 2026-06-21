@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
+.PHONY: build clean proto test vet fmt docs verify-cligen clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
 
 BINARY=helix
 GO=go
@@ -76,6 +76,9 @@ fmt:
 
 docs: ## Regenerate tool and language tables in README.md
 	$(GO) run ./cmd/docgen
+
+verify-cligen: ## HARD-FAIL drift gate: internal/cli/verbs_gen.go must match the live tool registry (VERB-02)
+	$(GO) run ./cmd/helix-cligen --check
 
 sync-docs: ## Copy root GUARDRAILS.md / DoD.md into internal/kernel/help/docs/ (Phase 66 IN-05)
 	@cp GUARDRAILS.md internal/kernel/help/docs/guardrails.md.tmp

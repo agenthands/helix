@@ -99,6 +99,12 @@ jobs:
       - name: go test
         run: go test ./... -count=1
 
+      - name: helix-cligen drift gate (VERB-02)
+        # HARD-FAIL if internal/cli/verbs_gen.go is stale relative to the live
+        # tool registry (an *Args edit without regen). Mirrors the docgen
+        # discipline. Regenerate with: go run ./cmd/helix-cligen
+        run: go run ./cmd/helix-cligen --check
+
       - name: eval-quick (harness validation)
         # eval-quick runs the in-process scripted-agent harness validation (<30s wall-time).
         # This is the ONLY eval target allowed in PR-gating CI (project rule: benchmarks local-only).

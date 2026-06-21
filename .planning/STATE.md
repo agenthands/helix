@@ -6,14 +6,14 @@ current_phase: 90
 current_phase_name: CLI One-Shot Dial Spine + Race-Free Warm Reuse
 status: executing
 stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-06-21T12:13:08.678Z"
+last_updated: "2026-06-21T12:24:19.752Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 90 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Phase: 90 (CLI One-Shot Dial Spine + Race-Free Warm Reuse) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 — Phase 90 execution started
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 90 P01 | 5min | 2 tasks | 5 files |
 | Phase 90 P02 | 3min | 1 tasks | 2 files |
 | Phase 90 P02 | 3min | 1 tasks | 2 files |
+| Phase 90 P03 | 6min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -82,7 +83,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T12:13:08.673Z
+Last session: 2026-06-21T12:24:01.092Z
 Stopped at: Completed 90-02-PLAN.md
 Resume file: None
 
@@ -91,3 +92,5 @@ Resume file: None
 - [Phase ?]: Phase 90-01: per-socket gofrs/flock startup lock + double-checked tryConnect in ConnectOrStartDaemon; N parallel cold callers spawn exactly one daemon (CLI-03)
 - [Phase ?]: Phase 90-01: synctest seam pattern - startupGuard takes injectable seams; race test uses an in-process mutex locker since real OS flock deadlocks synctest virtual clock
 - [Phase ?]: Phase 90-02: no-arg helix (mode=auto) prints grouped cobra help and exits 0 (CLI-04); explicit --mode=stdio still runs forwarder (Phase 94 owns head deletion); 3 command groups scaffold Phase 91 verbs
+- [Phase ?]: 90-03: client transport placed in internal/forwarder (no cycle; clirpc fallback unneeded)
+- [Phase ?]: 90-03: forwarder.CallTool takes version as a param to avoid an internal/cli↔forwarder import cycle

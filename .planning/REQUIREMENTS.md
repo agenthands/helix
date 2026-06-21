@@ -24,8 +24,8 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### CLI Invocation Spine (CLI-*)
 
-- [ ] **CLI-01**: `helix <verb>` invokes a single tool against the warm daemon via a one-shot `tools/call` over the existing gRPC `StreamMCP` wire, reusing `forwarder.ConnectOrStartDaemon`. _Acceptance:_ a representative verb round-trips through the daemon and returns the same tool result the MCP path returned; `git diff api/proto/` is empty (zero proto changes).
-- [ ] **CLI-02**: CLI invocations auto-start the daemon on a cold host and reuse a warm daemon thereafter; second-call latency meets a phase-set SLO. _Acceptance:_ first call spawns the daemon once; warm second-call p50 is below the SLO recorded in the phase.
+- [x] **CLI-01**: `helix <verb>` invokes a single tool against the warm daemon via a one-shot `tools/call` over the existing gRPC `StreamMCP` wire, reusing `forwarder.ConnectOrStartDaemon`. _Acceptance:_ a representative verb round-trips through the daemon and returns the same tool result the MCP path returned; `git diff api/proto/` is empty (zero proto changes).
+- [x] **CLI-02**: CLI invocations auto-start the daemon on a cold host and reuse a warm daemon thereafter; second-call latency meets a phase-set SLO. _Acceptance:_ first call spawns the daemon once; warm second-call p50 is below the SLO recorded in the phase.
 - [x] **CLI-03**: Daemon auto-start is race-free under parallel first calls — a cross-process startup lock prevents duplicate daemon spawns and connect storms. _Acceptance:_ N parallel cold `helix` invocations result in exactly one daemon process (integration/synctest).
 - [x] **CLI-04**: No-arg `helix` prints grouped usage/help and no longer launches a stdio MCP server. _Acceptance:_ `helix` with no args exits 0 with grouped command help and opens no MCP stdio session.
 
@@ -104,8 +104,8 @@ Which phases cover which requirements. Filled in during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLI-01 | Phase 90 | Pending |
-| CLI-02 | Phase 90 | Pending |
+| CLI-01 | Phase 90 | Complete |
+| CLI-02 | Phase 90 | Complete |
 | CLI-03 | Phase 90 | Complete |
 | CLI-04 | Phase 90 | Complete |
 | VERB-01 | Phase 91 | Pending |

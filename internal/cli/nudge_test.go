@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -238,6 +240,158 @@ func TestClassifyBashTarget_PureDataNoExec(t *testing.T) {
 	// deterministic return.
 	_, ok2 := classifyBashTarget(`grep x $(whoami).go`)
 	_ = ok2 // no panic, no exec — property assertion is the absence of side effects
+}
+
+// runNudgeCapture invokes runNudge with the given hookInput JSON piped to a
+// redirected os.Stdin and captures everything written to os.Stdout. It sets
+// CWD to a temp dir so session-stats writes are isolated. Returns the captured
+// stdout and the error returned by runNudge (which MUST always be nil).
+func runNudgeCapture(t *testing.T, input hookInput) (string, error) {
+	t.Helper()
+
+	tmp := t.TempDir()
+	input.CWD = tmp
+	if input.SessionID == "" {
+		input.SessionID = "test-session"
+	}
+	payload, err := json.Marshal(input)
+	require.NoError(t, err)
+
+	// Redirect stdin.
+	stdinR, stdinW, err := os.Pipe()
+	require.NoError(t, err)
+	origStdin := os.Stdin
+	os.Stdin = stdinR
+	go func() {
+		_, _ = stdinW.Write(payload)
+		_ = stdinW.Close()
+	}()
+
+	// Redirect stdout.
+	stdoutR, stdoutW, err := os.Pipe()
+	require.NoError(t, err)
+	origStdout := os.Stdout
+	os.Stdout = stdoutW
+
+	cmd := newNudgeCommand()
+	runErr := runNudge(cmd, nil)
+
+	_ = stdoutW.Close()
+	os.Stdout = origStdout
+	os.Stdin = origStdin
+	_ = stdinR.Close()
+
+	out, err := io.ReadAll(stdoutR)
+	require.NoError(t, err)
+	return string(out), runErr
+}
+
+// parseAdvisory parses captured stdout as a preToolUseOutput. Returns ok=false
+// when stdout is empty / not a suggestion JSON object.
+func parseAdvisory(t *testing.T, out string) (preToolUseOutput, bool) {
+	t.Helper()
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "" {
+		return preToolUseOutput{}, false
+	}
+	var adv preToolUseOutput
+	if err := json.Unmarshal([]byte(trimmed), &adv); err != nil {
+		return preToolUseOutput{}, false
+	}
+	if adv.HookSpecificOutput.HookEventName == "" {
+		return preToolUseOutput{}, false
+	}
+	return adv, true
+}
+
+func TestNudgeAdvisory_BashCodeGrep_Suggests(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `grep "func Foo" main.go`},
+	})
+	assert.NoError(t, err, "runNudge must always return nil (exit 0)")
+
+	adv, ok := parseAdvisory(t, out)
+	require.True(t, ok, "expected a suggestion JSON, got %q", out)
+	assert.Equal(t, "PreToolUse", adv.HookSpecificOutput.HookEventName)
+	assert.Contains(t, adv.HookSpecificOutput.AdditionalContext, "helix",
+		"advisory should name a helix verb")
+}
+
+func TestNudgeAdvisory_BashNonCodeGrep_Silent(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `grep TODO README.md`},
+	})
+	assert.NoError(t, err)
+	_, ok := parseAdvisory(t, out)
+	assert.False(t, ok, "non-code grep must produce no suggestion, got %q", out)
+}
+
+func TestNudgeAdvisory_BashUnparseable_FailOpenSilent(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `grep`},
+	})
+	assert.NoError(t, err)
+	_, ok := parseAdvisory(t, out)
+	assert.False(t, ok, "unparseable bash must fail open (no suggestion), got %q", out)
+}
+
+func TestNudgeAdvisory_GrepTool_Suggests(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{ToolName: "Grep"})
+	assert.NoError(t, err)
+	adv, ok := parseAdvisory(t, out)
+	require.True(t, ok, "Grep tool should yield a suggestion, got %q", out)
+	assert.Equal(t, "PreToolUse", adv.HookSpecificOutput.HookEventName)
+	assert.Contains(t, adv.HookSpecificOutput.AdditionalContext, "helix")
+}
+
+func TestNudgeAdvisory_ReadTool_Suggests(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{ToolName: "Read"})
+	assert.NoError(t, err)
+	adv, ok := parseAdvisory(t, out)
+	require.True(t, ok, "Read tool should yield a suggestion, got %q", out)
+	assert.Equal(t, "PreToolUse", adv.HookSpecificOutput.HookEventName)
+	assert.Contains(t, adv.HookSpecificOutput.AdditionalContext, "helix")
+}
+
+func TestNudgeAdvisory_AlwaysExitZero(t *testing.T) {
+	// Every input — including a helix symbolic tool, a non-grep tool, and an
+	// unparseable bash — must yield a nil error (exit 0). The advisory never blocks.
+	inputs := []hookInput{
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep "func Foo" main.go`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep TODO README.md`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep`}},
+		{ToolName: "Grep"},
+		{ToolName: "Read"},
+		{ToolName: "find_symbol"},
+		{ToolName: "Write"},
+		{ToolName: ""},
+	}
+	for _, in := range inputs {
+		_, err := runNudgeCapture(t, in)
+		assert.NoError(t, err, "runNudge must return nil for %+v", in)
+	}
+}
+
+func TestNudgeAdvisory_ValidJSONShape(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `grep "func Foo" main.go`},
+	})
+	require.NoError(t, err)
+
+	// The emitted bytes must parse as JSON with EXACTLY the
+	// hookSpecificOutput.{hookEventName,additionalContext} shape.
+	var generic map[string]any
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &generic))
+	hso, ok := generic["hookSpecificOutput"].(map[string]any)
+	require.True(t, ok, "missing hookSpecificOutput object")
+	assert.Equal(t, "PreToolUse", hso["hookEventName"])
+	_, hasCtx := hso["additionalContext"].(string)
+	assert.True(t, hasCtx, "additionalContext must be a string")
+	assert.Len(t, hso, 2, "hookSpecificOutput must have exactly 2 keys")
 }
 
 func TestSaveSessionStats_AtomicWrite(t *testing.T) {

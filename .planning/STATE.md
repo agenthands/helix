@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 87-03-PLAN.md
-last_updated: "2026-06-21T06:56:44.193Z"
-last_activity: 2026-06-21 -- Phase 88 planning complete
+last_updated: "2026-06-21T07:05:31.699Z"
+last_activity: 2026-06-21 -- Phase 88 execution started
 progress:
   total_phases: 15
   completed_phases: 13
-  total_plans: 65
-  completed_plans: 65
+  total_plans: 69
+  completed_plans: 66
   percent: 87
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 87 — swe-bench-verified-adapter-utboost-rescorer-multi-oracle-verified-correctness
+**Current focus:** Phase 88 — multi-swe-bench-terminal-bench-2-0-adapters
 
 ## Current Position
 
-Phase: 88
-Plan: Not started
+Phase: 88 (multi-swe-bench-terminal-bench-2-0-adapters) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 88 planning complete
+Last activity: 2026-06-21 -- Phase 88 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T06:02:58.204Z
+Last session: 2026-06-21T07:05:04.684Z
 Stopped at: Completed 87-03-PLAN.md
 Resume file: None
 
@@ -130,6 +130,7 @@ Resume file: None
 | Phase 87 P01 | 6min | 5 tasks | 11 files |
 | Phase 87 P02 | 5min | 3 tasks | 10 files (TDD RED+GREEN x3, hermetic fixtures) |
 | Phase 87 P04 | 12m | 1 tasks | 3 files |
+| Phase 88 P01 | 8 | 3 tasks | 12 files |
 
 ## Decisions
 
@@ -216,3 +217,4 @@ Resume file: None
 - [Phase ?]: Swebench rescore key-name consts live once in bench/runtime/result.go (shared by Plan 03 producer + Plan 04 reader)
 - [Phase ?]: Phase 87 A1-A5 UTBoost upstream details resolved APPROVED-WITH-DEFERRAL; live pin confirmation deferred to a Docker+network host
 - [Phase ?]: VERIFIED-02 raw-vs-rescored columns populated on LeaderRow but not rendered (goldens byte-identical); SWE-bench render deferred to Phase 89
+- [Phase ?]: Phase 88-01: Multi-SWE adapter is config-file-driven; WriteConfig path-validates every field before marshal then a fixed --config argv; Ingest stamps Language from the cell arg (Pitfall 1) and 7-language slicing flows through existing reduceLanguageRows with zero new aggregator code (SC#1)

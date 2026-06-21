@@ -181,6 +181,45 @@ func TestGrade_Abstain_ExplicitFalse(t *testing.T) {
 	}
 }
 
+// TestGrade_ZeroValueConfig_ESOracleStillBites is the CR-01 regression proof:
+// a zero-value GateConfig{} (ESThreshold == 0.0) must NOT silently disable the
+// edit-similarity oracle. Before the fix, es >= 0.0 was always true, so a pair
+// that passes EM-via-... — actually EM cannot be true while ES<1.0, so to prove
+// the third oracle bites under the default we drive the ES-only dimension: a pair
+// whose ES is below the documented DefaultESThreshold (0.9) must yield
+// verified_correctness=false under GateConfig{}, even though it is NOT abstained.
+// If the default were not applied, es >= 0.0 would let the composite ride on
+// EM/identifier alone.
+func TestGrade_ZeroValueConfig_ESOracleStillBites(t *testing.T) {
+	// "ab" vs "cdefghij": identifier sets are disjoint and EM is false, but the
+	// load-bearing assertion is the ES dimension under the zero-value config. We
+	// pick a pair whose ES sits below DefaultESThreshold so the third oracle is
+	// the one that can bite. The pair below has a large edit distance ⇒ low ES.
+	pred := "x = aaaa"
+	gold := "y = zzzzzzzzzzzz"
+
+	res := Grade(pred, gold, GateConfig{}, false)
+
+	if res.ES == nil {
+		t.Fatalf("zero-value: ES pointer is nil")
+	}
+	if *res.ES >= DefaultESThreshold {
+		t.Fatalf("zero-value: ES = %v, want strictly below DefaultESThreshold %v to exercise the oracle", *res.ES, DefaultESThreshold)
+	}
+	if got := requireBool(t, "VerifiedCorrectness", res.VerifiedCorrectness); got != false {
+		t.Fatalf("zero-value: VerifiedCorrectness = %v, want false — the ES oracle must bite under GateConfig{} (CR-01)", got)
+	}
+
+	// Contrast: an EM-exact pair (ES==1.0) under the SAME zero-value config DOES
+	// verify, proving the default floor (0.9) is met by a real high-similarity
+	// completion and the floor is not over-strict.
+	const s = "return ok(value)"
+	pass := Grade(s, s, GateConfig{}, false)
+	if got := requireBool(t, "VerifiedCorrectness", pass.VerifiedCorrectness); got != true {
+		t.Fatalf("zero-value-pass: VerifiedCorrectness = %v, want true (ES==1.0 meets the default 0.9 floor)", got)
+	}
+}
+
 // TestApplyToMetrics is the completion-path producer proof: the gate result
 // assigns onto an existing evaluators.Metrics.VerifiedCorrectness additively,
 // with no schema bump. It mirrors the coordinator's non-short-circuiting

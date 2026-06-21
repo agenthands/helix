@@ -107,6 +107,19 @@ func Grade(pred, gold string, cfg GateConfig, abstain bool) GateResult {
 		return GateResult{VerifiedCorrectness: &f}
 	}
 
+	// Apply the documented default so a zero-value GateConfig{} does NOT silently
+	// disable the ES oracle: with ESThreshold==0.0 the comparison es >= 0.0 is
+	// always true (ES is in [0,1]), collapsing the all-three-required AND into a
+	// two-oracle gate (EM AND identifier-match). Treat a non-positive threshold as
+	// "use the documented default" (DefaultESThreshold), mirroring the aggregator's
+	// withDefaults discipline, so the ES oracle is genuinely enforced under the
+	// default config and the gate stays fail-closed. No caller wants a literal-0
+	// threshold today; if "explicitly 0" must ever differ from "unset", promote
+	// ESThreshold to *float64.
+	if cfg.ESThreshold <= 0 {
+		cfg.ESThreshold = DefaultESThreshold
+	}
+
 	em := exactmatch.EM(pred, gold)
 	es := editsim.ES(pred, gold)
 	id, _ := identmatch.Match(pred, gold) // IM-EM bool; IM-F1 not gated on here.

@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.12
-milestone_name: Bench Stack & Tool Evaluation
-status: completed
-stopped_at: Completed 89-03-PLAN.md
-last_updated: "2026-06-21T09:15:42.830Z"
+milestone: v2.0
+milestone_name: CLI-First — MCP Surface Retirement
+status: planning
+last_updated: "2026-06-21T10:23:21.432Z"
 last_activity: 2026-06-21
 progress:
-  total_phases: 15
-  completed_phases: 15
-  total_plans: 73
-  completed_plans: 73
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 89
-Plan: Not started
-Status: 89-01, 89-02, 89-03, 89-04 complete
-Last activity: 2026-06-21
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-21 — Milestone v2.0 started
 
 ### Session Continuity
 

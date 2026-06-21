@@ -106,7 +106,7 @@ Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm 
 
 ### Active
 
-_v1.12 requirements to be defined via `/gsd-new-milestone`._
+_v2.0 requirements to be defined via this milestone cycle (CLI-First — MCP Surface Retirement)._
 
 Carry-over follow-ups (resolved at v1.10 Phase 58):
 - [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
@@ -170,47 +170,33 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.12 progress (2026-06-21):** Phase 89 complete — Reports, CI Policy & Contamination Canary (the v1.12 publication CAPSTONE; **milestone now 15/15 phases**). REPORT-01..05 + INFRA-04 + INFRA-05 satisfied; all 4 ROADMAP success criteria verified goal-backward (4/4 must-haves; verifier ran build/test/`make vet` AND did revert-and-fail to prove the integrity fixes are non-vacuous). `helix-bench report --run-id <id>` (the stub is now real; run-id `isValidRunID`-validated + `--out` `..`-guarded, no traversal) regenerates ALL 4 reports BYTE-IDENTICALLY via a single shared zero-RNG `renderAll` called by both `aggregate` and `report` — proven by the load-bearing hermetic `TestReportByteReproducible` (double-render diff-empty). New renderers: `leaderboard.md` gained the `verified_correctness` + `cost_per_solved` columns (with BCa CIs + non-overlap markers); `per_language.md` over the DERIVED 8-language Tier-1 set (from `bench/languages/`, no `c` — the research example was wrong) shows no-coverage languages as `n/a` not omitted; `ablations.md` 5 delta tables (incl. the aggregate-time `full vs no_semantic` that `deltas.go` deliberately omits) with BCa CI-overlap; `cost_quality.md` gained the deterministic ASCII scatter (cost vs verified_correctness) + the cost-table `valid_until` citation. The **contamination canary** (INFRA-05) closes Pitfall 1: a production `InjectPrompt` caller emits the known-novel Sentinel in every-Kth task, and the aggregator EXCLUDES contaminated rows from EVERY headline number (pass@1, verified_correctness, ablations, per_language — fail-safe, never silently counted) while `CanaryPassRate` still measures contamination over all rows; flagged tasks are footnoted in `leaderboard.md`. INFRA-04 ships `.github/workflows/bench.yml` (PR `make bench-quick` hard 5-min cap + no LLM secret + least-privilege perms; full `make bench` nightly/maintainer-gated) behind a hermetic YAML-parse test (the live CI run is honestly inspection-gated). All 4 plans TDD. Code review found **1 CRITICAL (CR-01) + 3 warnings, all the SAME integrity root cause: the `cleanRows` canary exclusion was wired into only the pass@1/cost reduces, so `verified_correctness`, ablations, and per_language still counted contaminated rows into the PUBLISHED headline** — the exact failure the canary exists to prevent (the exclusion test was vacuous because its fixture gave clean/dirty rows the same verdict). Fixed by routing `cleanRows` through ALL 5 published reduces + a strengthened discriminating test (revert-and-fail confirmed it now catches a 0.5-vs-0.667 inflation) + an `--out` traversal guard; determinism/byte-reproducibility intact (`cleanRows` consumes no RNG, runs inside sort-before-emit). **v1.12 Bench Stack & Tool Evaluation is functionally complete — pending milestone audit.**
 
-## Current Milestone: v1.12 Bench Stack & Tool Evaluation
+## Current Milestone: v2.0 CLI-First — MCP Surface Retirement
 
-**Goal:** Prove Helix's semantic / LSP / edit tooling improves agent success, cost, and safety on real public benchmarks across 8 Tier-1 languages — with controlled ablations and an internal ToolBench as the deterministic source of truth. Headline claim to land: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
+**Goal:** Replace Helix's agent-facing MCP surface with a token-efficient CLI+skill interface so the `helix` CLI becomes the *only* surface an agent touches — eliminating the MCP tool-schema preload tax and the agent's habitual fallback to `grep`/`sed`/`cat`, while keeping the warm-daemon code-intelligence kernel (LSP pool, share-until-dirty, RepoMap, structured edits) entirely intact behind it.
+
+**Why now:** Some coding-agent IDEs are dropping MCP support; more importantly, agents under-use a 53-tool MCP surface — the schema blob is preloaded into every context whether used or not, and verbose tool results lose to terse shell output the model already knows. A CLI head invoked through the universally-supported Bash tool, taught via a progressively-disclosed `SKILL.md`, costs ~nothing until relevant and wins on terseness. Reference: `github.com/microsoft/playwright-cli` (CLI+SKILL.md *alongside* MCP; Helix goes further and retires the agent-facing MCP surface).
+
+**Architecture decision (locked):** "Rip out MCP" = remove the agent-facing surface, NOT excise the SDK. MCP wears two hats — (1) the agent-facing transport an IDE connects to, and (2) the daemon's internal tool-dispatch + middleware engine (51 `mcpsdk.AddTool` registrations + 5 `AddReceivingMiddleware` middlewares). This milestone kills hat #1 only. The CLI drives the unchanged kernel over the existing gRPC `StreamMCP(stream MCPMessage)` wire via a one-shot `tools/call` per invocation (likely zero proto changes). Excising the SDK (hat #2) is ~5× the work for zero agent-visible benefit and is explicitly out of scope.
 
 **Target features:**
 
-*Foundation — Internal ToolBench (Option A):*
-
-- **Net-new `bench/` tree** — `datasets/`, `runners/`, `languages/`, `evaluators/`, `reports/`. `eval/` (Phase 67 / v1.10) left as legacy; synthetic corpus may migrate later but is not the source of truth.
-- **Internal ToolBench** — deterministic, per-language tool-contract tests for 10 capabilities: semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling.
-- **8 Tier-1 languages** — Python, TypeScript, JavaScript, Go, Java, C#, C++, Rust.
-- **6-mode ablation matrix** — `baseline_plain` (shell+grep+read+edit+test), `baseline_rag` (grep + embeddings + chunk RAG), `your_agent_full` (semantic + LSP + fuzzy + symbol graph + structured edits + diagnostics), `no_lsp`, `no_semantic`, `no_structured_edit`. Same model + same budget across all modes.
-- **Metrics layer (12+)** — `task_success`, `verified_correctness`, `tokens_input/output`, `tool_calls`, `wall_time_seconds`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`, `semantic_tool_calls`, `edit_distance_patch`, `retry_count`. Normalized per-task result object.
-- **Statistical rigor** — multi-run per task (N ≥ 3 by default), bootstrap confidence intervals, `pass@1` and `pass@k`. Single-run results are not publishable.
-- **Dollar-cost conversion** — static price table per provider × model, computed `cost_per_solved_task` (reopens Phase 67 deferred item).
-
-*Public benchmarks (Option B):*
-
-- **Aider Polyglot** — 225 Exercism tasks across C++, Go, Java, JS, Python, Rust.
-- **CrossCodeEval** — cross-file completion across Python, Java, TS, C#.
-- **RepoBench** — retrieval + completion across Python, Java.
-
-*External credibility (Option C):*
-
-- **SWE-bench Verified** — 500 human-validated Python tasks.
-- **Multi-SWE-bench** — 1,632 instances across Java, TS, JS, Go, Rust, C, C++.
-- **Terminal-Bench 2.0** — 89 hard containerized long-horizon tasks.
-
-*Reports:*
-
-- `leaderboard.md`, `per_language.md`, `ablations.md`, `cost_quality.md`.
+- **Agent-facing MCP surface removed** — the stdio MCP forwarder head and the Streamable-HTTP MCP transport are retired; no IDE/agent connects to Helix via MCP. The daemon + gRPC IPC remain.
+- **Full 53-tool CLI parity** — one `helix <verb>` subcommand per callable tool, each dialing the warm daemon over gRPC, invoking a single tool, printing result, exiting. Tool registry's typed args are the source for largely code-generated subcommand wiring.
+- **Terse, LLM-oriented output** — every CLI command prints compact, `file:line`-anchored, greppable text designed for a model reader (ripgrep/ast-grep ergonomics), not pretty-printed JSON. This is the load-bearing product work that makes the CLI win over grep.
+- **`SKILL.md` authoring** — a progressively-disclosed skill that teaches agents when/how to use `helix <cmd>` instead of grep/sed/cat, at ~zero idle context cost.
+- **Nudge-hook steering** — the existing `PreToolUse` nudge hook (`internal/cli/nudge.go`) repurposed to redirect `grep`/`sed`/`cat`-style Bash calls toward the equivalent `helix` CLI verb.
+- **`helix setup <client>` flip** — setup changes from "register an MCP server with the client" to "install the skill + hooks" across supported clients.
+- **One-shot daemon dialing with warm reuse** — CLI invocations auto-start and reuse the persistent daemon (reusing the forwarder's autostart logic), so per-call latency stays warm-cache fast and the share-until-dirty pool is preserved.
+- **Identity & docs rewrite** — README / CLAUDE.md / PROJECT.md ("Core Value", Constraints → "Protocol: MCP — primary interface") rewritten to a CLI-first identity; the auto-generated tool table (`cmd/docgen`) regenerated against the CLI surface.
 
 **Out of scope (deferred or won't-do):**
 
-- HumanEval-style toy benchmarks as primary scoring (smoke-only via MultiPL-E / HumanEval-X / McEval if needed).
-- Tier-2 (PHP, Ruby, Kotlin, Swift, C, Scala) and Tier-3 languages — future milestones.
-- LLM judge as CI gate (per Phase 67 EVAL-07, judge stays informational).
-- Comparing against Claude Code / Cursor as black boxes — controlled baselines using the *same* base model only.
-- Public-benchmark *leaderboard submissions* — generating local results sufficient; submission infra deferred.
+- **Excising the MCP SDK from the daemon** — internal dispatch/middleware engine stays; only the external surface is removed (see Architecture decision above).
+- **Removing the gRPC IPC layer** — the daemon↔CLI wire is retained (it already carries the `tools/call` frames).
+- **Re-implementing the 5 middlewares natively** — telemetry/profile-filter/suggest/lazy-init/guardrail keep running inside the daemon unchanged.
+- **A compatibility MCP shim for laggard clients** — clean retirement, not dual-head; revisit only if a concrete client need surfaces.
 
-**Source of truth:** This PROJECT.md milestone section, the upcoming v1.12 `.planning/REQUIREMENTS.md`, and the user's BENCH-PLAN dump captured in the discuss-milestone transcript (2026-06-13).
+**Source of truth:** This PROJECT.md milestone section and the upcoming v2.0 `.planning/REQUIREMENTS.md`.
 
 ## Context
 
@@ -301,4 +287,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-21 — Phase 89 (reports, CI policy & contamination canary; REPORT-01..05 + INFRA-04/05) complete and verified — v1.12 Bench Stack & Tool Evaluation at 15/15 phases, all complete; pending milestone audit.*
+*Last updated: 2026-06-21 — v2.0 CLI-First (MCP Surface Retirement) milestone started; requirements + roadmap being defined (phases continue from 90). v1.12 Bench Stack & Tool Evaluation complete at 15/15 phases (formal `/gsd-complete-milestone` archival pending).*

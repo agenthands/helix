@@ -331,6 +331,11 @@ func reduceLanguageRows(loaded *Loaded) []LanguageRow {
 	for _, task := range loaded.Tasks() {
 		for _, mode := range loaded.Modes(task) {
 			rows := loaded.Rows(task, mode)
+			// INFRA-05 canary EXCLUSION (T-89-02-01): per_language.md pass_rate / n is a
+			// published number; exclude contaminated rows via the SAME cleanRows split the
+			// leaderboard uses so a contaminated run cannot inflate a per-language rate.
+			// (reduceCanaryRate, the MEASUREMENT, deliberately keeps reading ALL rows.)
+			rows, _ = cleanRows(rows)
 			// Group this cell's rows by language; a single cell could in principle mix
 			// languages, so bucket per row rather than per cell.
 			perLang := map[string][]Row{}

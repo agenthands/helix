@@ -343,6 +343,22 @@ func TestAggregateEndToEnd(t *testing.T) {
 	}
 }
 
+// assertGolden compares got against testdata/<name>, or rewrites it under
+// `-update`. It is the shared golden harness for the new per_language /
+// ablations renderers (mirrors TestAggregateEndToEnd's diff loop).
+func assertGolden(t *testing.T, name, got string) {
+	t.Helper()
+	goldenPath := filepath.Join("testdata", name)
+	if *updateGolden {
+		require.NoError(t, os.WriteFile(goldenPath, []byte(got), 0o600))
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	require.NoError(t, err, "missing golden %s — regenerate with -update", goldenPath)
+	assert.Equal(t, string(want), got,
+		"%s drifted from its committed golden (byte determinism, D-08)", name)
+}
+
 // TestDeterministic: two Aggregate calls with the SAME seed over the SAME runDir
 // produce byte-identical leaderboard.md and cost_quality.md (D-08).
 func TestDeterministic(t *testing.T) {

@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-lsp-diagnostics-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "lsp_diagnostics",
+  "prompt": "The tsserver diagnostics report a type error in widget.ts. Read the diagnostics, fix the offending type annotation, and ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

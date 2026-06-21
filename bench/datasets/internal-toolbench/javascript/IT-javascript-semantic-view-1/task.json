@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "semantic_view",
+  "prompt": "Use list_file_outline on widget.js to enumerate the exported declarations, then add the missing export so the suite runs. Ensure `jest` passes.",
+  "verify": "verify.sh"
+}

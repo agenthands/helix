@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "context_minimization",
+  "prompt": "Retrieve only the minimal context needed (the single failing function) via get_context, fix the bug, and ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

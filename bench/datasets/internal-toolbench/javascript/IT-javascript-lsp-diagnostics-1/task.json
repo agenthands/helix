@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-lsp-diagnostics-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "lsp_diagnostics",
+  "prompt": "The eslint diagnostics report an undefined variable in widget.js. Read the diagnostics, fix the reference, and ensure `jest` passes.",
+  "verify": "verify.sh"
+}

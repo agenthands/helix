@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "rename_safety",
+  "prompt": "The exported function foo in widget.ts is called from consumer.ts, but widget.test.ts expects it named bar. Run find_references on foo and rename it to bar across every site. Ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

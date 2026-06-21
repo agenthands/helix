@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "dependency_graph",
+  "prompt": "Use get_import_graph to find the broken import in consumer.ts and repair the module path. Ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

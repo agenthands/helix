@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "patch_apply",
+  "prompt": "Apply the provided unified diff to widget.ts and confirm it lands cleanly. Ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

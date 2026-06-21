@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "dependency_graph",
+  "prompt": "Use get_import_graph to find the broken require/import in consumer.js and repair the module path. Ensure `jest` passes.",
+  "verify": "verify.sh"
+}

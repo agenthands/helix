@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "incremental_update",
+  "prompt": "After editing widget.ts, re-run only the affected test file incrementally and ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

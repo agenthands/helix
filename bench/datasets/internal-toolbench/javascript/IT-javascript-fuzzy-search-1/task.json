@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "fuzzy_search",
+  "prompt": "Apply the intended edit to widget.js using fuzzy_edit even though the surrounding whitespace drifted from the model output. Ensure `jest` passes.",
+  "verify": "verify.sh"
+}

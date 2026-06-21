@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "rename_safety",
+  "prompt": "The function foo in widget.js is called from consumer.js, but widget.test.js expects it named bar. Run find_references on foo and rename it to bar across every site. Ensure `jest` passes.",
+  "verify": "verify.sh"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "patch_apply",
+  "prompt": "Apply the provided unified diff to widget.js and confirm it lands cleanly. Ensure `jest` passes.",
+  "verify": "verify.sh"
+}

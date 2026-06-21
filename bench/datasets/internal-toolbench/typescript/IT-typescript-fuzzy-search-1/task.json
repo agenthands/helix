@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "fuzzy_search",
+  "prompt": "Apply the intended edit to widget.ts using fuzzy_edit even though the surrounding whitespace drifted from the model output. Ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

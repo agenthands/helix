@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "semantic_view",
+  "prompt": "Use list_file_outline on widget.ts to enumerate the exported declarations, then add the missing export so the suite compiles. Ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "failure_handling",
+  "prompt": "A syntax error produces a non-zero exit with no test rows. Diagnose the failure from the reporter output, fix it, and ensure `jest` passes.",
+  "verify": "verify.sh"
+}

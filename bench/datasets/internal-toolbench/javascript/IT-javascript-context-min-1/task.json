@@ -1,0 +1,8 @@
+{
+  "id": "IT-javascript-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "javascript",
+  "capability": "context_minimization",
+  "prompt": "Retrieve only the minimal context needed (the single failing function) via get_context, fix the bug, and ensure `jest` passes.",
+  "verify": "verify.sh"
+}

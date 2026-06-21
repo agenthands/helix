@@ -1,0 +1,8 @@
+{
+  "id": "IT-typescript-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "typescript",
+  "capability": "failure_handling",
+  "prompt": "A type-check failure produces a non-zero exit with no test rows. Diagnose the failure from the reporter output, fix it, and ensure `vitest run` passes.",
+  "verify": "verify.sh"
+}

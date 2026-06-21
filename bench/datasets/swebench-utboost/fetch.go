@@ -2,6 +2,8 @@ package swebenchutboost
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,6 +116,11 @@ func Fetch(ctx context.Context, rev, file string) ([]byte, error) {
 		return nil, err
 	}
 	if b, err := readCacheCapped(dst); err == nil {
+		// Assert the cached bytes against any pinned content digest (WR-01): a
+		// poisoned/wrong cache file fails closed even on a hit, never served.
+		if derr := assertContentDigest(file, b); derr != nil {
+			return nil, derr
+		}
 		return b, nil
 	} else if !os.IsNotExist(err) {
 		// A present-but-oversized (or otherwise unreadable) cache file must NOT
@@ -152,10 +159,35 @@ func Fetch(ctx context.Context, rev, file string) ([]byte, error) {
 		return nil, fmt.Errorf("swebench-utboost: payload %s exceeds %d-byte cap", url, int64(maxDatasetBytes))
 	}
 
+	// Assert the downloaded bytes against any pinned content digest BEFORE caching
+	// (WR-01): a moved/wrong commit or MITM that serves the wrong content fails
+	// closed and is never written to the cache (so it cannot be served "forever as
+	// a hit").
+	if err := assertContentDigest(file, body); err != nil {
+		return nil, err
+	}
+
 	if err := writeCacheAtomic(dst, body); err != nil {
 		return nil, err
 	}
 	return body, nil
+}
+
+// assertContentDigest fails closed when file has a pinned sha256 (pin.go
+// PinnedContentDigests) and the payload does not match it (WR-01). When no digest
+// is pinned for file it is a no-op — the documented, reviewed residual where the
+// rev-pin alone guards integrity until the live-confirmed digests are recorded.
+func assertContentDigest(file string, body []byte) error {
+	want, ok := expectedDigest(file)
+	if !ok {
+		return nil
+	}
+	sum := sha256.Sum256(body)
+	got := hex.EncodeToString(sum[:])
+	if got != want {
+		return fmt.Errorf("swebench-utboost: content digest mismatch for %q: got sha256 %s, want pinned %s (refuse tampered/moved payload)", file, got, want)
+	}
+	return nil
 }
 
 // readCacheCapped reads a cache-hit file under the SAME maxDatasetBytes cap the

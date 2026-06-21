@@ -2,6 +2,8 @@ package swebenchutboost
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"os"
 	"path/filepath"
@@ -115,6 +117,44 @@ func TestFetchCacheHitHonorsSizeCap(t *testing.T) {
 		t.Fatalf("oversized cache file must be a cap refusal, not a miss: %v", err)
 	} else if !strings.Contains(err.Error(), "cap") {
 		t.Errorf("expected a size-cap refusal error, got %v", err)
+	}
+}
+
+// TestContentDigestAssertion (WR-01): assertContentDigest is a no-op when no
+// digest is pinned for a file (the documented rev-pin-only residual), MATCHES the
+// correct payload when a digest IS pinned, and FAILS CLOSED on a mismatch (a
+// moved/wrong commit or tampered/poisoned payload). PinnedContentDigests is a var
+// so the test injects and restores a pin hermetically.
+func TestContentDigestAssertion(t *testing.T) {
+	body := []byte("audited-utboost-payload")
+	sum := sha256.Sum256(body)
+	want := hex.EncodeToString(sum[:])
+	const file = "data.parquet"
+
+	// No pin recorded -> no-op (residual rev-pin-only path).
+	if err := assertContentDigest(file, body); err != nil {
+		t.Fatalf("assertContentDigest with no pin = %v, want nil (rev-pin-only residual)", err)
+	}
+
+	// Inject a pin, restore on cleanup.
+	orig := PinnedContentDigests
+	PinnedContentDigests = map[string]string{file: want}
+	t.Cleanup(func() { PinnedContentDigests = orig })
+
+	// Correct payload matches.
+	if err := assertContentDigest(file, body); err != nil {
+		t.Fatalf("assertContentDigest on the matching payload = %v, want nil", err)
+	}
+
+	// Tampered payload fails closed.
+	tampered := append([]byte(nil), body...)
+	tampered[0] ^= 0xFF
+	err := assertContentDigest(file, tampered)
+	if err == nil {
+		t.Fatal("assertContentDigest must FAIL CLOSED on a digest mismatch, got nil")
+	}
+	if !strings.Contains(err.Error(), "digest mismatch") {
+		t.Errorf("expected a digest-mismatch refusal, got %v", err)
 	}
 }
 

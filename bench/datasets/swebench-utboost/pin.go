@@ -39,6 +39,40 @@ const Host = "https://huggingface.co"
 // and update this constant.
 const PinnedSHA = "4c21a4831d80b66e976f2a5ce946a0abded7a2aa"
 
+// PinnedContentDigests is the per-file content-integrity layer that closes the
+// gap PinnedSHA alone cannot (WR-01). The rev-pin proves we asked HF for an
+// immutable commit; it does NOT prove the bytes HF serves at that commit are the
+// audited content (a wrong/moved 40-hex would silently cache whatever HF returns
+// "forever as a hit"). When a file's lowercase sha256 hex is recorded here, Fetch
+// asserts the downloaded payload's sha256 against it and FAILS CLOSED on
+// mismatch — a moved/wrong commit, an MITM, or a poisoned mirror can never be
+// cached or returned.
+//
+// PROVENANCE / DEFERRAL: the expected sha256s are EMPTY until a
+// Docker+swebench+network host runs the gated live fetch and records the audited
+// payload digests (the same offline-environment constraint that defers the
+// PinnedSHA live confirmation). This map is the release-blocking checklist item
+// the WR-01 review asked for, encoded as enforceable code rather than a comment:
+// once populated, the digest assertion is automatic and fail-closed. An UNLISTED
+// file is currently allowed through on the rev-pin alone (the documented,
+// reviewed residual until digests land); a LISTED file MUST match.
+//
+// To populate after a confirmed live fetch:
+//
+//	sha256sum <cacheDir>/swebench-utboost/<PinnedSHA>/<file>
+//
+// and add `"<file>": "<64-hex>"` here.
+var PinnedContentDigests = map[string]string{}
+
+// expectedDigest returns the pinned lowercase-hex sha256 for file and whether one
+// is recorded. A caller that gets ok=false must NOT treat the absence as a
+// failure (the residual rev-pin-only path), but a recorded digest MUST be
+// asserted by the caller (Fetch).
+func expectedDigest(file string) (string, bool) {
+	d, ok := PinnedContentDigests[file]
+	return d, ok && d != ""
+}
+
 // isHexSHA1 reports whether s is exactly 40 lowercase hex characters — the shape
 // of a git/HF commit sha1 with no ref decoration. Mirrors aiderpolyglot/
 // crosscodeeval isHexSHA1 discipline (explicit, total, no regexp): a branch/tag

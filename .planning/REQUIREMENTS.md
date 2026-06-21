@@ -62,7 +62,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Verified Correctness (VERIFIED-*)
 
-- [ ] **VERIFIED-01**: `verified_correctness` is computed independently of `task_success` — multi-oracle verdict: (a) all canonical tests pass, (b) all augmented tests pass (UTBoost or equivalent for benchmarks that have them), (c) no pre-existing tests regress. _Acceptance:_ a known-buggy patch that passes only canonical tests gets `task_success=true`, `verified_correctness=false`.
+- [x] **VERIFIED-01**: `verified_correctness` is computed independently of `task_success` — multi-oracle verdict: (a) all canonical tests pass, (b) all augmented tests pass (UTBoost or equivalent for benchmarks that have them), (c) no pre-existing tests regress. _Acceptance:_ a known-buggy patch that passes only canonical tests gets `task_success=true`, `verified_correctness=false`.
 - [x] **VERIFIED-02**: SWE-bench Verified runs report **both** raw upstream score and UTBoost-augmented rescored score side-by-side. _Acceptance:_ SWE-bench Verified report has both columns; UTBoost augmented suite is wired and reproducible.
 - [x] **VERIFIED-03**: Multi-oracle gate for non-test-bearing benchmarks (CrossCodeEval, RepoBench): EM + edit-similarity + identifier match all required to pass; abstain mode for low-confidence completions. _Acceptance:_ gate documented in `bench/evaluators/VERIFIED.md`; threshold per oracle configurable.
 
@@ -178,8 +178,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | METRIC-04 | Phase 79 | 79-02 | Complete |
 | METRIC-05 | Phase 79 | 79-02 | Complete |
 | METRIC-06 | Phase 79 | 79-04 | Complete |
-| VERIFIED-01 | Phase 87 | TBD | Pending |
-| VERIFIED-02 | Phase 87 | TBD | Pending |
+| VERIFIED-01 | Phase 87 | 87-03 | Complete |
+| VERIFIED-02 | Phase 87 | 87-03, 87-04 | Complete |
 | VERIFIED-03 | Phase 86 | 86-02 | Complete — multi-oracle completion gate (EM AND edit-similarity≥threshold AND identifier-match all required; per-oracle configurable ESThreshold w/ DefaultESThreshold=0.9 fail-closed on zero-value config); abstain → explicit `verified_correctness=false` (never nil, never false-true); documented in bench/evaluators/VERIFIED.md behind a `make verify-verified-md` gate |
 | STATS-01 | Phase 82 | 82-01, 82-05 | Complete — ExpandMatrix N cells + --runs (producer); aggregator fail-closed N-gate (expectedN-from-arg, zero-discovery hard error) |
 | STATS-02 | Phase 82 | 82-02, 82-06 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, ordering guard, D-09 degenerate matrix); CIs on every leaderboard row |

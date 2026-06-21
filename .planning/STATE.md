@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 87-02-PLAN.md
+stopped_at: Completed 87-03-PLAN.md
 last_updated: "2026-06-21T06:03:09.276Z"
-last_activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
+last_activity: 2026-06-21 -- Completed 87-03 (3-condition verified_correctness gate + UTBoost rescorer + differential + VERIFIED.md; SC#2 buggy-patch divergence proven hermetically)
 progress:
   total_phases: 15
   completed_phases: 12
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 Phase: 87 (swe-bench-verified-adapter-utboost-rescorer-multi-oracle-verified-correctness) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Completed 87-02 (predictions producer + harness report parsers + ingestion)
+Last activity: 2026-06-21 -- Completed 87-03 (3-condition verified_correctness gate + UTBoost rescorer + differential + VERIFIED.md; SC#2 buggy-patch divergence proven hermetically)
 
 ### Session Continuity
 
 Last session: 2026-06-21T06:02:58.204Z
-Stopped at: Completed 87-02-PLAN.md
+Stopped at: Completed 87-03-PLAN.md
 Resume file: None
 
 ## Accumulated Context

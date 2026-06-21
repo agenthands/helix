@@ -364,7 +364,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 87-03-PLAN.md — 3-condition verified_correctness gate (SC#2 load-bearing) + differential.go + rescore + VERIFIED.md (TDD)
+- [x] 87-03-PLAN.md — 3-condition verified_correctness gate (SC#2 load-bearing) + differential.go + rescore + VERIFIED.md (TDD)
 
 ### Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters
 

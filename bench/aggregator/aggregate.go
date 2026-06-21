@@ -9,6 +9,7 @@ import (
 
 	"github.com/agenthands/helix/bench/canary"
 	"github.com/agenthands/helix/bench/cost"
+	"github.com/agenthands/helix/bench/runtime"
 )
 
 // aggregate.go is the STATS-02/03/04 + COST-03 orchestrator: a PURE function
@@ -121,6 +122,15 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 		// IN-03 metric-order/presence bootstrap contract; it only reads the same loaded
 		// rows. NEVER alters the existing leaderboard columns.
 		leader.CanaryPassRate = reduceCanaryRate(loaded, tasks, mode)
+		// Phase 87 (VERIFIED-02) ADDITIVE raw-vs-UTBoost-rescored side-by-side columns:
+		// populate RawScore/RescoredScore AFTER the determinism-locked metric reductions
+		// (mirror the CanaryPassRate assignment above). Both are flat pooled rates that
+		// consume NO RNG (no bca call), so they cannot perturb the IN-03 metric-order/
+		// presence bootstrap contract or the locked leaderboard/cost goldens; they only
+		// read the same loaded rows. They are NOT rendered into leaderboard.md/
+		// cost_quality.md (so the existing goldens stay byte-for-byte — Phase 86
+		// CanaryPassRate discipline); the SWE-bench render is downstream Phase 89.
+		leader.RawScore, leader.RescoredScore = reduceSwebenchScores(loaded, tasks, mode)
 		rep.Leaderboard = append(rep.Leaderboard, leader)
 
 		costRow := reduceCostRow(loaded, tasks, mode, ct, cfg, alpha, rng)
@@ -334,6 +344,80 @@ func reduceCanaryRate(loaded *Loaded, tasks []string, mode string) ciValue {
 	rate := float64(clean) / float64(total)
 	// A flat pooled point with degenerate [point, point] endpoints: it is a rate,
 	// not a bootstrapped interval (Phase 89 owns the CI). OK==true so it renders.
+	return ciValue{Point: rate, Lo: rate, Hi: rate, OK: true}
+}
+
+// rowSwebenchScores reads the open-provenance raw/rescored doc keys from a row at
+// SCORE TIME via the PINNED runtime.SwebenchRawResolvedKey /
+// runtime.SwebenchRescoredVerifiedKey consts — the SAME consts Plan 03's
+// rescore.ApplyToRow stamps, so producer and reader can NEVER drift to different
+// spellings (the canary.DocKeyCompletion shared-const precedent, NOT "agree by
+// comment"). It returns (raw, rescored, present): present==false when the row carries
+// NEITHER key (a non-SWE-bench artifact), so such a row contributes nothing to either
+// rate (Pitfall 4 null discipline — never fabricated). It mirrors rowCanary exactly.
+// A row missing a key reads its pointer as nil (excluded from that rate's counts).
+func rowSwebenchScores(r Row) (raw *bool, rescored *bool, present bool) {
+	raw = rowBoolKey(r, runtime.SwebenchRawResolvedKey)
+	rescored = rowBoolKey(r, runtime.SwebenchRescoredVerifiedKey)
+	return raw, rescored, raw != nil || rescored != nil
+}
+
+// rowBoolKey json.Unmarshals a bool from the named open doc key, returning nil when
+// the key is absent or not a bool (excluded — never coerced to a default verdict).
+func rowBoolKey(r Row, key string) *bool {
+	rawMsg, ok := r.Doc[key]
+	if !ok {
+		return nil
+	}
+	var v bool
+	if err := json.Unmarshal(rawMsg, &v); err != nil {
+		return nil
+	}
+	return &v
+}
+
+// reduceSwebenchScores computes the Phase 87 (VERIFIED-02) ADDITIVE RawScore /
+// RescoredScore for one (mode x benchmark): two flat pooled fractions over the rows
+// carrying each respective open key, derived at score time via rowSwebenchScores. It
+// mirrors reduceCanaryRate's pooled-rate path: a row with no swebench keys is excluded
+// from BOTH numerator and denominator of each rate. When NO row carries a given key
+// that rate is a NULL ci (OK==false, rendered em-dash) — never a fabricated 0. Each is
+// a degenerate [point, point] ciValue (NOT a BCa CI), so it consumes ZERO RNG and
+// cannot perturb the locked determinism contract; the bootstrapped CI is downstream
+// (Phase 89).
+func reduceSwebenchScores(loaded *Loaded, tasks []string, mode string) (rawCI, rescoredCI ciValue) {
+	var rawTrue, rawTotal, rescoredTrue, rescoredTotal int
+	for _, task := range tasks {
+		for _, r := range loaded.Rows(task, mode) {
+			raw, rescored, present := rowSwebenchScores(r)
+			if !present {
+				continue
+			}
+			if raw != nil {
+				rawTotal++
+				if *raw {
+					rawTrue++
+				}
+			}
+			if rescored != nil {
+				rescoredTotal++
+				if *rescored {
+					rescoredTrue++
+				}
+			}
+		}
+	}
+	return pooledRate(rawTrue, rawTotal), pooledRate(rescoredTrue, rescoredTotal)
+}
+
+// pooledRate builds a degenerate [point, point] ciValue from a true-count over a
+// total. A zero total is a NULL ci (OK==false, em-dash) — never a fabricated 0. It
+// consumes NO RNG (the bootstrapped CI is downstream Phase 89).
+func pooledRate(trueCount, total int) ciValue {
+	if total == 0 {
+		return ciValue{OK: false}
+	}
+	rate := float64(trueCount) / float64(total)
 	return ciValue{Point: rate, Lo: rate, Hi: rate, OK: true}
 }
 

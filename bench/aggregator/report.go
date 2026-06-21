@@ -68,6 +68,22 @@ type LeaderRow struct {
 	// locked determinism contract); the bootstrapped canary CI is downstream
 	// (Phase 89).
 	CanaryPassRate ciValue
+
+	// RawScore and RescoredScore are the Phase 87 (VERIFIED-02) ADDITIVE raw-vs-
+	// UTBoost-rescored side-by-side columns. RawScore is the pooled fraction of this
+	// (mode x benchmark)'s SWE-bench rows whose raw upstream `report.resolved` verdict
+	// was true; RescoredScore is the pooled fraction whose UTBoost-rescored
+	// verified_correctness verdict was true. Both are reduced at SCORE TIME from the
+	// open doc keys runtime.SwebenchRawResolvedKey / runtime.SwebenchRescoredVerifiedKey
+	// stamped by Plan 03's rescore.ApplyToRow (the REAL producer — NOT "TBD"), via
+	// rowSwebenchScores/reduceSwebenchScores, mirroring the CanaryPassRate precedent
+	// above exactly. They NEVER alter the existing leaderboard columns or their sort.
+	// A cell whose rows carry NO swebench keys yields a NULL ci (OK==false) rendered
+	// as an em-dash — never a fabricated 0. Each is a flat pooled rate, not a BCa CI,
+	// so it consumes ZERO RNG and cannot perturb the locked determinism contract; the
+	// SWE-bench-specific render of these columns is downstream (Phase 89).
+	RawScore      ciValue
+	RescoredScore ciValue
 }
 
 // VarianceFlag names a (task,mode) cell whose per-run USD CV exceeds the FAIR-03

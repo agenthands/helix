@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-no-docker-sdk
 
 BINARY=helix
 GO=go
@@ -44,7 +44,7 @@ VETTOOL_BENCH_RAG_LEAKAGE=$(shell go env GOPATH)/bin/vet-bench-rag-leakage
 # internal/kernel or internal/semantic (transitively the same as not importing
 # internal/mcp). Static, compile-time complement to the dynamic transitive
 # import-set test in cmd/helix-bench-rag/leakage_test.go.
-vet: $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE) $(VETTOOL_BENCH_RAG_LEAKAGE)
+vet: verify-no-docker-sdk $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE) $(VETTOOL_BENCH_RAG_LEAKAGE)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
@@ -308,3 +308,14 @@ validate-cost-table:
 # NO continue-on-error. Checks freshness/parse validity only, not legal accuracy.
 verify-tos:
 	go run ./cmd/helix-bench verify-tos bench/PROVIDERS.md
+
+# verify-no-docker-sdk: HARD-FAIL supply-chain gate (CONTAINER-01 / SC#1). The
+# bench container stack MUST drive docker/podman purely via os/exec — the Docker
+# Go SDK (github.com/docker/docker) must never appear in go.mod. On a match this
+# prints a CI ::error:: and exits NON-ZERO; on no match the recipe succeeds (the
+# grep exit-1 is swallowed by the `if` so the absence case is the pass).
+verify-no-docker-sdk:
+	@if grep -q 'github.com/docker/docker' go.mod; then \
+		echo "::error::SC#1 violation: github.com/docker/docker present in go.mod"; \
+		exit 1; \
+	fi

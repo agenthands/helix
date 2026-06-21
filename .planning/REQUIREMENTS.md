@@ -180,7 +180,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | METRIC-06 | Phase 79 | 79-04 | Complete |
 | VERIFIED-01 | Phase 87 | TBD | Pending |
 | VERIFIED-02 | Phase 87 | TBD | Pending |
-| VERIFIED-03 | Phase 86 | TBD | Pending |
+| VERIFIED-03 | Phase 86 | 86-02 | Complete — multi-oracle completion gate (EM AND edit-similarity≥threshold AND identifier-match all required; per-oracle configurable ESThreshold w/ DefaultESThreshold=0.9 fail-closed on zero-value config); abstain → explicit `verified_correctness=false` (never nil, never false-true); documented in bench/evaluators/VERIFIED.md behind a `make verify-verified-md` gate |
 | STATS-01 | Phase 82 | 82-01, 82-05 | Complete — ExpandMatrix N cells + --runs (producer); aggregator fail-closed N-gate (expectedN-from-arg, zero-discovery hard error) |
 | STATS-02 | Phase 82 | 82-02, 82-06 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, ordering guard, D-09 degenerate matrix); CIs on every leaderboard row |
 | STATS-03 | Phase 82 | 82-03, 82-06 | Complete — HumanEval unbiased c-term pass@k (0.91667 anchor, anti-naive + lgamma-agreement), pass@1/pass@k columns |
@@ -189,8 +189,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | COST-02 | Phase 82 | 82-04 | Complete — cost_per_solved_task golden (3.555) + model_id join + freshness gate fail-closed |
 | COST-03 | Phase 82 | 82-06, 82-07 | Complete — cost_quality.md renders cost-per-solved per mode×benchmark with BCa CIs + FAIR-03 CV>0.05 variance warning |
 | ADAPTER-AIDER-01 | Phase 85 | 85-07 | Complete — dataset-loader-only adapter landed (bench/datasets/aider-polyglot): pinned-sha `--depth 1` clone of Aider-AI/polyglot-benchmark @ 7e0611e7, `.meta/config.json` files.solution/test/example mapping, 2-attempt + stderr-reprompt protocol (tries=2/180s) over aider's native per-language commands. Proven hermetically over a committed fixture set; live clone verified once (HEAD==pin, 225 tasks/6 tracks). SC#3 non-hermetic flagging via the 85-02 `--network=none` seam. SC#1 full live run + per-language sanity comparison recorded as toolchain/network-gated. |
-| ADAPTER-CCE-01 | Phase 86 | TBD | Pending |
-| ADAPTER-REPO-01 | Phase 86 | TBD | Pending |
+| ADAPTER-CCE-01 | Phase 86 | 86-01, 86-03 | Complete — CrossCodeEval dataset-loader-only adapter (Py/Java/TS/C#); EM/edit-similarity(normalized Levenshtein)/identifier-match scorers unit-tested vs CCE paper (arXiv:2310.11248); HF parquet fetcher BUILT (net/http + arrow-go pqarrow, SSRF-pinned + path-safe + size-capped, cached); live smoke HELIX_BENCH_NETWORK-gated |
+| ADAPTER-REPO-01 | Phase 86 | 86-04 | Complete — RepoBench-R (acc@k) / -C (EM/ES, reuses 86-01 scorers) / -P (pipeline) for Python+Java; pinned HF revs (tianyang/repobench_{python,java}_v1.1); hermetic fixtures w/ provenance; live reference-match network-gated |
 | ADAPTER-SWE-01 | Phase 87 | TBD | Pending |
 | ADAPTER-MULTI-01 | Phase 88 | TBD | Pending |
 | ADAPTER-TERM-01 | Phase 88 | TBD | Pending |

@@ -25,7 +25,7 @@
 
 6 phases, 31 v1 requirements, 100% mapped. Strangler-fig: the CLI head is built behind the still-live MCP surface (90-93), parity is proven by dual-run, and the agent-facing MCP heads are deleted **last** (94). The security-load-bearing `tools/call` profile/mode enforcement lands in the **same** phase as the always-visible generated verbs (91). Docs/identity + docgen regen run against the frozen surface (95).
 
-- [ ] **Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse** — zero-proto `tools/call` over `StreamMCP`, cross-process spawn lock, 2nd-call SLO, E2E oracle stood up
+- [x] **Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse** — zero-proto `tools/call` over `StreamMCP`, cross-process spawn lock, 2nd-call SLO, E2E oracle stood up (completed 2026-06-21)
 - [ ] **Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement** — all-tool parity codegen + the security gate that must ship with the verbs
 - [ ] **Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle** — the load-bearing `relpath:line:col` product work that freezes the output shape SKILL.md will cite
 - [ ] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration

@@ -1,8 +1,8 @@
 ---
 phase: 84
 slug: container-runtime-cosign-signed-ghcr-mirror-disk-budget-guard
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-21
 ---

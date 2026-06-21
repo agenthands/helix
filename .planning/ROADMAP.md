@@ -30,7 +30,7 @@
 - [x] **Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle** — the load-bearing `relpath:line:col` product work that freezes the output shape SKILL.md will cite (completed 2026-06-21)
 - [x] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration (completed 2026-06-21)
 - [x] **Phase 94: Retire the Agent-Facing MCP Surface (DELETE)** — drop stdio forwarder head + Streamable-HTTP `/mcp` only after dual-run parity; optional gRPC TCP bind (completed 2026-06-21)
-- [ ] **Phase 95: Identity & Docs Rewrite + docgen Regen** — CLI-first identity across four docs; auto-generated table regenerated against the verb surface
+- [x] **Phase 95: Identity & Docs Rewrite + docgen Regen** — CLI-first identity across four docs; auto-generated table regenerated against the verb surface (completed 2026-06-21)
 
 ### Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse
 

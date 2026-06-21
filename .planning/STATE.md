@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 95
-current_phase_name: identity-docs-rewrite-docgen-regen
 status: verifying
 stopped_at: None
-last_updated: "2026-06-21T23:20:43.857Z"
+last_updated: "2026-06-21T23:34:57.615Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 95 execution started
+last_activity_desc: Phase 95 complete
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 19
   completed_plans: 19
   percent: 100
+current_phase_name: identity-docs-rewrite-docgen-regen
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 95 (identity-docs-rewrite-docgen-regen) — EXECUTING
-Plan: 2 of 2
+Phase: 95
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 95 execution started
+Last activity: 2026-06-21 — Phase 95 complete
 
 Progress: [██░░░░░░░░] 19%
 
@@ -46,6 +46,7 @@ Progress: [██░░░░░░░░] 19%
 | 92 | 3 | - | - |
 | 93 | 4 | - | - |
 | 94 | 2 | - | - |
+| 95 | 2 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

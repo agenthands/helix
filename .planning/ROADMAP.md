@@ -179,7 +179,7 @@ Plans:
 Plans:
 
 - [x] 95-01-PLAN.md — docgen verb re-key + `make verify-docs` + CI docgen drift gate + verb-form tests + blank-import cross-ref (DOCS-02)
-- [ ] 95-02-PLAN.md — CLI-first identity rewrite across README/CLAUDE.md/PROJECT.md + new Helix-CLI routing matrix in CLAUDE.md (DOCS-01, DOCS-03)
+- [x] 95-02-PLAN.md — CLI-first identity rewrite across README/CLAUDE.md/PROJECT.md + new Helix-CLI routing matrix in CLAUDE.md (DOCS-01, DOCS-03)
 
 ### ✅ v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — SHIPPED 2026-06-21
 

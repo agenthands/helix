@@ -67,9 +67,9 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Docs & Identity (DOCS-*)
 
-- [ ] **DOCS-01**: Identity rewrite — README, CLAUDE.md, and PROJECT.md ("Core Value"; Constraints "Protocol: MCP — primary interface") are rewritten to a CLI-first identity. _Acceptance:_ no doc claims MCP as the primary agent interface; the CLI-first framing is consistent across all four docs.
+- [x] **DOCS-01**: Identity rewrite — README, CLAUDE.md, and PROJECT.md ("Core Value"; Constraints "Protocol: MCP — primary interface") are rewritten to a CLI-first identity. _Acceptance:_ no doc claims MCP as the primary agent interface; the CLI-first framing is consistent across all four docs.
 - [x] **DOCS-02**: The auto-generated tool table is regenerated against the CLI surface (`cmd/docgen` enumerates verbs; docgen blank-imports stay == the daemon's). _Acceptance:_ the generated table lists `helix` verbs and the docgen drift gate is green.
-- [ ] **DOCS-03**: The CLAUDE.md "tool routing" guidance is updated to reference `helix <verb>` instead of MCP tool names. _Acceptance:_ the routing matrix cites CLI verbs end-to-end.
+- [x] **DOCS-03**: The CLAUDE.md "tool routing" guidance is updated to reference `helix <verb>` instead of MCP tool names. _Acceptance:_ the routing matrix cites CLI verbs end-to-end.
 
 ### Test & Oracle Migration (TEST-*)
 
@@ -129,9 +129,9 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | RETIRE-02 | Phase 94 | Complete |
 | RETIRE-03 | Phase 94 | Complete |
 | RETIRE-04 | Phase 94 | Complete |
-| DOCS-01 | Phase 95 | Pending |
+| DOCS-01 | Phase 95 | Complete |
 | DOCS-02 | Phase 95 | Complete |
-| DOCS-03 | Phase 95 | Pending |
+| DOCS-03 | Phase 95 | Complete |
 | TEST-01 | Phase 90 | Complete |
 | TEST-02 | Phase 92 | Complete |
 | TEST-03 | Phase 93 | Complete |

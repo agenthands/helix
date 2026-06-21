@@ -131,6 +131,11 @@ None - no external service configuration required.
 - This is the FINAL v2.0 plan. The docs now describe the frozen, MCP-head-free CLI-first shape after Phase 94.
 - All v2.0 DOCS requirements (DOCS-01, DOCS-03; DOCS-02 in plan 95-01) are satisfied; milestone is ready for completion/audit.
 
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/95-identity-docs-rewrite-docgen-regen/95-02-SUMMARY.md`
+- FOUND commits: `617e07bc` (Task 1), `e40f7ae9` (Task 2), `ddaf880b` (SUMMARY)
+
 ---
 *Phase: 95-identity-docs-rewrite-docgen-regen*
 *Completed: 2026-06-21*

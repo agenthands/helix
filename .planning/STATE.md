@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 95
 current_phase_name: identity-docs-rewrite-docgen-regen
-status: executing
-stopped_at: Completed 93-03-PLAN.md
-last_updated: "2026-06-21T23:13:15.836Z"
+status: verifying
+stopped_at: None
+last_updated: "2026-06-21T23:20:43.857Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 95 execution started
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 19
-  completed_plans: 18
-  percent: 83
+  completed_plans: 19
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 Phase: 95 (identity-docs-rewrite-docgen-regen) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-21 — Phase 95 execution started
 
 Progress: [██░░░░░░░░] 19%
@@ -67,6 +67,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 94 P01 | 18min | 3 tasks | 14 files |
 | Phase 94 P02 | 25min | 3 tasks | 28 files |
 | Phase 95 P01 | 3min | 3 tasks | 6 files |
+| Phase 95 P02 | 18 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -102,8 +103,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T23:12:56.649Z
-Stopped at: Completed 93-03-PLAN.md
+Last session: 2026-06-21T23:20:38.202Z
+Stopped at: None
 Resume file: None
 
 ## Decisions
@@ -134,3 +135,5 @@ Resume file: None
 - [Phase ?]: 94-02: CLI is the sole agent-facing MCP surface — both stdio (RunForwarder) and HTTP (/mcp) heads deleted; daemon/wire/middleware engine retained behind forwarder.CallTool
 - [Phase ?]: 94-02: --mode retained with only the auto arm; legacy stdio/http modes surface the unknown-mode error
 - [Phase ?]: Phase 95-01: docgen derives helix verbs inline via ReplaceAll; docgen drift gate wired as make verify-docs + CI step (closes v1.12 hole); blank-import parity via --check gate + cross-ref comments, not literal equality (D-02 preserved)
+- [Phase ?]: Phase 95-02: DOCS-03 satisfied by ADDING a Helix-CLI routing matrix to CLAUDE.md; external SMTC matrix left byte-for-byte intact (mcp__smtc__ count unchanged at 31)
+- [Phase ?]: Phase 95-02: docs reframed CLI-first without over-claiming MCP removal — MCP Go SDK + gRPC IPC are retained internal daemon plumbing

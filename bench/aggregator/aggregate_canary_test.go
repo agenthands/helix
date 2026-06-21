@@ -123,18 +123,30 @@ func TestAggregateCanaryPassRate(t *testing.T) {
 // listed in the leaderboard.md footnote. Fail-safe: a contaminated row is NEVER
 // silently counted in the headline.
 //
-// Fixture: mode "full" has one CLEAN task (task-clean, both runs solved+verified) and
-// one fully-CONTAMINATED task (task-dirty, both runs echo the sentinel). The headline
-// must reduce over ONLY task-clean; CanaryPassRate must reflect the contaminated runs;
-// the footnote must name (task-dirty, full).
+// Fixture (DISCRIMINATING — the contaminated task carries a verdict that, if counted,
+// would INFLATE every headline, so exclusion is genuinely asserted not masked): mode
+// "full" has TWO CLEAN tasks and ONE fully-CONTAMINATED task.
+//
+//   - task-clean-a: both runs UNSOLVED + verified_correctness=FALSE  (clean rate 0.0)
+//   - task-clean-b: both runs SOLVED   + verified_correctness=TRUE   (clean rate 1.0)
+//   - task-dirty:   both runs SOLVED   + verified_correctness=TRUE, echoing the sentinel
+//
+// Clean-only:  pass@1 across-task vector {0.0, 1.0} -> mean 0.50; VC pooled 2/4 = 0.50.
+// If the dirty solved/verified rows LEAKED in: pass@1 {0.0,1.0,1.0} -> 0.667; VC 4/6 = 0.667.
+// So 0.50 vs 0.667 genuinely discriminates the exclusion (unlike the prior fixture where
+// clean and dirty shared the same verdict and 1.0==1.0 masked the leak). The two-element
+// clean vector also keeps BCa non-degenerate so the ablation FullCI stays OK.
 func TestCanaryExclusionFromHeadline(t *testing.T) {
 	dir := t.TempDir()
-	// task-clean: two clean, solved+verified runs — the ONLY rows the headline sees.
-	writeCanaryRowVC(t, dir, "task-clean", "full", 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a + b")
-	writeCanaryRowVC(t, dir, "task-clean", "full", 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a + b")
-	// task-dirty: two contaminated runs (echo the sentinel). They are solved+verified on
-	// paper, so if they leaked into the headline they would INFLATE it — the integrity
-	// failure this test guards against.
+	// task-clean-a: two clean UNSOLVED + verified=FALSE runs.
+	writeCanaryRowVC(t, dir, "task-clean-a", "full", 0, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-clean-a", "full", 1, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	// task-clean-b: two clean SOLVED + verified=TRUE runs.
+	writeCanaryRowVC(t, dir, "task-clean-b", "full", 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	writeCanaryRowVC(t, dir, "task-clean-b", "full", 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	// task-dirty: two contaminated runs (echo the sentinel), SOLVED + verified=TRUE on
+	// paper. If they leaked into the headline they would push pass@1 / verified_correctness
+	// from 0.50 UP to 0.667 — exactly the inflation the canary exclusion must prevent.
 	writeCanaryRowVC(t, dir, "task-dirty", "full", 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "memorised "+canary.Sentinel)
 	writeCanaryRowVC(t, dir, "task-dirty", "full", 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "memorised "+canary.Sentinel)
 
@@ -146,20 +158,34 @@ func TestCanaryExclusionFromHeadline(t *testing.T) {
 	full, ok := byMode["full"]
 	require.True(t, ok, "expected a full-mode leaderboard row")
 
-	// Headline reduces over ONLY the clean task. task-clean is 2/2 solved+verified, so
-	// the across-task vector has exactly ONE element (the clean task) at 1.0. If the
-	// contaminated task leaked in, the vector would still be 1.0 here — so to truly
-	// prove exclusion we assert CanaryPassRate sees the dirty rows but the headline does
-	// not, AND the footnote names the dirty cell.
-	require.True(t, full.PassAt1.OK, "clean task must populate the headline pass@1")
-	assert.InDelta(t, 1.0, full.PassAt1.Point, 1e-9, "headline pass@1 reduces over the clean task only")
-	require.True(t, full.VerifiedCorrectness.OK, "clean task must populate verified_correctness")
-	assert.InDelta(t, 1.0, full.VerifiedCorrectness.Point, 1e-9, "verified_correctness over clean rows only")
+	// Headline reduces over the TWO clean tasks ONLY ({0.0, 1.0} -> 0.50). If the
+	// contaminated solved/verified task leaked in, BOTH of these would be 0.667, not 0.50.
+	require.True(t, full.PassAt1.OK, "clean tasks must populate the headline pass@1")
+	assert.InDelta(t, 0.5, full.PassAt1.Point, 1e-9,
+		"headline pass@1 reduces over the clean tasks ONLY ({0,1}->0.5), never 0.667 from the dirty task")
+	require.True(t, full.VerifiedCorrectness.OK, "clean tasks must populate verified_correctness")
+	assert.InDelta(t, 0.5, full.VerifiedCorrectness.Point, 1e-9,
+		"verified_correctness pools the clean rows ONLY (2/4=0.5), never 4/6=0.667 from the dirty task")
 
-	// CanaryPassRate MEASURES contamination over ALL rows: 2 clean / 4 with-completion.
+	// CanaryPassRate MEASURES contamination over ALL rows: 4 clean / 6 with-completion.
 	require.True(t, full.CanaryPassRate.OK, "CanaryPassRate must stay populated over all rows")
-	assert.InDelta(t, 0.5, full.CanaryPassRate.Point, 1e-9,
-		"CanaryPassRate counts ALL rows (2 clean / 4) — exclusion does not touch the measurement")
+	assert.InDelta(t, 4.0/6.0, full.CanaryPassRate.Point, 1e-9,
+		"CanaryPassRate counts ALL rows (4 clean / 6) — exclusion does not touch the measurement")
+
+	// WR-02 per_language: the per-language pass-rate pools across every (task,mode) cell.
+	// All tasks bucket under the empty language key (""). With exclusion the clean rows are
+	// the 4 task-clean-* runs (2 solved -> 2/4 = 0.5); if the 2 dirty solved runs leaked in
+	// it would be 4/6 == 0.667.
+	var emptyLang *LanguageRow
+	for i := range rep.ByLanguage {
+		if rep.ByLanguage[i].Language == "" {
+			emptyLang = &rep.ByLanguage[i]
+		}
+	}
+	require.NotNil(t, emptyLang, "the empty-language bucket must be present")
+	assert.InDelta(t, 0.5, emptyLang.PassRate, 1e-9,
+		"per_language pass_rate pools the clean rows ONLY (2/4=0.5), never 4/6=0.667")
+	assert.Equal(t, 4, emptyLang.N, "per_language n counts ONLY the 4 clean rows, not the 2 contaminated")
 
 	// The contaminated (task,mode) cell is collected onto the Report and footnoted.
 	require.Len(t, rep.Contaminated, 1, "exactly one contaminated (task,mode) cell")
@@ -172,6 +198,50 @@ func TestCanaryExclusionFromHeadline(t *testing.T) {
 	assert.Contains(t, lb, "Contamination", "footnote section header present")
 	assert.Contains(t, lb, "task-dirty", "footnote names the excluded task")
 	assert.Contains(t, lb, "full", "footnote names the excluded mode")
+}
+
+// TestCanaryExclusionFromAblations is the WR-01 integrity proof for the published
+// ablations.md table: the full-mode (your_agent_full) task_success vector that feeds
+// every comparison's FullCI must reduce over CLEAN rows only. The fixture gives
+// your_agent_full a DISCRIMINATING split — one clean UNSOLVED task and one clean
+// SOLVED task ({0.0, 1.0} -> 0.5), plus one fully-CONTAMINATED SOLVED task that, if
+// counted, would push the vector to {0.0, 1.0, 1.0} -> 0.667. your_agent_no_lsp is
+// the OTHER operand so the comparison is Present (FullCI is asserted directly).
+func TestCanaryExclusionFromAblations(t *testing.T) {
+	dir := t.TempDir()
+	const full = "your_agent_full"
+	const other = "your_agent_no_lsp"
+	// your_agent_full clean tasks: one unsolved, one solved -> {0.0, 1.0} -> 0.5.
+	writeCanaryRowVC(t, dir, "task-clean-a", full, 0, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-clean-a", full, 1, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-clean-b", full, 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	writeCanaryRowVC(t, dir, "task-clean-b", full, 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	// your_agent_full contaminated SOLVED task: would inflate the FullCI to 0.667 if counted.
+	writeCanaryRowVC(t, dir, "task-dirty", full, 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "memorised "+canary.Sentinel)
+	writeCanaryRowVC(t, dir, "task-dirty", full, 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "memorised "+canary.Sentinel)
+	// your_agent_no_lsp: a clean OTHER operand so the comparison renders as Present.
+	writeCanaryRowVC(t, dir, "task-clean-a", other, 0, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-clean-a", other, 1, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-clean-b", other, 0, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	writeCanaryRowVC(t, dir, "task-clean-b", other, 1, metricVC(true, true, 1000, 100, 5, 3, 0.9), "return a - b")
+	writeCanaryRowVC(t, dir, "task-dirty", other, 0, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+	writeCanaryRowVC(t, dir, "task-dirty", other, 1, metricVC(false, false, 1000, 100, 5, 3, 0.9), "return a + b")
+
+	rep, err := Aggregate(dir, aggConfig(2))
+	require.NoError(t, err)
+	require.NotNil(t, rep)
+
+	var noLsp *AblationRow
+	for i := range rep.Ablations {
+		if rep.Ablations[i].Comparison == "full_minus_no_lsp" {
+			noLsp = &rep.Ablations[i]
+		}
+	}
+	require.NotNil(t, noLsp, "the full_minus_no_lsp comparison must be present")
+	require.True(t, noLsp.Present, "both operands present -> comparison renders")
+	require.True(t, noLsp.FullCI.OK, "the full operand task_success must populate the FullCI")
+	assert.InDelta(t, 0.5, noLsp.FullCI.Point, 1e-9,
+		"ablation full task_success reduces over the clean tasks ONLY ({0,1}->0.5), never 0.667 from the dirty task")
 }
 
 // TestCleanRowsSplit unit-tests the cleanRows split primitive: a contaminated row

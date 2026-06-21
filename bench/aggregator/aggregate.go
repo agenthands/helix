@@ -543,7 +543,18 @@ func reduceSwebenchScores(loaded *Loaded, tasks []string, mode string) (rawCI, r
 func reduceVerifiedCorrectness(loaded *Loaded, tasks []string, mode string) ciValue {
 	var trueCount, total int
 	for _, task := range tasks {
-		for _, r := range loaded.Rows(task, mode) {
+		rows := loaded.Rows(task, mode)
+		if len(rows) == 0 {
+			continue
+		}
+		// INFRA-05 canary EXCLUSION (T-89-02-01): verified_correctness IS a published
+		// headline leaderboard column (report.go:323/328) and the contamination footnote
+		// asserts it is excluded. Route it through the SAME cleanRows split the other
+		// headline reduces (reduceLeaderRow, reduceCostRow) use so a contaminated row's
+		// verdict can never silently inflate the headline. A fully-contaminated cell
+		// contributes nothing. reduceCanaryRate (the MEASUREMENT) keeps reading ALL rows.
+		rows, _ = cleanRows(rows)
+		for _, r := range rows {
 			v := r.Metrics.VerifiedCorrectness
 			if v == nil {
 				continue

@@ -125,7 +125,6 @@ Plans:
   4. The `SKILL.md` token-efficiency rationale records a real measured idle-skill-cost vs preloaded-full-tool-schema before/after number in `SKILL.md` or a referenced doc.
 
 **Plans**: TBD
-**UI hint**: yes
 
 ### Phase 94: Retire the Agent-Facing MCP Surface (DELETE)
 

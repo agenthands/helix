@@ -418,18 +418,24 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return res, fmt.Errorf("bench/runtime: fairness contract invalid: %w", verr)
 	}
 
-	// (1c) D-02 baseline_rag fail-close: baseline_rag is a registered stub whose
-	// REAL RAG arm (chromem-go + cmd/helix-bench-rag) is deferred to Phase 83
-	// (ABLATE-04). It must NOT spawn a daemon or emit a result row this phase, so we
-	// short-circuit BY MODE NAME (not a frontmatter marker — keeps the two-key
-	// resolver change-free) right after the fairness gate and BEFORE benchsandbox.New.
-	// The path-segment validation above (and ResultPath layout) already ran; we set
-	// the Deferred signal and return a nil error (a registered stub, not an infra
-	// failure) so the matrix counts it as neither a success nor an infra error.
-	if cfg.Mode == "baseline_rag" {
-		res.Deferred = true
-		res.DeferredReason = "baseline_rag: real RAG arm deferred to Phase 83 (ABLATE-04)"
-		return res, nil
+	// (1c) Phase 83 baseline_rag REAL ARM (ABLATE-04 #3/#4): baseline_rag is the
+	// retrieval-only control arm. The Phase-80 fail-close is REPLACED by a real
+	// drive leg (runRAGCell) that — out-of-band, before the timed span — builds the
+	// embedding index and spawns the standalone cmd/helix-bench-rag MCP server (via
+	// subprocess.StartRAGServer, NOT the Helix daemon), drives the agent over its
+	// stdio, runs the same verify/RunTests contract, and emits a schema-valid
+	// result.v2 row carrying the selected embedder_id under the SAME
+	// runners.DefaultContract model snapshot + budget as your_agent_full. Detection
+	// stays BY MODE NAME (not a MODE.md frontmatter key — the resolver is strict
+	// two-key with KnownFields(true)). The path layout (ResultPath/MergedTracePath)
+	// and the unconditional fairness gate above already ran.
+	if cfg.Mode == baselineRagMode {
+		// profileName is resolved above (the resolver enforces baseline_rag's two-key
+		// MODE.md) but is intentionally unused by the RAG leg: cmd/helix-bench-rag has
+		// no Helix profile surface — it serves a fixed four-tool set. Resolving it
+		// still validates the MODE.md frontmatter as a side effect.
+		_ = profileName
+		return runRAGCell(ctx, cfg, res)
 	}
 
 	// (2) Bench sandbox (D-07): ephemeral OS-temp scratch for HOME/repo/socket;

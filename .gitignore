@@ -240,12 +240,17 @@ vue-implementation/
 
 # Go
 /helix
+/helix-bench-rag
 /helix-eval
 /serena
 *.exe
 /bin/
 /api/proto/**/*.pb.go
 test/bench/baselines/local.txt
+
+# Bench runtime store artifacts left when a store-on cell test runs with
+# cwd=bench/runtime (cwd-relative .helix/semantic.duckdb); generated, never tracked.
+/bench/runtime/.helix/
 
 # Eval harness runtime artifacts
 /eval/reports/

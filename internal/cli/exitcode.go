@@ -48,28 +48,41 @@ var exitCodeByKind = map[serr.Kind]int{
 // values appearing as a "<kind>:" token, returning the recognized kind. It
 // handles both wire forms: the bare "kind: message" rendered by
 // serr.Error.Error(), and the runVerb-wrapped "calling <tool>: <kind>: <msg>"
-// form (verb.go:212). Because the wrapper prepends "calling <tool>:", the
-// scan looks for the INNERMOST (rightmost) recognized "<kind>:" token so the
-// real kind wins over any incidental colon-prefixed text earlier in the line.
+// form (verb.go:214). The serr wire form is "<kind>: <message> [(detail)]"
+// (errors.go:51-56), and the ONLY prefix runVerb ever prepends is the non-kind
+// "calling <tool>: " wrapper. The TRUE kind is therefore always the LEFTMOST
+// recognized "<kind>:" token; selecting it lets the genuine leading kind win
+// over any incidental "<kind>:"-looking token that appears later in the message
+// BODY or detail.
 //
-// Security (T-92-02 kind-spoofing guard): a kind matches ONLY when it is one of
-// the 9 enum values followed immediately by a colon — an arbitrary "word:"
-// prefix such as "malformed:" never matches.
+// Security (T-92-02 kind-spoofing guard): a message body that quotes another
+// kind's token (e.g. `invalid_args: value must be one of ...; got
+// "permission_denied:x"`) is exactly the spoof vector. Leftmost-wins makes the
+// genuine leading kind win over the spoofed body token; the prior rightmost
+// scan let the body win. A kind also matches ONLY when it is one of the 9 enum
+// values followed immediately by a colon — an arbitrary "word:" prefix such as
+// "malformed:" never matches.
 func parseKind(msg string) (serr.Kind, bool) {
 	bestIdx := -1
 	var best serr.Kind
 	for _, k := range knownKinds {
 		tok := string(k) + ":"
-		// Find the rightmost occurrence so the innermost wrapped kind wins.
-		if i := strings.LastIndex(msg, tok); i > bestIdx {
-			// Guard against a longer kind name ending in a shorter one: require
-			// the match to start at a word boundary (start of string or a
-			// non-identifier char before it) so "not_a_not_found:" doesn't
-			// false-match "not_found:".
-			if i == 0 || !isKindNameByte(msg[i-1]) {
-				bestIdx = i
-				best = k
-			}
+		i := strings.Index(msg, tok)
+		if i < 0 {
+			continue
+		}
+		// Guard against a longer kind name ending in a shorter one: require the
+		// match to start at a word boundary (start of string or a non-identifier
+		// char before it) so "not_a_not_found:" doesn't false-match "not_found:".
+		if i != 0 && isKindNameByte(msg[i-1]) {
+			continue
+		}
+		// Select the leftmost recognized kind token: the genuine kind always
+		// leads (after the optional non-kind "calling <tool>: " wrapper, which
+		// contains no kind token), so an earlier match is the real kind.
+		if bestIdx < 0 || i < bestIdx {
+			bestIdx = i
+			best = k
 		}
 	}
 	if bestIdx < 0 {

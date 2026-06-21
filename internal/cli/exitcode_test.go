@@ -22,6 +22,15 @@ func TestParseKind_WireForms(t *testing.T) {
 		{"some random error with no kind", "", false},
 		{"malformed: not a real kind", "", false},
 		{"", "", false},
+		// WR-01 (T-92-02 spoofing vector): a message whose BODY quotes another
+		// kind's "<kind>:" token must still resolve to the LEADING kind, not the
+		// spoofed body token. The genuine kind is leftmost-wins.
+		{`invalid_args: bad value "permission_denied: x"`, serr.InvalidArgs, true},
+		{"invalid_args: value must be one of ...; got \"permission_denied:x\"", serr.InvalidArgs, true},
+		{"timeout: dial failed: not_found: host", serr.Timeout, true},
+		// The "calling <tool>: " wrapper carries no kind token, so the genuine
+		// leading kind after it is still seen through.
+		{"calling go_to_definition: permission_denied: blocked; got \"not_found: y\"", serr.PermissionDenied, true},
 	}
 	for _, tc := range cases {
 		got, ok := parseKind(tc.msg)

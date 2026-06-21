@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,6 +213,3 @@ func TestRace_PerSocketIndependent(t *testing.T) {
 func TestLockfilePath(t *testing.T) {
 	assert.Equal(t, "/tmp/helix-x/daemon.sock.lock", lockfilePath("/tmp/helix-x/daemon.sock"))
 }
-
-// guard against unused import when iterating
-var _ = time.Second

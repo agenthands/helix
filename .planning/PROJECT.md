@@ -287,4 +287,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-21 — v2.0 CLI-First (MCP Surface Retirement) milestone started; requirements + roadmap being defined (phases continue from 90). v1.12 Bench Stack & Tool Evaluation complete at 15/15 phases (formal `/gsd-complete-milestone` archival pending).*
+*Last updated: 2026-06-21 — v2.0 CLI-First (MCP Surface Retirement) in progress: phases 90–92 complete (one-shot dial spine + race-free warm reuse; code-generated 50-verb surface + `tools/call` profile/mode enforcement; terse `relpath:line:col<TAB>payload` output renderer with the contract oracle re-targeted to CLI stdout goldens — the output shape is now FROZEN for SKILL.md). Next: Phase 93 (SKILL.md + nudge repurpose + `helix setup` flip). v1.12 Bench Stack & Tool Evaluation complete at 15/15 phases (formal `/gsd-complete-milestone` archival pending).*

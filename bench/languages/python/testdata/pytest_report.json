@@ -1,0 +1,58 @@
+{
+  "created": 1518371686.7981803,
+  "duration": 0.1235666275024414,
+  "exitcode": 1,
+  "root": "/tmp/pyrep",
+  "environment": {
+    "Python": "3.13.5",
+    "Platform": "Linux"
+  },
+  "summary": {
+    "passed": 1,
+    "failed": 1,
+    "skipped": 1,
+    "total": 3,
+    "collected": 3
+  },
+  "collectors": [],
+  "tests": [
+    {
+      "nodeid": "test_widget.py::test_addition",
+      "lineno": 4,
+      "outcome": "passed",
+      "keywords": ["test_addition", "test_widget.py"],
+      "setup": {"duration": 0.0001, "outcome": "passed"},
+      "call": {"duration": 0.0002, "outcome": "passed"},
+      "teardown": {"duration": 0.0001, "outcome": "passed"}
+    },
+    {
+      "nodeid": "test_widget.py::test_subtraction",
+      "lineno": 8,
+      "outcome": "failed",
+      "keywords": ["test_subtraction", "test_widget.py"],
+      "setup": {"duration": 0.0001, "outcome": "passed"},
+      "call": {
+        "duration": 0.0003,
+        "outcome": "failed",
+        "crash": {
+          "path": "/tmp/pyrep/test_widget.py",
+          "lineno": 9,
+          "message": "assert 1 == 2"
+        },
+        "longrepr": "def test_subtraction():\n>       assert subtract(3, 1) == 2\nE       assert 1 == 2"
+      },
+      "teardown": {"duration": 0.0001, "outcome": "passed"}
+    },
+    {
+      "nodeid": "test_widget.py::test_division",
+      "lineno": 13,
+      "outcome": "skipped",
+      "keywords": ["test_division", "test_widget.py"],
+      "setup": {
+        "duration": 0.0001,
+        "outcome": "skipped",
+        "longrepr": "('/tmp/pyrep/test_widget.py', 13, 'Skipped: not ready')"
+      }
+    }
+  ]
+}

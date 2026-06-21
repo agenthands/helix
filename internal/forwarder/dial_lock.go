@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gofrs/flock"
 )
@@ -78,12 +79,19 @@ func startupGuard(ctx context.Context, socketPath string, s seams) error {
 
 	locker := s.newLocker(lockfilePath(socketPath))
 
-	locked, _ := locker.TryLock()
+	// WR-04: distinguish a genuine TryLock error (lockfile dir gone, EACCES, I/O
+	// error from gofrs/flock) from ordinary contention. A real error must be
+	// surfaced, not silently reclassified as "lock held by a peer" — otherwise the
+	// caller falls into a blocking Lock() (or hangs) and the root cause is lost.
+	locked, err := locker.TryLock()
+	if err != nil {
+		return fmt.Errorf("startup lock tryLock: %w", err)
+	}
 	if !locked {
 		// A peer holds the startup lock and is spawning. Block until it releases
 		// (its daemon's socket is up by then), then reuse via the post-lock probe.
 		if err := locker.Lock(); err != nil {
-			return err
+			return fmt.Errorf("startup lock: %w", err)
 		}
 	}
 	defer func() { _ = locker.Unlock() }()

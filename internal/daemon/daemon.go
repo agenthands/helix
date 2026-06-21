@@ -729,7 +729,13 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 	initialAllowedTools := resolveAllowedToolsForMode(profileStore, activeProfile, initialMode)
 	sessionProvider := &daemonSessionProvider{
 		session: &helixMCP.SessionInfo{
-			Profile:      cfg.Profile,
+			// IN-03: report the RESOLVED profile, not the raw cfg.Profile.
+			// ResolveProfile falls back to the "full" default when cfg.Profile
+			// does not resolve, so AllowedTools/initialMode derive from
+			// activeProfile; reporting cfg.Profile here would name a profile that
+			// does not match the basis of any PermissionDenied refusal or the
+			// telemetry profile label, misleading an operator debugging a refusal.
+			Profile:      activeProfile.Name,
 			Mode:         initialMode,
 			AllowedTools: initialAllowedTools,
 		},

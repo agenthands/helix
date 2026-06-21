@@ -38,11 +38,11 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Terse Output Contract (OUT-*) — load-bearing
 
-- [ ] **OUT-01**: Default output is terse `relpath:line:col<TAB>payload` — workspace-relative paths, 1-based line/col (converted from LSP 0-based), no ANSI when non-tty, honoring `NO_COLOR`. _Acceptance:_ piped output contains zero ANSI bytes; coordinates are 1-based; per-verb golden matches.
-- [ ] **OUT-02**: Output ordering is deterministic (sorted + deduped) across repeated runs. _Acceptance:_ the same query yields byte-identical output across N repeated runs.
+- [x] **OUT-01**: Default output is terse `relpath:line:col<TAB>payload` — workspace-relative paths, 1-based line/col (converted from LSP 0-based), no ANSI when non-tty, honoring `NO_COLOR`. _Acceptance:_ piped output contains zero ANSI bytes; coordinates are 1-based; per-verb golden matches.
+- [x] **OUT-02**: Output ordering is deterministic (sorted + deduped) across repeated runs. _Acceptance:_ the same query yields byte-identical output across N repeated runs.
 - [ ] **OUT-03**: Each verb's output is self-contained enough to act on in one round-trip (navigation verbs print locus + enclosing symbol + one snippet line; outline verbs print shape only). _Acceptance:_ per-verb goldens; behavioral-oracle check that nav verbs do not force a follow-up `Read`.
 - [ ] **OUT-04**: A read-verb's output is a copy-paste-able input to an edit/nav verb (stable symbol locator handle). _Acceptance:_ `helix find-symbol` output feeds `helix replace-symbol-body` / `get-callers` verbatim.
-- [ ] **OUT-05**: The v1.5 typed-error taxonomy is preserved on the CLI — each error kind surfaces as a stable stderr prefix plus a per-kind non-zero exit code. _Acceptance:_ each documented error kind maps to a stable prefix + exit code the agent can branch on.
+- [x] **OUT-05**: The v1.5 typed-error taxonomy is preserved on the CLI — each error kind surfaces as a stable stderr prefix plus a per-kind non-zero exit code. _Acceptance:_ each documented error kind maps to a stable prefix + exit code the agent can branch on.
 - [ ] **OUT-06**: Global persistent `--json` (opt-in compact JSON lines) and `--color` (auto/always/never) flags; terse text is the default. _Acceptance:_ `--json` emits compact JSON; omitting it yields terse text; `--color=never` ≡ piped behavior.
 - [ ] **OUT-07**: The path-format best practice (workspace-relative + `--abs` escape hatch) is empirically validated via the LLM behavioral oracle and the chosen anchor is documented in `SKILL.md`. _Acceptance:_ the behavioral oracle confirms agents resolve `helix`-emitted paths without error; `--abs` produces absolute paths.
 
@@ -112,11 +112,11 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | VERB-02 | Phase 91 | Complete |
 | VERB-03 | Phase 91 | Complete |
 | VERB-04 | Phase 91 | Complete |
-| OUT-01 | Phase 92 | Pending |
-| OUT-02 | Phase 92 | Pending |
+| OUT-01 | Phase 92 | Complete |
+| OUT-02 | Phase 92 | Complete |
 | OUT-03 | Phase 92 | Pending |
 | OUT-04 | Phase 92 | Pending |
-| OUT-05 | Phase 92 | Pending |
+| OUT-05 | Phase 92 | Complete |
 | OUT-06 | Phase 92 | Pending |
 | OUT-07 | Phase 92 | Pending |
 | SEC-01 | Phase 91 | Complete |

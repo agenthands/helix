@@ -230,36 +230,14 @@ func TestAblationStatusMarkerRemoved(t *testing.T) {
 	}
 }
 
-// TestBaselineRagFailClose asserts the D-02 fail-close: a RunCell for
-// cfg.Mode == "baseline_rag" short-circuits BEFORE any sandbox/daemon, returning a
-// nil error, res.Deferred == true, a DeferredReason naming Phase 83, and writing NO
-// result.v2.json on disk at res.ResultPath. The cell must return before touching the
-// helix binary, so a dummy HelixBin (never spawned) is sufficient.
-func TestBaselineRagFailClose(t *testing.T) {
-	outDir := t.TempDir()
-	cfg := CellConfig{
-		RunID:       "20060102T150405Z",
-		Benchmark:   "internal-toolbench",
-		Language:    "go",
-		Task:        "IT-go-patch-apply-1",
-		Mode:        "baseline_rag",
-		HelixBin:    "/bin/true", // never spawned — the cell fail-closes first
-		SeedDir:     filepath.Join(t.TempDir(), "unused-seed"),
-		OutDir:      outDir,
-		RunnersRoot: benchRunnersRootForTest(t),
-	}
-
-	res, err := RunCell(context.Background(), cfg)
-	require.NoError(t, err, "baseline_rag must fail-close with a nil error (a registered stub, not an infra failure)")
-	assert.True(t, res.Deferred, "baseline_rag must mark the cell Deferred")
-	assert.Contains(t, res.DeferredReason, "Phase 83", "DeferredReason must name Phase 83 (ABLATE-04)")
-
-	// No result.v2.json is written: the path is set for layout but the cell
-	// short-circuits before BuildResult/writeDurable.
-	require.NotEmpty(t, res.ResultPath, "ResultPath must be set for layout even on a deferred cell")
-	_, statErr := os.Stat(res.ResultPath)
-	assert.ErrorIs(t, statErr, os.ErrNotExist, "a deferred baseline_rag cell must write NO result.v2.json on disk")
-}
+// NOTE (Phase 83 Task 2): the former TestBaselineRagFailClose — which asserted the
+// Phase-80 fail-close (res.Deferred==true, "Phase 83" reason, NO row on disk) — is
+// REMOVED. baseline_rag is now a real retrieval-only arm that drives
+// cmd/helix-bench-rag and emits a schema-valid result.v2 row carrying embedder_id.
+// Its behavior is asserted by TestBaselineRagEmitsRow / TestBaselineRagSameContractBudget
+// in baseline_rag_test.go (HELIX_BIN-gated, since the cell spawns the server). The
+// generic deferred-outcome DISPATCH mechanism is still exercised below with a
+// synthetic injected run (it remains a supported third-outcome the matrix can carry).
 
 // TestDeferredOutcomeClassification asserts the matrix layer classifies a deferred
 // cell as a distinct third outcome: a CellOutcome for a deferred RunCell result is

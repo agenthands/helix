@@ -26,16 +26,26 @@ import (
 //   - exactly 1 additional REAL row (your_agent_no_semantic) that OMITS
 //     ablation_status (the Phase 81 deferral-marker removal — ABLATE-06 landed)
 //     and is NOT a delta operand (no ablation_deltas);
-//   - ZERO rows for baseline_rag — its cell is Deferred==true, Success==false, and
-//     no file exists at its ResultPath.
+//   - a REAL baseline_rag row (Phase 83): its cell is no longer Deferred — it
+//     drives cmd/helix-bench-rag and emits a schema-valid row carrying a non-empty
+//     embedder_id.
 //
-// It is hermetic (scripted agent, no model, no network) and SKIPs when no helix
-// binary is resolvable (mirrors TestDaemonTap).
+// It is hermetic (scripted agent, deterministic stub embedder, no model, no
+// network) and SKIPs when no helix / helix-bench-rag binary is resolvable.
 func TestFiveOfSixSmoke(t *testing.T) {
 	helixBin := resolveHelixBin()
 	if helixBin == "" {
 		t.Skip("helix binary not resolvable (set HELIX_BIN or 'go build ./cmd/helix'); skipping five-of-six smoke")
 	}
+	ragBin := resolveRAGServerBinForTest(t, helixBin)
+	if ragBin == "" {
+		t.Skip("helix-bench-rag binary not resolvable (build it next to helix or set HELIX_BENCH_RAG_BIN); skipping five-of-six smoke")
+	}
+	// Hermetic baseline_rag: point at the server binary and force the deterministic
+	// stub embedder + an isolated cache (no network, no real embedding API).
+	t.Setenv("HELIX_BENCH_RAG_BIN", ragBin)
+	t.Setenv("HELIX_RAG_FORCE_STUB", "1")
+	t.Setenv("HELIX_CACHE_DIR", t.TempDir())
 
 	const task = "IT-go-patch-apply-1"
 	seed := seedDirForTest(t)
@@ -76,12 +86,20 @@ func TestFiveOfSixSmoke(t *testing.T) {
 		ocByMode[oc.Cell.Mode] = oc
 	}
 
-	// baseline_rag: registered + fail-closed. Deferred, not a success, no row file.
+	// baseline_rag (Phase 83): a REAL retrieval-only arm. It is no longer Deferred —
+	// it drives cmd/helix-bench-rag and writes a schema-valid row carrying a
+	// non-empty embedder_id (the deterministic stub under HELIX_RAG_FORCE_STUB).
 	rag := ocByMode["baseline_rag"]
-	assert.True(t, rag.Deferred, "baseline_rag cell must be Deferred")
-	assert.False(t, rag.Success, "baseline_rag cell must NOT be a success")
-	_, statErr := os.Stat(rag.Result.ResultPath)
-	assert.ErrorIs(t, statErr, os.ErrNotExist, "baseline_rag must write NO result.v2.json")
+	assert.False(t, rag.Deferred, "baseline_rag is no longer deferred — it is a real arm")
+	require.FileExists(t, rag.Result.ResultPath, "baseline_rag must write a result.v2.json")
+	ragBytes, ragErr := os.ReadFile(rag.Result.ResultPath)
+	require.NoError(t, ragErr)
+	require.NoError(t, Validate(ragBytes), "the baseline_rag row must be schema-valid")
+	var ragDoc struct {
+		EmbedderID string `json:"embedder_id"`
+	}
+	require.NoError(t, json.Unmarshal(ragBytes, &ragDoc))
+	assert.NotEmpty(t, ragDoc.EmbedderID, "every baseline_rag row must record a non-empty embedder_id")
 
 	// Run the Plan-05 post-matrix delta pass over the outcomes (this is the unit
 	// the runBench wiring invokes — exercised here directly at the matrix tier).
@@ -128,12 +146,13 @@ func TestFiveOfSixSmoke(t *testing.T) {
 	assert.Nil(t, nsDoc.AblationDeltas,
 		"the no_semantic arm is NOT a delta operand and must not gain ablation_deltas")
 
-	// Exactly 4 real rows + 1 partial row = 5 rows on disk; baseline_rag = 0.
+	// All six modes now write a row: 4 real-with-deltas + 1 no_semantic + the real
+	// baseline_rag arm (Phase 83).
 	rowCount := 0
 	for _, m := range append(append([]string{}, realModes...), "your_agent_no_semantic", "baseline_rag") {
 		if _, err := os.Stat(ocByMode[m].Result.ResultPath); err == nil {
 			rowCount++
 		}
 	}
-	assert.Equal(t, 5, rowCount, "five-of-six: exactly 4 real-with-deltas + 1 no_semantic row; baseline_rag writes none")
+	assert.Equal(t, 6, rowCount, "six modes write rows: 4 real-with-deltas + 1 no_semantic + the real baseline_rag arm")
 }

@@ -81,14 +81,15 @@ func cloneArgs(repoURL, sha, destDir string) ([][]string, error) {
 	if destDir == "" || filepath.Clean(destDir) != destDir {
 		return nil, fmt.Errorf("aiderpolyglot: cloneArgs: unclean dest dir %q", destDir)
 	}
-	// The dest leaf must be a safe path segment (no traversal in the final
-	// component the adapter constructs).
+	// The dest leaf must be a safe path segment: no traversal token, no embedded
+	// separator, and no leading dot (".git", ".ssh"). A caller-supplied absolute
+	// temp dir (e.g. t.TempDir()) has a generated leaf that satisfies all three,
+	// so it is still permitted. We now PROPAGATE validatePathSegment's rejection
+	// rather than re-deriving a narrower predicate and swallowing most of it
+	// (WR-03): the previous form silently accepted a leading-dot leaf despite the
+	// validator rejecting it, so the guard did not enforce what its name claimed.
 	if err := validatePathSegment(filepath.Base(destDir), "clone dest"); err != nil {
-		// A caller-supplied absolute temp dir (e.g. t.TempDir()) has a generated
-		// leaf that is itself safe; only reject when the leaf is a traversal token.
-		if filepath.Base(destDir) == ".." || strings.Contains(filepath.Base(destDir), "/") {
-			return nil, err
-		}
+		return nil, err
 	}
 	return [][]string{
 		{"git", "clone", "--no-checkout", "--depth", "1", "--", repoURL, destDir},

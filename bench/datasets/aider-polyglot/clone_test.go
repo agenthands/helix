@@ -111,6 +111,22 @@ func TestCloneArgsFailClosed(t *testing.T) {
 	}
 }
 
+// TestCloneArgsRejectsHostileLeaf proves the dest-leaf guard fails closed on a
+// leading-dot leaf (".git", ".ssh") and on a "." / ".." traversal token, instead
+// of silently accepting them (WR-03). These dirs are clean per filepath.Clean
+// but must never be a clone destination leaf.
+func TestCloneArgsRejectsHostileLeaf(t *testing.T) {
+	base := t.TempDir()
+	for _, leaf := range []string{".git", ".ssh", ".", ".."} {
+		// filepath.Join cleans away a "." or ".." leaf, so build the dest dir
+		// string directly to exercise the leaf guard on the unclean form too.
+		dest := base + string(filepath.Separator) + leaf
+		if _, err := cloneArgs(RepoURL, PinnedSHA, dest); err == nil {
+			t.Fatalf("cloneArgs(dest leaf %q) = nil err, want rejection", leaf)
+		}
+	}
+}
+
 // TestClonePathUnderCache proves clonePath roots the clone under cacheDir() with
 // the aider-polyglot/<sha>/ sub-segment and is sha-validated.
 func TestClonePathUnderCache(t *testing.T) {

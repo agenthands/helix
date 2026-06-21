@@ -191,7 +191,20 @@ func (f *e2eFixture) mcpSearch(t *testing.T, ctx context.Context) string {
 // the `call` parent, so the oracle drives `helix <verb> --flag=...` directly (no
 // `call` prefix) against the root-attached verb surface.
 func (f *e2eFixture) runCLIVerb(ctx context.Context, args ...string) (string, error) {
+	return f.runCLIVerbInDir(ctx, "", args...)
+}
+
+// runCLIVerbInDir is runCLIVerb with an explicit subprocess working directory.
+// The behavioral chain (OUT-04) and self-contained-nav (OUT-03) oracles set
+// dir=workspace root because the Phase 92 terse renderer derives its
+// workspaceRoot from os.Getwd() (92-02 Open Q1 lock) to relativize loci and to
+// clamp the CLI-side snippet read. Running the subprocess from the workspace root
+// makes the emitted `relpath:line:col` resolve as the next verb's --path input
+// verbatim (no manual massaging), which is exactly the copy-paste contract under
+// test. dir="" preserves the inherited cwd (the existing dial oracle's behavior).
+func (f *e2eFixture) runCLIVerbInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, f.helixBin, args...)
+	cmd.Dir = dir
 	cmd.Env = []string{
 		"HELIX_SOCKET=" + f.socket,
 		"HOME=" + os.Getenv("HOME"),
@@ -593,4 +606,199 @@ func pollLifecycleDelta(t *testing.T, ctx context.Context, url string, endedBefo
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// --- Phase 92-03 behavioral oracle: nav locus feeds a downstream verb verbatim
+// (OUT-04) and nav output is self-contained with a snippet (OUT-03/SC#2). ---
+
+// chainSeedMain is a richer fixture than newE2EFixture's default: it carries a
+// top-level Helper function (a search-symbols / find-references target) whose
+// declaration line content is asserted as the self-contained nav snippet. It is
+// written over the fixture's main.go before activation so the chain operates on a
+// genuine cross-referenced symbol.
+const chainSeedMain = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, Go!")
+	Helper()
+}
+
+// Helper is a top-level function exercised by the behavioral chain oracle.
+func Helper() {
+	fmt.Println("HELPER_SNIPPET_TOKEN")
+}
+
+// UsingHelper creates a second reference so find-references returns > 1 locus.
+func UsingHelper() {
+	Helper()
+}
+`
+
+// seedChainFixture overwrites the fixture repo's main.go with chainSeedMain and a
+// minimal go.mod (so gopls treats it as a single-module workspace), then
+// re-activates the workspace over MCP so the daemon re-reads the seeded source.
+func (f *e2eFixture) seedChainFixture(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(f.repoDir, "main.go"), []byte(chainSeedMain), 0o600); err != nil {
+		t.Fatalf("seed chain main.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(f.repoDir, "go.mod"), []byte("module chainfixture\n\ngo 1.21\n"), 0o600); err != nil {
+		t.Fatalf("seed chain go.mod: %v", err)
+	}
+	f.mcpActivate(t, ctx)
+}
+
+// requireGoplsE2E skips the test when gopls is not on PATH (the chain endpoints
+// are LS-backed nav verbs). Mirrors test/harness.RequireGopls without importing
+// the harness into this package.
+func requireGoplsE2E(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("gopls"); err != nil {
+		t.Skip("gopls not installed, skipping LS-backed behavioral chain oracle")
+	}
+}
+
+// locusLineRe matches a terse "relpath:line:col" prefix at the start of a stdout
+// line (the frozen Phase 92 shape; the payload, if any, follows after a TAB). It
+// captures relpath, line, and column so the chain can feed them VERBATIM into the
+// downstream verb's flags.
+var locusLineRe = regexp.MustCompile(`(?m)^([^\s:]+):(\d+):(\d+)(?:\t|$)`)
+
+// parseFirstLocus returns the relpath, line, and column of the FIRST
+// `relpath:line:col` line in the given terse stdout, or ok=false if none is
+// present. No massaging is applied — the values are taken exactly as the upstream
+// verb emitted them, which is the copy-paste contract under test.
+func parseFirstLocus(stdout string) (relpath string, line, col int, ok bool) {
+	return parseFirstLocusMatching(stdout, "")
+}
+
+// parseFirstLocusMatching returns the first `relpath:line:col` line whose relpath
+// CONTAINS substr (use "" to match any). search-symbols / search-in-files may
+// also surface stdlib loci that sort ahead of the workspace symbol (e.g.
+// "../../usr/local/go/src/os/env.go" sorts before "main.go"); the chain selects
+// the WORKSPACE-LOCAL locus by substr so it feeds a real in-repo symbol to the
+// downstream verb. The selected relpath/line/col are still consumed VERBATIM —
+// the predicate only picks WHICH emitted locus, it never rewrites the values.
+func parseFirstLocusMatching(stdout, substr string) (relpath string, line, col int, ok bool) {
+	for _, m := range locusLineRe.FindAllStringSubmatch(stdout, -1) {
+		if substr != "" && !strings.Contains(m[1], substr) {
+			continue
+		}
+		l, err1 := strconv.Atoi(m[2])
+		c, err2 := strconv.Atoi(m[3])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		return m[1], l, c, true
+	}
+	return "", 0, 0, false
+}
+
+// TestCLI_E2E_Chain is the OUT-04 copy-paste chain oracle. It runs a nav/search
+// verb (`helix search-symbols --query=Helper`), parses ONE emitted
+// `relpath:line:col` locus from the terse stdout, and feeds that exact relpath +
+// line + column into a downstream verb (`helix find-references --path --line
+// --column`) WITHOUT any manual massaging. The downstream verb MUST exit 0 and
+// return a result — proving the emitted locus is directly consumable as the next
+// verb's input. Both subprocesses run with CWD=workspace root so the renderer's
+// os.Getwd()-derived workspaceRoot relativizes the loci consistently (92-02 Open
+// Q1 lock).
+func TestCLI_E2E_Chain(t *testing.T) {
+	requireGoplsE2E(t)
+	f := newE2EFixture(t, "chain")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	f.seedChainFixture(t, ctx)
+
+	// Upstream nav verb: search for the seeded symbol. Run from the workspace root
+	// so the emitted locus is a workspace-relative relpath the downstream verb can
+	// consume directly.
+	upstream, err := f.runCLIVerbInDir(ctx, f.repoDir, "search-symbols", "--query=Helper")
+	if err != nil {
+		t.Fatalf("upstream search-symbols failed: %v\noutput:\n%s", err, upstream)
+	}
+
+	// Select the WORKSPACE-LOCAL locus (search-symbols also surfaces stdlib hits
+	// that sort ahead of main.go). The relpath/line/col are still consumed
+	// verbatim; the predicate only picks which emitted locus to chain.
+	relpath, line, col, ok := parseFirstLocusMatching(upstream, "main.go")
+	if !ok {
+		t.Fatalf("upstream nav verb did not emit a parseable workspace-local relpath:line:col locus.\noutput:\n%s", upstream)
+	}
+	t.Logf("OUT-04 parsed upstream locus VERBATIM: relpath=%q line=%d col=%d", relpath, line, col)
+
+	// Downstream verb fed the upstream locus VERBATIM (no massaging). It must exit
+	// 0 and produce a result — the proof the emitted locus is copy-paste-able.
+	downstream, err := f.runCLIVerbInDir(ctx, f.repoDir,
+		"find-references",
+		"--path="+relpath,
+		"--line="+strconv.Itoa(line),
+		"--column="+strconv.Itoa(col),
+	)
+	if err != nil {
+		t.Fatalf("downstream find-references fed the upstream locus VERBATIM exited non-zero: %v\n"+
+			"locus: %s:%d:%d\noutput:\n%s", err, relpath, line, col, downstream)
+	}
+	if strings.TrimSpace(downstream) == "" {
+		t.Fatalf("downstream find-references returned no result for the chained locus %s:%d:%d "+
+			"(OUT-04 expects the locus to be a usable input)\noutput:\n%s", relpath, line, col, downstream)
+	}
+
+	t.Logf("OUT-04 chain proven: search-symbols -> %s:%d:%d -> find-references exit 0 with result:\n%s",
+		relpath, line, col, downstream)
+}
+
+// TestCLI_E2E_NavSelfContained is the OUT-03/SC#2 self-contained-nav oracle. It
+// runs a bare nav verb (`helix go-to-definition`) and asserts its stdout carries
+// BOTH the `relpath:line:col` locus AND a snippet (the source line content) in
+// the same output block — so an agent does NOT need a follow-up Read to see what
+// is at the locus. The seeded Helper declaration line is the snippet target; we
+// assert a token from that line ("Helper") appears alongside the locus.
+func TestCLI_E2E_NavSelfContained(t *testing.T) {
+	requireGoplsE2E(t)
+	f := newE2EFixture(t, "navself")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	f.seedChainFixture(t, ctx)
+
+	// go-to-definition on the Helper() call site (line 7, col 2 -> the call in
+	// main). 1-indexed flags per verbs_gen.go. Run from the workspace root.
+	out, err := f.runCLIVerbInDir(ctx, f.repoDir, "go-to-definition", "--path=main.go", "--line=7", "--column=2")
+	if err != nil {
+		t.Fatalf("go-to-definition failed: %v\noutput:\n%s", err, out)
+	}
+
+	relpath, line, col, ok := parseFirstLocus(out)
+	if !ok {
+		t.Fatalf("nav verb did not emit a relpath:line:col locus (OUT-03 requires a locus).\noutput:\n%s", out)
+	}
+
+	// The snippet must travel with the locus: assert a token from the seeded
+	// Helper declaration line appears in the SAME line as the locus (the renderer
+	// appends the source line after a TAB for bare nav loci — navToolsWithSnippet).
+	var locusLine string
+	for _, ln := range strings.Split(out, "\n") {
+		if strings.HasPrefix(ln, relpath+":") {
+			locusLine = ln
+			break
+		}
+	}
+	if locusLine == "" {
+		t.Fatalf("could not isolate the locus line for %s in nav output.\noutput:\n%s", relpath, out)
+	}
+	const snippetToken = "Helper"
+	if !strings.Contains(locusLine, snippetToken) {
+		t.Fatalf("nav locus line is NOT self-contained: missing snippet token %q on the locus line "+
+			"(OUT-03/SC#2 requires the source-line snippet so no follow-up Read is forced).\n"+
+			"locus line: %q\nfull output:\n%s", snippetToken, locusLine, out)
+	}
+
+	t.Logf("OUT-03 self-contained nav proven: %s:%d:%d carries snippet token %q on the same line: %q",
+		relpath, line, col, snippetToken, locusLine)
 }

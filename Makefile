@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk
+.PHONY: build clean proto test vet fmt docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
 
 BINARY=helix
 GO=go
@@ -336,3 +336,25 @@ verify-no-docker-sdk:
 		echo "::error::SC#1 violation: github.com/docker/docker present in go.mod"; \
 		exit 1; \
 	fi
+
+# verify-verified-md: HARD-FAIL SC#3 doc gate for the multi-oracle completion
+# gate (VERIFIED-03). Asserts bench/evaluators/VERIFIED.md exists and carries
+# every required `## ` section header documenting the gate contract (Oracles,
+# Threshold, Abstain, Tokenizer, EditSimilarity, Proof). Exits NON-ZERO when the
+# file is missing or any required header is absent — keeping the documented
+# contract honest (T-86-02-03). Build gate — NO continue-on-error. The header
+# match is anchored to `^## <name>$` so only true section headers count, not
+# prose mentions of the same word elsewhere in the doc.
+verify-verified-md:
+	@f=bench/evaluators/VERIFIED.md; \
+	if [ ! -f "$$f" ]; then \
+		echo "::error::SC#3 violation: $$f is missing"; \
+		exit 1; \
+	fi; \
+	for h in Oracles Threshold Abstain Tokenizer EditSimilarity Proof; do \
+		if ! grep -Eq "^## $$h$$" "$$f"; then \
+			echo "::error::SC#3 violation: $$f is missing required section '## $$h'"; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "verify-verified-md: all required VERIFIED.md sections present"

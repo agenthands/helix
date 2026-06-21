@@ -81,21 +81,35 @@ func TestReportParse(t *testing.T) {
 	})
 
 	t.Run("garbage body errors, never panics", func(t *testing.T) {
-		cases := []string{
+		// Bodies malformed for BOTH parsers: empty, truncated, non-JSON, and a
+		// type-mismatched scalar that fails whichever struct/map it lands in.
+		bothBad := []string{
 			"",
 			"{",
 			"not json at all",
 			`{"total_instances": "this should be a number"}`,
-			`{"sympy__sympy-20590": {"resolved": "not a bool"}}`,
 		}
-		for _, c := range cases {
-			if _, err := ParseRunReport([]byte(c)); err == nil && c != "" {
-				// empty run-report "" -> error; the others -> error too.
+		for _, c := range bothBad {
+			if _, err := ParseRunReport([]byte(c)); err == nil {
 				t.Errorf("ParseRunReport(%q): want error, got nil", c)
 			}
 			if _, err := ParseInstanceReport([]byte(c)); err == nil {
 				t.Errorf("ParseInstanceReport(%q): want error, got nil", c)
 			}
+		}
+
+		// A literal JSON null is not a valid report for either parser.
+		if _, err := ParseInstanceReport([]byte("null")); err == nil {
+			t.Error("ParseInstanceReport(null): want error, got nil")
+		}
+
+		// A non-bool `resolved` is garbage ONLY for the instance-report shape (it
+		// maps onto InstanceEval.Resolved). For the run-report shape the whole
+		// instance-keyed object is an unknown key and is tolerated — proving the
+		// two parsers are strict against THEIR OWN contract, not a shared one.
+		instanceOnlyBad := `{"sympy__sympy-20590": {"resolved": "not a bool"}}`
+		if _, err := ParseInstanceReport([]byte(instanceOnlyBad)); err == nil {
+			t.Errorf("ParseInstanceReport(%q): want error (non-bool resolved), got nil", instanceOnlyBad)
 		}
 	})
 

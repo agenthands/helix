@@ -145,14 +145,14 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 
 | REQ-ID | Phase | Plan(s) | Status |
 |---|---|---|---|
-| BENCH-01 | Phase 75 | TBD | Pending |
-| BENCH-02 | Phase 75 | TBD | Pending |
+| BENCH-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
+| BENCH-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
 | BENCH-03 | Phase 75 (plan 03) | 479e5c14 | Complete |
 | BENCH-04 | Phase 77 (plans 01-03) | 77-03 | Complete |
 | BENCH-05 | Phase 77 (plan 05) | 9aa1fa49 | Complete |
-| BENCH-06 | Phase 75 | TBD | Pending |
-| FAIR-01 | Phase 75 | TBD | Pending |
-| FAIR-02 | Phase 75 | TBD | Pending |
+| BENCH-06 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
+| FAIR-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
+| FAIR-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
 | FAIR-03 | Phase 75 plan 03 = schema substrate landed (479e5c14); variance gate Phase 82, warning Phase 89 | 479e5c14 (substrate) | Substrate done; full REQ pending Phase 82/89 |
 | TOOLBENCH-01 | Phase 78 (plans 02-05) | 78-05 | Complete |
 | TOOLBENCH-02 | Phase 78 (plans 01-05) | 78-05 | Complete |
@@ -164,14 +164,14 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | TOOLBENCH-08 | Phase 85 | 85-04 | Complete |
 | TOOLBENCH-09 | Phase 85 | 85-04 | Complete |
 | TOOLBENCH-10 | Phase 78 (plan 01) | 78-05 | Complete |
-| ABLATE-01 | Phase 80 | TBD | Pending |
+| ABLATE-01 | Phase 80 | (see phase SUMMARY) | Complete — verified (Phase 80, VERIFICATION passed) |
 | ABLATE-02 | Phase 76 | 76-02 | Complete |
-| ABLATE-03 | Phase 80 | TBD | Pending |
+| ABLATE-03 | Phase 80 | (see phase SUMMARY) | Complete — verified (Phase 80, VERIFICATION passed) |
 | ABLATE-04 | Phase 83 | 83-01, 83-02, 83-03 | Complete — standalone cmd/helix-bench-rag 4-tool MCP server (no kernel/semantic/mcp import, dual static+transitive gate); chromem-go per-corpus index cache; baseline_rag real drive leg reusing DefaultContract, out-of-band index (budget-excluded), embedder_id on every row |
-| ABLATE-05 | Phase 76 | TBD | Pending |
+| ABLATE-05 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
 | ABLATE-06 | Phase 81 | 81-04, 81-05 | Complete |
-| ABLATE-07 | Phase 76 | TBD | Pending |
-| ABLATE-08 | Phase 76 | TBD | Pending |
+| ABLATE-07 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
+| ABLATE-08 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
 | METRIC-01 | Phase 79 | 79-01 | Complete |
 | METRIC-02 | Phase 79 | 79-02 | Complete |
 | METRIC-03 | Phase 79 | 79-03 | Complete |
@@ -185,7 +185,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | STATS-02 | Phase 82 | 82-02, 82-06 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, ordering guard, D-09 degenerate matrix); CIs on every leaderboard row |
 | STATS-03 | Phase 82 | 82-03, 82-06 | Complete — HumanEval unbiased c-term pass@k (0.91667 anchor, anti-naive + lgamma-agreement), pass@1/pass@k columns |
 | STATS-04 | Phase 82 | 82-06 | Complete — BCa CI-overlap gate renders warning + suppresses X>Y for overlapping neighbors |
-| COST-01 | Phase 75 | TBD | Pending |
+| COST-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
 | COST-02 | Phase 82 | 82-04 | Complete — cost_per_solved_task golden (3.555) + model_id join + freshness gate fail-closed |
 | COST-03 | Phase 82 | 82-06, 82-07 | Complete — cost_quality.md renders cost-per-solved per mode×benchmark with BCa CIs + FAIR-03 CV>0.05 variance warning |
 | ADAPTER-AIDER-01 | Phase 85 | 85-07 | Complete — dataset-loader-only adapter landed (bench/datasets/aider-polyglot): pinned-sha `--depth 1` clone of Aider-AI/polyglot-benchmark @ 7e0611e7, `.meta/config.json` files.solution/test/example mapping, 2-attempt + stderr-reprompt protocol (tries=2/180s) over aider's native per-language commands. Proven hermetically over a committed fixture set; live clone verified once (HEAD==pin, 225 tasks/6 tracks). SC#3 non-hermetic flagging via the 85-02 `--network=none` seam. SC#1 full live run + per-language sanity comparison recorded as toolchain/network-gated. |
@@ -203,8 +203,8 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | REPORT-03 | Phase 89 | 89-01 | Complete — ablations.md 5 delta tables (full vs no_lsp/no_semantic/no_structured_edit/baseline_plain/baseline_rag) with BCa CI-overlap (full vs no_semantic computed aggregate-time); cost_quality.md ASCII scatter (cost vs verified_correctness) + cost-table valid_until citation |
 | REPORT-04 | Phase 89 | 89-01 | Complete — per-language reporter slicing (n/a rows) + the cost_quality scatter |
 | REPORT-05 | Phase 89 | 89-03 | Complete — `helix-bench report --run-id` (isValidRunID + --out `..`-guard, no traversal) regenerates all 4 reports BYTE-IDENTICALLY via a shared zero-RNG renderAll; TestReportByteReproducible (double-render diff-empty) is the hermetic proof |
-| INFRA-01 | Phase 75 | TBD | Pending |
-| INFRA-02 | Phase 75 | TBD | Pending |
-| INFRA-03 | Phase 75 | TBD | Pending |
+| INFRA-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
+| INFRA-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
+| INFRA-03 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
 | INFRA-04 | Phase 89 | 89-04 | Complete — `.github/workflows/bench.yml` CI cost policy: PR `make bench-quick` (hard 5-min cap, no LLM secret) + nightly/maintainer-gated full `make bench`; least-privilege perms; hermetic YAML-parse test (live CI run inspection-gated); `## CI Cost Policy` in bench/BENCH.md |
 | INFRA-05 | Phase 89 | 89-02 | Complete — contamination canary: production InjectPrompt caller (every-Kth-task FNV selector, Sentinel via canary.InjectPrompt) + aggregate-time `cleanRows` EXCLUSION of contaminated rows from ALL headline reduces (pass@1, verified_correctness, ablations, per_language; fail-safe, never silently counted) + leaderboard footnote; CanaryPassRate measures all rows; discriminating exclusion test proven by revert-and-fail |

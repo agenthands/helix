@@ -1,0 +1,12 @@
+{
+  "repo": "sympy/sympy",
+  "instance_id": "sympy__sympy-20590",
+  "base_commit": "cffd4e0f86fefd4802349a9f9b19ed70934ea354",
+  "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+  "version": "1.7",
+  "patch": "diff --git a/sympy/core/sympify.py b/sympy/core/sympify.py\n@@\n-old\n+new\n",
+  "test_patch": "diff --git a/sympy/core/tests/test_sympify.py b/sympy/core/tests/test_sympify.py\n@@\n+def test_sympify_rational():\n+    pass\n",
+  "problem_statement": "Symbol instances have __dict__ since 1.7",
+  "FAIL_TO_PASS": "[\"test_sympify_rational\", \"test_sympify_negative\"]",
+  "PASS_TO_PASS": "[\"test_core_basic\", \"test_core_existing\"]"
+}

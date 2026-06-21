@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -284,4 +286,68 @@ func splitNonEmpty(s string) []string {
 		out = append(out, l)
 	}
 	return out
+}
+
+// --- Task 2: flag wiring + kind-preserving error ---
+
+// TestRoot_PersistentColorAbsFlags asserts the root command exposes persistent
+// --color and --abs flags, and --json remains resolvable. (OUT-06/07)
+func TestRoot_PersistentColorAbsFlags(t *testing.T) {
+	root := NewRootCommand()
+	if root.PersistentFlags().Lookup("color") == nil {
+		t.Errorf("root missing persistent --color flag")
+	}
+	if root.PersistentFlags().Lookup("abs") == nil {
+		t.Errorf("root missing persistent --abs flag")
+	}
+	if root.PersistentFlags().Lookup("json") == nil {
+		t.Errorf("--json must be a persistent flag verbs inherit")
+	}
+}
+
+// TestVerb_InheritsPersistentFlags asserts a verb subcommand inherits
+// --color/--abs/--json from the root via PersistentFlags (resolvable on the
+// verb's inherited flag set), not redefined per verb.
+func TestVerb_InheritsPersistentFlags(t *testing.T) {
+	sub, _ := findRootVerb(t, "go-to-definition")
+	for _, name := range []string{"color", "abs", "json"} {
+		if sub.InheritedFlags().Lookup(name) == nil {
+			t.Errorf("verb does not inherit --%s from root", name)
+		}
+		// Must NOT be redefined as a local verb flag (would shadow / panic).
+		if sub.Flags().Lookup(name) != nil && sub.LocalFlags().Lookup(name) != nil {
+			t.Errorf("--%s appears as a local verb flag (should be inherited only)", name)
+		}
+	}
+}
+
+// TestRunVerb_KindPreservingError asserts runVerb on an IsError result returns
+// an error whose string carries the typed kind (parseKind succeeds), NOT the
+// generic "tool X reported an error" wrap. (OUT-05, replaces verb.go:216-218)
+func TestRunVerb_KindPreservingError(t *testing.T) {
+	restore := callToolFn
+	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			IsError: true,
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "permission_denied: workspace not activated"}},
+		}, nil
+	}
+	defer func() { callToolFn = restore }()
+
+	cmd := NewRootCommand()
+	cmd.SetArgs([]string{"go-to-definition", "--path=x.go", "--line=1", "--column=1"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected an error for IsError result, got nil")
+	}
+	if strings.Contains(err.Error(), "reported an error") {
+		t.Fatalf("error used the generic kind-dropping wrap: %q", err.Error())
+	}
+	kind, ok := parseKind(err.Error())
+	if !ok {
+		t.Fatalf("parseKind failed on runVerb error %q — typed kind was dropped", err.Error())
+	}
+	if exitCodeForKind(kind) != 5 {
+		t.Errorf("permission_denied error maps to exit %d, want 5", exitCodeForKind(kind))
+	}
 }

@@ -211,3 +211,15 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestReservedFlags_ColorAbs is the Phase 92-02 denylist gate: --color and
+// --abs are persistent root flags, so a generated verb flag must never shadow
+// them. They must be present in reservedRootFlags.
+func TestReservedFlags_ColorAbs(t *testing.T) {
+	if !reservedRootFlags["color"] {
+		t.Errorf("reservedRootFlags missing \"color\" — a verb flag could shadow the persistent --color")
+	}
+	if !reservedRootFlags["abs"] {
+		t.Errorf("reservedRootFlags missing \"abs\" — a verb flag could shadow the persistent --abs")
+	}
+}

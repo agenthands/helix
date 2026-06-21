@@ -28,6 +28,15 @@ type Transcript struct {
 
 // WriteTranscript marshals a transcript to indented JSON and writes it to
 // testdata/transcripts/{scenario_id}.json (D-14).
+//
+// Transcripts are run ARTIFACTS, not golden fixtures: their Response field is
+// raw, non-deterministic live-LLM output. They are written to a persistent path
+// on purpose so the two-stage offline judge flow can read them back across two
+// separate `go test` invocations (`-tags=llm` to generate, then `-tags=llmjudge`
+// to score — see test/oracle/judge/judge_test.go and TranscriptDir). To keep the
+// working tree clean on every keyed run, this directory is .gitignored and the
+// previously-committed copies were removed from tracking (WR-93-04); the files
+// are local run artifacts, never golden references checked into git.
 func WriteTranscript(t *testing.T, tr *Transcript) {
 	t.Helper()
 

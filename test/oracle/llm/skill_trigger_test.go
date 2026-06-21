@@ -16,9 +16,35 @@ import (
 )
 
 // mentionsHelix reports whether the model's chosen command line invokes the
-// `helix` CLI (TEST-03 "shifted toward a helix verb").
+// `helix` CLI (TEST-03 "shifted toward a helix verb"). Per the "ONLY the single
+// command line" contract (prompt.go), it requires the response — after trimming
+// whitespace and stripping a leading fence/`$ `/`> ` shell-prompt decoration — to
+// START WITH "helix " rather than merely containing the substring anywhere. This
+// rejects prose mentions ("the helix tool would...") and only counts an actually
+// emitted helix command (WR-93-05).
 func mentionsHelix(response string) bool {
-	return strings.Contains(strings.ToLower(response), "helix ")
+	cmd := firstCommandLine(response)
+	return strings.HasPrefix(strings.ToLower(cmd), "helix ")
+}
+
+// firstCommandLine returns the first non-empty line of the response with common
+// command-line decoration stripped: surrounding code fences, a leading "$ " or
+// "> " shell prompt, and leading/trailing backticks/whitespace. It mirrors the
+// "ONLY the single command line" contract so the detectors evaluate the command
+// the model actually chose, not surrounding prose.
+func firstCommandLine(response string) string {
+	for _, raw := range strings.Split(response, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "```") {
+			continue
+		}
+		line = strings.Trim(line, "`")
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "$ ")
+		line = strings.TrimPrefix(line, "> ")
+		return strings.TrimSpace(line)
+	}
+	return ""
 }
 
 // mentionsGrepBaseline reports whether the response reaches for a grep/sed/cat

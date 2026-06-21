@@ -22,7 +22,7 @@ func TestCheckpointRoundTrip(t *testing.T) {
 	fixed := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
 	s := NewStore(dir, fixedClock(fixed))
 
-	key := cellKey("multiswebench", "go", "agent", "task-001", 0)
+	key := mustCellKey(t, "multiswebench", "go", "agent", "task-001", 0)
 	want := CellState{
 		CellKey:   key,
 		Status:    StatusDone,
@@ -61,7 +61,7 @@ func TestCheckpointNotFound(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir, nil) // nil clock -> time.Now default
 
-	got, ok, err := s.readCheckpoint(cellKey("multiswebench", "go", "agent", "missing", 0))
+	got, ok, err := s.readCheckpoint(mustCellKey(t, "multiswebench", "go", "agent", "missing", 0))
 	if err != nil {
 		t.Fatalf("readCheckpoint missing: unexpected error %v (ENOENT must not abort)", err)
 	}
@@ -80,7 +80,7 @@ func TestCheckpointAtomic(t *testing.T) {
 	fixed := time.Date(2026, 6, 21, 0, 0, 0, 0, time.UTC)
 	s := NewStore(dir, fixedClock(fixed))
 
-	key := cellKey("terminalbench", "python", "agent", "long-task", 3)
+	key := mustCellKey(t, "terminalbench", "python", "agent", "long-task", 3)
 	if err := s.writeCheckpoint(CellState{CellKey: key, Status: StatusRunning, UpdatedAt: fixed.Format(time.RFC3339)}); err != nil {
 		t.Fatalf("writeCheckpoint: %v", err)
 	}
@@ -116,14 +116,25 @@ func TestCheckpointAtomic(t *testing.T) {
 	}
 }
 
+// mustCellKey builds a cellKey for a coordinate the test KNOWS is valid, failing
+// the test if validation unexpectedly rejects it.
+func mustCellKey(t *testing.T, benchmark, lang, mode, task string, runIndex int) string {
+	t.Helper()
+	key, err := cellKey(benchmark, lang, mode, task, runIndex)
+	if err != nil {
+		t.Fatalf("cellKey(%q,%q,%q,%q,%d) unexpected error: %v", benchmark, lang, mode, task, runIndex, err)
+	}
+	return key
+}
+
 // TestCellKey: cellKey is a stable function of its five components and path-safe.
 func TestCellKey(t *testing.T) {
-	a := cellKey("multiswebench", "go", "agent", "task-001", 0)
-	b := cellKey("multiswebench", "go", "agent", "task-001", 0)
+	a := mustCellKey(t, "multiswebench", "go", "agent", "task-001", 0)
+	b := mustCellKey(t, "multiswebench", "go", "agent", "task-001", 0)
 	if a != b {
 		t.Errorf("cellKey not stable: %q != %q", a, b)
 	}
-	if c := cellKey("multiswebench", "go", "agent", "task-001", 1); c == a {
+	if c := mustCellKey(t, "multiswebench", "go", "agent", "task-001", 1); c == a {
 		t.Errorf("cellKey collision across run_index: %q == %q", c, a)
 	}
 	// Path-safe: the key must not contain OS path separators that would escape
@@ -133,5 +144,34 @@ func TestCellKey(t *testing.T) {
 	}
 	if strings.Contains(a, "..") {
 		t.Errorf("cellKey contains traversal sequence: %q", a)
+	}
+}
+
+// TestCellKeyRejectsMalformed (WR-03): a malformed coordinate (empty / separator-
+// bearing / traversal-bearing segment) returns an ERROR rather than panicking, so
+// the scheduler can degrade it to a per-cell failure instead of aborting the run.
+// The validation stays total — every bad shape is still refused.
+func TestCellKeyRejectsMalformed(t *testing.T) {
+	bad := []struct {
+		name                        string
+		benchmark, lang, mode, task string
+	}{
+		{"empty lang", "multiswebench", "", "agent", "task-001"},
+		{"slash in task", "multiswebench", "go", "agent", "dir/task"},
+		{"backslash in task", "multiswebench", "go", "agent", "dir\\task"},
+		{"traversal in lang", "multiswebench", "..", "agent", "task-001"},
+		{"embedded dotdot", "multiswebench", "go", "agent", "a..b"},
+		{"empty benchmark", "", "go", "agent", "task-001"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := cellKey(tc.benchmark, tc.lang, tc.mode, tc.task, 0)
+			if err == nil {
+				t.Fatalf("cellKey(%q,%q,%q,%q) = %q, nil; want an error (no panic, no key)", tc.benchmark, tc.lang, tc.mode, tc.task, key)
+			}
+			if key != "" {
+				t.Errorf("cellKey on a malformed coordinate must return an empty key, got %q", key)
+			}
+		})
 	}
 }

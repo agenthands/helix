@@ -2,6 +2,7 @@ package longwall
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 )
@@ -18,12 +19,23 @@ func threeCells() []CellID {
 	}
 }
 
+// keyOf returns a cell's key for a coordinate the test KNOWS is valid, panicking
+// if validation unexpectedly rejects it (a test-only convenience for the always-
+// valid threeCells coordinates).
+func keyOf(c CellID) string {
+	key, err := c.Key()
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
+
 // countingRunner records how many times each cellKey's runner is invoked and
 // reports every cell as a success (so the scheduler writes done).
 func countingRunner(counts map[string]int) func(CellID) Outcome {
 	return func(c CellID) Outcome {
-		counts[c.Key()]++
-		return Outcome{Success: true, ResultRef: "results/" + c.Key() + ".json"}
+		counts[keyOf(c)]++
+		return Outcome{Success: true, ResultRef: "results/" + keyOf(c) + ".json"}
 	}
 }
 
@@ -35,7 +47,7 @@ func TestResumeSkipsDone(t *testing.T) {
 	cells := threeCells()
 
 	// Pre-seed beta as done (as if a prior run completed it before a restart).
-	seeded := cells[1].Key()
+	seeded := keyOf(cells[1])
 	if err := s.store.writeCheckpoint(CellState{CellKey: seeded, Status: StatusDone, UpdatedAt: schedFixed.Format(time.RFC3339)}); err != nil {
 		t.Fatalf("seed done checkpoint: %v", err)
 	}
@@ -46,10 +58,10 @@ func TestResumeSkipsDone(t *testing.T) {
 	if counts[seeded] != 0 {
 		t.Errorf("seeded done cell ran %d times, want 0 (resume must skip)", counts[seeded])
 	}
-	if got := counts[cells[0].Key()]; got != 1 {
+	if got := counts[keyOf(cells[0])]; got != 1 {
 		t.Errorf("alpha ran %d times, want 1", got)
 	}
-	if got := counts[cells[2].Key()]; got != 1 {
+	if got := counts[keyOf(cells[2])]; got != 1 {
 		t.Errorf("gamma ran %d times, want 1", got)
 	}
 	if sum.Skipped != 1 {
@@ -68,7 +80,7 @@ func TestIdempotentReentry(t *testing.T) {
 	cells := threeCells()
 
 	// Seed alpha as a PARTIAL running checkpoint — never done.
-	partial := cells[0].Key()
+	partial := keyOf(cells[0])
 	if err := s.store.writeCheckpoint(CellState{CellKey: partial, Status: StatusRunning, UpdatedAt: schedFixed.Format(time.RFC3339)}); err != nil {
 		t.Fatalf("seed running checkpoint: %v", err)
 	}
@@ -113,8 +125,8 @@ func TestFullRestart(t *testing.T) {
 	counts1 := map[string]int{}
 	s1.Run(context.Background(), cells, countingRunner(counts1))
 	for _, c := range cells {
-		if counts1[c.Key()] != 1 {
-			t.Fatalf("first pass: %q ran %d times, want 1", c.Key(), counts1[c.Key()])
+		if counts1[keyOf(c)] != 1 {
+			t.Fatalf("first pass: %q ran %d times, want 1", keyOf(c), counts1[keyOf(c)])
 		}
 	}
 
@@ -138,7 +150,7 @@ func TestFullRestart(t *testing.T) {
 
 	// The persisted UpdatedAt is the FIRST pass's injected clock, not the 48h-later
 	// one — completed cells were never rewritten, proving no wall-clock dependence.
-	cs, ok, _ := s2.store.readCheckpoint(cells[0].Key())
+	cs, ok, _ := s2.store.readCheckpoint(keyOf(cells[0]))
 	if !ok {
 		t.Fatal("expected a done checkpoint to persist across restart")
 	}
@@ -152,10 +164,10 @@ func TestFailedCellReruns(t *testing.T) {
 	dir := t.TempDir()
 	s := NewScheduler(dir, fixedClock(schedFixed))
 	cells := threeCells()
-	failing := cells[1].Key()
+	failing := keyOf(cells[1])
 
 	runner := func(c CellID) Outcome {
-		if c.Key() == failing {
+		if keyOf(c) == failing {
 			return Outcome{Success: false}
 		}
 		return Outcome{Success: true, ResultRef: "ok"}
@@ -172,10 +184,62 @@ func TestFailedCellReruns(t *testing.T) {
 	// Second pass: the failed cell re-runs (a failure is never a skip).
 	counts := map[string]int{}
 	s.Run(context.Background(), cells, func(c CellID) Outcome {
-		counts[c.Key()]++
+		counts[keyOf(c)]++
 		return Outcome{Success: true, ResultRef: "ok"}
 	})
 	if counts[failing] != 1 {
 		t.Errorf("failed cell re-ran %d times on second pass, want 1", counts[failing])
+	}
+}
+
+// TestMalformedCellDegradesNotAborts (WR-03): a batch containing ONE cell with a
+// malformed coordinate (a Task with a path separator — as could come from a bad
+// dataset dir/row) must still process every OTHER (valid) cell. The bad cell is
+// counted Failed (re-runnable / surfaced), NOT a panic that tears down the whole
+// resilience-oriented long-wall pass.
+func TestMalformedCellDegradesNotAborts(t *testing.T) {
+	dir := t.TempDir()
+	s := NewScheduler(dir, fixedClock(schedFixed))
+
+	// A bad cell sandwiched between two valid ones — proving cells AFTER the bad
+	// one still run (an abort would skip them).
+	cells := []CellID{
+		{Benchmark: "terminalbench", Lang: "python", Mode: "agent", Task: "alpha", RunIndex: 0},
+		{Benchmark: "terminalbench", Lang: "python", Mode: "agent", Task: "bad/task", RunIndex: 0}, // malformed
+		{Benchmark: "terminalbench", Lang: "python", Mode: "agent", Task: "gamma", RunIndex: 0},
+	}
+
+	counts := map[string]int{}
+	runner := func(c CellID) Outcome {
+		// keyOf would panic on the malformed cell — but Scheduler.Run must NEVER
+		// invoke the runner for it (its Key() fails before run is called).
+		counts[keyOf(c)]++
+		return Outcome{Success: true, ResultRef: "ok"}
+	}
+
+	sum := s.Run(context.Background(), cells, runner)
+
+	// Both valid cells ran exactly once.
+	if got := counts[keyOf(cells[0])]; got != 1 {
+		t.Errorf("alpha (before the bad cell) ran %d times, want 1", got)
+	}
+	if got := counts[keyOf(cells[2])]; got != 1 {
+		t.Errorf("gamma (AFTER the bad cell) ran %d times, want 1 — a bad cell must not abort the rest", got)
+	}
+	// The malformed cell is counted Failed (re-runnable), not silently dropped.
+	if sum.Failed != 1 {
+		t.Errorf("Summary.Failed = %d, want 1 (the malformed cell)", sum.Failed)
+	}
+	if sum.Ran != 2 {
+		t.Errorf("Summary.Ran = %d, want 2 (the two valid cells)", sum.Ran)
+	}
+	// No checkpoint should have been written for the malformed cell (its Key()
+	// never resolved, so writeCheckpoint was never reached for it).
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("got %d checkpoint files, want 2 (only the valid cells)", len(entries))
 	}
 }

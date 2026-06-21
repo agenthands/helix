@@ -68,17 +68,29 @@ func validateSegment(name, seg string) error {
 }
 
 // cellKey builds a stable, path-safe key from the five matrix coordinates. It
-// panics on an invalid (separator-bearing / empty) segment because a malformed
-// coordinate is a programming error in the caller, never untrusted input that
-// should silently corrupt the on-disk layout.
-func cellKey(benchmark, lang, mode, task string, runIndex int) string {
-	for name, seg := range map[string]string{"benchmark": benchmark, "lang": lang, "mode": mode, "task": task} {
-		if err := validateSegment(name, seg); err != nil {
-			panic(err)
+// returns an error (rather than panicking) on an invalid (separator-bearing /
+// empty / traversal-bearing) segment. Although a malformed coordinate is usually
+// a caller programming error, Lang/Task are routinely sourced from dataset
+// DIRECTORY names and dataset-file contents (external data), so a single bad cell
+// must degrade to a per-cell failure at the driver boundary, NOT abort the entire
+// long-wall run (WR-03). The validation stays TOTAL — only the failure mode
+// changes from panic to a returned error.
+func cellKey(benchmark, lang, mode, task string, runIndex int) (string, error) {
+	// Validate in a FIXED order so the surfaced error is deterministic (map
+	// iteration order is randomized and would make the error message unstable).
+	segs := []struct{ name, seg string }{
+		{"benchmark", benchmark},
+		{"lang", lang},
+		{"mode", mode},
+		{"task", task},
+	}
+	for _, s := range segs {
+		if err := validateSegment(s.name, s.seg); err != nil {
+			return "", err
 		}
 	}
 	// "__" join keeps the key a single path-safe filename component.
-	return strings.Join([]string{benchmark, lang, mode, task, "r" + strconv.Itoa(runIndex)}, "__")
+	return strings.Join([]string{benchmark, lang, mode, task, "r" + strconv.Itoa(runIndex)}, "__"), nil
 }
 
 // path is the on-disk location of a cell's checkpoint file.

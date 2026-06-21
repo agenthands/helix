@@ -15,8 +15,12 @@ type CellID struct {
 	RunIndex  int
 }
 
-// Key returns the stable, path-safe checkpoint key for the cell.
-func (c CellID) Key() string {
+// Key returns the stable, path-safe checkpoint key for the cell, or an error if
+// any coordinate is malformed (empty / separator-bearing / traversal-bearing).
+// Because Lang/Task can be sourced from dataset dirs and file contents, a bad
+// coordinate is surfaced as an error and degraded to a per-cell failure by
+// Scheduler.Run — it never aborts the whole resilience-oriented run (WR-03).
+func (c CellID) Key() (string, error) {
 	return cellKey(c.Benchmark, c.Lang, c.Mode, c.Task, c.RunIndex)
 }
 
@@ -74,7 +78,15 @@ func (s *Scheduler) Run(ctx context.Context, cells []CellID, run func(CellID) Ou
 		if ctx.Err() != nil {
 			return sum
 		}
-		key := c.Key()
+		key, err := c.Key()
+		if err != nil {
+			// A malformed coordinate (e.g. a Lang/Task sourced from a bad dataset
+			// dir or row) degrades to a per-cell failure — it must NOT abort the
+			// whole long-wall pass for every OTHER cell (WR-03). The cell is
+			// re-runnable once the bad coordinate is corrected upstream.
+			sum.Failed++
+			continue
+		}
 
 		cs, ok, err := s.store.readCheckpoint(key)
 		if err == nil && ok && cs.Status == StatusDone {

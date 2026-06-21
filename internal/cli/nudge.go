@@ -94,9 +94,11 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 		stats.GrepReadCount++
 		_ = saveSessionStats(statsPath, stats)
 
-		// Check threshold (D-10).
-		if stats.GrepReadCount >= 5 && stats.HelixToolCount == 0 {
-			fmt.Println("Tip: Helix provides find_symbol and get_symbols_overview for code navigation. These give you precise symbol locations, references, and type hierarchies instead of text pattern matching with grep.")
+		// Per-call advisory steer toward the frozen helix verbs. Fail-open:
+		// only emit when we can positively justify the suggestion. Always exit 0
+		// regardless (advisory only, never blocks — T-93-04 / D-11).
+		if advisory, emit := steerMessage(toolName, input.ToolInput); emit {
+			emitAdvisory(advisory)
 		}
 		return nil
 	}
@@ -104,6 +106,91 @@ func runNudge(cmd *cobra.Command, _ []string) error {
 	// Other tool -- just save and return.
 	_ = saveSessionStats(statsPath, stats)
 	return nil
+}
+
+// preToolUseOutput is the Claude Code PreToolUse hook output envelope. Emitting
+// it on stdout with exit 0 surfaces AdditionalContext into the agent's context
+// as an ADVISORY (exit 2 would instead make Claude Code treat it as a blocking
+// error and ignore the JSON — so exit 0 is mandatory). See:
+// https://code.claude.com/docs/en/hooks
+type preToolUseOutput struct {
+	HookSpecificOutput struct {
+		HookEventName     string `json:"hookEventName"`
+		AdditionalContext string `json:"additionalContext"`
+	} `json:"hookSpecificOutput"`
+}
+
+// emitAdvisory marshals an advisory message into the PreToolUse output envelope
+// and prints it to stdout. It NEVER string-concatenates JSON (T-34-01 spirit)
+// and never returns an error — a marshal failure simply emits nothing (the
+// nudge stays silent rather than blocking).
+func emitAdvisory(text string) {
+	var out preToolUseOutput
+	out.HookSpecificOutput.HookEventName = "PreToolUse"
+	out.HookSpecificOutput.AdditionalContext = text
+
+	data, err := json.Marshal(out)
+	if err != nil {
+		return // stay silent; never block
+	}
+	fmt.Println(string(data))
+}
+
+// steerMessage maps a grep/read tool call to an advisory `helix <verb>`
+// substitution. Returns emit=false when no suggestion is warranted (fail-open).
+//
+// For the Grep/Read TOOLS it always suggests the symbol-aware equivalents. For
+// Bash it classifies the command's file operand via classifyBashTarget and only
+// suggests on a positively-identified CODE target; prose/log/config targets,
+// no-operand commands, and unparseable shapes stay silent.
+func steerMessage(toolName string, input map[string]any) (msg string, emit bool) {
+	switch toolName {
+	case "Grep":
+		return "Tip: for code, `helix search-symbols --query=<name>` finds symbol declarations and " +
+			"`helix search-in-files --pattern=<pat>` does content search — both terser and symbol-aware than grep.", true
+	case "Read":
+		return "Tip: `helix read-file --path=<file>` reads a file and `helix get-symbol-overview` shows a " +
+			"file's symbol outline — symbol-aware alternatives to a raw Read.", true
+	case "Bash":
+		cmd, _ := input["command"].(string)
+		isCode, ok := classifyBashTarget(cmd)
+		if !ok || !isCode {
+			return "", false // fail-open: non-code, no-operand, or unparseable → silent
+		}
+		return bashSteerMessage(cmd), true
+	}
+	return "", false
+}
+
+// bashSteerMessage builds the advisory text for a Bash command already known to
+// target a CODE file. It maps the command shape to the closest frozen helix
+// verb (93-PATTERNS.md steer table). The command string is read as DATA only.
+func bashSteerMessage(cmd string) string {
+	fields := strings.Fields(cmd)
+	tool := ""
+	if len(fields) > 0 {
+		tool = fields[0]
+	}
+
+	switch tool {
+	case "find":
+		return "Tip: `helix find-files --pattern='**/*.ext'` lists files structurally — an alternative to `find -name`."
+	case "cat":
+		return "Tip: `helix read-file --path=<file>` reads a file and `helix get-symbol-overview` shows its symbol " +
+			"outline — symbol-aware alternatives to `cat`."
+	case "sed":
+		if strings.Contains(cmd, "-i") {
+			return "Tip: `helix replace-in-file` / `helix replace-symbol-body` edit code structurally — safer than `sed -i`."
+		}
+		return "Tip: `helix read-file --path=<file>` reads a file (or a range) — an alternative to `sed -n`."
+	default: // grep / rg / ag / egrep / fgrep
+		if strings.Contains(cmd, "-r") || strings.Contains(cmd, "-R") {
+			return "Tip: `helix find-references` / `helix get-call-hierarchy` find callers semantically, and " +
+				"`helix search-in-files --pattern=<pat>` does code-aware content search — alternatives to recursive grep."
+		}
+		return "Tip: `helix search-symbols --query=<name>` finds symbol declarations and " +
+			"`helix search-in-files --pattern=<pat>` does content search — symbol-aware alternatives to grep."
+	}
 }
 
 // loadSessionStats reads session stats from the given path.

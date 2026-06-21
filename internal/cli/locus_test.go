@@ -46,6 +46,36 @@ func TestParseLocusLine_SearchForm(t *testing.T) {
 	}
 }
 
+// TestParseLocusLine_SearchFormNumericText confirms WR-03: a search match whose
+// matched source line is itself purely numeric (daemon form "relpath:L: 42") is
+// still parsed as grammar (b) with the number as the payload, NOT misclassified
+// as grammar (a) and dropped to passthrough. The two grammars are distinguished
+// structurally (colon-space vs adjacent ":C"), not by whether the text is numeric.
+func TestParseLocusLine_SearchFormNumericText(t *testing.T) {
+	got, ok := parseLocusLine("a.go:10: 42", "", false)
+	if !ok {
+		t.Fatalf("parseLocusLine returned ok=false, want true (all-digits search text)")
+	}
+	want := locus{relpath: "a.go", line: 10, col: 1, payload: "42"}
+	if got != want {
+		t.Fatalf("parseLocusLine = %+v, want %+v", got, want)
+	}
+}
+
+// TestParseLocusLine_ColonLCStillGrammarA confirms the structural discriminator
+// still routes a true "<path>:<L>:<C>" line (adjacent ":C", no space) to
+// grammar (a), not the search form.
+func TestParseLocusLine_ColonLCStillGrammarA(t *testing.T) {
+	got, ok := parseLocusLine("a.go:10:6", "", false)
+	if !ok {
+		t.Fatalf("parseLocusLine returned ok=false, want true")
+	}
+	want := locus{relpath: "a.go", line: 10, col: 6, payload: ""}
+	if got != want {
+		t.Fatalf("parseLocusLine = %+v, want %+v (grammar a)", got, want)
+	}
+}
+
 // TestParseLocusLine_Passthrough confirms non-matching lines return ok=false
 // (passthrough sentinel — never a panic; T-92-01 DoS mitigation).
 func TestParseLocusLine_Passthrough(t *testing.T) {

@@ -135,11 +135,17 @@ func parseSearchForm(s string) (searchHead, string, bool) {
 		// Must be followed by ":" for the line-colon boundary.
 		if j < len(s) && s[j] == ':' {
 			text := s[j+1:]
-			// Reject grammar (a): if the remainder is a pure numeric column
-			// token (optionally with a " — payload" already stripped), this is
-			// "<path>:<L>:<C>", not the search form. Defer to parseColonLC.
-			if isAllDigits(strings.TrimSpace(text)) {
-				return searchHead{}, "", false
+			// WR-03: distinguish the two grammars STRUCTURALLY, not by payload
+			// shape. Grammar (a) "<path>:<L>:<C>" has its column token directly
+			// adjacent to the line colon with NO space (":C"); grammar (b)
+			// "<path>:<L>: <text>" always has a colon-space (": "). Reject the
+			// no-space form here and defer it to parseColonLC. Gating on whether
+			// the text is all-digits (the prior approach) wrongly rejected a
+			// legitimate search match whose matched source line is itself just a
+			// number (e.g. "relpath:10: 42"), which then mis-routed to
+			// passthrough instead of the terse form.
+			if j+1 < len(s) && s[j+1] != ' ' {
+				return searchHead{}, "", false // ":C" with no space => grammar (a)
 			}
 			path := s[:i]
 			lnum, err := strconv.Atoi(s[i+1 : j])
@@ -151,21 +157,6 @@ func parseSearchForm(s string) (searchHead, string, bool) {
 		}
 	}
 	return searchHead{}, "", false
-}
-
-// isAllDigits reports whether s is non-empty and consists solely of ASCII
-// digits — used to tell a trailing numeric column (grammar a) apart from a
-// search-match text (grammar b).
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // parseColonLC matches the "<path>:<L>:<C>" grammar, parsing the two rightmost

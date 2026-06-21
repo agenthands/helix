@@ -31,21 +31,35 @@ func InstallProfileEnforcementMiddleware(server *mcpsdk.Server, getSession func(
 	server.AddReceivingMiddleware(ProfileEnforcementMiddleware(getSession, logger))
 }
 
-// alwaysAllowedCoreTools are protocol-substrate tools registered via
-// RegisterCoreTools (internal/mcp/server.go) OUTSIDE the profile/skill system.
-// They are never present in any profile's AllowedTools whitelist (which is
-// resolved from skills/ToolProviders only — see resolveAllowedToolsForMode in
-// internal/daemon/daemon.go), are not profile-gated agent verbs, and must remain
-// callable under every profile/mode: activate_project is the workspace-activation
-// entry point (LazyInit directs clients to "Call activate_project explicitly")
-// and ping/echo are diagnostics. Exempting them does NOT weaken SEC-01 — that
-// threat is destructive EDIT verbs invoked under read mode, and these tools are
-// non-destructive. Keep this set in sync with RegisterCoreTools and the
+// alwaysAllowedCoreTools are control-plane tools that must remain callable under
+// every profile/mode because they are NOT profile-gated agent verbs. They fall
+// into two groups, neither of which weakens SEC-01 (whose threat is destructive
+// EDIT verbs invoked under read mode):
+//
+//  1. Protocol-substrate tools registered via RegisterCoreTools
+//     (internal/mcp/server.go) OUTSIDE the profile/skill system, so they never
+//     appear in any profile's AllowedTools whitelist (resolved from
+//     skills/ToolProviders only — see resolveAllowedToolsForMode in
+//     internal/daemon/daemon.go): activate_project is the workspace-activation
+//     entry point (LazyInit directs clients to "Call activate_project
+//     explicitly") and ping/echo are non-destructive diagnostics.
+//
+//  2. Profile control-plane tools registered by profileSkill
+//     (internal/profile/skill.go): switch_mode and get_token_budget. switch_mode
+//     MUST be callable from any mode or an agent could never transition modes;
+//     it is safe because the transition is independently validated against the
+//     profile by validateModeTransition (a read-only profile still cannot escalate
+//     — exempting the AllowedTools check does NOT bypass that gate).
+//     get_token_budget is read-only introspection.
+//
+// Keep groups 1-2 in sync with RegisterCoreTools / profileSkill.Tools() and the
 // helix-cligen intersection that drops these same names from the verb catalog.
 var alwaysAllowedCoreTools = map[string]bool{
 	"ping":             true,
 	"echo":             true,
 	"activate_project": true,
+	"switch_mode":      true,
+	"get_token_budget": true,
 }
 
 // ProfileEnforcementMiddleware returns a middleware that gates every

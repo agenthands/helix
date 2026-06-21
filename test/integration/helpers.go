@@ -54,6 +54,21 @@ func listSessionTools(tb testing.TB, session *mcp.ClientSession) []string {
 	return names
 }
 
+// callToolExpectProtocolError invokes an MCP tool and asserts the call is refused
+// at the protocol level (a non-nil error from CallTool — e.g. the Phase 91 SEC-01
+// ProfileEnforcementMiddleware returning a typed PermissionDenied), rather than
+// returning a result with IsError. The handler is never reached. Returns the
+// error for further assertions (e.g. message contains "permission_denied").
+func callToolExpectProtocolError(tb testing.TB, session *mcp.ClientSession, name string, args map[string]any) error {
+	tb.Helper()
+	_, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      name,
+		Arguments: args,
+	})
+	require.Error(tb, err, "tool %s should be refused at the protocol level", name)
+	return err
+}
+
 // callToolExpectError invokes an MCP tool and asserts it returns an error result.
 func callToolExpectError(tb testing.TB, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	tb.Helper()

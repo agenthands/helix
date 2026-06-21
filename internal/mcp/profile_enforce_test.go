@@ -95,7 +95,7 @@ func TestProfileEnforce_CoreTools_AlwaysAllowed(t *testing.T) {
 	sess := sessionWith("ci-bot", "read", []string{"goto_definition"})
 	mw := mcp.ProfileEnforcementMiddleware(sessionGetter(sess), discardLoggerPE())
 
-	for _, tool := range []string{"activate_project", "ping", "echo"} {
+	for _, tool := range []string{"activate_project", "ping", "echo", "switch_mode", "get_token_budget"} {
 		calls := 0
 		inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
 			calls++

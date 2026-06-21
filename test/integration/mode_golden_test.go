@@ -105,11 +105,14 @@ func TestProfile_ExcludedToolNotInvocable(t *testing.T) {
 			t.Fatalf("precondition failed: ci-bot should not expose replace_symbol_body, got: %v", tools)
 		}
 	}
-	// Try to invoke it anyway; expect structured error (not panic, not success).
-	result := callToolExpectError(t, td.Session, "replace_symbol_body", map[string]any{
+	// Try to invoke it anyway; the Phase 91 SEC-01 ProfileEnforcementMiddleware
+	// refuses it at the tools/call boundary with a typed PermissionDenied error —
+	// stronger than the pre-enforcement IsError-result behavior, since the handler
+	// is never reached.
+	err := callToolExpectProtocolError(t, td.Session, "replace_symbol_body", map[string]any{
 		"name_path":     "Foo",
 		"relative_path": "x.go",
 		"body":          "func Foo() {}",
 	})
-	assert.True(t, result.IsError, "excluded tool must return error, not silently succeed")
+	assert.Contains(t, err.Error(), "permission_denied", "excluded tool must be refused with a typed PermissionDenied error")
 }

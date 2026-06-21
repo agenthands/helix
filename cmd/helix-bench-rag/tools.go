@@ -16,9 +16,26 @@ import (
 // defaultK is the rag_search k used when the caller passes k <= 0.
 const defaultK = 5
 
+// maxK bounds the rag_search k so a single call cannot request an arbitrarily
+// large concatenation of chunk contents onto the stdio transport (WR-03 / IN-01,
+// symmetric with maxGrepMatches).
+const maxK = 50
+
 // maxGrepMatches caps grep output so a pathological pattern cannot flood the
 // MCP transport.
 const maxGrepMatches = 200
+
+// maxReadFileBytes caps read_file output so a multi-megabyte corpus file cannot
+// serialize an oversized frame onto the stdio JSON-RPC transport (WR-03,
+// mirroring the maxGrepMatches discipline).
+const maxReadFileBytes = 256 * 1024
+
+// maxRagSearchBytes bounds the total rendered size of a rag_search response so a
+// large k over big chunks cannot flood the transport (WR-03).
+const maxRagSearchBytes = 256 * 1024
+
+// truncationMarker is appended when a tool response is truncated to a byte cap.
+const truncationMarker = "\n... [truncated]\n"
 
 // handlers backs the four MCP tools over the corpus rooted at root. All
 // filesystem access is confined to root by validatePath (T-83-02-01).
@@ -89,6 +106,9 @@ func (h *handlers) ragSearch(ctx context.Context, query string, k int) (string, 
 	if k <= 0 {
 		k = defaultK
 	}
+	if k > maxK {
+		k = maxK
+	}
 	hits, err := h.idx.Query(ctx, query, k)
 	if err != nil {
 		return "", fmt.Errorf("rag_search: %w", err)
@@ -105,6 +125,12 @@ func (h *handlers) ragSearch(ctx context.Context, query string, k int) (string, 
 		}
 		if i < len(hits)-1 {
 			b.WriteString("---\n")
+		}
+		// Total-bytes ceiling: stop concatenating once the rendered response
+		// exceeds the cap so a large k over big chunks cannot flood the transport.
+		if b.Len() >= maxRagSearchBytes {
+			b.WriteString(truncationMarker)
+			break
 		}
 	}
 	return b.String(), nil
@@ -216,6 +242,11 @@ func (h *handlers) readFile(path string) (string, error) {
 	b, err := os.ReadFile(abs)
 	if err != nil {
 		return "", fmt.Errorf("read_file: %w", err)
+	}
+	// Byte cap so a multi-megabyte file cannot serialize an oversized frame onto
+	// the stdio transport (WR-03, mirroring the grep maxGrepMatches discipline).
+	if len(b) > maxReadFileBytes {
+		return string(b[:maxReadFileBytes]) + truncationMarker, nil
 	}
 	return string(b), nil
 }

@@ -89,6 +89,42 @@ func TestPathTraversalRejected(t *testing.T) {
 	}
 }
 
+// TestReadFileByteCap asserts read_file truncates oversized files with a marker
+// so a single call cannot flood the stdio transport (WR-03).
+func TestReadFileByteCap(t *testing.T) {
+	root := t.TempDir()
+	big := make([]byte, maxReadFileBytes*2)
+	for i := range big {
+		big[i] = 'x'
+	}
+	if err := os.WriteFile(filepath.Join(root, "big.txt"), big, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &handlers{idx: newStubIndex(), root: root}
+	out, err := srv.readFile("big.txt")
+	if err != nil {
+		t.Fatalf("read_file(big.txt) = %v, want success", err)
+	}
+	if len(out) > maxReadFileBytes+len(truncationMarker) {
+		t.Fatalf("read_file output not capped: %d bytes", len(out))
+	}
+	if !strings.HasSuffix(out, truncationMarker) {
+		t.Fatalf("read_file output missing truncation marker")
+	}
+
+	// A small file is returned verbatim with no marker.
+	if err := os.WriteFile(filepath.Join(root, "small.txt"), []byte("hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err = srv.readFile("small.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "hello\n" {
+		t.Fatalf("read_file(small.txt) = %q, want %q", out, "hello\n")
+	}
+}
+
 // TestSymlinkEscapeRejected asserts an in-corpus symlink that targets an
 // absolute path OUTSIDE the corpus root is rejected even though it passes every
 // lexical containment check (WR-02 defense-in-depth).

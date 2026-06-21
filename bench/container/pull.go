@@ -4,20 +4,44 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"runtime"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 )
 
+// ErrNotConfigured is returned by VerifyThenPull when its fetch/pull
+// collaborators are still the un-wired Plan 04 defaults. It is deliberately a
+// SINGLE, clearly-labeled "not configured" error raised BEFORE any verify is
+// attempted, so a production caller can never confuse an un-wired path with a
+// verification result (WR-03). The per-collaborator errFetchMetaNotWired /
+// errPullNotWired sentinels remain as the closure-level fail-closed backstop,
+// but they are no longer the error a production VerifyThenPull surfaces: the
+// top-of-function guard intercepts first, keeping the package's oracle-free
+// discipline intact (no error text announces which collaborator is un-wired).
+var ErrNotConfigured = errors.New("bench/container: VerifyThenPull is not configured (live fetch/pull wiring lands with the Plan 04 GHCR mirror)")
+
 // errFetchMetaNotWired / errPullNotWired are the fail-closed sentinels returned
 // by the default (un-wired) fetch/pull collaborators. The live wiring lands
-// with the Plan 04 GHCR mirror; until then a production VerifyThenPull call
-// fails closed here rather than silently skipping verification or publishing
-// unverified bytes.
+// with the Plan 04 GHCR mirror. With the top-of-function ErrNotConfigured guard
+// these are unreachable on a production call (the guard fires first), but they
+// remain as a defense-in-depth backstop should the guard ever be bypassed: a
+// closure that somehow runs with an un-wired collaborator still fails closed,
+// publishing zero cache bytes.
 var (
 	errFetchMetaNotWired = errors.New("bench/container: manifest+bundle fetch not wired until Plan 04 mirror")
 	errPullNotWired      = errors.New("bench/container: image pull not wired until Plan 04 mirror")
 )
+
+// isNotWired reports whether fn is one of the package's un-wired default
+// collaborators (notWiredFetchMeta / notWiredPull). It compares function
+// identity via reflect.Value.Pointer rather than error text, so the guard never
+// depends on (and never leaks) the branch-distinguishing sentinel messages.
+func isNotWired(fn any) bool {
+	target := reflect.ValueOf(fn).Pointer()
+	return target == reflect.ValueOf(notWiredFetchMeta).Pointer() ||
+		target == reflect.ValueOf(notWiredPull).Pointer()
+}
 
 // VerifyThenPull resolves a digest-pinned image, inspects its manifest
 // architecture daemon-free, runs the Plan 01 ArchGate, verifies the cosign
@@ -48,6 +72,13 @@ var (
 // hooks: production callers get the real crane/VerifyImage defaults; hermetic
 // tests inject recorders to assert ordering and the no-bytes-on-verify-failure
 // invariant without a live registry.
+//
+// Until the Plan 04 GHCR mirror wires the live fetch/pull collaborators,
+// VerifyThenPull refuses to run with the un-wired defaults: it returns the
+// clearly-labeled ErrNotConfigured BEFORE any verify (after the digest/repo
+// fail-closed checks), so a production caller cannot mistake an un-wired path
+// for a verification outcome and no error text leaks which collaborator is
+// missing (WR-03).
 func VerifyThenPull(ctx context.Context, repo, digest string, opts ...Option) (hit bool, dir string, err error) {
 	cfg := defaultPullConfig()
 	for _, o := range opts {
@@ -59,6 +90,16 @@ func VerifyThenPull(ctx context.Context, repo, digest string, opts ...Option) (h
 	}
 	if !isValidRepo(repo) {
 		return false, "", errBadRepo
+	}
+
+	// Refuse to run with the un-wired Plan 04 defaults BEFORE any arch inspect,
+	// verify, or pull (WR-03). This surfaces a single, clearly-labeled
+	// ErrNotConfigured so a production caller cannot mistake an un-wired path for
+	// a verification outcome, and so no error text announces which collaborator
+	// is missing. The guard runs AFTER the digest/repo fail-closed checks so a
+	// crafted ref is still rejected with errBadDigest/errBadRepo first.
+	if isNotWired(cfg.fetchMetaFn) || isNotWired(cfg.pullFn) {
+		return false, "", ErrNotConfigured
 	}
 
 	ref := repo + "@sha256:" + digest
@@ -135,11 +176,10 @@ func craneArch(_ context.Context, ref string) (string, error) {
 
 // notWiredFetchMeta is the default manifest+bundle fetcher. The live wiring
 // (crane.Manifest + GHCR cosign-bundle referrer lookup) is deferred to Plan 04
-// when the mirror exists; until then production VerifyThenPull is exercised only
-// via the gated live test (which injects a real fetchMeta) and the hermetic
-// tests (which inject recorders). Returning a canonical-shaped failure here
-// keeps an un-wired production call fail-closed rather than silently skipping
-// verification.
+// when the mirror exists. The top-of-VerifyThenPull ErrNotConfigured guard
+// intercepts before this stub ever runs on a production call (see isNotWired);
+// it remains as a defense-in-depth backstop so any path that somehow reaches it
+// with an un-wired fetcher still fails closed rather than skipping verification.
 func notWiredFetchMeta(_ context.Context, _ string) (_, _ []byte, err error) {
 	return nil, nil, errFetchMetaNotWired
 }

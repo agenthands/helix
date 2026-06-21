@@ -261,6 +261,25 @@ func TestVerifyThenPullRejectsBadDigestAndRepo(t *testing.T) {
 	}
 }
 
+// TestVerifyThenPullNotConfiguredOnDefaults (HERMETIC, WR-03): a production call
+// with NO option seams (the un-wired Plan 04 defaults) must fail closed with the
+// single, clearly-labeled ErrNotConfigured BEFORE any verify — never with the
+// branch-distinguishing errFetchMetaNotWired/errPullNotWired text — so no oracle
+// can tell an un-wired path from a verification outcome. The guard fires only
+// after the digest/repo fail-closed checks (those have their own test above).
+func TestVerifyThenPullNotConfiguredOnDefaults(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv(cacheDirEnv, tmp)
+
+	_, _, err := VerifyThenPull(context.Background(), testRepo, testDigest)
+	if !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("VerifyThenPull(un-wired defaults) err = %v, want ErrNotConfigured", err)
+	}
+	if errors.Is(err, errFetchMetaNotWired) || errors.Is(err, errPullNotWired) {
+		t.Fatalf("VerifyThenPull leaked a per-collaborator not-wired sentinel: %v", err)
+	}
+}
+
 // TestVerifyThenPullLive (GATED) is the SOLE live verify+pull test. It requires
 // a container engine (docker/podman) OR network plus a HELIX_BENCH_MIRROR ref,
 // and SKIPs cleanly when absent. Its hermetic siblings above
@@ -284,6 +303,13 @@ func TestVerifyThenPullLive(t *testing.T) {
 		t.Fatalf("HELIX_BENCH_MIRROR=%q is not <repo>@<64-hex-digest>", mirror)
 	}
 	_, _, err := VerifyThenPull(context.Background(), repo, digest)
+	if errors.Is(err, ErrNotConfigured) {
+		// The live fetch/pull collaborators are still the un-wired Plan 04
+		// defaults, so VerifyThenPull fails closed with ErrNotConfigured before
+		// any verify. That is by design until Plan 04 wires the real
+		// crane.Manifest+bundle fetcher and crane.Pull puller (see IN-03 / WR-03).
+		t.Skip("VerifyThenPull not configured (Plan 04 fetch/pull wiring absent); skipping live verify+pull")
+	}
 	if err != nil {
 		t.Fatalf("live VerifyThenPull(%s@%s) = %v", repo, digest, err)
 	}

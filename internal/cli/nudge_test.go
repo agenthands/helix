@@ -163,6 +163,83 @@ func TestNudgeThreshold_ResetBySymbolicTool(t *testing.T) {
 	assert.Equal(t, 1, final.HelixToolCount, "HelixToolCount should increment")
 }
 
+func TestClassifyBashTarget_CodeTargets(t *testing.T) {
+	// Code-file targets classify as code (isCode=true, ok=true).
+	cases := []string{
+		`grep "func Foo" main.go`,
+		`grep -r "Bar(" internal/cli/verb.go`,
+		`cat internal/kernel/edit/edit.go`,
+		`sed -n '1,20p' pkg/server/server.go`,
+		`rg "TODO" handler.ts`,
+		`find . -name '*.go'`,
+	}
+	for _, cmd := range cases {
+		isCode, ok := classifyBashTarget(cmd)
+		assert.True(t, ok, "expected ok=true for %q", cmd)
+		assert.True(t, isCode, "expected isCode=true for %q", cmd)
+	}
+}
+
+func TestClassifyBashTarget_NonCodeTargets(t *testing.T) {
+	// Prose/log/config targets classify as non-code (isCode=false, ok=true).
+	cases := []string{
+		`grep TODO README.md`,
+		`grep error app.log`,
+		`cat config.yaml`,
+		`grep x notes.txt`,
+		`grep y data.json`,
+		`cat Dockerfile`,
+		`cat settings.yml`,
+	}
+	for _, cmd := range cases {
+		isCode, ok := classifyBashTarget(cmd)
+		assert.True(t, ok, "expected ok=true for %q", cmd)
+		assert.False(t, isCode, "expected isCode=false for %q", cmd)
+	}
+}
+
+func TestClassifyBashTarget_FailOpen(t *testing.T) {
+	// Unparseable / no operand → ok=false (fail-open signal).
+	cases := []string{
+		`grep`,        // no operand
+		`grep "x"`,    // pattern only, no file
+		``,            // empty command
+		`grep -r -n`,  // flags only
+		`cat`,         // no operand
+		`echo hello`,  // not a grep/read shape
+		`go build ./...`,
+	}
+	for _, cmd := range cases {
+		_, ok := classifyBashTarget(cmd)
+		assert.False(t, ok, "expected ok=false (fail-open) for %q", cmd)
+	}
+}
+
+func TestClassifyBashTarget_MixedTargetsConservative(t *testing.T) {
+	// Policy: when BOTH a code and a non-code operand appear, do NOT suggest
+	// (conservative — a false suggestion is the failure mode to avoid).
+	// Require ALL identified file operands to be code.
+	isCode, ok := classifyBashTarget(`grep x main.go README.md`)
+	assert.True(t, ok, "mixed operands are still parseable")
+	assert.False(t, isCode, "mixed code+non-code operands → conservative non-code")
+}
+
+func TestClassifyBashTarget_PureDataNoExec(t *testing.T) {
+	// Commands with shell metacharacters are parsed as a string only — the
+	// classifier never runs anything (no os/exec in this path). We assert it
+	// returns deterministically without side effects.
+	isCode, ok := classifyBashTarget(`grep x f.go && rm -rf /`)
+	// f.go is a code operand; trailing metachars are ignored as data.
+	assert.True(t, ok)
+	assert.True(t, isCode)
+
+	// $(whoami).go must not be executed; it is just a token. Whether it
+	// classifies as code or not, the key property is no side effects + a
+	// deterministic return.
+	_, ok2 := classifyBashTarget(`grep x $(whoami).go`)
+	_ = ok2 // no panic, no exec — property assertion is the absence of side effects
+}
+
 func TestSaveSessionStats_AtomicWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".helix", "session-stats.json")

@@ -100,8 +100,13 @@
   4. Global `--json` emits compact JSON lines while omitting it yields terse text; `--color=never` is byte-equivalent to piped behavior; `--abs` produces absolute paths.
   5. The re-targeted contract oracle (CLI stdout goldens for ordering / `file:line` / error-kind prefix; "typed args → cobra flags" parity replacing MCP schema meta-validation) passes against CLI output.
 
-**Plans**: TBD
+**Plans**: 3 plans (3 waves)
 **UI hint**: yes
+
+Plans:
+- [ ] 92-01-PLAN.md — Foundation (TDD): render-class map (50 verbs) + locus parse/path-rel/coord (no re-convert) + sort/dedup + serr.Kind→exit-code/stderr-prefix mapper (OUT-01/02/05)
+- [ ] 92-02-PLAN.md — Renderer integration (TDD): replace renderResult seam (class dispatch, color/NO_COLOR/TTY gate, snippet read clamped to root) + persistent --color/--abs + repurpose --json + cligen denylist+regen + per-kind os.Exit (OUT-01..07)
+- [ ] 92-03-PLAN.md — Re-targeted contract oracle: CLI stdout goldens (HELIX_BIN) + typed-args→cobra-flags parity replacing MCP schema meta-validation + behavioral copy-paste chain & no-follow-up-Read (TEST-02, OUT-03/04)
 
 ### Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip
 

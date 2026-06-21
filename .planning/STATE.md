@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
+status: All 86 plans executed
 stopped_at: Completed 86-05-PLAN.md
-last_updated: "2026-06-21T04:50:18.000Z"
-last_activity: 2026-06-21 -- Completed 86-05-PLAN.md (canary probe + aggregator CanaryPassRate column + real fetch-datasets CLI)
+last_updated: "2026-06-21T05:07:16.681Z"
+last_activity: 2026-06-21
 progress:
   total_phases: 15
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 61
   completed_plans: 61
-  percent: 74
+  percent: 80
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 86 (crosscodeeval-repobench-adapters-multi-oracle-completion-gate) — EXECUTING
-Plan: 5 of 5 (complete)
+Phase: 87
+Plan: Not started
 Status: All 86 plans executed
-Last activity: 2026-06-21 -- Completed 86-05-PLAN.md (canary probe + aggregator CanaryPassRate column + real fetch-datasets CLI)
+Last activity: 2026-06-21
 
 ### Session Continuity
 

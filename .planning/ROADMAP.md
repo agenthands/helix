@@ -33,7 +33,7 @@
 - [x] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder (completed 2026-06-21)
 - [x] Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard (completed 2026-06-21)
 - [x] Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners (completed 2026-06-21)
-- [ ] Phase 86: CrossCodeEval + RepoBench Adapters + Multi-Oracle Completion Gate
+- [x] Phase 86: CrossCodeEval + RepoBench Adapters + Multi-Oracle Completion Gate (completed 2026-06-21)
 - [ ] Phase 87: SWE-bench Verified Adapter + UTBoost Rescorer + Multi-Oracle `verified_correctness`
 - [ ] Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters
 - [ ] Phase 89: Reports, CI Policy & Contamination Canary

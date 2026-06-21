@@ -174,3 +174,90 @@ func TestAblationDeltasSkipsIncompleteTask(t *testing.T) {
 	// No row should have gained ablation_deltas.
 	assert.Nil(t, readDeltas(t, full), "an incomplete task's rows must NOT be written back")
 }
+
+// TestDeltaIncludesBaselineRagOperand (Phase 83 Task 3, Open Q2 RESOLVED): once
+// baseline_rag emits real rows it is a delta OPERAND — a delta set containing a
+// baseline_rag row produces a `full_minus_baseline_rag` entry (the headline
+// control-arm comparison), and that delta lands on every written-back row. The
+// prior "baseline_rag excluded as a non-operand stub" behavior is inverted.
+func TestDeltaIncludesBaselineRagOperand(t *testing.T) {
+	outDir := t.TempDir()
+	const task = "IT-go-patch-apply-1"
+
+	full := writeModeRow(t, outDir, task, "your_agent_full", evaluators.Metrics{
+		TokensInput: iPtr(1000), TokensOutput: iPtr(200), ToolCalls: iPtr(10),
+		FilesModified: iPtr(3), EditLocality: fPtr(0.9),
+	})
+	bp := writeModeRow(t, outDir, task, "baseline_plain", evaluators.Metrics{
+		TokensInput: iPtr(1500), ToolCalls: iPtr(25),
+	})
+	nl := writeModeRow(t, outDir, task, "no_lsp", evaluators.Metrics{
+		TokensInput: iPtr(1200), ToolCalls: iPtr(15),
+	})
+	ne := writeModeRow(t, outDir, task, "no_structured_edit", evaluators.Metrics{
+		TokensInput: iPtr(1100), ToolCalls: iPtr(12),
+	})
+	rag := writeModeRow(t, outDir, task, "baseline_rag", evaluators.Metrics{
+		TokensInput: iPtr(800), ToolCalls: iPtr(5),
+	})
+
+	outcomes := []CellOutcome{
+		outcomeFor(task, "your_agent_full", full),
+		outcomeFor(task, "baseline_plain", bp),
+		outcomeFor(task, "no_lsp", nl),
+		outcomeFor(task, "no_structured_edit", ne),
+		outcomeFor(task, "baseline_rag", rag),
+	}
+
+	report, err := ComputeAndWriteDeltas(outcomes)
+	require.NoError(t, err)
+	require.Equal(t, []string{task}, report.Computed)
+	require.Empty(t, report.Skipped)
+
+	deltas := readDeltas(t, full)
+	require.NotNil(t, deltas)
+	require.Len(t, deltas, 4, "now 4 deltas: full vs baseline_plain/no_lsp/no_structured_edit/baseline_rag")
+
+	br := deltas["full_minus_baseline_rag"]
+	require.NotNil(t, br, "baseline_rag must be a delta operand (full_minus_baseline_rag present)")
+	assert.Equal(t, float64(1000-800), br["tokens_input"])
+	assert.Equal(t, float64(10-5), br["tool_calls"])
+
+	// The baseline_rag row itself also carries the same deltas object (every
+	// operand's row reports the task's deltas).
+	assert.NotNil(t, readDeltas(t, rag), "the baseline_rag row must carry ablation_deltas too")
+}
+
+// TestDeltaOmitsBaselineRagWhenAbsent (Phase 83 Task 3): baseline_rag is an
+// OPTIONAL operand — when its row is absent (a run that did not include the arm),
+// the task is NOT skipped (the 4 honest modes still gate completeness) and the
+// full_minus_baseline_rag comparison is simply omitted (no nil-baseline arithmetic).
+func TestDeltaOmitsBaselineRagWhenAbsent(t *testing.T) {
+	outDir := t.TempDir()
+	const task = "IT-go-norag-1"
+
+	m := evaluators.Metrics{TokensInput: iPtr(100), ToolCalls: iPtr(5)}
+	full := writeModeRow(t, outDir, task, "your_agent_full", m)
+	bp := writeModeRow(t, outDir, task, "baseline_plain", m)
+	nl := writeModeRow(t, outDir, task, "no_lsp", m)
+	ne := writeModeRow(t, outDir, task, "no_structured_edit", m)
+	// baseline_rag row deliberately ABSENT.
+
+	outcomes := []CellOutcome{
+		outcomeFor(task, "your_agent_full", full),
+		outcomeFor(task, "baseline_plain", bp),
+		outcomeFor(task, "no_lsp", nl),
+		outcomeFor(task, "no_structured_edit", ne),
+	}
+
+	report, err := ComputeAndWriteDeltas(outcomes)
+	require.NoError(t, err)
+	require.Equal(t, []string{task}, report.Computed, "the 4 honest modes still gate completeness")
+	require.Empty(t, report.Skipped, "a missing baseline_rag must NOT skip the task")
+
+	deltas := readDeltas(t, full)
+	require.NotNil(t, deltas)
+	assert.Len(t, deltas, 3, "without a baseline_rag row, only the 3 honest deltas are produced")
+	_, present := deltas["full_minus_baseline_rag"]
+	assert.False(t, present, "full_minus_baseline_rag must be omitted when the baseline_rag row is absent")
+}

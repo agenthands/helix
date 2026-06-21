@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
-stopped_at: Completed 85-07-PLAN.md
-last_updated: "2026-06-21T04:15:19.077Z"
-last_activity: 2026-06-21 -- Phase 86 execution started
+stopped_at: Completed 86-03-PLAN.md
+last_updated: "2026-06-21T04:30:00.000Z"
+last_activity: 2026-06-21 -- Completed 86-03-PLAN.md (CrossCodeEval dataset-loader-only adapter; arrow-go promoted to direct)
 progress:
   total_phases: 15
   completed_phases: 11
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 86 (crosscodeeval-repobench-adapters-multi-oracle-completion-gate) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 86 execution started
+Last activity: 2026-06-21 -- Completed 86-03-PLAN.md (CrossCodeEval dataset-loader-only adapter)
 
 ### Session Continuity
 
 Last session: 2026-06-21T04:15:15.076Z
-Stopped at: Completed 85-07-PLAN.md
+Stopped at: Completed 86-03-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -127,6 +127,7 @@ Resume file: None
 
 ## Decisions
 
+- [Phase 86 P03]: CrossCodeEval dataset-loader-only LEAF adapter (bench/datasets/crosscodeeval) shipped — stdlib net/http + arrow-go pqarrow ONLY (no gomlx/go-huggingface, RESEARCH A1). Pinned PinnedRev=41f916e35cc48bcca5dc369664f931afd9ffa22f (real immutable refs/heads/main targetCommit of Vincentvmt/CrossCodeEval, resolved live via the HF refs API). SSRF-pinned constants-only resolveURL (T-86-03-02), io.LimitReader 256MiB body cap (T-86-03-04), validatePathSegment on rev+language before filepath.Join (T-86-03-03), isHexSHA1 mutable-ref refusal (T-86-03-01). Hermetic SOLE proof = committed testdata/sample.parquet (uncompressed, deterministic, generated once via arrow-go) + per-language fixtures/{python,java,typescript,csharp}/task.json (paper-sourced values w/ `provenance` field, NOT viewer-scraped — the mirror's HF viewer has a known cast error, Pitfall 3). decodeParquet honors an optional `language` column so Load(<lang>) over the mixed fixture yields only that language's rows (Rule 1 fix). Live TestLiveFetch is HELIX_BENCH_NETWORK-gated + skips cleanly. arrow-go@v18.5.1 promoted indirect->direct via `go get` + hand-edit go.mod + `-mod=mod` build to settle go.sum (NOT full tidy — s2a-go pre-existing failure). go build ./..., make vet, go test ./bench/datasets/... all green; leaf invariant holds (no helix internal/kernel|internal/semantic|bench/runtime deps).
 - [Phase 82 P06]: STATS-02/03/04 + COST-03 DONE — aggregator.Aggregate(runDir,cfg) is a PURE orchestrator composing Load + BCaInterval/StatMean + PassAtK + perResultUSD/costPerSolvedTask via the two-level reduction (D-07: Level 1 per-(task,mode) scalar = success-rate / mean-over-non-nil / mean-USD; Level 2 BCa across-task vector). pass@1==success-rate identity; pass@N via PassAtK. ONE seeded math/rand/v2 PCG per Aggregate threaded into every BCa => byte-deterministic (D-08), locked by committed leaderboard.golden.md/cost_quality.golden.md + TestDeterministic. STATS-04 overlap gate: ciOverlap(lo_a<=hi_b && lo_b<=hi_a) on adjacent sorted rows -> "## CI overlap warnings" section suppressing X>Y (null CI never overlaps). FAIR-03 (D-15/A2): coefVariation = sample stddev/mean of per-run USD > 0.05 -> named warning in cost_quality.md. Null discipline: nil-across-all -> null CI -> em-dash, never 0. cost solved-gate = cell success-rate>0.5 (D-12); per-task USD = MEAN over runs (A3); valid_until footer = earliest across cost-table rows. Atomic temp+rename writeReport (cell.go:writeDurable analog, T-82-06-03). Added Loaded.Modes(task) accessor (Rule 3). PURE unit, NO HELIX_BIN, zero new deps.
 - [Phase ?]: Phase 64 microbench relocated to internal/semantic/bench/ via per-path git mv (renames preserved, git log --follow continuity)
 - [Phase ?]: Kept package bench + benchfts/ignore build tags unchanged; no go.mod edit (single module, absolute import path unaffected)

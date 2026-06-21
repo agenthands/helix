@@ -240,6 +240,7 @@ vue-implementation/
 
 # Go
 /helix
+/helix-bench
 /helix-bench-rag
 /helix-eval
 /serena

@@ -132,6 +132,38 @@ func TestRender_ReservedFlagDenylist(t *testing.T) {
 	}
 }
 
+// TestRender_ReservedSubcommandFailsGeneration is the WR-03 regression: a
+// generated verb name that collides with a hand-written root subcommand must
+// hard-fail generation, since rootCmd.AddCommand would panic at init.
+func TestRender_ReservedSubcommandFailsGeneration(t *testing.T) {
+	infos := []*argInfo{
+		{toolName: "status", fields: []argField{
+			{jsonKey: "path", required: true, help: "p", goType: "string"},
+		}},
+	}
+	reg := map[string]string{"status": "file-ops"}
+	_, err := renderVerbsGen(infos, reg)
+	if err == nil {
+		t.Fatalf("expected reserved-subcommand error, got nil")
+	}
+	if !strings.Contains(err.Error(), "reserved root subcommand") {
+		t.Errorf("expected reserved-subcommand error, got: %v", err)
+	}
+}
+
+// TestRender_ReservedSubcommandSetMatchesRoot keeps the WR-03 denylist honest:
+// every hand-written root subcommand name must be present in reservedSubcommands
+// so a future tool named after one of them is caught at generate time.
+func TestRender_ReservedSubcommandSetMatchesRoot(t *testing.T) {
+	for _, name := range []string{
+		"setup", "status", "activate", "deactivate", "nudge", "update", "upgrade",
+	} {
+		if !reservedSubcommands[name] {
+			t.Errorf("hand-written root subcommand %q missing from reservedSubcommands", name)
+		}
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a

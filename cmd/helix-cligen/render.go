@@ -29,6 +29,28 @@ var reservedRootFlags = map[string]bool{
 	"disable-semantic-subsystem":        true,
 }
 
+// reservedSubcommands are the hand-written root subcommand names (the first
+// token of each command's cobra Use string) plus the subcommands cobra adds
+// automatically. A generated verb name MUST NOT collide with one of these:
+// cobra's AddCommand panics ("...command ... is already registered") when two
+// children share a name, which would crash the binary at init for ALL
+// invocations. This is the subcommand-namespace analogue of reservedRootFlags
+// (WR-03). Kept in sync with the addGrouped(...) calls in internal/cli/root.go
+// and cobra's built-in help/completion commands.
+var reservedSubcommands = map[string]bool{
+	// Hand-written root subcommands (internal/cli/root.go).
+	"setup":      true,
+	"status":     true,
+	"activate":   true,
+	"deactivate": true,
+	"nudge":      true,
+	"update":     true,
+	"upgrade":    true,
+	// cobra auto-registers these on the root command.
+	"help":       true,
+	"completion": true,
+}
+
 // categoryToGroup maps a ToolProvider category (tp.Name()) to one of the 6
 // capability cobra groups the generated verbs attach to on the root command.
 // Unknown categories fall back to the memory/misc group so a newly-added tool
@@ -94,6 +116,17 @@ func renderVerbsGen(infos []*argInfo, registryNames map[string]string) (string, 
 
 	for _, info := range sorted {
 		verb := kebab(info.toolName)
+		// WR-03: a generated verb name must not collide with a hand-written (or
+		// cobra-auto) root subcommand, else rootCmd.AddCommand panics at init and
+		// crashes the binary for ALL invocations. Fail generation loudly so the
+		// collision is caught at generate/CI time rather than at the user's CLI.
+		if reservedSubcommands[verb] {
+			return "", fmt.Errorf(
+				"verb %q (from tool %q) collides with a reserved root subcommand; "+
+					"rename the tool or add a verb-name override (see reservedSubcommands)",
+				verb, info.toolName,
+			)
+		}
 		group := categoryToGroup[registryNames[info.toolName]]
 		if group == "" {
 			group = groupMemory

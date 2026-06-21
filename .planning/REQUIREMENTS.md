@@ -32,8 +32,8 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **TOOLBENCH-01**: 10 capability test classes implemented under `bench/datasets/internal-toolbench/` — semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling. _Acceptance:_ each capability has at least 1 deterministic test per supported language; capability list documented in `bench/datasets/internal-toolbench/CAPABILITIES.md`.
 - [x] **TOOLBENCH-02**: Tier-1 language coverage **Go** — all 10 capabilities have ≥ 1 fixture; `bench/languages/go/runner.go` wraps `go test ./... -json`. _Acceptance:_ ToolBench-Go full run passes locally; capability coverage reported per language.
 - [x] **TOOLBENCH-03**: Tier-1 language coverage **Python** — `pytest --json-report`. _Acceptance:_ ≥ 8/10 capabilities covered; gaps logged.
-- [ ] **TOOLBENCH-04**: Tier-1 language coverage **TypeScript** — `vitest --reporter=json` (or `jest --json`). _Acceptance:_ ≥ 8/10 capabilities; LSP diagnostics via tsserver.
-- [ ] **TOOLBENCH-05**: Tier-1 language coverage **JavaScript** — `jest --json`. _Acceptance:_ ≥ 8/10 capabilities; eslint-based diagnostics.
+- [x] **TOOLBENCH-04**: Tier-1 language coverage **TypeScript** — `vitest --reporter=json` (or `jest --json`). _Acceptance:_ ≥ 8/10 capabilities; LSP diagnostics via tsserver.
+- [x] **TOOLBENCH-05**: Tier-1 language coverage **JavaScript** — `jest --json`. _Acceptance:_ ≥ 8/10 capabilities; eslint-based diagnostics.
 - [x] **TOOLBENCH-06**: Tier-1 language coverage **Java** — `mvn test -Dsurefire.useFile=false`. _Acceptance:_ ≥ 8/10 capabilities; jdtls-backed semantic view.
 - [x] **TOOLBENCH-07**: Tier-1 language coverage **C#** — `dotnet test --logger trx`. _Acceptance:_ ≥ 6/10 capabilities (C# has weaker LSP server coverage); gaps logged.
 - [x] **TOOLBENCH-08**: Tier-1 language coverage **C++** — `cmake/ctest`. _Acceptance:_ ≥ 6/10 capabilities; clangd-backed semantic view.

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -1213,7 +1212,7 @@ func (a *daemonSemIndexAccessor) Status(ctx context.Context, ws workspace.Worksp
 // health.SemanticIndexAccessor.
 var _ health.SemanticIndexAccessor = (*daemonSemIndexAccessor)(nil)
 
-// MCPServer returns the MCP server for test wiring (e.g., HTTPHandler, SDK().Connect).
+// MCPServer returns the MCP server for test wiring (e.g., SDK().Connect).
 func (d *Daemon) MCPServer() *helixMCP.SerenaMCPServer { return d.mcpServer }
 
 // KernelInstance returns the kernel for lifecycle management in tests.
@@ -1321,18 +1320,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	})
 
 	// Optional loopback gRPC TCP listener for split-host CLI↔daemon use
-	// (Phase 94 RETIRE-04). Gated on GRPCAddr != "" like listenHTTP/listenAdmin;
+	// (Phase 94 RETIRE-04). Gated on GRPCAddr != "" like listenAdmin;
 	// default empty = unix-socket only. Serves the SAME ForwarderService.
 	if d.config.Daemon.GRPCAddr != "" {
 		g.Go(func() error {
 			return d.listenGRPCTCP(gctx)
-		})
-	}
-
-	// HTTP listener for Streamable HTTP MCP (DMN-04, MCP-02)
-	if d.config.Daemon.HTTPAddr != "" {
-		g.Go(func() error {
-			return d.listenHTTP(gctx)
 		})
 	}
 
@@ -1349,7 +1341,6 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	d.logger.Info("daemon started",
 		"socket", d.config.Daemon.SocketPath,
-		"http_addr", d.config.Daemon.HTTPAddr,
 		"grpc_addr", d.config.Daemon.GRPCAddr,
 		"admin_addr", d.config.Observability.AdminAddr,
 		"workspaces", d.workspaces.WorkspaceCount(),
@@ -1396,40 +1387,6 @@ func (d *Daemon) listenSocket(ctx context.Context) error {
 	case <-ctx.Done():
 		d.grpcServer.GracefulStop()
 		return ctx.Err()
-	case err := <-serveDone:
-		return err
-	}
-}
-
-// listenHTTP starts the Streamable HTTP listener for MCP (DMN-04, MCP-02).
-func (d *Daemon) listenHTTP(ctx context.Context) error {
-	mux := http.NewServeMux()
-	// Phase 53 D-09 + Q-1 Option 2: wrap the SDK HTTP handler with the
-	// session-lifecycle middleware to emit (started|ended|error, http).
-	// Best-effort `ended` semantic is documented in USAGE.md by Plan 06.
-	mux.Handle("/mcp", httpSessionMiddleware(d.mcpServer.HTTPHandler(), d.obs.Metrics()))
-
-	server := &http.Server{
-		Addr:    d.config.Daemon.HTTPAddr,
-		Handler: mux,
-	}
-
-	d.logger.Info("HTTP listener started", "addr", d.config.Daemon.HTTPAddr)
-
-	// Serve in a goroutine
-	serveDone := make(chan error, 1)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			serveDone <- err
-		}
-		close(serveDone)
-	}()
-
-	select {
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return server.Shutdown(shutdownCtx)
 	case err := <-serveDone:
 		return err
 	}

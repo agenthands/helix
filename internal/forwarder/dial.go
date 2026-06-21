@@ -176,13 +176,12 @@ func startDaemon(socketPath string) error {
 		return fmt.Errorf("getting executable path: %w", err)
 	}
 
-	// Disable the HTTP listener on the auto-started daemon: a forwarder/CLI dial
-	// reaches the daemon over the unix SOCKET, never the Streamable-HTTP transport.
-	// Leaving the default --http-addr=:8080 made cold-start fail with
-	// "listen tcp :8080: bind: address already in use" whenever the port was taken
-	// (a second helix daemon on a different socket, or any unrelated service),
-	// silently killing the freshly-spawned daemon so the dial timed out after 10s.
-	cmd := exec.Command(exe, "--serve", "--socket="+socketPath, "--http-addr=")
+	// Phase 94 RETIRE-02: the auto-started daemon serves the CLI over the unix
+	// SOCKET only — the Streamable-HTTP /mcp head was deleted, so there is no
+	// --http-addr flag to pass. (Historically this site passed --http-addr= to
+	// disable a default :8080 listener that could collide and silently kill the
+	// freshly-spawned daemon; with the head gone the flag no longer exists.)
+	cmd := exec.Command(exe, "--serve", "--socket="+socketPath)
 	// Detach daemon from forwarder process group (Unix only; no-op on Windows).
 	detachFromProcessGroup(cmd)
 	// WR-05: capture the auto-started daemon's stderr to a log file beside the

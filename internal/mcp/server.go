@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"log/slog"
-	"net/http"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
@@ -185,13 +184,6 @@ func (s *SerenaMCPServer) SDK() *mcpsdk.Server {
 // Registry returns the tool registry for dynamic tool management.
 func (s *SerenaMCPServer) Registry() *ToolRegistry {
 	return s.registry
-}
-
-// HTTPHandler returns an http.Handler for Streamable HTTP transport (MCP-02).
-func (s *SerenaMCPServer) HTTPHandler() http.Handler {
-	return mcpsdk.NewStreamableHTTPHandler(func(r *http.Request) *mcpsdk.Server {
-		return s.sdk
-	}, nil)
 }
 
 // AddTool registers a new tool dynamically at runtime (MCP-07).

@@ -452,8 +452,8 @@ func daemonPidsForSocket(t *testing.T, socket string) []int {
 	t.Helper()
 	// `--` terminates pgrep option parsing and the "socket=" pattern deliberately
 	// does NOT start with '-' (a leading "--serve" pattern is parsed by pgrep as a
-	// flag, matching nothing). The daemon argv is `helix --serve --socket=<sock>
-	// --http-addr=`, so "socket=<sock>" uniquely identifies it.
+	// flag, matching nothing). The daemon argv is `helix --serve --socket=<sock>`,
+	// so "socket=<sock>" uniquely identifies it.
 	out, err := exec.Command("pgrep", "-f", "--", "socket="+socket).Output()
 	if err != nil {
 		// pgrep exits 1 with no matches — treat as "no daemons" only if output is

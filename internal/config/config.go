@@ -101,8 +101,6 @@ type WorkerPoolConfig struct {
 type DaemonConfig struct {
 	// SocketPath overrides default /tmp/helix-$UID/daemon.sock (D-14)
 	SocketPath string `koanf:"socket_path"`
-	// HTTPAddr is the listen address for Streamable HTTP (default ":8080")
-	HTTPAddr string `koanf:"http_addr"`
 	// GRPCAddr is the OPTIONAL loopback gRPC TCP listen address for split-host
 	// CLI↔daemon use (Phase 94 RETIRE-04). Empty (default) = unix-socket only;
 	// when set it MUST be loopback (127.0.0.1/localhost/::1) — non-loopback is

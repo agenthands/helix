@@ -346,7 +346,11 @@ func (s *Sandbox) StartDaemon(ctx context.Context, taskID, mode, profileName, cf
 	homePath := s.HomeFor(taskID, mode)
 	modeDir := s.ModeDir(taskID, mode)
 
-	args := []string{"--serve", "--socket=" + sockPath, "--http-addr=", "--json"}
+	// Phase 94 RETIRE-02: the daemon no longer accepts --http-addr (the
+	// Streamable-HTTP /mcp head was deleted); passing it would make the spawned
+	// daemon die on an unknown flag. The sandbox daemon serves over the unix
+	// socket only.
+	args := []string{"--serve", "--socket=" + sockPath, "--json"}
 	if profileName != "" {
 		args = append(args, "--profile="+profileName)
 	}

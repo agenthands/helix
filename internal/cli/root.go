@@ -127,8 +127,6 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().Bool("abs", false, "Emit absolute paths instead of workspace-relative")
 	// Socket override
 	rootCmd.Flags().String("socket", "", "Override daemon socket path")
-	// HTTP listen address
-	rootCmd.Flags().String("http-addr", ":8080", "HTTP listen address for Streamable HTTP transport")
 	// Config file override
 	rootCmd.Flags().String("config", "", "Path to config file")
 	// Agent profile
@@ -192,7 +190,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	serve, _ := cmd.Flags().GetBool("serve")
 	mode, _ := cmd.Flags().GetString("mode")
 
-	if serve || mode == "http" {
+	// Phase 94 RETIRE-02: only --serve starts the daemon now. The former
+	// `mode == "http"` arm served the deleted Streamable-HTTP /mcp head, so
+	// `--mode http` no longer serves MCP — it falls through to the unknown-mode
+	// error below.
+	if serve {
 		return runDaemonFn(cmd)
 	}
 
@@ -230,7 +232,6 @@ func newLogger(jsonLog bool) *slog.Logger {
 func runDaemon(cmd *cobra.Command) error {
 	jsonLog, _ := cmd.Flags().GetBool("json")
 	socketPath, _ := cmd.Flags().GetString("socket")
-	httpAddr, _ := cmd.Flags().GetString("http-addr")
 	configPath, _ := cmd.Flags().GetString("config")
 	profileName, _ := cmd.Flags().GetString("profile")
 	adminAddr, _ := cmd.Flags().GetString("admin-addr")
@@ -245,9 +246,6 @@ func runDaemon(cmd *cobra.Command) error {
 	overrides := make(map[string]interface{})
 	if socketPath != "" {
 		overrides["daemon.socket_path"] = socketPath
-	}
-	if cmd.Flags().Changed("http-addr") {
-		overrides["daemon.http_addr"] = httpAddr
 	}
 	if profileName != "" {
 		overrides["profile"] = profileName

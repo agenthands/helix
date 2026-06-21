@@ -253,6 +253,11 @@ test/bench/baselines/local.txt
 # cwd=bench/runtime (cwd-relative .helix/semantic.duckdb); generated, never tracked.
 /bench/runtime/.helix/
 
+# CLI E2E oracle (90-04) cold-start daemon writes a cwd-relative .helix/ store
+# because TestCLI_ParallelColdSingleDaemon's daemon inherits the test package
+# cwd; generated runtime artifact, never tracked.
+/internal/cli/.helix/
+
 # Eval harness runtime artifacts
 /eval/reports/
 /cmd/helix-eval/eval/

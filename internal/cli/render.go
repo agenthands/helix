@@ -131,18 +131,32 @@ func renderResultFor(out io.Writer, spec verbSpec, res *mcpsdk.CallToolResult, o
 	}
 }
 
-// applyColorGate sets fatih/color's global NoColor toggle per the resolved
-// colorMode. auto leaves the package default (off for non-TTY and when NO_COLOR
-// is present), so a piped render and --color=never are byte-identical.
+// applyColorGate gates fatih/color's global NoColor toggle per the resolved
+// colorMode. The terse/locus render path emits NO ANSI in any branch (it writes
+// with plain fmt.Fprintf/Fprintln), so --color is intentionally a no-op for
+// verb output bytes; this gate exists only so the global is never wrongly
+// FORCED ON.
+//
+// WR-02: the prior code set color.NoColor = false on colorAlways. Because
+// NoColor is a process-global shared with every github.com/fatih/color
+// consumer, forcing it false could RE-ENABLE color in another consumer even
+// when stdout is piped — breaking the stated "piped == never" invariant
+// globally and making the side effect order-dependent across renders. Since the
+// terse path produces no color bytes, colorAlways has nothing to enable, so we
+// never force the global on. We still honor colorNever by setting NoColor = true
+// (a safe, monotonic disable that can only suppress color, never resurrect it),
+// and leave auto untouched so fatih/color's init-time TTY + NO_COLOR resolution
+// stands (piped == never).
 func applyColorGate(mode colorMode) {
 	switch mode {
 	case colorNever:
 		color.NoColor = true
-	case colorAlways:
-		color.NoColor = false
 	default:
-		// auto: do nothing — fatih/color already resolved NoColor at init from
-		// the TTY check + NO_COLOR. Leaving it untouched keeps piped == never.
+		// colorAlways / colorAuto: do not force the global on. The terse path
+		// emits no ANSI, and forcing NoColor=false would leak into other
+		// fatih/color consumers when piped (WR-02). fatih/color's init already
+		// resolved NoColor from the TTY check + NO_COLOR; leaving it untouched
+		// keeps piped == never.
 	}
 }
 

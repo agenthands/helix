@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fatih/color"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -115,6 +116,33 @@ func TestRender_NeverEqualsPiped(t *testing.T) {
 	renderResultFor(&piped, spec, res, renderOpts{workspaceRoot: root, color: colorAuto})
 	if !bytes.Equal(never.Bytes(), piped.Bytes()) {
 		t.Fatalf("--color=never != piped(auto):\nnever=%q\npiped=%q", never.String(), piped.String())
+	}
+}
+
+// TestRender_ColorAlways_DoesNotForceGlobalOn asserts WR-02: --color=always must
+// NOT flip the process-global color.NoColor to false. The terse path emits no
+// ANSI, so forcing it on would only leak into other fatih/color consumers and
+// break the "piped == never" invariant globally. The render must leave NoColor
+// untouched (or only ever set it true) regardless of --color.
+func TestRender_ColorAlways_DoesNotForceGlobalOn(t *testing.T) {
+	root := "/ws"
+	res := textResult("file:///ws/a.go:5:6 — Helper [Function]\n")
+	spec := specFor(t, "search-symbols")
+
+	// Simulate a piped/NO_COLOR environment: NoColor resolved to true.
+	saved := color.NoColor
+	defer func() { color.NoColor = saved }()
+	color.NoColor = true
+
+	var buf bytes.Buffer
+	renderResultFor(&buf, spec, res, renderOpts{workspaceRoot: root, color: colorAlways})
+
+	if color.NoColor != true {
+		t.Errorf("--color=always flipped global color.NoColor to false; the piped==never invariant must hold (WR-02)")
+	}
+	// And the output itself must still be ANSI-free.
+	if bytes.IndexByte(buf.Bytes(), 0x1b) != -1 {
+		t.Errorf("--color=always emitted ESC bytes on the terse path: %q", buf.String())
 	}
 }
 

@@ -12,11 +12,19 @@
 // writeDurable). A task missing any of the four real modes is SKIPPED (no panic,
 // no nil-baseline arithmetic) and reported.
 //
-// SCOPE GUARD: this is single-run / 3-fixed-deltas ONLY. It is NOT the Phase 82
+// SCOPE GUARD: this is single-run / fixed-deltas ONLY. It is NOT the Phase 82
 // aggregator — there is deliberately no multi-run aggregation, BCa bootstrap,
-// pass@k, variance gate, or leaderboard here. The your_agent_no_semantic partial
-// arm and the baseline_rag fail-closed stub (which writes no row) are excluded
-// from the delta operands by construction: they are not among the four real modes.
+// pass@k, variance gate, or leaderboard here.
+//
+// Operands (Phase 83, Open Q2 RESOLVED): the four honest ablation modes
+// (your_agent_full, baseline_plain, no_lsp, no_structured_edit) gate task
+// COMPLETENESS as before, and baseline_rag is now ALSO a delta operand — it is the
+// headline control arm, so `full vs baseline_rag` deltas are wanted. baseline_rag
+// is OPTIONAL: when its row is present the `full_minus_baseline_rag` comparison is
+// produced (and written back into its row too); when absent the task is still
+// computed over the honest modes and that one comparison is simply omitted (no
+// nil-baseline arithmetic). The your_agent_no_semantic partial arm remains a
+// NON-operand by construction.
 package runtime
 
 import (
@@ -25,31 +33,42 @@ import (
 	"os"
 )
 
-// The four real ablation modes whose rows the delta pass operates over. The
-// your_agent_no_semantic partial arm and the baseline_rag deferred stub are
-// deliberately absent: the 3 deltas are full vs the three honest ablations.
+// The mode names the delta pass operates over. The four honest modes gate task
+// COMPLETENESS; baseline_rag is an OPTIONAL operand (Phase 83, Open Q2). The
+// your_agent_no_semantic partial arm is deliberately absent (a non-operand).
 const (
 	modeFull             = "your_agent_full"
 	modeBaselinePlain    = "baseline_plain"
 	modeNoLSP            = "no_lsp"
 	modeNoStructuredEdit = "no_structured_edit"
+	modeBaselineRag      = "baseline_rag"
 )
 
-// deltaComparisons names the three fixed comparisons in the surfaced
-// ablation_deltas object, each `full − <other>`. The keys are stable, greppable
-// snake_case (the Phase 82 aggregator and any report reads them by name).
+// deltaComparisons names the fixed comparisons in the surfaced ablation_deltas
+// object, each `full − <other>`. The keys are stable, greppable snake_case (the
+// Phase 82 aggregator and any report read them by name). The optional flag marks a
+// comparison whose `other` row may be absent — when it is, the comparison is
+// omitted rather than skipping the whole task (Phase 83 baseline_rag operand).
 var deltaComparisons = []struct {
-	name  string // surfaced ablation_deltas key
-	other string // the mode subtracted from full
+	name     string // surfaced ablation_deltas key
+	other    string // the mode subtracted from full
+	optional bool   // when true, omit this comparison if the other row is absent
 }{
-	{"full_minus_baseline_plain", modeBaselinePlain},
-	{"full_minus_no_lsp", modeNoLSP},
-	{"full_minus_no_structured_edit", modeNoStructuredEdit},
+	{"full_minus_baseline_plain", modeBaselinePlain, false},
+	{"full_minus_no_lsp", modeNoLSP, false},
+	{"full_minus_no_structured_edit", modeNoStructuredEdit, false},
+	{"full_minus_baseline_rag", modeBaselineRag, true},
 }
 
-// requiredModes is the set of real modes a task must have rows for before any
-// delta is computed (Pitfall 3 — skip a task missing any of them).
+// requiredModes is the set of modes a task must have rows for before any delta is
+// computed (Pitfall 3 — skip a task missing any of them). baseline_rag is NOT
+// required (it is the optional headline control operand): a run without it still
+// computes the honest deltas.
 var requiredModes = []string{modeFull, modeBaselinePlain, modeNoLSP, modeNoStructuredEdit}
+
+// operandModes is the full set of modes whose rows the delta pass indexes and
+// writes back: the four required honest modes PLUS the optional baseline_rag arm.
+var operandModes = []string{modeFull, modeBaselinePlain, modeNoLSP, modeNoStructuredEdit, modeBaselineRag}
 
 // comparableMetric names a numeric metric the delta operates on and its accessor
 // into evaluators.Metrics. Both int and float metrics project to float64 deltas
@@ -124,16 +143,17 @@ type loadedRow struct {
 func ComputeAndWriteDeltas(outcomes []CellOutcome) (DeltaReport, error) {
 	var report DeltaReport
 
-	// Group the per-mode result paths by task. A deferred/errored cell (e.g.
-	// baseline_rag) has no ResultPath row on disk; we only index outcomes that
-	// name one of the four real modes AND carry a result path.
+	// Group the per-mode result paths by task. We index outcomes that name a delta
+	// OPERAND (the four required honest modes plus the optional baseline_rag arm)
+	// AND carry a result path. The your_agent_no_semantic partial arm is not an
+	// operand. An errored cell with no ResultPath row is skipped by the path check.
 	byTask := make(map[string]map[string]string) // task -> mode -> resultPath
 	var taskOrder []string
 	for _, oc := range outcomes {
 		task := oc.Cell.Task
 		mode := oc.Cell.Mode
-		if !isRequiredMode(mode) {
-			continue // no_semantic partial + baseline_rag stub are not delta operands
+		if !isDeltaOperand(mode) {
+			continue // no_semantic partial arm is not a delta operand
 		}
 		if oc.Result.ResultPath == "" {
 			continue
@@ -185,7 +205,16 @@ func computeTaskDeltas(rows map[string]loadedRow) map[string]map[string]float64 
 	full := rows[modeFull].metrics
 	out := make(map[string]map[string]float64, len(deltaComparisons))
 	for _, cmp := range deltaComparisons {
-		other := rows[cmp.other].metrics
+		otherRow, present := rows[cmp.other]
+		if !present {
+			// An OPTIONAL operand (baseline_rag) whose row is absent: omit the
+			// comparison entirely rather than emit an all-null entry. A REQUIRED
+			// operand can never be absent here (firstMissingMode gated the task).
+			if cmp.optional {
+				continue
+			}
+		}
+		other := otherRow.metrics
 		md := make(map[string]float64)
 		for _, m := range comparableMetrics {
 			fv, fok := m.val(full)
@@ -210,8 +239,14 @@ func writeBackDeltas(rows map[string]loadedRow, deltas map[string]map[string]flo
 	if err != nil {
 		return fmt.Errorf("marshal ablation_deltas: %w", err)
 	}
-	for _, mode := range requiredModes {
-		row := rows[mode]
+	// Write the deltas object into EVERY loaded operand row (the required honest
+	// modes plus the optional baseline_rag arm when present), so every operand's row
+	// reports the task's deltas.
+	for _, mode := range operandModes {
+		row, ok := rows[mode]
+		if !ok {
+			continue // optional operand (baseline_rag) absent — nothing to write back
+		}
 		// Preserve every existing field; add/overwrite ablation_deltas only.
 		row.doc["ablation_deltas"] = json.RawMessage(deltaBytes)
 		b, merr := json.MarshalIndent(row.doc, "", "  ")
@@ -233,8 +268,13 @@ func writeBackDeltas(rows map[string]loadedRow, deltas map[string]map[string]flo
 // comparable metrics subset for the arithmetic.
 func loadTaskRows(modes map[string]string) (map[string]loadedRow, error) {
 	rows := make(map[string]loadedRow, len(modes))
-	for _, mode := range requiredModes {
-		path := modes[mode]
+	for _, mode := range operandModes {
+		path, present := modes[mode]
+		if !present {
+			// An optional operand (baseline_rag) absent for this task — skip it; the
+			// required modes are guaranteed present by firstMissingMode upstream.
+			continue
+		}
 		b, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read row for mode %q: %w", mode, err)
@@ -254,9 +294,10 @@ func loadTaskRows(modes map[string]string) (map[string]loadedRow, error) {
 	return rows, nil
 }
 
-// isRequiredMode reports whether mode is one of the four real delta operands.
-func isRequiredMode(mode string) bool {
-	for _, m := range requiredModes {
+// isDeltaOperand reports whether mode is one of the delta operands the pass
+// indexes: the four required honest modes plus the optional baseline_rag arm.
+func isDeltaOperand(mode string) bool {
+	for _, m := range operandModes {
 		if m == mode {
 			return true
 		}

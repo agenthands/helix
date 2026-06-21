@@ -108,30 +108,37 @@ func TestFiveOfSixSmoke(t *testing.T) {
 	require.Equal(t, []string{task}, report.Computed, "the one task with all 4 real modes must have deltas computed")
 	require.Empty(t, report.Skipped, "no task should be skipped (all 4 real modes present)")
 
-	// The 4 real modes: exactly 4 rows on disk, each schema-valid + carrying deltas.
+	// The 4 honest modes PLUS baseline_rag: each schema-valid + carrying deltas.
+	// baseline_rag is now a delta operand (Phase 83 Task 3), so the task produces 4
+	// deltas (full vs baseline_plain/no_lsp/no_structured_edit/baseline_rag) and the
+	// baseline_rag row carries them too.
 	realModes := []string{"your_agent_full", "baseline_plain", "no_lsp", "no_structured_edit"}
 	for _, m := range realModes {
+		assert.True(t, ocByMode[m].Success, "honest real mode %s must be a success", m)
+	}
+	for _, m := range append(append([]string{}, realModes...), "baseline_rag") {
 		oc := ocByMode[m]
-		assert.True(t, oc.Success, "real mode %s must be a success", m)
-		require.FileExists(t, oc.Result.ResultPath, "real mode %s must write a result row", m)
+		require.FileExists(t, oc.Result.ResultPath, "operand mode %s must write a result row", m)
 		b, rerr := os.ReadFile(oc.Result.ResultPath)
 		require.NoError(t, rerr)
-		assert.NoError(t, Validate(b), "real mode %s row must be schema-valid after delta write-back", m)
+		assert.NoError(t, Validate(b), "operand mode %s row must be schema-valid after delta write-back", m)
 
 		var doc struct {
 			AblationDeltas map[string]map[string]float64 `json:"ablation_deltas"`
 			AblationStatus string                        `json:"ablation_status"`
 		}
 		require.NoError(t, json.Unmarshal(b, &doc))
-		require.NotNil(t, doc.AblationDeltas, "real mode %s row must carry ablation_deltas", m)
-		assert.Len(t, doc.AblationDeltas, 3, "real mode %s must carry exactly 3 deltas", m)
-		assert.Empty(t, doc.AblationStatus, "honest real mode %s must NOT carry ablation_status", m)
+		require.NotNil(t, doc.AblationDeltas, "operand mode %s row must carry ablation_deltas", m)
+		assert.Len(t, doc.AblationDeltas, 4, "operand mode %s must carry exactly 4 deltas (incl. full_minus_baseline_rag)", m)
+		_, hasRag := doc.AblationDeltas["full_minus_baseline_rag"]
+		assert.True(t, hasRag, "operand mode %s must carry the full_minus_baseline_rag delta", m)
+		assert.Empty(t, doc.AblationStatus, "operand mode %s must NOT carry ablation_status", m)
 	}
 
 	// The no_semantic row: a REAL row that (post-Phase-81) OMITS the deferral
 	// marker — the kernel disable_semantic_subsystem guarantee (ABLATE-06) landed,
-	// so the row is a clean measurement, not a partial. It is still NOT one of the
-	// 3 delta operands (so it carries no ablation_deltas).
+	// so the row is a clean measurement, not a partial. It is still NOT a delta
+	// operand (so it carries no ablation_deltas), unlike baseline_rag (Phase 83).
 	ns := ocByMode["your_agent_no_semantic"]
 	require.FileExists(t, ns.Result.ResultPath, "your_agent_no_semantic must write a row")
 	nsBytes, err := os.ReadFile(ns.Result.ResultPath)

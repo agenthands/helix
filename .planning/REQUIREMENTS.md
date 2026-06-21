@@ -1,210 +1,106 @@
-# Milestone v1.12 — Bench Stack & Tool Evaluation
+# Milestone v2.0 — CLI-First (MCP Surface Retirement)
 
-**Status:** Active (locked 2026-06-13)
+**Defined:** 2026-06-21
+**Status:** Active (locked 2026-06-21)
 **Source of truth:** This file (REQ-IDs are normative for the roadmap)
-**Upstream context:** `.planning/PROJECT.md` (Current Milestone), `.planning/research/{STACK,FEATURES,ARCHITECTURE,PITFALLS,SUMMARY}.md`
+**Upstream context:** `.planning/PROJECT.md` (Current Milestone v2.0), `.planning/research/{STACK,FEATURES,ARCHITECTURE,PITFALLS,SUMMARY}.md`
 
-**Headline claim to land:** *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
+**Core Value (this milestone):** The `helix` CLI is the only surface an agent touches — terse, `file:line`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents actually use the toolset instead of falling back to grep/sed/cat.
+
+**Locked architecture decision:** "Rip out MCP" = remove the *agent-facing* surface only (stdio forwarder head + Streamable-HTTP transport). The MCP SDK stays inside the daemon as the internal tool-dispatch + 5-middleware engine; the CLI drives it over the existing gRPC `StreamMCP` wire via one-shot `tools/call`. Excising the SDK (hat #2) is out of scope.
+
+**Locked design decisions (2026-06-21):**
+- Output flags `--json` / `--color` are **global persistent root flags**; text default, color=auto (off when piped).
+- The grep/sed/cat → `helix` nudge is **advisory-only** (exit 0, `additionalContext`), never blocking.
+- The retained gRPC IPC **optionally binds a TCP address** for split-host CLI↔daemon use (loopback default; non-loopback opt-in + gated).
+- File-location format: **workspace-relative `relpath:line:col`, 1-based** coordinates, deterministic ordering, `--abs` escape hatch — empirically validated against the LLM behavioral oracle (OUT-07).
 
 ---
 
 ## v1 Requirements
 
-Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly one phase.
+Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly one phase. REQ-IDs use new v2.0 category prefixes (no prior milestone used these).
 
-### Bench Foundation (BENCH-*)
+### CLI Invocation Spine (CLI-*)
 
-- [x] **BENCH-01**: Net-new `bench/` tree exists with the six-dir layout `bench/{datasets,runners,languages,evaluators,reports,schema}/` — the five runtime dirs plus the `schema/` **contract-only** dir (D-07; documented runtime-vs-contract in `bench/BENCH.md`). `eval/` (Phase 67) source/runtime code remains untouched. _Acceptance:_ `tree -d -L 2 bench/` matches the six-dir spec; `eval/` source/runtime is byte-identical to pre-milestone HEAD, with the single permitted change being the one-paragraph INFRA-03 reciprocal pointer in `eval/EVAL.md` (D-08/INFRA-03).
-- [x] **BENCH-02**: `cmd/helix-bench` binary builds (`go build ./cmd/helix-bench`) and ships cobra subcommands `run`, `fetch-datasets`, `doctor`, `report`, `validate-cost-table`. _Acceptance:_ `helix-bench --help` lists all 5 subcommands; `helix-bench doctor` succeeds on a clean Linux host with documented prereqs.
-- [x] **BENCH-03**: Normalized per-task result schema (JSON) versioned at `v2`, validated by JSON Schema; round-trips through `bench/evaluators/aggregator/`. _Acceptance:_ a golden result fixture validates; schema-version field present; backwards-incompatible changes bump major version.
-- [x] **BENCH-04**: Bench runtime reuses Phase 67's `internal/eval/sandbox` and subprocess patterns; one daemon subprocess per `(task × mode)`. _Acceptance:_ in-process smoke run completes ≤ 30 s for the smallest task; no port collisions on parallel runs.
-- [x] **BENCH-05**: `make bench`, `make bench-quick`, `make bench-<suite>` targets exist and invoke `cmd/helix-bench run --benchmarks=…`. _Acceptance:_ `make bench-quick` exits 0 with ≥1 task succeeding in CI in ≤ 90 s.
-- [x] **BENCH-06**: `bench/BENCH.md` documents operator-side prereqs (Python 3.11+, Docker Engine, per-language toolchains) and provider-TOS attestation (retention-zero verified per provider) parallel to `eval/EVAL.md`. _Acceptance:_ `make verify-tos` exits non-zero if any provider's TOS attestation row is older than 90 days.
+- [ ] **CLI-01**: `helix <verb>` invokes a single tool against the warm daemon via a one-shot `tools/call` over the existing gRPC `StreamMCP` wire, reusing `forwarder.ConnectOrStartDaemon`. _Acceptance:_ a representative verb round-trips through the daemon and returns the same tool result the MCP path returned; `git diff api/proto/` is empty (zero proto changes).
+- [ ] **CLI-02**: CLI invocations auto-start the daemon on a cold host and reuse a warm daemon thereafter; second-call latency meets a phase-set SLO. _Acceptance:_ first call spawns the daemon once; warm second-call p50 is below the SLO recorded in the phase.
+- [ ] **CLI-03**: Daemon auto-start is race-free under parallel first calls — a cross-process startup lock prevents duplicate daemon spawns and connect storms. _Acceptance:_ N parallel cold `helix` invocations result in exactly one daemon process (integration/synctest).
+- [ ] **CLI-04**: No-arg `helix` prints grouped usage/help and no longer launches a stdio MCP server. _Acceptance:_ `helix` with no args exits 0 with grouped command help and opens no MCP stdio session.
 
-### Fairness Contract (FAIR-*)
+### Verb Surface & Codegen (VERB-*)
 
-- [x] **FAIR-01**: Single `bench/runners/fairness_contract.go` struct loaded by every mode — pins temperature, max_tokens, retry policy, system prompt, cached-input handling, model snapshot (e.g. `claude-sonnet-4-5-20260128`). _Acceptance:_ unit test asserts every runner's effective config equals the loaded contract; runtime mismatch is a fatal startup error.
-- [x] **FAIR-02**: Dated model snapshot pinned (no alias resolution at runtime). Provider deprecation calendar gate fails the run if the pinned snapshot's EOL is < 30 days away. _Acceptance:_ test passes with a fresh pin; fails with a pin within 30 days of a known deprecation.
-- [x] **FAIR-03**: A/B routing / cache-fingerprint variance is detected — each task records the provider-side `usage` block (including cache_read_input_tokens and cache_creation_input_tokens) and the bench reporter flags > 5 % between-run variance as a fairness warning. _Acceptance:_ a synthetic high-variance trace produces a fairness warning in `cost_quality.md`. _Phase split:_ **Phase 75 delivers the FAIR-03 schema substrate only** — the cached-input token columns (`tokens_input_cached_read`, `tokens_input_cache_write`) and the `fairness.overrides[]` array in `result.v2.schema.json` (D-12/D-10). The > 5 % between-run variance detector and the `cost_quality.md` fairness warning land downstream (variance gate consumes STATS-01 N≥3 in Phase 82; the warning renders in the reports phase, Phase 89). Do NOT grade the FAIR-03 acceptance test complete in Phase 75.
+- [ ] **VERB-01**: Every callable tool in the live registry has a corresponding `helix <verb>` subcommand, code-generated from the typed `*Args` structs (existing `json` + `jsonschema` tags). _Acceptance:_ a parity test asserts generated subcommand count == live registry tool count, enumerated by name.
+- [ ] **VERB-02**: A `helix-cligen` generator emits committed `*_gen.go`; a `--check` CI drift gate fails on stale generated code (mirrors the docgen / PromQL gates). _Acceptance:_ editing a tool's args without regenerating fails CI.
+- [ ] **VERB-03**: `helix --help` groups verbs by capability (navigation / edit / fileops / diagnostics / repomap / memory) via cobra `AddGroup`; each verb's `--help` shows flags derived from its arg struct with required-ness. _Acceptance:_ grouped help renders; a required arg without a flag value errors before dialing the daemon.
+- [ ] **VERB-04**: The tool-name → arg-struct-type mapping the generator needs is available (a `ToolDef` field or a generator-side table). _Acceptance:_ the generator resolves the arg struct for every registered tool with no manual per-tool edits.
 
-### Internal ToolBench (TOOLBENCH-*)
+### Terse Output Contract (OUT-*) — load-bearing
 
-- [x] **TOOLBENCH-01**: 10 capability test classes implemented under `bench/datasets/internal-toolbench/` — semantic view, LSP diagnostics, rename safety, fuzzy search, call graph, dependency graph, patch apply, context minimization, incremental update, failure handling. _Acceptance:_ each capability has at least 1 deterministic test per supported language; capability list documented in `bench/datasets/internal-toolbench/CAPABILITIES.md`.
-- [x] **TOOLBENCH-02**: Tier-1 language coverage **Go** — all 10 capabilities have ≥ 1 fixture; `bench/languages/go/runner.go` wraps `go test ./... -json`. _Acceptance:_ ToolBench-Go full run passes locally; capability coverage reported per language.
-- [x] **TOOLBENCH-03**: Tier-1 language coverage **Python** — `pytest --json-report`. _Acceptance:_ ≥ 8/10 capabilities covered; gaps logged.
-- [x] **TOOLBENCH-04**: Tier-1 language coverage **TypeScript** — `vitest --reporter=json` (or `jest --json`). _Acceptance:_ ≥ 8/10 capabilities; LSP diagnostics via tsserver.
-- [x] **TOOLBENCH-05**: Tier-1 language coverage **JavaScript** — `jest --json`. _Acceptance:_ ≥ 8/10 capabilities; eslint-based diagnostics.
-- [x] **TOOLBENCH-06**: Tier-1 language coverage **Java** — `mvn test -Dsurefire.useFile=false`. _Acceptance:_ ≥ 8/10 capabilities; jdtls-backed semantic view.
-- [x] **TOOLBENCH-07**: Tier-1 language coverage **C#** — `dotnet test --logger trx`. _Acceptance:_ ≥ 6/10 capabilities (C# has weaker LSP server coverage); gaps logged.
-- [x] **TOOLBENCH-08**: Tier-1 language coverage **C++** — `cmake/ctest`. _Acceptance:_ ≥ 6/10 capabilities; clangd-backed semantic view.
-- [x] **TOOLBENCH-09**: Tier-1 language coverage **Rust** — `cargo test` (libtest TEXT, NOT `--message-format=json` — Pitfall 2). _Acceptance:_ ≥ 8/10 capabilities; rust-analyzer-backed semantic view.
-- [x] **TOOLBENCH-10**: `bench/languages/<L>/runner.go` implements a common `LanguageRunner` interface (`Detect`, `Setup`, `RunTests`, `Capabilities`). _Acceptance:_ `go vet` + interface-conformance test passes for all 8 languages.
+- [ ] **OUT-01**: Default output is terse `relpath:line:col<TAB>payload` — workspace-relative paths, 1-based line/col (converted from LSP 0-based), no ANSI when non-tty, honoring `NO_COLOR`. _Acceptance:_ piped output contains zero ANSI bytes; coordinates are 1-based; per-verb golden matches.
+- [ ] **OUT-02**: Output ordering is deterministic (sorted + deduped) across repeated runs. _Acceptance:_ the same query yields byte-identical output across N repeated runs.
+- [ ] **OUT-03**: Each verb's output is self-contained enough to act on in one round-trip (navigation verbs print locus + enclosing symbol + one snippet line; outline verbs print shape only). _Acceptance:_ per-verb goldens; behavioral-oracle check that nav verbs do not force a follow-up `Read`.
+- [ ] **OUT-04**: A read-verb's output is a copy-paste-able input to an edit/nav verb (stable symbol locator handle). _Acceptance:_ `helix find-symbol` output feeds `helix replace-symbol-body` / `get-callers` verbatim.
+- [ ] **OUT-05**: The v1.5 typed-error taxonomy is preserved on the CLI — each error kind surfaces as a stable stderr prefix plus a per-kind non-zero exit code. _Acceptance:_ each documented error kind maps to a stable prefix + exit code the agent can branch on.
+- [ ] **OUT-06**: Global persistent `--json` (opt-in compact JSON lines) and `--color` (auto/always/never) flags; terse text is the default. _Acceptance:_ `--json` emits compact JSON; omitting it yields terse text; `--color=never` ≡ piped behavior.
+- [ ] **OUT-07**: The path-format best practice (workspace-relative + `--abs` escape hatch) is empirically validated via the LLM behavioral oracle and the chosen anchor is documented in `SKILL.md`. _Acceptance:_ the behavioral oracle confirms agents resolve `helix`-emitted paths without error; `--abs` produces absolute paths.
 
-### Ablation Modes (ABLATE-*)
+### Profile / Mode Enforcement (SEC-*) — security-load-bearing
 
-- [x] **ABLATE-01**: 6 modes implemented: `baseline_plain`, `baseline_rag`, `your_agent_full`, `no_lsp`, `no_semantic`, `no_structured_edit`. _Acceptance:_ each mode runs end-to-end on a smoke task; mode definition lives in `bench/runners/<mode>/MODE.md`.
-- [x] **ABLATE-02**: Mode YAML profiles for `your_agent_full`, `no_lsp`, `no_semantic`, `no_structured_edit` ship as `internal/profile/profiles/bench-*.yaml` (4 new YAMLs). _Acceptance:_ profile-filter golden tests cover each YAML; profile loader rejects an unknown mode name.
-- [x] **ABLATE-03**: `baseline_plain` mode reuses existing `baseline.yaml` (Phase 67) — no new YAML, no Helix tools exposed. _Acceptance:_ tool inventory for `baseline_plain` is empty except for the shell/grep/read/edit/test the agent gets from the agent runtime itself.
-- [x] **ABLATE-04**: `baseline_rag` mode is implemented as a **standalone MCP server** `cmd/helix-bench-rag` exposing exactly 4 tools (`rag_search`, `rag_read_chunk`, `grep`, `read_file`). It is **not** a Helix profile and shares no code with the Helix daemon's tool surface. _Acceptance:_ `cmd/helix-bench-rag --help` works; tool-list returns exactly 4 tools; vet test asserts no import from `internal/kernel/` or `internal/semantic/`.
-- [x] **ABLATE-05**: Kernel-level `disable_lsp_subsystem` flag prevents any back-channel LSP call (including from `analyze_blast_radius` strangler-fig, RepoMap `SetEnrichFn`, live-update OnEdit hooks). _Acceptance:_ E2E `no_lsp` task emits **zero** `lsp.*` OTel spans; trace-tap assertion is a hard fail.
-- [x] **ABLATE-06**: Kernel-level `disable_semantic_subsystem` flag prevents any back-channel semantic-store read (including Phase 65 SemanticLookup, RankFiles, ExpandFrom). _Acceptance:_ E2E `no_semantic` task makes zero queries against the duckdb store; runtime assertion logs and fails.
-- [x] **ABLATE-07**: Kernel-level `disable_structured_edit_subsystem` flag forces fall-through to plain unified-diff patches; structured-edit tools (replace_symbol_body, fuzzy_edit, etc.) return `unsupported` with a documented kind. _Acceptance:_ `no_structured_edit` mode's tool inventory excludes structured edits; agent receives plain `replace_in_file` only.
-- [x] **ABLATE-08**: `vet-ablation-leakage` static analyzer (in `internal/lint/`) fails the build if any mode-restricted tool path reaches a disabled subsystem. Hooked into `make vet`. _Acceptance:_ a deliberate test-case violation makes `make vet` fail.
+- [ ] **SEC-01**: Profile/mode filtering is enforced on `tools/call` (not only the removed `tools/list`), so a read-mode or ci-bot agent cannot invoke destructive edit verbs via the CLI. _Acceptance:_ `helix replace-symbol-body` under read mode is refused with a typed error; the same verb succeeds under edit mode.
+- [ ] **SEC-02**: The CLI honors the resolved profile tool-subset (`config.ResolveProfile`) — verbs outside the active profile are hidden and refused. _Acceptance:_ per-profile goldens (re-pointed from the MCP `tools/list` goldens) verify the CLI verb surface per profile.
 
-### Metrics Layer (METRIC-*)
+### Skill, Nudge & Setup (SKILL-*)
 
-- [x] **METRIC-01**: 12 normalized metrics per task: `task_success`, `verified_correctness`, `tokens_input`, `tokens_output`, `tool_calls`, `wall_time_seconds`, `files_read`, `bytes_read`, `files_modified`, `edit_locality`, `regression_rate`, `lsp_diagnostics_used`. _Acceptance:_ result JSON schema validates against the v1 schema; missing metrics are explicit nulls, not omissions.
-- [x] **METRIC-02**: Additional metrics: `semantic_tool_calls`, `edit_distance_patch`, `retry_count`, `compile_errors_before`, `compile_errors_after`. _Acceptance:_ test records all 17 metrics for a real task run.
-- [x] **METRIC-03**: `tokens_input/output` are sourced from the **provider's `usage` block**, not Helix's MCP-side counters. _Acceptance:_ regression test asserts source-of-truth for token counts is the provider response, not internal counters.
-- [x] **METRIC-04**: `edit_locality` defined as `1 − (modified_files / total_files_in_repo_subtree)`; documented in `bench/evaluators/METRICS.md`. _Acceptance:_ definition test verifies edge cases (root-only edit = 1.0, all-files edit ≈ 0.0).
-- [x] **METRIC-05**: `regression_rate` defined as `(failing_pre-existing_tests_post_patch / passing_pre-existing_tests_pre_patch)`. _Acceptance:_ definition test on a synthetic regression case.
-- [x] **METRIC-06**: Trace merging from Helix daemon OTel + agent CLI subprocess + bench harness span — single merged trace per `(task, mode, run_index)`. Reuses Phase 67 trace-tap. _Acceptance:_ Jaeger import shows full continuity from `bench.run_id` root to LSP leaves; no orphan spans.
+- [ ] **SKILL-01**: Ship a `SKILL.md` (embedded via `go:embed`) with frontmatter (`name` / `description` / `allowed-tools: Bash(helix:*)`) and a `| Question | Use this | Not this |` decision table; the description fires on code-navigation/edit tasks without over-firing. _Acceptance:_ the skill validates against the Claude Code skill schema; the behavioral oracle shows it triggers on code tasks and stays dormant on unrelated ones.
+- [ ] **SKILL-02**: `helix setup <client>` installs the skill + hooks instead of registering an MCP server, idempotently, across the supported clients, and tears down any prior MCP registration (migration path). _Acceptance:_ `helix setup claude-code` leaves skill + hooks present and no MCP server entry; re-running is idempotent.
+- [ ] **SKILL-03**: The PreToolUse nudge hook is repurposed to advisory-steer grep/sed/cat → the equivalent `helix <verb>` via `additionalContext`, exiting 0, failing open on unparseable Bash and non-code targets. _Acceptance:_ a code-symbol grep yields a `helix` suggestion; a README/log grep yields none; the hook never blocks.
+- [ ] **SKILL-04**: The `SKILL.md` token-efficiency rationale is backed by a real measurement (idle skill cost vs the preloaded full-tool schema blob). _Acceptance:_ measured before/after token numbers are recorded in `SKILL.md` or a referenced doc.
 
-### Verified Correctness (VERIFIED-*)
+### MCP Surface Retirement (RETIRE-*)
 
-- [x] **VERIFIED-01**: `verified_correctness` is computed independently of `task_success` — multi-oracle verdict: (a) all canonical tests pass, (b) all augmented tests pass (UTBoost or equivalent for benchmarks that have them), (c) no pre-existing tests regress. _Acceptance:_ a known-buggy patch that passes only canonical tests gets `task_success=true`, `verified_correctness=false`.
-- [x] **VERIFIED-02**: SWE-bench Verified runs report **both** raw upstream score and UTBoost-augmented rescored score side-by-side. _Acceptance:_ SWE-bench Verified report has both columns; UTBoost augmented suite is wired and reproducible.
-- [x] **VERIFIED-03**: Multi-oracle gate for non-test-bearing benchmarks (CrossCodeEval, RepoBench): EM + edit-similarity + identifier match all required to pass; abstain mode for low-confidence completions. _Acceptance:_ gate documented in `bench/evaluators/VERIFIED.md`; threshold per oracle configurable.
+- [ ] **RETIRE-01**: The stdio MCP forwarder head is removed; agents no longer connect via stdio MCP (the forwarder dial path is retained only for CLI→daemon gRPC). _Acceptance:_ no stdio MCP server code path remains reachable; the CLI still dials the daemon.
+- [ ] **RETIRE-02**: The Streamable-HTTP MCP transport (`/mcp`, `--mode http`) is removed. _Acceptance:_ the HTTP MCP endpoint is gone and `--mode http` no longer serves MCP.
+- [ ] **RETIRE-03**: MCP-head removal happens only after CLI parity is proven via dual-run (strangler-fig) — a parity test compares CLI output against the pre-removal MCP path for a representative tool set. _Acceptance:_ the dual-run parity test is green in the commit immediately before the deletion commit.
+- [ ] **RETIRE-04**: The retained gRPC IPC optionally binds a TCP address for split-host CLI↔daemon use (loopback/unix-socket default; non-loopback TCP opt-in, gated and documented per the v1.2 admin-addr loopback pattern). _Acceptance:_ the CLI can target a configured TCP daemon endpoint; the default remains the local unix socket.
 
-### Statistical Rigor (STATS-*)
+### Docs & Identity (DOCS-*)
 
-- [x] **STATS-01**: Default `N ≥ 3` runs per task per mode; N configurable per-suite. _Acceptance:_ schema validates `runs` array length ≥ N; matrix runner enforces.
-- [x] **STATS-02**: BCa (bias-corrected accelerated) bootstrap CIs computed over per-task aggregates for every metric on every leaderboard row. Bootstrap iterations ≥ 10,000. _Acceptance:_ unit tests against a closed-form known distribution; CI width sanity-checked.
-- [x] **STATS-03**: `pass@1` and `pass@k` reported per HumanEval closed-form `1 − C(n-c, k)/C(n, k)`. _Acceptance:_ unit test against published reference values.
-- [x] **STATS-04**: Reports flag any cell where the BCa CI overlaps a neighboring cell (no claim of "X > Y" without non-overlapping CIs). _Acceptance:_ a synthetic-overlap test case is rendered with the overlap warning.
+- [ ] **DOCS-01**: Identity rewrite — README, CLAUDE.md, and PROJECT.md ("Core Value"; Constraints "Protocol: MCP — primary interface") are rewritten to a CLI-first identity. _Acceptance:_ no doc claims MCP as the primary agent interface; the CLI-first framing is consistent across all four docs.
+- [ ] **DOCS-02**: The auto-generated tool table is regenerated against the CLI surface (`cmd/docgen` enumerates verbs; docgen blank-imports stay == the daemon's). _Acceptance:_ the generated table lists `helix` verbs and the docgen drift gate is green.
+- [ ] **DOCS-03**: The CLAUDE.md "tool routing" guidance is updated to reference `helix <verb>` instead of MCP tool names. _Acceptance:_ the routing matrix cites CLI verbs end-to-end.
 
-### Cost Conversion (COST-*)
+### Test & Oracle Migration (TEST-*)
 
-- [x] **COST-01**: `bench/datasets/cost-table.yaml` ships with provider × model × `{input_per_mtok, output_per_mtok, currency}` and a `valid_until` date. _Acceptance:_ schema validates; CI gate fails if `valid_until` is past or > 90 days away from `last_verified`.
-- [x] **COST-02**: `cost_per_solved_task` = (sum across solved tasks of provider-side `usage`-derived USD cost) / count(solved). _Acceptance:_ matches a hand-computed example for a known run.
-- [x] **COST-03**: `cost_quality.md` report shows cost-per-solved-task per mode × benchmark with BCa CIs. _Acceptance:_ report renders for a sample run.
+- [ ] **TEST-01**: A CLI-over-daemon end-to-end oracle exercises `helix <verb>` as a subprocess against a real daemon (reusing the v1.12 bench subprocess/sandbox patterns). _Acceptance:_ the E2E suite runs a representative verb set green under `go test`.
+- [ ] **TEST-02**: The contract oracle is re-targeted — goldens become CLI stdout goldens (ordering, `file:line`, error-kind prefix); schema meta-validation becomes "typed args → cobra flags" parity. _Acceptance:_ the contract oracle passes against CLI output.
+- [ ] **TEST-03**: Skill + nudge behavior is verified via the v1.4 LLM behavioral harness — confirming the skill shifts agent tool-selection toward `helix` and the nudge fires correctly. _Acceptance:_ the behavioral oracle records a tool-selection improvement vs the grep/sed/cat baseline.
 
-### Public Benchmark Adapters (ADAPTER-*)
+## v2 Requirements (deferred to future milestones)
 
-- [x] **ADAPTER-AIDER-01**: Aider Polyglot adapter wired via `dataset-loader-only` — shallow git clone `Aider-AI/polyglot-benchmark` at pinned sha; 225 tasks × 6 langs (C++, Go, Java, JS, Python, Rust); 2-attempt protocol with stderr re-prompt. _Acceptance:_ full Aider Polyglot run completes; per-language pass-rate matches sanity benchmarks.
-- [x] **ADAPTER-CCE-01**: CrossCodeEval adapter wired via `dataset-loader-only` — HF dataset; EM + edit-similarity + identifier-match scoring; Python, Java, TS, C#. _Acceptance:_ smoke run scores at least one task per language; scorers unit-tested against CCE paper examples.
-- [x] **ADAPTER-REPO-01**: RepoBench adapter wired via `dataset-loader-only` — RepoBench-R + RepoBench-C + RepoBench-P sub-tasks; Python + Java. _Acceptance:_ smoke run for each sub-task; EM/ES metrics match published reference values on a sampled subset.
-- [x] **ADAPTER-SWE-01**: SWE-bench Verified adapter wired via `subprocess-shellout` — produces `predictions.jsonl`; shells out to `python -m swebench.harness.run_evaluation`; ingests `<run_id>.json`. _Acceptance:_ smoke run of 5 tasks completes; result JSON ingested into bench schema.
-- [x] **ADAPTER-MULTI-01**: Multi-SWE-bench adapter wired via `subprocess-shellout` — `python -m multi_swe_bench.harness.run_evaluation --config`; Java, TS, JS, Go, Rust, C, C++ (Mini set acceptable at ship; full set reach goal). _Acceptance:_ Mini set runs; per-language slicing exposed in reporter.
-- [x] **ADAPTER-TERM-01**: Terminal-Bench 2.0 adapter wired via `subprocess-shellout` — drives agent through `tb run` CLI; ingests `tb` JSON. _Acceptance:_ smoke run of ≥ 5 tasks; container-isolation invariant holds.
+### Remote / Multi-Host (REMOTE-*)
 
-### Container Runtime (CONTAINER-*)
+- **REMOTE-01**: Authenticated non-loopback gRPC TCP transport (mTLS / token auth) for true remote daemon access beyond the gated opt-in in RETIRE-04.
+- **REMOTE-02**: A multi-client fan-out story to replace the removed HTTP transport's multi-connection scenarios, if a concrete need surfaces.
 
-- [x] **CONTAINER-01**: Container orchestration uses `os/exec` to `docker` (or `podman` via drop-in compat). No Go Docker SDK in `go.mod`. _Acceptance:_ `grep "github.com/docker/docker"` in `go.mod` returns empty; bench harness works with either `docker` or `podman` on PATH.
-- [x] **CONTAINER-02**: Per-instance images pinned by SHA256 digest, not tag. Image-cache state cached at `$HELIX_CACHE_DIR/bench-images/<sha>/`. _Acceptance:_ digest-pin test; cache hit on re-run.
-- [x] **CONTAINER-03**: cosign-signed mirror of SWE-bench / Multi-SWE-bench / Terminal-Bench instance images published to a Helix-controlled GHCR namespace; bench harness verifies cosign signature before pulling. _Acceptance:_ mirror exists; verify step is mandatory; tampered image is rejected.
-- [x] **CONTAINER-04**: Disk-budget guard fails the run if available disk on the bench host is < 50 GB before SWE-bench full run. _Acceptance:_ synthetic low-disk test trips the guard.
+## Out of Scope
 
-### Reports (REPORT-*)
-
-- [x] **REPORT-01**: `bench/reports/leaderboard.md` — top-line table of `(mode × benchmark) → pass@1, verified_correctness, cost_per_solved` with BCa CIs and non-overlap markers. _Acceptance:_ regenerates from a sample run; renders in GitHub markdown.
-- [x] **REPORT-02**: `bench/reports/per_language.md` — per-language slice of all 8 Tier-1 languages × benchmarks that cover that language. _Acceptance:_ a language with no benchmark coverage is explicitly listed as `n/a`, not omitted.
-- [x] **REPORT-03**: `bench/reports/ablations.md` — delta tables: `full vs no_lsp`, `full vs no_semantic`, `full vs no_structured_edit`, `full vs baseline_plain`, `full vs baseline_rag`. Each delta has CI overlap analysis. _Acceptance:_ deltas computed correctly on a sample run.
-- [x] **REPORT-04**: `bench/reports/cost_quality.md` — cost-per-solved-task scatter (cost vs verified_correctness) per mode × benchmark. _Acceptance:_ scatter renders as ASCII / svg; report cites cost-table `valid_until`.
-- [x] **REPORT-05**: Reports are reproducible from a run-id: `helix-bench report --run-id <id>` regenerates all 4 reports byte-identically. _Acceptance:_ `diff` on regenerated vs original report is empty.
-
-### Infrastructure & Hygiene (INFRA-*)
-
-- [x] **INFRA-01**: Provider TOS attestation captured per provider in `bench/PROVIDERS.md` with retention-zero confirmation; CI gate `make verify-tos` (see BENCH-06). _Acceptance:_ attestation per provider used; stale attestations fail CI.
-- [x] **INFRA-02**: License audit per dataset captured in `bench/LICENSES.md` — SWE-bench, Multi-SWE-bench, Aider Polyglot (Exercism MIT), CrossCodeEval, RepoBench, Terminal-Bench. _Acceptance:_ each dataset has an explicit license + redistribution clause.
-- [x] **INFRA-03**: Eval ↔ bench separation note in `bench/BENCH.md`: `eval/` stays as the in-process PR-gate wiring smoke; `bench/` is the milestone artifact for headline claims (prose-enforced this milestone — no analyzer; D-08). _Acceptance:_ note rendered; reciprocal cross-link added to `eval/EVAL.md` (this one-paragraph pointer is the single permitted change to `eval/` under BENCH-01, which otherwise stays byte-identical).
-- [x] **INFRA-04**: CI policy documented: `make bench-quick` runs on PR (ToolBench Go-only, ≤ 5 minutes, no LLM cost). Full `make bench` runs nightly or on-demand, gated on a maintainer. _Acceptance:_ workflow file exists; PR cost ≤ documented budget.
-- [x] **INFRA-05**: Contamination canary — a known-novel "canary" pattern emitted in select tasks; if a model emits the canary verbatim, the task is flagged as potentially-contaminated and excluded from headline numbers. _Acceptance:_ a synthetic contaminated-response test trips the flag; flagged tasks listed in `leaderboard.md` footnote.
-
----
-
-## Future Requirements (v1.13+)
-
-- Tier-2 languages (PHP, Ruby, Kotlin, Swift, C, Scala) — ToolBench coverage.
-- Tier-3 languages (Lua, Dart, Objective-C, R, Bash, PowerShell) — smoke-only via MultiPL-E / McEval.
-- Pluggable agent runners — Codex CLI, Gemini CLI, OpenAI Agents SDK direct, Anthropic SDK direct.
-- LLM judge as a CI gate (currently informational only per Phase 67 EVAL-07).
-- Public-benchmark *leaderboard submission* infrastructure (SWE-bench leaderboard PR, Aider leaderboard automation).
-- Hosted bench-as-a-service (per-PR cost-controlled bench run for any project).
-- Differential test execution / mutation testing for `verified_correctness` beyond UTBoost.
-- Dynamic cost-table updates via provider pricing-page polling.
-
----
-
-## Out of Scope (v1.12 explicit exclusions)
-
-- **HumanEval-style toy benchmarks as primary scoring.** MultiPL-E / HumanEval-X / McEval kept as smoke-only signals; never appear on the leaderboard headline.
-- **Tier-2 and Tier-3 languages.** Future milestones.
-- **LLM judge as a CI gate.** Stays informational per Phase 67 EVAL-07.
-- **Comparing against Claude Code / Cursor / Continue as black boxes.** v1.12 only does controlled baselines using the *same* base model. External comparisons are a separate exercise.
-- **Public-benchmark leaderboard submissions.** Generating local results is sufficient; submission infra deferred to v1.13+.
-- **Embedding/vector search in the Helix daemon.** `baseline_rag` ships as a standalone `cmd/helix-bench-rag` MCP server, never as a Helix profile. The PROJECT.md "Vector/embedding search → out of scope" rule for the daemon stands.
-- **CGO=0 build paths.** v1.10 dropped CGO=0 entirely; v1.12 inherits.
-- **Reimplementing upstream Python harnesses in Go.** subprocess-shellout for SWE-bench / Multi-SWE-bench / Terminal-Bench; ~6-month effort for zero comparability gain.
-
----
+| Feature | Reason |
+|---------|--------|
+| Excising the MCP SDK from the daemon | Internal dispatch/middleware engine stays; only the external surface is removed. ~5× the work for zero agent-visible benefit. |
+| Removing the gRPC IPC layer | The daemon↔CLI wire is retained — it already carries the `tools/call` frames. |
+| Re-implementing the 5 middlewares natively | Telemetry / profile-filter / suggest / lazy-init / guardrail keep running inside the daemon unchanged. |
+| A compatibility MCP shim / dual MCP+CLI head | Clean retirement, not dual-head; revisit only if a concrete client need surfaces. |
+| Playwright-style named sessions (`-s <name>`) | Code navigation is stateless; the warm daemon is the only state that matters. |
+| Default-on JSON output | JSON is more tokens and lower fluency for an LLM reader than terse `file:line`; `--json` is opt-in. |
+| A generic `helix run <tool> --json` mega-verb | Kills discoverability and reintroduces a schema blob; one explicit verb per tool instead. |
+| Hard-deny-every-grep nudge | False positives on log/README/YAML greps break legitimate work; advisory-only. |
+| Real authn implementation for non-loopback TCP | RETIRE-04 only gates/documents the opt-in; full auth deferred to REMOTE-01. |
 
 ## Traceability
 
-Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-ID maps to exactly one phase (no orphans, no overlaps). 63/63 mapped.
+Which phases cover which requirements. Filled in during roadmap creation.
 
-| REQ-ID | Phase | Plan(s) | Status |
-|---|---|---|---|
-| BENCH-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| BENCH-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| BENCH-03 | Phase 75 (plan 03) | 479e5c14 | Complete |
-| BENCH-04 | Phase 77 (plans 01-03) | 77-03 | Complete |
-| BENCH-05 | Phase 77 (plan 05) | 9aa1fa49 | Complete |
-| BENCH-06 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| FAIR-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| FAIR-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| FAIR-03 | Phase 75 plan 03 = schema substrate landed (479e5c14); variance gate Phase 82, warning Phase 89 | 479e5c14 (substrate) | Substrate done; full REQ pending Phase 82/89 |
-| TOOLBENCH-01 | Phase 78 (plans 02-05) | 78-05 | Complete |
-| TOOLBENCH-02 | Phase 78 (plans 01-05) | 78-05 | Complete |
-| TOOLBENCH-03 | Phase 85 | 85-03 | Complete — PyRunner (pytest --json-report, parsePytestJSON), 9/9 capabilities (≥8), hermetic golden-fixture parser test (sole proof) |
-| TOOLBENCH-04 | Phase 85 | 85-05 | Complete — TSRunner (vitest --reporter=json, parseJestStyleJSON), 9 capabilities incl tsserver CapLSPDiagnostics (≥8), hermetic golden test |
-| TOOLBENCH-05 | Phase 85 | 85-05 | Complete — JSRunner (jest --json), 9 capabilities incl eslint CapLSPDiagnostics (≥8), package.json-without-tsconfig Detect precedence, hermetic golden test |
-| TOOLBENCH-06 | Phase 85 | 85-03 | Complete — JavaRunner (mvn surefire, parseSurefireXML), 9/9 capabilities (≥8), REAL-provenance surefire golden (apache/maven-surefire@5ee132b4) + TestJavaFixtureProvenance gate; live mvn skips (no JDK) |
-| TOOLBENCH-07 | Phase 85 | 85-03 | Complete — CSharpRunner (dotnet test --logger trx, parseTRX), 7/7 capabilities (≥6), live-captured dotnet 8 TRX golden |
-| TOOLBENCH-08 | Phase 85 | 85-04 | Complete |
-| TOOLBENCH-09 | Phase 85 | 85-04 | Complete |
-| TOOLBENCH-10 | Phase 78 (plan 01) | 78-05 | Complete |
-| ABLATE-01 | Phase 80 | (see phase SUMMARY) | Complete — verified (Phase 80, VERIFICATION passed) |
-| ABLATE-02 | Phase 76 | 76-02 | Complete |
-| ABLATE-03 | Phase 80 | (see phase SUMMARY) | Complete — verified (Phase 80, VERIFICATION passed) |
-| ABLATE-04 | Phase 83 | 83-01, 83-02, 83-03 | Complete — standalone cmd/helix-bench-rag 4-tool MCP server (no kernel/semantic/mcp import, dual static+transitive gate); chromem-go per-corpus index cache; baseline_rag real drive leg reusing DefaultContract, out-of-band index (budget-excluded), embedder_id on every row |
-| ABLATE-05 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
-| ABLATE-06 | Phase 81 | 81-04, 81-05 | Complete |
-| ABLATE-07 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
-| ABLATE-08 | Phase 76 | (see phase SUMMARY) | Complete — verified (Phase 76, VERIFICATION passed) |
-| METRIC-01 | Phase 79 | 79-01 | Complete |
-| METRIC-02 | Phase 79 | 79-02 | Complete |
-| METRIC-03 | Phase 79 | 79-03 | Complete |
-| METRIC-04 | Phase 79 | 79-02 | Complete |
-| METRIC-05 | Phase 79 | 79-02 | Complete |
-| METRIC-06 | Phase 79 | 79-04 | Complete |
-| VERIFIED-01 | Phase 87 | 87-03 | Complete |
-| VERIFIED-02 | Phase 87 | 87-03, 87-04 | Complete |
-| VERIFIED-03 | Phase 86 | 86-02 | Complete — multi-oracle completion gate (EM AND edit-similarity≥threshold AND identifier-match all required; per-oracle configurable ESThreshold w/ DefaultESThreshold=0.9 fail-closed on zero-value config); abstain → explicit `verified_correctness=false` (never nil, never false-true); documented in bench/evaluators/VERIFIED.md behind a `make verify-verified-md` gate |
-| STATS-01 | Phase 82 | 82-01, 82-05 | Complete — ExpandMatrix N cells + --runs (producer); aggregator fail-closed N-gate (expectedN-from-arg, zero-discovery hard error) |
-| STATS-02 | Phase 82 | 82-02, 82-06 | Complete — BCaInterval (z0 + jackknife a, seeded >=10k resamples, BCa!=percentile-on-skew proven, ordering guard, D-09 degenerate matrix); CIs on every leaderboard row |
-| STATS-03 | Phase 82 | 82-03, 82-06 | Complete — HumanEval unbiased c-term pass@k (0.91667 anchor, anti-naive + lgamma-agreement), pass@1/pass@k columns |
-| STATS-04 | Phase 82 | 82-06 | Complete — BCa CI-overlap gate renders warning + suppresses X>Y for overlapping neighbors |
-| COST-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| COST-02 | Phase 82 | 82-04 | Complete — cost_per_solved_task golden (3.555) + model_id join + freshness gate fail-closed |
-| COST-03 | Phase 82 | 82-06, 82-07 | Complete — cost_quality.md renders cost-per-solved per mode×benchmark with BCa CIs + FAIR-03 CV>0.05 variance warning |
-| ADAPTER-AIDER-01 | Phase 85 | 85-07 | Complete — dataset-loader-only adapter landed (bench/datasets/aider-polyglot): pinned-sha `--depth 1` clone of Aider-AI/polyglot-benchmark @ 7e0611e7, `.meta/config.json` files.solution/test/example mapping, 2-attempt + stderr-reprompt protocol (tries=2/180s) over aider's native per-language commands. Proven hermetically over a committed fixture set; live clone verified once (HEAD==pin, 225 tasks/6 tracks). SC#3 non-hermetic flagging via the 85-02 `--network=none` seam. SC#1 full live run + per-language sanity comparison recorded as toolchain/network-gated. |
-| ADAPTER-CCE-01 | Phase 86 | 86-01, 86-03 | Complete — CrossCodeEval dataset-loader-only adapter (Py/Java/TS/C#); EM/edit-similarity(normalized Levenshtein)/identifier-match scorers unit-tested vs CCE paper (arXiv:2310.11248); HF parquet fetcher BUILT (net/http + arrow-go pqarrow, SSRF-pinned + path-safe + size-capped, cached); live smoke HELIX_BENCH_NETWORK-gated |
-| ADAPTER-REPO-01 | Phase 86 | 86-04 | Complete — RepoBench-R (acc@k) / -C (EM/ES, reuses 86-01 scorers) / -P (pipeline) for Python+Java; pinned HF revs (tianyang/repobench_{python,java}_v1.1); hermetic fixtures w/ provenance; live reference-match network-gated |
-| ADAPTER-SWE-01 | Phase 87 | 87-01, 87-02 | Complete — SWE-bench Verified adapter via subprocess-shellout to upstream `python -m swebench.harness.run_evaluation` (fixed-argv + allowlisted args + strict env + controlled WorkDir, no shell SDK); predictions.jsonl producer; harness run-report + per-instance report.json → result.v2 ingestion (task_success ← resolved, additive container_id + exit_code `*int`); hermetic fixtures sole proof, live 5-task Docker+swebench smoke gated-skip |
-| ADAPTER-MULTI-01 | Phase 88 | 88-01, 88-04 | Complete — Multi-SWE-bench adapter (config-file-driven `python -m multi_swe_bench.harness.run_evaluation --config`, path-validated atomic config.json producer); per-language slicing (Java/TS/JS/Go/Rust/C/C++) through the EXISTING aggregator reduceLanguageRows (directory→Cell.Language, zero new aggregator code); Mini-set pinned-rev SSRF-safe fetcher (CC0); hermetic fixtures sole proof, live Mini-set run Docker/python-gated |
-| ADAPTER-TERM-01 | Phase 88 | 88-02, 88-03, 88-04 | Complete — Terminal-Bench 2.0 adapter (`tb run`/`harbor run` via a wired runnerKind binary-name seam, results.json is_resolved→task_success, import-level container-isolation gate); long-wall checkpoint/resume state machine (`bench/longwall/`, atomic write + injected clock; >24h resume proven hermetically); Apache-2.0 license row; live ≥5-task tb smoke gated-skip |
-| CONTAINER-01 | Phase 84 | 84-01 | Complete — os/exec docker→podman engine (no github.com/docker/docker SDK, anchored verify-no-docker-sdk make-vet gate); arch-mismatch refusal with BENCH_ARCH_MISMATCH_OK escape |
-| CONTAINER-02 | Phase 84 | 84-02 | Complete — SHA256 digest-pinned images cached at $HELIX_CACHE_DIR/bench-images/<sha>/ (isHexSHA256 path-escape guard); cache-hit on re-run; Ensure idempotent under concurrency/crash recovery |
-| CONTAINER-03 | Phase 84 | 84-03, 84-04 | Complete (live-mirror confirmation deferred until namespace published) — in-process sigstore-go verify-before-pull (canonical error, pinned issuer/SAN, VirtualSigstore tamper/unsigned/wrong-org/wrong-issuer fixtures); bench-mirror.yml cosign keyless sign whose minted SAN byte-matches the runtime verifier pin |
-| CONTAINER-04 | Phase 84 | 84-02 | Complete — cross-platform 50 GiB disk-budget guard (x/sys Statfs / GetDiskFreeSpaceEx, injectable availFn), single-line remediation; synthetic low-disk test trips it |
-| REPORT-01 | Phase 89 | 89-01 | Complete — leaderboard (mode×benchmark)→pass@1 + verified_correctness + cost_per_solved columns with BCa CIs + non-overlap markers; reduceVerifiedCorrectness (clean-subset, contamination-excluded) |
-| REPORT-02 | Phase 89 | 89-01 | Complete — per_language.md over the derived 8-lang Tier-1 set (bench/languages, no `c`); no-coverage languages render `n/a`, never omitted |
-| REPORT-03 | Phase 89 | 89-01 | Complete — ablations.md 5 delta tables (full vs no_lsp/no_semantic/no_structured_edit/baseline_plain/baseline_rag) with BCa CI-overlap (full vs no_semantic computed aggregate-time); cost_quality.md ASCII scatter (cost vs verified_correctness) + cost-table valid_until citation |
-| REPORT-04 | Phase 89 | 89-01 | Complete — per-language reporter slicing (n/a rows) + the cost_quality scatter |
-| REPORT-05 | Phase 89 | 89-03 | Complete — `helix-bench report --run-id` (isValidRunID + --out `..`-guard, no traversal) regenerates all 4 reports BYTE-IDENTICALLY via a shared zero-RNG renderAll; TestReportByteReproducible (double-render diff-empty) is the hermetic proof |
-| INFRA-01 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| INFRA-02 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| INFRA-03 | Phase 75 | (see phase SUMMARY) | Complete — verified (Phase 75, VERIFICATION passed) |
-| INFRA-04 | Phase 89 | 89-04 | Complete — `.github/workflows/bench.yml` CI cost policy: PR `make bench-quick` (hard 5-min cap, no LLM secret) + nightly/maintainer-gated full `make bench`; least-privilege perms; hermetic YAML-parse test (live CI run inspection-gated); `## CI Cost Policy` in bench/BENCH.md |
-| INFRA-05 | Phase 89 | 89-02 | Complete — contamination canary: production InjectPrompt caller (every-Kth-task FNV selector, Sentinel via canary.InjectPrompt) + aggregate-time `cleanRows` EXCLUSION of contaminated rows from ALL headline reduces (pass@1, verified_correctness, ablations, per_language; fail-safe, never silently counted) + leaderboard footnote; CanaryPassRate measures all rows; discriminating exclusion test proven by revert-and-fail |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| (pending roadmap) | — | Pending |

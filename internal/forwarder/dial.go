@@ -50,9 +50,29 @@ func ConnectOrStartDaemon(ctx context.Context, socketPath string, logger *slog.L
 	logger.Info("daemon not running, acquiring startup lock", "socket", socketPath)
 	if err := startupGuard(ctx, socketPath, seams{
 		newLocker: newFlockLocker,
-		connect:   func(sp string) error { _, _, e := tryConnect(ctx, sp, tp); return e },
-		spawn:     startDaemon,
-		waitUp:    func(sp string) error { _, _, e := waitForDaemon(ctx, sp, 10*time.Second, tp); return e },
+		// WR-01/WR-02: the double-check and wait probes build a live
+		// *grpc.ClientConn on success. The guard only consumes the
+		// success/failure signal, so close the probe conn here — otherwise the
+		// lock-loser / TOCTOU-peer / spawn paths leak its resolver+keepalive
+		// goroutines and FD for the life of the process (ConnectOrStartDaemon
+		// re-dials the single real conn at the tryConnect below).
+		connect: func(sp string) error {
+			c, _, e := tryConnect(ctx, sp, tp)
+			if c != nil {
+				_ = c.Close()
+			}
+			return e
+		},
+		spawn: startDaemon,
+		waitUp: func(sp string) error {
+			// NB: waitForDaemon returns (client, conn, err) — conn is the SECOND
+			// value, unlike tryConnect which returns conn first.
+			_, c, e := waitForDaemon(ctx, sp, 10*time.Second, tp)
+			if c != nil {
+				_ = c.Close()
+			}
+			return e
+		},
 	}); err != nil {
 		return nil, nil, fmt.Errorf("starting daemon: %w", err)
 	}

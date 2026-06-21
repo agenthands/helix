@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: completed
+status: executing
 stopped_at: Completed 85-07-PLAN.md
-last_updated: "2026-06-21T04:09:18.120Z"
-last_activity: 2026-06-21 -- Phase 86 planning complete
+last_updated: "2026-06-21T04:15:19.077Z"
+last_activity: 2026-06-21 -- Phase 86 execution started
 progress:
   total_phases: 15
   completed_phases: 11
-  total_plans: 56
-  completed_plans: 56
+  total_plans: 61
+  completed_plans: 57
   percent: 73
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 85 — aider-polyglot-adapter-7-remaining-per-language-runners
+**Current focus:** Phase 86 — crosscodeeval-repobench-adapters-multi-oracle-completion-gate
 
 ## Current Position
 
-Phase: 86
-Plan: Not started
-Status: 85-07 complete (final plan of phase)
-Last activity: 2026-06-21 -- Phase 86 planning complete
+Phase: 86 (crosscodeeval-repobench-adapters-multi-oracle-completion-gate) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-06-21 -- Phase 86 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T00:00:00.000Z
+Last session: 2026-06-21T04:15:15.076Z
 Stopped at: Completed 85-07-PLAN.md
 Resume file: None
 
@@ -123,6 +123,7 @@ Resume file: None
 | Phase 85 P05 | 12m | 2 tasks | 7 files |
 | Phase 85 P06 | 4m | 2 tasks | 5 files |
 | Phase 85 P07 | ~35min | 2 tasks | 14 files (TDD RED+GREEN x2) |
+| Phase 86 P01 | ~14min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -202,3 +203,4 @@ Resume file: None
 - [Phase ?]: 85-03: Java surefire golden sourced verbatim from apache/maven-surefire@5ee132b; TestJavaFixtureProvenance gate enforces non-placeholder (A5)
 - [Phase 85 P04]: cloned go/runner.go x2 for cpp/rust; Passed=exitCode==0 gate + ctx/ExitError split kept verbatim. C++ = ctest --output-junit R.xml → parseCtestJUnit (encoding/xml; child <failure> ⇒ fail). Rust = PLAIN `cargo test` → parseLibtestText (bufio.Scanner resync over `test NAME ... ok|FAILED|ignored`), NEVER --message-format=json (Pitfall 2: stable cargo emits only compiler-artifact JSON, zero per-test rows) — guarded by TestRustDoesNotUseMessageFormatJSON over a testArgv() hook. Both goldens REAL live captures this session (CMake 3.31.6 ctest-junit.xml; cargo 1.96.0 cargo-libtest.txt including the panic/failures noise so resync is exercised). C++ 7/7 declared/covered (≥6), Rust 9/9 (≥8). Gaps declared: C++ omits lsp_diagnostics/call_graph/dependency_graph; Rust omits lsp_diagnostics. TOOLBENCH-08/09 satisfied.
 - [Phase 85 P07]: ADAPTER-AIDER-01 COMPLETE — new leaf pkg bench/datasets/aider-polyglot (stdlib-only). loadExercise parses .meta/config.json files.solution/test/example (V5 validatePathSegment cloned from cell.go on exercise name+lang before Join); restorePristine restores solution+test stubs each attempt; RunExercise drives upstream tries=2/180s 2-attempt loop (agent edits → native tests under 180s child ctx → break on pass → re-prompt attempt 2 with captured failure output) via injected TestFn/AgentFn seams (hermetic, NO toolchain). nativeTestCommand = aider's OWN per-lang table (pytest / cargo test -- --include-ignored / go test ./... / ./gradlew test / ./npm-test.sh / ./cpp-test.sh), NOT TOOLBENCH argv (Open Q1). pin.go PinnedSHA=7e0611e7... (REAL main HEAD, never a branch/tag) + isHexSHA1 (mirror container isHexSHA256). clone.go cacheDir()/clonePath() under aider-polyglot/<sha>/ (cloned from ragindex precedence); cloneArgs fixed --depth 1 clone/fetch/checkout pinned by sha, fail-close on non-hex sha/flag-url/unclean dest before os/exec; Clone() strict gitEnv allowlist (PATH/HOME/HELIX_CACHE_DIR + GIT_TERMINAL_PROMPT=0). flagNonHermetic SC#3 (config marker + rust/java/js per-lang rule). Hermetic fixture-set (python wordy + rust leap) is SOLE proof; live clone (HELIX_BENCH_NETWORK+github probe) ran ONCE this session: HEAD==PinnedSHA, real dataset=225 tasks across 6 tracks (cpp26/go39/java47/js49/py34/rust30), files schema matches loader byte-for-byte. [Rule 1] live leg caught `git checkout --detach -- <sha>` invalid (--detach rejects pathspec) → fixed to `checkout --detach <sha>`, flag-smuggling closed by isHexSHA1. SC#1 full 225-task run + per-language sanity comparison recorded as toolchain/network-gated (Open Q3 tolerance-band-vs-aggregate + one-time per-lang baseline), NOT falsely claimed.
+- [Phase 86 P01]: Three PURE stdlib-only CCE completion scorers as leaf subpackages — exactmatch.EM (CM-EM raw string equality, NO normalization, both-empty==true), editsim.ES (CM-ES normalized Levenshtein 1-lev/max(runeLen) in [0,1] via a LOCAL two-row DP over runes; deliberately NOT git-numstat patch_validator.EditDistancePatch nor unexported internal/mcp suggest_lev — proven by TestES_NumstatDiscriminator asserting a (0,1) char-level ratio AND an import-level gate: editsim has ZERO imports), identmatch.Match (IM-EM set-equality + IM-F1 harmonic-mean over [A-Za-z_]\w* identifiers minus a documented language-agnostic keyword set; empty-vs-empty=(true,1.0), one-empty=(false,0.0); keyword-only inputs reduce to empty sets proving keyword exclusion; tokenizer+keyword list documented in doc comment for Plan 02 VERIFIED.md to cite). Hermetic CCE-paper-shaped fixtures (arXiv:2310.11248) are the SOLE proof — no network, no HELIX_BIN, no new go.mod dep. RED+GREEN atomic commits per scorer. go build/vet/test + make vet all green.

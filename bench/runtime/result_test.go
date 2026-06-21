@@ -471,3 +471,88 @@ func TestResultV2ValidWithOverrides(t *testing.T) {
 	assert.Equal(t, "needs a bigger ceiling for multi-file diffs", ov["waiver_reason"])
 	assert.Equal(t, "maintainer:test", ov["approved_by"])
 }
+
+// TestLanguageEmittedWhenSet (Phase 85 Task 1, ADAPTER-AIDER-01): a build with a
+// non-empty Language (the per-language runner path threading Cell.Language) emits
+// the `language` key carrying the recorded language string and still passes
+// Validate. This is the provenance the aggregator slices on to answer SC#1's
+// "Python pass-rate" question. Mirrors the EmbedderID open-additive-key precedent.
+func TestLanguageEmittedWhenSet(t *testing.T) {
+	in := ResultInput{
+		TaskID:    "aider-polyglot/exercism-python-1",
+		Mode:      "your_agent_full",
+		Benchmark: "aider-polyglot",
+		RunIndex:  0,
+		Outcome:   "success",
+		TraceRef:  "bench/reports/x/trace.json",
+		Fairness:  runners.DefaultContract,
+		Language:  "python",
+	}
+
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc), "a set-Language build must validate")
+
+	var got struct {
+		Language string `json:"language"`
+	}
+	require.NoError(t, json.Unmarshal(doc, &got))
+	assert.Equal(t, "python", got.Language,
+		"a row built with Language set must record the language provenance key")
+}
+
+// TestLanguageOmittedWhenEmpty (Phase 85 Task 1, ADAPTER-AIDER-01): a build with
+// Language=="" emits NO `language` key and still passes Validate. `language` is an
+// open, additive-minor provenance key (additionalProperties is OPEN at the top
+// level), so its presence or absence is schema-valid either way; omitempty drops
+// it. This is the backward-compat guarantee: old result.v2 artifacts written
+// before the language axis existed (Language unset) still validate.
+func TestLanguageOmittedWhenEmpty(t *testing.T) {
+	in := ResultInput{
+		TaskID:    "internal-toolbench/IT-go-patch-apply-1",
+		Mode:      "your_agent_full",
+		Benchmark: "internal-toolbench",
+		RunIndex:  0,
+		Outcome:   "success",
+		TraceRef:  "bench/reports/x/trace.json",
+		Fairness:  runners.DefaultContract,
+		// Language intentionally left "" — a pre-language artifact / non-runner path.
+	}
+
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc),
+		"a Language=='' build must still validate (additive-minor open key, backward compatible)")
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(doc, &raw))
+	_, present := raw["language"]
+	assert.False(t, present,
+		"a row with Language=='' must OMIT the language key (omitempty) so old artifacts stay byte-compatible")
+}
+
+// TestLanguageBackwardCompatValidate (Phase 85 Task 1, T-85-01-03): a hand-rolled
+// result.v2 fixture with NO `language` key (exactly what every pre-Phase-85
+// artifact looks like) still passes Validate. This pins the schema honesty
+// guarantee: adding the optional `language` property must NOT make the field
+// required and must NOT close additionalProperties.
+func TestLanguageBackwardCompatValidate(t *testing.T) {
+	// Minimal pre-language result.v2: required schema_version + the named props a
+	// real row carries, with NO language key.
+	fixture := []byte(`{
+  "schema_version": "v2",
+  "task_id": "internal-toolbench/IT-go-patch-apply-1",
+  "mode": "your_agent_full",
+  "benchmark": "internal-toolbench",
+  "run_index": 0,
+  "tokens_input": null,
+  "tokens_output": null,
+  "fairness": {"overrides": []},
+  "outcome": "success",
+  "trace_ref": "bench/reports/x/trace.json",
+  "model_id": "claude-sonnet-4-5-20250929",
+  "metrics": {"task_success": true}
+}`)
+	require.NoError(t, Validate(fixture),
+		"a pre-language result.v2 artifact (no `language` key) must still validate")
+}

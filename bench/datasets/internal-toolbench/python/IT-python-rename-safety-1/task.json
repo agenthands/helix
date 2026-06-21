@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-rename-safety-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "rename_safety",
+  "prompt": "The function foo is defined in widget.py and called from consumer.py, but test_widget.py expects it to be named bar, so the suite fails. Run find_references on foo to locate every reference, then rename foo to bar so every site is updated. Ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

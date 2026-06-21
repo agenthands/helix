@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-context-min-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "context_minimization",
+  "prompt": "Across a large widget.py, only one method body is wrong. Use get_context / list_file_outline to retrieve just the failing symbol's body (not the whole file), fix it, and ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

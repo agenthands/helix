@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-failure-handling-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "failure_handling",
+  "prompt": "test_widget.py raises a TypeError because widget.py does not guard a None argument. Read the failing test output, add the missing guard, and ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

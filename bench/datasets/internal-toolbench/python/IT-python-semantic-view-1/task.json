@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-semantic-view-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "semantic_view",
+  "prompt": "The module widget.py defines a Widget class with several methods. Use get_repo_map / list_file_outline to obtain the symbol outline of widget.py, then summarize its public methods without reading the whole file. Ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-patch-apply-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "patch_apply",
+  "prompt": "Apply the supplied unified diff to widget.py using replace_in_file / replace_symbol_body so the off-by-one in the slice bound is corrected. Ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

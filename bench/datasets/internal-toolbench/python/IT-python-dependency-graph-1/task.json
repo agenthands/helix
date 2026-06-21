@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-dependency-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "dependency_graph",
+  "prompt": "A circular import between widget.py and helper.py breaks collection. Use get_import_graph to find the cycle, then move the shared symbol so the import graph is acyclic. Ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

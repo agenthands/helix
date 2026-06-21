@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-call-graph-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "call_graph",
+  "prompt": "The function compute in widget.py is failing because one of its callees returns the wrong value. Use get_callees / get_neighborhood on compute to locate the misbehaving helper, fix it, and ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

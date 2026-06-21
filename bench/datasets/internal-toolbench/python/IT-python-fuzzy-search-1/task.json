@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-fuzzy-search-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "fuzzy_search",
+  "prompt": "test_widget.py asserts a normalized output string, but widget.py emits slightly different whitespace. Use fuzzy_edit / replace_in_file to update the offending literal in widget.py despite the indentation drift. Ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

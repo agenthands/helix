@@ -1,0 +1,8 @@
+{
+  "id": "IT-python-incremental-update-1",
+  "benchmark": "internal-toolbench",
+  "language": "python",
+  "capability": "incremental_update",
+  "prompt": "After editing widget.py, re-query its symbols to confirm the repo map reflects the new method without a full re-index. Apply the follow-up fix the updated outline reveals and ensure `pytest -q` passes.",
+  "verify": "verify.sh"
+}

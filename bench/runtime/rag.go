@@ -286,7 +286,18 @@ func driveRAGServer(ctx context.Context, h *subprocess.RAGHandle, query string) 
 	done := make(chan struct{})
 	respCh := make(chan jsonrpcResp, 4)
 	go readResponses(h.Stdout, respCh, done)
-	defer close(done)
+	// WR-04: readResponses can only observe `done` after it has parsed a line;
+	// while parked inside ReadString waiting for the next byte it cannot react to
+	// `done` closing. Without this, the reader stays blocked on the still-open
+	// stdout pipe across the (potentially tens-of-seconds) verify span and is only
+	// reaped at the eventual Kill. Closing h.Stdout here makes the blocked
+	// ReadString return EOF immediately so the goroutine exits when the drive
+	// returns, not at Kill. For an os/exec StdoutPipe the caller may Close it;
+	// cmd.Wait will not double-close.
+	defer func() {
+		close(done)
+		_ = h.Stdout.Close()
+	}()
 	disp := &respDispatcher{ch: respCh, pending: map[int]jsonrpcResp{}}
 
 	// initialize frame (id=1).

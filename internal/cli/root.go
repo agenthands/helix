@@ -39,6 +39,30 @@ func CurrentVersion() string {
 	return currentVersion
 }
 
+// Command group IDs for organizing the help screen by capability (cobra
+// AddGroup, v1.10.2). These IDs are part of the help contract — Phase 91 adds
+// the generated verb groups (navigation/edit/fileops/diagnostics/repomap/
+// memory) on top of this scaffold, so DO NOT rename these without updating the
+// commands assigned to them.
+const (
+	// groupWorkspace: per-project workspace lifecycle commands.
+	groupWorkspace = "workspace"
+	// groupRuntime: setup/status of the helix runtime and its clients.
+	groupRuntime = "runtime"
+	// groupMaintenance: self-update / upgrade of the helix binary.
+	groupMaintenance = "maintenance"
+)
+
+// runForwarderFn / runDaemonFn are overridable seams over the real
+// runForwarder / runDaemon entry points. Production code uses the real
+// functions; tests substitute fakes to assert routing (which entry point a
+// given invocation reaches) without spawning a daemon or opening a stdio MCP
+// session. See root_test.go.
+var (
+	runForwarderFn = runForwarder
+	runDaemonFn    = runDaemon
+)
+
 // NewRootCommand creates the root cobra command with all flags.
 // Per D-02: flat CLI with flags, no subcommands.
 func NewRootCommand() *cobra.Command {
@@ -47,10 +71,20 @@ func NewRootCommand() *cobra.Command {
 		Short: "Helix code intelligence MCP server",
 		Long:  "Helix - LSP-backed MCP runtime for semantic code operations",
 		RunE:  runRoot,
-		// Per Pitfall 6: prevent help on errors, allow no-args to enter stdio mode
+		// Per Pitfall 6: prevent help on errors. As of CLI-04 (Phase 90), a
+		// bare no-arg `helix` prints grouped help and exits 0 (see runRoot)
+		// instead of entering the stdio forwarder.
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+
+	// Command groups organize the help screen by capability (cobra AddGroup).
+	// Phase 91 will register the generated verb groups on top of this scaffold.
+	rootCmd.AddGroup(
+		&cobra.Group{ID: groupWorkspace, Title: "Workspace Commands:"},
+		&cobra.Group{ID: groupRuntime, Title: "Runtime Commands:"},
+		&cobra.Group{ID: groupMaintenance, Title: "Maintenance Commands:"},
+	)
 
 	// Transport mode: stdio (default/forwarder), http, auto
 	rootCmd.Flags().String("mode", "auto", "Transport mode: stdio, http, auto")
@@ -83,14 +117,20 @@ func NewRootCommand() *cobra.Command {
 	// Version
 	rootCmd.Flags().Bool("version", false, "Print version and exit")
 
-	// Subcommands
-	rootCmd.AddCommand(newSetupCommand())
-	rootCmd.AddCommand(newStatusCommand())
-	rootCmd.AddCommand(newActivateCommand())
-	rootCmd.AddCommand(newDeactivateCommand())
-	rootCmd.AddCommand(newNudgeCommand())
-	rootCmd.AddCommand(newUpdateCommand())
-	rootCmd.AddCommand(newUpgradeCommand())
+	// Subcommands, each assigned to a capability group so the help output is
+	// organized rather than a flat list. addGrouped sets GroupID at
+	// registration to keep the group wiring centralized in root.go.
+	addGrouped := func(group string, cmd *cobra.Command) {
+		cmd.GroupID = group
+		rootCmd.AddCommand(cmd)
+	}
+	addGrouped(groupRuntime, newSetupCommand())
+	addGrouped(groupRuntime, newStatusCommand())
+	addGrouped(groupWorkspace, newActivateCommand())
+	addGrouped(groupWorkspace, newDeactivateCommand())
+	addGrouped(groupWorkspace, newNudgeCommand())
+	addGrouped(groupMaintenance, newUpdateCommand())
+	addGrouped(groupMaintenance, newUpgradeCommand())
 
 	return rootCmd
 }
@@ -98,7 +138,9 @@ func NewRootCommand() *cobra.Command {
 func runRoot(cmd *cobra.Command, args []string) error {
 	showVersion, _ := cmd.Flags().GetBool("version")
 	if showVersion {
-		fmt.Printf("helix version %s\n", currentVersion)
+		// Write to the command's configured output (defaults to os.Stdout) so
+		// the version line honors cobra's writer and is testable.
+		fmt.Fprintf(cmd.OutOrStdout(), "helix version %s\n", currentVersion)
 		return nil
 	}
 
@@ -106,12 +148,20 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	mode, _ := cmd.Flags().GetString("mode")
 
 	if serve || mode == "http" {
-		return runDaemon(cmd)
+		return runDaemonFn(cmd)
 	}
 
 	switch mode {
-	case "stdio", "auto":
-		return runForwarder(cmd)
+	case "stdio":
+		// Explicit stdio: still run the forwarder. Phase 94 owns the full
+		// forwarder-head deletion; CLI-04 only re-routes the no-arg/auto path.
+		return runForwarderFn(cmd)
+	case "auto":
+		// CLI-04: a bare `helix` (default mode=auto, no subcommand) prints
+		// grouped help and exits 0. It must NOT open a stdio MCP session — an
+		// agent never asked for one. Cobra dispatches subcommands before
+		// RunE, so reaching here means no verb was given.
+		return cmd.Help()
 	default:
 		return fmt.Errorf("unknown mode: %s", mode)
 	}

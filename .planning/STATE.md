@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 91
-current_phase_name: Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
+current_phase: 92
+current_phase_name: Terse Output Renderer + Re-Targeted Contract Oracle
 status: verifying
 stopped_at: Completed 91-03-PLAN.md
-last_updated: "2026-06-21T14:56:48.075Z"
+last_updated: "2026-06-21T15:03:55.352Z"
 last_activity: 2026-06-21
-last_activity_desc: Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
+last_activity_desc: Phase 91 complete, transitioned to Phase 92
 progress:
   total_phases: 6
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 91 (Code-Generated Verb Surface + tools/call Profile/Mode Enforcement) — EXECUTING
-Plan: 4 of 4
+Phase: 92 — Terse Output Renderer + Re-Targeted Contract Oracle
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Completed 91-03 (CLI verb-surface profile contract oracle, SEC-02)
+Last activity: 2026-06-21 — Phase 91 complete, transitioned to Phase 92
 
 Progress: [██░░░░░░░░] 19%
 
@@ -42,6 +42,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 90 | 4 | - | - |
+| 91 | 4 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

@@ -3,7 +3,17 @@
 Out-of-scope discoveries logged during execution. Not fixed in the discovering plan
 (scope-boundary rule: a plan only fixes issues in its own `files_modified`).
 
-## Discovered during 91-03 (CLI verb-surface oracle re-point)
+> **STATUS: ALL RESOLVED in-phase (commit `71d02cad`).** The two items below were
+> discovered during 91-03 and resolved during the post-wave integration gate by the
+> autonomous orchestrator: `switch_mode`/`get_token_budget` were added to the
+> `ProfileEnforcementMiddleware` control-plane exemption set (safe — `switch_mode`
+> transitions are independently validated by `validateModeTransition`, so a read-only
+> profile still cannot escalate), and both tests were updated to the typed-refusal
+> contract (`TestProfile_ExcludedToolNotInvocable` now asserts a protocol-level
+> `permission_denied`; `TestProfile_ModeAndBudget/switch_mode` now passes via the
+> exemption). Verified passing at HEAD. No open work remains.
+
+## Discovered during 91-03 (CLI verb-surface oracle re-point) — RESOLVED
 
 Two pre-existing integration tests fail under the integration build tag. The
 failures are caused by the **91-02 `ProfileEnforcementMiddleware`** (which now

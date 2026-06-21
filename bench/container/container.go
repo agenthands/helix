@@ -47,3 +47,36 @@ func isHexSHA256(s string) bool {
 	}
 	return true
 }
+
+// errBadRepo is returned when a repository string is not a well-formed lowercase
+// OCI image reference. It fail-closes argv flag-smuggling: a repo beginning with
+// '-' (which docker/podman would parse as a flag) or carrying shell/flag
+// metacharacters can never reach the engine argv (T-84-01-03 / Pitfall 2).
+var errBadRepo = errors.New("bench/container: repo must be a lowercase OCI image reference")
+
+// isValidRepo reports whether repo is a conservative, lowercase OCI image
+// reference: it MUST begin with [a-z0-9] (never '-' — that is the argv
+// flag-smuggling vector) and contain only [a-z0-9], '.', '_', '-', '/' and ':'
+// (registry port). Same explicit, total, no-regexp discipline as isHexSHA256.
+// Combined with the "--" end-of-options separator in pullArgs this closes
+// argv flag-smuggling even if docker/podman flag parsing changes.
+func isValidRepo(repo string) bool {
+	if repo == "" {
+		return false
+	}
+	// A leading '-' is the flag-smuggling vector; a leading separator is malformed.
+	if c0 := repo[0]; !((c0 >= 'a' && c0 <= 'z') || (c0 >= '0' && c0 <= '9')) {
+		return false
+	}
+	for i := 0; i < len(repo); i++ {
+		c := repo[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= '0' && c <= '9':
+		case c == '.' || c == '_' || c == '-' || c == '/' || c == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}

@@ -44,8 +44,14 @@ func (e *Engine) pullArgs(repo, digest string) ([]string, error) {
 	if !isHexSHA256(digest) {
 		return nil, errBadDigest
 	}
+	if !isValidRepo(repo) {
+		return nil, errBadRepo
+	}
 	ref := fmt.Sprintf("%s@sha256:%s", repo, digest)
-	return []string{"pull", ref}, nil
+	// "--" terminates docker/podman option parsing so a crafted ref can never be
+	// smuggled as a flag (argv flag-smuggling, T-84-01-03). isValidRepo already
+	// rejects a leading '-'; the separator is belt-and-suspenders.
+	return []string{"pull", "--", ref}, nil
 }
 
 // PullByDigest pulls repo@sha256:<digest> via the resolved engine. It rejects a

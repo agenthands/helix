@@ -83,30 +83,55 @@ func TestPullByDigestUsesAtSha256NeverTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pullArgs err = %v, want nil", err)
 	}
-	// argv = ["pull", "<repo>@sha256:<hex>"]
-	if len(argv) != 2 || argv[0] != "pull" {
-		t.Fatalf("pullArgs = %v, want [pull <ref>]", argv)
+	// argv = ["pull", "--", "<repo>@sha256:<hex>"] — the "--" terminates option
+	// parsing so a crafted ref can never be smuggled as a docker/podman flag.
+	if len(argv) != 3 || argv[0] != "pull" || argv[1] != "--" {
+		t.Fatalf("pullArgs = %v, want [pull -- <ref>]", argv)
 	}
 	want := "ghcr.io/x/y@sha256:" + validHex
-	if argv[1] != want {
-		t.Fatalf("ref = %q, want %q", argv[1], want)
+	if argv[2] != want {
+		t.Fatalf("ref = %q, want %q", argv[2], want)
 	}
 	// A tag-shaped ref (":latest", or no @sha256:) must never be produced.
 	for _, bad := range []string{":latest", ":v1", ":main"} {
-		if argv[1] == "ghcr.io/x/y"+bad {
-			t.Fatalf("ref %q is tag-shaped, must be digest-pinned", argv[1])
+		if argv[2] == "ghcr.io/x/y"+bad {
+			t.Fatalf("ref %q is tag-shaped, must be digest-pinned", argv[2])
 		}
+	}
+}
+
+func TestPullByDigestRejectsFlagSmugglingRepo(t *testing.T) {
+	e := &Engine{bin: "docker"}
+	// A repo beginning with '-' or carrying flag/shell metacharacters must
+	// fail-close with errBadRepo BEFORE any argv reaches the engine (argv
+	// flag-smuggling, T-84-01-03).
+	for _, bad := range []string{
+		"-x/y",                 // leading dash → would parse as a docker flag
+		"--privileged",         // a real docker flag
+		"ghcr.io/x/y;rm -rf /", // shell metacharacters
+		"ghcr.io/x y",          // space
+		"GHCR.io/x/y",          // uppercase (not a valid lowercase OCI ref)
+		"",                     // empty
+		"/leading-slash",       // leading separator
+	} {
+		if _, err := e.pullArgs(bad, validHex); !errors.Is(err, errBadRepo) {
+			t.Fatalf("pullArgs(repo=%q) err = %v, want errBadRepo", bad, err)
+		}
+	}
+	// A normal lowercase OCI ref with host:port still validates.
+	if _, err := e.pullArgs("localhost:5000/owner/name", validHex); err != nil {
+		t.Fatalf("pullArgs(valid host:port repo) err = %v, want nil", err)
 	}
 }
 
 func TestPullByDigestRejectsNonHexDigest(t *testing.T) {
 	e := &Engine{bin: "docker"}
 	for _, bad := range []string{
-		"",                            // empty
-		"sha256:" + validHex,          // includes prefix → not 64 hex
-		validHex[:63],                 // too short
-		validHex + "0",                // too long
-		"g" + validHex[1:],            // non-hex char
+		"",                                 // empty
+		"sha256:" + validHex,               // includes prefix → not 64 hex
+		validHex[:63],                      // too short
+		validHex + "0",                     // too long
+		"g" + validHex[1:],                 // non-hex char
 		"0123456789ABCDEF" + validHex[16:], // uppercase
 	} {
 		if _, err := e.pullArgs("ghcr.io/x/y", bad); !errors.Is(err, errBadDigest) {

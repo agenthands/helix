@@ -304,6 +304,62 @@ func TestReadSnippetLine_Hermetic(t *testing.T) {
 	}
 }
 
+// TestVerb_ResolveRenderOpts_AbsEndToEnd asserts WR-04: --abs set on the
+// SUBCOMMAND invocation is actually observed by resolveRenderOpts (which reads
+// the persistent flags via cmd.Root().Flags()) on the production
+// runVerb → renderResult → resolveRenderOpts path — not just that the flag
+// exists on the root. With --abs the absolute file:// path must survive to the
+// terse output. (OUT-07)
+func TestVerb_ResolveRenderOpts_AbsEndToEnd(t *testing.T) {
+	restore := callToolFn
+	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+		// search-symbols carries a payload, so no CLI-side snippet read is
+		// triggered (keeps the test hermetic — no filesystem dependency).
+		return textResult("file:///abs/ws/pkg/a.go:5:6 — Helper [Function]\n"), nil
+	}
+	defer func() { callToolFn = restore }()
+
+	cmd := NewRootCommand()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"search-symbols", "--abs", "--query=Helper"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.HasPrefix(out, "/abs/ws/pkg/a.go:5:6\t") {
+		t.Fatalf("--abs not observed through resolveRenderOpts: got %q, want absolute path kept", out)
+	}
+}
+
+// TestVerb_ResolveRenderOpts_JSONEndToEnd asserts WR-04: --json set on the
+// SUBCOMMAND invocation is observed by resolveRenderOpts and switches the verb
+// output to compact JSON lines on the real cobra path. (OUT-06)
+func TestVerb_ResolveRenderOpts_JSONEndToEnd(t *testing.T) {
+	restore := callToolFn
+	callToolFn = func(_ context.Context, _ string, _ *slog.Logger, _ string, _ string, _ map[string]any) (*mcpsdk.CallToolResult, error) {
+		return textResult("file:///abs/ws/pkg/a.go:5:6 — Helper [Function]\n"), nil
+	}
+	defer func() { callToolFn = restore }()
+
+	cmd := NewRootCommand()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"search-symbols", "--json", "--abs", "--query=Helper"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	out := strings.TrimSpace(buf.String())
+	for _, key := range []string{`"path"`, `"line"`, `"col"`, `"payload"`} {
+		if !strings.Contains(out, key) {
+			t.Errorf("--json not observed through resolveRenderOpts: output %q missing key %s", out, key)
+		}
+	}
+	if !strings.Contains(out, `"path":"/abs/ws/pkg/a.go"`) {
+		t.Errorf("--json+--abs path = %q, want absolute path in JSON", out)
+	}
+}
+
 // splitNonEmpty splits on newline and drops trailing empty entries.
 func splitNonEmpty(s string) []string {
 	var out []string

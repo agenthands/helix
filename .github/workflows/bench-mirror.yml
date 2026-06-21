@@ -117,10 +117,18 @@ jobs:
           # Capture the IMMUTABLE pushed digest. cosign MUST sign by digest
           # (repo@sha256:…), NEVER by the mutable tag (T-84-04-02 — by-digest
           # signing). The runtime verifier (CONTAINER-02) also pins by digest.
-          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${DEST}" \
-            | awk -F'@' '{print $2}')"
+          #
+          # After `docker pull UPSTREAM; docker tag …; docker push DEST`, the
+          # local image carries RepoDigests for BOTH the upstream repo (from the
+          # pull) and the dest repo (from the push). `index .RepoDigests 0`
+          # selects array element 0 whose ordering is not contract-guaranteed,
+          # so it can return the UPSTREAM digest and sign a manifest that may not
+          # exist in the dest repo (WR-02). Select the dest-repo digest
+          # explicitly by filtering RepoDigests for the `^${DEST_REPO}@` prefix.
+          DIGEST="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "${DEST}" \
+            | grep "^${DEST_REPO}@" | head -n1 | awk -F'@' '{print $2}')"
           if [ -z "${DIGEST}" ]; then
-            echo "::error::could not resolve pushed digest for ${DEST}"
+            echo "::error::could not resolve ${DEST_REPO} digest on pushed image ${DEST}"
             exit 1
           fi
           echo "Pushed digest: ${DEST_REPO}@${DIGEST}"

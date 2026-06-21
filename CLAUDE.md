@@ -191,6 +191,41 @@ Use these entry points:
 
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 
+## Helix CLI tool routing (this product's agent surface)
+
+Agents drive Helix via the `helix <verb>` CLI (Bash), not MCP. Prefer these terse, `relpath:line:col`-anchored verbs over `grep`/`sed`/`cat`/`Read` — they parse the AST and (for first-class languages) consult the LSP, returning real definitions, callers, and type-resolved references instead of string matches. Every verb below is a real frozen `helix` command (the full inventory is auto-generated in README.md; kebab form = the tool name with `_`→`-`).
+
+| Question | Use this | Not this |
+|---|---|---|
+| Where is symbol `X` defined? | `helix go-to-definition` | `Grep "X"` |
+| Who references / calls `X`? | `helix find-references` | `grep -r "X"` |
+| Who calls into `Y` (call tree)? | `helix get-call-hierarchy` | manual grep chain |
+| Implementations of an interface | `helix find-implementations` | `grep "implements"` |
+| Type relationships (super/sub) | `helix get-type-hierarchy` | read + reason |
+| File outline (symbols in a file) | `helix get-symbol-overview` | `Read <file>` |
+| Find symbols by name across repo | `helix search-symbols` | `grep "func X"` |
+| Type / signature at a location | `helix get-hover-info` | infer by reading |
+| Blast radius of a change | `helix analyze-blast-radius` | manual trace |
+| Rename a symbol across files | `helix rename-symbol` | `sed` |
+| Replace a function/method body | `helix replace-symbol-body` | line-number edit |
+| Insert before / after a symbol | `helix insert-before-symbol` / `helix insert-after-symbol` | regex edit |
+| Delete a symbol safely | `helix safe-delete-symbol` | `sed -d` |
+| Fuzzy / drift-tolerant text edit | `helix fuzzy-edit` | brittle exact patch |
+| Replace text in a file | `helix replace-in-file` | `sed -i` |
+| Search text across the repo | `helix search-in-files` | `grep -r` |
+| Find files by name/glob | `helix find-files` | `find` |
+| Read a file | `helix read-file` | `cat` |
+| Diagnostics for a file | `helix get-diagnostics` | parse build output |
+| Available code actions / quick-fixes | `helix get-code-actions` | manual fix |
+| Format code | `helix format-code` | hand-format |
+| Ranked structural repo overview | `helix get-repo-map` | read many files |
+| Context bundle around a symbol | `helix get-context` | several reads |
+| Project / session memory | `helix read-memory` / `helix write-memory` / `helix search-memories` | ad-hoc notes |
+
+Helix ships NO taint/CFG/IR/slice tools — those are SMTC-only (below). Do not invent `helix` verbs; cite only names that appear in `internal/cli/verbs_gen.go`.
+
+> NOTE: the `## Code intelligence: SMTC-first tool routing` section below describes an **external** dev MCP server (show-me-the-code, the `smtc` MCP tools), NOT Helix's own tools — do not conflate the two. SMTC is a development-environment concern for working in this repo; the `helix <verb>` table above is Helix's product surface.
+
 ## Code intelligence: SMTC-first tool routing
 
 For code-aware operations, prefer SMTC MCP tools over `Bash` / `Grep` / `Read`. SMTC parses the AST and (for first-class languages) consults the LSP, so it returns *semantic* results — actual definitions, real callers, type-resolved references — instead of string matches. Pick by the question being asked, not by tool habit.

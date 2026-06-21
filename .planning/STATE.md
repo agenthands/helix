@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 88-04-PLAN.md
-last_updated: "2026-06-21T08:15:21.563Z"
-last_activity: 2026-06-21 -- Phase 89 planning complete
+last_updated: "2026-06-21T08:27:13.073Z"
+last_activity: 2026-06-21 -- Phase 89 execution started
 progress:
   total_phases: 15
   completed_phases: 14
-  total_plans: 69
-  completed_plans: 69
+  total_plans: 73
+  completed_plans: 70
   percent: 93
 ---
 
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
-**Current focus:** Phase 88 — multi-swe-bench-terminal-bench-2-0-adapters
+**Current focus:** Phase 89 — reports-ci-policy-contamination-canary
 
 ## Current Position
 
-Phase: 89
-Plan: Not started
+Phase: 89 (reports-ci-policy-contamination-canary) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 89 planning complete
+Last activity: 2026-06-21 -- Phase 89 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T07:26:55.846Z
+Last session: 2026-06-21T08:27:06.221Z
 Stopped at: Completed 88-04-PLAN.md
 Resume file: None
 
@@ -133,6 +133,7 @@ Resume file: None
 | Phase 88 P01 | 8 | 3 tasks | 12 files |
 | Phase 88 P02 | 11 | 2 tasks | 10 files |
 | Phase 88 P04 | 3 min | 3 tasks | 4 files |
+| Phase 89 P01 | 35m | 3 tasks | 11 files |
 
 ## Decisions
 
@@ -221,3 +222,4 @@ Resume file: None
 - [Phase ?]: VERIFIED-02 raw-vs-rescored columns populated on LeaderRow but not rendered (goldens byte-identical); SWE-bench render deferred to Phase 89
 - [Phase ?]: Phase 88-01: Multi-SWE adapter is config-file-driven; WriteConfig path-validates every field before marshal then a fixed --config argv; Ingest stamps Language from the cell arg (Pitfall 1) and 7-language slicing flows through existing reduceLanguageRows with zero new aggregator code (SC#1)
 - [Phase 88]: 88-04: Multi-SWE Mini fetcher cloned from swebench-utboost (SSRF-safe, capped, atomic, network-gated); DatasetID=ByteDance-Seed/Multi-SWE-bench (CC0 umbrella id confirmed); PinnedSHA placeholder + live-confirm DEFERRED (A4/A5, Phase 87 precedent); LICENSES.md +2 rows (CC0, Apache-2.0) + full-set v1.13 deferral; A1-A7 checkpoint resolved approved-with-deferral
+- [Phase ?]: Tier-1 set derived from bench/languages (8 IDs, no c); ablation no_semantic computed aggregate-time; reduceAblations threads rng last so leaderboard/cost goldens stay byte-identical

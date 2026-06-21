@@ -97,10 +97,10 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Reports (REPORT-*)
 
-- [ ] **REPORT-01**: `bench/reports/leaderboard.md` — top-line table of `(mode × benchmark) → pass@1, verified_correctness, cost_per_solved` with BCa CIs and non-overlap markers. _Acceptance:_ regenerates from a sample run; renders in GitHub markdown.
-- [ ] **REPORT-02**: `bench/reports/per_language.md` — per-language slice of all 8 Tier-1 languages × benchmarks that cover that language. _Acceptance:_ a language with no benchmark coverage is explicitly listed as `n/a`, not omitted.
-- [ ] **REPORT-03**: `bench/reports/ablations.md` — delta tables: `full vs no_lsp`, `full vs no_semantic`, `full vs no_structured_edit`, `full vs baseline_plain`, `full vs baseline_rag`. Each delta has CI overlap analysis. _Acceptance:_ deltas computed correctly on a sample run.
-- [ ] **REPORT-04**: `bench/reports/cost_quality.md` — cost-per-solved-task scatter (cost vs verified_correctness) per mode × benchmark. _Acceptance:_ scatter renders as ASCII / svg; report cites cost-table `valid_until`.
+- [x] **REPORT-01**: `bench/reports/leaderboard.md` — top-line table of `(mode × benchmark) → pass@1, verified_correctness, cost_per_solved` with BCa CIs and non-overlap markers. _Acceptance:_ regenerates from a sample run; renders in GitHub markdown.
+- [x] **REPORT-02**: `bench/reports/per_language.md` — per-language slice of all 8 Tier-1 languages × benchmarks that cover that language. _Acceptance:_ a language with no benchmark coverage is explicitly listed as `n/a`, not omitted.
+- [x] **REPORT-03**: `bench/reports/ablations.md` — delta tables: `full vs no_lsp`, `full vs no_semantic`, `full vs no_structured_edit`, `full vs baseline_plain`, `full vs baseline_rag`. Each delta has CI overlap analysis. _Acceptance:_ deltas computed correctly on a sample run.
+- [x] **REPORT-04**: `bench/reports/cost_quality.md` — cost-per-solved-task scatter (cost vs verified_correctness) per mode × benchmark. _Acceptance:_ scatter renders as ASCII / svg; report cites cost-table `valid_until`.
 - [ ] **REPORT-05**: Reports are reproducible from a run-id: `helix-bench report --run-id <id>` regenerates all 4 reports byte-identically. _Acceptance:_ `diff` on regenerated vs original report is empty.
 
 ### Infrastructure & Hygiene (INFRA-*)

@@ -80,7 +80,7 @@ type RunReport struct {
 
 	// Docker-only fields (present only when a Docker client ran). Parsed when
 	// present, absent otherwise — never required.
-	UnstoppedInstances int      `json:"unstopped_instances"`
+	UnstoppedInstances  int      `json:"unstopped_instances"`
 	UnstoppedContainers []string `json:"unstopped_containers"`
 	UnremovedImages     []string `json:"unremoved_images"`
 }

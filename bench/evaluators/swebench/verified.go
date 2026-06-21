@@ -63,8 +63,19 @@ type GateResult struct {
 	Errs []evaluators.MetricError
 }
 
-// passed reports whether a test bucket has no failures (an all-success bucket).
-func passed(l TestList) bool { return len(l.Failure) == 0 }
+// passed reports whether a gating test bucket actually ran ≥1 test AND none
+// failed (CR-01). An EMPTY bucket is NOT a pass: an absent/empty tests_status
+// means no verification tests executed (the patch didn't apply, the instance
+// errored, or the augmented suite was absent), which must never read as
+// verified. This is stricter than failure-only emptiness — a vacuous all-empty
+// bucket is the spurious-true the gate exists to prevent.
+func passed(l TestList) bool { return len(l.Failure) == 0 && len(l.Success) > 0 }
+
+// noRegress reports whether a regress-check bucket had no failures. Unlike
+// passed(), it does NOT require a non-empty success list: an empty PASS_TO_PASS
+// (or PASS_TO_FAIL) legitimately means there were no pre-existing tests to
+// regress, which is not itself a failure.
+func noRegressBucket(l TestList) bool { return len(l.Failure) == 0 }
 
 // Grade composes the three test-execution conditions over the canonical report
 // and the (possibly nil) augmented report, returning the 3-condition verdict.
@@ -97,9 +108,19 @@ func Grade(canonical InstanceEval, augmented *InstanceEval) GateResult {
 		return GateResult{VerifiedCorrectness: &f}
 	}
 
+	// Fail closed if the canonical patch never applied (CR-01): an un-run /
+	// failed-to-apply / no-op-patch instance executes zero verification tests, so
+	// it must NEVER read as verified. Consulting the empty oracle buckets in that
+	// state would yield a spurious true. The per-condition pointers stay nil for
+	// the same reason the abstain branch leaves them nil — the oracles weren't run.
+	if !canonical.PatchSuccessfullyApplied {
+		f := false
+		return GateResult{VerifiedCorrectness: &f}
+	}
+
 	canonicalPass := passed(canonical.TestsStatus.FailToPass)
 	augmentedPass := passed(augmented.TestsStatus.FailToPass)
-	noRegress := passed(canonical.TestsStatus.PassToPass) && passed(canonical.TestsStatus.PassToFail)
+	noRegress := noRegressBucket(canonical.TestsStatus.PassToPass) && noRegressBucket(canonical.TestsStatus.PassToFail)
 
 	ok := canonicalPass && augmentedPass && noRegress
 

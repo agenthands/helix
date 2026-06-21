@@ -64,6 +64,62 @@ func TestVerified_BuggyPatch(t *testing.T) {
 	}
 }
 
+// TestVerified_VacuousPass is the CR-01 hermetic regression: an instance that
+// executed ZERO verification tests must NEVER read as verified_correctness=true.
+// Two distinct vacuous shapes are proven, both via committed fixtures:
+//
+//	(a) the canonical patch failed to apply (patch_successfully_applied=false,
+//	    all tests_status buckets empty) — the gate fails closed BEFORE consulting
+//	    the empty oracles.
+//	(b) the patch applied but no tests ran (tests_status absent → every bucket
+//	    zero-valued / empty) — passed() refuses an empty FAIL_TO_PASS bucket, so
+//	    the verdict is false even though no failures were recorded.
+//
+// Before this fix passed()=len(failure)==0 credited an empty bucket as a pass,
+// so both shapes spuriously produced verified_correctness=true with no tests
+// executed — the single worst benchmark failure the phase exists to prevent.
+func TestVerified_VacuousPass(t *testing.T) {
+	const iid = "sympy__sympy-20590"
+
+	// A present-but-empty augmented report (patch applied, no tests) — still a
+	// present (non-nil) report, so it is NOT the abstain path; the empty-bucket
+	// guard is what must catch it.
+	augEmpty := InstanceEval{PatchSuccessfullyApplied: true}
+
+	t.Run("patch not applied -> false (fail closed)", func(t *testing.T) {
+		canonical := loadEval(t, "report.notapplied_canonical.json", iid)
+		res := Grade(canonical, &augEmpty)
+		if res.VerifiedCorrectness == nil {
+			t.Fatal("verified_correctness must be non-nil (fail-closed), got nil")
+		}
+		if *res.VerifiedCorrectness != false {
+			t.Fatalf("verified_correctness = %v, want false (patch did not apply, zero tests ran)", *res.VerifiedCorrectness)
+		}
+		// Patch-not-applied short-circuits before consulting the oracles, exactly
+		// like the abstain branch.
+		if res.CanonicalPass != nil || res.AugmentedPass != nil || res.NoRegress != nil {
+			t.Errorf("patch-not-applied must not consult oracles: canon=%v aug=%v noreg=%v",
+				res.CanonicalPass, res.AugmentedPass, res.NoRegress)
+		}
+	})
+
+	t.Run("patch applied but no tests ran -> false", func(t *testing.T) {
+		canonical := loadEval(t, "report.notests_canonical.json", iid)
+		res := Grade(canonical, &augEmpty)
+		if res.VerifiedCorrectness == nil {
+			t.Fatal("verified_correctness must be non-nil (fail-closed), got nil")
+		}
+		if *res.VerifiedCorrectness != false {
+			t.Fatalf("verified_correctness = %v, want false (empty FAIL_TO_PASS is not a pass)", *res.VerifiedCorrectness)
+		}
+		// canonicalPass must be false because the empty FAIL_TO_PASS bucket ran no
+		// tests — it is consulted (patch applied) but refused.
+		if res.CanonicalPass == nil || *res.CanonicalPass {
+			t.Errorf("CanonicalPass = %v, want &false (empty FAIL_TO_PASS, no tests ran)", res.CanonicalPass)
+		}
+	})
+}
+
 // TestVerified_Gate exercises the 3-condition gate matrix: all-three-pass →
 // &true; any single condition fail → &false; missing augmented oracle → explicit
 // non-nil &false (fail-closed abstain, never nil, never a spurious true).
@@ -72,7 +128,8 @@ func TestVerified_Gate(t *testing.T) {
 
 	mk := func(canonFTPFail, p2pFail, p2fFail []string, augFTPFail []string, augNil bool) ([]string, GateResult) {
 		canonical := InstanceEval{
-			Resolved: true,
+			Resolved:                 true,
+			PatchSuccessfullyApplied: true,
 			TestsStatus: TestsStatus{
 				FailToPass: TestList{Success: []string{"ftp_ok"}, Failure: canonFTPFail},
 				PassToPass: TestList{Success: []string{"p2p_ok"}, Failure: p2pFail},
@@ -83,6 +140,7 @@ func TestVerified_Gate(t *testing.T) {
 			return canonFTPFail, Grade(canonical, nil)
 		}
 		augmented := InstanceEval{
+			PatchSuccessfullyApplied: true,
 			TestsStatus: TestsStatus{
 				FailToPass: TestList{Success: []string{"ftp_ok"}, Failure: augFTPFail},
 			},
@@ -152,11 +210,11 @@ func TestVerified_ApplyToMetrics(t *testing.T) {
 	ts := true
 	m := evaluators.Metrics{TaskSuccess: &ts}
 
-	canonical := InstanceEval{Resolved: true, TestsStatus: TestsStatus{
+	canonical := InstanceEval{Resolved: true, PatchSuccessfullyApplied: true, TestsStatus: TestsStatus{
 		FailToPass: TestList{Success: []string{"a"}},
 		PassToPass: TestList{Success: []string{"b"}},
 	}}
-	augmented := InstanceEval{TestsStatus: TestsStatus{
+	augmented := InstanceEval{PatchSuccessfullyApplied: true, TestsStatus: TestsStatus{
 		FailToPass: TestList{Success: []string{"a"}},
 	}}
 

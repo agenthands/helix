@@ -76,7 +76,7 @@
 
 **Wave 1** *(file-disjoint, parallel)*
 
-- [ ] 91-01-PLAN.md — `cmd/helix-cligen` generator (go/packages+AST scan recovers tool->`*Args`, VERB-04) + committed `internal/cli/verbs_gen.go` + flatten verbs onto root grouped by capability + `--check` drift gate + parity-by-name test + `make verify-cligen`/CI (VERB-01/02/03/04)
+- [x] 91-01-PLAN.md — `cmd/helix-cligen` generator (go/packages+AST scan recovers tool->`*Args`, VERB-04) + committed `internal/cli/verbs_gen.go` + flatten verbs onto root grouped by capability + `--check` drift gate + parity-by-name test + `make verify-cligen`/CI (VERB-01/02/03/04)
 - [ ] 91-02-PLAN.md — `tools/call` ProfileEnforcementMiddleware (Guardrail clone; refuse with typed `serr.PermissionDenied`) installed AFTER Guardrail / BEFORE LazyInit (LIFO invariant) (SEC-01)
 
 **Wave 2** *(blocked on Wave 1; file-disjoint, parallel)*

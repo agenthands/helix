@@ -31,10 +31,10 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 
 ### Verb Surface & Codegen (VERB-*)
 
-- [ ] **VERB-01**: Every callable tool in the live registry has a corresponding `helix <verb>` subcommand, code-generated from the typed `*Args` structs (existing `json` + `jsonschema` tags). _Acceptance:_ a parity test asserts generated subcommand count == live registry tool count, enumerated by name.
-- [ ] **VERB-02**: A `helix-cligen` generator emits committed `*_gen.go`; a `--check` CI drift gate fails on stale generated code (mirrors the docgen / PromQL gates). _Acceptance:_ editing a tool's args without regenerating fails CI.
-- [ ] **VERB-03**: `helix --help` groups verbs by capability (navigation / edit / fileops / diagnostics / repomap / memory) via cobra `AddGroup`; each verb's `--help` shows flags derived from its arg struct with required-ness. _Acceptance:_ grouped help renders; a required arg without a flag value errors before dialing the daemon.
-- [ ] **VERB-04**: The tool-name → arg-struct-type mapping the generator needs is available (a `ToolDef` field or a generator-side table). _Acceptance:_ the generator resolves the arg struct for every registered tool with no manual per-tool edits.
+- [x] **VERB-01**: Every callable tool in the live registry has a corresponding `helix <verb>` subcommand, code-generated from the typed `*Args` structs (existing `json` + `jsonschema` tags). _Acceptance:_ a parity test asserts generated subcommand count == live registry tool count, enumerated by name.
+- [x] **VERB-02**: A `helix-cligen` generator emits committed `*_gen.go`; a `--check` CI drift gate fails on stale generated code (mirrors the docgen / PromQL gates). _Acceptance:_ editing a tool's args without regenerating fails CI.
+- [x] **VERB-03**: `helix --help` groups verbs by capability (navigation / edit / fileops / diagnostics / repomap / memory) via cobra `AddGroup`; each verb's `--help` shows flags derived from its arg struct with required-ness. _Acceptance:_ grouped help renders; a required arg without a flag value errors before dialing the daemon.
+- [x] **VERB-04**: The tool-name → arg-struct-type mapping the generator needs is available (a `ToolDef` field or a generator-side table). _Acceptance:_ the generator resolves the arg struct for every registered tool with no manual per-tool edits.
 
 ### Terse Output Contract (OUT-*) — load-bearing
 
@@ -108,10 +108,10 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | CLI-02 | Phase 90 | Complete |
 | CLI-03 | Phase 90 | Complete |
 | CLI-04 | Phase 90 | Complete |
-| VERB-01 | Phase 91 | Pending |
-| VERB-02 | Phase 91 | Pending |
-| VERB-03 | Phase 91 | Pending |
-| VERB-04 | Phase 91 | Pending |
+| VERB-01 | Phase 91 | Complete |
+| VERB-02 | Phase 91 | Complete |
+| VERB-03 | Phase 91 | Complete |
+| VERB-04 | Phase 91 | Complete |
 | OUT-01 | Phase 92 | Pending |
 | OUT-02 | Phase 92 | Pending |
 | OUT-03 | Phase 92 | Pending |

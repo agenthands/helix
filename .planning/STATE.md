@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 91
-current_phase_name: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement
-status: verifying
+current_phase_name: Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
+status: executing
 stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-06-21T12:53:50.935Z"
+last_updated: "2026-06-21T14:14:00.405Z"
 last_activity: 2026-06-21
-last_activity_desc: Phase 90 complete, transitioned to Phase 91
+last_activity_desc: Phase 91 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 5
   percent: 17
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 90 — CLI One-Shot Dial Spine + Race-Free Warm Reuse
+**Current focus:** Phase 91 — Code-Generated Verb Surface + tools/call Profile/Mode Enforcement
 
 ## Current Position
 
-Phase: 91 — Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 90 complete, transitioned to Phase 91
+Phase: 91 (Code-Generated Verb Surface + tools/call Profile/Mode Enforcement) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-21 — Phase 91 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 90 P02 | 3min | 1 tasks | 2 files |
 | Phase 90 P03 | 6min | 2 tasks | 6 files |
 | Phase 90 P04 | 35min | 3 tasks | 5 files |
+| Phase 91 P01 | 17min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -84,7 +85,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T12:47:05.764Z
+Last session: 2026-06-21T14:13:31.353Z
 Stopped at: Completed 90-02-PLAN.md
 Resume file: None
 
@@ -96,3 +97,6 @@ Resume file: None
 - [Phase ?]: 90-03: client transport placed in internal/forwarder (no cycle; clirpc fallback unneeded)
 - [Phase ?]: 90-03: forwarder.CallTool takes version as a param to avoid an internal/cli↔forwarder import cycle
 - [Phase ?]: 90-04: E2E oracle fixed 3 latent 90-03 spine bugs (search_for_pattern wrong tool name, no socket override, cold-start :8080 bind); CLI-02 SLO=max(p50*5,50ms), observed p50 ~12ms
+- [Phase ?]: 91-01: AST scan (go/packages+go/ast) recovers tool-name->*Args binding; no manual per-tool table (VERB-04)
+- [Phase ?]: 91-01: verbs_gen.go generated+committed; helix-cligen --check drift gate in CI + make verify-cligen (VERB-02)
+- [Phase ?]: 91-01: internal/cli.VerbToolNames() is the read-only catalog seam for 91-03 integration tests

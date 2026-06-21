@@ -544,7 +544,7 @@ m.TaskSuccess = &taskSuccess                               // assigned separatel
 | Architecture | HIGH | Every pattern is a verified in-tree clone; JSON contracts cited from upstream source |
 | Pitfalls | HIGH | Sourced from in-tree decisions + cited report shapes + the MEMORY false-green trap |
 
-### Open Questions
+### Open-Question Disposition Summary
 All 5 RESOLVED with recommendations; 5 `[ASSUMED]` items logged (A1–A5) for a single `checkpoint:human-verify` (confirm UTBoost dataset name+rev, drop-in vs fork, report log path, run-all-tests mechanism) — none block hermetic-fixture development.
 
 ### Ready for Planning

@@ -117,6 +117,62 @@ func TestResultMetricsRoundTrip(t *testing.T) {
 	})
 }
 
+// TestEmbedderIDOmittedWhenEmpty (Phase 83 Task 1, ABLATE-04 #3): a build with
+// EmbedderID=="" (every honest non-RAG mode) emits NO embedder_id key and still
+// passes Validate. embedder_id is an open, additive-minor provenance key —
+// additionalProperties is OPEN at the schema's top level, so the key's presence
+// or absence is schema-valid either way; omitempty drops it for honest modes.
+func TestEmbedderIDOmittedWhenEmpty(t *testing.T) {
+	in := ResultInput{
+		TaskID:    "internal-toolbench/IT-go-patch-apply-1",
+		Mode:      "your_agent_full",
+		Benchmark: "internal-toolbench",
+		RunIndex:  0,
+		Outcome:   "success",
+		TraceRef:  "bench/reports/x/trace.json",
+		Fairness:  runners.DefaultContract,
+		// EmbedderID intentionally left "" — honest non-RAG mode.
+	}
+
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc), "an EmbedderID=='' build must still validate (additive-minor open key)")
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(doc, &raw))
+	_, present := raw["embedder_id"]
+	assert.False(t, present,
+		"an honest non-RAG mode (EmbedderID=='') must OMIT the embedder_id key (omitempty)")
+}
+
+// TestEmbedderIDEmittedWhenSet (Phase 83 Task 1, ABLATE-04 #3): a build with a
+// non-empty EmbedderID (the baseline_rag arm) emits the embedder_id key carrying
+// the recorded model string and still passes Validate. This is the provenance the
+// leaderboard reads to answer "which embedder produced this RAG row" (T-83-03-01).
+func TestEmbedderIDEmittedWhenSet(t *testing.T) {
+	in := ResultInput{
+		TaskID:     "internal-toolbench/IT-go-patch-apply-1",
+		Mode:       "baseline_rag",
+		Benchmark:  "internal-toolbench",
+		RunIndex:   0,
+		Outcome:    "success",
+		TraceRef:   "bench/reports/x/trace.json",
+		Fairness:   runners.DefaultContract,
+		EmbedderID: "text-embedding-3-small",
+	}
+
+	doc, err := BuildResult(in)
+	require.NoError(t, err)
+	require.NoError(t, Validate(doc), "a set-EmbedderID build must validate")
+
+	var got struct {
+		EmbedderID string `json:"embedder_id"`
+	}
+	require.NoError(t, json.Unmarshal(doc, &got))
+	assert.Equal(t, "text-embedding-3-small", got.EmbedderID,
+		"a baseline_rag row must record the selected embedder_id")
+}
+
 // TestRunIndexPathSegment (Pitfall 3 / V5): the durable result + trace paths
 // carry a <run_index> segment derived from cfg.RunIndex, and the segment is
 // routed through validatePathSegment before the join.

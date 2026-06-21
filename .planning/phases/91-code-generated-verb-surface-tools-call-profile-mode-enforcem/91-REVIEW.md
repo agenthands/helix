@@ -19,7 +19,16 @@ findings:
   warning: 3
   info: 4
   total: 7
-status: issues_found
+status: fixed
+fixed_at: 2026-06-21
+dispositions:
+  WR-01: fixed   # fail-closed on unresolvable initial mode (daemon bootstrap) + tests
+  WR-02: fixed   # per-verb flag-name dedup hard-fails generation + tests
+  WR-03: fixed   # reserved-subcommand denylist hard-fails generation + tests
+  IN-01: fixed   # deleted dead '_ = rendered' assignment
+  IN-03: fixed   # session Profile now reports resolved activeProfile.Name
+  IN-02: deferred # blank-import set correct today (guardrails Tools()==nil); structural, not trivial
+  IN-04: deferred # --mode naming; WR-01 fail-closed neutralizes the latent risk
 ---
 
 # Phase 91: Code Review Report
@@ -59,6 +68,13 @@ when the initial operational mode cannot be resolved to a registered mode.
 
 ### WR-01: Enforcement fails open when the initial mode does not resolve
 
+> **DISPOSITION: FIXED** (commit 89b2658d). Applied option (b) at the call site:
+> daemon bootstrap now validates the initial operational mode resolves via
+> `profileStore.Mode(initialMode)` BEFORE resolving the whitelist and refuses to
+> start on a miss (fail-fast). The legitimate no-profile/nil-allow-all default is
+> unaffected (a profile is always resolved via `ResolveProfile`). Regression tests
+> added in `internal/daemon/profile_mode_failclosed_test.go`.
+
 **File:** `internal/daemon/daemon.go:700-715`, `internal/daemon/daemon.go:78-85`, `internal/mcp/profile_enforce.go:108-111`
 **Issue:** `initialAllowedTools := resolveAllowedToolsForMode(...)` returns `nil`
 whenever `store.Mode(modeName)` misses (daemon.go:82-85). The session is then
@@ -87,6 +103,11 @@ ProfileEnforce; if you change it, change both. Preferred is (b) at the call site
 the operator gets a startup error instead of a silently-wide-open daemon.
 
 ### WR-02: Generator does not dedupe flag names within a verb (latent cobra panic)
+
+> **DISPOSITION: FIXED** (commit 1b88d1e9). `renderVerbsGen` now tracks a per-verb
+> `seenFlags` map and hard-fails generation with a clear error on a duplicate flag
+> name. Regression tests added in `cmd/helix-cligen/render_test.go`
+> (`TestRender_DuplicateFlagNameFailsGeneration`, `TestRender_NoFalseDuplicateAcrossVerbs`).
 
 **File:** `cmd/helix-cligen/render.go:95-119`, `cmd/helix-cligen/render.go:131-142`, `internal/cli/verb.go:122-135`
 **Issue:** `flagNameAndKind` kebab-cases each field's `jsonKey` independently. Two
@@ -118,6 +139,12 @@ for _, f := range info.fields {
 
 ### WR-03: Generated verb names can collide with hand-written root subcommands
 
+> **DISPOSITION: FIXED** (commit 039fc0c0). Added a `reservedSubcommands` denylist
+> to the generator (setup/status/activate/deactivate/nudge/update/upgrade plus
+> cobra's auto help/completion) mirroring `reservedRootFlags`; a colliding verb
+> hard-fails generation. Regression tests added in `cmd/helix-cligen/render_test.go`
+> (`TestRender_ReservedSubcommandFailsGeneration`, `TestRender_ReservedSubcommandSetMatchesRoot`).
+
 **File:** `internal/cli/verb.go:92-104`, `internal/cli/root.go:146-157`
 **Issue:** `registerGeneratedVerbs` calls `rootCmd.AddCommand(sub)` for every entry
 in `verbSpecs`. The root command also has hand-written subcommands `setup`,
@@ -138,6 +165,8 @@ maintained together.
 
 ### IN-01: Dead assignment `_ = rendered` in cligen main
 
+> **DISPOSITION: FIXED** (commit 242c1e94). Deleted the dead `_ = rendered` line.
+
 **File:** `cmd/helix-cligen/main.go:67`
 **Issue:** `rendered, err := renderVerbsGen(...)` is assigned at line 63 and then
 discarded with `_ = rendered` at line 67, yet `rendered` is used at lines 74 and 82.
@@ -146,6 +175,11 @@ misleading (it reads as if `rendered` were unused).
 **Fix:** Delete line 67.
 
 ### IN-02: Blank-import set diverges from daemon's, relying on a non-obvious zero-tools invariant
+
+> **DISPOSITION: DEFERRED.** Correct today (`GuardrailsSkill.Tools()` returns nil, so
+> guardrails contributes zero verbs and the catalogs match). Out of the trivial/safe
+> fix scope for this pass — changing the blank-import set or restructuring the
+> docgen/cligen/daemon import parity is a structural change better tracked separately.
 
 **File:** `cmd/helix-cligen/main.go:26-38`, `internal/daemon/imports.go`
 **Issue:** cligen blank-imports `internal/kernel/health` and `internal/kernel/help`
@@ -166,6 +200,10 @@ maintainer does not assume drift.
 
 ### IN-03: Session `Profile` field can mismatch the actually-enforced profile
 
+> **DISPOSITION: FIXED** (commit 3d2df49a). Session now built with
+> `Profile: activeProfile.Name` (the resolved profile) instead of `cfg.Profile`,
+> so refusal messages and telemetry labels name the enforced profile.
+
 **File:** `internal/daemon/daemon.go:711-715`, `internal/config/resolve.go:102-105`
 **Issue:** The session is built with `Profile: cfg.Profile`, but `AllowedTools` and
 `initialMode` are derived from `activeProfile`. `ResolveProfile` falls back to
@@ -181,6 +219,12 @@ name) instead of `cfg.Profile` so the session's reported profile matches the one
 whose tools are actually enforced.
 
 ### IN-04: `--mode` flag name overloads two distinct concepts
+
+> **DISPOSITION: DEFERRED.** No live bug (`runDaemon` does not wire the transport
+> `--mode` into `cfg.Mode`). The WR-01 fail-closed fix already neutralizes the
+> latent risk: feeding `stdio`/`http` into the operational-mode resolution would now
+> fail-fast at startup instead of failing open. A rename is broader than the
+> trivial/safe scope for this pass.
 
 **File:** `internal/cli/root.go:109`, `internal/config/config.go:21-23`
 **Issue:** The root `--mode` flag is the *transport* mode (stdio/http/auto,

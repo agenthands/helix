@@ -1,0 +1,3 @@
+{"instance_id":"astropy__astropy-12345","model_name_or_path":"helix","model_patch":"diff --git a/astropy/x.py b/astropy/x.py\n@@\n-a\n+b\n"}
+{"instance_id":"django__django-11099","model_name_or_path":"helix","model_patch":"diff --git a/django/y.py b/django/y.py\n@@\n-c\n+d\n"}
+{"instance_id":"sympy__sympy-20590","model_name_or_path":"helix","model_patch":"diff --git a/sympy/core/sympify.py b/sympy/core/sympify.py\n@@\n-old\n+new\n"}

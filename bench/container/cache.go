@@ -91,7 +91,39 @@ func Ensure(sha string, fetch func(stageDir string) error) (hit bool, dir string
 		return false, "", markErr
 	}
 
+	// Re-check the sentinel after a successful, fully-verified fetch+mark: a
+	// concurrent Ensure for the same digest may have won the publish race while
+	// this goroutine was staging (there is no flock/O_EXCL coordination). If a
+	// valid finalDir is already present, discard our freshly-staged copy and
+	// treat it as a hit — the published cache is byte-equivalent (both passed
+	// the same verify-then-pull) so it is safe to adopt the winner's. This
+	// closes the WR-01 TOCTOU on the publish side: os.Rename over an existing
+	// directory fails with "file exists" on Linux/macOS, which would otherwise
+	// wedge the loser with a hard error despite a valid cache.
+	if _, statErr := os.Stat(filepath.Join(finalDir, cacheOKMarker)); statErr == nil {
+		os.RemoveAll(stageDir)
+		return true, finalDir, nil
+	}
+
+	// No valid winner published. A finalDir may still exist WITHOUT the sentinel
+	// from a crash/interrupt between a prior rename and its sentinel write, or
+	// from operator tampering — os.Rename refuses to overwrite it, permanently
+	// un-filling the cache. Clear any such stale/partial finalDir so our
+	// verified staging dir can land atomically. We only reach here when finalDir
+	// lacks the sentinel, so RemoveAll never discards a valid published cache.
+	if rmErr := os.RemoveAll(finalDir); rmErr != nil {
+		os.RemoveAll(stageDir)
+		return false, "", rmErr
+	}
+
 	if renErr := os.Rename(stageDir, finalDir); renErr != nil {
+		// Final defensive re-check: if a concurrent winner published in the
+		// narrow window between our RemoveAll and Rename, adopt it rather than
+		// fail. Otherwise surface the rename error.
+		if _, statErr := os.Stat(filepath.Join(finalDir, cacheOKMarker)); statErr == nil {
+			os.RemoveAll(stageDir)
+			return true, finalDir, nil
+		}
 		os.RemoveAll(stageDir)
 		return false, "", renErr
 	}

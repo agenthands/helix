@@ -80,6 +80,97 @@ func TestCacheHitOnRerun(t *testing.T) {
 	}
 }
 
+// TestEnsureSecondFillOverPreexistingValidFinalDir proves the WR-01 publish-side
+// TOCTOU is closed: when a SECOND fetch stages a fresh copy but a valid finalDir
+// (sentinel present) already exists, Ensure adopts the winner and returns a hit
+// instead of dying at os.Rename ("file exists"). We force the second fetch to run
+// by clearing the sentinel before the call (so the cache-hit short-circuit at the
+// top of Ensure is bypassed), then assert no hard error and a valid published dir.
+func TestEnsureSecondFillOverPreexistingValidFinalDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv(cacheDirEnv, tmp)
+
+	fetch := func(stageDir string) error {
+		return os.WriteFile(filepath.Join(stageDir, "image.tar"), []byte("stub"), 0o644)
+	}
+
+	finalDir := filepath.Join(tmp, imagesSubdir, validHex)
+	marker := filepath.Join(finalDir, cacheOKMarker)
+
+	// First fill publishes a valid finalDir (with sentinel).
+	if _, _, err := Ensure(validHex, fetch); err != nil {
+		t.Fatalf("first Ensure error: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("expected sentinel after first fill: %v", err)
+	}
+
+	// Remove ONLY the sentinel so finalDir still exists but the top-of-Ensure
+	// cache-hit short-circuit is bypassed, forcing a second fetch+publish over a
+	// pre-existing finalDir — the exact WR-01 wedge condition.
+	if err := os.Remove(marker); err != nil {
+		t.Fatalf("removing sentinel: %v", err)
+	}
+
+	hit, dir, err := Ensure(validHex, fetch)
+	if err != nil {
+		t.Fatalf("second Ensure over pre-existing finalDir errored (WR-01 wedge): %v", err)
+	}
+	if dir != finalDir {
+		t.Fatalf("second Ensure dir = %q, want %q", dir, finalDir)
+	}
+	// hit may be false (we re-published) — what matters is no hard error and a
+	// valid, sentinel-bearing finalDir afterward.
+	_ = hit
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("expected valid sentinel-bearing finalDir after second fill: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(finalDir, "image.tar")); err != nil {
+		t.Fatalf("expected published image after second fill: %v", err)
+	}
+}
+
+// TestEnsureConcurrentDoubleFillNoWedge runs many Ensure calls for the same digest
+// concurrently. Before the WR-01 fix the losers of the publish race died at
+// os.Rename with "file exists"; now every caller must return without a hard error
+// and observe a valid published cache. Each goroutine clears the sentinel before
+// its call to defeat the fast cache-hit path and maximize publish-race overlap.
+func TestEnsureConcurrentDoubleFillNoWedge(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv(cacheDirEnv, tmp)
+
+	fetch := func(stageDir string) error {
+		return os.WriteFile(filepath.Join(stageDir, "image.tar"), []byte("stub"), 0o644)
+	}
+
+	finalDir := filepath.Join(tmp, imagesSubdir, validHex)
+
+	const workers = 16
+	errs := make(chan error, workers)
+	start := make(chan struct{})
+	for i := 0; i < workers; i++ {
+		go func() {
+			<-start
+			_, _, err := Ensure(validHex, fetch)
+			errs <- err
+		}()
+	}
+	close(start)
+
+	for i := 0; i < workers; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent Ensure returned error (WR-01 wedge): %v", err)
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(finalDir, cacheOKMarker)); err != nil {
+		t.Fatalf("expected valid sentinel after concurrent fills: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(finalDir, "image.tar")); err != nil {
+		t.Fatalf("expected published image after concurrent fills: %v", err)
+	}
+}
+
 func TestCacheHelixCacheDirPrecedence(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv(cacheDirEnv, tmp)

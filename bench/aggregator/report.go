@@ -55,6 +55,19 @@ type LeaderRow struct {
 	ToolCalls    ciValue
 	FilesRead    ciValue
 	EditLocality ciValue
+
+	// CanaryPassRate is the Phase 86 (Plan 05) ADDITIVE contamination-canary column:
+	// the fraction of this (mode x benchmark)'s rows-carrying-a-completion whose
+	// completion did NOT echo the injected canary sentinel (canary "pass" == clean).
+	// It is reduced at SCORE TIME from the open `completion` doc key via
+	// bench/canary.IsContaminated (reduceCanaryRate), mirroring the Phase 85
+	// ByLanguage additive discipline: it NEVER alters the existing leaderboard
+	// columns or their sort, and a cell whose rows carry NO completion key yields a
+	// NULL ci (OK==false) rendered as an em-dash — never a fabricated 0. It is a
+	// flat pooled rate, not a BCa CI (so it consumes no RNG and cannot perturb the
+	// locked determinism contract); the bootstrapped canary CI is downstream
+	// (Phase 89).
+	CanaryPassRate ciValue
 }
 
 // VarianceFlag names a (task,mode) cell whose per-run USD CV exceeds the FAIR-03

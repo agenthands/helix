@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/agenthands/helix/bench/canary"
 	"github.com/agenthands/helix/bench/cost"
 )
 
@@ -114,6 +115,12 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 
 	for _, mode := range modes {
 		leader := reduceLeaderRow(loaded, tasks, mode, cfg, alpha, rng)
+		// Phase 86 (Plan 05) ADDITIVE contamination-canary column: populate
+		// CanaryPassRate AFTER the determinism-locked metric reductions above. It is a
+		// flat pooled rate that consumes NO RNG (no bca call), so it cannot perturb the
+		// IN-03 metric-order/presence bootstrap contract; it only reads the same loaded
+		// rows. NEVER alters the existing leaderboard columns.
+		leader.CanaryPassRate = reduceCanaryRate(loaded, tasks, mode)
 		rep.Leaderboard = append(rep.Leaderboard, leader)
 
 		costRow := reduceCostRow(loaded, tasks, mode, ct, cfg, alpha, rng)
@@ -276,6 +283,58 @@ func reduceLanguageRows(loaded *Loaded) []LanguageRow {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Language < out[j].Language })
 	return out
+}
+
+// rowCanary reads the open-provenance `completion` doc key from a row and runs
+// bench/canary.IsContaminated over it at SCORE TIME — the contamination flag is
+// DERIVED here in the aggregator path, NOT by editing the CCE/RepoBench loaders
+// (Plans 03/04 own them). It returns (contaminated, present): present==false when
+// the row carries no completion key (a pre-canary artifact), so such a row
+// contributes nothing to the canary pass-rate (Pitfall 4 null discipline — never
+// fabricated as clean OR contaminated). It mirrors rowLanguage/rowModelID exactly.
+func rowCanary(r Row) (contaminated bool, present bool) {
+	raw, ok := r.Doc[canary.DocKeyCompletion]
+	if !ok {
+		return false, false
+	}
+	var completion string
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		return false, false
+	}
+	return canary.IsContaminated(completion), true
+}
+
+// reduceCanaryRate computes the Phase 86 (Plan 05) ADDITIVE CanaryPassRate for one
+// (mode x benchmark): a flat pooled fraction of rows-carrying-a-completion whose
+// completion did NOT echo the canary sentinel (canary "pass" == clean), derived at
+// score time via rowCanary. It mirrors the reduceLanguageRows pooled-rate path: a
+// row with no completion key is excluded from BOTH numerator and denominator. When
+// NO row in the cell carries a completion key the rate is a NULL ci (OK==false,
+// rendered em-dash) — never a fabricated 0. It is intentionally NOT a BCa CI (the
+// bootstrapped canary CI is downstream Phase 89), so it consumes no RNG and cannot
+// perturb the locked determinism contract.
+func reduceCanaryRate(loaded *Loaded, tasks []string, mode string) ciValue {
+	var clean, total int
+	for _, task := range tasks {
+		for _, r := range loaded.Rows(task, mode) {
+			contaminated, present := rowCanary(r)
+			if !present {
+				continue
+			}
+			total++
+			if !contaminated {
+				clean++
+			}
+		}
+	}
+	if total == 0 {
+		// No completion data anywhere in this cell — null canary signal (em-dash).
+		return ciValue{OK: false}
+	}
+	rate := float64(clean) / float64(total)
+	// A flat pooled point with degenerate [point, point] endpoints: it is a rate,
+	// not a bootstrapped interval (Phase 89 owns the CI). OK==true so it renders.
+	return ciValue{Point: rate, Lo: rate, Hi: rate, OK: true}
 }
 
 // reduceCostRow builds the COST-03 cost_quality.md row for one (mode x

@@ -33,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agenthands/helix/bench/datasets/crosscodeeval"
+	"github.com/agenthands/helix/bench/datasets/repobench"
 	runtime "github.com/agenthands/helix/bench/runtime"
 	"github.com/spf13/cobra"
 )
@@ -350,12 +352,67 @@ func discoverTasks(datasetsRoot, benchmark string, languages []string) ([]string
 	return tasks, nil
 }
 
-// newFetchDatasetsCmd returns the 'fetch-datasets' subcommand (skeleton).
+// newFetchDatasetsCmd returns the 'fetch-datasets' subcommand: it downloads (or
+// reuses the cached) CrossCodeEval + RepoBench per-language parquet datasets by
+// invoking each adapter's pinned-constant Fetch func (crosscodeeval.Fetch /
+// repobench.Fetch). Both fetchers build the resolve URL ONLY from their pinned
+// Host+Repo+Rev constants and a validated language (SSRF-safe, T-86-03-02 /
+// T-86-04-02) — no caller-supplied URL crosses — and cache under HELIX_CACHE_DIR.
+//
+// The live fetch is network-gated by nature (it reaches huggingface.co); the
+// hermetic test only proves the command is registered and is NOT the old
+// notYetImplemented stub. RunE reports the cached size per (adapter, language) and
+// returns a non-nil error iff EVERY fetch failed, so a partial mirror gap
+// (RESEARCH Pitfall 3) does not hard-fail the whole command.
 func newFetchDatasetsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "fetch-datasets",
-		Short: "Download or refresh bench datasets",
-		RunE:  notYetImplemented("fetch-datasets"),
+		Short: "Download or refresh bench datasets (CrossCodeEval + RepoBench)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			out := cmd.OutOrStdout()
+
+			var ok, failed int
+
+			// CrossCodeEval: one pinned rev across all languages.
+			for _, lang := range crosscodeeval.Languages {
+				b, err := crosscodeeval.Fetch(ctx, crosscodeeval.PinnedRev, lang)
+				if err != nil {
+					fmt.Fprintf(out, "crosscodeeval %-12s FAILED: %v\n", lang, err)
+					failed++
+					continue
+				}
+				fmt.Fprintf(out, "crosscodeeval %-12s OK (%d bytes)\n", lang, len(b))
+				ok++
+			}
+
+			// RepoBench: a per-language pinned rev (separate per-language repos).
+			for _, lang := range repobench.Languages {
+				rev := repobench.PinnedRev(lang)
+				if rev == "" {
+					fmt.Fprintf(out, "repobench %-12s FAILED: no pinned rev\n", lang)
+					failed++
+					continue
+				}
+				b, err := repobench.Fetch(ctx, rev, lang)
+				if err != nil {
+					fmt.Fprintf(out, "repobench %-12s FAILED: %v\n", lang, err)
+					failed++
+					continue
+				}
+				fmt.Fprintf(out, "repobench %-12s OK (%d bytes)\n", lang, len(b))
+				ok++
+			}
+
+			if ok == 0 {
+				return fmt.Errorf("fetch-datasets: all %d dataset fetches failed", failed)
+			}
+			fmt.Fprintf(out, "fetch-datasets: %d ok, %d failed\n", ok, failed)
+			return nil
+		},
 	}
 }
 

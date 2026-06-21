@@ -188,7 +188,7 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | COST-01 | Phase 75 | TBD | Pending |
 | COST-02 | Phase 82 | 82-04 | Complete — cost_per_solved_task golden (3.555) + model_id join + freshness gate fail-closed |
 | COST-03 | Phase 82 | 82-06, 82-07 | Complete — cost_quality.md renders cost-per-solved per mode×benchmark with BCa CIs + FAIR-03 CV>0.05 variance warning |
-| ADAPTER-AIDER-01 | Phase 85 | 85-02 (partial) | In progress — SC#3 `--network=none` container Run seam landed (bench/container.runArgs + Run, argv-proven hermetically); full dataset-loader adapter + 2-attempt protocol pending later plans |
+| ADAPTER-AIDER-01 | Phase 85 | 85-07 | Complete — dataset-loader-only adapter landed (bench/datasets/aider-polyglot): pinned-sha `--depth 1` clone of Aider-AI/polyglot-benchmark @ 7e0611e7, `.meta/config.json` files.solution/test/example mapping, 2-attempt + stderr-reprompt protocol (tries=2/180s) over aider's native per-language commands. Proven hermetically over a committed fixture set; live clone verified once (HEAD==pin, 225 tasks/6 tracks). SC#3 non-hermetic flagging via the 85-02 `--network=none` seam. SC#1 full live run + per-language sanity comparison recorded as toolchain/network-gated. |
 | ADAPTER-CCE-01 | Phase 86 | TBD | Pending |
 | ADAPTER-REPO-01 | Phase 86 | TBD | Pending |
 | ADAPTER-SWE-01 | Phase 87 | TBD | Pending |

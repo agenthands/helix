@@ -89,7 +89,7 @@ helix setup jetbrains      # JetBrains IDEs
 helix setup gemini-cli     # Gemini CLI
 helix setup claude-desktop # Claude Desktop
 helix setup opencode       # OpenCode
-helix setup generic        # Generic MCP client
+helix setup generic        # Generic client (MCP-teardown only; no skill)
 ```
 
 Add `--global` for user-wide registration. Run `helix setup --help` for all options.
@@ -138,7 +138,7 @@ For full profile and mode reference, see [USAGE.md](USAGE.md).
 | **Progressive Descriptions** | Tools expose short descriptions for listing; full documentation available on demand via `get_tool_help` |
 | **Health Monitoring** | `get_health` reports runtime status of language servers and worker pool |
 | **Lazy Initialization** | Workspaces initialize on first tool call — no upfront indexing delay |
-| **Setup CLI** | One-command client registration: `helix setup claude-code` with language detection and health check |
+| **Setup CLI** | One-command skill + hooks install (and prior-MCP teardown): `helix setup claude-code` with language detection and health check |
 
 ## RepoMap
 

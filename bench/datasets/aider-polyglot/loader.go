@@ -152,16 +152,29 @@ func copyFile(srcRoot, workRoot, rel string) error {
 }
 
 // restorePristine restores the exercise's pristine solution stub(s) AND test
-// file(s) from SrcDir into workRoot, so each attempt starts from a clean
+// file(s) from SrcDir into workRoot, so the work tree starts from a clean
 // solution stub and the original (un-tampered) test file — exactly the upstream
 // benchmark.py "restore solution from pristine before running tests" step. The
-// agent edits the work copy; the pristine source is never mutated.
+// agent edits the work copy; the pristine source is never mutated. It is used to
+// seed the work tree before the first attempt.
 func restorePristine(ex *Exercise, srcRoot, workRoot string) error {
 	for _, rel := range ex.Config.Files.Solution {
 		if err := copyFile(srcRoot, workRoot, rel); err != nil {
 			return fmt.Errorf("aiderpolyglot: restore solution %q: %w", rel, err)
 		}
 	}
+	return restorePristineTests(ex, srcRoot, workRoot)
+}
+
+// restorePristineTests restores ONLY the pristine test file(s) from SrcDir into
+// workRoot. This is the load-bearing anti-tamper step (WR-01): the upstream
+// invariant is that the agent may iteratively edit the SOLUTION stub across
+// attempts, but the graded TEST file must be reset to its committed form before
+// EACH test run so a test-tampering agent cannot force a spurious green. Unlike
+// restorePristine it deliberately does NOT reset the solution stub, preserving
+// the agent's iterative fix between attempts. The pristine source is never
+// mutated.
+func restorePristineTests(ex *Exercise, srcRoot, workRoot string) error {
 	for _, rel := range ex.Config.Files.Test {
 		if err := copyFile(srcRoot, workRoot, rel); err != nil {
 			return fmt.Errorf("aiderpolyglot: restore test %q: %w", rel, err)
@@ -202,10 +215,18 @@ type AttemptResult struct {
 
 // RunExercise drives the upstream aider 2-attempt + stderr-reprompt protocol
 // (benchmark.py): for attempt in 0..tries(2): the agent edits the stub, the
-// native tests run, on pass the loop breaks, on fail the next prompt becomes
-// base + the captured failure output and the loop continues. runTests and agent
-// are injected so the hermetic test drives the EXACT protocol with NO toolchain.
-// Each attempt's test run is given an attemptTimeout (180s) child context.
+// pristine TEST file(s) are restored, the native tests run, on pass the loop
+// breaks, on fail the next prompt becomes base + the captured failure output and
+// the loop continues. runTests and agent are injected so the hermetic test
+// drives the EXACT protocol with NO toolchain. Each attempt's test run is given
+// an attemptTimeout (180s) child context.
+//
+// Anti-tamper invariant (WR-01): the graded test file is restored to its
+// committed (pristine) form AFTER the agent edits but BEFORE each test run, so an
+// agent that edits a files.test path cannot force a spurious green — the edited
+// solution stub is preserved across attempts (iterative fixing) while the test is
+// reset every attempt. Restoration runs only when ex.SrcDir is set (a real loaded
+// exercise); the pure-scripted fake-tester unit tests leave it empty and skip it.
 func RunExercise(ctx context.Context, ex *Exercise, workDir string, runTests TestFn, agent AgentFn) AttemptResult {
 	prompt := ex.basePrompt
 	var res AttemptResult
@@ -216,6 +237,15 @@ func RunExercise(ctx context.Context, ex *Exercise, workDir string, runTests Tes
 			res.LastOutput = err.Error()
 			prompt = ex.basePrompt + "\n\n# Previous attempt failed:\n" + err.Error()
 			continue
+		}
+		// Restore the pristine test file(s) before grading so a test-tampering
+		// agent cannot produce a false pass (upstream benchmark.py invariant).
+		if ex.SrcDir != "" {
+			if err := restorePristineTests(ex, ex.SrcDir, workDir); err != nil {
+				res.LastOutput = err.Error()
+				prompt = ex.basePrompt + "\n\n# Previous attempt failed:\n" + err.Error()
+				continue
+			}
 		}
 		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
 		tr := runTests(attemptCtx, ex, workDir)

@@ -161,6 +161,74 @@ func TestTwoAttemptFailBoth(t *testing.T) {
 	}
 }
 
+// TestRunExerciseRestoresTamperedTest proves the WR-01 anti-tamper invariant: an
+// agent that edits the graded TEST file has that edit reverted to the pristine
+// committed form BEFORE the tests are graded, so test-tampering cannot force a
+// spurious pass. It also proves the agent's SOLUTION edit is preserved across the
+// run (only the test file is reset).
+func TestRunExerciseRestoresTamperedTest(t *testing.T) {
+	srcRoot := fixtureWordy(t)
+	workRoot := t.TempDir()
+	ex, err := loadExercise(srcRoot, "python")
+	if err != nil {
+		t.Fatalf("loadExercise: %v", err)
+	}
+	// Seed the work tree with the pristine solution + test (as a real run would
+	// before the first attempt).
+	if err := restorePristine(ex, srcRoot, workRoot); err != nil {
+		t.Fatalf("seed restorePristine: %v", err)
+	}
+	testRel := ex.Config.Files.Test[0]
+	solRel := ex.Config.Files.Solution[0]
+	pristineTest, err := os.ReadFile(filepath.Join(srcRoot, testRel))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const tamper = "# TAMPERED: assert True\n"
+	const solEdit = "# agent solution edit\n"
+	// The agent tampers the graded test file AND edits the solution stub.
+	tamperingAgent := AgentFn(func(_ context.Context, _ *Exercise, workDir, _ string) error {
+		if err := os.WriteFile(filepath.Join(workDir, testRel), []byte(tamper), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(workDir, solRel), []byte(solEdit), 0o644)
+	})
+
+	// At grading time the tester inspects the on-disk test file. If the loop
+	// restored it, the content is pristine (never the tamper marker).
+	var sawTamperAtGrade bool
+	grader := func(_ context.Context, _ *Exercise, workDir string) TestResult {
+		got, rerr := os.ReadFile(filepath.Join(workDir, testRel))
+		if rerr != nil {
+			return TestResult{Passed: false, Output: rerr.Error()}
+		}
+		if strings.Contains(string(got), "TAMPERED") {
+			sawTamperAtGrade = true
+		}
+		if string(got) != string(pristineTest) {
+			return TestResult{Passed: false, Output: "test file not pristine at grading"}
+		}
+		return TestResult{Passed: true}
+	}
+
+	res := RunExercise(context.Background(), ex, workRoot, grader, tamperingAgent)
+	if sawTamperAtGrade {
+		t.Fatal("graded against a tampered test file — restorePristineTests was not wired into the loop")
+	}
+	if !res.Passed {
+		t.Fatalf("RunExercise = %+v, want Passed (test restored to pristine each attempt)", res)
+	}
+	// The agent's SOLUTION edit must survive (only the test is reset).
+	gotSol, err := os.ReadFile(filepath.Join(workRoot, solRel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotSol) != solEdit {
+		t.Fatalf("solution stub = %q, want the agent edit preserved %q", gotSol, solEdit)
+	}
+}
+
 // TestNativeTestCommand proves the loader uses the dataset's NATIVE per-language
 // command table (pytest / cargo / gradlew / jest / ctest / go), NOT the
 // TOOLBENCH runner argv.

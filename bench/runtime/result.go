@@ -23,6 +23,24 @@ import (
 // schema's only required field and is a const "v2" in the schema.
 const resultSchemaVersion = "v2"
 
+// SwebenchRawResolvedKey and SwebenchRescoredVerifiedKey are the two PINNED
+// snake_case open-provenance result-row doc KEY NAMES (Phase 87, VERIFIED-02)
+// stamped onto the result doc as OPEN keys by the SWE-bench rescore producer
+// (Plan 03 rescore.go ApplyToRow) and read at score time by the aggregator
+// (Plan 04 rowSwebenchScores). They are declared ONCE here — the single shared
+// home both the Plan 03 producer and the Plan 04 reader import — mirroring the
+// bench/canary.DocKeyCompletion key-name precedent so the writer and reader can
+// never drift on the spelling. These are key NAMES only: NO schema property is
+// added, `required` is unchanged, and additionalProperties stays OPEN at the
+// schema top level (no v3 bump). The values carried under these keys are the
+// raw-upstream `report.resolved` verdict and the UTBoost-rescored
+// verified_correctness verdict respectively, reported side-by-side by the
+// aggregator (raw-vs-rescored column).
+const (
+	SwebenchRawResolvedKey      = "swebench_raw_resolved"
+	SwebenchRescoredVerifiedKey = "swebench_rescored_verified"
+)
+
 // ResultInput is the full set of provenance the cell orchestrator (Plan 03)
 // hands the builder. Rich metrics (edit_locality, regression_rate, pass@k) are
 // deliberately ABSENT here — Phase 79 owns them (D-04).
@@ -82,6 +100,28 @@ type ResultInput struct {
 	// aggregator reads it to tell a partial no_semantic row from a clean one. SET
 	// by the cell wiring in Plan 03 (this plan delivers the field + schema doc).
 	AblationStatus string
+
+	// ContainerID is the Phase 87 (ADAPTER-SWE-01) open-provenance key recording
+	// the Docker container/image identity the SWE-bench harness ran the instance
+	// in, projected into the open key `container_id` (omitempty). It mirrors the
+	// EmbedderID/Language additive-minor discipline EXACTLY: additive-minor,
+	// omitempty, schema_version stays "v2", additionalProperties stays OPEN, NOT
+	// added to required. Honest non-SWE-bench rows leave it "" so the omitempty
+	// doc field drops the key and old artifacts stay byte-compatible; only the
+	// SWE-bench ingestion path (Plan 02) populates it. Passed through verbatim —
+	// no top-level default/fallback.
+	ContainerID string
+
+	// ExitCode is the Phase 87 (ADAPTER-SWE-01) open-provenance key recording the
+	// SWE-bench harness subprocess exit code, projected into the open key
+	// `exit_code` (omitempty). CRITICAL (Pitfall 2): it is a *int NOT an int — a
+	// literal 0 is a real "ran clean" exit code that a value-type omitempty would
+	// wrongly drop; nil = "no exit code captured" (drops the key). Mirrors the
+	// EmbedderID/Language additive-minor discipline: additive-minor, omitempty,
+	// schema_version stays "v2", additionalProperties stays OPEN, NOT added to
+	// required. Only the SWE-bench ingestion path (Plan 02) populates it. Passed
+	// through verbatim — no top-level default/fallback.
+	ExitCode *int
 
 	// Metrics is the canonical Phase 79 nullable metric record (D-06/METRIC-01),
 	// assembled by the coordinator. Every field is a pointer; a nil marshals to an
@@ -148,6 +188,20 @@ type resultDoc struct {
 	// emit nothing; only the no_semantic arm carries "guarantee_pending_phase_81".
 	AblationStatus string `json:"ablation_status,omitempty"`
 
+	// ContainerID is the Phase 87 (ADAPTER-SWE-01) SWE-bench container-provenance
+	// key. WITH omitempty so non-SWE-bench rows (ContainerID=="") emit nothing and
+	// stay byte-compatible; only the SWE-bench ingestion path carries the harness
+	// container/image id. additive-minor open key — additionalProperties is OPEN
+	// at the schema top level, no v3 bump.
+	ContainerID string `json:"container_id,omitempty"`
+
+	// ExitCode is the Phase 87 (ADAPTER-SWE-01) SWE-bench harness exit-code key.
+	// *int (NOT int) WITH omitempty so a nil drops the key but a literal 0 (a real
+	// "ran clean" exit) is PRESERVED — a value-type omitempty would wrongly drop a
+	// clean zero (Pitfall 2). additive-minor open key — additionalProperties is
+	// OPEN at the schema top level, no v3 bump.
+	ExitCode *int `json:"exit_code,omitempty"`
+
 	// Phase 79 canonical metric record (METRIC-01/D-06). Metrics has NO omitempty:
 	// the object (and every nullable field within it) is always emitted so a
 	// missing metric is an explicit JSON null, never an omission (D-07).
@@ -196,6 +250,8 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		EmbedderID:     in.EmbedderID,
 		Language:       in.Language,
 		AblationStatus: in.AblationStatus,
+		ContainerID:    in.ContainerID,
+		ExitCode:       in.ExitCode,
 		Metrics:        in.Metrics,
 		MetricErrors:   in.MetricErrors,
 	}

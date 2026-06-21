@@ -183,6 +183,14 @@
       "type": "string",
       "description": "OPTIONAL Phase 85 (ADAPTER-AIDER-01) language-axis provenance key. Additive-only (no schema major bump; schema_version stays \"v2\"; additionalProperties left OPEN; NOT added to required). Honest provenance populated from the cell's Cell.Language; a row written before the language axis existed (or a non-per-language path) OMITS this key entirely (the Go builder uses omitempty), so pre-language artifacts stay byte-compatible and still validate. The aggregator reads it to slice per-language pass-rate (SC#1's \"Python pass-rate\")."
     },
+    "container_id": {
+      "type": "string",
+      "description": "OPTIONAL Phase 87 (ADAPTER-SWE-01) SWE-bench container-provenance key recording the Docker container/image identity the harness ran the instance in. Additive-only (no schema major bump; schema_version stays \"v2\"; additionalProperties left OPEN; NOT added to required). Honest non-SWE-bench rows OMIT this key entirely (the Go builder uses omitempty), so pre-SWE-bench artifacts stay byte-compatible and still validate. Populated only by the SWE-bench harness-report ingestion path (Plan 02)."
+    },
+    "exit_code": {
+      "type": ["integer", "null"],
+      "description": "OPTIONAL Phase 87 (ADAPTER-SWE-01) SWE-bench harness exit-code provenance key. Additive-only (no schema major bump; schema_version stays \"v2\"; additionalProperties left OPEN; NOT added to required). Nullable to mirror the Go *int home: a captured exit code (including a clean 0 — a real \"ran clean\" code that must NEVER be dropped, Pitfall 2) is the integer; an uncaptured code OMITS the key entirely (the Go builder uses omitempty over a nil pointer). Populated only by the SWE-bench harness-report ingestion path (Plan 02)."
+    },
     "metric_errors": {
       "type": "array",
       "description": "D-07 per-metric grader-failure annotations. When a grader cannot compute a metric it leaves the metrics field null and records why here. Mirrors the Go evaluators.MetricError struct.",

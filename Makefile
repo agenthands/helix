@@ -337,24 +337,33 @@ verify-no-docker-sdk:
 		exit 1; \
 	fi
 
-# verify-verified-md: HARD-FAIL SC#3 doc gate for the multi-oracle completion
-# gate (VERIFIED-03). Asserts bench/evaluators/VERIFIED.md exists and carries
-# every required `## ` section header documenting the gate contract (Oracles,
-# Threshold, Abstain, Tokenizer, EditSimilarity, Proof). Exits NON-ZERO when the
-# file is missing or any required header is absent — keeping the documented
-# contract honest (T-86-02-03). Build gate — NO continue-on-error. The header
-# match is anchored to `^## <name>$` so only true section headers count, not
-# prose mentions of the same word elsewhere in the doc.
+# verify-verified-md: HARD-FAIL doc gate for BOTH VERIFIED.md acceptance
+# artifacts. It asserts each file exists and carries every required `## ` section
+# header documenting that gate's contract, exiting NON-ZERO when a file is missing
+# or any required header is absent — keeping the documented contracts honest
+# (T-86-02-03 / T-87-03-04). Build gate — NO continue-on-error. Each header match
+# is anchored to `^## <name>$` so only true section headers count, not prose
+# mentions of the same word elsewhere in the doc.
+#
+#   * bench/evaluators/VERIFIED.md            (VERIFIED-03 completion gate):
+#       Oracles Threshold Abstain Tokenizer EditSimilarity Proof
+#   * bench/evaluators/swebench/VERIFIED.md   (VERIFIED-01/02 SWE-bench gate):
+#       Oracles Conditions Abstain Differential Proof
 verify-verified-md:
-	@f=bench/evaluators/VERIFIED.md; \
-	if [ ! -f "$$f" ]; then \
-		echo "::error::SC#3 violation: $$f is missing"; \
-		exit 1; \
-	fi; \
-	for h in Oracles Threshold Abstain Tokenizer EditSimilarity Proof; do \
-		if ! grep -Eq "^## $$h$$" "$$f"; then \
-			echo "::error::SC#3 violation: $$f is missing required section '## $$h'"; \
+	@set -e; \
+	check() { \
+		f="$$1"; shift; \
+		if [ ! -f "$$f" ]; then \
+			echo "::error::VERIFIED.md violation: $$f is missing"; \
 			exit 1; \
 		fi; \
-	done; \
-	echo "verify-verified-md: all required VERIFIED.md sections present"
+		for h in "$$@"; do \
+			if ! grep -Eq "^## $$h$$" "$$f"; then \
+				echo "::error::VERIFIED.md violation: $$f is missing required section '## $$h'"; \
+				exit 1; \
+			fi; \
+		done; \
+		echo "verify-verified-md: $$f — all required sections present"; \
+	}; \
+	check bench/evaluators/VERIFIED.md Oracles Threshold Abstain Tokenizer EditSimilarity Proof; \
+	check bench/evaluators/swebench/VERIFIED.md Oracles Conditions Abstain Differential Proof

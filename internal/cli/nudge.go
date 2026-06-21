@@ -22,12 +22,19 @@ type hookInput struct {
 	ToolInput      map[string]any `json:"tool_input"`
 }
 
-// sessionStats tracks tool call counts per session for nudge threshold logic.
+// sessionStats records per-session tool-usage counters. Post-Phase-93 the
+// advisory fires on EVERY grep/read/Bash-on-code call (no count threshold gates
+// emission anymore — see runNudge), so these counters do NOT influence whether a
+// nudge is emitted. They are retained as lightweight session telemetry: a
+// symbolic-tool call resets GrepReadCount (D-12) and bumps HelixToolCount, so the
+// persisted ratio is a cheap observability signal for "is the agent leaning on
+// grep vs symbolic tools" that callers/diagnostics can inspect. They are NOT a
+// throttle.
 type sessionStats struct {
-	SessionID       string `json:"session_id"`
-	GrepReadCount   int    `json:"grep_read_count"`
+	SessionID      string `json:"session_id"`
+	GrepReadCount  int    `json:"grep_read_count"`
 	HelixToolCount int    `json:"helix_tool_count"`
-	LastUpdated     string `json:"last_updated"`
+	LastUpdated    string `json:"last_updated"`
 }
 
 // newNudgeCommand creates the nudge subcommand invoked by Claude Code's PreToolUse hook.
@@ -35,7 +42,7 @@ func newNudgeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "nudge",
 		Short:         "Nudge agent toward symbolic tools",
-		Long:          "Reads hook input from stdin (Claude Code PreToolUse), tracks tool call counters, and outputs a nudge message when agents overuse grep/read without trying symbolic tools.",
+		Long:          "Reads hook input from stdin (Claude Code PreToolUse) and emits a per-call advisory steering the agent toward the frozen helix verbs whenever it reaches for grep/read (or a grep/read-like Bash command on a code file). Advisory only: it always exits 0 and never blocks the tool call. Per-session counters are tracked as telemetry but do not gate emission.",
 		RunE:          runNudge,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -46,8 +53,13 @@ func newNudgeCommand() *cobra.Command {
 	return cmd
 }
 
-// runNudge reads stdin JSON from Claude Code, tracks grep/read counts,
-// and outputs a nudge message after 5+ calls without symbolic tool usage.
+// runNudge reads stdin JSON from Claude Code and emits a PER-CALL advisory
+// steering toward the frozen helix verbs whenever the agent reaches for a
+// grep/read tool (or a grep/read-like Bash command on a code file). There is no
+// longer a "5+ calls" gate — the advisory fires on the first such call. The
+// grep/read and symbolic counters are still tracked (and a symbolic-tool call
+// resets GrepReadCount, D-12) purely as session telemetry; they do NOT gate
+// emission. Fail-open: only emit when the suggestion can be positively justified.
 // Always exits 0 (advisory only, per D-11).
 func runNudge(cmd *cobra.Command, _ []string) error {
 	// Read stdin JSON into hookInput via json.Decoder (safe parser per T-36-01).
@@ -241,17 +253,23 @@ func saveSessionStats(path string, stats sessionStats) error {
 	return nil
 }
 
-// helixSymbolicTools lists Helix MCP tool names that indicate symbolic tool usage.
+// helixSymbolicTools lists the Helix symbolic (navigation) tool names that, when
+// invoked, signal "the agent is using symbolic tools" and reset GrepReadCount
+// (D-12). The keys MUST match the snake_case tool names the live registry
+// registers (verbs_gen.go toolName fields, surfaced via VerbToolNames()) — the
+// stale pre-rename names (find_symbol/get_symbol_details/get_symbols_overview/
+// get_blast_radius) never matched reality and silently broke the reset (CR-93-02).
+// A drift test (nudge_test.go) asserts every key is a real registered tool name.
 var helixSymbolicTools = map[string]bool{
-	"find_symbol":          true,
-	"get_symbol_details":   true,
-	"get_symbols_overview": true,
+	"search_symbols":       true,
+	"get_symbol_overview":  true,
 	"find_references":      true,
 	"get_hover_info":       true,
 	"find_implementations": true,
 	"get_call_hierarchy":   true,
 	"get_type_hierarchy":   true,
-	"get_blast_radius":     true,
+	"analyze_blast_radius": true,
+	"go_to_definition":     true,
 }
 
 // isHelixSymbolicTool returns true if the tool name matches a Helix symbolic tool,

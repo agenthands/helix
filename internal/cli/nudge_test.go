@@ -25,8 +25,8 @@ func TestLoadSessionStats_DifferentSession(t *testing.T) {
 
 	// Save stats with session "A".
 	statsA := sessionStats{
-		SessionID:       "session-A",
-		GrepReadCount:   10,
+		SessionID:      "session-A",
+		GrepReadCount:  10,
 		HelixToolCount: 5,
 	}
 	require.NoError(t, saveSessionStats(path, statsA))
@@ -43,8 +43,8 @@ func TestSaveAndLoadSessionStats_RoundTrip(t *testing.T) {
 	path := filepath.Join(dir, ".helix", "session-stats.json")
 
 	original := sessionStats{
-		SessionID:       "session-xyz",
-		GrepReadCount:   7,
+		SessionID:      "session-xyz",
+		GrepReadCount:  7,
 		HelixToolCount: 3,
 	}
 	require.NoError(t, saveSessionStats(path, original))
@@ -57,20 +57,26 @@ func TestSaveAndLoadSessionStats_RoundTrip(t *testing.T) {
 }
 
 func TestIsHelixSymbolicTool(t *testing.T) {
-	// Should return true for bare names.
-	assert.True(t, isHelixSymbolicTool("find_symbol"))
-	assert.True(t, isHelixSymbolicTool("get_symbols_overview"))
-	assert.True(t, isHelixSymbolicTool("get_symbol_details"))
+	// Should return true for the REAL registered symbolic tool names (CR-93-02).
+	assert.True(t, isHelixSymbolicTool("search_symbols"))
+	assert.True(t, isHelixSymbolicTool("get_symbol_overview"))
 	assert.True(t, isHelixSymbolicTool("find_references"))
 	assert.True(t, isHelixSymbolicTool("get_hover_info"))
 	assert.True(t, isHelixSymbolicTool("find_implementations"))
 	assert.True(t, isHelixSymbolicTool("get_call_hierarchy"))
 	assert.True(t, isHelixSymbolicTool("get_type_hierarchy"))
-	assert.True(t, isHelixSymbolicTool("get_blast_radius"))
+	assert.True(t, isHelixSymbolicTool("analyze_blast_radius"))
+	assert.True(t, isHelixSymbolicTool("go_to_definition"))
 
 	// Should return true with mcp__helix__ prefix.
-	assert.True(t, isHelixSymbolicTool("mcp__helix__find_symbol"))
-	assert.True(t, isHelixSymbolicTool("mcp__helix__get_symbols_overview"))
+	assert.True(t, isHelixSymbolicTool("mcp__helix__search_symbols"))
+	assert.True(t, isHelixSymbolicTool("mcp__helix__analyze_blast_radius"))
+
+	// The stale pre-rename names must NOT match (regression guard for CR-93-02).
+	assert.False(t, isHelixSymbolicTool("find_symbol"))
+	assert.False(t, isHelixSymbolicTool("get_symbols_overview"))
+	assert.False(t, isHelixSymbolicTool("get_symbol_details"))
+	assert.False(t, isHelixSymbolicTool("get_blast_radius"))
 
 	// Should return false for non-symbolic tools.
 	assert.False(t, isHelixSymbolicTool("Grep"))
@@ -78,6 +84,23 @@ func TestIsHelixSymbolicTool(t *testing.T) {
 	assert.False(t, isHelixSymbolicTool("Bash"))
 	assert.False(t, isHelixSymbolicTool("Write"))
 	assert.False(t, isHelixSymbolicTool("mcp__helix__read_file"))
+}
+
+// TestHelixSymbolicTools_NoDrift asserts every helixSymbolicTools key is a REAL
+// tool name in the live registry (VerbToolNames() — kebab verb names mapped to
+// their snake_case toolName). This is the drift guard the review (CR-93-02) asks
+// for: it fails if a future rename leaves a stale key behind (the exact defect
+// that made the symbolic-tool reset silently dead).
+func TestHelixSymbolicTools_NoDrift(t *testing.T) {
+	registered := make(map[string]bool)
+	for _, name := range VerbToolNames() {
+		registered[name] = true
+	}
+	for toolName := range helixSymbolicTools {
+		assert.Truef(t, registered[toolName],
+			"helixSymbolicTools key %q is not a registered tool name (VerbToolNames()); stale name → broken GrepReadCount reset (CR-93-02)",
+			toolName)
+	}
 }
 
 func TestIsGrepReadTool(t *testing.T) {
@@ -100,62 +123,45 @@ func TestIsGrepReadTool(t *testing.T) {
 	assert.False(t, isGrepReadTool("Edit", nil))
 }
 
-func TestNudgeThreshold_BelowThreshold(t *testing.T) {
+// TestSessionStats_GrepReadCountPersists records that the grep/read counter is
+// tracked telemetry that round-trips through save/load. Post-Phase-93 it does NOT
+// gate emission (the advisory fires per-call — see runNudge); the counter is kept
+// only as a session-usage signal (WR-93-03).
+func TestSessionStats_GrepReadCountPersists(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session-stats.json")
 
 	stats := sessionStats{
-		SessionID:       "test-session",
-		GrepReadCount:   4,
+		SessionID:      "test-session",
+		GrepReadCount:  4,
 		HelixToolCount: 0,
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
 	loaded := loadSessionStats(path, "test-session")
 	assert.Equal(t, 4, loaded.GrepReadCount)
-	// At 4 grep calls, nudge should NOT fire (threshold is 5).
-	assert.True(t, loaded.GrepReadCount < 5, "count 4 should be below threshold 5")
+	assert.Equal(t, 0, loaded.HelixToolCount)
 }
 
-func TestNudgeThreshold_AtThreshold(t *testing.T) {
+// TestSessionStats_ResetBySymbolicTool exercises the D-12 reset semantics: a
+// symbolic-tool call bumps HelixToolCount and zeroes GrepReadCount. It uses a
+// REAL registered tool name (CR-93-02), proving the reset path actually fires for
+// the tools the agent really invokes.
+func TestSessionStats_ResetBySymbolicTool(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session-stats.json")
 
 	stats := sessionStats{
-		SessionID:       "test-session",
-		GrepReadCount:   4,
+		SessionID:      "test-session",
+		GrepReadCount:  6,
 		HelixToolCount: 0,
 	}
 	require.NoError(t, saveSessionStats(path, stats))
 
-	// Simulate one more grep call to reach threshold.
+	// A real symbolic tool resets the grep count (D-12).
 	loaded := loadSessionStats(path, "test-session")
-	loaded.GrepReadCount++
-	require.NoError(t, saveSessionStats(path, loaded))
-
-	// Now at threshold.
-	final := loadSessionStats(path, "test-session")
-	assert.Equal(t, 5, final.GrepReadCount)
-	assert.Equal(t, 0, final.HelixToolCount)
-	// Nudge should fire: GrepReadCount >= 5 && HelixToolCount == 0.
-	assert.True(t, final.GrepReadCount >= 5 && final.HelixToolCount == 0,
-		"nudge should fire at count=%d with helix_count=%d", final.GrepReadCount, final.HelixToolCount)
-}
-
-func TestNudgeThreshold_ResetBySymbolicTool(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "session-stats.json")
-
-	stats := sessionStats{
-		SessionID:       "test-session",
-		GrepReadCount:   6,
-		HelixToolCount: 0,
-	}
-	require.NoError(t, saveSessionStats(path, stats))
-
-	// Simulate a Helix symbolic tool call (resets grep count).
-	loaded := loadSessionStats(path, "test-session")
-	assert.True(t, isHelixSymbolicTool("find_symbol"))
+	require.True(t, isHelixSymbolicTool("search_symbols"),
+		"search_symbols must be recognized as symbolic (CR-93-02)")
 	loaded.HelixToolCount++
 	loaded.GrepReadCount = 0
 	require.NoError(t, saveSessionStats(path, loaded))
@@ -203,12 +209,12 @@ func TestClassifyBashTarget_NonCodeTargets(t *testing.T) {
 func TestClassifyBashTarget_FailOpen(t *testing.T) {
 	// Unparseable / no operand → ok=false (fail-open signal).
 	cases := []string{
-		`grep`,        // no operand
-		`grep "x"`,    // pattern only, no file
-		``,            // empty command
-		`grep -r -n`,  // flags only
-		`cat`,         // no operand
-		`echo hello`,  // not a grep/read shape
+		`grep`,       // no operand
+		`grep "x"`,   // pattern only, no file
+		``,           // empty command
+		`grep -r -n`, // flags only
+		`cat`,        // no operand
+		`echo hello`, // not a grep/read shape
 		`go build ./...`,
 	}
 	for _, cmd := range cases {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 )
 
 // Engine is a resolved container engine (docker or podman) located on PATH. All
@@ -60,7 +59,11 @@ func (e *Engine) PullByDigest(ctx context.Context, repo, digest string) error {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, e.bin, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// procGroupAttr is build-tag-split: on unix it sets Setpgid so a context
+	// cancel can group-kill the engine and its descendants; on windows it is nil
+	// (POSIX process groups have no windows analog), keeping the package
+	// cross-compilable for the windows release archive (Pitfall 6).
+	cmd.SysProcAttr = procGroupAttr()
 	cmd.Env = allowlistEnv()
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("bench/container: %s pull %s@sha256:%s: %w", e.bin, repo, digest, err)

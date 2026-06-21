@@ -21,6 +21,13 @@ import (
 //go:embed skills/helix/SKILL.md
 var embeddedSkillMD string
 
+// EmbeddedSkillBody returns the verbatim embedded SKILL.md content. It is the
+// single source of truth for the helix Agent Skill so external callers (e.g. the
+// test/oracle/llm behavioral oracle for TEST-03) can load the skill body into a
+// system prompt without duplicating the asset. The bytes are identical to what
+// installSkill writes to disk (modulo a normalizing trailing newline).
+func EmbeddedSkillBody() string { return embeddedSkillMD }
+
 // skillDescription returns the SKILL.md frontmatter `description` value (joined
 // with the optional `when_to_use` value when present). It is the idle-skill-cost
 // payload: the only text Claude Code keeps in context until the skill triggers

@@ -108,6 +108,51 @@ func SelectionUserPrompt(taskDescription string) string {
 	return fmt.Sprintf("Task: %s\n\nWhich tool should be used?", taskDescription)
 }
 
+// skillTaskDescriptions are helix-appropriate CODE tasks for the skill-vs-baseline
+// tool-selection comparison (TEST-03). Each is a question the helix decision table
+// answers with a `helix` verb but a naive agent answers with grep/sed/cat/find.
+var skillTaskDescriptions = []string{
+	"Find where the function NewClient is defined in this Go codebase.",
+	"Find every place that calls the function AskSingleTurn across the codebase.",
+	"List all references to the symbol Transcript in the project.",
+	"Rename the symbol FormatToolList to RenderToolList everywhere it is used.",
+	"Show me the symbol outline (functions and types) of internal/cli/skill.go.",
+	"Find all implementations of the io.Reader interface in this project.",
+	"Replace the body of the function InterCallDelay while keeping its signature.",
+	"Find every symbol whose name contains 'Prompt' in the codebase.",
+}
+
+// SkillTaskDescriptions returns the helix-verb-oriented code tasks used by the
+// skill-vs-baseline comparison.
+func SkillTaskDescriptions() []string { return skillTaskDescriptions }
+
+// GrepBaselineSystemPrompt returns the BASELINE system prompt: a shell-tool agent
+// that knows ONLY grep/sed/cat/find/ls — no helix skill body. It is the "before"
+// condition: the agent is expected to reach for grep/sed/cat for code questions.
+func GrepBaselineSystemPrompt() string {
+	return `You are a coding agent operating in a Unix shell. The tools available to you are the standard shell utilities: grep, sed, cat, find, ls, and rg.
+
+When given a task, respond with ONLY the single shell command line you would run to accomplish it (the command and its arguments). No explanation, no prose, no markdown fences — just the command.`
+}
+
+// SkillSystemPrompt returns the SKILL condition system prompt: the same shell
+// agent, but with the helix Agent Skill body (the decision table) injected. It is
+// the "after" condition: the agent is expected to pick a `helix <verb>` over
+// grep/sed/cat for code questions. skillBody is the verbatim embedded SKILL.md
+// (single source of truth, loaded via cli.EmbeddedSkillBody()).
+func SkillSystemPrompt(skillBody string) string {
+	return fmt.Sprintf(`You are a coding agent operating in a Unix shell. The standard shell utilities are available: grep, sed, cat, find, ls, rg. You ALSO have the `+"`helix`"+` CLI available, documented by the following Agent Skill:
+
+%s
+
+When given a task, respond with ONLY the single command line you would run to accomplish it (the command and its arguments). No explanation, no prose, no markdown fences — just the command. Prefer the most appropriate tool for the task.`, skillBody)
+}
+
+// SkillTaskUserPrompt returns the user prompt for a skill-vs-baseline task.
+func SkillTaskUserPrompt(taskDescription string) string {
+	return fmt.Sprintf("Task: %s\n\nWhich command should you run?", taskDescription)
+}
+
 // DisambiguationSystemPrompt returns the system prompt for disambiguation tests.
 func DisambiguationSystemPrompt(toolA, descA, toolB, descB string) string {
 	return fmt.Sprintf(`You are an expert at selecting the right MCP tool for a task. You have exactly two tools available:

@@ -8,6 +8,7 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.10502.0
 	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/google/go-containerregistry v0.20.7
 	github.com/knadh/koanf/parsers/yaml v1.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.0
 	github.com/knadh/koanf/providers/file v1.2.1
@@ -126,7 +127,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/certificate-transparency-go v1.3.2 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
-	github.com/google/go-containerregistry v0.20.7 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect

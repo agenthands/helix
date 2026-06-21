@@ -166,8 +166,21 @@ type Report struct {
 	// pair is computed HERE (deltas.go deliberately omits it). Additive: it never
 	// alters the leaderboard.
 	Ablations []AblationRow
-	PassNK    int
-	Footer    Footer
+	// Contaminated is the INFRA-05 (T-89-02-02) set of (task,mode) cells EXCLUDED
+	// from the headline because at least one of their rows echoed the canary Sentinel
+	// (cleanRows). It is the audit trail behind the leaderboard.md contamination
+	// footnote — an excluded cell is never silently dropped. Sorted (mode, task) for
+	// determinism. Empty when nothing was contaminated (no footnote rendered).
+	Contaminated []ContaminatedCell
+	PassNK       int
+	Footer       Footer
+}
+
+// ContaminatedCell names one (task, mode) cell excluded from the headline by the
+// INFRA-05 canary exclusion (cleanRows). It is the leaderboard.md footnote's unit.
+type ContaminatedCell struct {
+	Task string
+	Mode string
 }
 
 // AblationRow is one Phase 89 (REPORT-03) full-vs-other delta: the two modes' BCa
@@ -334,6 +347,38 @@ func renderLeaderboard(rows []LeaderRow, passNK int, footer Footer) string {
 	b.WriteString("\n")
 	b.WriteString(renderFooter(footer))
 	return b.String()
+}
+
+// appendContaminationFootnote inserts the INFRA-05 (T-89-02-02) contamination
+// footnote into a rendered leaderboard, listing every (task,mode) cell EXCLUDED from
+// the headline by the canary exclusion (cleanRows). The footnote is placed AFTER the
+// table / overlap-warning block but BEFORE the provenance footer (the `\n---\n`
+// divider renderFooter emits), so the audit trail rides inside the report body. An
+// EMPTY cells slice yields the leaderboard verbatim — em-dash discipline: never
+// fabricate a footnote when nothing was excluded. cells is already sorted (mode,
+// task) by contaminatedCells, so the rendered lines are deterministic.
+func appendContaminationFootnote(leaderboard string, cells []ContaminatedCell) string {
+	if len(cells) == 0 {
+		return leaderboard
+	}
+
+	var fn strings.Builder
+	fn.WriteString("\n## Contamination canary exclusions (INFRA-05)\n\n")
+	fn.WriteString("The following (task, mode) cells echoed the canary sentinel and were EXCLUDED ")
+	fn.WriteString("from the headline (pass@1, verified_correctness, cost_per_solved). ")
+	fn.WriteString("CanaryPassRate still measures them over all rows.\n\n")
+	for _, c := range cells {
+		fmt.Fprintf(&fn, "- task=%s mode=%s\n", c.Task, c.Mode)
+	}
+
+	// Insert before the provenance footer divider so the footnote rides inside the
+	// report body. The footer is the LAST `\n---\n`-prefixed block renderFooter emits;
+	// fall back to appending if (defensively) no divider is present.
+	const divider = "\n---\n"
+	if idx := strings.LastIndex(leaderboard, divider); idx >= 0 {
+		return leaderboard[:idx] + fn.String() + leaderboard[idx:]
+	}
+	return leaderboard + fn.String()
 }
 
 // overlapWarnings returns one warning line per adjacent row pair whose

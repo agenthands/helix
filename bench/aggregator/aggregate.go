@@ -163,13 +163,22 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 	// loaded full + no_semantic rows (deltas.go deliberately omits it — Pitfall 2).
 	rep.Ablations = reduceAblations(loaded, tasks, cfg, alpha, rng)
 
+	// INFRA-05 (T-89-02-02): collect the contaminated (task,mode) cells AFTER the
+	// per-mode reduce loop (the headline already excluded them). They are carried on
+	// the Report and rendered as a deterministic, sorted leaderboard.md footnote so an
+	// excluded cell is auditable — never silently dropped.
+	rep.Contaminated = contaminatedCells(loaded, tasks, modes)
+
 	// Phase 89 (REPORT-04) scatter points: SINGLE-SOURCE cost from rep.Cost and
 	// verified_correctness from rep.Leaderboard, joined by (mode x benchmark), so
 	// the scatter's axes are the same numbers the leaderboard/cost tables publish.
 	scatter := buildScatterPoints(rep.Leaderboard, rep.Cost)
 
 	// Render + atomically write both artifacts (only reached on success).
+	// INFRA-05: append the contamination footnote to the rendered leaderboard so the
+	// excluded (task,mode) cells are auditable in the published artifact.
 	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
+	lb = appendContaminationFootnote(lb, rep.Contaminated)
 	cq := renderCostQuality(rep.Cost, scatter, rep.Footer)
 	if err := writeReport(runDir, "leaderboard.md", lb); err != nil {
 		return nil, err
@@ -214,6 +223,17 @@ func reduceLeaderRow(loaded *Loaded, tasks []string, mode string, cfg Config, al
 	for _, task := range tasks {
 		rows := loaded.Rows(task, mode)
 		if len(rows) == 0 {
+			continue
+		}
+		// INFRA-05 canary EXCLUSION (T-89-02-01): split the cell's rows into
+		// clean/contaminated and feed ONLY the clean rows into every headline reduce
+		// below. A row whose completion echoed the canary Sentinel never reaches the
+		// pass@1/verified_correctness/cost vectors — fail-safe so contaminated data
+		// can never silently inflate the headline. reduceCanaryRate (the MEASUREMENT)
+		// deliberately keeps reading ALL rows; only the headline EXCLUDES.
+		rows, _ = cleanRows(rows)
+		if len(rows) == 0 {
+			// The whole cell was contaminated — it contributes nothing to the headline.
 			continue
 		}
 		// Level 1 boolean: success-rate c/n.
@@ -336,6 +356,54 @@ func rowCanary(r Row) (contaminated bool, present bool) {
 		return false, false
 	}
 	return canary.IsContaminated(completion), true
+}
+
+// cleanRows is the INFRA-05 (T-89-02-01) clean/contaminated split: it partitions a
+// cell's rows by rowCanary's verdict — a row that is BOTH present AND contaminated
+// (its completion echoed the canary Sentinel) goes to contaminated; EVERY other row
+// (a clean completion, OR a pre-canary row with no completion key — Pitfall 4 null
+// discipline) stays clean. The headline reduces (reduceLeaderRow, reduceCostRow)
+// consume ONLY the clean partition, so a contaminated row can never silently inflate
+// the headline (fail-safe). reduceCanaryRate is deliberately NOT routed through this
+// — it MEASURES contamination over all rows; only the headline EXCLUDES. Order is
+// preserved for determinism.
+func cleanRows(rows []Row) (clean, contaminated []Row) {
+	for _, r := range rows {
+		cont, present := rowCanary(r)
+		if present && cont {
+			contaminated = append(contaminated, r)
+			continue
+		}
+		clean = append(clean, r)
+	}
+	return clean, contaminated
+}
+
+// contaminatedCells returns the sorted set of (task, mode) cells that contain at
+// least one contaminated row, for the INFRA-05 (T-89-02-02) leaderboard footnote.
+// A cell is flagged iff cleanRows reports any contaminated row in it. The result is
+// sorted (mode, then task) for a deterministic, auditable footnote — contaminated
+// cells are EXCLUDED from the headline but never disappear without a trace.
+func contaminatedCells(loaded *Loaded, tasks, modes []string) []ContaminatedCell {
+	var out []ContaminatedCell
+	for _, mode := range modes {
+		for _, task := range tasks {
+			rows := loaded.Rows(task, mode)
+			if len(rows) == 0 {
+				continue
+			}
+			if _, contaminated := cleanRows(rows); len(contaminated) > 0 {
+				out = append(out, ContaminatedCell{Task: task, Mode: mode})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Mode != out[j].Mode {
+			return out[i].Mode < out[j].Mode
+		}
+		return out[i].Task < out[j].Task
+	})
+	return out
 }
 
 // reduceCanaryRate computes the Phase 86 (Plan 05) ADDITIVE CanaryPassRate for one
@@ -553,6 +621,14 @@ func reduceCostRow(loaded *Loaded, tasks []string, mode string, ct cost.CostTabl
 
 	for _, task := range tasks {
 		rows := loaded.Rows(task, mode)
+		if len(rows) == 0 {
+			continue
+		}
+		// INFRA-05 canary EXCLUSION (T-89-02-01): the cost headline reduces over CLEAN
+		// rows only — a contaminated cell never contributes a cost_per_solved datum,
+		// mirroring the leaderboard exclusion. cleanRows is the single source of the
+		// clean/contaminated split.
+		rows, _ = cleanRows(rows)
 		if len(rows) == 0 {
 			continue
 		}

@@ -768,7 +768,11 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		RunIndex:  cfg.RunIndex,
 		Outcome:   merged.Outcome,
 		TraceRef:  res.MergedTracePath,
-		Fairness:  runners.DefaultContract,
+		// Language threads the cell's language axis (cell.go:189) into the persisted
+		// result as the additive-minor open `language` provenance key (Phase 85,
+		// ADAPTER-AIDER-01) so the aggregator can slice per-language pass-rate (SC#1).
+		Language: cfg.Language,
+		Fairness: runners.DefaultContract,
 		// AblationStatus is now empty for EVERY mode: the Phase 80 "pending"
 		// deferral marker is removed because the kernel disable_semantic_subsystem
 		// guarantee (ABLATE-06) lands this phase. The no_semantic arm's clean

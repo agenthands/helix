@@ -62,6 +62,15 @@ type ResultInput struct {
 	// "weak embedder" pushback with the exact model used (T-83-03-01).
 	EmbedderID string
 
+	// Language is the Phase 85 (ADAPTER-AIDER-01) open-provenance key recording the
+	// language axis of this cell, populated from Cell.Language at the cell.go
+	// BuildResult call site. It mirrors the EmbedderID open key exactly: additive-
+	// minor, omitempty, schema_version stays "v2", additionalProperties stays OPEN.
+	// A row written before the language axis existed (or a non-per-language path)
+	// leaves it "" so the omitempty doc field drops the key and old artifacts stay
+	// byte-compatible. The aggregator slices per-language pass-rate on it (SC#1).
+	Language string
+
 	// Fairness is the compile-time contract the run executed under; the builder
 	// projects its ModelID into model_id and its Overrides into fairness.overrides.
 	Fairness runners.FairnessContract
@@ -128,6 +137,13 @@ type resultDoc struct {
 	// open key — additionalProperties is OPEN at the schema top level, no v3 bump.
 	EmbedderID string `json:"embedder_id,omitempty"`
 
+	// Language is the Phase 85 (ADAPTER-AIDER-01) language-axis provenance key. WITH
+	// omitempty so a pre-language artifact / non-per-language path (Language=="")
+	// emits nothing and stays byte-compatible; the per-language runner path carries
+	// the cell's language string. additive-minor open key — additionalProperties is
+	// OPEN at the schema top level, no v3 bump.
+	Language string `json:"language,omitempty"`
+
 	// AblationStatus is the D-03 deferral marker. WITH omitempty so honest modes
 	// emit nothing; only the no_semantic arm carries "guarantee_pending_phase_81".
 	AblationStatus string `json:"ablation_status,omitempty"`
@@ -178,6 +194,7 @@ func BuildResult(in ResultInput) ([]byte, error) {
 		TraceRef:       in.TraceRef,
 		ModelID:        in.Fairness.ModelID,
 		EmbedderID:     in.EmbedderID,
+		Language:       in.Language,
 		AblationStatus: in.AblationStatus,
 		Metrics:        in.Metrics,
 		MetricErrors:   in.MetricErrors,

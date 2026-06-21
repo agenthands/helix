@@ -109,7 +109,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **INFRA-02**: License audit per dataset captured in `bench/LICENSES.md` — SWE-bench, Multi-SWE-bench, Aider Polyglot (Exercism MIT), CrossCodeEval, RepoBench, Terminal-Bench. _Acceptance:_ each dataset has an explicit license + redistribution clause.
 - [x] **INFRA-03**: Eval ↔ bench separation note in `bench/BENCH.md`: `eval/` stays as the in-process PR-gate wiring smoke; `bench/` is the milestone artifact for headline claims (prose-enforced this milestone — no analyzer; D-08). _Acceptance:_ note rendered; reciprocal cross-link added to `eval/EVAL.md` (this one-paragraph pointer is the single permitted change to `eval/` under BENCH-01, which otherwise stays byte-identical).
 - [x] **INFRA-04**: CI policy documented: `make bench-quick` runs on PR (ToolBench Go-only, ≤ 5 minutes, no LLM cost). Full `make bench` runs nightly or on-demand, gated on a maintainer. _Acceptance:_ workflow file exists; PR cost ≤ documented budget.
-- [ ] **INFRA-05**: Contamination canary — a known-novel "canary" pattern emitted in select tasks; if a model emits the canary verbatim, the task is flagged as potentially-contaminated and excluded from headline numbers. _Acceptance:_ a synthetic contaminated-response test trips the flag; flagged tasks listed in `leaderboard.md` footnote.
+- [x] **INFRA-05**: Contamination canary — a known-novel "canary" pattern emitted in select tasks; if a model emits the canary verbatim, the task is flagged as potentially-contaminated and excluded from headline numbers. _Acceptance:_ a synthetic contaminated-response test trips the flag; flagged tasks listed in `leaderboard.md` footnote.
 
 ---
 

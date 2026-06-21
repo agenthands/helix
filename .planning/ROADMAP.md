@@ -406,7 +406,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 89-02-PLAN.md — Contamination canary: aggregate-time exclusion of contaminated rows + leaderboard.md footnote + deterministic InjectPrompt production caller [INFRA-05]
+- [x] 89-02-PLAN.md — Contamination canary: aggregate-time exclusion of contaminated rows + leaderboard.md footnote + deterministic InjectPrompt production caller [INFRA-05]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

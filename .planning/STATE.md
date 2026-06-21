@@ -4,13 +4,13 @@ milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
 status: executing
 stopped_at: Completed 88-04-PLAN.md
-last_updated: "2026-06-21T08:32:40.283Z"
+last_updated: "2026-06-21T08:40:40.211Z"
 last_activity: 2026-06-21 -- Phase 89 execution started
 progress:
   total_phases: 15
   completed_phases: 14
   total_plans: 73
-  completed_plans: 71
+  completed_plans: 72
   percent: 93
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Current Position
 
 Phase: 89 (reports-ci-policy-contamination-canary) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 -- Phase 89 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-21T08:32:30.630Z
+Last session: 2026-06-21T08:40:23.674Z
 Stopped at: Completed 88-04-PLAN.md
 Resume file: None
 
@@ -135,6 +135,7 @@ Resume file: None
 | Phase 88 P04 | 3 min | 3 tasks | 4 files |
 | Phase 89 P01 | 35m | 3 tasks | 11 files |
 | Phase 89 P04 | 6m | 2 tasks | 3 files |
+| Phase 89 P02 | 25m | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -224,3 +225,4 @@ Resume file: None
 - [Phase ?]: Phase 88-01: Multi-SWE adapter is config-file-driven; WriteConfig path-validates every field before marshal then a fixed --config argv; Ingest stamps Language from the cell arg (Pitfall 1) and 7-language slicing flows through existing reduceLanguageRows with zero new aggregator code (SC#1)
 - [Phase 88]: 88-04: Multi-SWE Mini fetcher cloned from swebench-utboost (SSRF-safe, capped, atomic, network-gated); DatasetID=ByteDance-Seed/Multi-SWE-bench (CC0 umbrella id confirmed); PinnedSHA placeholder + live-confirm DEFERRED (A4/A5, Phase 87 precedent); LICENSES.md +2 rows (CC0, Apache-2.0) + full-set v1.13 deferral; A1-A7 checkpoint resolved approved-with-deferral
 - [Phase ?]: Tier-1 set derived from bench/languages (8 IDs, no c); ablation no_semantic computed aggregate-time; reduceAblations threads rng last so leaderboard/cost goldens stay byte-identical
+- [Phase ?]: INFRA-05: contaminated rows excluded from leaderboard headline at aggregate-time via cleanRows; CanaryPassRate stays over all rows; deterministic production InjectPrompt caller (every Kth task K=7)

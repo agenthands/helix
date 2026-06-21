@@ -116,6 +116,24 @@ func TestReportRunIDValidation(t *testing.T) {
 	}
 }
 
+// TestReportOutValidation (WR-03): a --out root carrying a '..' traversal segment is
+// REFUSED with a non-zero exit and writes NOTHING — closing the gap where a valid
+// --run-id could still relocate the whole report tree via `--out ../../x`. An
+// operator-trusted absolute --out is allowed (covered elsewhere); only upward escape
+// is rejected.
+func TestReportOutValidation(t *testing.T) {
+	ct := repoCostTablePath(t)
+	for _, badOut := range []string{"..", "../etc", "../../x", "a/../../b"} {
+		// A VALID run-id, so the rejection can ONLY come from the --out validation.
+		// Assert the SPECIFIC --out error so the test discriminates the WR-03 guard
+		// from an incidental fail-closed Aggregate error on a missing directory.
+		err := runReportCmd(t, badOut, "good-run", 3, ct)
+		require.Error(t, err, "an --out with a '..' traversal segment %q must be refused", badOut)
+		assert.Contains(t, err.Error(), "invalid --out",
+			"%q must be refused by the --out validation (not an incidental Aggregate error)", badOut)
+	}
+}
+
 // TestReportRunIDRequired: an empty/missing --run-id is an error (no default tree).
 func TestReportRunIDMissing(t *testing.T) {
 	ct := repoCostTablePath(t)

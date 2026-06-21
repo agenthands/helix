@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	aggregator "github.com/agenthands/helix/bench/aggregator"
@@ -27,6 +28,15 @@ import (
 // cloned from bench/evaluators/swebench/harness.go — it is package-private there)
 // BEFORE any filepath.Join, so a "../etc"/absolute/leading-'-'/empty value can
 // never escape the report tree (T-89-03-01 path-traversal mitigation, V5).
+//
+// --out is the operator-chosen durable report ROOT (default bench/reports). It is
+// an operator-trusted root, so an ABSOLUTE path is allowed (an operator may stage
+// reports under any chosen directory) — but it is STILL validated (isValidOut)
+// to reject a '..' traversal segment (WR-03). This closes the gap where the
+// run-id half was hardened while --out could relocate the whole tree via
+// `--out ../../x`: after this, NEITHER --run-id NOR --out can climb out of the
+// directory --out names. The doc above no longer over-claims containment the
+// code does not enforce.
 
 // reportOutDefault is the durable report root --run-id resolves against. It mirrors
 // the `run` subcommand's --out default (bench/reports) so `report --run-id <id>`
@@ -52,6 +62,27 @@ func isValidRunID(s string) bool {
 		default:
 			return false
 		}
+	}
+	return true
+}
+
+// isValidOut reports whether the operator-supplied --out root is free of a '..'
+// traversal segment (WR-03). --out is an operator-trusted root so an ABSOLUTE path
+// is permitted; what is REFUSED is any path that, once cleaned, retains a '..'
+// component — i.e. a path that climbs ABOVE the directory it nominally names
+// (e.g. `../../etc`, `a/../../b`). filepath.Clean collapses interior `a/../b`
+// to `b`, so a surviving leading `..` (or a bare `..`) is an unambiguous escape.
+// An empty --out is rejected (the caller always passes the bench/reports default).
+func isValidOut(out string) bool {
+	if out == "" {
+		return false
+	}
+	cleaned := filepath.Clean(out)
+	// A cleaned path equal to ".." (bare escape) or one that still LEADS with a
+	// `..` segment escapes upward. Use the OS separator so this holds on every
+	// platform; filepath.Clean has already collapsed any interior `..` it can.
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return false
 	}
 	return true
 }
@@ -91,6 +122,14 @@ NON-ZERO and writes NO reports (fail-closed, mirroring aggregate).`,
 			// so it is always a single, traversal-free path segment.
 			if !isValidRunID(runID) {
 				return fmt.Errorf("report: invalid --run-id %q: must be a non-empty [A-Za-z0-9_-]+ segment (no '..'/'/'/leading '-')", runID)
+			}
+			// WR-03: validate the operator-supplied --out root too. --out is an
+			// operator-trusted root (absolute paths allowed) but a '..' traversal
+			// segment that climbs above the named directory is REFUSED, so a
+			// `--out ../../x` can no longer relocate the whole report tree out of
+			// the directory --out names. Both halves of the join are now contained.
+			if !isValidOut(out) {
+				return fmt.Errorf("report: invalid --out %q: must not contain a '..' traversal segment", out)
 			}
 			runDir := filepath.Join(out, runID)
 

@@ -38,7 +38,10 @@ type Result struct {
 // occurs. The selected embedder_id is recorded in the collection metadata and
 // returned via EmbedderID.
 func Open(ctx context.Context, root string) (*Index, error) {
-	ef, embedderID := selectEmbedder()
+	ef, embedderID, err := selectEmbedder()
+	if err != nil {
+		return nil, fmt.Errorf("ragindex: select embedder: %w", err)
+	}
 	return openWith(ctx, root, ef, embedderID)
 }
 

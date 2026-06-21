@@ -140,7 +140,14 @@ func ResolveRAGServerBin(helixBin string) (string, error) {
 // hits the warm per-corpus cache, so no embedding-API tokens are charged to the
 // timed agent span. ragServerBin is the resolved helix-bench-rag binary path
 // (see ResolveRAGServerBin).
-func StartRAGServer(ctx context.Context, sb *benchsandbox.Sandbox, ragServerBin, taskID, mode, corpusRoot string) (*RAGHandle, error) {
+//
+// embedderID is the embedder_id the parent recorded when it built the index
+// out-of-band; it is forwarded as HELIX_RAG_EMBEDDER so the server selects the
+// SAME embedder deterministically on warm reopen (fail-closed if that embedder
+// is no longer usable) rather than re-probing availability — see WR-01. An empty
+// embedderID leaves the env unset (the server then re-derives selection, the
+// pre-WR-01 behavior).
+func StartRAGServer(ctx context.Context, sb *benchsandbox.Sandbox, ragServerBin, taskID, mode, corpusRoot, embedderID string) (*RAGHandle, error) {
 	if sb == nil {
 		return nil, fmt.Errorf("subprocess: nil sandbox")
 	}
@@ -170,6 +177,13 @@ func StartRAGServer(ctx context.Context, sb *benchsandbox.Sandbox, ragServerBin,
 		if v := os.Getenv(k); v != "" {
 			env = append(env, k+"="+v)
 		}
+	}
+	// Pin the parent-selected embedder so the warm-reopen server cannot silently
+	// diverge from the embedder_id recorded against the on-disk vectors (WR-01).
+	// The server fails closed if the pinned embedder is no longer usable rather
+	// than answering queries from a different embedder space.
+	if embedderID != "" {
+		env = append(env, "HELIX_RAG_EMBEDDER="+embedderID)
 	}
 	env = append(env, "HELIX_LOG_LEVEL=info")
 	cmd.Env = env

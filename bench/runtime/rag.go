@@ -121,7 +121,7 @@ func runRAGCell(ctx context.Context, cfg CellConfig, res CellResult) (CellResult
 
 	// (3) Spawn cmd/helix-bench-rag over stdio (D-06: no socket/port) and capture
 	// its PID before any Kill (criterion #4 PID gate).
-	h, err := subprocess.StartRAGServer(ctx, sb, ragBin, cfg.Task, cfg.Mode, repoDir)
+	h, err := subprocess.StartRAGServer(ctx, sb, ragBin, cfg.Task, cfg.Mode, repoDir, embedderID)
 	if err != nil {
 		return preserve(fmt.Errorf("bench/runtime: start rag server: %w", err))
 	}

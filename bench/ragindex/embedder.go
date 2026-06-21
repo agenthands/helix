@@ -2,6 +2,7 @@ package ragindex
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net"
 	"os"
@@ -25,8 +26,8 @@ const (
 // constant — it is NEVER accepted as a tool/function argument (T-83-01-02 SSRF
 // mitigation).
 const (
-	ollamaModel   = "nomic-embed-text"
-	ollamaBaseURL = "http://localhost:11434/api"
+	ollamaModel    = "nomic-embed-text"
+	ollamaBaseURL  = "http://localhost:11434/api"
 	ollamaHostPort = "localhost:11434"
 )
 
@@ -34,6 +35,18 @@ const (
 // the deterministic stub regardless of OPENAI_API_KEY / Ollama reachability.
 // Used by hermetic unit tests so they never touch the network.
 const forceStubEnv = "HELIX_RAG_FORCE_STUB"
+
+// pinnedEmbedderEnv, when set to one of the known embedder_id strings, forces
+// selectEmbedder to deterministically return THAT embedder rather than
+// re-probing availability — and to FAIL CLOSED if the pinned embedder is not
+// actually usable in this process. The parent (runRAGCell) records the
+// embedder_id from its own cold index build and forwards it to the spawned
+// server via this env so the warm-reopen query embedder cannot silently diverge
+// from the document vectors on disk (WR-01: chromem does not persist the
+// EmbeddingFunc, so without pinning the subprocess re-derives selection and a
+// transient Ollama dial flake would answer queries from stub-space against
+// Ollama-space document vectors while the row still claims ollama-*).
+const pinnedEmbedderEnv = "HELIX_RAG_EMBEDDER"
 
 // stubDim is the fixed dimensionality of the deterministic stub embedding.
 const stubDim = 256
@@ -47,17 +60,51 @@ const stubDim = 256
 //
 // The OPENAI_API_KEY value is read only to decide availability and is handed to
 // chromem's built-in func; it is never logged here.
-func selectEmbedder() (chromem.EmbeddingFunc, string) {
+//
+// If pinnedEmbedderEnv is set, selectEmbedder skips probing and returns exactly
+// the pinned backend, failing closed (returning an error) when that backend is
+// not usable in this process. This keeps a warm-reopen subprocess consistent
+// with the embedder_id the parent recorded against the on-disk document vectors
+// (WR-01).
+func selectEmbedder() (chromem.EmbeddingFunc, string, error) {
+	if pinned := os.Getenv(pinnedEmbedderEnv); pinned != "" {
+		return embedderFor(pinned)
+	}
 	if os.Getenv(forceStubEnv) != "" {
-		return stubEmbedder(), embedderIDStub
+		return stubEmbedder(), embedderIDStub, nil
 	}
 	if os.Getenv("OPENAI_API_KEY") != "" {
-		return chromem.NewEmbeddingFuncDefault(), embedderIDOpenAI
+		return chromem.NewEmbeddingFuncDefault(), embedderIDOpenAI, nil
 	}
 	if ollamaReachable() {
-		return chromem.NewEmbeddingFuncOllama(ollamaModel, ollamaBaseURL), embedderIDOllama
+		return chromem.NewEmbeddingFuncOllama(ollamaModel, ollamaBaseURL), embedderIDOllama, nil
 	}
-	return stubEmbedder(), embedderIDStub
+	return stubEmbedder(), embedderIDStub, nil
+}
+
+// embedderFor returns the EmbeddingFunc for an explicitly pinned embedder_id,
+// failing closed when the named backend is not usable in THIS process. This is
+// the authoritative-selection seam for WR-01: the parent forwards the embedder_id
+// it built the index with, and the subprocess must either honor it exactly or
+// refuse to serve — it must never silently fall back to a different embedder
+// while the recorded provenance still claims the pinned one.
+func embedderFor(id string) (chromem.EmbeddingFunc, string, error) {
+	switch id {
+	case embedderIDOpenAI:
+		if os.Getenv("OPENAI_API_KEY") == "" {
+			return nil, "", fmt.Errorf("ragindex: pinned embedder %q requires OPENAI_API_KEY, which is unset in this process", id)
+		}
+		return chromem.NewEmbeddingFuncDefault(), embedderIDOpenAI, nil
+	case embedderIDOllama:
+		if !ollamaReachable() {
+			return nil, "", fmt.Errorf("ragindex: pinned embedder %q is unreachable in this process (Ollama dial failed at %s)", id, ollamaHostPort)
+		}
+		return chromem.NewEmbeddingFuncOllama(ollamaModel, ollamaBaseURL), embedderIDOllama, nil
+	case embedderIDStub:
+		return stubEmbedder(), embedderIDStub, nil
+	default:
+		return nil, "", fmt.Errorf("ragindex: unknown pinned embedder %q (want one of %q, %q, %q)", id, embedderIDOpenAI, embedderIDOllama, embedderIDStub)
+	}
 }
 
 // ollamaReachable probes the pinned Ollama host:port with a short dial timeout.

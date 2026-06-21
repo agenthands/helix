@@ -245,22 +245,43 @@ func TestCLI_E2E_OneShot(t *testing.T) {
 	}
 
 	// CLI path: the same tool (search_in_files) via flat `helix search-in-files
-	// --pattern=...` against the SAME daemon. The verb renders the tool's text content verbatim,
-	// so the CLI stdout must equal the MCP-path reference text.
+	// --pattern=...` against the SAME daemon. Phase 92 froze the terse CLI output
+	// shape (OUT-01): locus-list verbs render `relpath:line:col<TAB>payload`, so the
+	// CLI stdout is INTENTIONALLY NOT byte-equal to the raw MCP text — it is the terse
+	// rendering of the SAME locus. This asserts the round-trip works (CLI-01) and that
+	// the CLI reports the same (relpath, line) the MCP path did, in the frozen shape.
 	out, err := f.runCLIVerb(ctx, representativeVerbName, representativeVerbFlag+searchPattern)
 	if err != nil {
 		t.Fatalf("helix %s failed: %v\noutput:\n%s", representativeVerbName, err, out)
 	}
 
 	gotCLI := strings.TrimRight(out, "\n")
-	wantMCP := strings.TrimRight(reference, "\n")
-	if gotCLI != wantMCP {
-		t.Fatalf("CLI result does not match MCP path.\nCLI:  %q\nMCP:  %q", gotCLI, wantMCP)
-	}
 	if !strings.Contains(gotCLI, searchPattern) {
 		t.Fatalf("CLI result missing the marker; got %q", gotCLI)
 	}
+
+	// The CLI line must be in the frozen terse locus shape relpath:line:col<TAB>payload.
+	m := locusLineRe.FindStringSubmatch(gotCLI)
+	if m == nil {
+		t.Fatalf("CLI result is not in the terse relpath:line:col<TAB> shape (OUT-01); got %q", gotCLI)
+	}
+	cliRel, cliLine := m[1], m[2]
+
+	// The MCP reference is the raw daemon form relpath:line: text. Extract its
+	// (relpath, line) and assert the terse CLI locus points at the SAME place.
+	refLoc := mcpLocusRe.FindStringSubmatch(strings.TrimRight(reference, "\n"))
+	if refLoc == nil {
+		t.Fatalf("MCP reference not in expected relpath:line: form; got %q", reference)
+	}
+	if cliRel != refLoc[1] || cliLine != refLoc[2] {
+		t.Fatalf("CLI locus %s:%s does not match MCP locus %s:%s", cliRel, cliLine, refLoc[1], refLoc[2])
+	}
 }
+
+// mcpLocusRe extracts the leading relpath:line from the raw MCP search form
+// `relpath:line: text` so TestCLI_E2E_OneShot can cross-check the terse CLI locus
+// against the same place the MCP path reported.
+var mcpLocusRe = regexp.MustCompile(`(?m)^([^\s:]+):(\d+):`)
 
 // slowFactor is the comfortable multiple of the observed warm p50 used to derive
 // the asserted SLO (CLI-02). The assertion is against the RECORDED p50*factor,

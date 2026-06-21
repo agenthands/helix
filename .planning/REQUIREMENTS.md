@@ -101,7 +101,7 @@ Every REQ has a one-line acceptance test. The roadmap maps each REQ to exactly o
 - [x] **REPORT-02**: `bench/reports/per_language.md` — per-language slice of all 8 Tier-1 languages × benchmarks that cover that language. _Acceptance:_ a language with no benchmark coverage is explicitly listed as `n/a`, not omitted.
 - [x] **REPORT-03**: `bench/reports/ablations.md` — delta tables: `full vs no_lsp`, `full vs no_semantic`, `full vs no_structured_edit`, `full vs baseline_plain`, `full vs baseline_rag`. Each delta has CI overlap analysis. _Acceptance:_ deltas computed correctly on a sample run.
 - [x] **REPORT-04**: `bench/reports/cost_quality.md` — cost-per-solved-task scatter (cost vs verified_correctness) per mode × benchmark. _Acceptance:_ scatter renders as ASCII / svg; report cites cost-table `valid_until`.
-- [ ] **REPORT-05**: Reports are reproducible from a run-id: `helix-bench report --run-id <id>` regenerates all 4 reports byte-identically. _Acceptance:_ `diff` on regenerated vs original report is empty.
+- [x] **REPORT-05**: Reports are reproducible from a run-id: `helix-bench report --run-id <id>` regenerates all 4 reports byte-identically. _Acceptance:_ `diff` on regenerated vs original report is empty.
 
 ### Infrastructure & Hygiene (INFRA-*)
 
@@ -198,13 +198,13 @@ Populated 2026-06-13 from `.planning/milestones/v1.12-ROADMAP.md`. Every v1 REQ-
 | CONTAINER-02 | Phase 84 | 84-02 | Complete — SHA256 digest-pinned images cached at $HELIX_CACHE_DIR/bench-images/<sha>/ (isHexSHA256 path-escape guard); cache-hit on re-run; Ensure idempotent under concurrency/crash recovery |
 | CONTAINER-03 | Phase 84 | 84-03, 84-04 | Complete (live-mirror confirmation deferred until namespace published) — in-process sigstore-go verify-before-pull (canonical error, pinned issuer/SAN, VirtualSigstore tamper/unsigned/wrong-org/wrong-issuer fixtures); bench-mirror.yml cosign keyless sign whose minted SAN byte-matches the runtime verifier pin |
 | CONTAINER-04 | Phase 84 | 84-02 | Complete — cross-platform 50 GiB disk-budget guard (x/sys Statfs / GetDiskFreeSpaceEx, injectable availFn), single-line remediation; synthetic low-disk test trips it |
-| REPORT-01 | Phase 89 | TBD | Pending |
-| REPORT-02 | Phase 89 | TBD | Pending |
-| REPORT-03 | Phase 89 | TBD | Pending |
-| REPORT-04 | Phase 89 | TBD | Pending |
-| REPORT-05 | Phase 89 | TBD | Pending |
+| REPORT-01 | Phase 89 | 89-01 | Complete — leaderboard (mode×benchmark)→pass@1 + verified_correctness + cost_per_solved columns with BCa CIs + non-overlap markers; reduceVerifiedCorrectness (clean-subset, contamination-excluded) |
+| REPORT-02 | Phase 89 | 89-01 | Complete — per_language.md over the derived 8-lang Tier-1 set (bench/languages, no `c`); no-coverage languages render `n/a`, never omitted |
+| REPORT-03 | Phase 89 | 89-01 | Complete — ablations.md 5 delta tables (full vs no_lsp/no_semantic/no_structured_edit/baseline_plain/baseline_rag) with BCa CI-overlap (full vs no_semantic computed aggregate-time); cost_quality.md ASCII scatter (cost vs verified_correctness) + cost-table valid_until citation |
+| REPORT-04 | Phase 89 | 89-01 | Complete — per-language reporter slicing (n/a rows) + the cost_quality scatter |
+| REPORT-05 | Phase 89 | 89-03 | Complete — `helix-bench report --run-id` (isValidRunID + --out `..`-guard, no traversal) regenerates all 4 reports BYTE-IDENTICALLY via a shared zero-RNG renderAll; TestReportByteReproducible (double-render diff-empty) is the hermetic proof |
 | INFRA-01 | Phase 75 | TBD | Pending |
 | INFRA-02 | Phase 75 | TBD | Pending |
 | INFRA-03 | Phase 75 | TBD | Pending |
-| INFRA-04 | Phase 89 | TBD | Pending |
-| INFRA-05 | Phase 89 | TBD | Pending |
+| INFRA-04 | Phase 89 | 89-04 | Complete — `.github/workflows/bench.yml` CI cost policy: PR `make bench-quick` (hard 5-min cap, no LLM secret) + nightly/maintainer-gated full `make bench`; least-privilege perms; hermetic YAML-parse test (live CI run inspection-gated); `## CI Cost Policy` in bench/BENCH.md |
+| INFRA-05 | Phase 89 | 89-02 | Complete — contamination canary: production InjectPrompt caller (every-Kth-task FNV selector, Sentinel via canary.InjectPrompt) + aggregate-time `cleanRows` EXCLUSION of contaminated rows from ALL headline reduces (pass@1, verified_correctness, ablations, per_language; fail-safe, never silently counted) + leaderboard footnote; CanaryPassRate measures all rows; discriminating exclusion test proven by revert-and-fail |

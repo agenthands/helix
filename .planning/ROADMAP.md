@@ -36,7 +36,7 @@
 - [x] Phase 86: CrossCodeEval + RepoBench Adapters + Multi-Oracle Completion Gate (completed 2026-06-21)
 - [x] Phase 87: SWE-bench Verified Adapter + UTBoost Rescorer + Multi-Oracle `verified_correctness` (completed 2026-06-21)
 - [x] Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters (completed 2026-06-21)
-- [ ] Phase 89: Reports, CI Policy & Contamination Canary
+- [x] Phase 89: Reports, CI Policy & Contamination Canary (completed 2026-06-21)
 
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md`
 

@@ -160,8 +160,56 @@ type Report struct {
 	// the SC#1 substrate. Purely additive: it never alters the (mode x benchmark)
 	// Leaderboard. A pre-language run buckets under Language=="".
 	ByLanguage []LanguageRow
-	PassNK     int
-	Footer     Footer
+	// Ablations is the Phase 89 (REPORT-03) aggregate-time delta slice: one
+	// AblationRow per fixed comparison (full vs {no_lsp, no_semantic,
+	// no_structured_edit, baseline_plain, baseline_rag}). The full vs no_semantic
+	// pair is computed HERE (deltas.go deliberately omits it). Additive: it never
+	// alters the leaderboard.
+	Ablations []AblationRow
+	PassNK    int
+	Footer    Footer
+}
+
+// AblationRow is one Phase 89 (REPORT-03) full-vs-other delta: the two modes' BCa
+// task_success CIs (re-reduced at aggregate-time), their point delta, and the
+// STATS-04 ciOverlap marker. Present==false when the `other` mode is absent from
+// the loaded tree (an em-dash delta — never a fabricated 0).
+type AblationRow struct {
+	Comparison string  // e.g. "full_minus_no_lsp"
+	FullCI     ciValue // full mode's task_success BCa CI
+	OtherCI    ciValue // the other mode's task_success BCa CI (null if absent)
+	Present    bool    // false when the other mode's rows are absent
+}
+
+// ablationComparison names one fixed full-vs-other comparison and the canonical
+// on-disk mode names of its two operands.
+type ablationComparison struct {
+	name  string // surfaced comparison key (full_minus_<other>)
+	full  string // the full operand mode (your_agent_full)
+	other string // the mode subtracted from full
+}
+
+// ablationComparisons is the FIXED, ordered Phase 89 (REPORT-03) comparison set:
+// full vs each of the 5 ablation arms. full vs no_semantic is INCLUDED here even
+// though bench/runtime/deltas.go deliberately omits it as a delta operand — this
+// comparison is computed at aggregate-time from the full + no_semantic BCa CIs in
+// the loaded tree (Pitfall 2). The operand mode names are the canonical on-disk
+// names (your_agent_*, baseline_*) the matrix writes.
+var ablationComparisons = []ablationComparison{
+	{"full_minus_no_lsp", "your_agent_full", "your_agent_no_lsp"},
+	{"full_minus_no_semantic", "your_agent_full", "your_agent_no_semantic"},
+	{"full_minus_no_structured_edit", "your_agent_full", "your_agent_no_structured_edit"},
+	{"full_minus_baseline_plain", "your_agent_full", "baseline_plain"},
+	{"full_minus_baseline_rag", "your_agent_full", "baseline_rag"},
+}
+
+// tier1Languages is the FIXED, sorted canonical Tier-1 language set — the 8
+// directories under bench/languages: cpp, csharp, go, java, javascript, python,
+// rust, typescript. There is deliberately NO `c` (the research example list of 9
+// was wrong; verified against the on-disk registry). renderPerLanguage iterates
+// this list so a no-coverage language renders n/a rather than being omitted.
+var tier1Languages = []string{
+	"cpp", "csharp", "go", "java", "javascript", "python", "rust", "typescript",
 }
 
 // ciOverlap is the STATS-04 interval-intersection predicate (D-17): two CIs
@@ -373,6 +421,70 @@ func renderFooter(f Footer) string {
 	fmt.Fprintf(&b, "ci_level: %.2f\n", f.CILevel)
 	fmt.Fprintf(&b, "runs: %d\n", f.Runs)
 	fmt.Fprintf(&b, "cost_table_valid_until: %s\n", f.CostTableValidUntil)
+	return b.String()
+}
+
+// renderPerLanguage renders the REPORT-02 per_language.md: ALL 8 Tier-1
+// languages (tier1Languages) in fixed order, each row carrying the pooled
+// pass_rate (%.4f) + n when the language has benchmark coverage in byLang, or
+// `n/a` when it has none (NOT omitted — never a fabricated 0). The "" / non-Tier-1
+// buckets in byLang are intentionally NOT rendered (only the fixed Tier-1 axis).
+// RNG-free and byte-stable: it indexes byLang into a map then iterates the fixed
+// slice, so no map-iteration order leaks into the output.
+func renderPerLanguage(byLang []LanguageRow, footer Footer) string {
+	idx := make(map[string]LanguageRow, len(byLang))
+	for _, r := range byLang {
+		idx[r.Language] = r
+	}
+
+	var b strings.Builder
+	b.WriteString("# Per-Language Pass Rate\n\n")
+	b.WriteString("| language | pass_rate | n |\n")
+	b.WriteString("| --- | --- | --- |\n")
+	for _, lang := range tier1Languages {
+		if r, ok := idx[lang]; ok {
+			fmt.Fprintf(&b, "| %s | %.4f | %d |\n", lang, r.PassRate, r.N)
+		} else {
+			// No-coverage Tier-1 language: n/a, never a fabricated 0 (REPORT-02).
+			fmt.Fprintf(&b, "| %s | n/a | n/a |\n", lang)
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(renderFooter(footer))
+	return b.String()
+}
+
+// renderAblations renders the REPORT-03 ablations.md: one delta table per fixed
+// ablationComparisons entry (full vs {no_lsp, no_semantic, no_structured_edit,
+// baseline_plain, baseline_rag}). Each present row shows the two operands'
+// task_success CIs, their point delta, and a STATS-04 CI-overlap marker (via the
+// reused ciOverlap predicate — no new overlap logic). A row whose `other` operand
+// is absent (Present==false) renders an em-dash delta, never a fabricated 0. Rows
+// are emitted in the fixed comparison order (already deterministic). RNG-free and
+// byte-stable.
+func renderAblations(rows []AblationRow, footer Footer) string {
+	var b strings.Builder
+	b.WriteString("# Ablation Deltas\n\n")
+	b.WriteString("| comparison | full_task_success | other_task_success | delta | ci_overlap |\n")
+	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	for _, r := range rows {
+		delta := emDash
+		overlap := emDash
+		if r.Present && r.FullCI.OK && r.OtherCI.OK {
+			delta = fmt.Sprintf("%.4f", r.FullCI.Point-r.OtherCI.Point)
+			if ciOverlap(r.FullCI, r.OtherCI) {
+				overlap = "CI overlap — no X>Y claim"
+			} else {
+				overlap = "disjoint"
+			}
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
+			r.Comparison, fmtCI(r.FullCI), fmtCI(r.OtherCI), delta, overlap)
+	}
+
+	b.WriteString("\n")
+	b.WriteString(renderFooter(footer))
 	return b.String()
 }
 

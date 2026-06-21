@@ -155,6 +155,14 @@ func Aggregate(runDir string, cfg Config) (*Report, error) {
 	// the returned Report and be correct.
 	rep.ByLanguage = reduceLanguageRows(loaded)
 
+	// Phase 89 (REPORT-03) aggregate-time ablation reduce. It threads the SAME
+	// single seeded rng AFTER the per-mode leaderboard/cost loop above — so the
+	// already-computed leaderboard/cost BCa CIs are byte-for-byte unchanged (their
+	// rng draws are complete), and the ablation draws are taken last in a fixed,
+	// deterministic order. The full vs no_semantic pair is computed HERE from the
+	// loaded full + no_semantic rows (deltas.go deliberately omits it — Pitfall 2).
+	rep.Ablations = reduceAblations(loaded, tasks, cfg, alpha, rng)
+
 	// Render + atomically write both artifacts (only reached on success).
 	lb := renderLeaderboard(rep.Leaderboard, rep.PassNK, rep.Footer)
 	cq := renderCostQuality(rep.Cost, rep.Footer)
@@ -446,6 +454,50 @@ func reduceVerifiedCorrectness(loaded *Loaded, tasks []string, mode string) ciVa
 		}
 	}
 	return pooledRate(trueCount, total)
+}
+
+// successVectorForMode builds the across-task per-task success-rate vector for one
+// mode — the SAME Level-1 boolean reduction reduceLeaderRow uses for TaskSuccess
+// (successCount -> c/n per task). It returns (vec, present): present==false when
+// the mode has NO rows in any task (the mode is absent from the loaded tree), so
+// the ablation reduce can render an em-dash rather than a fabricated 0.
+func successVectorForMode(loaded *Loaded, tasks []string, mode string) (vec []float64, present bool) {
+	for _, task := range tasks {
+		rows := loaded.Rows(task, mode)
+		if len(rows) == 0 {
+			continue
+		}
+		present = true
+		c, n := successCount(rows)
+		if n > 0 {
+			vec = append(vec, float64(c)/float64(n))
+		}
+	}
+	return vec, present
+}
+
+// reduceAblations computes the Phase 89 (REPORT-03) aggregate-time full-vs-other
+// deltas over the fixed ablationComparisons set. For each comparison it re-reduces
+// the full and other modes' task_success vectors to BCa CIs (the SAME bca helper /
+// success path the leaderboard uses) and records whether the other operand is
+// present. The full vs no_semantic pair is produced HERE — deltas.go deliberately
+// omits no_semantic as a delta operand (Pitfall 2). It threads the shared rng in
+// the fixed comparison order; bca consumes NO rng for an empty/absent vector so an
+// absent operand cannot shift a later comparison's draws.
+func reduceAblations(loaded *Loaded, tasks []string, cfg Config, alpha float64, rng *rand.Rand) []AblationRow {
+	out := make([]AblationRow, 0, len(ablationComparisons))
+	for _, cmp := range ablationComparisons {
+		fullVec, fullPresent := successVectorForMode(loaded, tasks, cmp.full)
+		otherVec, otherPresent := successVectorForMode(loaded, tasks, cmp.other)
+		row := AblationRow{
+			Comparison: cmp.name,
+			FullCI:     bca(fullVec, cfg.Iterations, alpha, rng),
+			OtherCI:    bca(otherVec, cfg.Iterations, alpha, rng),
+			Present:    fullPresent && otherPresent,
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 // pooledRate builds a degenerate [point, point] ciValue from a true-count over a

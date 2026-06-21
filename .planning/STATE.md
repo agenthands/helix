@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Bench Stack & Tool Evaluation
-status: executing
-stopped_at: Completed Phase 82 (7/7 plans, verified)
-last_updated: "2026-06-20T23:59:03.022Z"
+status: verifying
+stopped_at: Completed 83-03-PLAN.md
+last_updated: "2026-06-21T00:19:59.573Z"
 last_activity: 2026-06-20 -- Phase 83 execution started
 progress:
   total_phases: 15
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 45
-  completed_plans: 44
-  percent: 53
+  completed_plans: 45
+  percent: 60
 ---
 
 # Project State
@@ -27,13 +27,13 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 Phase: 83 (cmd-helix-bench-rag-baseline-rag-mode-embedding-index-builde) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-20 -- Phase 83 execution started
 
 ### Session Continuity
 
-Last session: 2026-06-20T23:58:13.867Z
-Stopped at: Completed Phase 82 (7/7 plans, verified)
+Last session: 2026-06-21T00:19:59.568Z
+Stopped at: Completed 83-03-PLAN.md
 Resume file: None
 
 ## Accumulated Context
@@ -111,6 +111,7 @@ Resume file: None
 | Phase 82 P06 | ~12m | 3 tasks | 7 files |
 | Phase 83 P01 | 22min | 4 tasks | 11 files |
 | Phase 83 P02 | ~30min | 2 tasks | 14 files |
+| Phase 83 P03 | 55min | 4 tasks | 14 files |
 
 ## Decisions
 
@@ -179,3 +180,5 @@ Resume file: None
 - [Phase 83]: [Phase 83 P01]: bench/ragindex is a LEAF (chromem-go v0.7.0 + stdlib only; proven by go list -deps clean of kernel/semantic/bench-runtime/mcp) so Plan 02's no-kernel/no-semantic vet gate holds transitively. CorpusSHA = sha256 over SORTED (rel-path, content-sha256) pairs (mtime/order-independent, content-discriminating, Pitfall 4). cacheDir precedence HELIX_CACHE_DIR > os.UserCacheDir()/helix > ~/.helix/cache; index at <cacheDir>/bench-rag-index/<corpus_sha>/. Warm-path reuse via coll.Count()>0 after NewPersistentDB auto-loads gob docs+embeddings => AddDocuments skipped, ZERO re-embeds; same embedder re-supplied to GetOrCreateCollection (chromem never persists the func, Pitfall 1). selectEmbedder: OpenAI text-embedding-3-small > Ollama nomic-embed-text (base URL PINNED constant, SSRF T-83-01-02) > stub-deterministic (byte-value histogram, no-network, distinct embedder_id, Open Q3); API key NEVER logged (T-83-01-01). chunk struct named Piece to free exported func Chunk; 40-line/8-overlap windows, IDs <rel>#<ord>, empty=>0 chunks. chromem promoted to DIRECT require by go.mod hand-edit (full go mod tidy blocked by pre-existing unrelated s2a-go failure, deferred).
 - [Phase 83]: 83-02: cmd/helix-bench-rag built via mcpsdk directly (never internal/mcp); dual import-boundary gate (dynamic NeedDeps test + static benchragleakage vet) keeps the baseline_rag control arm daemon-code-free
 - [Phase 83]: 83-02: exactly-4 tool surface asserted via self-tracked benchServer.ToolNames; all FS tools confined to corpus root by validatePath (rejects .., absolute, post-Join escapes)
+- [Phase ?]: 83-03: baseline_rag is a real retrieval-only arm — RunCell spawns cmd/helix-bench-rag over stdio (StartRAGServer), builds the embedding index out-of-band (budget-excluded), records embedder_id, reuses DefaultContract verbatim
+- [Phase ?]: 83-03: StartRAGServer returns a bench-owned RAGHandle (stdio MCP endpoint, not a socketed daemon); baseline_rag is an OPTIONAL delta operand (full_minus_baseline_rag)

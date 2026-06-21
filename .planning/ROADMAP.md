@@ -283,7 +283,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 83-03-PLAN.md — bench wiring: embedder_id result key, real baseline_rag drive leg (out-of-band index, same contract+budget), flip deferral tests, BENCH.md/MODE.md rewrite
+- [x] 83-03-PLAN.md — bench wiring: embedder_id result key, real baseline_rag drive leg (out-of-band index, same contract+budget), flip deferral tests, BENCH.md/MODE.md rewrite
 
 ### Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard
 

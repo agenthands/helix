@@ -149,6 +149,15 @@ func validLanguage(lang string) bool {
 // here. The parquet decode is confined to this package to preserve the leaf
 // invariant.
 //
+// gold_snippet_index is read as an OPTIONAL int column (string columns are
+// likewise length-skew-tolerant via stringAt). It is authoritative only for
+// TaskRetrieval rows, where acc@k ranks it within Context; for those rows it
+// MUST be present and aligned. A retrieval row whose gold index is absent
+// (column missing or shorter than tasks) is a precise per-row error naming the
+// missing index, NOT a silent degrade to -1 read as a generic out-of-range
+// value (WR-01). Completion/pipeline rows do not consult the gold index, so a
+// missing column degrades only the affected retrieval rows, not the whole load.
+//
 // When the parquet carries an optional `language` column, the per-row value is
 // authoritative and rows for other languages are skipped (the hermetic fixture
 // bundles both languages in one file); when absent (a real per-language parquet),
@@ -215,13 +224,22 @@ func decodeParquet(ctx context.Context, raw []byte, language string) ([]Task, er
 		// int64 > 2^31-1 would wrap to a negative/unrelated value, and the error
 		// would then report the wrapped value, not the real one (WR-02). We reject
 		// an out-of-int-range value here and report the ORIGINAL int64.
+		// goldPresent distinguishes "the gold_snippet_index column was absent or
+		// shorter than this row" (gold stays -1, NOT present) from a real on-disk
+		// index, so the retrieval-row validation below names a MISSING gold index
+		// precisely instead of letting the silent -1 masquerade as an out-of-range
+		// value (WR-01). The string columns are tolerant of length skew via
+		// stringAt; the gold index is only authoritative for retrieval rows, so the
+		// asymmetry is resolved by demanding presence ONLY where it is load-bearing.
 		gold := -1
+		goldPresent := false
 		if i < len(golds) {
 			g := golds[i]
 			if g < math.MinInt || g > math.MaxInt {
 				return nil, fmt.Errorf("repobench: %s row %d gold_snippet_index %d out of platform int range", language, i, g)
 			}
 			gold = int(g)
+			goldPresent = true
 		}
 
 		t := Task{
@@ -242,6 +260,15 @@ func decodeParquet(ctx context.Context, raw []byte, language string) ([]Task, er
 		case TaskRetrieval:
 			if len(t.Context) == 0 {
 				return nil, fmt.Errorf("repobench: %s row %d is retrieval but has empty context", language, i)
+			}
+			// A retrieval row's gold index is authoritative (acc@k ranks it within
+			// Context), so it MUST be present and aligned. If the gold_snippet_index
+			// column was absent or shorter than this row, surface that precisely
+			// rather than letting the default -1 read as a generic out-of-range value
+			// (WR-01) — the failure mode is "this parquet is missing the gold index
+			// for a retrieval row", not a silent degrade.
+			if !goldPresent {
+				return nil, fmt.Errorf("repobench: %s row %d is retrieval but gold_snippet_index is absent (column missing or shorter than tasks)", language, i)
 			}
 			if t.GoldSnippetIndex < 0 || t.GoldSnippetIndex >= len(t.Context) {
 				return nil, fmt.Errorf("repobench: %s row %d gold_snippet_index %d out of range [0,%d)", language, i, t.GoldSnippetIndex, len(t.Context))

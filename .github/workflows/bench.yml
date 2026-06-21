@@ -1,0 +1,74 @@
+name: bench
+# INFRA-04 CI cost-policy workflow.
+#
+# Two jobs guard the milestone bench budget:
+#
+#   bench-quick (PR gate) — runs `make bench-quick`, the HERMETIC scripted-agent
+#     smoke (Go-only, scripted agent, NO provider API key, NO LLM cost). It is
+#     capped HARD at 5 minutes (`timeout-minutes: 5`). It NEVER references a
+#     provider secret, so untrusted-PR runs cannot leak credentials or burn
+#     LLM budget (T-89-04-01, T-89-04-02).
+#
+#   bench-full (nightly / on-demand) — runs `make bench`, the full milestone
+#     suite, gated behind `schedule:` (nightly cron) and `workflow_dispatch:`
+#     (maintainer on-demand). It NEVER runs on a `pull_request` event, so the
+#     expensive path is maintainer/schedule-gated only.
+#
+# Least-privilege token: `permissions: {contents: read}` (T-89-04-03).
+# The informational LLM judge is NEVER referenced here — it must never gate
+# merges (EVAL-07, mirrored by go-test.yml's forbid-judge grep gate).
+#
+# The LIVE CI execution is inspection-gated (verified post-merge by opening a
+# PR — see 89-VALIDATION.md). The YAML STRUCTURE of this file is hermetically
+# proven by bench/ci_workflow_test.go.
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly at 06:00 UTC — runs the full bench suite off the PR critical path.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench-quick:
+    name: bench-quick (PR gate, hermetic, no LLM cost)
+    # PR-only: the cheap, hermetic, scripted-agent smoke. NO provider secret.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # HARD 5-minute cap — the PR budget guard. Do NOT raise without revisiting
+    # INFRA-04 and bench/ci_workflow_test.go (which asserts this value).
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: bench-quick (hermetic scripted smoke, no API key)
+        run: make bench-quick
+
+  bench-full:
+    name: bench-full (nightly / on-demand, maintainer-gated)
+    # Schedule (nightly) or workflow_dispatch (maintainer on-demand) ONLY — this
+    # expensive path NEVER runs on a pull_request event.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: bench (full milestone suite)
+        run: make bench

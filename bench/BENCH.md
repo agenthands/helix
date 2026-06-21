@@ -292,3 +292,50 @@ land as additional open properties alongside these, never by repurposing an exis
   parsed by `make verify-tos` from Plan 05).
 - `bench/LICENSES.md` — per-dataset license audit scaffold (each external dataset adapter
   appends its row).
+
+## CI Cost Policy
+
+The CI cost policy protects the milestone bench budget: the merge-gating path must be
+**cheap, hermetic, and bounded**, while the expensive full suite is maintainer/schedule-gated.
+It is implemented by `.github/workflows/bench.yml` (INFRA-04) and proven hermetically by
+`bench/ci_workflow_test.go` (`TestBenchWorkflow`). The LIVE CI execution is inspection-gated
+(verified post-merge by opening a PR — see `89-VALIDATION.md`); only the workflow STRUCTURE is
+asserted by the parse test.
+
+### Cost budget
+
+| Path | Trigger | Command | Cost profile | Cap |
+|------|---------|---------|--------------|-----|
+| `bench-quick` | `pull_request` | `make bench-quick` | **Hermetic** — scripted agent, Go-only, **NO provider API key, NO LLM cost** (D-01) | **Hard `timeout-minutes: 5`** |
+| `bench-full` | `schedule` (nightly 06:00 UTC) **or** `workflow_dispatch` (maintainer on-demand) | `make bench` | Full milestone suite | `timeout-minutes: 30` |
+
+Budget invariants (each asserted by `TestBenchWorkflow`):
+
+- The PR `bench-quick` job runs the **hermetic** scripted smoke (`make bench-quick` from the
+  Makefile) — no provider secret is referenced, so untrusted-PR runs cannot leak credentials or
+  burn LLM budget. It is capped **hard at 5 minutes**; raising that cap requires revisiting
+  INFRA-04 and the parse test.
+- The expensive `bench-full` job **never** runs on a `pull_request` event — it is gated on
+  `schedule` (nightly cron) or `workflow_dispatch` (maintainer on-demand) only.
+- The workflow uses **least-privilege** permissions (`permissions: {contents: read}`).
+- The workflow **never** references the informational LLM judge — it must never gate merges
+  (EVAL-07); `go-test.yml`'s forbid-judge grep gate and the parse test both enforce this.
+
+### Contamination-canary policy
+
+Select bench tasks carry a known-novel canary **Sentinel** (the `bench/canary` probe, Phase 86;
+`Sentinel` / `InjectPrompt` / `IsContaminated`). A model that echoes the Sentinel **verbatim** in
+its completion is a contamination signal: that `(task, mode)` cell is **flagged**. Flagged cells
+are:
+
+- **Excluded from the headline numbers** — at aggregate time the `successCount`/reduce path skips
+  rows where the per-row canary check reports contaminated, so contaminated cells never inflate
+  `pass@1` / `verified_correctness` / `cost_per_solved`.
+- **Listed in the `leaderboard.md` footnote** — each contaminated `(task, mode)` cell is recorded
+  in a footnote so the exclusion is transparent and auditable.
+- **Still measured by `CanaryPassRate`** — the canary column continues to report the pooled
+  contamination rate, so the signal is visible even though the cell is dropped from the headline.
+
+This keeps the leaderboard honest: contaminated results are neither silently counted toward the
+headline nor silently dropped — they are excluded from the headline, footnoted, and surfaced via
+`CanaryPassRate`.

@@ -4,15 +4,13 @@
 package runner
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +19,7 @@ import (
 
 	"github.com/agenthands/helix/internal/eval/sandbox"
 	"github.com/agenthands/helix/internal/eval/trace"
+	"github.com/agenthands/helix/internal/forwarder"
 )
 
 // TestDaemonTapIntegration is the F-07 regression guard. It boots a real
@@ -59,11 +58,19 @@ func TestDaemonTapIntegration(t *testing.T) {
 	require.NotNil(t, h)
 	require.Greater(t, h.Pid(), 0)
 
-	// Drive a tools/call against the daemon via the helix stdio forwarder.
-	// get_health is a side-effect-free tool registered in every profile
-	// (including baseline) via internal/kernel/health/skill_adapter.go.
+	// Drive a tools/call against the daemon over the retained gRPC StreamMCP wire
+	// (Phase 94 fix(94-02)). We call activate_project: it is an always-allowed
+	// control-plane tool (internal/mcp/profile_enforce.go:alwaysAllowedCoreTools),
+	// so it is NOT refused by ProfileEnforcementMiddleware under the baseline
+	// profile's empty tool whitelist (baseline.yaml: `tools: []`) — the refusal
+	// short-circuits BEFORE TelemetryMiddleware, so a denied call would emit zero
+	// "tool call" lines and defeat the tap. activate_project reaches the handler
+	// and TelemetryMiddleware emits the msg="tool call" line the tap asserts.
+	// (The deleted stdio forwarder head historically drove get_health here.)
 	sockPath := sb.SocketFor(taskID, mode)
-	if err := driveSingleToolCall(ctx, helixBin, sockPath, "get_health"); err != nil {
+	repoDir := sb.RepoFor(taskID, mode)
+	if err := driveSingleToolCall(ctx, helixBin, sockPath, "activate_project",
+		map[string]any{"repo_path": repoDir}); err != nil {
 		t.Logf("driveSingleToolCall: %v (continuing to tap anyway)", err)
 	}
 
@@ -103,97 +110,39 @@ func TestDaemonTapIntegration(t *testing.T) {
 		"expected at least one tool call in MergedTrace.ToolCallSummary")
 }
 
-// driveSingleToolCall spawns `helix --mode=stdio --socket=<sockPath>` as a
-// child process and writes a minimal MCP JSON-RPC handshake + one tools/call
-// frame to its stdin. The forwarder proxies the frames to the daemon over the
-// Unix socket, triggering the TelemetryMiddleware "tool call" emission on the
-// daemon side. Returns nil on a clean response, or an error describing the
-// failure (the caller logs and proceeds to the tap regardless, since the tap
-// is the regression guard, not the response payload).
-func driveSingleToolCall(ctx context.Context, helixBin, sockPath, tool string) error {
-	fwdCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+// driveSingleToolCall issues one MCP tools/call against the daemon over the
+// RETAINED gRPC StreamMCP wire via forwarder.CallTool (Phase 94 fix(94-02)).
+//
+// History: this previously spawned `helix --mode=stdio --socket=<sockPath>` and
+// piped a hand-framed initialize + tools/call over the forwarder's stdin/stdout.
+// Phase 94 deleted that stdio forwarder head, so the call now dials the daemon's
+// unix socket directly in-process. forwarder.CallTool wraps the gRPC StreamMCP
+// stream with the MCP SDK client (which performs the initialize handshake the
+// daemon requires) and issues the single tools/call, which is exactly what
+// triggers the daemon-side TelemetryMiddleware "tool call" emission the tap
+// asserts. The helixBin parameter is no longer needed to spawn a forwarder; it
+// is retained for signature stability (the caller passes the resolved path).
+//
+// The old "do not close stdin until the response arrives" race is moot: there is
+// no stdin pipe under gRPC. forwarder.CallTool performs the ordered teardown
+// (SDK shutdown flush → stream CloseSend → conn close) internally so the daemon
+// records the session with outcome="ended", not an RST abort.
+//
+// Returns nil on a clean response (including a tool-level isError result, since
+// the tap — not the payload — is the regression guard), or an error describing a
+// transport-level failure. The caller logs and proceeds to the tap regardless.
+func driveSingleToolCall(ctx context.Context, helixBin, sockPath, tool string, args map[string]any) error {
+	_ = helixBin // retained for signature stability; the gRPC dial needs no binary path.
+
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(fwdCtx, helixBin, "--mode=stdio", "--socket="+sockPath)
-	cmd.Env = append(os.Environ(), "HELIX_LOG_LEVEL=info")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("stdin pipe: %w", err)
+	// Empty tcpAddr selects the unix-socket default (with auto-start). The daemon
+	// is already up (sandbox.StartDaemon), so this takes the warm-reuse fast path.
+	if _, err := forwarder.CallTool(callCtx, sockPath, "", logger, "tap-integration", tool, args); err != nil {
+		return fmt.Errorf("call %q over gRPC: %w", tool, err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
-	}
-	cmd.Stderr = io.Discard
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start forwarder: %w", err)
-	}
-	defer func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
-
-	// Write initialize then tools/call as newline-delimited JSON-RPC frames.
-	// (The forwarder accepts NDJSON per forwarder_test.go.) Critically: do
-	// NOT close stdin between frames or before responses arrive — closing
-	// stdin makes the forwarder's stdin->gRPC goroutine reach EOF and
-	// CloseSend the gRPC stream, which can race response delivery and cause
-	// the daemon's reply to be discarded before we read it.
-	initFrame := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"tap-integration","version":"0"}}}`
-	callFrame := fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":%q,"arguments":{}}}`, tool)
-
-	if _, err := fmt.Fprintln(stdin, initFrame); err != nil {
-		return fmt.Errorf("write initialize: %w", err)
-	}
-	if _, err := fmt.Fprintln(stdin, callFrame); err != nil {
-		return fmt.Errorf("write tools/call: %w", err)
-	}
-
-	// Read responses on a goroutine so we can apply a deadline without leaking
-	// the reader. We're looking for id=2 (the tools/call response).
-	type readResult struct {
-		got bool
-		err error
-	}
-	resultCh := make(chan readResult, 1)
-	go func() {
-		reader := bufio.NewReader(stdout)
-		for {
-			line, err := reader.ReadString('\n')
-			if line != "" {
-				line = strings.TrimSpace(line)
-				if line != "" {
-					var resp map[string]interface{}
-					if json.Unmarshal([]byte(line), &resp) == nil {
-						if id, ok := resp["id"]; ok {
-							if v, ok := id.(float64); ok && int(v) == 2 {
-								resultCh <- readResult{got: true}
-								return
-							}
-						}
-					}
-				}
-			}
-			if err != nil {
-				resultCh <- readResult{got: false, err: err}
-				return
-			}
-		}
-	}()
-
-	select {
-	case r := <-resultCh:
-		if r.got {
-			// Close stdin AFTER we have the response so subsequent kill is
-			// clean; the response was already proxied to the daemon log too.
-			_ = stdin.Close()
-			return nil
-		}
-		return fmt.Errorf("read response: %v", r.err)
-	case <-time.After(10 * time.Second):
-		_ = stdin.Close()
-		return fmt.Errorf("did not receive tools/call response within deadline")
-	}
+	return nil
 }

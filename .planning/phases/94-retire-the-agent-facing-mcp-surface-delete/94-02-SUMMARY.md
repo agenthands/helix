@@ -166,3 +166,73 @@ None — the deletion is a net attack-surface reduction:
 ## Self-Check: PASSED
 
 All created files exist (dial_windows_test.go, smoke_grpc_test.go, 94-02-SUMMARY.md), both deleted middleware files are gone, and all 3 task commits (a1d4da7c, d8081b47, abd76b13) are present in git history.
+
+---
+
+## FIX (fix(94-02)): Migrate the two internal stdio-forwarder consumers onto the gRPC StreamMCP wire
+
+The 94-02 deletion of `helix --mode=stdio` left two INTERNAL harnesses broken — they
+still spawned the deleted stdio forwarder head as a subprocess and piped MCP
+JSON-RPC NDJSON over its stdin/stdout. This follow-on fix migrates both onto the
+RETAINED gRPC `StreamMCP` wire. NOT a new plan — atomic `fix(94-02)` commit.
+
+### New retained internal driver
+- **`internal/forwarder/session.go` (new):** `Session` + `OpenSession()` — the
+  multi-call analog of the one-shot `forwarder.CallTool`. It opens ONE `StreamMCP`
+  stream via `ConnectOrStartDaemon` (reusing `grpc_client_transport.go` +
+  `generateSessionID`), performs the MCP SDK initialize handshake ONCE, then
+  exposes `CallTool(name, args)` for a SEQUENCE of calls over that single
+  daemon-side session. `Close()` performs the same ordered teardown as
+  `oneshot.go` (SDK shutdown flush → `stream.CloseSend()` clean-EOF →
+  `conn.Close()`), so the daemon records `outcome="ended"`, not an RST abort.
+  This is an in-process Go API — NO CLI subcommand/flag, NO stdio MCP server path,
+  NO `--mode=stdio` route (SC2 held).
+
+### Consumer migrations
+- **`bench/runtime/drive.go`:** `driveScript` now dials the daemon via
+  `forwarder.OpenSession` instead of `exec.Command(helixBin, "--mode=stdio", ...)`.
+  Timing fidelity preserved: per-step `AtTime` dispatch instants (Pitfall 5),
+  per-step `StepResult.Err` capture that does NOT abort the drive, per-step context
+  deadlines, and parent-ctx cancellation. The old id-keyed pending buffer /
+  out-of-order demux is obsolete (each `session.CallTool` blocks for its own
+  response); the stdin-close-after-reads race is moot under gRPC (replaced by
+  `Session.Close()` running after the loop returns — documented). `helixBin` param
+  retained for signature stability (no longer used — the gRPC dial needs no binary).
+- **`bench/runtime/ndjson.go` (new):** the NDJSON reader/dispatcher
+  (`jsonrpcResp`, `readResponses`, `parseRPCLine`, `respDispatcher`) was extracted
+  from the old `drive.go` because it is STILL legitimately used by
+  `rag.go:driveRAGServer` — that drives the standalone `cmd/helix-bench-rag` server,
+  which IS an MCP endpoint over its OWN stdio (`StdioTransport`, not a forwarder,
+  not the retired agent head). Keeping it unbroken is in scope; it is unrelated to
+  the deleted `--mode=stdio` forwarder.
+- **`internal/eval/runner/daemon_tap_integration_test.go`:** `driveSingleToolCall`
+  now uses `forwarder.CallTool` (the retained one-shot dial) instead of the stdio
+  spawn. **Real behavioral fix surfaced:** the test drove `get_health`, which is
+  REFUSED by `ProfileEnforcementMiddleware` under the baseline profile's empty tool
+  whitelist (`baseline.yaml: tools: []`). That refusal short-circuits BEFORE
+  `TelemetryMiddleware` (execution order `…→ ProfileEnforce →…→ Telemetry →
+  handler`), so a denied call emits ZERO `msg="tool call"` lines and the tap sees
+  nothing. Switched to `activate_project` (in `alwaysAllowedCoreTools`), which
+  reaches the handler and triggers the TelemetryMiddleware emission the tap
+  asserts. (The pre-existing `get_health`-in-every-profile comment was stale.)
+- **`bench/runtime/subprocess/ragserver.go`:** [Rule 1] corrected a stale doc
+  comment that described the daemon being driven through `helix --mode=stdio` and
+  passing `--http-addr=` (both deleted in 94-02) — now describes the gRPC
+  `OpenSession` dial.
+
+### Critical invariants held
+- **No stdio MCP server path reintroduced:** zero non-comment `--mode=stdio` refs
+  in `bench/` + `internal/eval/`; zero `RunForwarder`/`RunStdio`/`runForwarder`.
+- **`git diff go.mod go.sum api/proto/` empty** — zero new deps, zero proto change.
+- **Retained gates GREEN:** `TestCLI_E2E_OneShot` + `TestCLI_DualRunParity`
+  (`-tags integration`) pass post-migration.
+
+### Verification
+- `go build ./...` + `go build -tags integration ./...` clean; `go vet ./...` +
+  `go vet -tags integration ./...` clean; all new files gofmt-clean.
+- `HELIX_BIN=$(pwd)/helix go test ./bench/runtime/... -count=1` GREEN
+  (TestCrossCell / TestDaemonTap / TestFiveOfSixSmoke / TestNoSemanticStoreOnZeroReads
+  / TestStoreIsolationParallel — 33.7s).
+- `PATH=$(pwd):$PATH HELIX_BIN=$(pwd)/helix go test -run TestDaemonTapIntegration
+  ./internal/eval/runner/...` GREEN (the F-07 tap regression guard).
+- `go test ./internal/forwarder/... ./internal/eval/... -count=1` GREEN.

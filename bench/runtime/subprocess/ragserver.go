@@ -4,10 +4,12 @@
 // (claude.go).
 //
 // CRITICAL transport difference from StartDaemon: the Helix daemon is a SOCKETED
-// server (`helix --serve --socket=<cell>/daemon.sock --http-addr=`) that the bench
-// drives THROUGH a stdio forwarder (`helix --mode=stdio --socket=…`). The
-// baseline_rag server is fundamentally different — `cmd/helix-bench-rag` IS the MCP
-// server and speaks the MCP protocol directly over its OWN stdin/stdout
+// server (`helix --serve --socket=<cell>/daemon.sock`) that the bench drives over
+// the gRPC StreamMCP wire (forwarder.OpenSession dials the socket directly —
+// drive.go:driveScript; the `helix --mode=stdio` forwarder head it used pre-Phase-94
+// was deleted). The baseline_rag server is fundamentally different —
+// `cmd/helix-bench-rag` IS the MCP server and speaks the MCP protocol directly
+// over its OWN stdin/stdout
 // (StdioTransport; cmd/helix-bench-rag/server.go Run). There is no socket, no
 // forwarder, and (D-06) no TCP port. So this helper cannot delegate to the eval
 // sandbox's StartDaemon (which hard-codes the helix binary + socket argv and

@@ -85,6 +85,34 @@ func TestProfileEnforce_Allow_PassesThrough(t *testing.T) {
 	}
 }
 
+// --- Core infra tools (ping/echo/activate_project) are exempt even under a
+// restrictive whitelist: they are registered outside the profile/skill system
+// and are not present in AllowedTools, but must remain callable (regression for
+// the Phase 91 post-wave gate failure where activation broke). ---
+
+func TestProfileEnforce_CoreTools_AlwaysAllowed(t *testing.T) {
+	// A restrictive read-mode whitelist that does NOT list any core tool.
+	sess := sessionWith("ci-bot", "read", []string{"goto_definition"})
+	mw := mcp.ProfileEnforcementMiddleware(sessionGetter(sess), discardLoggerPE())
+
+	for _, tool := range []string{"activate_project", "ping", "echo"} {
+		calls := 0
+		inner := func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			calls++
+			return &mcpsdk.CallToolResult{}, nil
+		}
+		handler := mw(inner)
+		req := makeCallToolRequest(tool, `{}`)
+		_, err := handler(context.Background(), "tools/call", req)
+		if err != nil {
+			t.Errorf("core tool %q must pass through enforcement, got error: %v", tool, err)
+		}
+		if calls != 1 {
+			t.Errorf("core tool %q: expected inner handler called once, got %d", tool, calls)
+		}
+	}
+}
+
 // --- Passthrough method: non-tools/call methods are never filtered ---
 
 func TestProfileEnforce_NonToolsCall_PassesThrough(t *testing.T) {

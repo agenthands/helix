@@ -31,6 +31,23 @@ func InstallProfileEnforcementMiddleware(server *mcpsdk.Server, getSession func(
 	server.AddReceivingMiddleware(ProfileEnforcementMiddleware(getSession, logger))
 }
 
+// alwaysAllowedCoreTools are protocol-substrate tools registered via
+// RegisterCoreTools (internal/mcp/server.go) OUTSIDE the profile/skill system.
+// They are never present in any profile's AllowedTools whitelist (which is
+// resolved from skills/ToolProviders only — see resolveAllowedToolsForMode in
+// internal/daemon/daemon.go), are not profile-gated agent verbs, and must remain
+// callable under every profile/mode: activate_project is the workspace-activation
+// entry point (LazyInit directs clients to "Call activate_project explicitly")
+// and ping/echo are diagnostics. Exempting them does NOT weaken SEC-01 — that
+// threat is destructive EDIT verbs invoked under read mode, and these tools are
+// non-destructive. Keep this set in sync with RegisterCoreTools and the
+// helix-cligen intersection that drops these same names from the verb catalog.
+var alwaysAllowedCoreTools = map[string]bool{
+	"ping":             true,
+	"echo":             true,
+	"activate_project": true,
+}
+
 // ProfileEnforcementMiddleware returns a middleware that gates every
 // tools/call on the session's already-resolved AllowedTools whitelist
 // (Phase 91 SEC-01, threat T-91-05). A tool not present in the whitelist is
@@ -81,6 +98,14 @@ func ProfileEnforcementMiddleware(getSession func(ctx context.Context) *SessionI
 
 			// Membership check: linear scan of the resolved whitelist.
 			name := ctr.Params.Name
+
+			// Core protocol/infrastructure tools are registered outside the
+			// profile/skill system and never appear in AllowedTools; exempt them
+			// so activation/connectivity always work (see alwaysAllowedCoreTools).
+			if alwaysAllowedCoreTools[name] {
+				return next(ctx, method, req)
+			}
+
 			for _, allowed := range snap.AllowedTools {
 				if allowed == name {
 					return next(ctx, method, req)

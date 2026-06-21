@@ -1,0 +1,28 @@
+{
+  "mode": "evaluation",
+  "workdir": "/cache/helix/multiswebench-runs/workdir",
+  "patch_files": [
+    "/cache/helix/multiswebench-runs/patches/go.jsonl",
+    "/cache/helix/multiswebench-runs/patches/java.jsonl"
+  ],
+  "dataset_files": [
+    "/cache/helix/multiswebench-mini/go/dataset.jsonl",
+    "/cache/helix/multiswebench-mini/java/dataset.jsonl"
+  ],
+  "force_build": false,
+  "output_dir": "/cache/helix/multiswebench-runs/output",
+  "specifics": [],
+  "skips": [],
+  "repo_dir": "/cache/helix/multiswebench-runs/repos",
+  "need_clone": true,
+  "global_env": [
+    "GOFLAGS=-mod=mod"
+  ],
+  "clear_env": true,
+  "stop_on_error": false,
+  "max_workers": 4,
+  "max_workers_build_image": 2,
+  "max_workers_run_instance": 2,
+  "log_dir": "/cache/helix/multiswebench-runs/logs",
+  "log_level": "INFO"
+}

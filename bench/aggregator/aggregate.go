@@ -579,7 +579,14 @@ func successVectorForMode(loaded *Loaded, tasks []string, mode string) (vec []fl
 		if len(rows) == 0 {
 			continue
 		}
+		// `present` is set from PRE-filter row existence so a fully-contaminated mode
+		// renders an em-dash (Present==false propagation) rather than silently vanishing
+		// from the ablation comparison.
 		present = true
+		// INFRA-05 canary EXCLUSION (T-89-02-01): ablation task_success deltas are a
+		// published artifact (ablations.md). Apply the SAME cleanRows split the
+		// leaderboard uses so contaminated rows cannot inflate the ablation table.
+		rows, _ = cleanRows(rows)
 		c, n := successCount(rows)
 		if n > 0 {
 			vec = append(vec, float64(c)/float64(n))

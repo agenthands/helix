@@ -398,12 +398,19 @@ Plans:
   4. Contamination canary: a known-novel pattern emitted in select tasks; a synthetic contaminated-response test trips the flag; flagged tasks are listed in `leaderboard.md` footnote and excluded from headline numbers.
 
 **Plans**: 4 plans
-
 Plans:
+**Wave 1**
+
 - [ ] 89-01-PLAN.md — Report renderers: verified_correctness reduce + leaderboard column, per_language.md (n/a rows), ablations.md (5 deltas incl. aggregate-time no_semantic), cost_quality.md ASCII scatter [REPORT-01/02/03/04]
-- [ ] 89-02-PLAN.md — Contamination canary: aggregate-time exclusion of contaminated rows + leaderboard.md footnote + deterministic InjectPrompt production caller [INFRA-05]
-- [ ] 89-03-PLAN.md — helix-bench report --run-id: shared renderAll factoring, validated run-id, hermetic double-render byte-reproducibility, lockstep golden-guard updates [REPORT-05]
 - [ ] 89-04-PLAN.md — CI cost-policy workflow (.github/workflows/bench.yml: PR bench-quick 5-min cap + nightly/maintainer-gated full) + hermetic YAML-parse test + BENCH.md cost-budget/canary-policy doc [INFRA-04]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 89-02-PLAN.md — Contamination canary: aggregate-time exclusion of contaminated rows + leaderboard.md footnote + deterministic InjectPrompt production caller [INFRA-05]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 89-03-PLAN.md — helix-bench report --run-id: shared renderAll factoring, validated run-id, hermetic double-render byte-reproducibility, lockstep golden-guard updates [REPORT-05]
 
 <details>
 <summary>✅ v1.11 Semantic Index Completion & P1 MCP Tools (Phases 68-74) -- SHIPPED 2026-06-07</summary>

@@ -15,13 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Helix** — The IDE for your coding agent. A Go-native code intelligence platform for MCP.
+**Helix** — The IDE for your coding agent. A Go-native, CLI-first code intelligence platform.
 
-Helix provides 53 MCP tools for semantic code retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions.
+Helix exposes its semantic code operations as `helix <verb>` CLI commands (the full verb inventory is auto-generated in `README.md`) for retrieval, editing, and refactoring across 52 languages via LSP. It ships as a **single Go binary** with no Python, Docker, or runtime dependencies, running as a **persistent daemon** that keeps language servers warm between agent sessions. The MCP Go SDK and gRPC IPC are retained as internal daemon plumbing — they are no longer an agent-facing surface.
 
 Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need symbol-level operations — go-to-definition, find references, rename across files, replace symbol body, blast-radius analysis — backed by real language servers with warm persistent caching, a ranked RepoMap for structural context, and fuzzy editing that tolerates LLM output drift.
 
-**Core Value:** Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, serves ranked structural context on demand, and exposes semantic code operations as agent tools — all from a single binary with one-command client setup.
+**Core Value:** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
 **Lineage:** Helix is a standalone, Go-native product — not a fork, port, or rewrite. It is partially inspired by prior art including Serena, Aider, Graphify, and others, but its kernel, daemon, and tooling are its own. The project carried an earlier name through v1.8 and was renamed to `helix` at v1.9 (see CHANGELOG.md > v1.9 Breaking Changes). The original Python reference codebase (formerly under `legacy/`) has been removed from the tree; see git history prior to v1.12 if you need it.
 
@@ -90,8 +90,8 @@ Four real middlewares, defined in `internal/mcp/`:
 - **Database:** modernc.org/sqlite (CGO-free, for FTS5 memory search)
 - **Tree-sitter:** go-tree-sitter (body extraction for symbol editing)
 - **IPC:** gRPC (forwarder-daemon communication)
-- **CLI:** cobra v1.9.1
-- **Protocol:** MCP (Model Context Protocol) -- primary interface for all clients
+- **CLI:** cobra v1.9.1 -- the agent interface; agents drive `helix <verb>` via Bash
+- **Protocol:** MCP Go SDK + gRPC IPC retained as internal daemon plumbing (not an agent-facing surface)
 - **LSP:** LSP 3.17 (generated types from official metamodel)
 
 **Build pipeline (CGO=1, split-runner per Phase 59.1):**
@@ -176,7 +176,7 @@ LazyInit MUST run first so the workspace is activated before `TelemetryMiddlewar
 ## Constraints
 
 - **Language**: Go -- single binary, native concurrency
-- **Protocol**: MCP (Model Context Protocol) -- primary interface
+- **Interface**: the `helix` CLI is the agent interface; the MCP Go SDK + gRPC IPC are retained as internal daemon plumbing
 - **LSP only**: No JetBrains or proprietary backends
 - **Repo**: Go-only; the historical Python reference tree has been removed (see git history)
 

@@ -2,11 +2,11 @@
 
 ## What This Is
 
-A Go-native code intelligence platform for MCP: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, 41+ callable MCP tools, 52-language support across 23 tree-sitter grammars. Ships as `helix` (renamed from `serena` at v1.9 — module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`) with reproducible multi-arch signed releases via goreleaser, in-binary self-upgrade (`helix update` / `helix upgrade` with sigstore cosign-keyless bundle verify + atomic swap), full Prometheus + OpenTelemetry observability (5 RED metric families plus cache/repomap/session/edit families, 2 packaged Grafana dashboards, 4 runbooks), and per-MCP-tool + per-LS-call tracing. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching. Every tool returns typed, structured errors for reliable programmatic error handling.
+A Go-native, CLI-first code intelligence platform: universal LSP gateway at the core, agent skills as plugins. Single binary, persistent daemon, agents drive the `helix <verb>` CLI (the full verb inventory is auto-generated in README.md), 52-language support across 23 tree-sitter grammars. The MCP Go SDK and gRPC IPC are retained as internal daemon plumbing — no longer an agent-facing surface. Ships as `helix` (renamed from `serena` at v1.9 — module path `github.com/agenthands/helix`, env vars `HELIX_*`, config dir `~/.helix/`) with reproducible multi-arch signed releases via goreleaser, in-binary self-upgrade (`helix update` / `helix upgrade` with sigstore cosign-keyless bundle verify + atomic swap), full Prometheus + OpenTelemetry observability (5 RED metric families plus cache/repomap/session/edit families, 2 packaged Grafana dashboards, 4 runbooks), and per-MCP-tool + per-LS-call tracing. Targets coding agents (Claude Code, Codex, IDE assistants) that need semantic code operations — symbol-level retrieval, editing, refactoring — backed by real language servers with warm persistent caching. Every tool returns typed, structured errors for reliable programmatic error handling.
 
 ## Core Value
 
-Rock-solid LSP-backed MCP runtime that survives client disconnects, shares warm caches across sessions, and exposes semantic code operations as tools.
+The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
 ## Requirements
 
@@ -187,7 +187,7 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 - **Nudge-hook steering** — the existing `PreToolUse` nudge hook (`internal/cli/nudge.go`) repurposed to redirect `grep`/`sed`/`cat`-style Bash calls toward the equivalent `helix` CLI verb.
 - **`helix setup <client>` flip** — setup changes from "register an MCP server with the client" to "install the skill + hooks" across supported clients.
 - **One-shot daemon dialing with warm reuse** — CLI invocations auto-start and reuse the persistent daemon (reusing the forwarder's autostart logic), so per-call latency stays warm-cache fast and the share-until-dirty pool is preserved.
-- **Identity & docs rewrite** — README / CLAUDE.md / PROJECT.md ("Core Value", Constraints → "Protocol: MCP — primary interface") rewritten to a CLI-first identity; the auto-generated tool table (`cmd/docgen`) regenerated against the CLI surface.
+- **Identity & docs rewrite** — README / CLAUDE.md / PROJECT.md (Core Value and the Constraints Protocol line, which framed MCP as the agent surface) rewritten to a CLI-first identity; the auto-generated tool table (`cmd/docgen`) regenerated against the CLI surface.
 
 **Out of scope (deferred or won't-do):**
 
@@ -200,7 +200,7 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 ## Context
 
-Shipped v1.0 through v1.9. Single binary (`helix`, renamed from `serena` at v1.9), 4-layer architecture, persistent daemon. 41+ MCP tools, 52-language support, 23 tree-sitter grammars. Multi-oracle test harness (protocol, contract, scenario, LLM behavioral, judge scoring) plus per-MCP-tool + per-LS-call trace coverage with TRACE-AUDIT.md hygiene review. Reproducible signed multi-arch releases via goreleaser (6 archives × darwin/linux/windows × amd64/arm64 with sigstore cosign keyless; minisign retired at v1.10 per Phase 58 D-02). In-binary self-upgrade. Full observability: 5 new Prometheus metric families landed at v1.9 (cache hit-rate, repomap latency, session lifecycle, edit outcomes — all bounded labels), 2 packaged Grafana dashboards (`helix-overview.json`, `helix-engine.json`), 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction).
+Shipped v1.0 through v1.9. Single binary (`helix`, renamed from `serena` at v1.9), 4-layer architecture, persistent daemon. 50 frozen `helix` CLI verbs (the full inventory is auto-generated in README.md), 52-language support, 23 tree-sitter grammars. Multi-oracle test harness (protocol, contract, scenario, LLM behavioral, judge scoring) plus per-MCP-tool + per-LS-call trace coverage with TRACE-AUDIT.md hygiene review. Reproducible signed multi-arch releases via goreleaser (6 archives × darwin/linux/windows × amd64/arm64 with sigstore cosign keyless; minisign retired at v1.10 per Phase 58 D-02). In-binary self-upgrade. Full observability: 5 new Prometheus metric families landed at v1.9 (cache hit-rate, repomap latency, session lifecycle, edit outcomes — all bounded labels), 2 packaged Grafana dashboards (`helix-overview.json`, `helix-engine.json`), 4 runbooks (ErrCircuitOpen, deadline-timeouts, ls-crash-restart, memory-pressure-eviction).
 
 Tech stack: Go 1.25 (gopls compatibility resolved at v1.9), official MCP Go SDK, koanf v2, modernc.org/sqlite, go-tree-sitter (23 grammars; CGO=0 stub path preserved via Phase 51.1), gRPC, prometheus/client_golang, OpenTelemetry (otelgrpc + otlptrace), goreleaser, sigstore cosign keyless (replaces minisign at v1.10 per Phase 58 D-02; release-side via cosign-installer in CI, verifier-side via embedded sigstore-go + live-TUF-sourced trust root).
 
@@ -219,7 +219,7 @@ The `legacy/` directory contains the original Python-based prototype (Serena nam
 ## Constraints
 
 - **Language**: Go — single binary, native concurrency
-- **Protocol**: MCP (Model Context Protocol) — primary interface
+- **Interface**: the `helix` CLI is the agent interface; the MCP Go SDK + gRPC IPC are retained as internal daemon plumbing
 - **LSP only**: No JetBrains or proprietary backends
 
 ## Key Decisions

@@ -10,13 +10,13 @@
 <p align="center"><b>Not a code-assistant add-on &mdash; literally the editor your coding agent drives.</b><br/>
 It replaces the agent's blunt, file-based tool calls &mdash; <code>read</code> whole files, <code>grep</code>, line-number / regex edits &mdash; with precise, IDE-grade <b>semantic operations</b> backed by real language servers: go-to-definition, find-references, call hierarchy, rename-across-files, replace-symbol-body.</p>
 
-<p align="center">Code intelligence platform for MCP &mdash; 41+ tools across 52 languages.</p>
+<p align="center">CLI-first code intelligence platform &mdash; agents drive the <code>helix &lt;verb&gt;</code> CLI across 52 languages.</p>
 
 <p align="center"><sub>Helix is an independent, Go-native project &mdash; not a fork, port, or rewrite. It is partially inspired by prior art including <a href="https://github.com/oraios/serena">Serena</a>, <a href="https://github.com/Aider-AI/aider">Aider</a>, Graphify, and others, but its kernel, daemon, and tooling are its own. (The project carried an earlier name through v1.8; the full rename of binary, CLI, env vars, config dirs, and MCP server identity to <code>helix</code> shipped at v1.9 &mdash; see <a href="CHANGELOG.md">CHANGELOG.md</a> &gt; v1.9 Breaking Changes.)</sub></p>
 
 * Helix provides essential **semantic code retrieval, editing and refactoring tools** that are akin to an IDE's capabilities,
   operating at the symbol level and exploiting relational structure.
-* It integrates with any client/LLM via the model context protocol (**MCP**).
+* Agents drive Helix through the **`helix <verb>` CLI** (via Bash); the CLI dials a warm daemon over internal gRPC. The MCP Go SDK and gRPC IPC are retained as internal daemon plumbing — no longer an agent-facing surface.
 * Ships as a **single Go binary** — no Python, no Docker, no runtime dependencies beyond the binary itself.
 
 Helix's **agent-first tool design** involves robust high-level abstractions, distinguishing it from
@@ -40,13 +40,11 @@ more complex codebases.
 
 ## How Helix Works
 
-Helix provides 41+ MCP tools for coding workflows, backed by real language servers.
-An LLM orchestrates these tools to navigate, understand, and edit code.
+Helix exposes its coding-workflow operations as `helix <verb>` CLI commands, backed by real language servers.
+An LLM orchestrates these verbs (via Bash) to navigate, understand, and edit code.
 
 Helix runs as a **persistent daemon** that keeps language servers warm between sessions.
-Agents connect via the **model context protocol (MCP)** through:
-* **stdio** — direct integration with Claude Code, Codex, OpenCode, Gemini-CLI
-* **Streamable HTTP** — for IDEs, web clients, and multi-client scenarios
+Agents invoke `helix <verb>` via Bash; the CLI dials the warm daemon over **internal gRPC** (a unix socket by default). The MCP Go SDK and gRPC IPC live behind that wire as internal daemon plumbing — they are not an agent-facing surface.
 
 <!-- Block diagram asset deferred — see TODO at top of file. -->
 
@@ -101,47 +99,18 @@ Helix uses **lazy initialization** — workspaces are configured on first tool c
 <details>
 <summary>Manual configuration (without helix setup)</summary>
 
-**Claude Code** (`.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "helix": {
-      "command": "helix",
-      "args": ["--mode=stdio"]
-    }
-  }
-}
-```
+`helix setup <client>` is the supported path — it installs the agent skill + hooks so the agent drives the `helix <verb>` CLI directly (via Bash). There is no MCP-server registration to hand-write: the legacy agent-facing daemon transport modes and HTTP endpoint were removed; only the internal auto daemon remains, dialed over gRPC by the CLI.
 
-**Codex** (`.codex/config.json`):
-```json
-{
-  "mcpServers": {
-    "helix": {
-      "command": "helix",
-      "args": ["--mode=stdio", "--profile=codex"]
-    }
-  }
-}
-```
+If you prefer to wire a client by hand, point it at the `helix` binary's per-verb commands and choose a profile with `--profile`:
 
-**IDE Assistant** (generic MCP client config):
-```json
-{
-  "mcpServers": {
-    "helix": {
-      "command": "helix",
-      "args": ["--mode=stdio", "--profile=ide-assistant"]
-    }
-  }
-}
-```
-
-**HTTP mode** (for IDEs, web clients, multi-client):
 ```bash
-helix --mode=http --http-addr=127.0.0.1:8080
-# Connect your client to http://127.0.0.1:8080/mcp
-# Equivalent: helix --serve --http-addr=127.0.0.1:8080 (--serve and --mode=http both enter the daemon)
+# The agent calls verbs directly, e.g.:
+helix go-to-definition path/to/file.go:42:8
+helix find-references path/to/file.go:42:8 --profile=codex
+
+# Inspect the available verbs and profiles:
+helix --help
+helix setup --help
 ```
 
 For Cursor, Antigravity, VS Code, JetBrains, Claude Desktop, Gemini CLI, and OpenCode — see [INSTALL.md#manual-configuration](INSTALL.md#manual-configuration) for full examples.
@@ -196,7 +165,7 @@ Helix ships with built-in production infrastructure — metrics, tracing, health
 
 ### Admin Endpoints
 
-A dedicated loopback admin listener, isolated from MCP traffic, exposes:
+A dedicated loopback admin listener, isolated from daemon traffic, exposes:
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -408,7 +377,7 @@ This is a deliberate first-release scope (per `SPEC-DRAFT.md`: *"scope productio
 Helix is built as a 4-layer Go binary:
 
 ```
-MCP Runtime (stdio/HTTP transports, tool registry, profile middleware)
+CLI + Daemon Runtime (helix-verb CLI over internal gRPC, tool registry, profile middleware)
     |
 Code Intelligence Kernel (LS worker pool, symbol ops, file ops, diagnostics)
     |

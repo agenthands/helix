@@ -34,7 +34,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 - `internal/daemon/` -- Persistent supervisor daemon with errgroup orchestration, signal-first lifecycle
 - `internal/forwarder/` -- Stdio-to-gRPC proxy with auto-start
 - `api/proto/serena/v1/` -- gRPC IPC between forwarder and daemon (proto package directory name retained as a wire-format lineage artifact; see Phase 52-03 SUMMARY)
-- Transports: stdio (via forwarder), Streamable HTTP (direct)
+- Transport: the agent-facing surface is the `helix` CLI dialing the daemon over gRPC `StreamMCP` (unix socket / named-pipe by default; opt-in loopback-gated gRPC TCP). The stdio MCP forwarder head and the Streamable-HTTP `/mcp` head were removed in Phase 94 — only the internal gRPC `StreamMCP` wire remains.
 
 ### Layer 1: Code Intelligence Kernel
 - `internal/kernel/` -- Kernel orchestrator, workspace runtime, language detection
@@ -61,7 +61,7 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 ### Layer 3: Agent Profiles & Setup
 - `internal/profile/` -- 5 agent profiles (claude-code, codex, ide-assistant, ci-bot, full), 4 modes (read/edit/review/admin)
 - `internal/config/` -- 4-layer config: CLI > project (.helix/) > user (~/.helix/) > profile defaults
-- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `helix setup <client>` one-command MCP registration for 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic) with language detection, LS pre-installation, and Claude Code hook installer
+- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `helix setup <client>` installs the Helix Agent Skill + hooks (Claude-family clients) and idempotently tears down any prior Helix MCP-server registration across 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic), with language detection, LS pre-installation, and the Claude Code hook installer. Non-skill clients (vscode, jetbrains, gemini-cli, opencode, generic) get MCP-teardown only — no skill is written. The binary's internal MCP daemon head is left intact.
 - `internal/cli/status.go`, `internal/cli/status_output.go` -- `helix status` CLI producing human-readable workspace health summary (`--json`, `--verbose` modes)
 - `cmd/helix/main.go` -- single entrypoint; all CLI subcommands (setup, status, activate, deactivate, nudge, root, daemon wiring) live in `internal/cli/` and are mounted via cobra in `internal/cli/root.go`
 
@@ -130,7 +130,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - Skill tools use `ToolProvider.Tools()` returning `[]*mcp.ToolDef`, daemon registers centrally
 - Kernel tools wrapped as thin skill adapters for uniform ToolProvider interface
 - "Skills for composition, tool names for execution"
-- Full tool inventory (53 callable tools with profile/mode matrix) is auto-generated in `README.md`; do not hand-edit the tool table
+- Full tool inventory (50 frozen `helix` verbs with profile/mode matrix; the README table renders 51 rows because `analyze-blast-radius` is dual-categorized) is auto-generated in `README.md`; do not hand-edit the tool table
 
 ### Skill System
 - Caddy-style `init()` registration: `skill.Register(&MySkill{})`
@@ -157,9 +157,9 @@ Four real middlewares, defined in `internal/mcp/`:
 - Token budget fitting uses binary search over the elided tree; output scales to any repository size
 
 ### Setup & Hooks
-- `helix setup <client>` (implemented in `internal/cli/setup*.go`) invokes client CLIs as subprocess (e.g., `claude mcp add-json`) rather than writing config files directly
+- `helix setup <client>` (implemented in `internal/cli/setup*.go`) installs the embedded Helix Agent Skill (Claude-family clients) and hooks, and tears down any prior Helix MCP-server entry (e.g., `claude mcp remove`) — it no longer registers an MCP server
 - Claude Code hooks installed during `helix setup claude-code` (see `internal/cli/setup_hooks.go`): SessionStart (activate workspace), PreToolUse (nudge toward symbolic tools), Stop (cleanup); `--no-hooks` opts out
-- Language detection (`internal/cli/setup_detect.go`) scans the project directory for known file extensions and pre-installs LSs via the three-tier installer before registering the MCP server
+- Language detection (`internal/cli/setup_detect.go`) scans the project directory for known file extensions and pre-installs LSs via the three-tier installer before installing the Helix skill + hooks (and tearing down any prior MCP registration)
 
 ### Middleware Execution Order (LIFO)
 Install order in `internal/daemon/daemon.go` is:

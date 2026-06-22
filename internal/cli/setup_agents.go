@@ -1,11 +1,120 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// codexAGENTSMaxBytes is the Codex project_doc_max_bytes cap (32 KiB) applied to
+// the whole AGENTS.md file. The appended Helix block is trimmed to a pointer (never
+// the user content) to stay under it. (STACK.md A2; developers.openai.com/codex.)
+const codexAGENTSMaxBytes = 32 * 1024
+
+// codexAgentsPath resolves the Codex AGENTS.md destination: project root
+// (<ProjectDir>/AGENTS.md) or, when global, ~/.codex/AGENTS.md. (STACK.md A2.)
+func codexAgentsPath(projectDir string, global bool) string {
+	if global {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".codex", "AGENTS.md")
+		}
+	}
+	return filepath.Join(projectDir, "AGENTS.md")
+}
+
+// codexHooksPath resolves the Codex hooks.json destination: project
+// <ProjectDir>/.codex/hooks.json or, when global, ~/.codex/hooks.json. Codex reads
+// both project and home hooks; setup writes the scope the user selected. (STACK.md
+// A1; developers.openai.com/codex/hooks.)
+func codexHooksPath(projectDir string, global bool) string {
+	if global {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".codex", "hooks.json")
+		}
+	}
+	return filepath.Join(projectDir, ".codex", "hooks.json")
+}
+
+// geminiInstructionPath resolves the Gemini GEMINI.md destination: project root
+// (<ProjectDir>/GEMINI.md) or, when global, ~/.gemini/GEMINI.md. (STACK.md A2;
+// geminicli.com.) Gemini documents no hard project-doc cap, so the writer uses no
+// byte cap for it.
+func geminiInstructionPath(projectDir string, global bool) string {
+	if global {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".gemini", "GEMINI.md")
+		}
+	}
+	return filepath.Join(projectDir, "GEMINI.md")
+}
+
+// genericInstructionPath resolves the generic cross-tool instruction file:
+// <ProjectDir>/AGENTS.md (the emerging agents.md standard). The generic client has
+// no hook surface.
+func genericInstructionPath(projectDir string) string {
+	return filepath.Join(projectDir, "AGENTS.md")
+}
+
+// writeCodexHooks writes a Codex PreToolUse hooks.json whose command invokes
+// `<binaryPath> nudge` — the SAME runNudge engine Claude uses (one engine, two
+// runtimes; AGENT-03). It mirrors helixHookConfig's PreToolUse entry shape and is
+// built via map[string]any + encoding/json (NEVER string-concatenated JSON,
+// T-34-01). The hook is advisory-only: it emits the shared additionalContext
+// envelope at exit 0 and NEVER a permissionDecision:"deny" default (locked
+// anti-feature). The write is atomic (temp+rename), path-contained, and
+// byte-stable on re-run.
+//
+// The config shape pins the documented Codex hooks convention (STACK.md A1):
+// {"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command",
+// "command":["<bin>","nudge"]}]}]}}. The exact live byte-shape is gated by the
+// Task 2 human-verify checkpoint; the command-invokes-nudge + advisory-only
+// invariants asserted here are the parts Helix controls.
+func writeCodexHooks(path, binaryPath string) error {
+	// Path containment (Security V12): refuse a ".." traversal destination.
+	if strings.Contains(filepath.ToSlash(path), "/../") {
+		return fmt.Errorf("refusing hooks.json write: %q contains a path traversal escape", path)
+	}
+
+	config := map[string]any{
+		"hooks": map[string]any{
+			"PreToolUse": []any{
+				map[string]any{
+					"matcher": "Bash",
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": []any{binaryPath, "nudge"},
+							"timeout": 5,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling codex hooks config: %w", err)
+	}
+	data = append(data, '\n')
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating codex hooks directory: %w", err)
+	}
+
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("writing temp codex hooks file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("renaming codex hooks file: %w", err)
+	}
+	return nil
+}
 
 // Sentinel markers bracketing the Helix-managed block inside a per-agent
 // instruction file (AGENTS.md / GEMINI.md / generic). They are HTML comments so
@@ -185,4 +294,40 @@ func ensureTrailingNewline(s string) string {
 		return ""
 	}
 	return strings.TrimRight(s, "\n") + "\n"
+}
+
+// removeAgentInstructions strips the Helix-managed block from the instruction file
+// at path, preserving all user content, and writes it back atomically. A missing
+// file is a no-op (idempotent uninstall). If the file contained no Helix block it
+// is left untouched. Path containment is enforced as in writeAgentInstructions.
+func removeAgentInstructions(path string) error {
+	if strings.Contains(filepath.ToSlash(path), "/../") {
+		return fmt.Errorf("refusing instruction-file edit: %q contains a path traversal escape", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("reading instruction file %s: %w", path, err)
+	}
+	existing := string(data)
+	stripped := stripHelixBlock(existing)
+	if stripped == existing {
+		return nil // no Helix block present — nothing to do.
+	}
+	stripped = strings.TrimRight(stripped, "\n")
+	if stripped != "" {
+		stripped += "\n"
+	}
+
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(stripped), 0644); err != nil {
+		return fmt.Errorf("writing temp instruction file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("renaming instruction file: %w", err)
+	}
+	return nil
 }

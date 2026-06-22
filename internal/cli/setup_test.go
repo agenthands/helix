@@ -142,6 +142,7 @@ func TestGenericRegistrarRegister(t *testing.T) {
 
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
+		ProjectDir: dir, // contain the AGENTS.md instruction-file write (Phase 98 flip)
 		OutputPath: outputPath,
 		Printer:    &SetupPrinter{},
 	}
@@ -160,7 +161,8 @@ func TestGenericRegistrarStdout(t *testing.T) {
 
 	cfg := RegistrationConfig{
 		BinaryPath: "/usr/local/bin/helix",
-		OutputPath: "", // empty = stdout
+		ProjectDir: t.TempDir(), // contain the AGENTS.md instruction-file write (Phase 98 flip)
+		OutputPath: "",          // empty = stdout
 		Printer:    &SetupPrinter{},
 	}
 
@@ -319,7 +321,7 @@ func TestSetupCommandDryRunGeneric(t *testing.T) {
 
 func TestClientRegistryContainsAll(t *testing.T) {
 	reg := clientRegistry()
-	expected := []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"}
+	expected := []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic", "codex"}
 	for _, name := range expected {
 		_, ok := reg[name]
 		assert.True(t, ok, "registry should contain %s", name)

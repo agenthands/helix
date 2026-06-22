@@ -28,7 +28,7 @@ binary's MCP daemon head is left intact.
 
 Run without arguments to list available clients.
 Run with a client name to set up Helix for that client.`,
-		ValidArgs:     []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic"},
+		ValidArgs:     []string{"claude-code", "vscode", "jetbrains", "claude-desktop", "gemini-cli", "opencode", "generic", "codex"},
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          runSetup,
 		SilenceUsage:  true,

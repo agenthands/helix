@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,4 +163,197 @@ func TestWriteAgentInstructions(t *testing.T) {
 			assert.False(t, strings.HasSuffix(e.Name(), ".tmp"), "no .tmp sibling should remain: %s", e.Name())
 		}
 	})
+}
+
+// --- Task 3: Codex/Gemini/generic registrars (AGENT-03) ---
+
+// findHookArtifacts walks root and returns the relative paths of any file whose
+// name looks like a hook config (a JSON file named *hooks*.json). Used to prove
+// Gemini produces NO hook artifact.
+func findHookArtifacts(t *testing.T, root string) []string {
+	t.Helper()
+	var found []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		name := strings.ToLower(d.Name())
+		if strings.Contains(name, "hook") && strings.HasSuffix(name, ".json") {
+			rel, _ := filepath.Rel(root, p)
+			found = append(found, rel)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	return found
+}
+
+// TestWriteCodexHooks asserts the Codex hooks.json writer emits a JSON file whose
+// PreToolUse handler invokes `<bin> nudge` (the ONE engine, no second steering
+// output), with type:"command", and NEVER a deny default. The bytes are pinned to
+// the documented Codex hooks convention (additionalContext envelope, type:command
+// handlers; STACK.md A1).
+func TestWriteCodexHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	bin := "/usr/local/bin/helix"
+	require.NoError(t, writeCodexHooks(path, bin))
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	// It parses as JSON.
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(data, &parsed), "hooks.json must be valid JSON")
+
+	// The serialized form invokes the nudge engine via the helix binary.
+	raw := string(data)
+	assert.Contains(t, raw, bin, "hooks.json command must reference the helix binary path")
+	assert.Contains(t, raw, "nudge", "hooks.json command must invoke the nudge engine")
+	assert.Contains(t, raw, "PreToolUse", "hooks.json must register a PreToolUse handler")
+	assert.Contains(t, raw, "command", `hooks.json must use type:"command" handlers`)
+
+	// Locked anti-feature: NEVER a deny-by-default.
+	assert.NotContains(t, raw, "permissionDecision", "Codex hook must be advisory only — no permissionDecision")
+	assert.NotContains(t, raw, "deny", "Codex hook must never set a deny default")
+
+	// No .tmp sibling remains (atomic write).
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.False(t, strings.HasSuffix(e.Name(), ".tmp"), "no .tmp sibling should remain: %s", e.Name())
+	}
+
+	// Idempotent / byte-stable re-run.
+	require.NoError(t, writeCodexHooks(path, bin))
+	data2, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, data, data2, "re-running writeCodexHooks must be byte-stable")
+}
+
+// TestCodexRegistrar asserts CodexRegistrar.Register writes BOTH an AGENTS.md
+// (sentinel-delimited Helix block, idempotent) and a Codex hooks.json invoking
+// `<bin> nudge`, advisory-only.
+func TestCodexRegistrar(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := RegistrationConfig{
+		ProjectDir: tmp,
+		BinaryPath: "/path/to/helix",
+		Printer:    &SetupPrinter{},
+	}
+	r := &CodexRegistrar{}
+	require.Equal(t, "codex", r.Name())
+	require.NotEmpty(t, r.Description())
+
+	require.NoError(t, r.Register(cfg))
+
+	// (a) AGENTS.md exists under tmp with the sentinel block.
+	agentsPath := filepath.Join(tmp, "AGENTS.md")
+	agentsData, err := os.ReadFile(agentsPath)
+	require.NoError(t, err, "Codex AGENTS.md must be written")
+	assert.Contains(t, string(agentsData), helixBlockBegin, "AGENTS.md must carry the Helix block")
+	assert.LessOrEqual(t, len(agentsData), 32*1024, "Codex AGENTS.md must stay within the 32-KiB cap")
+
+	// (b) hooks.json exists under the project .codex dir.
+	hooksPath := filepath.Join(tmp, ".codex", "hooks.json")
+	hooksData, err := os.ReadFile(hooksPath)
+	require.NoError(t, err, "Codex hooks.json must be written")
+
+	// (c) the hooks.json command invokes `helix nudge` (one engine).
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(hooksData, &parsed), "hooks.json must be valid JSON")
+	assert.Contains(t, string(hooksData), cfg.BinaryPath, "hooks command must reference the binary")
+	assert.Contains(t, string(hooksData), "nudge", "hooks command must invoke nudge")
+
+	// (d) no deny default.
+	assert.NotContains(t, string(hooksData), "permissionDecision", "no deny default")
+
+	// Idempotent re-run: no duplicate AGENTS.md block.
+	require.NoError(t, r.Register(cfg))
+	agentsData2, err := os.ReadFile(agentsPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(agentsData2), helixBlockBegin), "re-run must not duplicate the block")
+}
+
+// TestGeminiNoHookArtifact asserts GeminiCLIRegistrar.Register writes a GEMINI.md
+// with the Helix block AND produces NO hook artifact anywhere under tmp (Gemini
+// has no PreToolUse-equivalent; fabricating one is the locked anti-feature).
+func TestGeminiNoHookArtifact(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := RegistrationConfig{
+		ProjectDir: tmp,
+		BinaryPath: "/path/to/helix",
+		Printer:    &SetupPrinter{},
+	}
+	r := &GeminiCLIRegistrar{}
+	require.NoError(t, r.Register(cfg))
+
+	// GEMINI.md exists with the Helix block.
+	geminiPath := filepath.Join(tmp, "GEMINI.md")
+	data, err := os.ReadFile(geminiPath)
+	require.NoError(t, err, "GEMINI.md must be written")
+	assert.Contains(t, string(data), helixBlockBegin, "GEMINI.md must carry the Helix block")
+
+	// NO hook artifact anywhere under tmp.
+	hooks := findHookArtifacts(t, tmp)
+	assert.Empty(t, hooks, "Gemini must produce NO hook artifact (locked anti-feature); found: %v", hooks)
+
+	// Idempotent re-run: no duplicate block.
+	require.NoError(t, r.Register(cfg))
+	data2, err := os.ReadFile(geminiPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(data2), helixBlockBegin), "re-run must not duplicate the block")
+}
+
+// TestGenericRegistrarWritesInstructionFile asserts GenericRegistrar.Register
+// writes the generic AGENTS.md (no hook), and honors DryRun (no write).
+func TestGenericRegistrarWritesInstructionFile(t *testing.T) {
+	t.Run("writes-agents-md", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfg := RegistrationConfig{ProjectDir: tmp, BinaryPath: "/path/to/helix", Printer: &SetupPrinter{}}
+		require.NoError(t, (&GenericRegistrar{}).Register(cfg))
+
+		data, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
+		require.NoError(t, err, "generic AGENTS.md must be written")
+		assert.Contains(t, string(data), helixBlockBegin)
+
+		// No hook artifact.
+		assert.Empty(t, findHookArtifacts(t, tmp), "generic must produce no hook")
+	})
+
+	t.Run("dry-run-writes-nothing", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfg := RegistrationConfig{ProjectDir: tmp, BinaryPath: "/path/to/helix", DryRun: true, Printer: &SetupPrinter{DryRun: true}}
+		require.NoError(t, (&GenericRegistrar{}).Register(cfg))
+		_, err := os.Stat(filepath.Join(tmp, "AGENTS.md"))
+		assert.True(t, os.IsNotExist(err), "dry-run must not write AGENTS.md")
+	})
+}
+
+// TestCodexInValidArgsAndRegistry asserts codex is a resolvable setup target and
+// vscode/jetbrains/opencode remain teardown-only (not flipped).
+func TestCodexInValidArgsAndRegistry(t *testing.T) {
+	// In the registry.
+	reg := clientRegistry()
+	_, ok := reg["codex"]
+	assert.True(t, ok, "codex must be in clientRegistry()")
+
+	// In ValidArgs.
+	cmd := newSetupCommand()
+	assert.Contains(t, cmd.ValidArgs, "codex", "codex must be in setup ValidArgs")
+
+	// vscode/jetbrains/opencode remain teardown-only: their Register writes no
+	// instruction file.
+	for _, name := range []string{"vscode", "jetbrains", "opencode"} {
+		tmp := t.TempDir()
+		cfg := RegistrationConfig{ProjectDir: tmp, BinaryPath: "/path/to/helix", Printer: &SetupPrinter{}}
+		require.NoError(t, reg[name].Register(cfg), "%s Register", name)
+		_, err := os.Stat(filepath.Join(tmp, "AGENTS.md"))
+		assert.True(t, os.IsNotExist(err), "%s must remain teardown-only (no AGENTS.md)", name)
+		_, err = os.Stat(filepath.Join(tmp, "GEMINI.md"))
+		assert.True(t, os.IsNotExist(err), "%s must remain teardown-only (no GEMINI.md)", name)
+	}
 }

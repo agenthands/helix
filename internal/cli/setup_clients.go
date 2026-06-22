@@ -49,6 +49,7 @@ func clientRegistry() map[string]ClientRegistrar {
 		"gemini-cli":     &GeminiCLIRegistrar{},
 		"opencode":       &OpenCodeRegistrar{},
 		"generic":        &GenericRegistrar{},
+		"codex":          &CodexRegistrar{},
 	}
 }
 
@@ -280,10 +281,25 @@ type GeminiCLIRegistrar struct{}
 func (r *GeminiCLIRegistrar) Name() string        { return "gemini-cli" }
 func (r *GeminiCLIRegistrar) Description() string { return "Gemini CLI (Google)" }
 
-// Register performs the Phase 93 flip for Gemini CLI: MCP-teardown only. Gemini
-// CLI does not consume Agent Skills, so no skill is written.
+// Register tears down any prior helix MCP entry (the Phase 93 flip) and then ALSO
+// writes a GEMINI.md instruction file with the idempotent Helix steering block
+// (AGENT-02/03). Gemini CLI has NO PreToolUse-equivalent, so NO hook artifact is
+// written — instruction-file steering only (locked anti-feature). Gemini documents
+// no hard project-doc byte cap, so the writer uses no cap (maxBytes <= 0).
 func (r *GeminiCLIRegistrar) Register(cfg RegistrationConfig) error {
-	return teardownOnlyRegister(r, cfg, "gemini-cli")
+	if err := teardownOnlyRegister(r, cfg, "gemini-cli"); err != nil {
+		return err
+	}
+	path := geminiInstructionPath(cfg.ProjectDir, cfg.Global)
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would write Helix steering block to %s (no hook — Gemini has no PreToolUse)", path)
+		return nil
+	}
+	if err := writeAgentInstructions(path, agentInstructionBody(), 0); err != nil {
+		return fmt.Errorf("writing GEMINI.md instructions: %w", err)
+	}
+	cfg.Printer.Success("wrote Helix steering block to %s (instruction-file only; Gemini has no hook surface)", path)
+	return nil
 }
 
 // ensureDisabled sets {"helix": {"enabled": false}} in Gemini's mcp-server-enablement.json.
@@ -654,13 +670,26 @@ type GenericRegistrar struct{}
 func (r *GenericRegistrar) Name() string        { return "generic" }
 func (r *GenericRegistrar) Description() string { return "Generic MCP stdio config (any client)" }
 
-// Register performs the Phase 93 flip for the generic client: MCP-teardown only.
-// The generic client emits no skill (no Agent Skill consumer) and no longer
-// prints an MCP server config — the agent surface is now the CLI taught by the
-// skill, not an MCP tools/list blob. When --output points at a file, any prior
-// helix MCP entry in it is removed.
+// Register tears down any prior helix MCP entry (the Phase 93 flip) and then ALSO
+// writes the generic cross-tool instruction file (AGENTS.md at the project root —
+// the emerging agents.md standard) with the idempotent Helix steering block
+// (AGENT-02/03). No hook is written (the generic client has no hook surface).
+// DryRun is honored (no write); --output continues to govern any prior on-disk MCP
+// entry removal in teardownMCP.
 func (r *GenericRegistrar) Register(cfg RegistrationConfig) error {
-	return teardownOnlyRegister(r, cfg, "generic")
+	if err := teardownOnlyRegister(r, cfg, "generic"); err != nil {
+		return err
+	}
+	path := genericInstructionPath(cfg.ProjectDir)
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would write Helix steering block to %s (no hook — generic instruction file)", path)
+		return nil
+	}
+	if err := writeAgentInstructions(path, agentInstructionBody(), 0); err != nil {
+		return fmt.Errorf("writing generic AGENTS.md instructions: %w", err)
+	}
+	cfg.Printer.Success("wrote Helix steering block to %s (instruction-file only)", path)
+	return nil
 }
 
 // teardownMCP for the generic client is a documented no-op when the config is
@@ -687,5 +716,90 @@ func (r *GenericRegistrar) Unregister(cfg RegistrationConfig) error {
 		return removeFromJSONConfig(cfg.OutputPath, "mcpServers", "helix")
 	}
 	cfg.Printer.Info("generic config was printed to stdout and cannot be unregistered automatically")
+	return nil
+}
+
+// --- CodexRegistrar ---
+
+// CodexRegistrar handles setup for the OpenAI Codex CLI — the only non-Claude
+// client with a PreToolUse-equivalent. Register writes BOTH an AGENTS.md (terse
+// Helix steering block, 32-KiB capped) AND a hooks.json whose PreToolUse command
+// invokes `<bin> nudge` (the SAME runNudge engine Claude uses — one engine, two
+// runtimes; AGENT-03). The hook is advisory-only (additionalContext, exit 0); it
+// NEVER sets a deny default.
+type CodexRegistrar struct{}
+
+func (r *CodexRegistrar) Name() string { return "codex" }
+func (r *CodexRegistrar) Description() string {
+	return "OpenAI Codex CLI (AGENTS.md + PreToolUse hook)"
+}
+
+// Register writes the Codex AGENTS.md instruction file (idempotent sentinel block,
+// 32-KiB cap) and the Codex hooks.json (PreToolUse → `helix nudge`). Codex has no
+// prior helix MCP entry today, so the MCP teardown is a documented best-effort
+// no-op. DryRun is honored (no writes).
+func (r *CodexRegistrar) Register(cfg RegistrationConfig) error {
+	agentsPath := codexAgentsPath(cfg.ProjectDir, cfg.Global)
+	hooksPath := codexHooksPath(cfg.ProjectDir, cfg.Global)
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would tear down any prior helix MCP entry (codex: best-effort no-op)")
+		cfg.Printer.DryRunAction("would write Helix steering block to %s (≤32 KiB)", agentsPath)
+		cfg.Printer.DryRunAction("would write Codex PreToolUse hook to %s (command: %s nudge)", hooksPath, cfg.BinaryPath)
+		return nil
+	}
+
+	// Best-effort MCP teardown (no prior codex helix MCP entry today — documented no-op).
+	if err := r.teardownMCP(cfg); err != nil {
+		return fmt.Errorf("tearing down prior MCP registration: %w", err)
+	}
+
+	if err := writeAgentInstructions(agentsPath, agentInstructionBody(), codexAGENTSMaxBytes); err != nil {
+		return fmt.Errorf("writing Codex AGENTS.md instructions: %w", err)
+	}
+	cfg.Printer.Success("wrote Helix steering block to %s (≤32 KiB)", agentsPath)
+
+	if err := writeCodexHooks(hooksPath, cfg.BinaryPath); err != nil {
+		return fmt.Errorf("writing Codex hooks.json: %w", err)
+	}
+	cfg.Printer.Success("wrote Codex PreToolUse hook to %s (advisory-only → helix nudge)", hooksPath)
+	return nil
+}
+
+// teardownMCP is a best-effort no-op for Codex: there is no prior helix MCP entry
+// to remove (codex was never an MCP-registered client). It mirrors the
+// teardown-only contract (never touches hooks) and never errors on absence.
+func (r *CodexRegistrar) teardownMCP(cfg RegistrationConfig) error {
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove prior helix MCP entry (codex: none today — no-op)")
+	}
+	return nil
+}
+
+// Unregister strips the Helix block from AGENTS.md (remove-between-sentinels) and
+// removes the Helix-managed hooks.json, best-effort. A missing file is a no-op.
+func (r *CodexRegistrar) Unregister(cfg RegistrationConfig) error {
+	agentsPath := codexAgentsPath(cfg.ProjectDir, cfg.Global)
+	hooksPath := codexHooksPath(cfg.ProjectDir, cfg.Global)
+
+	if cfg.DryRun {
+		cfg.Printer.DryRunAction("would remove Helix block from %s", agentsPath)
+		cfg.Printer.DryRunAction("would remove Codex hooks.json %s", hooksPath)
+		return nil
+	}
+
+	if err := removeAgentInstructions(agentsPath); err != nil {
+		cfg.Printer.Failure("removing Helix block from %s failed: %s", agentsPath, err)
+	} else {
+		cfg.Printer.Success("removed Helix block from %s", agentsPath)
+	}
+
+	// The hooks.json is entirely Helix-managed (setup created it), so removal is a
+	// best-effort file delete; a missing file is a no-op.
+	if err := os.Remove(hooksPath); err != nil && !os.IsNotExist(err) {
+		cfg.Printer.Failure("removing %s failed: %s", hooksPath, err)
+	} else {
+		cfg.Printer.Success("removed Codex hook %s", hooksPath)
+	}
 	return nil
 }

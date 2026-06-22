@@ -1,5 +1,32 @@
 # Milestones
 
+## v2.0 v2.0 (Shipped: 2026-06-22)
+
+**Phases completed:** 7 phases, 20 plans, 41 tasks
+
+**Key accomplishments:**
+
+- Per-socket gofrs/flock startup lock with double-checked tryConnect in `ConnectOrStartDaemon`, proven by a synctest fan-out test to spawn exactly one daemon under N concurrent cold callers (CLI-03).
+- Task 1 (TDD): No-arg helix → grouped help, exit 0, no stdio session (CLI-04)
+- `helix call <verb> --flag=val` issues a single MCP `tools/call` through the warm daemon over the EXISTING gRPC `StreamMCP` wire via a client-side transport mirror + the MCP SDK client (initialize handshake, not hand-framed JSON-RPC), with race-safe cold auto-start (90-01), ordered clean teardown, and zero proto changes (CLI-01/CLI-02).
+- 1. [Rule 1 - Bug] `search` verb mapped to a non-existent tool
+- A go/packages+AST generator (`cmd/helix-cligen`) that emits a committed `internal/cli/verbs_gen.go` of 50 capability-grouped `helix <verb>` subcommands — one per live-registry tool — drift-gated by `helix-cligen --check`, plus the exported `VerbToolNames()` seam for 91-03.
+- Server-side `tools/call` authz (ProfileEnforcementMiddleware) that refuses any tool outside the session's resolved AllowedTools with a typed `serr.PermissionDenied`, installed between Guardrail and LazyInit so LazyInit-first LIFO is preserved.
+- 1. [Rule 3 - Blocking] Flat verb name and flag differed from the plan's assumptions
+- Three pure, dependency-free foundation units for the Phase 92 terse renderer: a 50-verb render-class map, a locus parse + path-normalization + sort/dedup core, and the 9-kind serr.Kind → frozen exit-code + stderr-prefix mapper — all built TDD with no cobra/network dependency.
+- Wired the 92-01 foundation (render class, locus core, exit-code mapper) into the live verb path: `renderResultFor` now emits sorted+deduped `relpath:line:col<TAB>payload` for locus-list verbs with a workspace-clamped CLI-side snippet for bare nav loci, passes tree/opaque through verbatim, gates color up front, adds persistent `--color`/`--abs`/`--json` flags every generated verb inherits, preserves the daemon's typed `<kind>:` error so `main.go` exits with the per-kind code, and adds color/abs to the cligen denylist — the output shape FREEZES here.
+- Re-pointed the TEST-02 contract oracle from MCP `TextContent` goldens to REAL `helix <verb> --flags` subprocess stdout — per-verb goldens now freeze the terse `relpath:line:col<TAB>payload` shape (plus `--abs` absolute and `--color=never` zero-ANSI variants) against the binary; the MCP schema meta-validation is replaced by an untagged default-suite typed-args→cobra-flags parity test; and a behavioral chain proves a nav locus feeds a downstream verb verbatim (OUT-04) with a self-contained snippet (OUT-03).
+- 1. [Rule 3 - Blocking] Repaired a corrupt local Go module cache (environmental, not code)
+- Repurposed the PreToolUse nudge from a generic 5-call "use find_symbol" tip into a per-call advisory that steers grep/sed/cat/find over positively-identified CODE targets toward the frozen Phase 92 `helix` verbs via `hookSpecificOutput.additionalContext` JSON — fail-open and exit-0 on prose/log/config, unparseable, and no-operand commands.
+- Task 1 — SKILL-04 dependency-free idle-cost bound + filled token-note
+- Landed the CLI-is-sole-sufficient-surface proof (TestCLI_DualRunParity) and the loopback-gated gRPC-TCP opt-in that replaces the to-be-deleted HTTP /mcp head's network reach — both green with BOTH agent-facing heads still alive, zero new deps, zero proto change.
+- Deleted both agent-facing MCP heads — the stdio forwarder (RunForwarder) and the HTTP /mcp listener (listenHTTP/HTTPHandler/httpSessionMiddleware) — plus the dead RunStdio and the entire --http-addr thread, leaving the CLI's per-verb gRPC dial path as the sole agent surface; the retained E2E + RETIRE-03 parity tests stay GREEN post-deletion, with zero proto change and zero new deps.
+- Re-keyed the auto-generated README tool table to `helix <verb>` names and closed the v1.12 docgen-drift hole by wiring `go run ./cmd/docgen --check` into both `make verify-docs` and CI.
+- Rewrote Helix's identity from MCP-primary to CLI-first across README/CLAUDE.md/PROJECT.md and added a Helix-CLI tool-routing decision matrix to CLAUDE.md citing the 50 real frozen verbs, with the external SMTC matrix left byte-for-byte intact.
+- Closed the four non-blocking v2.0 audit items: hardened the admin listener against wildcard binds, removed the dead mergeJSONConfig helper, stopped the Bash classifier from treating a grep PATTERN as a file, and reworded get_tool_help docs CLI-first with a regenerated README.
+
+---
+
 ## v1.11 Semantic Index Completion & P1 MCP Tools (Shipped: 2026-06-07)
 
 **Phases completed:** 7 phases, 38 plans, 19 tasks

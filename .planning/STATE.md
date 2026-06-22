@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 95
-status: verifying
+current_phase: 0
+status: Awaiting next milestone
 stopped_at: Completed 96-01-PLAN.md
-last_updated: "2026-06-22T09:16:51.189Z"
-last_activity: 2026-06-21
-last_activity_desc: Phase 95 complete
+last_updated: "2026-06-22T09:58:45.587Z"
+last_activity: 2026-06-22
+last_activity_desc: Milestone v2.0 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -28,12 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 95
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21 — Phase 95 complete
-
-Progress: [██░░░░░░░░] 19%
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-22 — Milestone v2.0 completed and archived
 
 ## Performance Metrics
 
@@ -103,6 +101,12 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | v1.12 audit | Live execution of public-benchmark adapters (Docker/swebench/HF-network paths) honestly gated-skip; decision logic hermetically proven | Tracked | v1.12 close |
+| uat (pre-existing) | Phase 75 (v1.12) `75-UAT.md` — status passed, 0 pending scenarios; file simply never formally closed at v1.12 archive | Acknowledged (benign) | v2.0 close |
+| quick_task (pre-existing) | `260414-e5n-fix-requirements-md-checkboxes-check-all` — pre-v2.0 quick task, tracker status unknown | Acknowledged | v2.0 close |
+| quick_task (pre-existing) | `260617-j29-re-pin-fairness-contract-modelid-to-auth` — pre-v2.0 (v1.12-era) quick task, tracker status unknown | Acknowledged | v2.0 close |
+| quick_task (pre-existing) | `260617-t7x-resync-helix-tool-capability-documentation` — work was completed (docgen blank-import resync); tracker status reads unknown, not formally closed | Acknowledged (effectively done) | v2.0 close |
+
+> These four items were surfaced by the v2.0 milestone-close open-artifact audit (2026-06-22). All are pre-existing (none from v2.0 phases 90–96); acknowledged and deferred so the v2.0 close can proceed. None are v2.0 blockers.
 
 ## Session Continuity
 
@@ -143,3 +147,7 @@ Resume file: None
 - [Phase 96]: TD-01: validateAdminAddr refuses empty-host/wildcard binds via explicit empty-host switch case + !ip.IsUnspecified() guard, preserving the empty-ADDR error contract
 - [Phase 96]: TD-03: classifyBashTarget grep-family leading-PATTERN skip gated to grep/rg/ag/egrep/fgrep only; cat/sed/find unchanged; fail-open preserved
 - [Phase 96]: TD-04: reworded four get_tool_help metadata literals to 'Helix tool'; regenerated README + tool-descriptions golden via tooling (no hand-edit)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

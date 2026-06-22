@@ -126,7 +126,11 @@ Carry-over follow-ups (resolved at v1.10 Phase 58):
 
 ## Current State
 
-**Shipped:** v1.10 Live Semantic Index (2026-05-12) — 12 phases (57–67, including emergent 59.1), 79 plans, 64/64 in-scope REQs satisfied (3 won't-do: REL-02/03/04 superseded by Phase 59.1). 11/11 cross-phase flows wired. Audit status: `resolved`, verdict `PRODUCTION-READY`. See `.planning/milestones/v1.10-ROADMAP.md` and `.planning/v1.10-MILESTONE-AUDIT.md`.
+**Shipped:** v2.0 CLI-First — MCP Surface Retirement (2026-06-22) — 7 phases (90–96, including the inserted post-audit tech-debt phase 96), 20 plans, 31/31 v1 requirements satisfied, 4/4 cross-phase E2E flows wired, Nyquist 7/7. Audit status: `passed`. The `helix` CLI is now the only agent-facing surface; the MCP Go SDK + gRPC IPC are retained as internal daemon plumbing (the agent-facing stdio + Streamable-HTTP MCP heads were deleted in Phase 94). See `.planning/milestones/v2.0-ROADMAP.md` and `.planning/milestones/v2.0-MILESTONE-AUDIT.md`.
+
+**Previously shipped:** v1.12 Bench Stack & Tool Evaluation (2026-06-21) — 15 phases (75–89). v1.11 Semantic Index Completion & P1 MCP Tools (2026-06-07) — phases 68–74.
+
+**Earlier shipped:** v1.10 Live Semantic Index (2026-05-12) — 12 phases (57–67, including emergent 59.1), 79 plans, 64/64 in-scope REQs satisfied (3 won't-do: REL-02/03/04 superseded by Phase 59.1). 11/11 cross-phase flows wired. Audit status: `resolved`, verdict `PRODUCTION-READY`. See `.planning/milestones/v1.10-ROADMAP.md` and `.planning/v1.10-MILESTONE-AUDIT.md`.
 
 **Previously shipped:** v1.9 Polish & Infra (2026-05-03) — 12 phases (46–56, including emergent 51.1), 51 plans, 14/14 in-scope REQs satisfied.
 
@@ -170,7 +174,14 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.12 progress (2026-06-21):** Phase 89 complete — Reports, CI Policy & Contamination Canary (the v1.12 publication CAPSTONE; **milestone now 15/15 phases**). REPORT-01..05 + INFRA-04 + INFRA-05 satisfied; all 4 ROADMAP success criteria verified goal-backward (4/4 must-haves; verifier ran build/test/`make vet` AND did revert-and-fail to prove the integrity fixes are non-vacuous). `helix-bench report --run-id <id>` (the stub is now real; run-id `isValidRunID`-validated + `--out` `..`-guarded, no traversal) regenerates ALL 4 reports BYTE-IDENTICALLY via a single shared zero-RNG `renderAll` called by both `aggregate` and `report` — proven by the load-bearing hermetic `TestReportByteReproducible` (double-render diff-empty). New renderers: `leaderboard.md` gained the `verified_correctness` + `cost_per_solved` columns (with BCa CIs + non-overlap markers); `per_language.md` over the DERIVED 8-language Tier-1 set (from `bench/languages/`, no `c` — the research example was wrong) shows no-coverage languages as `n/a` not omitted; `ablations.md` 5 delta tables (incl. the aggregate-time `full vs no_semantic` that `deltas.go` deliberately omits) with BCa CI-overlap; `cost_quality.md` gained the deterministic ASCII scatter (cost vs verified_correctness) + the cost-table `valid_until` citation. The **contamination canary** (INFRA-05) closes Pitfall 1: a production `InjectPrompt` caller emits the known-novel Sentinel in every-Kth task, and the aggregator EXCLUDES contaminated rows from EVERY headline number (pass@1, verified_correctness, ablations, per_language — fail-safe, never silently counted) while `CanaryPassRate` still measures contamination over all rows; flagged tasks are footnoted in `leaderboard.md`. INFRA-04 ships `.github/workflows/bench.yml` (PR `make bench-quick` hard 5-min cap + no LLM secret + least-privilege perms; full `make bench` nightly/maintainer-gated) behind a hermetic YAML-parse test (the live CI run is honestly inspection-gated). All 4 plans TDD. Code review found **1 CRITICAL (CR-01) + 3 warnings, all the SAME integrity root cause: the `cleanRows` canary exclusion was wired into only the pass@1/cost reduces, so `verified_correctness`, ablations, and per_language still counted contaminated rows into the PUBLISHED headline** — the exact failure the canary exists to prevent (the exclusion test was vacuous because its fixture gave clean/dirty rows the same verdict). Fixed by routing `cleanRows` through ALL 5 published reduces + a strengthened discriminating test (revert-and-fail confirmed it now catches a 0.5-vs-0.667 inflation) + an `--out` traversal guard; determinism/byte-reproducibility intact (`cleanRows` consumes no RNG, runs inside sort-before-emit). **v1.12 Bench Stack & Tool Evaluation is functionally complete — pending milestone audit.**
 
-## Current Milestone: v2.0 CLI-First — MCP Surface Retirement
+## Current Milestone: none — v2.0 shipped (2026-06-22)
+
+**Next milestone:** to be defined. Run `/gsd-new-milestone` to start the next cycle (questioning → research → requirements → roadmap); a fresh `.planning/REQUIREMENTS.md` is created then (the v2.0 one is archived at `.planning/milestones/v2.0-REQUIREMENTS.md`).
+
+<details>
+<summary>Shipped v2.0 milestone definition (historical)</summary>
+
+### v2.0 CLI-First — MCP Surface Retirement
 
 **Goal:** Replace Helix's agent-facing MCP surface with a token-efficient CLI+skill interface so the `helix` CLI becomes the *only* surface an agent touches — eliminating the MCP tool-schema preload tax and the agent's habitual fallback to `grep`/`sed`/`cat`, while keeping the warm-daemon code-intelligence kernel (LSP pool, share-until-dirty, RepoMap, structured edits) entirely intact behind it.
 
@@ -196,7 +207,9 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 - **Re-implementing the 5 middlewares natively** — telemetry/profile-filter/suggest/lazy-init/guardrail keep running inside the daemon unchanged.
 - **A compatibility MCP shim for laggard clients** — clean retirement, not dual-head; revisit only if a concrete client need surfaces.
 
-**Source of truth:** This PROJECT.md milestone section and the upcoming v2.0 `.planning/REQUIREMENTS.md`.
+**Source of truth:** This PROJECT.md milestone section and the v2.0 `.planning/REQUIREMENTS.md` (archived at `.planning/milestones/v2.0-REQUIREMENTS.md`).
+
+</details>
 
 ## Context
 

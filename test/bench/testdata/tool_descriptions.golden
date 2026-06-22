@@ -25,7 +25,7 @@ get_semantic_context: Semantic context retrieval
 get_semantic_graph_status: Semantic index status
 get_symbol_overview: List all symbols defined in a file with their types
 get_token_budget: Get token budget for current profile and mode
-get_tool_help: Get detailed usage documentation for an MCP tool
+get_tool_help: Get detailed usage documentation for a Helix tool
 get_type_hierarchy: Get the type hierarchy (supertypes and subtypes)
 go_to_definition: Jump to where a symbol is defined
 index_semantic_graph: Index the semantic graph

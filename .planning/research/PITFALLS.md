@@ -1,275 +1,240 @@
 # Pitfalls Research
 
-**Domain:** CLI-over-warm-daemon migration + retiring an existing MCP agent surface (Helix v2.0 "CLI-First")
-**Researched:** 2026-06-21
-**Confidence:** HIGH (grounded in the actual Helix codebase — `internal/forwarder/dial.go`, `internal/cli/nudge.go`, `internal/cli/setup_hooks.go`, `internal/errors/kinds.go`, the `tools/call`-keyed middleware stack — plus external corroboration from gopls daemon-mode reports and Claude Code Agent Skills docs)
+**Domain:** Coding-agent adoption layer (skill/reference + steering + multi-agent) and Aider-derived benchmark validation, added to a mature Go-native CLI-first code-intelligence tool (Helix v2.1)
+**Researched:** 2026-06-22
+**Confidence:** HIGH — every pitfall below is anchored either to a *named, already-shipped* failure in this exact bench stack (the v1.12 phase log records four distinct vacuous-pass CRITICALs caught only by revert-and-fail) or to an in-tree contract verified by direct source read. Lower-confidence items are tagged inline.
 
-This milestone has two intertwined risk surfaces: (A) **adding** a fresh-process-per-call CLI head in front of a daemon that was designed for one long-lived MCP session, and (B) **removing** a working MCP surface whose middleware quietly provided profile-filtering, per-tool deadlines, telemetry, and suggestion enrichment. The pitfalls below are specific to that pairing — not generic CLI advice.
+> **Reading note for the roadmapper.** This milestone is *additive to a system that has already been bitten by every class of failure listed here.* The v1.12 progress log (PROJECT.md lines 153–177) is a confession of four separate "gate failed OPEN / vacuous pass" CRITICALs (Phases 82, 86, 87, 89), each caught only by an *adversarial revert-and-fail* test, not by the happy-path test. The single most important meta-lesson: **for every gate this milestone adds, there must be a test that deliberately breaks the thing the gate protects and asserts the gate goes RED.** A gate with only a green-path test is presumed broken until proven otherwise. The same discipline applies verbatim to the adoption eval and the HELIX_BIN guard.
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Per-invocation cold-start tax — every `helix <verb>` re-paying daemon start or LSP warm-up
+### Pitfall 1: Adoption eval is *vacuous* — it passes without ever proving an agent chose `helix`
 
 **What goes wrong:**
-An MCP session connects once and stays warm for the whole agent session; the warm LS pool, RepoMap cache, and gRPC channel persist across hundreds of tool calls. A CLI head inverts this: each `helix find_symbol …` is a fresh OS process that dials the daemon, runs one `tools/call`, prints, and exits. If the warm-reuse contract isn't airtight, the agent pays process startup + gRPC dial + (worst case) daemon spawn + (worst case) LSP cold-index **on every single call**. Even when the daemon is warm, gopls-style reports show that connecting to a warm shared daemon can still stall 10+ seconds if the *workspace* (not the daemon) wasn't already activated — the cold cost is per-workspace, not per-daemon. Helix's existing `LazyInitMiddleware` activates the workspace on *first* `tools/call`; under CLI-per-call there is no persistent session to amortize that first call against, so the very first `helix` verb in a repo eats the full LSP warm-up synchronously while the agent waits.
+The headline deliverable of Thrust 1 is "a measurement proving an agent actually picks `helix` over grep/sed/cat" (PROJECT.md line 191). The failure mode is an eval that returns green while proving nothing. Concretely, several independent ways this happens:
+- **Deterministic-contract tautology:** the "skill/reference ⊇ all 50 verbs" completeness test reads the verb list *from the same generator that produced the reference* — so it can never fail (it compares a set to itself). Or the "nudge fires on grep/sed/cat" test asserts `output != ""` rather than asserting the output names the *correct* `helix` verb for that shape.
+- **LLM-judge rubric that can't return < pass:** the judge prompt is "did the model use a good tool?" with no negative anchor, so the judge rubber-stamps grep as "reasonable." Or the score is computed but the threshold is `>= 0.0`.
+- **Detector that matches on substring, not on the chosen command:** `mentionsHelix(output)` returns true because the *task prompt itself* (or the injected SKILL.md) contains the word "helix," not because the model emitted a `helix` verb. (This is the exact shape of the Phase 86 zero-value-config collapse, transplanted to text.)
+- **Empty task bucket counts as a pass:** the behavioral scorer iterates an empty task set and reports `choice_rate = 1.0` (0/0 treated as success) — identical to the **Phase 87 CR-01** "empty test bucket counted as a pass" CRITICAL.
 
 **Why it happens:**
-`ConnectOrStartDaemon` (internal/forwarder/dial.go:24) already does try-connect-then-spawn with a 10s readiness poll — but it was written for *one* forwarder process, not N concurrent short-lived CLI processes. The autostart path (`startDaemon` → `cmd.Start` → `Release`) has no cross-process lock, so two near-simultaneous CLI invocations into a cold repo both observe "socket not found" and both spawn a daemon (see Pitfall 2). Process-startup overhead (Go runtime init, cobra wiring, koanf 4-layer config load, gRPC client construction, otelgrpc stats handler) is paid per invocation and is invisible in single-call benchmarks.
+Adoption is fuzzy to measure, so authors reach for the weakest assertion that turns the bar green. LLM nondeterminism pushes authors toward lenient rubrics to avoid flakes. And because the LLM layer "never blocks merge" (a correct, locked decision), there is no CI pressure forcing it to be discriminating.
 
 **How to avoid:**
-- Treat "warm reuse" as a measured SLO, not an assumption. Establish a benchmark for *second-and-subsequent* `helix <verb>` calls into an already-warm repo and gate it (e.g. p95 < 150 ms process-to-result excluding the tool's own work). The existing `bench/` harness (v1.12) is the natural home.
-- Minimize per-process fixed cost: lazy-construct the otelgrpc stats handler and koanf layers only when needed; avoid importing skill packages into the thin CLI binary path (they belong in the daemon).
-- Keep the daemon's `LazyInitMiddleware` but add an explicit `helix activate` warm-up verb (already exists as `activate`) and have `setup` wire it into `SessionStart` so the first real verb is never the one paying LSP cold-start — the hook does it ahead of time.
-- Reuse of the gRPC channel within a single process is moot (one call per process), so the win must come from daemon warmth + cheap dial. Confirm the Unix-socket dial path (not TCP) is used by default.
+- **Deterministic contract — make it adversarially non-tautological:**
+  - Source the verb list for the completeness assertion from `internal/cli/verbs_gen.go` (the frozen registry, the *authority*), NOT from the reference generator's own output. Compare `referenceCovers(verbsFromRegistry)`. A revert test that drops one verb from the reference MUST turn it RED.
+  - The nudge-fires test must assert the **specific suggested verb** per input shape (`grep "func X"` → suggests `search-symbols`; `sed -i` on `.go` → suggests `replace-in-file`/`fuzzy-edit`), via a golden table, not non-emptiness.
+  - Add a **negative-control row**: a Bash target that is legitimately prose/log/config (`grep TODO README.md`) MUST assert the nudge does **not** fire. A nudge that fires on everything is as useless as one that fires on nothing (see Pitfall 6).
+- **LLM-behavioral score — build in a failing anchor:**
+  - The scorecard MUST include a **revert-and-fail self-test**: run the scorer against a *deliberately sabotaged* skill body (decision matrix stripped) and assert `choice_rate` drops materially. If the score is identical with and without the skill, the eval measures nothing. This is the direct analog of the Phase 89 "revert-and-fail to prove the integrity fix is non-vacuous."
+  - The detector must key on the **first emitted command line** (`firstCommandLine`, already in `test/oracle/llm`), not substring presence anywhere in the transcript.
+  - Score both **choice rate** (% of code questions answered with a `helix` verb) AND **fallback rate** (% that fell to grep/sed/cat/Read) and assert they are complementary on a known fixture, so a detector that double-counts or silently drops a transcript is caught.
+  - The judge rubric must have an explicit **negative exemplar** ("a response that runs `grep -r` to find a definition scores 0 on adoption") so the rubric can demonstrably return 0.
 
 **Warning signs:**
-- Second `helix find_symbol` in the same repo is not dramatically faster than the first.
-- Telemetry shows `LazyInitMiddleware` activation firing on calls other than the session's first.
-- p95 latency in the CLI benchmark is dominated by a fixed constant independent of tool work.
+- The completeness test passes after you delete a verb from the reference.
+- The behavioral score is numerically identical whether or not the skill is installed.
+- The nudge test asserts `!= ""` anywhere.
+- `choice_rate` is reported on an empty or one-element task set.
+- No test in the suite is *expected* to be RED on a sabotaged input.
 
 **Phase to address:**
-Phase 90 (daemon-dial / warm-reuse foundation) owns the reuse contract; a CLI-latency benchmark phase verifies the SLO.
+Deterministic contract → the **adoption-contract phase** (the first adoption-eval phase, ~Phase 99). Behavioral anti-vacuity self-test → the **LLM-behavioral score phase** (later, ~Phase 101+). Both phases' VERIFICATION must include an explicit revert-and-fail step.
 
 ---
 
-### Pitfall 2: Daemon auto-start race & socket connect storm under burst CLI calls
+### Pitfall 2: HELIX_BIN false-green — every new bench surface SKIPs silently instead of failing
 
 **What goes wrong:**
-An agent fires many `helix` calls in quick succession (e.g. a fan-out of `find_references` across files). Three distinct failures emerge: (1) **spawn race** — into a cold repo, several CLI processes simultaneously fail `tryConnect`, each calls `startDaemon`, and you get duplicate daemons fighting over the same socket path; the loser's `cmd.Start` may clobber the socket or leave an orphan. (2) **connect storm** — into a warm daemon, dozens of concurrent `net.DialTimeout` + `grpc.NewClient` calls hit the daemon's accept loop and per-connection goroutine/stream limits at once, causing queueing, timeouts, or `ResourceExhausted`. (3) **thundering-herd on readiness** — during the 10s `waitForDaemon` poll window, all racers poll the socket every 100 ms, and when the daemon finally binds they all reconnect in the same instant.
+The single most-repeated trap in this codebase. Bench smoke/cell tests `t.Skip()` when `HELIX_BIN` is unset, so a plain `go test ./...` reports **green while exercising none of the new bench code**. This has already bitten the project (project memory: *helix-bench-smoke-false-green*; the *no_semantic SIGKILL-vacuous-gate* finding). v2.1 adds **three** new bench surfaces (polyglot EDIT-verb runner, RepoMap-quality eval, fuzzy/edit-format robustness) — each is a fresh opportunity to re-introduce the skip-instead-of-fail hole, plus a new `HELIX_BENCH_*_BIN` for any second binary (cf. Phase 83's `HELIX_BENCH_RAG_BIN`).
 
 **Why it happens:**
-`tryConnect`→`startDaemon`→`waitForDaemon` in dial.go has zero cross-process mutual exclusion. The forwarder design assumed a single client process; the MCP transport multiplexed many tool calls over *one* gRPC stream. CLI-per-call replaces stream multiplexing with connection multiplicity, which the daemon's listener was never load-tested for.
+`t.Skip` is the idiomatic Go way to handle "can't run here," and CI genuinely lacks the built binary unless the workflow builds it first. The skip looks responsible; the false-green is invisible until someone checks coverage.
 
 **How to avoid:**
-- Add a cross-process startup lock: an exclusive `flock` (or atomic socket-create-then-bind) around the spawn path so exactly one CLI wins the spawn and the rest wait on readiness. The lock file lives next to the socket (`.helix/daemon.lock`).
-- Make `startDaemon` idempotent and self-healing: if the socket exists but is dead (stale after crash), the winner unlinks-and-rebinds; losers detect "now alive" and connect.
-- Bound concurrency: the daemon must tolerate a burst of short-lived gRPC connections — set sane `MaxConcurrentStreams`, connection accept backpressure, and confirm one connection per CLI process closes cleanly (no FD leak).
-- Consider an OS-level retry-with-jitter on the *client* dial so the herd disperses instead of synchronizing on the 100 ms tick.
+- **The Phase-85 precedent is the law: a committed HERMETIC golden fixture is the SOLE authoritative proof, and the live/HELIX_BIN leg has a hermetic sibling.** Every new runner/evaluator must have a golden-fixture test that runs with NO binary and NO network — so `go test ./bench/...` exercises real parsing/scoring logic even on CI. The live leg may skip; its logic is already covered by the sibling. ("no skip-only-without-sibling" — BENCH.md.)
+- **A dedicated "is the guard real?" gate:** add a test that, when `HELIX_BIN` *is* set, asserts the live test actually RAN (e.g. via a sentinel side-effect or a ran-marker) — the Phase 81 fix proved this exact thing (`TestNoSemanticReadsTotalLineEmitted` "proven to RUN (not SKIP) and PASS").
+- **Fail-closed on malformed/missing artifacts:** if the live leg DOES run, a missing `result.v2.json`, an empty run dir, or a missing metric line must be a hard error — never read as a zero/pass. This is the **Phase 82 CR-01** ("N-gate failed OPEN on zero-discovery — empty run dir produced empty reports + exit 0") and the **Phase 81 WR-02** ("scraper read a missing line as count=0") lessons. Reuse their fail-closed scrape/assert pattern.
+- **CI documents the gate, doesn't fake it:** the `bench.yml` PR job runs `make bench-quick` with the binary BUILT first (Phase 89 INFRA-04 precedent), so the hermetic path is genuinely exercised; the full live matrix stays nightly/maintainer-gated and local-only.
 
 **Warning signs:**
-- `ps` shows >1 `helix --serve` after a burst.
-- Intermittent "daemon did not start within 10s" under parallel calls that never reproduces serially.
-- Daemon FD count climbs monotonically across a session (connection leak).
-- gRPC `ResourceExhausted` or accept-queue latency spikes in telemetry under fan-out.
+- `go test ./bench/...` passes in seconds with no `HELIX_BIN` and you cannot point to a non-skipped test that touched the new code.
+- A new runner has only a `if os.Getenv("HELIX_BIN")=="" { t.Skip }`-guarded test and no golden sibling.
+- A scraper/parser treats a missing line/file/dir as a zero or a pass.
 
 **Phase to address:**
-Phase 90 (daemon-dial foundation) — the startup lock and burst-tolerance are foundational; a dedicated connect-storm stress test (synctest + fan-out, mirroring the v1.1 three-tier concurrency pattern) verifies it.
+Each of the three bench-surface phases (polyglot EDIT runner, RepoMap eval, fuzzy-robustness) must ship its hermetic golden sibling in the SAME phase. A cross-cutting **"bench guard audit"** belongs in the committed-baseline phase (verify no surface is skip-only).
 
 ---
 
-### Pitfall 3: Capability regression — losing profile/mode tool-filtering when the MCP `tools/list` surface is removed
+### Pitfall 3: Fixture vendoring license trap — Apache-2.0 vs MIT, missing attribution, oversized tree
 
 **What goes wrong:**
-`ProfileFilterMiddleware` filters `tools/list` by the active profile and applies brief/override descriptions on that same pass (CLAUDE.md middleware stack). Profiles (claude-code, codex, ci-bot, …) and modes (read/edit/review/admin) gate *which tools an agent may even see*. A CLI head that exposes one cobra subcommand per tool has **no `tools/list` step** — every subcommand is always present on `helix --help`. If nothing replaces the filter, a `read`-mode or `ci-bot` agent can now invoke destructive edit verbs that the MCP surface would have hidden, and mode transitions (`switch_mode`) lose their meaning. This is a silent *security/safety* regression, not just a UX one.
+The milestone brief *literally states the wrong license*: PROJECT.md line 194 says "vendor Aider's fixtures … (Apache-2.0)." That is factually wrong and STACK.md flags it (lines 21–34): the **polyglot fixtures redistribute Exercism content and are MIT**, byte-verified in the existing `bench/datasets/aider-polyglot/LICENSE-AUDIT.md`. Apache-2.0 applies only to the *aider TOOL repo* (`Aider-AI/aider`). Failure modes:
+- Stamping vendored MIT fixtures with `SPDX-License-Identifier: Apache-2.0` (or vice-versa) → an inaccurate, possibly non-compliant attribution.
+- Accidentally vendoring Apache-2.0 tool-repo files (edit-format coder prompts, `benchmark/` harness) into the otherwise-MIT fixture tree, mixing licenses without the required `LICENSE.txt` + `NOTICE`.
+- Vendoring all six full Exercism tracks (~700 exercises) when the benches exercise a small subset → a bloated, hard-to-audit tree.
+- Missing per-track attribution / `NOTICE` (MIT requires the copyright + permission notice be retained on redistribution).
 
 **Why it happens:**
-Profile/mode filtering lived entirely in the MCP `tools/list` response path. Cobra registers all subcommands at build time; there is no per-request filtering hook unless you add one. It's easy to assume "the daemon still enforces it" — but the daemon's filter ran on `tools/list`, and the CLI never calls `tools/list`; it goes straight to `tools/call`.
+The brief itself is wrong, and "Aider" colloquially conflates the tool repo and the fixtures repo. Vendoring "everything" feels safer than curating a subset.
 
 **How to avoid:**
-- Enforce profile/mode at the **`tools/call` boundary inside the daemon**, not (only) at CLI subcommand registration. Every gRPC `tools/call` must be checked against the active profile/mode and rejected with a typed `PermissionDenied`/`Unsupported` error if out of profile — so even a hand-typed `helix replace_symbol_body` in read mode is refused by the daemon.
-- Mirror the filter in the CLI for UX: hide or grey out out-of-profile subcommands in `helix --help` based on resolved profile, but treat that as cosmetic — the daemon is the enforcement point.
-- Preserve `switch_mode` as a CLI verb that mutates daemon session/workspace state, and make mode part of the per-call gRPC metadata.
-- Keep the golden-file profile/mode contract tests (v1.1, 19 goldens) alive by re-pointing them at the CLI surface + the daemon enforcement, so a tool leaking into the wrong profile fails CI.
+- **Treat STACK.md's correction as binding:** vendored polyglot fixtures get `SPDX-License-Identifier: MIT` + a per-track `NOTICE` citing `exercism/<lang>@<sha>`, NOT Apache-2.0.
+- **Do NOT vendor aider tool-repo code.** Re-derive the edit-format/fuzzy drift corpus *natively* against Helix's own 4-strategy cascade (STACK.md 2C, FEATURES.md). This keeps the tree single-license and avoids the Apache-2.0 `NOTICE` obligation entirely. (MEDIUM — recommendation, not a hard constraint; if tool code IS vendored, it needs Apache-2.0 SPDX + `LICENSE.txt` + `NOTICE`.)
+- **Vendor only the exercised subset, recorded in a manifest** (STACK.md "vendoring scope guard"), so the committed baseline is reproducible and the NOTICE is auditable.
+- **Extend `make verify-licenses` (Phase 85's HARD-FAIL gate) to cover the VENDORED tree**, not just the cloned tracks. The verifier already clones the Phase-75 `verify_tos.go` strict-decode discipline; point it at the committed fixtures and assert each track's SPDX + NOTICE + sha256. The Phase-85 verifier was *tamper-tested* — keep that: a test that flips a license header MUST fail the gate.
 
 **Warning signs:**
-- `helix --help` shows edit verbs while in `read` mode.
-- A profile/mode golden test has no CLI-surface equivalent after the migration.
-- No `PermissionDenied` path exercised in CLI tests for out-of-profile calls.
+- Any `SPDX-License-Identifier: Apache-2.0` header on a file under `fixtures/.../exercises/`.
+- A file from `Aider-AI/aider` (tool repo) appearing in the vendored tree without `LICENSE.txt` + `NOTICE`.
+- The vendored tree has far more exercises than the runners reference.
+- `make verify-licenses` passes after you corrupt a license header (gate not tamper-proof).
 
 **Phase to address:**
-The phase that builds CLI parity must add daemon-side `tools/call` profile/mode enforcement; the profile/mode golden suite migration is its verification.
+The **fixture-vendoring phase** (first Aider-validation phase, ~Phase 102). The extended `verify-licenses` gate + its tamper test ship in that same phase.
 
 ---
 
-### Pitfall 4: Losing per-tool deadlines, telemetry, and suggestion/guardrail enrichment that lived in the middleware stack
+### Pitfall 4: Non-deterministic / non-reproducible committed baseline
 
 **What goes wrong:**
-The five middlewares (`Telemetry`, `ProfileFilter`, `Suggestion`, `LazyInit`, `Guardrail`) execute on the `tools/call` path *inside the daemon*. The locked architecture keeps them running — but two things can still regress: (1) **deadlines** — `TelemetryMiddleware`'s `BudgetFunc` injects a per-tool deadline; if the CLI sets its own client-side gRPC timeout that's shorter or longer, you get either premature cancellation (CLI gives up while the daemon is mid-LSP-call) or a hung CLI (CLI waits forever past the daemon's deadline). (2) **suggestion enrichment** — `SuggestionMiddleware`'s "Did you mean?" for parameter typos enriches `tools/call` *errors*; if the CLI does its own cobra-level flag parsing and rejects bad flags *before* reaching the daemon, the agent never sees the daemon's richer suggestion, just cobra's terse "unknown flag" — a downgrade in error quality.
+The milestone commits a baseline results artifact (`BENCH-RESULTS.md` / `result.v2.json`). It is worthless — and actively misleading — if it can't be regenerated byte-identically. Failure modes:
+- An evaluator or report uses an unseeded RNG (BCa bootstrap resamples, any shuffle) → a re-run diffs against the committed baseline and every CI/local check sees a spurious "regression."
+- Non-deterministic map-iteration ordering leaks into the rendered report (the **Phase 80 WR-03** "latent non-deterministic `fairness.overrides[]` ordering" — already a known landmine here).
+- The baseline bakes in machine-specific data (absolute paths, timestamps, hostname, wall-clock latency) → only reproducible on the author's machine.
+- A regenerate command exists but isn't the *same* code path that produced the committed file, so they drift.
 
 **Why it happens:**
-The middleware contract assumed the *client* was a dumb transport that forwarded `tools/call` verbatim and surfaced whatever the daemon returned. A CLI is not a dumb transport: cobra parses, validates, and can short-circuit before the gRPC call, bypassing the daemon's enrichment and deadline logic.
+Statistics imply randomness; timing is inherently machine-specific; Go map order is deliberately randomized. None of these are obvious in a passing local run.
 
 **How to avoid:**
-- Make the CLI a **thin pass-through**: do minimal cobra parsing (just map subcommand+flags → typed args JSON), and let the *daemon's* validation/suggestion/guardrail middleware own argument errors. Do not duplicate enum/param validation in cobra where the daemon already does it better.
-- Align timeouts: the CLI's gRPC call deadline must be derived from (or strictly longer than) the daemon's per-tool budget, so the daemon's deadline fires first and returns a typed `Timeout` error the CLI can render — rather than the CLI cancelling blind.
-- Keep telemetry meaningful: the daemon still emits RED metrics per `tools/call`; verify the per-call CLI invocation still carries trace context (the otelgrpc client stats handler in dial.go must propagate `TraceContext{}` — it does today, don't drop it in the thin CLI).
-- Surface the daemon's typed error verbatim — including suggestion text — in CLI stderr.
+- **Reuse the existing seed-deterministic discipline, don't reinvent it.** The Phase 82/89 aggregator already produces **byte-identical golden `.md`** via a single zero-RNG `renderAll` (BCa seeded ≥10,000 resamples; `TestReportByteReproducible` double-renders and diffs-empty). Any new RepoMap/fuzzy report MUST route through the same deterministic renderer and ship its own byte-reproducible double-render test.
+- **Seed every resample/shuffle explicitly** and assert determinism (the Phase 82 `fake-BCa discriminator` precedent shows the project already gates statistical correctness).
+- **Sort before emit** for any map-derived collection (closes the Phase-80 WR-03 ordering class).
+- **Separate "score" from "timing":** the committed baseline must record *outcome/quality* metrics (pass@k, recall@k, edit-sim, edit-format-applied) which are deterministic given fixtures — NOT raw latency, which is machine-specific and belongs to the local-only microbench (`make bench-micro`), never the committed correctness baseline.
+- **One code path, two callers:** the regenerate command (`helix-bench report`) and the original (`aggregate`) must share the renderer (Phase 89 precedent), so the committed file and the regenerated file are the same bytes by construction.
 
 **Warning signs:**
-- CLI exits with cobra's "unknown flag" instead of the daemon's "Did you mean `--symbol`?" suggestion.
-- Traces show no span for CLI-driven `tools/call`, or broken trace continuity.
-- A long LSP operation gets cancelled by the CLI before the daemon's budget elapses (client-deadline-too-short).
+- Re-running the baseline produces a non-empty diff.
+- A report contains an absolute path, a hostname, a timestamp, or a raw millisecond latency.
+- An evaluator calls `rand.` / `math/rand` without a fixed seed.
+- `range someMap` feeds directly into rendered output without a sort.
 
 **Phase to address:**
-The CLI-parity phase; verified by an error-quality oracle (the daemon's suggestion/typed-error output must survive to CLI stderr unchanged).
+The **committed-baseline phase** (last Aider-validation phase). Determinism tests for the *new* RepoMap/fuzzy reports ship in their respective surface phases.
 
 ---
 
-### Pitfall 5: Un-greppable / unstable CLI output that loses to grep instead of beating it
+### Pitfall 5: RepoMap-quality / fuzzy-robustness gold corpus is self-confirming
 
 **What goes wrong:**
-The whole product thesis is "terse `file:line`-anchored output beats grep." It's easy to ship output that *looks* terse but fails for an LLM reader: (a) **unstable ordering** — map-iteration or goroutine-completion order makes the same query print results in different orders run-to-run, breaking the agent's ability to diff or reference "the 3rd result"; (b) **color/ANSI leakage** — cobra/term libraries auto-detect a TTY but a hook-spawned or piped invocation may still emit escape codes that pollute the model's context with `\x1b[31m`; (c) **truncation hiding results** — a token-budget or line cap that silently drops matches makes the agent confidently wrong ("no other references"); (d) **ambiguous `file:line`** — relative vs absolute paths, or `path:12` vs `path:12:5`, that the agent can't reliably feed back into `helix read_file`; (e) **losing the typed-error taxonomy** — v1.5's 9-kind structured errors (`not_found`, `invalid_args`, `circuit_open`, `timeout`, `guardrail_violation`, …) collapsing into an undifferentiated stderr string the agent can't branch on.
+Both the RepoMap eval (top-k recall / MRR / nDCG of "relevant symbols for task T") and the fuzzy-robustness bench (drift corpus → expected strategy + result) need a **gold corpus**. The corpus is worthless if it encodes the current implementation's output:
+- **Self-confirming RepoMap gold:** the "relevant symbols" label set is generated by *running `get-repo-map` today and recording its top-k* → the eval then measures whether `get-repo-map` agrees with its past self. A regression that drops the truly-relevant symbol still scores 100% because the gold was the buggy output. (This is the **Phase 89 canary** lesson in corpus form: a fixture that gives the right and wrong answers the *same* verdict proves nothing.)
+- **Fuzzy gold encodes the cascade:** the "expected strategy" label is whatever the current cascade *happens* to pick, so a future change that picks a worse-but-still-passing strategy never trips.
+- **Corpus too small to mean anything:** 3–5 hand-picked cases → noise; a single ambiguous case can't distinguish "refuses correctly" from "refuses everything."
 
 **Why it happens:**
-Designing output "for a human at a terminal" (pretty tables, colors, spinners, truncation-with-ellipsis) is the default instinct, and it's exactly wrong for a model reader. Ordering instability comes from concurrent LS fan-out with unsorted result merging. The structured-error loss happens because gRPC returns an error and the naive CLI just prints `err.Error()`, discarding `Kind` and the `GuardrailViolationDetail`/`SeeAlso` payload (internal/errors/kinds.go).
+Hand-labeling relevance is expensive; the path of least resistance is to snapshot current output and call it gold. Small corpora pass fast and look done.
 
 **How to avoid:**
-- **Deterministic ordering**: sort every multi-result output by a stable key (file path, then line, then col) before printing. Make this a tested invariant.
-- **No color by default for the agent path**: disable ANSI unless `--color=always`; auto-detection must default to plain when stdout is not an interactive TTY (and the nudge/skill path should pass plain explicitly).
-- **Truncation must be loud**: never silently drop; print a machine-readable `… (N more, re-run with --limit=… )` trailer so the agent knows results were elided. Prefer token-budgeted *but complete-count-reported* output.
-- **Canonical `file:line[:col]`** with a documented, stable scheme (decide absolute vs workspace-relative once, document it in SKILL.md, keep it consistent across all verbs).
-- **Preserve the error taxonomy on the wire and in print**: serialize `Kind` (and the guardrail `see_also`/`required_receipts` detail) across gRPC and render a greppable prefix (e.g. `error[not_found]: …`, reusing the existing `subsystem_disabled:`-style greppable convention) so an agent can branch on kind.
+- **Gold relevance must be authored from the TASK, independent of the tool.** For each RepoMap eval task, a human (or the task's own ground-truth solution file set, e.g. the exercism `files.solution`) defines which symbols/files are relevant — derived from *what solving the task requires*, never from `get-repo-map`'s current ranking. Document the labeling provenance in the corpus (the Phase-85 `TestJavaFixtureProvenance` "REAL-provenance-sourced + anti-tautology gate" is the exact pattern to clone).
+- **Add an anti-tautology discriminator test:** assert the gold corpus would FAIL a deliberately bad ranker (e.g. reverse-sorted, or random) — if a broken ranker still scores ≥ threshold, the corpus encodes nothing. Mirror the Phase-86 `editsim` "provably NOT the same as X" discriminator and the Phase-82 `fake-BCa` discriminator.
+- **Fuzzy corpus must include a known-ambiguous case that MUST be refused** and a known-unambiguous case that MUST apply via a *named* strategy, with the expected strategy derived from the drift type (whitespace drift → whitespace-normalized), not from observed behavior. Assert ambiguity refusal explicitly (the `internal/fuzzy` ambiguity-refusal contract is the spec).
+- **Size floor:** enough cases per strategy / per language that one flake can't swing the headline; record the count and fail the build if a strategy has zero cases (cf. the empty-bucket trap, Pitfall 1/Phase 87).
 
 **Warning signs:**
-- Running the same query twice yields different result order.
-- Escape codes appear in captured CLI output during hook/piped invocation.
-- An agent says "no references found" when references exist (silent truncation).
-- CLI stderr for a known `not_found` is indistinguishable from an internal error.
+- The gold labels were produced by running the tool under test.
+- A reversed/random ranker still passes the RepoMap eval.
+- The fuzzy "expected strategy" column was copied from a test run, not derived from the drift type.
+- Any strategy or language has zero corpus entries (silent empty bucket).
 
 **Phase to address:**
-A dedicated "terse output / output contract" phase (this is called out as "the load-bearing product work"); verified by golden-output oracle tests asserting ordering, no-ANSI, loud-truncation, and `Kind`-prefixed errors.
+RepoMap gold → the **RepoMap-eval phase** (~Phase 103). Fuzzy gold → the **fuzzy-robustness phase** (~Phase 104). Each phase owns its anti-tautology discriminator.
 
 ---
 
-### Pitfall 6: SKILL.md that doesn't trigger (or triggers on everything)
+### Pitfall 6: Steering over-reach — nudging/denying grep/sed/cat where they are legitimately correct, or breaking fail-open
 
 **What goes wrong:**
-The skill's YAML `description` *is the trigger* — Claude reads it every turn and decides relevance. Two failure modes: (a) **under-triggering** — a vague description ("helps with code") never fires, so the agent keeps using grep and the entire migration delivers nothing; (b) **over-triggering** — an over-broad description ("use for any file operation") fires on README edits, log greps, and config reads where `helix` has no advantage, wasting context and annoying users. A third, subtler failure: the skill *fires* but the agent **ignores it and uses grep anyway** because grep is in muscle-memory and the skill didn't give a concrete, lower-friction substitution.
+"Stronger steering" (PROJECT.md line 189) tempts three regressions:
+- **Over-firing the nudge** on legitimate non-code use. CLAUDE.md is explicit ("when grep IS still correct"): free-text search in comments/READMEs/docstrings/logs, non-code files (YAML/JSON/TOML/Markdown/Dockerfiles/shell), unknown-symbol discovery, build/test output. Broadening `classifyBashTarget` to `awk`/`head`/`tail`/pipelines without preserving the prose/log/config allowlist trains the model to ignore the nudge (cry-wolf) or fights real workflows.
+- **Breaking the fail-open exit-0 contract.** The existing nudge is *advisory, exit 0, never blocks* (`nudge.go`). FEATURES.md lists a deny/block hook (exit 2) as an explicit **anti-feature** — exit 2 makes Claude Code treat it as a blocking error and trains the model to evade the tool. Any change that lets the nudge exit non-zero (or a Codex hook return `permissionDecision:"deny"` by default) breaks the locked design.
+- **SessionStart priming bloat.** Injecting the full decision matrix (or worse, the whole per-verb reference) at SessionStart regresses the 599-byte idle-cost win that was the *entire point* of v2.0's terse skill.
 
 **Why it happens:**
-Skill descriptions are easy to write as documentation ("what it does") rather than as a trigger ("when to use it, with specific terms"). Anthropic's guidance is explicit: be specific, include key terms and concrete triggers, write in third person ("This skill should be used when…"). Teams underestimate that the agent's default (grep/cat) is a strong attractor that a weak skill won't overcome.
+"Stronger" reads as "more aggressive." Deny *feels* like it would raise adoption. Priming *feels* free.
 
 **How to avoid:**
-- Write the description as a trigger with concrete verbs and contexts: name the operations (find definition, find references, rename across files, blast radius) and the *anti-trigger* boundary (NOT for free-text search in comments/docs/logs — exactly the CLAUDE.md "when grep is still correct" list).
-- Keep SKILL.md body lean (target ~1,500–2,000 words / <500 lines) and push detail to progressively-disclosed sub-files; an overlong body degrades triggering and wastes context.
-- Give the agent a **direct grep→helix substitution table** in the skill (mirroring the CLAUDE.md decision matrix) so the substitution is lower-friction than typing grep.
-- **Verify behavior change empirically**, not by inspection: reuse the v1.4 LLM behavioral-test harness + judge scoring to measure "did the agent pick `helix find_references` over `grep -r`" across realistic prompts, with a pass-rate gate. A skill is "done" only when it measurably shifts tool selection.
+- **Keep advisory exit-0 as the default and assert it:** a test that runs the nudge on every shape and asserts exit code == 0 (deny is opt-in only, for a narrow positively-identified shape like `sed -i` on a `.go` file — FEATURES.md). For Codex, the hook emits `additionalContext` (camelCase, mirrors Claude's envelope — STACK.md 1B); a test asserts it never emits `permissionDecision:"deny"` by default.
+- **Negative-control corpus for the classifier (the same one from Pitfall 1):** prose/log/config/build-output targets MUST NOT fire the nudge. Extend `nudge_test.go` with these rows; a broadened classifier that fires on `grep TODO README.md` fails the suite.
+- **SessionStart priming, if added, injects ONLY the terse matrix, never the reference**, and a SKILL-04-style assertion caps the injected size. Keep the three tiers (idle frontmatter → on-trigger SKILL.md body → on-demand reference + `get-tool-help`) and assert the tier boundary (FEATURES.md "progressive disclosure contract").
 
 **Warning signs:**
-- Behavioral tests show grep still chosen for symbol-level questions after the skill ships.
-- The skill fires on doc/log tasks where `helix` adds nothing (over-trigger).
-- SKILL.md body exceeds ~500 lines.
+- The nudge fires on a Markdown/YAML/log target.
+- The nudge (or Codex hook) can exit non-zero / deny by default.
+- SessionStart injects more than the terse matrix; idle context cost grows past the v2.0 baseline.
 
 **Phase to address:**
-A SKILL.md authoring phase, gated by the LLM behavioral oracle (tool-selection pass-rate), not by author judgement.
+The **stronger-steering phase** (~Phase 100). Its VERIFICATION must include the exit-0 assertion + the negative-control classifier rows + an idle-cost cap.
 
 ---
 
-### Pitfall 7: Nudge-hook hazards — false positives, wrong-verb mapping, and users disabling hooks
+### Pitfall 7: Multi-agent install clobbers user files / wrong locations / assumes hooks that don't exist
 
 **What goes wrong:**
-The repurposed `PreToolUse` hook redirects grep/sed/cat → `helix`. Failure modes: (a) **false positives** — `isGrepReadTool` (nudge.go:186) flags any Bash command merely *containing* the substrings `grep`/`find`/`rg`/`ag`, so grepping a *log file*, a path that contains `ripgrep`/`postgres`, a comment mentioning `find`, or a README search trips it. Substring matching is far too coarse and will nudge on legitimate non-code searches (logs, READMEs, YAML), training the user to ignore or disable the hook; (b) **wrong-verb mapping** — mapping a `grep "func "` to `find_symbol` when the user wanted a literal-string search in a Markdown file gives actively bad advice; (c) **blocking vs advising** — the current nudge is advisory (always exit 0, just prints a tip after 5 calls). If v2.0 escalates it to *block* (PreToolUse can deny the tool call), a false positive now *prevents* a legitimate grep, which is rage-inducing and the fastest route to `--no-hooks`; (d) **annoyance → disable** — too-frequent or too-preachy nudging makes users turn hooks off, losing the steering entirely.
+`helix setup codex|gemini-cli|generic` now *writes* instruction files (today they are teardown-only — FEATURES.md, STACK.md 1B). Failure modes:
+- **Clobbering a user's existing `AGENTS.md` / `GEMINI.md`** by overwriting it wholesale instead of merging/appending a Helix section. Users keep real project instructions in those files.
+- **Wrong file location / cap:** Codex `AGENTS.md` has a **32 KiB/file cap** (`project_doc_max_bytes`) and a specific discovery order (project root → cwd walk; `~/.codex/AGENTS.md`); Gemini's context filename is *configurable* via `context.fileName` in `settings.json` and lives at `~/.gemini/GEMINI.md` + workspace/parent dirs. Writing to the wrong path = silently ignored.
+- **Assuming a PreToolUse-equivalent exists where it does not:** Gemini CLI has **no PreToolUse hook** (STACK.md 1B, HIGH). Wiring a Gemini "nudge hook" is impossible; steering there is context-file-only. Codex *does* have a PreToolUse hook but only `type:"command"` handlers run today.
 
 **Why it happens:**
-The existing matcher is `strings.Contains`-based substring detection over the raw Bash command — fast to write, wrong in the tails. The hook fires on `Grep|Read|Bash` broadly. Escalating from advisory-tip to behavioral-redirect raises the cost of every false positive.
+The Claude Code path (skill + hook) is the mental model; authors assume the other agents mirror it. File-writing setup tends to overwrite by default.
 
 **How to avoid:**
-- Replace substring matching with **argument-aware parsing**: detect that the Bash command's *program* is `grep`/`rg`/`ag`/`sed`/`cat` (token at command position, not anywhere in the string), and inspect the *target* — only nudge when the search target is a code file in the workspace, never for `*.log`, `*.md`, `*.yaml`, `/var/log`, paths outside the workspace, or piped-from-stdout greps.
-- **Map conservatively**: only suggest a specific `helix` verb when the pattern is unambiguously symbolic (e.g. `grep -rn "func X"` → `find_declarations`); for ambiguous greps, suggest nothing or a generic pointer, never a wrong specific verb.
-- **Keep it advisory by default**; if blocking is ever introduced, gate it behind explicit opt-in and an allowlist, and always provide the exact `helix` command to run instead so the redirect is zero-friction.
-- **Tune frequency**: keep the "after N calls without symbolic use" threshold and the per-session reset (already in nudge.go), and make the message terse and actionable, not preachy.
-- Honor `--no-hooks` and document a one-line disable so frustrated users downgrade gracefully instead of abandoning Helix.
+- **Append a delimited, idempotent Helix block, never overwrite.** Use sentinel markers (`<!-- helix:begin -->` … `<!-- helix:end -->`) and re-write only between them; preserve everything else. Golden-file round-trip tests (the existing `test/harness/golden.go` pattern) for: (a) writing into an empty dir, (b) writing into a file with pre-existing user content (assert user content survives), (c) re-running setup (assert idempotent — no duplicate block).
+- **Respect each agent's path + cap as a tested contract:** a test asserts the Codex block stays under 32 KiB and the file lands at the documented location; Gemini writes `GEMINI.md` at the documented path.
+- **Encode capability differences in the registrar, not in hope:** Codex registrar writes `AGENTS.md` + `~/.codex/hooks.json` (`type:"command"` → `helix nudge`, reusing the existing nudge — do NOT write a second steering engine); Gemini/IDE/generic registrars write the instruction file ONLY (no hook). A test asserts no Gemini hook artifact is produced.
 
 **Warning signs:**
-- Users report the nudge firing on `grep` of log files or READMEs.
-- Issue reports / telemetry show `--no-hooks` usage rising after the change.
-- The hook suggests `find_symbol` for a literal-text search.
+- Setup truncates or replaces an existing `AGENTS.md`/`GEMINI.md`.
+- Re-running setup duplicates the Helix block.
+- A Gemini hook file is generated.
+- The Codex instruction block exceeds 32 KiB.
 
 **Phase to address:**
-The nudge-hook phase; verified by a fixture corpus of Bash commands (code-grep vs log-grep vs doc-grep vs non-grep-containing-substring) asserting nudge fires only on the true positives.
+The **multi-agent coverage phase** (~Phase 100/101). Golden round-trip + idempotency + cap tests ship in that phase.
 
 ---
 
-### Pitfall 8: Breaking existing users' MCP client configs with no migration path
+### Pitfall 8: Scope/overlap — duplicating the existing aider-polyglot adapter, the v1.12 evaluators, or `get_tool_help`
 
 **What goes wrong:**
-Existing users have `helix` registered as an MCP server in Claude Code / VS Code / Gemini / Claude Desktop (via `helix setup <client>` which calls `claude mcp add-json` etc.). When v2.0 retires the stdio forwarder head and HTTP MCP transport, those registrations point at a surface that **no longer answers MCP**. The agent's MCP client will show a dead/failing server, the 53 tools vanish from the agent's tool list, and — because the migration also *retires* MCP — there's no fallback. Without a migration path, every existing user's setup silently breaks on upgrade.
+This milestone sits ON TOP of the v1.12 bench stack and the v2.0 skill. "Add the aider benchmark / add per-verb help / add edit-similarity scoring" all read like new work but already exist. Duplicating them wastes effort AND risks regressing load-bearing invariants:
+- Rebuilding the **polyglot adapter** (`bench/datasets/aider-polyglot/{clone,loader,pin}.go`) risks regressing the **WR-01 anti-tamper pristine-test restore** and the **WR-02 Rust `--include-ignored`** vacuous-pass guards (Phase 85). FEATURES.md: reuse `RunExercise` verbatim; the v2.1 delta is *vendoring + the EDIT-verb `AgentFn` + the applied-correctly field*, not the driver.
+- Re-implementing **edit-similarity** duplicates `bench/evaluators/editsim` (CM-ES, already discriminator-gated as "provably NOT git-numstat").
+- Re-authoring **per-verb help prose** by hand duplicates `internal/kernel/help` (`get_tool_help`) AND drifts from the frozen 50-verb registry — the per-verb reference MUST be *generated* from the registry via `cmd/docgen` plumbing (STACK.md 1A; project memory *helix-tool-docs-drift*: docgen's blank imports must == the daemon's, or the generated docs silently lose tools).
 
 **Why it happens:**
-`setup` registered an MCP server *with the client's own config store* (it shelled out to `claude mcp add-json`, it didn't write Helix-owned files). Helix can't unilaterally clean those up; they live in the client. The "clean retirement, no shim" decision (locked, out-of-scope item) means there's deliberately no compatibility MCP head, so a stale registration is a hard break.
+The milestone brief names "aider benchmark" and "per-verb reference" as deliverables without flagging the existing substrate; an author who doesn't read the v1.12 tree starts from scratch.
 
 **How to avoid:**
-- Ship a **migration command**: `helix setup <client>` (the "flip") must both *remove* the old MCP registration (e.g. `claude mcp remove helix`) and *install* the new skill+hooks, idempotently — so re-running setup heals a stale config. The hook installer already has an idempotent `helix_managed: true` pattern (setup_hooks.go) to clone for MCP-registration teardown.
-- **Detect-and-warn on first run**: when the daemon or CLI starts and detects an orphaned MCP registration it can no longer serve, emit a one-line "run `helix setup <client>` to migrate" message.
-- **Document the breaking change loudly** in CHANGELOG + README (this is a v2.0 major; a hard cut is acceptable but must be announced, like the v1.9 serena→helix rename precedent).
-- Cover every one of the 7 setup clients — a migration that flips Claude Code but forgets Gemini/OpenCode leaves those users broken.
+- **Reuse-don't-fork is a stated repo ethos** (the v1.12 log repeats "clone the template ×N, swap only Detect/parse"). The roadmap's first Aider-validation phase must *start* by reusing `RunExercise`, `editsim`, the result.v2 additive-open-key pattern (`language`/`embedder_id` precedent — no schema v3 bump), and the aggregator. New work is strictly the *delta* (FEATURES.md "Scope Note — what already exists").
+- **Per-verb reference is generated, never hand-written.** Drive it from `internal/cli/verbs_gen.go` + the registry the same way the README tool table is generated. A drift test (Pitfall 1) asserts coverage of the registry. Verify docgen's blank-import set matches the daemon's (project memory).
+- **`AgentFn` drives Helix EDIT verbs** (`replace-symbol-body`/`fuzzy-edit`/`replace-in-file`/`insert-*`) — that is the actual gap (FEATURES.md "the real gap"); the loader stays verb-agnostic and untouched.
+- A **"do not duplicate" checklist** in each Aider-validation phase's plan, citing the exact existing files to reuse.
 
 **Warning signs:**
-- After upgrade, the agent's MCP tool list is empty and no skill/hooks were installed.
-- `helix setup <client>` run twice produces duplicate or conflicting entries (non-idempotent teardown).
-- A supported client has no teardown path in the flipped `setup`.
+- A new clone/loader/pin under a different path.
+- A second edit-similarity implementation.
+- A hand-edited per-verb reference (the README table warns "do not hand-edit").
+- A `result.v2` schema bump (v3) for something that should be an additive open key.
+- `cmd/docgen` imports a different skill set than the daemon (silently drops verbs).
 
 **Phase to address:**
-The `helix setup` flip phase; verified by a per-client setup/teardown idempotency test (run setup twice, assert old MCP entry gone + skill/hooks present exactly once).
-
----
-
-### Pitfall 9: Losing HTTP-transport multi-client / remote scenarios
-
-**What goes wrong:**
-The Streamable-HTTP MCP transport let *multiple clients* connect to one daemon over HTTP (and enabled remote/containerized setups where the agent and daemon aren't co-located). Retiring it removes that topology. The CLI head assumes the daemon is reachable over a **local Unix socket** (dial.go is unix-socket-first), which means: (a) remote/split-host deployments stop working with no replacement; (b) any user who relied on HTTP for multi-client fan-in loses it silently; (c) Windows named-pipe / cross-platform socket nuances resurface (the forwarder has `dial_windows.go`/`dial_unix.go` for a reason).
-
-**Why it happens:**
-HTTP was the only network-transparent transport; the CLI-over-gRPC-unix-socket path is inherently local. It's easy to treat "remove HTTP MCP" as pure subtraction without noticing it also removed the only remote-access story.
-
-**How to avoid:**
-- **Confirm the scope**: the milestone retires the HTTP *MCP* transport, not necessarily the daemon's ability to listen on a TCP gRPC socket. If remote access matters, the gRPC layer (retained) can still bind TCP; decide explicitly whether the CLI supports `--socket=tcp://host:port` or whether remote is genuinely out of scope.
-- If remote is dropped, **document it as a removed capability** in CHANGELOG so users with that topology aren't surprised.
-- Preserve cross-platform dialing (`dial_windows.go` named-pipe path) for the local case — Windows agents still need to reach the daemon.
-
-**Warning signs:**
-- A user reports the daemon is on a different host and the CLI can't reach it.
-- Windows CLI invocations fail to dial the daemon (named-pipe path regressed).
-
-**Phase to address:**
-The MCP-surface-removal phase; verification: explicit decision record on remote/multi-client scope + a Windows local-dial smoke test.
-
----
-
-### Pitfall 10: docgen tool-table going stale (53 vs N drift)
-
-**What goes wrong:**
-The README tool table is auto-generated by `cmd/docgen` from the live tool registry; CLAUDE.md says "do not hand-edit." There's *already* documented drift history (MEMORY.md: a 53-vs-47 tool-count drift from `cmd/docgen` missing a blank import; the v1.12 `test/bench` MCP-registry 53-vs-47 failures). Now the surface *changes shape* — from "53 MCP tools" to "53 `helix` CLI verbs." If docgen still introspects the MCP `tools/list` registry while the agent-facing surface is the CLI, the generated table describes a surface that no longer exists; if it isn't re-pointed at the CLI subcommand set, every count and name can drift.
-
-**Why it happens:**
-docgen and the daemon must register the *same* set (the MEMORY note: "Keep docgen's imports == daemon's"). The CLI migration introduces a *third* surface (cobra subcommands) that must stay in lockstep with the registry the daemon exposes and the docgen reads. Three things to keep equal instead of two = more drift surface.
-
-**How to avoid:**
-- **Single source of truth**: generate the CLI subcommands *and* the docgen table from the same tool registry (the milestone already plans "code-generated subcommand wiring" from the registry's typed args — extend that generation to docgen).
-- Keep the existing CI count gate but re-point it at the CLI surface; assert `len(cli subcommands) == len(registry tools) == docgen rows`.
-- Reuse the v1.12 lesson: a missing blank import silently drops tools — keep an explicit registry-completeness test, not just a count.
-
-**Warning signs:**
-- README tool table count ≠ `helix --help` verb count ≠ daemon registry size.
-- A `test/bench` or docgen count test fails after adding a tool.
-
-**Phase to address:**
-The identity/docs-rewrite phase; verified by a three-way count/name parity test (registry ↔ CLI ↔ docgen).
-
----
-
-### Pitfall 11: Testing strategy gap — the multi-oracle harness assumes an MCP transport
-
-**What goes wrong:**
-The v1.1–v1.4 multi-oracle harness (protocol / contract / scenario / LLM-behavioral) tests *through the MCP transport* — protocol oracle checks the MCP handshake and `tools/list`; contract oracle meta-validates MCP tool schemas and golden outputs; the harness uses InMemory + HTTP MCP transports. Retiring the MCP surface **deletes the thing those oracles test against**. If the harness isn't reworked, either the tests break (and get disabled, losing coverage) or they keep passing against an internal MCP path that's no longer the agent's surface (false green — testing a surface no agent uses).
-
-**Why it happens:**
-The oracles were built around MCP being *the* surface. The locked architecture keeps MCP as internal dispatch, so the tempting shortcut is "leave the oracles pointed at the internal MCP dispatch" — but that no longer reflects what an agent experiences (a fresh CLI process per call, gRPC, terse stdout, exit codes).
-
-**How to avoid:**
-- **Add a CLI end-to-end oracle**: spawn the real `helix` binary as a subprocess (the v1.12 bench harness already does daemon-over-unix-socket subprocess spawning — reuse `bench/runtime/subprocess`), run a verb, assert on stdout/stderr/exit-code. This is the new "protocol" layer for the CLI surface.
-- **Re-target the contract oracle**: golden outputs become *CLI stdout* goldens (ordering, `file:line`, error-kind prefix) instead of MCP JSON; schema meta-validation becomes "typed args → cobra flags" parity.
-- **Keep the scenario oracle** (multi-language runtime correctness) but drive it through the CLI verbs.
-- **Keep the LLM behavioral oracle** and *expand* it — it's now load-bearing for SKILL.md triggering (Pitfall 6).
-- Don't delete the internal MCP-dispatch tests; demote them to "internal engine" unit tests (the SDK is still the dispatch core) so the engine stays covered without pretending it's the agent surface.
-
-**Warning signs:**
-- After migration, oracle tests still import the MCP HTTP transport as the surface under test.
-- No test spawns the real CLI binary and asserts on stdout.
-- Coverage of "what the agent actually sees" is zero (only internal dispatch is tested).
-
-**Phase to address:**
-A testing-migration phase (likely late in the milestone, after CLI parity + output contract land); verified by a CLI subprocess oracle replacing the MCP protocol/contract oracles.
+Every Aider-validation phase, and the per-verb-reference phase (~Phase 98). The reuse checklist is a planning-time gate, not a code test.
 
 ---
 
@@ -277,103 +242,97 @@ A testing-migration phase (likely late in the milestone, after CLI parity + outp
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| CLI client sets its own short gRPC deadline, ignoring daemon `BudgetFunc` | Simple, no metadata plumbing | Premature cancel of long LSP ops; deadline taxonomy diverges from telemetry | Never — align to daemon budget |
-| Keep substring `strings.Contains` nudge matcher | No parser to write | False positives on logs/READMEs → users disable hooks | Only as the current advisory tip; never if nudge escalates to blocking |
-| Print `err.Error()` and drop `Kind` | One line | Agent loses the v1.5 typed-error taxonomy it can branch on | Never — serialize Kind across gRPC |
-| Leave multi-oracle harness pointed at internal MCP dispatch | Tests stay green | False green — surface no agent uses; real CLI surface untested | Only as a transitional step with a tracked CLI-oracle follow-up |
-| No cross-process daemon-start lock | Works in serial tests | Spawn race + duplicate daemons under agent fan-out | Never — agents fan out by design |
-| Auto-detect TTY for color without an agent-path override | Pretty for humans | ANSI leaks into model context on piped/hook paths | Only with an explicit plain-by-default for non-TTY |
+| `t.Skip` without a hermetic golden sibling | Test "passes" on CI with no binary | False-green; the surface is never exercised (project's most-repeated bug) | **Never** — Phase-85 precedent requires a hermetic sibling as the sole authoritative proof |
+| Snapshot current tool output as the gold corpus | Instant "labels" for RepoMap/fuzzy eval | Eval becomes self-confirming; regressions invisible | **Never** for relevance/strategy labels; OK only for *byte-reproducibility* goldens (output-is-the-spec) |
+| Hand-write the per-verb reference | Fast first draft | Drifts from the frozen 50-verb registry; the deterministic contract becomes a lie | **Never** — generate from registry |
+| Vendor all six full Exercism tracks | "Complete" fixtures | Bloated tree, unauditable NOTICE, slow clones | Only if a manifest justifies each track; prefer exercised subset |
+| LLM-judge rubric with no negative anchor | Fewer flaky reds | Rubric can't fail → eval proves nothing | **Never** — must include a 0-scoring exemplar |
+| Lenient detector (`mentionsHelix` substring) | Higher, more "stable" choice-rate | Counts the prompt's own text as adoption | **Never** — key on first emitted command line |
+| Skip the revert-and-fail test for a new gate | Ships faster | Gate presumed broken; four such gates already shipped OPEN here | **Never** for any merge-gating assertion |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Claude Code MCP registry | Flip `setup` to install skill but forget to `claude mcp remove helix` | Idempotent teardown-then-install; heal stale config on re-run |
-| Claude Code PreToolUse hook | Block legitimate grep on a false positive → user runs `--no-hooks` | Advisory-first; argument-aware matcher; always supply the exact `helix` substitute |
-| gRPC `StreamMCP` wire | Assume one-shot `tools/call` needs proto changes | Reuse the existing bidi `StreamMCP` frame; likely zero proto changes (per locked architecture) |
-| 7 setup clients | Migrate Claude Code only | Cover all 7 (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini, OpenCode, generic) |
-| otelgrpc trace propagation | Drop the client stats handler in the thin CLI | Keep `obs.ClientStatsHandler(tp)` + `TraceContext{}` so per-call traces stay continuous |
-| Windows daemon dial | Assume Unix socket everywhere | Preserve `dial_windows.go` named-pipe path for local Windows agents |
+| Codex CLI | Assume its hook == Claude's exactly; or write a 2nd steering engine | Envelope IS the same (`additionalContext` camelCase); reuse `helix nudge` via `hooks.json` `type:"command"`; respect 32 KiB `AGENTS.md` cap |
+| Gemini CLI | Wire a "PreToolUse nudge" | Gemini has **no** PreToolUse hook; steer via `GEMINI.md` context only |
+| `AGENTS.md`/`GEMINI.md` | Overwrite the user's file | Append a sentinel-delimited Helix block; idempotent; preserve user content |
+| Anthropic SDK / judge | Treat a flaky LLM score as a merge gate | Behavioral layer never blocks merge (v1.4 locked); deterministic layer gates |
+| `result.v2.json` schema | Bump to v3 for a new field | Add an **additive open key** (precedent: `language`, `embedder_id`, `ablation_status`) |
+| `make verify-licenses` | Audit only the cloned tracks | Extend to the **vendored** tree; keep the tamper test |
+| `cmd/docgen` | Different blank-import set than daemon | Imports must match daemon's, or generated docs silently drop verbs (project memory) |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Per-process fixed startup cost (runtime + koanf + gRPC + otel) | p95 dominated by a tool-work-independent constant | Lazy-init heavy components; keep CLI binary path thin | Immediately, on every call; worsens under fan-out |
-| Connect storm into warm daemon | gRPC `ResourceExhausted`, accept-queue latency under fan-out | Bound concurrency; tolerate burst of short connections; client retry-with-jitter | Tens of concurrent CLI calls (agent fan-out) |
-| First-call LSP cold-index paid synchronously | First `helix` verb in a repo stalls 10s+ (gopls-style) | Pre-warm via `SessionStart` `helix activate` hook | First call into any new workspace |
-| FD/connection leak per CLI process | Daemon FD count climbs across a session | One connection per process, asserted closed; leak test | Long sessions with many calls |
-| Daemon spawn race | >1 `helix --serve`, intermittent start-timeout | Cross-process `flock` around spawn | Cold repo + parallel first calls |
+| Latency in the committed baseline | Baseline diffs across machines | Commit only deterministic quality metrics; latency → local `bench-micro` only | First re-run on a different machine |
+| SessionStart priming bloat | Idle context cost > v2.0's 599 B | Prime terse matrix only; cap with a SKILL-04-style assertion | Every session, immediately |
+| Vendoring all six tracks | Slow clones, huge diff, unauditable NOTICE | Vendor exercised subset + manifest | At review / git operations |
+| Full 225-task polyglot run in CI | Minutes-to-hours, 6 toolchains, network | Hermetic fixture proof in CI; live run local/`HELIX_BIN`-gated | First CI run |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Profile/mode filtering only at CLI registration, not daemon `tools/call` | A `read`-mode/`ci-bot` agent invokes destructive edit verbs hidden by the old MCP filter | Enforce profile/mode at the daemon `tools/call` boundary; reject with typed `PermissionDenied` |
-| Guardrail middleware bypassed by cobra short-circuit | Destructive op runs without the v1.6 receipt/guardrail check | Route all `tools/call` through the daemon; never validate-and-execute in the CLI |
-| Nudge hook executes values from stdin | Command injection via crafted hook input | Already mitigated (nudge.go reads ToolName/ToolInput as data only) — keep that invariant |
-| Stale MCP registration left answering on a port | Confused/dead surface; potential bind confusion | Teardown old registration in `setup` flip |
+| Codex hook deny-by-default | Trains model to evade tool; blocks legit grep | Advisory exit-0 default; deny opt-in, narrow shape only |
+| Vendored fixture path traversal on load | Reads/writes outside fixture dir | Reuse existing `validatePathSegment`/`isHexSHA1` guards (Phase 84/85/86 precedent) |
+| Wrong-license redistribution | Non-compliant attribution | MIT SPDX + per-track NOTICE; `verify-licenses` hard-fail gate with tamper test |
+| Setup overwrites user instruction file | Data loss of user's project rules | Sentinel-delimited append; round-trip test preserves user content |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Preachy / too-frequent nudges | User disables hooks, loses all steering | Terse, actionable, threshold-gated, per-session reset (keep nudge.go pattern) |
-| Silent result truncation | Agent confidently wrong ("no references") | Loud `… (N more)` trailer with re-run hint |
-| Color codes in piped/hook output | Pollutes model context | Plain by default off-TTY |
-| Stale config breaks on upgrade with no message | User thinks Helix is broken | First-run detect-and-warn + idempotent `setup` migration |
-| Wrong-verb nudge (`find_symbol` for a doc search) | Actively bad guidance | Suggest specific verb only for unambiguous symbolic patterns |
+| Nudge cries wolf on prose/logs/config | Model learns to ignore the nudge | Negative-control classifier rows; preserve prose/log/config allowlist |
+| Deny hook blocks legitimate grep | Real workflows break; user fights tool | Keep advisory exit-0 default |
+| Reference tells *which* verb, not *how* | Agent picks the verb but mis-calls it | Per-verb args + output shape + worked example (generated from registry) |
+| Fat always-loaded reference | Idle context cost regresses | Progressive disclosure: on-demand reference file + `get-tool-help` |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **CLI parity:** All 53 verbs present — verify three-way count parity (registry ↔ `helix --help` ↔ docgen), not just "the common ones work."
-- [ ] **Warm reuse:** Second call into a warm repo is fast — verify with a 2nd-call benchmark, not a single-call demo.
-- [ ] **Profile/mode enforcement:** Out-of-profile verb is *refused by the daemon* — verify a hand-typed edit verb in `read` mode returns `PermissionDenied`, not success.
-- [ ] **Error taxonomy:** `Kind` survives to CLI stderr — verify a known `not_found` prints `error[not_found]:`, distinct from `internal`.
-- [ ] **Output determinism:** Same query twice → byte-identical order — verify with a repeated-run golden.
-- [ ] **No ANSI off-TTY:** Piped output is plain — verify captured output has no escape codes.
-- [ ] **Truncation loud:** Capped output announces elision — verify the trailer appears, not silent drop.
-- [ ] **Setup migration:** Re-running `setup` heals a stale MCP registration — verify old entry removed + skill/hooks installed exactly once, for all 7 clients.
-- [ ] **Skill behavior change:** Agent actually picks `helix` over grep — verify with the LLM behavioral oracle pass-rate, not by reading SKILL.md.
-- [ ] **Daemon-start race:** Parallel first calls spawn exactly one daemon — verify with a fan-out stress test.
-- [ ] **Trace continuity:** Per-call CLI invocation produces a continuous trace — verify a `tools/call` span exists end-to-end.
-- [ ] **Deadline alignment:** Daemon budget fires before CLI client timeout — verify a long op returns typed `Timeout`, not a client cancel.
+- [ ] **Adoption contract:** passes after deleting a verb from the reference? Then it's tautological — re-source from the registry.
+- [ ] **LLM-behavioral score:** identical with and without the skill installed? Then it measures nothing — add the sabotaged-skill revert-and-fail.
+- [ ] **Every new bench surface:** has a hermetic golden sibling that runs with NO `HELIX_BIN` and NO network? If only a skip-guarded test exists, it's false-green.
+- [ ] **Fail-closed:** does a missing `result.v2.json` / empty run dir / missing metric line hard-error, or read as 0/pass? (Phase 82/81 lesson.)
+- [ ] **Vendored fixtures:** SPDX = MIT (not Apache-2.0)? Per-track NOTICE present? `verify-licenses` fails on a corrupted header?
+- [ ] **Baseline:** re-runs byte-identically? No paths/timestamps/hostname/latency? Same renderer for `aggregate` and `report`?
+- [ ] **Gold corpus:** would a reversed/random ranker FAIL it? If not, it encodes the implementation.
+- [ ] **Nudge:** exit 0 on every shape? Does NOT fire on `grep TODO README.md`?
+- [ ] **Multi-agent setup:** preserves pre-existing user `AGENTS.md`/`GEMINI.md` content? Idempotent on re-run? No Gemini hook artifact?
+- [ ] **Empty bucket:** any task set / strategy / language with zero entries reported as a pass? (Phase 87 lesson.)
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Daemon spawn race shipped | MEDIUM | Add cross-process `flock`; add fan-out stress test; reap orphan daemons on detect |
-| Profile/mode filtering lost | HIGH | Retrofit daemon-side `tools/call` enforcement; re-run/golden the profile-mode suite — security-sensitive, prioritize |
-| Stale MCP configs breaking users | MEDIUM | Ship a `helix setup --migrate` patch release; first-run warn; CHANGELOG notice |
-| Un-greppable/unstable output | LOW–MEDIUM | Add sort-before-print + plain-default + loud-truncation; re-golden outputs |
-| SKILL.md not triggering | LOW | Rewrite description as trigger with key terms + anti-triggers; re-measure with behavioral oracle |
-| Nudge false positives | LOW | Swap substring matcher for argument-aware parsing; add fixture corpus |
-| docgen drift | LOW | Generate CLI + docgen from one registry; add three-way parity test |
-| Multi-oracle harness stale | MEDIUM | Add CLI subprocess oracle; re-target contract goldens to stdout; demote MCP tests to engine units |
+| Vacuous adoption eval shipped | MEDIUM | Add revert-and-fail self-test; re-source completeness from registry; re-run — expect prior green to go RED on sabotage |
+| HELIX_BIN false-green | LOW | Add hermetic golden sibling per surface; add "did it RUN" sentinel; re-audit `go test ./bench/...` coverage |
+| Wrong license stamped | LOW–MEDIUM | Correct SPDX to MIT; add per-track NOTICE; extend + tamper-test `verify-licenses` |
+| Non-reproducible baseline | MEDIUM | Route through deterministic `renderAll`; seed RNG; sort-before-emit; strip latency/paths; re-commit |
+| Self-confirming gold corpus | HIGH | Re-author labels from task ground truth (e.g. `files.solution`); add reversed-ranker discriminator; re-label is the cost driver |
+| Over-firing/deny nudge shipped | LOW | Restore exit-0; add negative-control rows; gate deny behind narrow opt-in shape |
 
 ## Pitfall-to-Phase Mapping
 
-| Pitfall | Prevention Phase | Verification |
+| Pitfall | Prevention Phase (indicative — roadmapper assigns final numbers) | Verification |
 |---------|------------------|--------------|
-| 1. Per-invocation cold-start tax | Phase 90 (daemon-dial / warm-reuse) + CLI-latency bench | 2nd-call p95 SLO benchmark; LazyInit fires only on session-first |
-| 2. Daemon-start race / connect storm | Phase 90 (daemon-dial foundation) | Cross-process lock; fan-out/synctest stress test; single-daemon assertion |
-| 3. Profile/mode filter regression | CLI-parity phase (daemon `tools/call` enforcement) | Profile/mode golden suite re-pointed at CLI + daemon refusal test |
-| 4. Lost deadlines/telemetry/suggestion | CLI-parity phase | Daemon suggestion/typed-error survives to stderr; trace continuity; deadline alignment |
-| 5. Un-greppable/unstable output | Terse-output contract phase (load-bearing) | Golden ordering, no-ANSI, loud-truncation, `Kind`-prefixed errors |
-| 6. SKILL.md trigger failure | SKILL.md authoring phase | LLM behavioral oracle tool-selection pass-rate gate |
-| 7. Nudge-hook hazards | Nudge-hook phase | Fixture corpus (code-grep vs log/doc/non-grep) asserts true-positive-only firing |
-| 8. Breaking MCP client configs | `helix setup` flip phase | Per-client setup/teardown idempotency test (all 7 clients) |
-| 9. Lost HTTP multi-client/remote | MCP-surface-removal phase | Explicit remote-scope decision record + Windows local-dial smoke |
-| 10. docgen tool-table drift | Identity/docs-rewrite phase | Three-way registry↔CLI↔docgen count/name parity test |
-| 11. Multi-oracle harness gap | Testing-migration phase (late) | CLI subprocess oracle replacing MCP protocol/contract oracles |
+| 1. Adoption-eval vacuity | Adoption-contract phase (~99); behavioral self-test (~101+) | Revert-and-fail: sabotaged skill → score drops; deleting a verb → contract RED |
+| 2. HELIX_BIN false-green | Each bench-surface phase (~102/103/104) + baseline phase | Hermetic golden runs with no binary; "did it RUN" sentinel when HELIX_BIN set |
+| 3. License vendoring | Fixture-vendoring phase (~102) | `verify-licenses` covers vendored tree; tamper test fails on corrupted header; SPDX==MIT |
+| 4. Non-reproducible baseline | Committed-baseline phase (last) + each surface | Double-render diff-empty; no paths/timestamps; shared renderer |
+| 5. Self-confirming gold corpus | RepoMap-eval (~103) + fuzzy-robustness (~104) | Reversed/random ranker FAILS the corpus; labels provenance-documented |
+| 6. Steering over-reach | Stronger-steering phase (~100) | Exit-0 on all shapes; negative-control rows don't fire; idle-cost cap |
+| 7. Multi-agent install clobber | Multi-agent phase (~100/101) | Round-trip preserves user content; idempotent; no Gemini hook; 32 KiB cap |
+| 8. Scope/overlap duplication | Per-verb-reference phase (~98) + every Aider phase | Reuse checklist cites existing files; reference generated from registry; no schema v3 bump |
 
 ## Sources
 
-- Helix codebase (HIGH — primary): `internal/forwarder/dial.go` (autostart/poll, no cross-process lock, keepalive, otelgrpc handler), `internal/cli/nudge.go` (substring matcher, advisory exit-0, session stats), `internal/cli/setup_hooks.go` (idempotent `helix_managed` hook pattern, PreToolUse matcher), `internal/errors/kinds.go` (9-kind taxonomy, `subsystem_disabled:` greppable convention, guardrail detail), CLAUDE.md (middleware stack, LIFO order, profile/mode filtering on `tools/list`, docgen "do not hand-edit"), `.planning/PROJECT.md` v2.0 milestone (locked architecture, target features, out-of-scope), MEMORY.md (docgen 53-vs-47 drift history; bench false-green skip).
-- [gopls: Running as a daemon](https://go.dev/gopls/daemon) and [golang/go#48844 — slow startup even with shared cache](https://github.com/golang/go/issues/48844) (MEDIUM) — warm-daemon socket connect can still stall 10s+ when the *workspace* wasn't pre-warmed; daemon mode addresses memory sharing, not per-invocation connection latency.
-- [Anthropic — Equipping agents with Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills), [Skill authoring best practices](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices), [Extend Claude with skills](https://code.claude.com/docs/en/skills) (HIGH — official) — description is the trigger; be specific with key terms + concrete triggers; third person; body <500 lines / ~1,500–2,000 words; progressive disclosure.
+- In-tree, direct read (HIGH): `.planning/PROJECT.md` (v2.1 milestone + the v1.12 phase-by-phase progress log of four named vacuous-pass CRITICALs: Phase 82 CR-01 N-gate-fail-open, Phase 86 CR-01 zero-value-GateConfig, Phase 87 CR-01 empty-bucket-as-pass + `TestVerified_VacuousPass`, Phase 89 CR-01 canary-exclusion-partial-wiring + revert-and-fail); `bench/BENCH.md` (no-skip-only-without-sibling, fail-closed scrape, baseline rules); this cycle's `STACK.md` (license correction MIT≠Apache-2.0, Codex/Gemini hook capability matrix, no-new-deps) and `FEATURES.md` (anti-features: deny hook, rebuild-adapter, self-confirming eval; the existing-surface scope note)
+- Project memory (HIGH): `helix-bench-smoke-false-green` (HELIX_BIN skip false-green + no_semantic SIGKILL-vacuous-gate), `helix-tool-docs-drift` (docgen blank-import == daemon or docs silently drop tools)
+- CLAUDE.md (HIGH): "when grep/Bash/Read IS still correct" (prose/logs/config/build-output) — the steering-overreach boundary
+- External, this cycle's STACK.md sources (HIGH): Claude Code Skills docs (1,536-char idle cap, <500-line body, progressive disclosure); OpenAI Codex AGENTS.md (32 KiB cap) + Hooks (`type:"command"`-only, `additionalContext`/`permissionDecision`); Gemini CLI GEMINI.md (no PreToolUse hook); Aider polyglot = Exercism MIT redistribution
 
 ---
-*Pitfalls research for: CLI-over-warm-daemon migration + MCP agent-surface retirement (Helix v2.0)*
-*Researched: 2026-06-21*
+*Pitfalls research for: Helix v2.1 — Agent Adoption & Aider-Derived Validation*
+*Researched: 2026-06-22*

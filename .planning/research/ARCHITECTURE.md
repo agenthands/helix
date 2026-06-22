@@ -1,264 +1,307 @@
 # Architecture Research
 
-**Domain:** CLI head for an existing LSP-backed MCP daemon (Go); retirement of the agent-facing MCP surface
-**Milestone:** v2.0 CLI-First — MCP Surface Retirement
-**Researched:** 2026-06-21
-**Confidence:** HIGH (grounded in the actual v1.12 codebase — every integration point below cites a real file/line)
+**Domain:** Integration architecture for a v2.1 milestone (agent-adoption layer + Aider-derived bench validation) ON TOP OF a mature Go-native CLI-first code-intelligence platform (single binary + persistent daemon).
+**Milestone:** v2.1 Agent Adoption & Aider-Derived Validation
+**Researched:** 2026-06-22
+**Confidence:** HIGH — every integration point below was read from real in-tree source (`internal/cli/{skill,nudge,setup_clients}.go`, `cmd/docgen/main.go`, `internal/kernel/help/help.go`, `internal/cli/verbs_gen.go`, `bench/datasets/aider-polyglot/loader.go`, `bench/runtime/{result,cell,mode_resolver}.go`, `bench/evaluators/editsim/editsim.go`, `Makefile`). This is an INTEGRATION map, not a domain survey: it states where the new code attaches, what is NEW vs MODIFIED, the data-flow deltas, and a dependency-honoring build order.
 
-> Scope note: This document answers "how does the v2.0 CLI head integrate with the existing daemon/gRPC/MCP-SDK internals, and what is the safe build order?" It is explicit about NEW / MODIFIED / DELETED code so the roadmapper can carve phases. The architecture decision is already locked in PROJECT.md (lines 173-199): kill MCP hat #1 (agent-facing transport), keep MCP hat #2 (internal dispatch + middleware engine).
->
-> This file replaces a stale v1.12 bench-milestone ARCHITECTURE.md (dated 2026-06-13) that predated the v2.0 start.
+> **Framing for the roadmapper:** v2.1 adds NO new architectural layer and NO new Go dependency. Both thrusts are *leaf additions and small edits* against existing seams: Thrust 1 attaches to the `internal/cli/` skill+nudge+setup surface and reuses `cmd/docgen`/`get_tool_help`/`test/oracle`; Thrust 2 attaches to the `bench/` stack (the v1.12 aider-polyglot loader, `bench/runtime` cell spine, `bench/evaluators/*` leaves, `bench/runners/<mode>` filesystem-table). The single structural code change in the entire milestone is switching `internal/cli/skill.go` from an embedded `string` to an `embed.FS` so the skill can ship `reference.md` alongside `SKILL.md`.
 
 ---
 
 ## Standard Architecture
 
-### System Overview — today (v1.12) vs target (v2.0)
+### System Overview — where v2.1 attaches (★ = NEW, ◆ = MODIFIED, · = reused unchanged)
 
 ```
-TODAY (v1.12) — two agent-facing MCP heads
-┌──────────────────────────────────────────────────────────────────────┐
-│  AGENT / IDE                                                           │
-│   │  (A) stdio MCP            │  (B) Streamable-HTTP MCP               │
-│   ▼                           ▼                                        │
-│  helix (no-arg) ─► forwarder  helix --mode http ─► daemon.listenHTTP   │
-│   │  RunForwarder()            │   /mcp  (mcpServer.HTTPHandler())     │
-│   ▼  StreamMCP gRPC stream     ▼                                       │
-├───┴────────────────────────────┴──────────────────────────────────────┤
-│  DAEMON (persistent)                                                   │
-│   forwarderServiceHandler.StreamMCP ─► GRPCTransport ─► mcpServer.SDK  │
-│   middleware: LazyInit→Guardrail→Suggest→ProfileFilter→Telemetry       │
-│   51 mcpsdk.AddTool handlers ─► kernel (LSP pool, RepoMap, edits)      │
-└───────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  THRUST 1 — ADOPTION LAYER  (internal/cli/, cmd/, test/oracle/)           │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ★ cmd/helix-refgen ──reads──> · skill.ToolProviders() / help.ExtractParam│
+│   (per-verb reference generator,        Docs()  (tool registry, same       │
+│    --check drift gate, mirrors          source as cmd/docgen + get_tool_help)│
+│    cmd/docgen)                                                              │
+│        │ writes                                                            │
+│        ▼                                                                   │
+│  ★ internal/cli/skills/helix/reference.md  (+ per-capability files)        │
+│  ◆ internal/cli/skill.go   string ──► embed.FS  (multi-file install)       │
+│  · internal/cli/skills/helix/SKILL.md   (terse idle-cost tier, unchanged)  │
+│        │ installed by                                                      │
+│        ▼                                                                   │
+│  ◆ internal/cli/setup_clients.go                                           │
+│     · ClaudeCodeRegistrar  ──► installs SKILL.md + reference.md (was 1 file)│
+│     ★ codex / gemini-cli / generic registrars: teardown-only ──► ALSO write│
+│       AGENTS.md / GEMINI.md  (per-agent instruction file; no skill engine) │
+│  ◆ internal/cli/nudge.go   broaden classifyBashTarget (awk/head/tail/pipe);│
+│       ★ reuse emitAdvisory envelope for a Codex hooks.json handler          │
+│        │ asserted by                                                       │
+│        ▼                                                                   │
+│  ★ adoption-contract tests (internal/cli/*_test.go):                       │
+│     reference ⊇ VerbToolNames();  nudge-fires;  per-agent install goldens  │
+│  ★ test/oracle/llm adoption scorecard  (build-tag llm/llmjudge, opt-in)    │
+└──────────────────────────────────────────────────────────────────────────┘
 
-TARGET (v2.0) — one agent-facing head: the CLI
-┌──────────────────────────────────────────────────────────────────────┐
-│  AGENT (via universal Bash tool, taught by SKILL.md + nudge hook)     │
-│   │  helix <verb> --flags                                             │
-│   ▼                                                                   │
-│  CLI subcommand (NEW, ~code-generated from tool registry)             │
-│   1. ConnectOrStartDaemon()  ← REUSED warm-daemon dial                │
-│   2. one StreamMCP stream: initialize → tools/call → read result      │
-│   3. render MCP content blocks → terse file:line text (NEW renderer)  │
-│   4. exit                                                             │
-├───────────────────────────────────────────────────────────────────────┤
-│  DAEMON (UNCHANGED behind the wire)                                    │
-│   StreamMCP ─► GRPCTransport ─► mcpServer.SDK                         │
-│   middleware stack UNCHANGED ─► 51 tool handlers ─► kernel            │
-│   [DELETED: listenHTTP /mcp head, mcpServer.RunStdio]                 │
-└───────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  THRUST 2 — AIDER-DERIVED VALIDATION  (bench/)                            │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ★ bench/datasets/aider-polyglot/fixtures/<lang>/...  (VENDORED subset     │
+│       + per-track MIT NOTICE/SPDX)                                          │
+│  · loader.go RunExercise / restorePristineTests  (REUSED VERBATIM)        │
+│  ★ EDIT-verb AgentFn  (drives replace-symbol-body / fuzzy-edit / ...       │
+│       via the warm daemon)  ──plugs into──> RunExercise's AgentFn seam     │
+│        │ run by                                                            │
+│        ▼                                                                   │
+│  ★ bench/runners/aider_edit/MODE.md   (filesystem-table mode, 0 Go change) │
+│  ◆ bench/runtime/result.go  + additive open key `edit_format_applied`      │
+│       (*bool, omitempty — mirrors swebench_* keys; NO schema v3 bump)       │
+│                                                                            │
+│  ★ bench/evaluators/repomapeval/   (recall@k / MRR / nDCG leaf, stdlib)    │
+│       ──measures──> · get-repo-map / get-context (internal/repomap)        │
+│  ★ bench/datasets/repomap-gold/    (hand-labeled relevance corpus)         │
+│  ★ bench/evaluators/fuzzyrobust/   (drift corpus runner, reuses editsim.ES)│
+│       ──measures──> · internal/fuzzy 4-strategy cascade + refusal           │
+│                                                                            │
+│  · bench/aggregator (BCa/pass@k)  ◆ ByLanguage already exists; consumes    │
+│       result.v2 rows for committed baseline                                │
+│  ★ bench/reports/<run>/BENCH-RESULTS.md  (committed local baseline)        │
+│  ◆ Makefile  verify-licenses extended to vendored tree; bench targets       │
+│       HELIX_BIN-guarded (fail-not-skip)                                     │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities (v2.0)
+### Component Responsibilities
 
-| Component | Responsibility | New/Modified/Deleted | File anchor |
-|-----------|----------------|------------------------|-------------|
-| CLI verb subcommands | One cobra command per callable tool; parse flags → `tools/call` args | **NEW** (largely generated) | `internal/cli/tools_gen.go` (new) |
-| One-shot MCP client | Open stream, `initialize`+`tools/call`, read one result, exit | **NEW** | `internal/cli/toolcall.go` (new) or `internal/forwarder/oneshot.go` |
-| `ConnectOrStartDaemon` | Auto-start + warm-reuse the daemon over gRPC | **REUSED as-is** | `internal/forwarder/dial.go:24` |
-| Output renderer | MCP `[]Content` → terse, greppable `file:line` text | **NEW** | `internal/cli/render/` (new) |
-| `forwarderServiceHandler.StreamMCP` | Bridge gRPC stream ↔ SDK session | **UNCHANGED** | `internal/daemon/daemon.go:1442` |
-| `GRPCTransport` | gRPC stream ↔ `mcpsdk.IOTransport` pipe bridge | **UNCHANGED** | `internal/mcp/grpc_transport.go` |
-| Middleware stack (5) | telemetry/profile-filter/suggest/lazy-init/guardrail | **UNCHANGED** (run inside daemon) | `internal/daemon/daemon.go:828-942` |
-| `mcpServer.RunStdio` | stdio MCP transport for daemon-direct mode | **DELETED** | `internal/mcp/server.go:191` |
-| `daemon.listenHTTP` + `/mcp` | Streamable-HTTP MCP head | **DELETED** | `internal/daemon/daemon.go:1360`; `http_session_middleware.go` |
-| `runForwarder` no-arg path | no-arg `helix` = stdio MCP forwarder | **DELETED / REPURPOSED** | `internal/cli/root.go:113-114` |
-| `helix setup <client>` | register MCP server → install skill + hooks | **MODIFIED** | `internal/cli/setup*.go` |
-| `helix nudge` | PreToolUse steer grep/sed/cat → `helix <verb>` | **MODIFIED** | `internal/cli/nudge.go:99` |
-| `cmd/docgen` | regenerate tool table against CLI surface | **MODIFIED** | `cmd/docgen/main.go` |
+| Component | Responsibility | New / Modified / Reused |
+|-----------|----------------|-------------------------|
+| `cmd/helix-refgen` (or `cmd/docgen` extension) | Generate `reference.md` from `skill.ToolProviders()` + `help.ExtractParamDocs`; `--check` drift gate | **NEW** (or modify `cmd/docgen` to emit a 2nd artifact) |
+| `internal/cli/skills/helix/reference.md` | Per-verb synopsis/args/output/example, progressive-disclosure tier | **NEW** (generated, committed) |
+| `internal/cli/skill.go` | Embed + install the skill bundle | **MODIFIED** — `string` → `embed.FS`, `installSkill` walks+copies all files |
+| `internal/cli/setup_clients.go` | Per-client install | **MODIFIED** — Claude path copies reference too; codex/gemini/generic flip teardown-only → also-write instruction file |
+| `internal/cli/nudge.go` | PreToolUse steering | **MODIFIED** — broaden `classifyBashTarget`; envelope reused for Codex hooks.json |
+| adoption-contract tests (`internal/cli/*_test.go`) | Deterministic CI gate: reference completeness, nudge-fires, per-agent install goldens | **NEW** (extend `nudge_test.go`, `verbs_gen_test.go` pattern) |
+| `test/oracle/llm` adoption scorecard | Opt-in LLM-behavioral "does a model pick helix" score | **NEW oracle test** in existing build-tag-gated harness |
+| `bench/datasets/aider-polyglot/loader.go` `RunExercise` | 2-attempt + pristine-test-restore protocol | **REUSED VERBATIM** — do NOT touch WR-01 anti-tamper |
+| EDIT-verb `AgentFn` | Route the model's edit through `helix` verbs against the warm daemon | **NEW** — supplies the loader's existing `AgentFn` seam |
+| `bench/datasets/aider-polyglot/fixtures/` | Vendored exercism subset + MIT SPDX/NOTICE | **NEW** (data) |
+| `bench/runners/aider_edit/MODE.md` | Filesystem-table mode binding | **NEW** (1 dir, 0 Go change — like Phase 80) |
+| `bench/runtime/result.go` | `result.v2` builder | **MODIFIED** — add `edit_format_applied *bool` additive open key |
+| `bench/evaluators/repomapeval/` | recall@k/MRR/nDCG ranking-quality leaf | **NEW** (stdlib-only leaf) |
+| `bench/datasets/repomap-gold/` | Hand-labeled "relevant symbols for task T" corpus | **NEW** (data) |
+| `bench/evaluators/fuzzyrobust/` | Drift-corpus runner; asserts strategy selection + refusal; scores with `editsim.ES` | **NEW** (leaf, reuses `editsim`) |
+| `bench/aggregator` | BCa bootstrap / pass@k / per-language rollup → baseline | **REUSED** (already has `ByLanguage`) |
 
 ---
 
-## Q1 — One-shot tool invocation: reuse forwarder auto-start, and zero-proto-change feasibility
-
-### The reusable seam already exists
-
-`forwarder.ConnectOrStartDaemon(ctx, socketPath, logger, tp)` (`internal/forwarder/dial.go:24`) is the warm-daemon dial: it `tryConnect`s to the unix socket, and on miss spawns `helix --serve --socket=…` detached and polls up to 10s for readiness (`dial.go:34-39,82-100`). **It is already reused by `helix activate` (`internal/cli/activate.go:53`) and `helix status`** with a noop tracer — those commands prove the CLI→daemon path with no MCP at all. The new tool subcommands reuse the *same* function verbatim. No new auto-start logic is needed.
-
-### Zero-proto-change one-shot — RECOMMENDED, and feasible
-
-The existing `StreamMCP(stream MCPMessage)` RPC carries raw MCP JSON-RPC frames (`api/proto/serena/v1/ipc.proto:12`; `MCPMessage.payload` = raw bytes, `:27`). A one-shot CLI call is a *degenerate forwarder session*:
-
-1. `ConnectOrStartDaemon` → `client.StreamMCP(ctx)`.
-2. Send `initialize` request frame, read `initialize` response. The daemon side runs the full MCP handshake inside `mcpServer.SDK().Connect` — `defaultSessionRunner` (`daemon.go:1476-1492`) does exactly this for the forwarder; the daemon cannot tell a CLI stream from a forwarder stream.
-3. Send one `tools/call` frame `{name, arguments}`; read the matching response frame.
-4. `CloseSend()`, drain, exit.
-
-Every frame flows through the **unchanged** server path: `StreamMCP` (`daemon.go:1442`) → `GRPCTransport.Connect` io.Pipe bridge (`grpc_transport.go:44`) → `IOTransport` → SDK → middleware chain → tool handler. The CLI is just a *minimal MCP client* speaking the same wire the forwarder speaks. **Requires ZERO ipc.proto changes and zero daemon changes.**
-
-**Cost of zero-proto:** the CLI must do the MCP `initialize` handshake + JSON-RPC framing + request/response id-matching. Two clean ways to avoid hand-rolling:
-- **(Preferred) Use the MCP Go SDK *client* against a client-side `GRPCTransport`.** `mcpsdk.NewClient(...).Connect(ctx, transport, nil)` yields `session.CallTool(ctx, &CallToolParams{Name, Arguments})`, handling handshake + id-matching for free. The CLI builds the client side of a `GRPCTransport` (mirror of the daemon's `grpc_transport.go`; the forwarder's existing send/recv loop, `forwarder.go:64-123`, refactored into a reusable transport supplies the gRPC↔pipe plumbing). This keeps the MCP SDK as *internal plumbing on the CLI side too* — consistent with "keep the SDK, remove the external surface."
-- Hand-roll a 3-message JSON-RPC exchange. Smaller dependency surface but re-implements handshake/id-matching the SDK already gives.
-
-### Unary `CallTool` RPC — NOT warranted now (assessed)
-
-A new `rpc CallTool(CallToolRequest) returns (CallToolResult)` would be ergonomically nicer (no per-call handshake) but:
-- It would **bypass the 5-middleware chain** (telemetry/lazy-init/guardrail/suggest, installed `daemon.go:828-942`) unless re-invoked behind the unary handler — i.e. rebuild the dispatch the SDK already does. PROJECT.md line 196 keeps those middlewares running; a parallel unary path risks them silently not applying.
-- It is a **proto + generated-code + new server-handler** change, versus zero for the streaming reuse.
-- The handshake "cost" is one extra round-trip on an *already-warm unix socket* — sub-millisecond; dominant latency is the tool's LSP work, identical either way.
-
-**Verdict:** Ship v2.0 with the **zero-proto streaming one-shot via the SDK client**. Revisit a unary `CallTool` only if profiling shows the per-call `initialize` handshake is a measurable tax against a warm daemon (it won't be). Confidence: HIGH.
-
----
-
-## Q2 — Where does output formatting live
-
-### Principle: formatting is a CLI-layer concern, NEVER in the daemon
-
-Tool handlers return `*mcpsdk.CallToolResult{ Content: []mcpsdk.Content{ &TextContent{Text: …} } }` (e.g. `server.go:114-119`, `AddSkillTool` `server.go:262-266`). The daemon stays **content-shape neutral**: it must keep returning structured content so non-CLI consumers (InMemory + HTTP test oracles, the eval harness) are not coupled to terminal formatting. Putting `file:line` prettifying in the daemon would pollute the kernel with presentation concerns and break the existing golden/contract oracles.
-
-### Recommended: a shared renderer package with per-tool render funcs
+## Recommended Project Structure (delta only — what lands where)
 
 ```
-internal/cli/render/          (NEW)
-├── render.go      # Render(toolName string, result *mcpsdk.CallToolResult) (string, error)
-├── content.go     # generic fallback: flatten TextContent; IsError → stderr + nonzero exit
-├── locations.go   # shared "path:line:col  symbol  kind" formatter (the load-bearing terseness)
-└── tools/         # per-tool overrides keyed by tool name (only where the generic isn't terse enough)
+cmd/
+├── docgen/                       ◆ option A: extend to also emit reference.md
+└── helix-refgen/                 ★ option B (recommended): dedicated generator
+    ├── main.go                       (blank-imports == docgen/daemon for registry parity)
+    └── main_test.go
+
+internal/cli/
+├── skill.go                      ◆ embeddedSkillMD string → //go:embed skills/helix/* embed.FS
+├── skills/helix/
+│   ├── SKILL.md                  · terse idle-cost tier (unchanged)
+│   ├── reference.md              ★ generated per-verb reference (committed)
+│   └── reference-edit.md ...     ★ optional per-capability splits
+├── setup_clients.go              ◆ Claude copies bundle; codex/gemini/generic write instruction file
+├── setup_agents.go               ★ AGENTS.md / GEMINI.md writers + Codex hooks.json writer (new file)
+├── nudge.go                      ◆ broaden classifyBashTarget; Codex-envelope reuse
+├── reference_contract_test.go    ★ reference ⊇ VerbToolNames() drift gate
+├── setup_agents_test.go          ★ per-agent install goldens
+└── nudge_test.go                 ◆ add broadened-shape nudge-fires cases
+
+test/oracle/llm/
+└── adoption_scorecard_test.go    ★ opt-in choice-rate / fallback-rate (build tags llm,llmjudge)
+
+bench/
+├── datasets/
+│   ├── aider-polyglot/
+│   │   ├── loader.go             · RunExercise REUSED VERBATIM (WR-01 untouched)
+│   │   ├── fixtures/<lang>/...   ★ VENDORED exercism subset
+│   │   ├── NOTICE / *.SPDX       ★ MIT attribution per track
+│   │   └── VENDOR-MANIFEST.md    ★ deterministic vendored-exercise selection
+│   └── repomap-gold/             ★ hand-labeled relevance corpus + task specs
+├── runners/
+│   └── aider_edit/MODE.md        ★ filesystem-table mode (0 Go change)
+├── runtime/
+│   ├── result.go                 ◆ + edit_format_applied open key
+│   └── aider_edit_agent.go       ★ EDIT-verb AgentFn (daemon-dialing)
+├── evaluators/
+│   ├── editsim/                  · ES() REUSED by fuzzyrobust
+│   ├── repomapeval/              ★ recall@k / MRR / nDCG (stdlib leaf)
+│   └── fuzzyrobust/              ★ drift-corpus runner (leaf, reuses editsim)
+└── reports/<run>/BENCH-RESULTS.md ★ committed local baseline
+
+Makefile                          ◆ verify-licenses → vendored tree; bench targets HELIX_BIN-guarded
 ```
 
-- **One dispatch point**, keyed by tool name, with a **generic fallback** that flattens `TextContent` and maps `IsError==true` (set by tool handlers, e.g. `server.go:161`, `:258`) to stderr + non-zero exit. Most tools work via the fallback + the shared `locations.go` formatter; only a handful (RepoMap tree, blast-radius, diagnostics) need bespoke renderers.
-- **Why shared, not purely per-command:** the terse `file:line`-anchored grammar (ripgrep/ast-grep ergonomics, PROJECT.md line 185) is a *product invariant* that must be consistent across all 51 verbs; one `locations.go` enforces it. Per-command logic is reserved for genuinely tool-specific shapes.
-- This package is the **load-bearing product work** (PROJECT.md line 185) — it deserves its own phase and golden-output tests (mirror the existing golden pattern used for profile contracts).
+### Structure Rationale
 
-**Anti-pattern to avoid:** adding a `--format` field to `tools/call` args or a render hint to the proto. Rendering must not cross the wire. Confidence: HIGH.
-
----
-
-## Q3 — Profile/mode + middleware once the MCP `tools/list` surface is gone
-
-### Critical finding: ProfileFilterMiddleware ONLY touches `tools/list`
-
-`ProfileFilterMiddleware` (`middleware.go:501`, early-returns for `method != "tools/list"` at `:509`) and the explicit comment at `middleware.go:165`: *"ProfileFilterMiddleware only filters tools/list in v1.2; there is no rejection path at tools/call."* So today **profile filtering is advisory** — it shapes what the client is *told* it may call, but the daemon does NOT reject a `tools/call` for a tool outside the active profile. Brief-descriptions and profile description-overrides also piggyback on the same `tools/list` pass (CLAUDE.md middleware notes; `middleware.go:498-501`).
-
-This is the single most important consequence of removing the MCP surface: **with no `tools/list`, the daemon-side profile filter becomes a no-op for the CLI path.** If profile/mode is to be preserved, the CLI must own it.
-
-| Middleware | Fires on | Still meaningful under CLI `tools/call`? | Action |
-|------------|----------|------------------------------------------|--------|
-| **LazyInit** (`lazy_init.go`, installed last → runs first) | every `tools/call` | **YES — essential.** Activates the workspace on first call (`daemon.go:902-942`), serializes concurrent first calls. The CLI one-shot relies on this to warm the kernel. | Keep unchanged |
-| **Telemetry** (`middleware.go:331`, fires when `method=="tools/call"` `:340`) | `tools/call` | **YES.** RED metrics, per-tool deadline via `BudgetFunc`, outcome classification still apply per CLI call. | Keep unchanged |
-| **Guardrail** (`guardrail_middleware.go`) | `tools/call` | **YES.** Receipt/rule enforcement is call-time; unaffected by surface removal. | Keep unchanged |
-| **Suggestion** (`suggest.go`) | error responses on `tools/call` | **YES, but** enriches the MCP error *content*; the CLI renderer must surface that as stderr text. | Keep; renderer prints it |
-| **ProfileFilter** (`middleware.go:501`) | `tools/list` only | **NO for filtering** (no tools/list) and its description-override work also only runs on tools/list. | Becomes inert for the CLI path |
-
-### Where profile/mode enforcement must move
-
-The profile tool-subsets live in `Profile.Tools` (`internal/profile/profile.go:30`) and `config.Tools` (`internal/config/config.go:131,139`), resolved by `config.ResolveProfile` (`internal/config/loader.go:82`). Two options:
-
-1. **CLI-side gate (recommended).** At subcommand registration / dispatch, resolve the active profile via `config.ResolveProfile` and **omit (or refuse) verbs not in the profile's allowed set + current mode.** This mirrors exactly what `tools/list` filtering did for the agent — the agent now "sees" only the verbs the CLI exposes. Keeps enforcement at the same conceptual layer (the surface the agent touches), needs no daemon change. `switch_mode` becomes `helix switch-mode` writing session/config state the CLI reads.
-2. **Promote filtering into a `tools/call` rejection middleware** in the daemon. More invasive (new daemon code, changes call-time semantics for *all* clients), explicitly larger than this milestone wants. Only if defense-in-depth against a hand-typed out-of-profile `helix` call is a hard requirement.
-
-**Verdict:** Enforce profile/mode in the **CLI layer** (option 1), reusing `config.ResolveProfile`. The daemon middleware stack stays byte-for-byte unchanged; `ProfileFilterMiddleware` remains installed (harmless) but dormant for the agent path. Document that the daemon does NOT enforce profile at `tools/call` — the CLI is the enforcement boundary. Confidence: HIGH.
+- **`cmd/helix-refgen` over hand-writing:** The 50 verbs are FROZEN and the registry (`skill.ToolProviders()` → `tool.Name`, `tool.Description`, `tool.InputSchema`) is the single source `cmd/docgen` and `get_tool_help` already read. Generating `reference.md` from the same source makes the completeness contract test trivial (`reference ⊇ VerbToolNames()`) and structurally prevents drift. `cmd/docgen/main.go:110-134` is the exact plumbing to clone; `help.ExtractParamDocs` (`internal/kernel/help/help.go:21`) already turns an `InputSchema` into typed `ParamDoc`s — the per-verb args section is `FormatHelp`'s output, no new parsing.
+- **Bundled `reference.md` (progressive disclosure), not a fatter SKILL.md:** STACK.md confirms the 1,536-char idle cap and the <500-line body guidance. The terse `SKILL.md` stays the idle tier; `reference.md` loads on demand. This is why `skill.go` MUST move to `embed.FS` — the only structural code change.
+- **Leaf evaluators under `bench/evaluators/`:** `editsim` is the proven precedent: stdlib-only, no cross-package reach, unit-tested against paper examples. `repomapeval` and `fuzzyrobust` follow it. The `vet-ablation-leakage` analyzer already forbids `bench/runners → lspool|semantic/store`; new leaves must respect it.
+- **Filesystem-as-table mode (`bench/runners/aider_edit/MODE.md`):** Phase 80 grew 1→6 modes with ZERO resolver Go change by dropping in `MODE.md` dirs (`mode_resolver.go:5-9`). The aider edit surface is one more dir.
 
 ---
 
-## Q4 — Exactly what is removed vs retained
+## Architectural Patterns (the seams v2.1 plugs into)
 
-### DELETED (agent-facing MCP surface — hat #1)
+### Pattern 1: Registry-as-source generation with a `--check` drift gate
 
-| Deleted | File anchor | Notes |
-|---------|-------------|-------|
-| Streamable-HTTP MCP head | `daemon.listenHTTP` + `/mcp` mux `daemon.go:1360-1392`; `mcpServer.HTTPHandler()` `server.go:196`; `internal/daemon/http_session_middleware.go` | Removes the `--mode http` agent transport + `--http-addr`. |
-| stdio MCP transport (daemon-direct) | `mcpServer.RunStdio` `server.go:191` | The forwarder path used `GRPCTransport`, not this; safe to delete. |
-| no-arg / `--mode stdio` forwarder MCP head | `runForwarder` dispatch `root.go:113-114`; the stdin↔stdout MCP pump in `forwarder.RunForwarder` `forwarder.go:22-131` | Retire the *stdio MCP head*. **Reuse** `ConnectOrStartDaemon` + the gRPC send/recv loop by refactoring them into the new one-shot transport; **delete** only the stdin/stdout MCP-framing wrapper. |
-| `helix setup` MCP-registration registrars | `internal/cli/setup_clients.go` (`claude mcp add-json`-style subprocess) | Replaced by skill+hooks install (below). |
+**What:** `cmd/docgen` imports all tool-providing packages (blank imports, `cmd/docgen/main.go:32-46`), calls `skill.ToolProviders()`, and renders markdown between `<!-- BEGIN -->/<!-- END -->` markers; `--check` exits 1 if the file would change (CI gate).
+**When to use:** Any committed artifact derived from the 50 frozen verbs — exactly `reference.md`.
+**Trade-off:** Must keep the generator's blank-import set == the daemon's (the documented "blank-import parity rule", `cmd/docgen/main.go:23-31`) or the generated set diverges from the runtime set. `helix-refgen` inherits this constraint verbatim.
 
-### RETAINED (internal plumbing — hat #2)
-
-- The **daemon process** + bootstrap (`daemon.go`), the **gRPC IPC** (`ForwarderService`, all 4 RPCs — `StreamMCP` now carries CLI one-shots; `GetStatus`/`ActivateWorkspace`/`DeactivateWorkspace` still serve `helix status/activate/deactivate`, `daemon.go:1494-1538`).
-- `forwarderServiceHandler.StreamMCP` + `GRPCTransport` + `mcpServer.SDK()` dispatch + **all 5 middlewares** + all 51 `mcpsdk.AddTool` registrations.
-- `ConnectOrStartDaemon` auto-start/warm-reuse; `--serve` flag (now internal, used by `dial.go:89`).
-
-### What replaces no-arg `helix`
-
-Today no-arg `helix` launches the stdio forwarder (`root.go:50` comment, `:98-118` dispatches to `runForwarder`). Options, in recommendation order:
-1. **Print help/usage** (cobra default once `RunE: runRoot` is removed). Cleanest; matches `git`/`kubectl`/`playwright`. The agent never calls bare `helix`; it calls `helix find-symbol …`.
-2. Alias bare `helix` to `helix status` (least surprising for a human poking the daemon).
-
-`--serve` is **retained** (the forwarder/one-shot spawns the daemon via `helix --serve --socket=…`). `--mode` / `--http-addr` are removed from the public surface.
-
-### How `helix setup <client>` flips to skill+hooks install
-
-Half the skeleton already exists for Claude Code: `setup_hooks.go:28-69` installs SessionStart(`activate`)/PreToolUse(`nudge`)/Stop(`deactivate`) hooks. The flip:
-- **Remove** the MCP-server registration step (`ClientRegistrar.Register` subprocess in `setup_clients.go`).
-- **Add** a `SKILL.md` install step: write/symlink the progressively-disclosed `SKILL.md` (NEW authored asset) into the client's skill location, plus the nudge/activate/deactivate hooks (present for Claude Code; generalize the installer to other hook-capable clients, degrade to "SKILL.md only" elsewhere).
-- **Keep** language detection + LS pre-install (`setup_detect.go`, `setup.go:113-138`) — unchanged value.
-- `helix setup` becomes "install skill + hooks (+ pre-warm language servers)" rather than "register MCP server."
-
-The **nudge hook** (`nudge.go`) is repurposed: today it nudges *toward* MCP symbolic tool names (`helixSymbolicTools` map `nudge.go:158-168`; message `nudge.go:99`); v2.0 rewrites the suggestion text to redirect `grep`/`sed`/`cat` Bash calls to the equivalent `helix <verb>` (PROJECT.md line 187). `isGrepReadTool` (`nudge.go:186-198`) already detects the Bash grep/find/rg/ag cases — the change is the *suggested replacement text* and the detection set. Confidence: HIGH.
-
----
-
-## Q5 — Suggested build order (phases continue from 90) + docgen regen point
-
-Dependency-ordered, strangler-fig (same pattern v1.10 used for the semantic store): each phase ships behind the still-live MCP surface; **the MCP heads are deleted LAST**, after the CLI proves parity.
-
-```
-Phase 90  CLI one-shot invocation spine (NEW)
-          - Refactor forwarder send/recv into a reusable client-side GRPCTransport seam
-          - ConnectOrStartDaemon reuse + MCP SDK *client* + initialize→tools/call→read→exit
-          - 2-3 hand-wired verbs end-to-end (e.g. find-symbol, goto-definition) as proof
-          - ZERO proto change; daemon untouched; MCP heads still live (dual-run)
-          DEPENDS: nothing new. GATE: a real CLI call returns a tool result from the warm daemon.
-
-Phase 91  Code-generated verb wiring + profile/mode CLI gate (NEW + MODIFIED)
-          - Generate one cobra subcommand per tool from mcpServer.CollectToolSchemas()
-            InputSchema + the typed Args structs (the SDK populates InputSchema; suggest.go
-            BuildToolSchemaMap at suggest.go:26-38 proves it's introspectable)
-          - CLI-side profile/mode enforcement via config.ResolveProfile (Q3 option 1)
-          DEPENDS: 90. GATE: all 51 verbs dispatch; out-of-profile verbs refused at the CLI.
-
-Phase 92  Terse output renderer (NEW) — the load-bearing product phase
-          - internal/cli/render/ : shared locations.go + per-tool overrides + golden tests
-          - IsError → stderr + nonzero exit; surface Suggestion-middleware enrichment
-          DEPENDS: 91 (needs verbs to render). GATE: golden file:line output for every verb.
-
-Phase 93  SKILL.md authoring + nudge-hook repurpose + setup flip (NEW + MODIFIED)
-          - Author progressively-disclosed SKILL.md
-          - nudge.go: redirect grep/sed/cat → helix <verb>
-          - setup*.go: drop MCP registration, install skill+hooks across clients
-          DEPENDS: 92 (skill teaches the real terse commands). GATE: helix setup claude-code
-          installs skill+hooks, no MCP server; nudge points to helix verbs.
-
-Phase 94  Retire the agent-facing MCP surface (DELETED)
-          - Delete daemon.listenHTTP + /mcp + http_session_middleware + HTTPHandler
-          - Delete RunStdio + the stdio-MCP forwarder framing; repurpose no-arg helix → help/status
-          - Remove --mode/--http-addr public flags; keep --serve as internal
-          - Middlewares + StreamMCP + GRPCTransport + 51 tools all RETAINED
-          DEPENDS: 90-93 (CLI must be the proven sole surface first). GATE: no MCP head
-          listens; CLI parity verified; existing daemon/kernel tests green.
-
-Phase 95  Identity & docs rewrite + docgen regen (MODIFIED)
-          - README / CLAUDE.md / PROJECT.md Constraints ("Protocol: MCP — primary interface"
-            → CLI-first); Core Value rewrite
-          - REGENERATE cmd/docgen tool table against the CLI surface (see below)
-          DEPENDS: 94 (docs describe the final shape). GATE: docgen --check clean.
+**Example:**
+```go
+// helix-refgen reuses the docgen registry walk:
+for _, tp := range skill.ToolProviders() {
+    for _, tool := range tp.Tools() {
+        verb := strings.ReplaceAll(tool.Name, "_", "-")      // frozen mechanical mapping
+        params := help.ExtractParamDocs(tool.InputSchema)    // typed args from schema
+        section := help.FormatHelp(verb, tool.Description, params, "")
+        // ... emit reference.md section ...
+    }
+}
 ```
 
-### Where `cmd/docgen` must be regenerated — and a required change
+### Pattern 2: `embed.FS` skill bundle + path-contained atomic install
 
-`cmd/docgen/main.go` builds the README tool table from `skill.ToolProviders()` via blank imports (`cmd/docgen/main.go:21-36`). Two facts the roadmapper must encode:
-1. **Regen happens in Phase 95**, after the surface is final: run `go run ./cmd/docgen` then commit — the table is auto-generated, never hand-edited (CLAUDE.md: "do not hand-edit the tool table"). The `--check` mode is the CI gate.
-2. **docgen's import set MUST equal the daemon's** (MEMORY "helix-tool-docs-drift": the prior bug was docgen missing the `internal/skill/semantic` blank import, drifting 53-vs-47 tool counts). If any tool package is added/removed during 90-94, mirror it in both `cmd/docgen/main.go` and `internal/daemon/imports.go`. The table semantics also shift from "MCP tool / profile / mode" to "CLI verb / profile / mode" — docgen's `generateToolTable` renderer (`cmd/docgen/main.go:56`) likely needs a column/header update, not just a regen.
+**What:** `installSkill` (`skill.go:131`) atomically writes the embedded skill (temp+rename) into a `withinSkillRoot`-contained target dir. Today it embeds ONE file as a `string`.
+**When to use:** Shipping `reference.md` alongside `SKILL.md`.
+**Trade-off:** The `embed.FS` switch ripples into `EmbeddedSkillBody()` (still returns just `SKILL.md`), the SKILL-04 idle-cost assertion (reads `SKILL.md` only), and `installSkill` (now walks the FS). All three are small, localized edits; the path-traversal guard (`withinSkillRoot`/`lexicalSkillRoot`) is unchanged.
+
+**Example:**
+```go
+//go:embed skills/helix/*
+var embeddedSkillFS embed.FS
+
+func installSkill(targetDir string) error {
+    if !withinSkillRoot(targetDir) { /* unchanged guard */ }
+    // walk embeddedSkillFS, write each entry atomically (temp+rename)
+}
+```
+
+### Pattern 3: PreToolUse advisory envelope, reused across Claude + Codex
+
+**What:** `nudge.go` emits `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":...}}` at exit 0 (advisory, never blocks — `nudge.go:123-149`). Codex's PreToolUse hook (STACK.md, HIGH-confidence) uses the SAME camelCase `additionalContext` envelope.
+**When to use:** Codex steering — write a `~/.codex/hooks.json` (`type:"command"` → `helix nudge`) and reuse `emitAdvisory`.
+**Trade-off:** Gemini/IDE/generic have NO hook surface — steering there is instruction-file-only (`GEMINI.md`/`AGENTS.md`). Do not build a per-agent steering engine; the one nudge command serves both hook-capable runtimes.
+
+### Pattern 4: Injected `AgentFn`/`TestFn` seam in `RunExercise` (verb-agnostic loader)
+
+**What:** `RunExercise(ctx, ex, workDir, runTests TestFn, agent AgentFn)` (`loader.go:230`) is verb-agnostic — `AgentFn` is "whatever drives the edit". The loader already does pinned-clone, config-map, 2-attempt reprompt, and the WR-01 pristine-test restore.
+**When to use:** The v2.1 polyglot edit bench supplies an `AgentFn` that routes the model's diff through `helix replace-symbol-body`/`fuzzy-edit`/`replace-in-file`/`insert-*` against the warm daemon.
+**Trade-off:** The `AgentFn` must dial the daemon (the v2.0 one-shot `helix <verb>` path) — it is NOT a leaf; it lives in `bench/runtime` (or a sibling) where daemon-dialing is allowed, not in the `aiderpolyglot` leaf package (stdlib-only). The pristine-test restore is load-bearing; do not move it into the AgentFn.
+
+### Pattern 5: Additive open `result.v2` key (no schema v3 bump)
+
+**What:** `result.go` carries open provenance keys (`embedder_id`, `language`, `container_id`, `swebench_*`) as `omitempty` (pointer for booleans so a literal `false` survives). `additionalProperties` stays OPEN; `schema_version` stays `"v2"` (`result.go:126-139, 220-229`).
+**When to use:** The "edit-format-applied-correctly" signal — `edit_format_applied *bool` mirrors `swebench_raw_resolved` exactly (a `*bool` so an applied=false is preserved, not dropped).
+**Trade-off:** None structurally; this is the project's established additive contract. Do NOT add it to `required` and do NOT bump to v3.
 
 ---
 
-## Anti-Patterns (specific to this milestone)
+## Data Flow
 
-### Anti-Pattern 1: Excising the MCP SDK
-**What people do:** read "rip out MCP" as "remove the SDK." **Why wrong:** PROJECT.md line 179 locks this — the SDK is the daemon's *dispatch + middleware engine* (51 `AddTool` + 5 middlewares); excising it is ~5× work for zero agent-visible benefit. **Instead:** remove only the two agent-facing transports (HTTP `/mcp`, stdio forwarder framing); keep `mcpServer.SDK()` driving `StreamMCP`.
+### New flow A — per-verb reference generation + install
 
-### Anti-Pattern 2: A unary `CallTool` proto RPC to "simplify" one-shots
-**What people do:** add `rpc CallTool(...)` to feel cleaner. **Why wrong:** bypasses the 5-middleware chain (re-implementing dispatch), needs proto/codegen changes, saves only a sub-ms handshake on a warm socket. **Instead:** stream one `tools/call` over the existing `StreamMCP` via the MCP SDK *client* (Q1).
+```
+skill.ToolProviders() ──► helix-refgen ──► reference.md (committed)
+        (tool.Name, .Description, .InputSchema)        │
+                                                       │ embed.FS
+helix setup claude-code ──► installSkill walks bundle ──► <.claude>/skills/helix/{SKILL.md,reference.md}
+helix setup codex       ──► AGENTS.md + ~/.codex/hooks.json(→ helix nudge)
+helix setup gemini-cli  ──► GEMINI.md
+        ▲
+   make check / CI: helix-refgen --check  +  reference ⊇ VerbToolNames() test  (BLOCKS merge)
+```
 
-### Anti-Pattern 3: Rendering in the daemon / over the wire
-**What people do:** add a `--format` arg or render hint to `tools/call`. **Why wrong:** couples the kernel to presentation, breaks the InMemory/HTTP test oracles, leaks formatting across the IPC boundary. **Instead:** daemon returns structured `[]Content`; `internal/cli/render/` formats (Q2).
+### New flow B — polyglot edit bench (reuses RunExercise)
 
-### Anti-Pattern 4: Assuming the daemon enforces profile at call time
-**What people do:** drop CLI-side profile gating, trusting the daemon's ProfileFilter. **Why wrong:** ProfileFilter only filters `tools/list`, which no longer exists for the CLI — call-time is unenforced (`middleware.go:165`). **Instead:** gate profile/mode in the CLI via `config.ResolveProfile` (Q3).
+```
+vendored fixtures ──► loadExercise (.meta/config.json map)
+        │
+        ▼
+RunExercise(ctx, ex, workDir, realTestFn, EDIT-verb AgentFn)   [REUSED VERBATIM]
+   attempt i: AgentFn drives `helix replace-symbol-body|fuzzy-edit|...` against warm daemon
+              │
+              ▼ restorePristineTests (WR-01)  ──►  nativeTestCommand (pytest/cargo --include-ignored/...)
+   pass/fail ──► BuildResult{ outcome, language, edit_format_applied:&bool }  ──► result.v2.json
+        │
+        ▼
+bench/aggregator (BCa, pass@k, ByLanguage) ──► bench/reports/<run>/BENCH-RESULTS.md (committed baseline)
+```
 
-### Anti-Pattern 5: Deleting MCP heads before CLI parity
-**What people do:** remove `listenHTTP`/forwarder framing early. **Why wrong:** loses the dual-run safety net; a CLI gap becomes a regression with no fallback. **Instead:** strangler-fig — heads stay live through Phases 90-93, deleted only in 94.
+### New flow C — RepoMap-quality + fuzzy-robustness evals
+
+```
+repomap-gold corpus (task T, relevant symbols) ──► get-repo-map / get-context (internal/repomap)
+        │                                                   │ ranked output
+        ▼                                                   ▼
+repomapeval leaf: recall@k / MRR / nDCG + budget-fit invariant ──► result.v2 ──► aggregator
+
+drift corpus (intended edit, drifted rendering) ──► fuzzy-edit / replace-in-file (internal/fuzzy)
+        │                                                   │ strategy used + refusal
+        ▼                                                   ▼
+fuzzyrobust leaf: assert strategy selected + ambiguity REFUSED; score with editsim.ES ──► result.v2
+```
+
+### Key invariants the data flow MUST preserve
+
+1. **HELIX_BIN guard (fail-not-skip):** bench smoke is false-green without `HELIX_BIN` (MEMORY: helix-bench-smoke-false-green). The new edit/repomap/fuzzy runners must FAIL or REFUSE when `HELIX_BIN` is unset, never silently SKIP into a green. The committed baseline is captured `HELIX_BIN`-gated, local-only.
+2. **WR-01 anti-tamper:** the graded test file is restored pristine before each grade. The EDIT-verb AgentFn must not bypass `restorePristineTests`.
+3. **Leaf discipline:** `repomapeval`/`fuzzyrobust` import stdlib (+ `editsim`) only — no `internal/kernel`, `internal/semantic`, or `bench/runtime`. The daemon-dialing AgentFn lives OUTSIDE the leaf.
+4. **Generator parity:** `helix-refgen`'s blank-import set must equal the daemon's (else the reference covers the wrong tool set).
+
+---
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| Vendored fixture subset (tens of exercises) | Vendor only the exercises actually exercised (VENDOR-MANIFEST.md), not all 6 full tracks — keeps the tree small and the MIT NOTICE auditable |
+| Full 225-task live polyglot run | Local/`HELIX_BIN`-gated only; NEVER a CI gate (network + 6 toolchains). Hermetic vendored subset is the CI proof (Phase 85 precedent) |
+| RepoMap gold corpus growth | Hand-labeling is the cost driver; start with a small curated set per language; recall@k is O(k), nDCG O(n log n) — math is not the bottleneck |
+| LLM adoption scorecard | Opt-in, never blocks; nondeterminism stays out of the merge gate (v1.4 precedent) |
+
+### Scaling Priorities
+
+1. **First bottleneck:** human curation of the repomap-gold and fuzzy-drift corpora — gate these features (P2) behind the P1 substrate so the milestone isn't blocked on labeling.
+2. **Second bottleneck:** vendored-tree size / license audit surface — bound by the VENDOR-MANIFEST subset + the extended `make verify-licenses` hard-fail.
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Hand-writing the per-verb reference
+**What people do:** Author 50 verbs of args/examples by hand in `reference.md`.
+**Why it's wrong:** Drifts from the frozen registry the moment a description changes; the completeness test becomes a stale duplicate.
+**Do this instead:** Generate from `skill.ToolProviders()` + `help.ExtractParamDocs` via `helix-refgen --check`, identical to `cmd/docgen`.
+
+### Anti-Pattern 2: Rebuilding the aider polyglot adapter
+**What people do:** Treat "add the aider benchmark" as new harness work.
+**Why it's wrong:** The v1.12 loader (clone + config-map + 2-attempt + WR-01 anti-tamper + native test argv) already exists and is correct; rebuilding risks regressing WR-01.
+**Do this instead:** Reuse `RunExercise` verbatim; only supply the EDIT-verb `AgentFn`, vendor fixtures, add the `edit_format_applied` field, and commit a baseline.
+
+### Anti-Pattern 3: A per-agent skill engine for Codex/Gemini/IDE
+**What people do:** Build a bespoke skill runtime per non-Claude agent.
+**Why it's wrong:** Those agents read a markdown instruction file (AGENTS.md/GEMINI.md), not Claude Agent Skills. High cost, no return.
+**Do this instead:** One shared generated reference + a thin per-agent instruction file; reuse the single `helix nudge` for the only other hook-capable runtime (Codex).
+
+### Anti-Pattern 4: Bumping `result.v2` to v3 for the edit-format signal
+**What people do:** Add a required field / new schema version.
+**Why it's wrong:** Breaks byte-compat of existing artifacts; the project's contract is additive-minor open keys.
+**Do this instead:** `edit_format_applied *bool` with `omitempty`, `additionalProperties` open, `schema_version` stays `"v2"` (mirror `swebench_raw_resolved`).
+
+### Anti-Pattern 5: A deny/block PreToolUse hook to "force" adoption
+**What people do:** exit 2 on grep/sed/cat.
+**Why it's wrong:** grep/sed/cat are legitimately correct for prose/logs/config/unknown-symbol discovery; blocking trains the model to fight the tool. `nudge.go` deliberately exits 0.
+**Do this instead:** Keep advisory exit-0; broaden detection only.
 
 ---
 
@@ -268,49 +311,54 @@ Phase 95  Identity & docs rewrite + docgen regen (MODIFIED)
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| CLI ↔ daemon (tool call) | gRPC `StreamMCP` stream, raw MCP JSON-RPC frames (`ipc.proto:12`) | **UNCHANGED wire.** CLI is a minimal MCP client; daemon can't distinguish it from the forwarder. |
-| CLI ↔ daemon (workspace/status) | gRPC unary `GetStatus`/`ActivateWorkspace`/`DeactivateWorkspace` | **UNCHANGED.** Already used by `helix status/activate/deactivate`. |
-| CLI ↔ daemon (auto-start) | `ConnectOrStartDaemon` spawns `helix --serve --socket=…` | **REUSED** (`dial.go:24,89`). `--serve` retained as internal flag. |
-| daemon ↔ kernel | in-process; SDK dispatch → tool handlers → kernel | **UNCHANGED.** Warm LSP pool, RepoMap, edits all intact. |
-| CLI render ↔ tool result | in-process; `*mcpsdk.CallToolResult.Content` → terse text | **NEW** `internal/cli/render/`. Must not cross the wire. |
-| CLI ↔ profile/config | `config.ResolveProfile` (`config/loader.go:82`) | **NEW use** — CLI becomes the profile-enforcement boundary. |
-| client ↔ helix (steering) | `SKILL.md` + nudge hook (`nudge.go`) | **NEW asset + MODIFIED hook.** |
+| `helix-refgen` ↔ tool registry | `skill.ToolProviders()` + `help.ExtractParamDocs` | Same source as `cmd/docgen`/`get_tool_help`; keep blank-import parity with daemon |
+| `skill.go` ↔ `setup_clients.go` | `installSkill(targetDir)` walks `embed.FS` | Claude/Claude-Desktop registrars copy the bundle; path-traversal guard unchanged |
+| `setup_clients.go` ↔ non-Claude agents | write `AGENTS.md`/`GEMINI.md` (+ Codex `hooks.json`) | Flip teardown-only → also-write; Codex hooks.json points at `helix nudge` |
+| `nudge.go` ↔ Codex hook | shared `additionalContext` exit-0 envelope | One steering engine, two runtimes |
+| EDIT-verb `AgentFn` ↔ warm daemon | one-shot `helix <verb>` dial (v2.0 path) | Lives in `bench/runtime` (daemon-dialing allowed), NOT the stdlib leaf |
+| `aiderpolyglot.RunExercise` ↔ AgentFn/TestFn | injected func seams | REUSED VERBATIM; WR-01 restore untouched |
+| `repomapeval`/`fuzzyrobust` ↔ kernel engines | measure `get-repo-map`/`get-context` & `internal/fuzzy` outputs | Leaves import stdlib + `editsim` only; `vet-ablation-leakage` forbids kernel imports from `bench/runners` |
+| new runners ↔ `bench/runtime` | `BuildResult` → `result.v2.json` → `bench/aggregator` | Additive `edit_format_applied` key; aggregator's `ByLanguage` already exists |
+| Makefile gates | `verify-licenses` (vendored tree), `bench`/`bench-quick` (HELIX_BIN) | License gate already exists for the cloned tracks; extend to vendored fixtures |
 
-### External Reference
+### External Services
 
-| Reference | Pattern | Notes |
-|-----------|---------|-------|
-| `github.com/microsoft/playwright-cli` | CLI + `SKILL.md` taught via Bash tool | Playwright keeps MCP *alongside* the CLI; Helix goes further and retires the agent-facing MCP head. The CLI+SKILL.md+progressive-disclosure pattern and terse-output ergonomics are the borrowable parts. |
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Aider-AI/polyglot-benchmark | pinned-SHA clone (`pin.go` `7e0611e7…`) → snapshot into `fixtures/` | Exercism content is **MIT** (in-tree byte-verified LICENSE-AUDIT.md), NOT Apache-2.0 |
+| Anthropic / DeepSeek LLM | `anthropic-sdk-go v1.35.0` (already a dep) via `test/oracle/{llm,judge}` | Opt-in adoption scorecard; build-tag gated; never blocks merge |
+| Claude Code / Codex / Gemini hook & instruction surfaces | file writes (SKILL.md/reference.md, AGENTS.md, GEMINI.md, hooks.json) | No new dependency; conventions verified in STACK.md (HIGH) |
 
 ---
 
-## Scaling Considerations
+## Suggested Build Order (dependency-honoring — roadmap phases from 97)
 
-| Scale | Architecture adjustment |
-|-------|--------------------------|
-| Single agent, occasional calls | Per-call `initialize` handshake on a warm socket is negligible; default path. |
-| High CLI call rate (tight agent loop) | If handshake overhead ever shows in profiling, consider a unary `CallTool` (Q1) OR a short-lived client connection cache — but only then. The warm daemon + share-until-dirty LS pool is the real performance asset and is untouched. |
-| Many concurrent CLI invocations | LazyInit serializes first-call activation per workspace; each one-shot is its own gRPC stream/session — already the forwarder's concurrency model. |
+The order encodes three hard dependencies the question calls out: **reference → contract-test**, **vendor → baseline**, **output/corpus → eval**. Thrust 1 and Thrust 2 are independent and could interleave; within each, order is fixed.
+
+**Thrust 1 (adoption):**
+1. **`embed.FS` switch + `helix-refgen` + generated `reference.md`** — the substrate everything else asserts/installs. (`skill.go` MODIFIED, `helix-refgen` NEW, `reference.md` NEW.) *Depends on: nothing new.*
+2. **Deterministic adoption-contract tests** — reference ⊇ `VerbToolNames()`, nudge-fires (broadened), idle-cost cap. *Depends on: 1 (reference must exist to assert completeness).* BLOCKS merge.
+3. **Multi-agent instruction files + Codex hook** — `setup_clients.go`/`setup_agents.go` write AGENTS.md/GEMINI.md, Codex hooks.json reuses `nudge`. *Depends on: 1 (shared reference is the substrate) + the nudge broadening.* Add per-agent install goldens.
+4. **(P2) LLM-behavioral adoption scorecard** — `test/oracle/llm`, opt-in. *Depends on: 1 (loads the skill body) + 2 (deterministic layer green first).*
+
+**Thrust 2 (validation):**
+5. **Vendor fixtures + MIT SPDX/NOTICE + extended `verify-licenses`** — committed offline data. *Depends on: nothing new (reuses `pin.go`).* Must precede the baseline.
+6. **EDIT-verb AgentFn + `aider_edit` MODE.md + `edit_format_applied` key** — wires `RunExercise` to helix verbs. *Depends on: 5 (vendored fixtures) + the result.v2 additive key.*
+7. **Committed polyglot baseline** — HELIX_BIN-gated local capture → `BENCH-RESULTS.md`. *Depends on: 5 + 6 (must run the wired bench offline).*
+8. **(P2) RepoMap-gold corpus → `repomapeval` leaf → baseline** — corpus before eval. *Depends on: corpus authored first.*
+9. **(P2) Fuzzy-drift corpus → `fuzzyrobust` leaf (reuses `editsim.ES`) → baseline** — corpus before eval. *Depends on: corpus authored first.*
+
+**Cross-cutting ordering rule for every bench phase:** the HELIX_BIN guard (fail-not-skip) and the leaf-import boundary (`vet-ablation-leakage`) are pre-existing gates the new code must satisfy, not new work — verify them in each bench phase's exit criteria.
 
 ---
 
 ## Sources
 
-- `/.planning/PROJECT.md` lines 173-199 (v2.0 locked architecture decision) — HIGH
-- `internal/forwarder/dial.go:24,34-39,82-100` (`ConnectOrStartDaemon`, `--serve` spawn) — HIGH
-- `internal/forwarder/forwarder.go:22-131` (stdio MCP pump to retire; gRPC send/recv loop to reuse) — HIGH
-- `internal/mcp/grpc_transport.go:25-130` (`GRPCTransport` bridge, retained) — HIGH
-- `internal/mcp/server.go:191,196,262-266` (`RunStdio`, `HTTPHandler` deleted; content shape) — HIGH
-- `internal/mcp/middleware.go:133,165,331,340,498-501,509` (5-middleware install; ProfileFilter tools/list-only; telemetry on tools/call) — HIGH
-- `internal/mcp/suggest.go:26-38` (proves `mcpsdk.Tool.InputSchema` is introspectable for verb codegen) — HIGH
-- `internal/daemon/daemon.go:828-942,1360-1392,1442-1538` (middleware install order, listenHTTP, StreamMCP, defaultSessionRunner, unary RPC handlers) — HIGH
-- `internal/cli/root.go:44-118,134-206` (no-arg/forwarder/daemon dispatch, flags to remove) — HIGH
-- `internal/cli/activate.go:53` (ConnectOrStartDaemon CLI reuse precedent) — HIGH
-- `internal/cli/nudge.go:99,158-198` (nudge repurpose point), `internal/cli/setup.go:113-138`, `internal/cli/setup_hooks.go:28-69` (setup flip) — HIGH
-- `internal/profile/profile.go:30`, `internal/config/config.go:131,139`, `internal/config/loader.go:82` (profile tool-subsets + ResolveProfile) — HIGH
-- `cmd/docgen/main.go:21-36,56` + MEMORY "helix-tool-docs-drift" (regen point + import-parity requirement) — HIGH
-- `api/proto/serena/v1/ipc.proto:9-30` (StreamMCP + unary RPCs; zero-change feasibility) — HIGH
+- In-tree source (read directly, HIGH): `internal/cli/skill.go`, `internal/cli/nudge.go`, `internal/cli/setup_clients.go`, `internal/cli/verbs_gen.go`, `cmd/docgen/main.go`, `internal/kernel/help/help.go`, `bench/datasets/aider-polyglot/loader.go`, `bench/runtime/result.go`, `bench/runtime/cell.go`, `bench/runners/mode_resolver.go`, `bench/evaluators/editsim/editsim.go`, `Makefile`
+- `.planning/research/STACK.md`, `.planning/research/FEATURES.md` (this cycle — established findings)
+- `.planning/PROJECT.md` (v2.1 milestone section + v1.12 bench phase history)
+- MEMORY: helix-bench-smoke-false-green (HELIX_BIN fail-not-skip guard)
 
 ---
-*Architecture research for: CLI head over an existing MCP daemon; agent-facing MCP surface retirement (v2.0)*
-*Researched: 2026-06-21*
+*Architecture integration research for: Helix v2.1 — Agent Adoption & Aider-Derived Validation*
+*Researched: 2026-06-22*

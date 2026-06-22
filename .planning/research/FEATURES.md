@@ -1,247 +1,181 @@
 # Feature Research
 
-**Domain:** CLI+skill agent interface (token-efficient CLI head + progressively-disclosed SKILL.md + PreToolUse steering) for a code-intelligence daemon
-**Researched:** 2026-06-21
-**Confidence:** HIGH (Claude Code skills + hooks from official docs; Playwright-CLI conventions from upstream README/SKILL.md; ripgrep/ast-grep output from man pages and upstream docs; existing Helix nudge hook read directly from source)
+**Domain:** Coding-agent adoption layer (skill/reference + steering + multi-agent) and Aider-derived benchmark validation for a CLI-first code-intelligence tool
+**Researched:** 2026-06-22
+**Confidence:** HIGH (existing Helix surface read from source; Aider mechanics confirmed against aider.chat docs; Claude Code hook semantics confirmed against current docs)
 
-> Scope: this milestone (v2.0 CLI-First — MCP Surface Retirement) builds the **new CLI+skill interface only** — the 53 underlying tools, daemon, gRPC IPC, profiles/modes, and the nudge-hook mechanism already exist. Findings below are about the *surface*: how `helix <verb>` subcommands should be named/grouped, what they print, what the SKILL.md teaches, and how the hook steers `grep/sed/cat` → `helix`. Categories are tuned for a **single reader: an LLM coding agent invoking the CLI through the Bash tool**, not a human at a terminal.
+## Scope Note — What Already Exists (do NOT rebuild)
+
+Read from source before scoping the gap:
+
+- **`internal/cli/skills/helix/SKILL.md`** — terse v2.0 skill: YAML frontmatter (599-byte idle description, `allowed-tools: Bash(helix *)`) + a one-line-per-verb **decision matrix** ("use X not Y") + a pointer to `helix get-tool-help`. It is NOT a per-verb reference (no args, no output shape, no worked examples). **Per-verb help already exists at runtime via `helix get-tool-help`** (`internal/kernel/help/`), pulled from the tool registry.
+- **`internal/cli/nudge.go`** — `PreToolUse` advisory nudge. Fires on EVERY grep/read/Bash-on-code call (no count threshold), classifies the Bash file operand (code vs prose/log/config via static ext allowlists `classifyBashTarget`), maps to the closest `helix` verb, and emits `additionalContext` with **exit 0 (advisory only, never blocks)**. Has a symbolic-tool reset list. No SessionStart priming, no deny path.
+- **`internal/cli/setup_clients.go`** — 7 client registrars. **Only `claude-code` writes the skill + hooks.** vscode / jetbrains / gemini-cli / opencode / generic are **MCP-teardown-only** (they remove a stale Helix MCP registration; they install no skill, no reference, no steering).
+- **`bench/datasets/aider-polyglot/`** (v1.12 Phase 85) — a **dataset-loader-only** adapter: pinned-sha shallow clone (`clone.go`), `.meta/config.json` mapping + `flagNonHermetic` (`loader.go`), the upstream **2-attempt + stderr-reprompt** protocol (`RunExercise`, `tries=2`, `timeout=180s`), native per-language test argv (`nativeTestCommand`), and the **anti-tamper pristine-test restore** (`restorePristineTests`, WR-01). It carries the `language` provenance field onto result.v2 and is HELIX_BIN/network-gated. **It does NOT exercise Helix EDIT verbs** — the `AgentFn` is whatever drives the edit; the adapter is verb-agnostic. It clones from upstream at runtime (it does NOT vendor fixtures into the tree).
+- **`bench/` stack** (v1.12) — result.v2 schema, aggregator (BCa/pass@k/cost rollup), container runtime, contamination canary, `cmd/helix-bench`, fairness contract. **No RepoMap-quality eval and no fuzzy/edit-format robustness bench exist.**
+- **`internal/fuzzy/`** — 4-strategy cascade (exact `lines.go`, whitespace-normalized, indentation-flexible `indent.go`, ellipsis-placeholder `ellipsis.go`) with ambiguity refusal + `diff.go`. Well unit-tested; **never benchmarked against an LLM-drift corpus.**
+- **`test/oracle/llm/` + `test/oracle/judge/`** (v1.4, build tags `llm`/`llmjudge`) — tool-selection / disambiguation / output-interpretation behavioral tests with judge scoring, multi-provider (Anthropic + DeepSeek), never blocks merge.
+
+**Net gap for v2.1:** (1) a comprehensive per-verb *reference* layer above the existing terse skill; (2) a *deterministic adoption contract* + an LLM-behavioral adoption score; (3) per-agent skill/reference surfaces for the 4 non-Claude clients; (4) the aider EDIT-verb mapping, a RepoMap-quality eval, a fuzzy-robustness bench, **vendored** fixtures, and a **committed baseline** — none of which the existing loader-only adapter covers.
 
 ## Feature Landscape
 
-### Table Stakes (Agents Expect These)
-
-Features the surface must have or it fails its one job (replace grep/sed/cat fallback and the MCP schema preload).
+### Table Stakes (Users Expect These)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **One `helix <verb>` per callable tool, code-generated from the typed-arg registry** | The milestone's "full 53-tool CLI parity" goal; manual wiring of 53 commands drifts from the registry | MEDIUM | Tool registry's typed args (`jsonschema.For[T]`) already drive MCP `AddTool`; reuse as the source for cobra flag wiring. One generator, not 53 hand-written files. |
-| **Terse `path:line:col`-anchored default output, NOT pretty JSON** | This is the load-bearing reason a CLI beats grep — a model already parses `file.go:42:7` fluently (ripgrep/`--vimgrep`, gcc, gofmt all use it); verbose JSON loses to terse shell the model already knows | HIGH | The single highest-value, highest-risk item. One stable line shape: `relpath:line:col<TAB>terse-payload`. Relative paths, deduped, sorted, no decorative borders/box-drawing/emoji. |
-| **`--json` opt-in for structured callers** | Convention parity with `rg --json`, `ast-grep --json`, `gh --json` — humans/scripts that *do* want machine objects expect a flag, and default-text-quiet stays the agent path | LOW | Default = terse text for the model; `--json` = JSON Lines (one object/line, stream-safe), never pretty-printed-by-default. Mirror ripgrep: `--json` is mutually exclusive with text-shaping flags. |
-| **Stable, documented exit codes** | Agents branch on `$?` (and the PreToolUse-steered command must signal "found nothing" vs "error"); ripgrep's `0=match / 1=no-match / 2=error` is the canonical contract | LOW | Pick 3: `0`=success/results, `1`=no results (not an error), `2`=usage/daemon error. Keep stderr for diagnostics, stdout for results — agents pipe stdout. |
-| **Quiet-by-default, no chatter on stdout** | Progress bars, "Connecting to daemon…", banners pollute the model's parse and waste tokens; every non-result byte on stdout is noise | LOW | Diagnostics → stderr. stdout carries *only* the answer. No "Done." / no summary footer unless `--stats`. |
-| **A single SKILL.md with a tight `description` that fires on code-nav/edit tasks** | Progressive disclosure: only `name`+`description` (a few dozen tokens) preload; the body loads only when relevant. This *is* the "~zero idle cost" promise | MEDIUM | `description` ≤1024 chars, third-person, "what + when + trigger terms" (`go-to definition, find references, rename symbol, repo map, edit a function body, instead of grep/sed/cat`). Body ≤500 lines. |
-| **SKILL.md body = a decision table (question → `helix <verb>`), not prose** | The existing CLAUDE.md "SMTC-first tool routing" matrix is exactly this shape and is proven; an agent scans a table faster than paragraphs | MEDIUM | Mirror the CLAUDE.md decision matrix: `| Question | Use this | Not this |`. One row per common code question mapping to a `helix` verb and the grep/sed/cat it replaces. |
-| **One-shot dial-and-exit with warm-daemon reuse** | Per-call latency must stay warm-cache fast or agents abandon the CLI; reuses the forwarder's existing autostart | MEDIUM | Each `helix <verb>` = autostart-if-needed → single `tools/call` over existing gRPC `StreamMCP` → print → exit. Share-until-dirty pool preserved across calls. |
-| **PreToolUse nudge steers grep/sed/cat → `helix <verb>`** | The milestone repurposes `internal/cli/nudge.go`; without steering, agents keep their grep habit and the CLI sits unused | MEDIUM | Existing hook already classifies grep/read Bash calls. Upgrade from a generic "Tip:" after 5 calls to a targeted "use `helix find-references X` instead of `grep -r 'X('`". |
-| **`helix setup <client>` installs skill+hooks (not an MCP server)** | The milestone flips setup; an agent surface no one installs is dead. Setup must drop SKILL.md into the skills dir and register the PreToolUse hook | MEDIUM | Reuse `internal/cli/setup*.go`. The flip is "register MCP server" → "copy skill dir + install hook". |
-| **`helix --help` / per-verb `--help` that's terse and accurate** | Agents read `--help` to recover from a wrong invocation; cobra gives this for free but output must stay terse | LOW | cobra default help is acceptable; ensure the one-line `Short` per verb matches the SKILL.md row wording (consistent terminology, per skill best-practices). |
+| **Comprehensive per-verb reference** (Skill/Reference) | A "use X not Y" matrix tells an agent *which* verb but not *how* to call it; agents need synopsis + args + output shape + 1 worked example per verb to invoke correctly first try | MEDIUM | Generate, don't hand-write — derive from the tool registry (same source as `get-tool-help`) so it cannot drift. Covers all 50 verbs. Lives as a **linked reference file** (progressive disclosure: terse SKILL.md body stays idle-cheap; reference loaded on demand). Dep: `cmd/docgen` + tool registry; reuse `get-tool-help`. |
+| **Progressive disclosure contract** (Skill/Reference) | Idle context cost must stay ~zero (the v2.0 win); a fat always-loaded reference would regress the 599-byte idle cost | LOW | Three tiers already implied: frontmatter description (always) → SKILL.md body decision-matrix (on trigger) → per-verb reference + `get-tool-help` (on demand). Formalize + assert the tier boundary. |
+| **Deterministic adoption contract test** (Adoption-eval) | CI must gate that the skill/reference stays complete (every frozen verb present, every "not-this" mapping valid) and that the nudge actually fires on grep/read/sed/cat shapes | LOW–MEDIUM | Pure Go, no LLM, no API key — **blocks merge**. Extends existing `nudge_test.go` + a new "skill/reference ⊇ all 50 verbs" drift test. This is the "content/contract assertion + nudge-fires" layer. |
+| **Multi-agent reference doc + per-agent instruction file** (Multi-agent) | Codex/Gemini/IDE/generic agents are first-class targets per PROJECT.md; today they get teardown-only | MEDIUM | **Minimum viable = one shared verb-reference doc + a thin per-agent instruction/config file** pointing the agent at the `helix` verbs (e.g. `AGENTS.md` for Codex, `GEMINI.md` for Gemini CLI, generic README snippet). NOT a full per-agent skill engine. Dep: `setup_clients.go` registrars (flip teardown-only → also-install). |
+| **Vendored Aider fixtures with attribution** (Aider-edit-bench) | PROJECT.md explicitly requires copying Aider's exercism + edit-format fixtures into the tree (Apache-2.0) with license headers — reinforces lineage; removes the runtime-clone network dependency | LOW–MEDIUM | Existing adapter **clones at runtime**; v2.1 wants **vendored** (committed). Reuse the loader's `.meta/config.json` mapping + 2-attempt protocol unchanged; swap source clone → vendored tree. Add attribution headers (precedent: `LICENSE-AUDIT.md` + `make verify-licenses`). |
+| **Polyglot edit benchmark wired to Helix EDIT verbs** (Aider-edit-bench) | The point is to prove the *toolset* works, not just that some agent solves exercism. The `AgentFn` must drive `replace-symbol-body`/`fuzzy-edit`/`replace-in-file`/`insert-*` to apply the model's diff | MEDIUM | **The real gap** — the v1.12 loader is verb-agnostic. v2.1 supplies an `AgentFn` routing the model's edit through Helix verbs; scores pass/fail per exercise (exit-0 test = pass, `tries=2`). Reuse `RunExercise` verbatim; do NOT touch the WR-01 anti-tamper restore. |
+| **Committed baseline results artifact** (all bench surfaces) | PROJECT.md + the v1.9 local-only-bench rule: run `HELIX_BIN`-gated, commit a baseline (BENCH-RESULTS / benchstat) so regressions are visible | LOW | Reuse result.v2 + aggregator. Load-bearing risk: the **false-green** — bench smoke SKIPs without `HELIX_BIN` (MEMORY: helix-bench-smoke-false-green). The harness MUST fail/refuse rather than silently pass. |
 
-### Differentiators (Why This CLI Beats Grep And The Old MCP Surface)
-
-Features that make the CLI genuinely better than both the fallback and the retired MCP head.
+### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Self-contained results — enough context to act without a second call** | Grep gives a line; a model then `Read`s the file. `helix find-references` returning `path:line:col<TAB>enclosing-symbol<TAB>one-line-snippet` lets the model act in one round-trip. This is the "agent terseness" sweet spot: not a bare locator, not the whole file | HIGH | Tune per verb: navigation verbs print locus + enclosing symbol + 1 snippet line; outline verbs print the shape only. The art is "one line that answers, zero lines that don't." |
-| **Ref/handle flow between calls (Playwright-CLI's `e15` pattern, adapted)** | Playwright-CLI returns short refs (`e15`) from `snapshot` that later commands consume, avoiding re-sending big trees. Helix analog: a `helix outline`/`find-symbol` result yields a stable symbol locator that `helix replace-symbol-body`/`get-callers` consume verbatim — no re-describing the symbol | MEDIUM | Helix already has symbol locators (`file:line` / name-path). Make the *output* of a read verb be a copy-paste-able *input* to an edit/nav verb. Closes the read→act loop cheaply. |
-| **Idle cost ≈ zero vs MCP's always-on schema tax** | The retired MCP surface preloaded 53 tool schemas into every context. SKILL.md preloads ~1 description until a code task appears. This is the milestone's core "why now" | LOW (it's the design, not code) | Quantify in the SKILL.md rationale section: "~N tokens idle vs ~M tokens for 53 preloaded schemas." Mirrors Playwright-CLI's stated rationale. |
-| **Steering that *rewrites* rather than only *blocks*** | PreToolUse `updatedInput` can rewrite `grep -rn 'foo' .` → `helix search foo` and explain via `additionalContext`, so the agent learns the mapping instead of just hitting a wall | MEDIUM | Higher-risk (wrong rewrite is worse than no rewrite). Safer default: `permissionDecision: "allow"` + `additionalContext` suggestion (advisory), escalate to rewrite only for unambiguous patterns. See anti-features. |
-| **Consistent verb grammar across all 53 commands** | Playwright-CLI groups by domain (core/navigation/storage/network/devtools/tabs); a predictable `helix <noun>-<verb>` or `helix <verb>-<noun>` grammar lets the model *guess* the right command and be right | LOW | Decide one convention (e.g. `helix find-references`, `helix goto-definition`, `helix replace-symbol-body`, `helix repo-map`) and apply uniformly. Group in `--help` by the existing tool families (symbols/edit/fileops/diag/repomap/memory). |
-| **`--stats`/`--count` style summarizers behind a flag** | Sometimes the model wants "how many callers" not the list; ripgrep's `--count`/`--stats` precedent. Cheap token win for triage questions | LOW | Opt-in only; default stays the full terse list. |
+| **Two-layer adoption eval** (Adoption-eval) | Cleanly separates "the contract is intact" (deterministic, blocks merge) from "a real model picks helix over grep/sed/cat" (LLM-behavioral, informational). No competitor grades CLI-tool adoption | MEDIUM–HIGH | Deterministic = content/contract assertions + nudge-fires tests. Behavioral = reuse v1.4 `llm`/`llmjudge` with a NEW rubric: **choice rate** (% of code questions answered with a helix verb), **fallback rate** (% that fell back to grep/sed/cat/Read), optionally **task success with vs without helix**. Never blocks merge (v1.4 precedent). |
+| **Stronger steering with anti-fallback guardrails** (Steering) | Today's nudge is per-call advisory only; broadening code-target detection + SessionStart priming raises the adoption floor before the model reaches for grep | MEDIUM | SessionStart priming = inject the decision-matrix once at session start (cheap, high-leverage). Broaden `classifyBashTarget` (more shapes: `awk`, `head`/`tail`, pipelines). **Keep advisory exit-0** as default; deny/block is an anti-feature (below). |
+| **RepoMap-quality eval** (RepoMap-eval) | Aider's RepoMap is a lineage influence; Helix already ships its own PageRank + token-budget binary-search RepoMap. An eval measuring *ranking correctness* (does the gold-relevant symbol rank highly?) and *token-budget fit* (map ≤ budget, no mid-symbol truncation) proves the kernel, not just the agent | MEDIUM–HIGH | Maps to `get-repo-map`/`get-context`. Metrics: top-k recall of a hand-labeled "relevant symbols for task T" gold set; rank-correlation; budget-adherence + no-mid-symbol-truncation invariant. Helix already does the binary-search fit (`internal/repomap`); the eval *measures* it — NOT a reimplementation of aider's repomap. |
+| **Fuzzy/edit-format robustness bench** (Fuzzy-robustness-bench) | Aider's edit application tolerates specific LLM drift (whitespace, indentation, partial/ellipsis edits, slightly-wrong context). Helix's 4-strategy cascade claims the same; a drift corpus proves which strategy bites and the refusal-on-ambiguity behavior | MEDIUM | Corpus of (original, drifted-edit, expected-result) triples across the 4 strategies. Asserts: correct strategy selected + reported; ambiguous matches **refused** (not silently applied). Maps to `fuzzy-edit`/`replace-in-file`/`replace-symbol-body`. Reuse `internal/fuzzy` test fixtures as a seed corpus. |
+| **Edit-format-applied-correctly signal** (Aider-edit-bench) | Aider reports "percent using correct edit format" distinct from "percent completed correctly". The Helix analog: did the model's intended edit get *applied by a helix verb* (vs the verb refusing/erroring)? Isolates tool-mechanics failures from reasoning failures | MEDIUM | Additive result.v2 field (precedent: `embedder_id`, `ablation_status`, `language` all additive open keys — no schema v3 bump). Distinguishes "fuzzy refused / verb errored" from "tests failed because the code was wrong". |
 
-### Anti-Features (Look Helpful, Hurt Agent Usage)
-
-Things that seem like good CLI/skill design but degrade the agent path. Each milestone phase should explicitly avoid these.
+### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Pretty-printed / boxed / colored / emoji output by default** | "Nice UX," matches human-facing CLIs | Box-drawing, ANSI color codes, and emoji are token-heavy noise the model must parse around; color codes corrupt grep-ability; this is the exact verbosity that lost to shell output and motivated the milestone | Terse `path:line:col` plain text by default; detect non-tty (like ripgrep) and never colorize when piped — and the agent path is always non-tty. |
-| **Default-on JSON output** | "Machine-readable is correct for a machine" | JSON for a *language model* reader is more tokens and lower fluency than `file:line` — the model parses positional `:`-delimited text natively; JSON adds keys/braces/quotes per record | Terse text default, `--json` opt-in (rg/ast-grep/gh convention). |
-| **A mega-verb / `helix run <tool> --args=<json>` passthrough** | "53 thin commands is a lot; one generic dispatcher is less code" | Defeats progressive guessing and `--help` discoverability; the model can't infer `helix run goto_definition` the way it infers `helix goto-definition`; reintroduces a schema blob | Generate 53 real subcommands from the registry; the generator is the "less code," not a generic passthrough. |
-| **Over-broad SKILL.md `description` (fires on everything)** | "Make sure it's always available" | Over-firing burns context on non-code tasks and trains the agent to ignore it; under the 100+-skill selection model a vague description loses to specific ones | Specific "what + when + trigger terms," third person; name in gerund/noun form (`code-intelligence`/`navigating-code`), not `helper`/`tools`. |
-| **Stuffing all 53 tool docs into SKILL.md body** | "Teach the agent everything up front" | Blows the ≤500-line budget, defeats progressive disclosure, and the body competes with conversation once loaded | Body = decision table + the ~10 highest-value verbs; defer full per-verb docs to one-level-deep reference files (`reference/edit.md`, `reference/nav.md`) loaded on demand. Keep references one level deep (deep nesting → partial reads). |
-| **Hard-block (deny) on every grep/sed/cat** | "Force the agent onto the CLI" | False positives are inevitable (grep in a comment-search, `cat` a YAML, `sed` a non-code file); hard denies that are *wrong* break legitimate work and the agent fights the wall. Annoyance erodes trust in the whole surface | Advisory-first: `additionalContext` suggestion (exit 0), reserve `deny`/rewrite for unambiguous code-symbol patterns only. The existing nudge already "always exits 0 (advisory only)" — preserve that default. |
-| **Steering that fires on free-text/non-code grep** | "Any grep could be a code search" | grep on READMEs, logs, YAML, commit messages is correct shell usage; nudging it toward `helix` is wrong and noisy | Pattern-match for code signals (`grep -r 'func '`, `grep 'class '`, symbol-shaped queries, code file globs); skip plain-text/non-code targets. Fail open when the Bash command can't be parsed. |
-| **Stateful CLI sessions / a `--session` handle for code nav** | Playwright-CLI uses `-s=<name>` sessions because a browser is stateful | Code navigation is stateless per query; sessions add lifecycle the agent must manage and a failure mode (stale session). The warm *daemon* already provides the only state that matters (the cache) transparently | One-shot dial-and-exit; the daemon's warm pool is the implicit "session," invisible to the agent. |
-| **Re-emitting large structures (full file, full AST) the model must re-parse** | "Give complete context" | Token blowup; the model then can't act cheaply — the failure mode of the old verbose MCP results | Self-contained-but-minimal: locus + enclosing symbol + one snippet line; offer a ref the model passes back for drill-down (Playwright `e15` analog). |
-| **A dual MCP+CLI head "just in case"** | "Don't break laggard clients" | Explicitly out of scope per the milestone (clean retirement, not dual-head); keeping both reintroduces the schema tax the milestone exists to kill | Clean retirement; revisit a compat shim only if a concrete client need surfaces (milestone's stated stance). |
+| **Deny/block PreToolUse hook (exit 2) for grep/sed/cat** | "Force" adoption — exit 2 deterministically blocks the call and feeds stderr back to the model | grep/sed/cat are legitimately correct for prose, logs, config, unknown-symbol discovery, build output (CLAUDE.md "when grep IS still correct"). Blocking breaks real workflows and trains the model to fight the tool. The existing nudge deliberately exits 0 (`nudge.go`: exit 2 makes CC treat it as a blocking error) | Keep **advisory exit-0** as default. Offer deny only as an explicit opt-in for a narrow positively-identified shape (e.g. `sed -i` on a code file), never the default. |
+| **Per-agent bespoke skill engine** for Codex/Gemini/IDE/generic | "Full skill parity" across agents | Most non-Claude agents don't consume Claude-style Agent Skills; a bespoke skill runtime per agent is high cost / low return. Gemini/Codex read a markdown instruction file, not a skill | Shared verb-reference doc + thin per-agent instruction file (AGENTS.md / GEMINI.md / generic). Table-stakes, not a skill engine. |
+| **Rebuild the aider polyglot adapter** | "Add the aider benchmark" reads like new work | The v1.12 loader-only adapter (clone + config-map + 2-attempt + anti-tamper) already exists and is correct. Rebuilding wastes effort and risks regressing the WR-01 anti-tamper invariant | **Scope v2.1 to the GAP only**: vendor the fixtures, supply the EDIT-verb `AgentFn`, add edit-format-applied scoring, commit a baseline. Reuse `RunExercise` verbatim. |
+| **Reimplement Aider's RepoMap / PageRank in the eval** | "Match aider's repomap" | Helix already has its own PageRank + token-budget RepoMap (`internal/repomap`, v1.6+). The eval should *measure* Helix's RepoMap quality, not port aider's | Build a gold-labeled relevance set; measure top-k recall / budget-fit against `get-repo-map`/`get-context`. |
+| **Make the LLM-behavioral adoption score a merge gate** | "Prove adoption in CI" | LLM nondeterminism flakes CI; v1.4 already decided LLM tests are informational/never-block | Deterministic contract layer gates merge; behavioral score is opt-in, informational, captured to a transcript. |
+| **Live full 225-task polyglot run in CI** | "Run the whole benchmark" | Requires 6 toolchains + network + minutes-to-hours; the v1.12 adapter already records the live 225-task run as toolchain/network-gated | Hermetic fixture-set proof in CI (Phase 85 precedent: golden fixtures as sole authoritative proof); live run is local/`HELIX_BIN`-gated and produces the committed baseline. |
 
 ## Feature Dependencies
 
 ```
-Code-generated 53 subcommands (from typed-arg registry)
-    └──requires──> One-shot daemon dialing over existing gRPC StreamMCP
-                       └──requires──> Forwarder autostart logic (already exists)
+[Comprehensive per-verb reference]
+    └──requires──> [tool registry / get-tool-help content]   (exists)
+    └──enhances──> [terse SKILL.md decision matrix]           (exists; stays the idle-cheap tier)
 
-Terse path:line:col output (per-verb tuned)
-    └──requires──> Code-generated subcommands (need the verbs first)
-    └──enables───> Ref/handle flow (read verb output = edit/nav verb input)
+[Deterministic adoption contract test]
+    └──requires──> [Comprehensive per-verb reference]   (must exist to assert completeness)
+    └──requires──> [nudge.go]                            (exists; extend nudge-fires assertions)
 
-SKILL.md decision table
-    └──requires──> Stable verb names + terse output shape (table cites exact commands + sample output)
-    └──enhances──> PreToolUse steering (hook message points at the same verbs the SKILL.md teaches)
+[LLM-behavioral adoption score]
+    └──requires──> [v1.4 llm/llmjudge harness]           (exists)
+    └──enhances──> [Deterministic adoption contract test] (two layers of one eval)
 
-PreToolUse steering (grep/sed/cat → helix)
-    └──requires──> Stable verb names (must name a real command in additionalContext)
-    └──reuses────> internal/cli/nudge.go (existing classifier + atomic stats + exit-0 advisory default)
+[Multi-agent reference + per-agent instruction file]
+    └──requires──> [Comprehensive per-verb reference]    (shared doc is the substrate)
+    └──requires──> [setup_clients.go registrars]         (exists; flip teardown-only → also-install)
 
-helix setup <client> flip (install skill + hooks)
-    └──requires──> SKILL.md authored AND hook command finalized
-    └──reuses────> internal/cli/setup*.go (existing client-CLI subprocess wiring)
+[Polyglot edit benchmark wired to EDIT verbs]
+    └──requires──> [aider-polyglot loader + RunExercise]  (exists, reuse verbatim)
+    └──requires──> [Vendored Aider fixtures]              (new: clone → committed tree)
+    └──requires──> [HELIX_BIN-gated runtime]              (exists; MUST fail-not-skip)
+    └──produces──> [edit-format-applied-correctly signal] (additive result.v2 field)
 
-Identity/docs rewrite (README/CLAUDE.md/PROJECT.md + cmd/docgen)
-    └──requires──> Final verb surface (docgen regenerates the tool table against the CLI)
+[RepoMap-quality eval]    ──requires──> [get-repo-map / get-context + internal/repomap]  (exists)
+[Fuzzy-robustness bench]  ──requires──> [internal/fuzzy 4-strategy cascade]              (exists)
+[Committed baseline]      ──requires──> [all three bench surfaces + result.v2 + aggregator] (mostly exists)
 
---json opt-in ──enhances──> Terse text default (additive flag, not a replacement)
-Default-on JSON ──conflicts──> Terse text default (pick text-default; JSON is the flag)
-Hard-block-all-grep ──conflicts──> Advisory-first steering (annoyance vs adoption)
+[Deny/block hook] ──conflicts──> [legitimate grep/sed/cat use]  (anti-feature; keep advisory)
 ```
 
 ### Dependency Notes
 
-- **Subcommands require daemon dialing:** every verb is a thin client; the gRPC `tools/call` path and forwarder autostart must work before the verbs are useful. Likely **zero proto changes** (milestone-locked).
-- **Terse output before SKILL.md:** the SKILL.md decision table should cite *real* command names and *real* sample output, so the output shape must be settled first (or co-developed).
-- **Steering names real verbs:** the hook's `additionalContext` must reference an existing `helix <verb>`; finalize verb naming before wiring steering messages.
-- **docgen depends on final surface:** the auto-generated tool table (`cmd/docgen`) regenerates against the CLI verbs — do it last, after the verb set is frozen, to avoid churn.
-- **Conflicts to keep out of the same phase:** don't ship default-JSON and terse-text-default together (pick text-default); don't pair hard-block steering with advisory steering (advisory is the default, escalation is opt-in/pattern-gated).
+- **Per-verb reference requires the tool registry, not new prose:** generating from the same source as `get-tool-help` guarantees the reference can't drift from the frozen 50-verb set and makes the deterministic completeness test trivial.
+- **Deterministic contract test requires the reference first:** it asserts "every frozen verb appears with args + output-shape + example". Order: reference → contract test.
+- **Multi-agent reuses the reference as the shared doc:** minimum viable per-agent surface = one shared verb doc + a thin per-agent pointer file; do not author the reference N times.
+- **Polyglot edit bench reuses RunExercise verbatim** and only adds the EDIT-verb `AgentFn` + vendored fixtures + the applied-correctly field — the WR-01 anti-tamper pristine-test restore must NOT be touched.
+- **Vendoring must precede the committed baseline run** if the baseline is to be reproducible offline.
 
 ## MVP Definition
 
-### Launch With (v2.0 core)
+### Launch With (v2.1 — Phase 97+)
 
-The minimum that delivers "the CLI is the only surface an agent touches, and it wins on terseness."
+Adoption layer:
+- [ ] **Comprehensive per-verb reference** (generated from registry) — without it the skill tells *which* verb, not *how*.
+- [ ] **Deterministic adoption contract test** (completeness + nudge-fires, blocks merge) — the measurable contract PROJECT.md demands.
+- [ ] **Multi-agent shared reference + per-agent instruction file** for Codex/Gemini/IDE/generic — first-class per PROJECT.md.
+- [ ] **Stronger steering** (broadened code-target detection + SessionStart priming, still advisory exit-0).
 
-- [ ] **Code-generated 53-verb CLI dialing the warm daemon** — the parity promise; without it there's no surface.
-- [ ] **Terse `path:line:col` default output, per-verb tuned for self-contained action** — the load-bearing product work; the whole milestone rationale.
-- [ ] **Stable exit codes + quiet-by-default (results on stdout, diagnostics on stderr)** — agents branch on this; cheap, non-negotiable.
-- [ ] **SKILL.md: tight description + decision-table body (≤500 lines), one-level-deep references** — the ~zero-idle-cost teaching surface.
-- [ ] **PreToolUse steering upgraded to name specific `helix` verbs, advisory-first, code-signal-gated** — converts grep habit into CLI usage without false-positive annoyance.
-- [ ] **`helix setup <client>` flip to install skill + hooks** — without install, the surface is dead.
+Aider validation:
+- [ ] **Vendored Aider fixtures** (Apache-2.0 + attribution + license-audit gate).
+- [ ] **Polyglot edit benchmark wired to Helix EDIT verbs** (reuse RunExercise; pass/fail per exercise; tries=2).
+- [ ] **Committed baseline results artifact** (HELIX_BIN-gated, fail-not-skip).
 
-### Add After Validation (v2.x)
+### Add After Validation (v2.1 late / v2.2)
 
-- [ ] **`--json` opt-in (JSON Lines)** — add once a concrete script/tool consumer asks; not on the agent path.
-- [ ] **Ref/handle flow (read-verb output → edit/nav-verb input)** — add after measuring read→act round-trips; high value, moderate design.
-- [ ] **`--stats`/`--count` summarizers** — add when triage-style "how many" questions show up in usage.
-- [ ] **Pattern-gated steering *rewrites* (`updatedInput`)** — escalate from advisory only after the advisory path proves the mappings are right (low false-positive rate measured).
+- [ ] **LLM-behavioral adoption score** (choice rate / fallback rate, opt-in, informational) — add once the deterministic contract is green and the rubric settles.
+- [ ] **RepoMap-quality eval** (top-k recall + budget-fit) — needs a hand-labeled gold relevance set (the cost driver).
+- [ ] **Fuzzy/edit-format robustness bench** (drift corpus across the 4 strategies) — high value, but the corpus must be curated.
+- [ ] **Edit-format-applied-correctly signal** (additive result.v2 field) — pairs with the polyglot edit bench.
 
-### Future Consideration (v3+)
+### Future Consideration (v2.2+)
 
-- [ ] **MCP compatibility shim** — only if a concrete laggard-client need surfaces (milestone says clean retirement; revisit on demand).
-- [ ] **Per-language output presets** — if terse-shape tuning diverges enough by language to warrant it.
+- [ ] **Opt-in deny policy for narrow shapes** (e.g. `sed -i` on a code file) — only if advisory proves insufficient in the behavioral score.
+- [ ] **Task-success-with-vs-without-helix A/B** in the behavioral harness — strongest adoption signal, most expensive to run.
 
 ## Feature Prioritization Matrix
 
-| Feature | Agent Value | Implementation Cost | Priority |
+| Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Terse path:line:col default output (per-verb tuned) | HIGH | HIGH | P1 |
-| Code-generated 53-verb CLI over warm daemon | HIGH | MEDIUM | P1 |
-| SKILL.md description + decision-table body | HIGH | MEDIUM | P1 |
-| Stable exit codes + quiet-by-default | HIGH | LOW | P1 |
-| PreToolUse steering → named verbs, advisory-first | HIGH | MEDIUM | P1 |
-| setup flip (install skill + hooks) | HIGH | MEDIUM | P1 |
-| Identity/docs + docgen rewrite | MEDIUM | LOW | P1 (last) |
-| `--json` opt-in (JSON Lines) | LOW | LOW | P2 |
-| Ref/handle flow (read→edit handles) | HIGH | MEDIUM | P2 |
-| `--stats`/`--count` summarizers | MEDIUM | LOW | P2 |
-| Steering *rewrites* (`updatedInput`) | MEDIUM | MEDIUM | P3 |
-| MCP compatibility shim | LOW | MEDIUM | P3 |
+| Comprehensive per-verb reference | HIGH | MEDIUM | P1 |
+| Deterministic adoption contract test | HIGH | LOW–MEDIUM | P1 |
+| Multi-agent reference + per-agent file | HIGH | MEDIUM | P1 |
+| Vendored Aider fixtures | MEDIUM | LOW–MEDIUM | P1 |
+| Polyglot edit bench → EDIT verbs | HIGH | MEDIUM | P1 |
+| Committed baseline artifact | HIGH | LOW | P1 |
+| Stronger steering (priming + broader detect) | MEDIUM | MEDIUM | P2 |
+| LLM-behavioral adoption score | HIGH | MEDIUM–HIGH | P2 |
+| RepoMap-quality eval | MEDIUM | MEDIUM–HIGH | P2 |
+| Fuzzy/edit-format robustness bench | MEDIUM | MEDIUM | P2 |
+| Edit-format-applied-correctly signal | MEDIUM | MEDIUM | P2 |
+| Opt-in deny policy | LOW | LOW | P3 |
+| Task-success A/B | HIGH | HIGH | P3 |
 
-**Priority key:** P1 = must have for v2.0 launch · P2 = add when validated · P3 = future/conditional.
+**Priority key:** P1 = must have for the milestone; P2 = strong differentiator, add when the P1 substrate is green; P3 = future.
 
-## Competitor Feature Analysis
+## Competitor / Prior-Art Feature Analysis
 
-| Feature | Playwright-CLI | ripgrep / ast-grep / gh / git porcelain | Claude Code Skills/Hooks | Our Approach (Helix v2.0) |
-|---------|----------------|------------------------------------------|--------------------------|----------------------------|
-| Surface model | CLI **alongside** MCP | n/a (pure CLI) | Skill = progressive-disclosure docs over tools | CLI **retiring** the agent MCP head; skill teaches it |
-| Token-efficiency rationale | "avoid loading large tool schemas + verbose a11y trees into context" (stated) | terse `path:line:col` default; `--json` opt-in | metadata-only preload, body on demand | inherit all three: terse default + skill preload + no schema tax |
-| Command grouping | domain groups: core/nav/keyboard/storage/network/devtools/tabs | flat verbs, `:`-delimited output | n/a | group by existing tool families (symbols/edit/fileops/diag/repomap/memory); uniform verb grammar |
-| State passing between calls | `snapshot` → short refs (`e15`) consumed by later commands; named sessions `-s=<name>` | stateless; `path:line:col` line is the handle | n/a | read-verb output = edit/nav-verb input (symbol locator as handle); **no** session lifecycle — warm daemon is the implicit state |
-| Default output | snapshot file + refs | terse text (heading on tty, `path:line:col` when piped); `--json` opt-in | n/a | terse `path:line:col<TAB>payload`, never colorize when piped, `--json` opt-in |
-| Teaching/discovery | SKILL.md: "use refs from the snapshot," when-to-use | `--help`, man pages | SKILL.md frontmatter `description` triggers load; body ≤500 lines; refs one level deep | SKILL.md decision table mirroring existing CLAUDE.md "SMTC-first routing" matrix |
-| Steering off generic shell | n/a | n/a | PreToolUse `permissionDecision` deny/allow/ask + `updatedInput` + `additionalContext`; exit-2 vs JSON | repurpose `internal/cli/nudge.go`; advisory-first (exit 0), pattern-gated, fail-open on parse failure |
+| Feature | Aider (lineage) | Playwright-CLI (v2.0 reference) | Helix v2.1 Approach |
+|---------|-----------------|--------------------------------|---------------------|
+| Agent reference | In-repo CONVENTIONS + edit-format prompts | SKILL.md alongside MCP | Generated per-verb reference + terse triggering SKILL.md (progressive disclosure) |
+| Steering | Prompt-level edit-format instruction | None (relies on SKILL discovery) | PreToolUse advisory nudge (exit-0) + SessionStart priming |
+| Edit benchmark | 225-exercise polyglot, pass/fail, tries=2, % correct-edit-format | n/a | Reuse aider's exercises+protocol; wire to Helix EDIT verbs; add applied-correctly field |
+| RepoMap | tree-sitter tags → graph → PageRank → token-budget binary search | n/a | Helix has its own equivalent (`internal/repomap`); v2.1 *measures* its quality, doesn't port aider's |
+| Edit-application robustness | diff/whole formats, tolerant application | n/a | 4-strategy fuzzy cascade with ambiguity refusal; v2.1 benches it against a drift corpus |
 
-## Concrete Examples (Good vs Bad)
+## Aider Mechanics (for downstream requirements precision)
 
-These are the load-bearing, non-hand-wavy artifacts the roadmapper and requirements should hold the work to.
+- **Polyglot scoring:** 225 exercises from Exercism across C++(26)/Go(39)/Java(47)/JS(49)/Python(34)/Rust(30) — the hardest 225 of 697. Binary pass/fail per exercise = all unit tests pass. **Two attempts** (`tries=2`): attempt 1 from stub, attempt 2 after seeing capped error output. Two distinct headline metrics: **"percent completed correctly"** (solved) and **"percent using correct edit format"** (edit parsed/applied without malformation). The existing Helix loader already encodes `tries=2`, the 180s timeout, native per-language test argv, and the stderr-reprompt.
+- **RepoMap construction:** tree-sitter extracts definition + reference tags → files are graph nodes, references are edges → a **PageRank** (personalized toward files in chat) ranks identifiers → the ranked tags are fit into a **token budget via binary search** over how many tags to render, eliding the rest. Helix's `internal/repomap` already implements this shape; the eval measures ranking correctness + budget fit, not the algorithm.
+- **Edit-format drift tolerated:** aider applies whole-file and diff (search/replace) edits and tolerates models that mis-format slightly — the closest Helix analog is the 4-strategy fuzzy cascade (exact → whitespace-normalized → indentation-flexible → ellipsis-placeholder) with ambiguity refusal.
 
-### Terse output — GOOD (agent can act in one round-trip)
+## Concrete Verb Mapping (for downstream requirements)
 
-```
-$ helix find-references parseConfig
-internal/config/load.go:88:14	func ResolveProfile	cfg := parseConfig(raw)
-internal/config/load.go:142:9	func (*Loader) Reload	c, err := parseConfig(b)
-internal/daemon/daemon.go:301:21	func New	parseConfig(opts.Raw)
-```
-- relative paths, `path:line:col`, `<TAB>`-delimited, enclosing symbol + the one line that matters; sorted, deduped; nothing else.
-
-### Terse output — BAD (the verbosity that lost to grep)
-
-```
-$ helix find-references parseConfig
-╭───────────────────────────────────────────╮
-│  🔎 References to 'parseConfig' (3 found)   │
-╰───────────────────────────────────────────╯
-[
-  { "uri": "file:///home/john/.../internal/config/load.go",
-    "range": {"start": {"line": 87, "character": 13}, ... },
-    "containerName": "ResolveProfile" },
-  ...
-]
-✓ Done in 12ms. Connected to daemon at /tmp/helix.sock.
-```
-- box-drawing + emoji + absolute file URIs + pretty JSON + a "Done" footer + daemon chatter: every line here is tokens the model must parse around, and the locators are 0-based LSP coordinates a model won't map to editor lines.
-
-### SKILL.md description — GOOD (fires on the right tasks, third person, trigger terms)
-
-```yaml
-description: Navigate and edit code semantically via the `helix` CLI — go-to-definition,
-  find-references, callers/callees, type hierarchy, repo map, and symbol-body edits across
-  52 languages. Use when locating where a symbol is defined or used, tracing call paths,
-  renaming or replacing a function/method body, or mapping a repo's structure — instead of
-  grep/sed/cat over source files.
-```
-
-### SKILL.md description — BAD (over-fires, first person, vague)
-
-```yaml
-description: I can help you work with code and files and search your project.
-```
-
-### SKILL.md body — GOOD shape (decision table, mirrors existing CLAUDE.md matrix)
-
-```markdown
-| Question | Use this | Not this |
+| Bench/eval surface | Helix verbs exercised | Existing component reused |
 |---|---|---|
-| Where is `X` defined? | `helix goto-definition X` | `grep -rn 'func X' .` |
-| Who calls `Y`? | `helix get-callers Y` | `grep -rn 'Y(' .` |
-| All references to `X`? | `helix find-references X` | `grep -rn X .` |
-| Shape of a file? | `helix outline path/to/f.go` | `cat path/to/f.go` |
-| Replace a function body | `helix replace-symbol-body F --file ...` | `sed -i ...` |
-```
-
-### PreToolUse steering — GOOD (advisory, names a real verb, code-signal-gated)
-
-Agent runs `Bash("grep -rn 'func ResolveProfile' .")` → hook returns exit 0 with:
-```json
-{ "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "additionalContext": "Tip: `helix goto-definition ResolveProfile` returns the exact definition (path:line:col + signature) in one call instead of grepping." } }
-```
-
-### PreToolUse steering — BAD (hard-deny, false-positive-prone, no escape)
-
-Agent runs `Bash("grep -i deprecated CHANGELOG.md")` → hook returns:
-```json
-{ "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "Use helix instead of grep." } }
-```
-- denies a legitimate free-text search of a Markdown file; no code signal present; the agent is now blocked from correct work and will distrust the surface.
+| Polyglot edit bench | `replace-symbol-body`, `fuzzy-edit`, `replace-in-file`, `insert-before-symbol`, `insert-after-symbol`, `create-file` | `bench/datasets/aider-polyglot/RunExercise` (verbatim), result.v2, aggregator |
+| RepoMap-quality eval | `get-repo-map`, `get-context` | `internal/repomap` PageRank + token-budget renderer |
+| Fuzzy-robustness bench | `fuzzy-edit`, `replace-in-file`, `replace-symbol-body` | `internal/fuzzy` 4-strategy cascade + ambiguity refusal |
+| Steering / adoption | (none — steers TOWARD the above) | `internal/cli/nudge.go`, `setup_clients.go` |
+| Per-verb reference | all 50 frozen verbs | tool registry, `get-tool-help` (`internal/kernel/help`), `cmd/docgen` |
 
 ## Sources
 
-- Microsoft Playwright-CLI README/SKILL.md — command groups (core/navigation/keyboard/storage/network/devtools/tabs), `snapshot`→`e15` ref flow, `-s=<name>` sessions, stated token-efficiency rationale ("avoid loading large tool schemas and verbose accessibility trees"). https://github.com/microsoft/playwright-cli — **HIGH**
-- Claude Code Agent Skills — overview + skill-authoring best practices (progressive disclosure 3 levels, `description` ≤1024 chars third-person "what+when+triggers," body ≤500 lines, references one level deep, naming conventions, anti-patterns). https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices and .../overview — **HIGH**
-- Claude Code Hooks reference — PreToolUse `hookSpecificOutput` fields (`permissionDecision` allow/deny/ask/defer, `permissionDecisionReason`, `updatedInput`, `additionalContext`), exit-2-vs-JSON, steering-via-rewrite pattern. https://code.claude.com/docs/en/hooks — **HIGH**
-- ripgrep man page / docs — tty-aware default (heading on tty, grep-like `path:line[:col]` when piped), `--no-heading`/`--vimgrep`/`--column`, `:` separator, `--json` JSON Lines (mutually exclusive with text-shaping flags), exit codes `0/1/2`. https://manpages.debian.org/testing/ripgrep/rg.1.en.html and https://github.com/BurntSushi/ripgrep/issues/930 — **HIGH**
-- ast-grep JSON mode — `--json=pretty|stream|compact`, `range`/`byteOffset`/line-col objects, stream for large result sets. https://ast-grep.github.io/guide/tools/json.html — **HIGH**
-- Existing Helix nudge hook — `internal/cli/nudge.go` (grep/read classifier, 5-call threshold, atomic stats write, "always exits 0 (advisory only)" default) read directly from source — **HIGH**
-- Helix milestone spec — `.planning/PROJECT.md` "Current Milestone: v2.0 CLI-First — MCP Surface Retirement" (target features, locked architecture decision, out-of-scope) — **HIGH**
-- Existing CLAUDE.md "SMTC-first tool routing" decision matrix — proven `| Question | Use this | Not this |` table shape to mirror in SKILL.md — **HIGH**
+- Helix source (read directly): `internal/cli/skills/helix/SKILL.md`, `internal/cli/nudge.go`, `internal/cli/setup_clients.go`, `bench/datasets/aider-polyglot/{loader,clone}.go`, `bench/BENCH.md`, `internal/fuzzy/`, `.planning/PROJECT.md` (v2.1 milestone section)
+- [Aider code-editing benchmark scoring (pass/fail, tries=2, edit formats)](https://aider.chat/docs/benchmarks.html)
+- [Aider polyglot benchmark (225 exercises, 6 languages, Exercism, % correct edit format)](https://aider.chat/2024/12/21/polyglot.html)
+- [Aider RepoMap overview (graph ranking, token budget)](https://aider.chat/docs/repomap.html)
+- [Aider RepoMap technical construction (tree-sitter tags, PageRank, personalization, token-budget fit)](https://aider.chat/2023/10/22/repomap.html)
+- [Claude Code hook control flow — additionalContext (exit 0, advisory) vs decision:block / exit 2 (deny)](https://stevekinney.com/courses/ai-development/claude-code-hook-control-flow)
+- [Steering Claude Code: skills, hooks, rules, subagents (Anthropic)](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
 
 ---
-*Feature research for: CLI+skill agent interface (token-efficient CLI head + SKILL.md progressive disclosure + PreToolUse steering)*
-*Researched: 2026-06-21*
+*Feature research for: coding-agent adoption layer + Aider-derived benchmark validation (Helix v2.1)*
+*Researched: 2026-06-22*

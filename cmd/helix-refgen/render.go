@@ -94,14 +94,47 @@ func renderVerb(d cli.VerbDoc, syn string) string {
 	return sb.String()
 }
 
+// sentenceAbbreviations are common abbreviations that end in a period followed by
+// a space. A naive "first `. ` is a sentence boundary" split would truncate the
+// synopsis mid-clause at one of these, so firstSentence skips past them.
+var sentenceAbbreviations = []string{"e.g.", "i.e.", "vs.", "etc.", "cf.", "no.", "al.", "ca."}
+
 // firstSentence truncates a description at the first sentence boundary (mirrors
 // the docgen table truncation), keeping the synopsis terse and deterministic.
+// It does NOT treat a ". " that closes a known abbreviation (e.g. "e.g. ",
+// "i.e. ") as a sentence boundary — it scans for the next real boundary instead —
+// so the synopsis is not silently truncated mid-clause (WR-01).
 func firstSentence(desc string) string {
 	desc = strings.TrimSpace(desc)
-	if idx := strings.Index(desc, ". "); idx > 0 && idx < 160 {
-		return desc[:idx+1]
+	start := 0
+	for {
+		rel := strings.Index(desc[start:], ". ")
+		if rel < 0 {
+			return desc
+		}
+		idx := start + rel
+		if idx <= 0 || idx >= 160 {
+			return desc
+		}
+		if !endsWithAbbreviation(desc[:idx+1]) {
+			return desc[:idx+1]
+		}
+		// The boundary closed an abbreviation; keep scanning past it.
+		start = idx + 2
 	}
-	return desc
+}
+
+// endsWithAbbreviation reports whether head (which ends in ".") closes a known
+// abbreviation. The comparison is case-insensitive on the trailing token so
+// "E.g." and "e.g." are both caught.
+func endsWithAbbreviation(head string) bool {
+	lower := strings.ToLower(head)
+	for _, abbr := range sentenceAbbreviations {
+		if strings.HasSuffix(lower, abbr) {
+			return true
+		}
+	}
+	return false
 }
 
 // workedExample builds a generic, deterministic `helix <verb> ...` invocation from

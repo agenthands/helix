@@ -181,6 +181,29 @@ Plans:
 - [x] 95-01-PLAN.md — docgen verb re-key + `make verify-docs` + CI docgen drift gate + verb-form tests + blank-import cross-ref (DOCS-02)
 - [x] 95-02-PLAN.md — CLI-first identity rewrite across README/CLAUDE.md/PROJECT.md + new Helix-CLI routing matrix in CLAUDE.md (DOCS-01, DOCS-03)
 
+### Phase 96: Address v2.0 tech debt
+
+**Goal**: Resolve the non-blocking tech debt the v2.0 milestone audit (`.planning/v2.0-MILESTONE-AUDIT.md`) surfaced so the milestone archives with zero open items. Four small code/doc fixes (security hardening, dead-code removal, a nudge-classifier edge case, a generated-doc correction) plus retroactive Nyquist coverage on phases 93–95. No behavior change to the frozen CLI/verb surface — these are hardening, cleanup, and coverage formalities, not new features.
+
+**Depends on**: Phase 95 (docs/identity frozen; docgen drift gate green)
+
+**Requirements**: TD-01..TD-05 (v2.0 audit tech-debt items; non-blocking — not REQUIREMENTS.md IDs)
+
+**Success Criteria** (what must be TRUE):
+
+  1. **TD-01 (P94 security follow-up):** `validateAdminAddr` (`internal/daemon/telemetry.go`) rejects the same empty-host / wildcard-bind inputs that CR-01 hardened in `validateGRPCAddr` (`internal/daemon/grpc_tcp.go`), proven by a regression test mirroring the `validateGRPCAddr` cases.
+  2. **TD-02 (P94 dead code):** `mergeJSONConfig` (`internal/cli/setup_clients.go`) and any now-orphaned helpers/tests are removed; `go build ./...` and `go vet ./...` stay green.
+  3. **TD-03 (P93 cosmetic):** the nudge classifier (`classifyBashTarget`, `internal/cli/nudge.go`) no longer treats a grep *pattern* that looks like a code path as a file operand; covered by a unit test. The hook stays fail-open / exit-0.
+  4. **TD-04 (P95 generated row):** the `get_tool_help` tool Description is reworded at source (`internal/kernel/help/`) so it no longer says "any MCP tool", and `make verify-docs` (docgen regen) is green with `README.md` regenerated — not hand-edited.
+  5. **TD-05 (Nyquist coverage, companion task):** phases 93, 94, 95 `VALIDATION.md` carry `nyquist_compliant: true` after `/gsd-validate-phase` closes the Wave-0 coverage formalities. Handled via direct `/gsd-validate-phase` runs, not the Phase 96 code plan.
+  6. **Suite green:** `go build ./...`, `go vet ./...`, `go test ./...` pass. The pre-existing env-gated `cmd/helix-bench` `TestRunSubcommandWires*` failures remain out of scope (carried from v1.12; NOT a v2.0 regression).
+
+**Plans**: 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 96 to break down)
+
 ### ✅ v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — SHIPPED 2026-06-21
 
 15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*

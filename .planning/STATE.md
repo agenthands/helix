@@ -5,7 +5,7 @@ milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 95
 status: verifying
 stopped_at: None
-last_updated: "2026-06-21T23:34:57.615Z"
+last_updated: "2026-06-22T06:50:36.141Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 95 complete
 progress:
@@ -76,6 +76,7 @@ Progress: [██░░░░░░░░] 19%
 
 - 2026-06-21: v2.0 roadmap created from REQUIREMENTS.md (31 REQ-IDs across CLI/VERB/OUT/SEC/SKILL/RETIRE/DOCS/TEST) and the 5 research files. Strangler-fig 6-phase shape (90→95) honored; TEST-* threaded into 90/92/93 (E2E oracle early, contract oracle at output-freeze, behavioral oracle with the skill).
 - 2026-06-21: v1.12 Bench Stack & Tool Evaluation functionally complete at Phase 89 (15/15 phases); formal `/gsd-complete-milestone` archival pending.
+- Phase 96 added: Address v2.0 tech debt
 
 ### Critical Roadmap Constraints (carried forward to Phase 90+)
 

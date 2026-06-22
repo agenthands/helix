@@ -46,7 +46,16 @@ Two independent, interleavable thrusts; intra-thrust order is fixed by hard depe
   2. `helix setup claude-code` installs `reference.md` atomically alongside `SKILL.md` from the `embed.FS` bundle, preserving the existing `withinSkillRoot` path-containment guarantee, with the SKILL-04 idle-cost bound still asserted on `SKILL.md` only.
   3. The deterministic adoption-contract test asserts `reference ⊇ VerbToolNames()` sourced from `verbs_gen.go` (the authority, NOT the generator's own output) AND a per-shape nudge-fires golden table mapping each standard-tool shape to the specific suggested verb, keyed on the emitted command, rejecting empty-bucket-as-pass — and it BLOCKS merge.
   4. Anti-vacuity proven: deleting one verb from `reference.md` turns the completeness gate RED, and a revert that breaks a nudge-shape mapping turns the contract RED (a deliberate break-the-invariant test ships in this phase).
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 97-01-PLAN.md — Generator + embed substrate: `VerbSpecsForDocs()` accessor + `cmd/helix-refgen` (registry walk, args from verbSpecs not InputSchema) + committed `reference.md` + `skill.go` string→`embed.FS` multi-file atomic install + `make verify-reference`/CI drift gate (REF-01/02/03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 97-02-PLAN.md — Deterministic adoption contract (TDD): ADOPT-01a completeness (authority = `VerbToolNames()`) + revert-and-fail, ADOPT-01b per-shape nudge golden keyed on the emitted verb + revert-and-fail + empty-bucket floor; runs untagged, BLOCKS merge (ADOPT-01)
 **UI hint**: no
 
 ### Phase 98: Multi-Agent Coverage + Stronger Steering
@@ -114,7 +123,7 @@ Two independent, interleavable thrusts; intra-thrust order is fixed by hard depe
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 97. Generated Reference + Adoption Contract | v2.1 | 0/TBD | Not started | - |
+| 97. Generated Reference + Adoption Contract | v2.1 | 0/2 | Not started | - |
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/TBD | Not started | - |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |

@@ -27,6 +27,9 @@ func TestValidateAdminAddr(t *testing.T) {
 		{name: "localhost", addr: "localhost:0", wantErr: false},
 		{name: "loopback_v6", addr: "[::1]:9090", wantErr: false},
 		{name: "auto_port", addr: "127.0.0.1:0", wantErr: false},
+		{name: "wildcard_empty_host", addr: ":9090", wantErr: true},   // empty host binds all interfaces
+		{name: "wildcard_empty_host_zero", addr: ":0", wantErr: true}, // empty host, auto-port
+		{name: "wildcard_v6", addr: "[::]:9090", wantErr: true},       // unspecified IPv6
 		{name: "zero_bind", addr: "0.0.0.0:9090", wantErr: true, errHas: "v1.3"},
 		{name: "lan_bind", addr: "192.168.1.5:9090", wantErr: true, errHas: "v1.3"},
 		{name: "dns_host", addr: "example.com:9090", wantErr: true, errHas: "v1.3"},

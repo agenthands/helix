@@ -111,10 +111,19 @@ func validateAdminAddr(addr string) error {
 		return fmt.Errorf("invalid admin addr %q: %w", addr, err)
 	}
 	switch host {
-	case "", "localhost", "127.0.0.1", "::1":
+	case "localhost", "127.0.0.1", "::1":
 		return nil
+	case "":
+		// ":9090" / ":0" → net.Listen binds ALL interfaces. Refuse: the
+		// loopback gate must name an explicit loopback host (mirrors
+		// validateGRPCAddr CR-01). The empty-ADDR no-op ("") stays the
+		// caller's job in listenAdmin; this guards the empty-HOST case.
+		return fmt.Errorf("admin addr must name an explicit loopback host, got wildcard %q "+
+			"(use 127.0.0.1:PORT or [::1]:PORT; v1.3 will add auth for non-loopback)", addr)
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+	// IsUnspecified() defends against 0.0.0.0 / :: should the explicit branch
+	// ever be reordered — never accept a wildcard bind.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() && !ip.IsUnspecified() {
 		return nil
 	}
 	return fmt.Errorf("admin addr must be loopback, got %q (v1.3 will add auth for non-loopback)", host)

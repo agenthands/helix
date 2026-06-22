@@ -2,13 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Agent Adoption & Aider-Derived Validation
-status: roadmapped
-last_updated: "2026-06-22T13:30:00.000Z"
+current_phase: 97
+current_phase_name: generated-per-verb-reference-deterministic-adoption-contract
+status: executing
+stopped_at: Completed 96-01-PLAN.md
+last_updated: "2026-06-22T13:32:30.179Z"
 last_activity: 2026-06-22
+last_activity_desc: Phase 97 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 97 — Generated Per-Verb Reference + Deterministic Adoption Contract (v2.1 roadmap created; ready to plan)
+**Current focus:** Phase 97 — generated-per-verb-reference-deterministic-adoption-contract
 
 ## Current Position
 
-Phase: 97 (not started) — v2.1 roadmap created (Phases 97-102)
-Plan: —
-Status: Roadmapped — awaiting `/gsd-plan-phase 97`
-Last activity: 2026-06-22 — v2.1 ROADMAP.md created, 23/23 requirements mapped
+Phase: 97 (generated-per-verb-reference-deterministic-adoption-contract) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 97
+Last activity: 2026-06-22 — Phase 97 execution started
 
 ## Performance Metrics
 

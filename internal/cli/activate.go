@@ -69,5 +69,11 @@ func runActivate(cmd *cobra.Command, _ []string) error {
 
 	// Output for Claude Code hook stdout (added to agent context)
 	fmt.Fprintf(os.Stdout, "Helix workspace activated: %s (status: %s)\n", absPath, resp.Status)
+
+	// STEER-02: emit the terse "use X not Y" priming matrix once per session,
+	// best-effort. sessionPrimingText() is a pure compiled constant (size-capped,
+	// no I/O), so this never fails the session; a write error is ignored on purpose
+	// (fail-open — the activation return value is unchanged).
+	fmt.Fprintln(os.Stdout, sessionPrimingText())
 	return nil
 }

@@ -106,7 +106,9 @@ The `helix` CLI is the only surface an agent touches — terse, `relpath:line:co
 
 ### Active
 
-_v2.0 requirements to be defined via this milestone cycle (CLI-First — MCP Surface Retirement)._
+_v2.1 requirements to be defined via this milestone cycle (Agent Adoption & Aider-Derived Validation) — see `.planning/REQUIREMENTS.md`._
+
+v2.0 (CLI-First — MCP Surface Retirement) shipped 2026-06-22: 31/31 in-scope REQs satisfied, audit passed. See `.planning/milestones/v2.0-REQUIREMENTS.md`.
 
 Carry-over follow-ups (resolved at v1.10 Phase 58):
 - [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
@@ -174,9 +176,31 @@ Helix now ships as a single self-contained signed binary with reproducible multi
 
 **v1.12 progress (2026-06-21):** Phase 89 complete — Reports, CI Policy & Contamination Canary (the v1.12 publication CAPSTONE; **milestone now 15/15 phases**). REPORT-01..05 + INFRA-04 + INFRA-05 satisfied; all 4 ROADMAP success criteria verified goal-backward (4/4 must-haves; verifier ran build/test/`make vet` AND did revert-and-fail to prove the integrity fixes are non-vacuous). `helix-bench report --run-id <id>` (the stub is now real; run-id `isValidRunID`-validated + `--out` `..`-guarded, no traversal) regenerates ALL 4 reports BYTE-IDENTICALLY via a single shared zero-RNG `renderAll` called by both `aggregate` and `report` — proven by the load-bearing hermetic `TestReportByteReproducible` (double-render diff-empty). New renderers: `leaderboard.md` gained the `verified_correctness` + `cost_per_solved` columns (with BCa CIs + non-overlap markers); `per_language.md` over the DERIVED 8-language Tier-1 set (from `bench/languages/`, no `c` — the research example was wrong) shows no-coverage languages as `n/a` not omitted; `ablations.md` 5 delta tables (incl. the aggregate-time `full vs no_semantic` that `deltas.go` deliberately omits) with BCa CI-overlap; `cost_quality.md` gained the deterministic ASCII scatter (cost vs verified_correctness) + the cost-table `valid_until` citation. The **contamination canary** (INFRA-05) closes Pitfall 1: a production `InjectPrompt` caller emits the known-novel Sentinel in every-Kth task, and the aggregator EXCLUDES contaminated rows from EVERY headline number (pass@1, verified_correctness, ablations, per_language — fail-safe, never silently counted) while `CanaryPassRate` still measures contamination over all rows; flagged tasks are footnoted in `leaderboard.md`. INFRA-04 ships `.github/workflows/bench.yml` (PR `make bench-quick` hard 5-min cap + no LLM secret + least-privilege perms; full `make bench` nightly/maintainer-gated) behind a hermetic YAML-parse test (the live CI run is honestly inspection-gated). All 4 plans TDD. Code review found **1 CRITICAL (CR-01) + 3 warnings, all the SAME integrity root cause: the `cleanRows` canary exclusion was wired into only the pass@1/cost reduces, so `verified_correctness`, ablations, and per_language still counted contaminated rows into the PUBLISHED headline** — the exact failure the canary exists to prevent (the exclusion test was vacuous because its fixture gave clean/dirty rows the same verdict). Fixed by routing `cleanRows` through ALL 5 published reduces + a strengthened discriminating test (revert-and-fail confirmed it now catches a 0.5-vs-0.667 inflation) + an `--out` traversal guard; determinism/byte-reproducibility intact (`cleanRows` consumes no RNG, runs inside sort-before-emit). **v1.12 Bench Stack & Tool Evaluation is functionally complete — pending milestone audit.**
 
-## Current Milestone: none — v2.0 shipped (2026-06-22)
+## Current Milestone: v2.1 Agent Adoption & Aider-Derived Validation
 
-**Next milestone:** to be defined. Run `/gsd-new-milestone` to start the next cycle (questioning → research → requirements → roadmap); a fresh `.planning/REQUIREMENTS.md` is created then (the v2.0 one is archived at `.planning/milestones/v2.0-REQUIREMENTS.md`).
+**Goal:** Make AI coding agents reliably reach for `helix` verbs over standard tools — via a comprehensive skill/reference, stronger steering, and multi-agent coverage — then prove the toolset works end-to-end with vendored Aider benchmarks and a committed baseline.
+
+**Why now:** v2.0 made the `helix` CLI the *only* agent-facing surface and froze a terse 50-verb output shape, but the adoption layer shipped thin: `SKILL.md` is terse, the `PreToolUse` nudge is advisory, and there is no measurement proving an agent actually picks `helix` over grep/sed/cat/Read. v2.0 also left the toolset's real-world editing/repomap quality unbenchmarked against an external standard. Aider — a stated lineage influence (CLAUDE.md) — ships mature polyglot edit, repomap, and edit-format fixtures (Apache-2.0) that map cleanly onto Helix's verbs. This milestone closes both gaps: deepen the adoption surface to a measured contract, and validate the kernel against vendored Aider benchmarks with a committed baseline.
+
+**Target features:**
+
+*Adoption layer (skill + reference)*
+- **Comprehensive per-verb reference** — expand the terse v2.0 `SKILL.md` into a full agent-facing reference: every verb with args, output shape, worked examples, and explicit "use X not Y" decision guidance.
+- **Stronger steering / enforcement** — richer `PreToolUse` nudges, broader code-target detection, anti-fallback guardrails (possibly SessionStart priming) so agents don't silently fall back to grep/sed/cat/Read.
+- **Multi-agent coverage** — references/setup beyond Claude Code: Codex, Gemini CLI, IDE assistants, generic agents.
+- **Adoption eval harness (both layers)** — a deterministic CI-gating contract (skill/reference completeness + nudge-fires unit tests) PLUS an opt-in LLM-behavioral score (reusing the v1.4 `llm`/`llmjudge` infra, never blocks merge) that measures whether a real model chooses `helix` over standard tools.
+
+*Aider-derived validation*
+- **Vendor Aider's fixtures** — copy Aider's actual exercism + edit-format fixtures into the tree with attribution/license headers (Apache-2.0).
+- **Three bench surfaces** — polyglot edit benchmark (exercism), RepoMap eval (get-repo-map / get-context ranking + token budget), and edit-format / fuzzy-robustness (the 4-strategy cascade against LLM output drift).
+- **Local capture + committed baseline** — run benches locally (`HELIX_BIN`-gated, the known false-green guard), commit a baseline results artifact (BENCH-RESULTS / benchstat), consistent with the v1.9 local-only bench rule.
+
+**Key context:**
+- Builds on the v2.0 CLI-first surface; **no breaking changes** (minor version). Phase numbering continues from **97**.
+- Aider is part of Helix's stated lineage — vendoring with attribution reinforces that; no "fork/port/rewrite" framing.
+- Bench smoke tests are false-green without `HELIX_BIN` set (known gotcha) — the harness must enforce it.
+
+**Source of truth:** This PROJECT.md milestone section and the v2.1 `.planning/REQUIREMENTS.md` (created by this milestone cycle; the v2.0 one is archived at `.planning/milestones/v2.0-REQUIREMENTS.md`).
 
 <details>
 <summary>Shipped v2.0 milestone definition (historical)</summary>
@@ -300,4 +324,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-22 — v2.0 CLI-First (MCP Surface Retirement) in progress: phases 90–94 complete (one-shot dial spine + race-free warm reuse; code-generated 50-verb surface + `tools/call` profile/mode enforcement; terse `relpath:line:col<TAB>payload` output renderer + CLI-stdout contract oracle — output shape FROZEN; embedded SKILL.md + advisory grep→helix nudge + `helix setup` flip, LLM-oracle-validated 8/8; AND the agent-facing MCP surface RETIRED — stdio forwarder head + Streamable-HTTP `/mcp` deleted after a green dual-run parity gate, with an opt-in loopback-gated gRPC TCP bind added and bench/eval harnesses migrated onto the retained gRPC `StreamMCP` wire). Next: Phase 95 (Identity & docs rewrite to CLI-first across README/CLAUDE.md/PROJECT.md + docgen regen against the frozen, MCP-free surface) — the final v2.0 phase. v1.12 Bench Stack & Tool Evaluation complete at 15/15 phases (formal `/gsd-complete-milestone` archival pending).*
+*Last updated: 2026-06-22 — v2.1 Agent Adoption & Aider-Derived Validation milestone started (continues phase numbering from 97). Two thrusts: (1) deepen the v2.0 adoption layer — comprehensive per-verb SKILL reference, stronger PreToolUse steering, multi-agent coverage (Codex/Gemini/IDE/generic), and a two-layer adoption eval harness (deterministic CI gate + opt-in LLM-behavioral score); (2) vendor Aider's fixtures (Apache-2.0) and adapt three bench surfaces — polyglot edit, RepoMap eval, edit-format/fuzzy robustness — with a committed local baseline. No breaking changes. v2.0 CLI-First (MCP Surface Retirement) shipped 2026-06-22 (7 phases 90–96, 31/31 REQs, audit passed). Requirements + roadmap pending this cycle.*

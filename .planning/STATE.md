@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: CLI-First — MCP Surface Retirement
-current_phase: 0
-status: Awaiting next milestone
-stopped_at: Completed 96-01-PLAN.md
-last_updated: "2026-06-22T09:58:45.587Z"
+milestone: v2.1
+milestone_name: Agent Adoption & Aider-Derived Validation
+status: planning
+last_updated: "2026-06-22T12:15:40.696Z"
 last_activity: 2026-06-22
-last_activity_desc: Milestone v2.0 completed and archived
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
-  percent: 100
-current_phase_name: identity-docs-rewrite-docgen-regen
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-22 — Milestone v2.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-22 — Milestone v2.1 started
 
 ## Performance Metrics
 

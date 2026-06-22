@@ -72,15 +72,15 @@ func frontmatterValue(fm, key string) (string, bool) {
 // TestSkillEmbedNonEmpty asserts the SKILL.md asset is compiled into the binary
 // (embed non-empty). (Task 1, behavior 1.)
 func TestSkillEmbedNonEmpty(t *testing.T) {
-	if strings.TrimSpace(embeddedSkillMD) == "" {
-		t.Fatal("embeddedSkillMD is empty; SKILL.md was not embedded")
+	if strings.TrimSpace(embeddedSkillBytes()) == "" {
+		t.Fatal("embedded SKILL.md is empty; SKILL.md was not embedded")
 	}
 }
 
 // TestSkillFrontmatterValid asserts the leading frontmatter parses and carries
 // name/description/allowed-tools, with name == "helix". (Task 1, behavior 2.)
 func TestSkillFrontmatterValid(t *testing.T) {
-	fm, ok := frontmatterBlock(embeddedSkillMD)
+	fm, ok := frontmatterBlock(embeddedSkillBytes())
 	if !ok {
 		t.Fatal("SKILL.md has no leading --- frontmatter block")
 	}
@@ -103,7 +103,7 @@ func TestSkillFrontmatterValid(t *testing.T) {
 // within the Claude Code 1,536-char listing cap — the SKILL-04 idle-cost upper
 // bound, asserted with no API key. (Task 1, behavior 3.)
 func TestSkillDescriptionCap(t *testing.T) {
-	fm, ok := frontmatterBlock(embeddedSkillMD)
+	fm, ok := frontmatterBlock(embeddedSkillBytes())
 	if !ok {
 		t.Fatal("SKILL.md has no leading --- frontmatter block")
 	}
@@ -153,17 +153,17 @@ func TestSkillIdleCostBound(t *testing.T) {
 // digit-bearing idle-cost figure and that the <N>/<M> placeholders reserved in
 // 93-01 are gone. Runs in the DEFAULT suite (no API key). (SKILL-04 Task 1, Test 3.)
 func TestSkillTokenNoteFilled(t *testing.T) {
-	if strings.Contains(embeddedSkillMD, "<N>") || strings.Contains(embeddedSkillMD, "<M>") {
+	if strings.Contains(embeddedSkillBytes(), "<N>") || strings.Contains(embeddedSkillBytes(), "<M>") {
 		t.Error("SKILL.md token-note still contains <N>/<M> placeholders; fill with measured numbers")
 	}
 	// A real, digit-bearing idle-cost number must be present somewhere in the
 	// token-note region (the SKILL-04 acceptance: no placeholder, real number).
 	digitRe := regexp.MustCompile(`\d`)
-	noteIdx := strings.Index(strings.ToLower(embeddedSkillMD), "token note")
+	noteIdx := strings.Index(strings.ToLower(embeddedSkillBytes()), "token note")
 	if noteIdx < 0 {
 		t.Fatal("SKILL.md missing the 'Token note' line")
 	}
-	note := embeddedSkillMD[noteIdx:]
+	note := embeddedSkillBytes()[noteIdx:]
 	if !digitRe.MatchString(note) {
 		t.Error("SKILL-04 token-note carries no digit-bearing idle-cost figure")
 	}
@@ -182,7 +182,7 @@ func TestSkillVerbMembershipDrift(t *testing.T) {
 		catalog[n] = true
 	}
 
-	matches := helixVerbRe.FindAllStringSubmatch(embeddedSkillMD, -1)
+	matches := helixVerbRe.FindAllStringSubmatch(embeddedSkillBytes(), -1)
 	if len(matches) == 0 {
 		t.Fatal("no `helix <verb>` citations found in SKILL.md decision table")
 	}
@@ -206,7 +206,7 @@ func TestSkillVerbMembershipDrift(t *testing.T) {
 // (Task 1, behavior 5.)
 func TestSkillNoVerbCountLiteral(t *testing.T) {
 	countRe := regexp.MustCompile(`\b5[03]\s+(verbs|tools)\b`)
-	if loc := countRe.FindString(embeddedSkillMD); loc != "" {
+	if loc := countRe.FindString(embeddedSkillBytes()); loc != "" {
 		t.Errorf("SKILL.md contains a hardcoded verb-count literal %q; cite by capability group instead", loc)
 	}
 }
@@ -214,8 +214,8 @@ func TestSkillNoVerbCountLiteral(t *testing.T) {
 // TestSkillTokenNotePresent asserts the SKILL-04 token-note line is present in
 // the body (reserves the idle-cost vs preloaded-schema numbers).
 func TestSkillTokenNotePresent(t *testing.T) {
-	if !strings.Contains(strings.ToLower(embeddedSkillMD), "token note") &&
-		!strings.Contains(strings.ToLower(embeddedSkillMD), "skill-04") {
+	if !strings.Contains(strings.ToLower(embeddedSkillBytes()), "token note") &&
+		!strings.Contains(strings.ToLower(embeddedSkillBytes()), "skill-04") {
 		t.Error("SKILL.md is missing the SKILL-04 token-note line")
 	}
 }
@@ -232,7 +232,7 @@ func TestSkillTargetDir(t *testing.T) {
 }
 
 // TestInstallSkillWritesContent asserts installSkill writes <dir>/SKILL.md whose
-// bytes equal embeddedSkillMD (modulo a single trailing newline). (Task 2, b1.)
+// bytes equal the embedded SKILL.md (modulo a single trailing newline). (Task 2, b1.)
 func TestInstallSkillWritesContent(t *testing.T) {
 	dir := skillTargetDir(t.TempDir())
 	if err := installSkill(dir); err != nil {
@@ -242,12 +242,12 @@ func TestInstallSkillWritesContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading written SKILL.md: %v", err)
 	}
-	want := embeddedSkillMD
+	want := embeddedSkillBytes()
 	if !strings.HasSuffix(want, "\n") {
 		want += "\n"
 	}
 	if string(got) != want {
-		t.Errorf("written SKILL.md content does not match embeddedSkillMD (modulo trailing newline)")
+		t.Errorf("written SKILL.md content does not match embedded SKILL.md (modulo trailing newline)")
 	}
 }
 

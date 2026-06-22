@@ -1,32 +1,48 @@
 package cli
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// embeddedSkillMD is the Claude Code Agent Skill that teaches an agent the
-// frozen Phase 92 `helix` kebab verbs and the terse
-// `relpath:line:col<TAB>payload` output via a `| Question | Use this | Not this |`
-// decision table. It is compiled into the binary (string form, not embed.FS,
-// since SKILL.md is a single file — analog: internal/eval/judge/client.go) and
-// written verbatim to disk by installSkill (helix setup). The asset is the
+// embeddedSkillFS is the Claude Code Agent Skill BUNDLE: the terse SKILL.md
+// (idle tier — teaches the frozen `helix` kebab verbs via a decision table) plus
+// the generated reference.md (on-demand tier — the full per-verb reference). The
+// whole skills/helix tree is compiled into the binary and shipped to disk by
+// installSkill (helix setup), each file written atomically. SKILL.md is the
 // on-demand replacement for the preloaded MCP tools/list schema blob: the agent
-// learns the verbs from a ≤1,536-char description instead of a full-schema
-// preload tax.
+// learns the verbs from a ≤1,536-char description instead of a full-schema preload
+// tax. reference.md is loaded only when the agent reaches for it (progressive
+// disclosure) and is therefore EXEMPT from the SKILL-04 idle-cost cap.
 //
-//go:embed skills/helix/SKILL.md
-var embeddedSkillMD string
+//go:embed skills/helix/*
+var embeddedSkillFS embed.FS
+
+// embeddedSkillBytes returns the verbatim embedded SKILL.md content (ONLY
+// SKILL.md, never the bundle). It is the SKILL.md-only accessor every former
+// embeddedSkillMD consumer reads — the idle-cost description parser, the body
+// accessor, and the in-package tests — so reference.md never bleeds into the idle
+// tier (97-RESEARCH.md Pitfall 4).
+func embeddedSkillBytes() string {
+	b, err := embeddedSkillFS.ReadFile("skills/helix/SKILL.md")
+	if err != nil {
+		// The file is embedded at build time; a read failure means the embed
+		// directive lost SKILL.md, which is a build-time programming error.
+		panic("embedded skills/helix/SKILL.md missing: " + err.Error())
+	}
+	return string(b)
+}
 
 // EmbeddedSkillBody returns the verbatim embedded SKILL.md content. It is the
 // single source of truth for the helix Agent Skill so external callers (e.g. the
 // test/oracle/llm behavioral oracle for TEST-03) can load the skill body into a
-// system prompt without duplicating the asset. The bytes are identical to what
-// installSkill writes to disk (modulo a normalizing trailing newline).
-func EmbeddedSkillBody() string { return embeddedSkillMD }
+// system prompt without duplicating the asset. It returns SKILL.md bytes ONLY (no
+// reference.md bleed). The bytes are identical to what installSkill writes to disk
+// (modulo a normalizing trailing newline).
+func EmbeddedSkillBody() string { return embeddedSkillBytes() }
 
 // skillDescription returns the SKILL.md frontmatter `description` value (joined
 // with the optional `when_to_use` value when present). It is the idle-skill-cost
@@ -40,7 +56,7 @@ func EmbeddedSkillBody() string { return embeddedSkillMD }
 // `---`-fence split that understands single-line values and `>-`/`>`/`|`/`|-`
 // block scalars (the form the description uses).
 func skillDescription() (string, error) {
-	fm, ok := skillFrontmatter(embeddedSkillMD)
+	fm, ok := skillFrontmatter(embeddedSkillBytes())
 	if !ok {
 		return "", fmt.Errorf("SKILL.md has no leading --- frontmatter block")
 	}
@@ -117,17 +133,21 @@ func skillTargetDir(claudeDir string) string {
 	return filepath.Join(claudeDir, "skills", "helix")
 }
 
-// installSkill writes the embedded SKILL.md verbatim to <targetDir>/SKILL.md,
-// atomically (temp file + rename, mirroring nudge.go saveSessionStats so a
-// concurrent setup never observes a partial/corrupt file) and idempotently
-// (re-running is byte-stable). It creates targetDir (MkdirAll 0755) if absent.
+// installSkill writes the embedded skill BUNDLE (SKILL.md + reference.md) to
+// targetDir, each file atomically (temp file + rename, mirroring nudge.go
+// saveSessionStats so a concurrent setup never observes a partial/corrupt file)
+// and idempotently (re-running is byte-stable). It creates targetDir (MkdirAll
+// 0755) if absent.
 //
 // Containment (T-93-01, Security V12): installSkill refuses any targetDir that is
 // not within the per-client skills root — i.e. a targetDir that does not resolve
 // (via filepath.Rel) to a path at or under its own ".../skills/helix" root, with
 // no ".." escape. A crafted client/project dir whose ".." components escape that
 // root is rejected before any write — the path-traversal analog of render.go
-// readSnippetLine's filepath.Rel + ".."-prefix guard.
+// readSnippetLine's filepath.Rel + ".."-prefix guard. The per-file write loop
+// derives each destination name ONLY from the embedded FS (never user input), so
+// the multi-file bundle keeps the same path-traversal posture as the single-file
+// install (T-97-01).
 func installSkill(targetDir string) error {
 	if !withinSkillRoot(targetDir) {
 		return fmt.Errorf("refusing skill install: target %q is outside the skills/helix root", targetDir)
@@ -137,20 +157,33 @@ func installSkill(targetDir string) error {
 		return fmt.Errorf("creating skill directory: %w", err)
 	}
 
-	// Write embeddedSkillMD with a single trailing newline (policy matching
-	// saveSessionStats), only adding one if absent.
-	data := []byte(embeddedSkillMD)
-	if !strings.HasSuffix(embeddedSkillMD, "\n") {
-		data = append(data, '\n')
+	entries, err := embeddedSkillFS.ReadDir("skills/helix")
+	if err != nil {
+		return fmt.Errorf("reading embedded skill dir: %w", err)
 	}
-
-	dst := filepath.Join(targetDir, "SKILL.md")
-	tmp := dst + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("writing temp skill file: %w", err)
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		return fmt.Errorf("renaming skill file: %w", err)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := embeddedSkillFS.ReadFile("skills/helix/" + e.Name())
+		if err != nil {
+			return fmt.Errorf("reading embedded %s: %w", e.Name(), err)
+		}
+		// Single trailing newline (policy matching saveSessionStats), only adding
+		// one if absent.
+		if len(data) == 0 || data[len(data)-1] != '\n' {
+			data = append(data, '\n')
+		}
+		// Entry name comes ONLY from the embedded FS (never user-controlled), so
+		// the join writes strictly within targetDir (T-97-01).
+		dst := filepath.Join(targetDir, e.Name())
+		tmp := dst + ".tmp"
+		if err := os.WriteFile(tmp, data, 0644); err != nil {
+			return fmt.Errorf("writing temp skill file: %w", err)
+		}
+		if err := os.Rename(tmp, dst); err != nil {
+			return fmt.Errorf("renaming skill file: %w", err)
+		}
 	}
 	return nil
 }
@@ -204,20 +237,30 @@ func containedIn(root, target string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-// uninstallSkill removes <targetDir>/SKILL.md and, if it then becomes empty, the
-// targetDir itself (WR-93-01). It is best-effort and path-contained: it refuses
-// any targetDir outside the per-client skills/helix root (same guard as
-// installSkill), and a missing file/dir is a no-op (not an error) so --uninstall
-// is idempotent. Only the empty skills/helix dir is pruned; parent dirs (skills,
-// .claude) are left intact since they may hold other content.
+// uninstallSkill removes every embedded bundle file (SKILL.md + reference.md) from
+// targetDir and, if it then becomes empty, the targetDir itself (WR-93-01). It is
+// best-effort and path-contained: it refuses any targetDir outside the per-client
+// skills/helix root (same guard as installSkill), and a missing file/dir is a
+// no-op (not an error) so --uninstall is idempotent. Only the empty skills/helix
+// dir is pruned; parent dirs (skills, .claude) are left intact since they may hold
+// other content. Entry names come ONLY from the embedded FS (never user input).
 func uninstallSkill(targetDir string) error {
 	if !withinSkillRoot(targetDir) {
 		return fmt.Errorf("refusing skill uninstall: target %q is outside the skills/helix root", targetDir)
 	}
 
-	dst := filepath.Join(targetDir, "SKILL.md")
-	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing skill file: %w", err)
+	entries, err := embeddedSkillFS.ReadDir("skills/helix")
+	if err != nil {
+		return fmt.Errorf("reading embedded skill dir: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		dst := filepath.Join(targetDir, e.Name())
+		if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing skill file: %w", err)
+		}
 	}
 
 	// Prune the now-(possibly-)empty skills/helix dir. os.Remove only succeeds on

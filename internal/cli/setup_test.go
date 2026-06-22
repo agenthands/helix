@@ -587,7 +587,7 @@ func TestSetupFlip_ClaudeCode_NoMCPEntry_SkillAndHooksPresent(t *testing.T) {
 	skillPath := filepath.Join(dir, ".claude", "skills", "helix", "SKILL.md")
 	data, err := os.ReadFile(skillPath)
 	require.NoError(t, err, "SKILL.md must be written")
-	want := embeddedSkillMD
+	want := embeddedSkillBytes()
 	if !bytesHasTrailingNewline(want) {
 		want += "\n"
 	}

@@ -204,7 +204,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 96-01-PLAN.md — Wave 1: 4 independent tech-debt fixes — TD-01 harden validateAdminAddr (empty-host/wildcard refusal, mirror CR-01; TDD), TD-02 remove dead mergeJSONConfig + tests, TD-03 grep-family pattern-skip in classifyBashTarget (TDD), TD-04 reword get_tool_help "MCP tool" Descriptions at source + docgen regen
+- [x] 96-01-PLAN.md — Wave 1: 4 independent tech-debt fixes — TD-01 harden validateAdminAddr (empty-host/wildcard refusal, mirror CR-01; TDD), TD-02 remove dead mergeJSONConfig + tests, TD-03 grep-family pattern-skip in classifyBashTarget (TDD), TD-04 reword get_tool_help "MCP tool" Descriptions at source + docgen regen
 
 ### ✅ v1.12 Bench Stack & Tool Evaluation (Phases 75-89) — SHIPPED 2026-06-21
 

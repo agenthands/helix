@@ -4,15 +4,15 @@ milestone: v2.0
 milestone_name: CLI-First — MCP Surface Retirement
 current_phase: 95
 status: verifying
-stopped_at: None
-last_updated: "2026-06-22T06:50:36.141Z"
+stopped_at: Completed 96-01-PLAN.md
+last_updated: "2026-06-22T09:16:51.189Z"
 last_activity: 2026-06-21
 last_activity_desc: Phase 95 complete
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 19
-  completed_plans: 19
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 20
+  completed_plans: 20
   percent: 100
 current_phase_name: identity-docs-rewrite-docgen-regen
 ---
@@ -69,6 +69,7 @@ Progress: [██░░░░░░░░] 19%
 | Phase 94 P02 | 25min | 3 tasks | 28 files |
 | Phase 95 P01 | 3min | 3 tasks | 6 files |
 | Phase 95 P02 | 18 | 3 tasks | 3 files |
+| Phase 96 P01 | 6min | 4 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -105,8 +106,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-21T23:20:38.202Z
-Stopped at: None
+Last session: 2026-06-22T09:16:51.184Z
+Stopped at: Completed 96-01-PLAN.md
 Resume file: None
 
 ## Decisions
@@ -139,3 +140,6 @@ Resume file: None
 - [Phase ?]: Phase 95-01: docgen derives helix verbs inline via ReplaceAll; docgen drift gate wired as make verify-docs + CI step (closes v1.12 hole); blank-import parity via --check gate + cross-ref comments, not literal equality (D-02 preserved)
 - [Phase ?]: Phase 95-02: DOCS-03 satisfied by ADDING a Helix-CLI routing matrix to CLAUDE.md; external SMTC matrix left byte-for-byte intact (mcp__smtc__ count unchanged at 31)
 - [Phase ?]: Phase 95-02: docs reframed CLI-first without over-claiming MCP removal — MCP Go SDK + gRPC IPC are retained internal daemon plumbing
+- [Phase 96]: TD-01: validateAdminAddr refuses empty-host/wildcard binds via explicit empty-host switch case + !ip.IsUnspecified() guard, preserving the empty-ADDR error contract
+- [Phase 96]: TD-03: classifyBashTarget grep-family leading-PATTERN skip gated to grep/rg/ag/egrep/fgrep only; cat/sed/find unchanged; fail-open preserved
+- [Phase 96]: TD-04: reworded four get_tool_help metadata literals to 'Helix tool'; regenerated README + tool-descriptions golden via tooling (no hand-edit)

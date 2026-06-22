@@ -248,6 +248,27 @@ func TestClassifyBashTarget_PureDataNoExec(t *testing.T) {
 	_ = ok2 // no panic, no exec — property assertion is the absence of side effects
 }
 
+func TestClassifyBashTarget_GrepPatternNotFile(t *testing.T) {
+	// The grep family (grep/rg/ag/egrep/fgrep) leads with a search PATTERN, not a
+	// file operand. The first non-flag token must NOT be classified as a file.
+	cases := []struct {
+		cmd        string
+		wantIsCode bool
+		wantOk     bool
+	}{
+		{`grep foo.go`, false, false},          // pattern only, no file operand → fail open
+		{`grep foo.go bar.go`, true, true},     // foo.go is the skipped pattern, bar.go is the file
+		{`grep -i foo.go util.go`, true, true}, // flag, then pattern foo.go, then file util.go
+		{`rg pattern.go`, false, false},        // rg pattern only
+		{`cat main.go`, true, true},            // control: cat has no leading pattern; first operand is the file
+	}
+	for _, tc := range cases {
+		isCode, ok := classifyBashTarget(tc.cmd)
+		assert.Equal(t, tc.wantOk, ok, "ok mismatch for %q", tc.cmd)
+		assert.Equal(t, tc.wantIsCode, isCode, "isCode mismatch for %q", tc.cmd)
+	}
+}
+
 // runNudgeCapture invokes runNudge with the given hookInput JSON piped to a
 // redirected os.Stdin and captures everything written to os.Stdout. It sets
 // CWD to a temp dir so session-stats writes are isolated. Returns the captured

@@ -348,6 +348,17 @@ func classifyBashTarget(cmd string) (isCode bool, ok bool) {
 		return false, false
 	}
 
+	// The grep family (grep/rg/ag/egrep/fgrep) leads with a search PATTERN, not a
+	// file operand. cat/sed/find lead with a file/expr and have no leading pattern
+	// to skip. For the grep family the FIRST non-flag token after the command is
+	// the pattern and must NOT be counted as a file operand.
+	var grepFamily bool
+	switch fields[0] {
+	case "grep", "rg", "ag", "egrep", "fgrep":
+		grepFamily = true
+	}
+	patternSkipped := false
+
 	sawCode := false
 	sawNonCode := false
 	sawAnyOperand := false
@@ -355,8 +366,16 @@ func classifyBashTarget(cmd string) (isCode bool, ok bool) {
 	for _, tok := range fields[1:] {
 		// Skip option flags (leading '-'). This also skips grep patterns that
 		// happen to start with '-' via -e, which is acceptable (we only need
-		// to find file operands, not patterns).
+		// to find file operands, not patterns). We do NOT consume -e/-f flag
+		// VALUES; the first NON-flag token is treated as the pattern.
 		if strings.HasPrefix(tok, "-") {
+			continue
+		}
+
+		// For the grep family, the first non-flag token is the search pattern.
+		// Skip it once (it is not a file operand) and classify the rest.
+		if grepFamily && !patternSkipped {
+			patternSkipped = true
 			continue
 		}
 

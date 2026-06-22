@@ -44,6 +44,27 @@ func embeddedSkillBytes() string {
 // (modulo a normalizing trailing newline).
 func EmbeddedSkillBody() string { return embeddedSkillBytes() }
 
+// embeddedReferenceBytes returns the verbatim embedded reference.md content (the
+// generated per-verb reference, NOT SKILL.md). It mirrors embeddedSkillBytes:
+// the file is embedded at build time via the same `//go:embed skills/helix/*`
+// directive, so a read failure is a build-time programming error (the embed
+// directive lost reference.md) and panics.
+func embeddedReferenceBytes() string {
+	b, err := embeddedSkillFS.ReadFile("skills/helix/reference.md")
+	if err != nil {
+		panic("embedded skills/helix/reference.md missing: " + err.Error())
+	}
+	return string(b)
+}
+
+// EmbeddedReference returns the verbatim embedded reference.md content — the
+// generated, `--check`-gated per-verb reference for the frozen helix CLI verbs.
+// AGENT-01: it surfaces the SAME bytes already shipped to Claude (via the skill
+// bundle) to non-Claude agents, so the multi-agent instruction surface points at
+// ONE generated source with no per-agent bespoke engine and no drift from the
+// helix-refgen --check gate. It returns reference.md bytes ONLY (never SKILL.md).
+func EmbeddedReference() string { return embeddedReferenceBytes() }
+
 // skillDescription returns the SKILL.md frontmatter `description` value (joined
 // with the optional `when_to_use` value when present). It is the idle-skill-cost
 // payload: the only text Claude Code keeps in context until the skill triggers

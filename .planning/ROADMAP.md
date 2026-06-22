@@ -15,11 +15,11 @@
 - [x] **v1.10 Live Semantic Index** -- Phases 57-67 (shipped 2026-05-12)
 - [x] **v1.11 Semantic Index Completion & P1 MCP Tools** -- Phases 68-74 (shipped 2026-06-07) — see `.planning/milestones/v1.11-ROADMAP.md`
 - [x] **v1.12 Bench Stack & Tool Evaluation** -- Phases 75-89 (shipped 2026-06-21) — see `.planning/milestones/v1.12-ROADMAP.md`
-- [ ] **v2.0 CLI-First — MCP Surface Retirement** -- Phases 90-95 (active, started 2026-06-21)
+- [ ] **v2.0 CLI-First — MCP Surface Retirement** -- Phases 90-96 (active, started 2026-06-21)
 
 ## Phases
 
-### 🚧 v2.0 CLI-First — MCP Surface Retirement (Phases 90-95) — ACTIVE
+### 🚧 v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — ACTIVE
 
 **Milestone Goal:** The `helix` CLI becomes the *only* surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it over the existing gRPC `StreamMCP` wire, so agents use the toolset instead of falling back to grep/sed/cat.
 
@@ -31,6 +31,7 @@
 - [x] **Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip** — teach the agent the real verbs; advisory grep→helix steering; migrate setup off MCP registration (completed 2026-06-21)
 - [x] **Phase 94: Retire the Agent-Facing MCP Surface (DELETE)** — drop stdio forwarder head + Streamable-HTTP `/mcp` only after dual-run parity; optional gRPC TCP bind (completed 2026-06-21)
 - [x] **Phase 95: Identity & Docs Rewrite + docgen Regen** — CLI-first identity across four docs; auto-generated table regenerated against the verb surface (completed 2026-06-21)
+- [x] **Phase 96: Address v2.0 tech debt** — inserted post-audit cleanup: TD-01 harden `validateAdminAddr`, TD-02 remove dead `mergeJSONConfig`, TD-03 grep-family pattern-skip in the nudge classifier, TD-04 reword `get_tool_help` Descriptions + docgen regen; plus retroactive Nyquist coverage on 93–95 (completed 2026-06-22)
 
 ### Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse
 

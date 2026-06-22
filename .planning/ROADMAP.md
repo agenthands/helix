@@ -16,8 +16,110 @@
 - [x] **v1.11 Semantic Index Completion & P1 MCP Tools** -- Phases 68-74 (shipped 2026-06-07) — see `.planning/milestones/v1.11-ROADMAP.md`
 - [x] **v1.12 Bench Stack & Tool Evaluation** -- Phases 75-89 (shipped 2026-06-21) — see `.planning/milestones/v1.12-ROADMAP.md`
 - [x] **v2.0 CLI-First — MCP Surface Retirement** -- Phases 90-96 (shipped 2026-06-22) — see `.planning/milestones/v2.0-ROADMAP.md`
+- [ ] **v2.1 Agent Adoption & Aider-Derived Validation** -- Phases 97-102 (planned)
 
 ## Phases
+
+### 🚧 v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — IN PROGRESS
+
+**Milestone Goal:** Make AI coding agents reliably reach for `helix` verbs over standard tools (comprehensive generated reference + stronger steering + multi-agent coverage + a measured adoption contract), then prove the toolset works end-to-end with vendored Aider benchmarks and committed local baselines.
+
+Two independent, interleavable thrusts; intra-thrust order is fixed by hard dependencies. **Thrust 1 (Adoption):** reference substrate → deterministic merge-gating contract → multi-agent + steering → opt-in LLM scorecard. **Thrust 2 (Aider validation):** vendor fixtures → EDIT-verb wiring + committed baseline → eval surfaces (RepoMap + fuzzy) with gold/drift corpora before their evaluators. The milestone is additive — ZERO new Go dependencies; the only structural code change is `internal/cli/skill.go` switching from an embedded `string` to an `embed.FS`.
+
+**Cross-cutting exit gates baked into every relevant phase (anchored to named v1.12 failures, not new work):** (a) anti-vacuity — every gate ships a deliberate break-the-invariant → assert-RED test; (b) `HELIX_BIN` fail-not-skip + a hermetic golden sibling as the sole authoritative proof on every bench-surface phase; (c) `vet-ablation-leakage` leaf-import boundary respected by new bench/evaluator leaves; (d) benches stay local-only — no CI benchstat gate.
+
+- [ ] **Phase 97: Generated Per-Verb Reference + Deterministic Adoption Contract** - `embed.FS` skill bundle, `cmd/helix-refgen` + generated `reference.md`, merge-gating completeness + nudge-fires contract
+- [ ] **Phase 98: Multi-Agent Coverage + Stronger Steering** - per-agent instruction files (Codex/Gemini/generic), Codex hook reuse, broadened nudge + SessionStart priming, negative-control coverage
+- [ ] **Phase 99: Vendored Aider Fixtures + Mixed-License Gate** - MIT polyglot + Apache-2.0 edit-format fixtures, dual `verify-licenses` hard-fail + tamper test
+- [ ] **Phase 100: Polyglot Edit Benchmark + Committed Baseline** - EDIT-verb `AgentFn` via reused `RunExercise`, `aider_edit` mode, `edit_format_applied` open key, byte-reproducible baseline
+- [ ] **Phase 101: Opt-In LLM-Behavioral Adoption Scorecard** - choice/fallback-rate scorecard with sabotaged-skill revert-and-fail + negative judge exemplar, build-tag gated, never blocks merge
+- [ ] **Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines** - gold/drift corpora authored from ground truth, `repomapeval` + `fuzzyrobust` leaves, reversed-ranker discriminators, committed baselines
+
+## Phase Details
+
+### Phase 97: Generated Per-Verb Reference + Deterministic Adoption Contract
+**Goal**: An agent has a complete, registry-generated per-verb reference installed alongside the terse skill, and a deterministic merge-gating contract proves both that the reference covers every frozen verb and that the nudge steers each standard-tool shape to the specific correct `helix` verb.
+**Depends on**: Nothing new (reuses `cmd/docgen` plumbing, `skill.ToolProviders()`, `help.ExtractParamDocs`, `verbs_gen.go`)
+**Requirements**: REF-01, REF-02, REF-03, ADOPT-01
+**Success Criteria** (what must be TRUE):
+  1. `helix-refgen` generates `internal/cli/skills/helix/reference.md` from the live tool registry covering every verb in `verbs_gen.go` (synopsis, args, output shape, worked example, "use this not that"); `helix-refgen --check` fails the build (make + CI) on a hand-edited or stale reference, inheriting the docgen blank-import-parity-with-daemon rule.
+  2. `helix setup claude-code` installs `reference.md` atomically alongside `SKILL.md` from the `embed.FS` bundle, preserving the existing `withinSkillRoot` path-containment guarantee, with the SKILL-04 idle-cost bound still asserted on `SKILL.md` only.
+  3. The deterministic adoption-contract test asserts `reference ⊇ VerbToolNames()` sourced from `verbs_gen.go` (the authority, NOT the generator's own output) AND a per-shape nudge-fires golden table mapping each standard-tool shape to the specific suggested verb, keyed on the emitted command, rejecting empty-bucket-as-pass — and it BLOCKS merge.
+  4. Anti-vacuity proven: deleting one verb from `reference.md` turns the completeness gate RED, and a revert that breaks a nudge-shape mapping turns the contract RED (a deliberate break-the-invariant test ships in this phase).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 98: Multi-Agent Coverage + Stronger Steering
+**Goal**: Non-Claude agents (Codex, Gemini, generic) receive the shared generated reference plus a per-agent instruction file installed without clobbering user content, Codex gets the reused advisory nudge hook, and the broadened steering classifier reaches more standard-tool shapes while provably never firing on legitimately-correct prose/log/config use.
+**Depends on**: Phase 97 (shared reference is the substrate; the nudge envelope is portable to Codex)
+**Requirements**: STEER-01, STEER-02, STEER-03, AGENT-01, AGENT-02, AGENT-03
+**Success Criteria** (what must be TRUE):
+  1. `helix setup` writes/updates per-agent instruction files via idempotent sentinel-delimited append (Codex `AGENTS.md` ≤32 KiB at the documented path, Gemini `GEMINI.md`, generic) that preserves pre-existing user content and does not duplicate the Helix block on re-run (golden round-trip + idempotency + cap tests).
+  2. The generated verb reference is installable for non-Claude agents as a shared markdown reference (no per-agent bespoke skill engine); Codex's `PreToolUse` hook is wired to `helix nudge` reusing the existing advisory envelope, while Gemini/IDE/generic get instruction-file steering only and produce no fabricated hook artifact.
+  3. The `PreToolUse` nudge's code-target classifier is broadened to steer more standard-tool invocations (grep/sed/cat/find/Read-shaped Bash) toward the specific equivalent `helix` verb, preserving the advisory exit-0 / fail-open contract (asserted exit-0 on every shape).
+  4. A SessionStart priming surface presents the terse "use X not Y" decision matrix once per session, size-capped (SKILL-04-style idle-cost bound) and fail-open; negative-control golden classifier rows prove the nudge does NOT fire on prose/log/config/build-output targets (e.g. `grep TODO README.md`).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 99: Vendored Aider Fixtures + Mixed-License Gate
+**Goal**: A deterministic, offline, mixed-license vendored fixture tree (MIT Exercism polyglot subset + Apache-2.0 aider edit-format fixtures) lands in the tree with correct per-file SPDX headers, per-track attribution/NOTICE, and a manifest, guarded by an extended hard-fail license gate that goes RED on any tampered or missing header.
+**Depends on**: Nothing new (reuses `pin.go`; must precede any committed baseline)
+**Requirements**: VENDOR-01, VENDOR-02, VENDOR-03
+**Success Criteria** (what must be TRUE):
+  1. The MIT-licensed Exercism polyglot fixtures (a recorded, deterministic subset) are vendored under `bench/datasets/aider-polyglot/fixtures/` with `SPDX-License-Identifier: MIT`, per-track NOTICE/attribution, and a `VENDOR-MANIFEST.md` recording the exact exercise selection.
+  2. Aider's Apache-2.0 edit-format fixtures are vendored with `SPDX-License-Identifier: Apache-2.0` + attribution, producing a documented mixed-license vendored tree (the user ratified the mixed-license decision).
+  3. `make verify-licenses` is extended to hard-fail over the full vendored tree under both the MIT and Apache-2.0 dispositions.
+  4. Anti-vacuity proven: a tamper test flipping a license header or removing a NOTICE turns the `verify-licenses` gate RED (deliberate break-the-invariant test ships in this phase).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 100: Polyglot Edit Benchmark + Committed Baseline
+**Goal**: The model's edit is routed through helix EDIT verbs against the warm daemon via the reused verb-agnostic `RunExercise` loader, surfaced as a new filesystem-table bench mode with an additive `edit_format_applied` result key, and a byte-reproducible committed polyglot-edit baseline is captured `HELIX_BIN`-gated, fail-not-skip.
+**Depends on**: Phase 99 (vendored fixtures must exist before the bench can run offline)
+**Requirements**: EDITBENCH-01, EDITBENCH-02, EDITBENCH-03, BASELINE-01
+**Success Criteria** (what must be TRUE):
+  1. An EDIT-verb `AgentFn` in `bench/runtime` (daemon-dialing) routes edits through `replace-symbol-body` / `fuzzy-edit` / `replace-in-file` / `insert-before-symbol` / `insert-after-symbol`, plugged into the existing `RunExercise` seam with the loader untouched and the WR-01 anti-tamper pristine-test restore preserved.
+  2. A new `bench/runners/aider_edit/MODE.md` adds the polyglot-edit mode via the filesystem-as-table pattern with zero mode-resolver Go change, and an additive `edit_format_applied` (`*bool`, `omitempty`) open key is recorded on `result.v2.json` with no `schema_version` v3 bump.
+  3. A committed polyglot-edit baseline (`bench/reports/<run>/BENCH-RESULTS.md` + `result.v2.json`) is captured `HELIX_BIN`-gated and fails (not silently SKIPs) when `HELIX_BIN` is set but no `result.v2.json` / empty bucket / missing metric line is produced; the baseline carries byte-reproducible deterministic metrics only (latency excluded → local `bench-micro`).
+  4. Anti-vacuity proven: a hermetic golden sibling (no binary, no network) is the sole authoritative proof exercised by `go test ./bench/...`, a "did it RUN" sentinel proves the live leg ran when `HELIX_BIN` is set, and the new `bench/runtime` AgentFn respects the `vet-ablation-leakage` leaf-import boundary (kept outside the stdlib leaf).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 101: Opt-In LLM-Behavioral Adoption Scorecard
+**Goal**: An opt-in, build-tag-gated LLM-behavioral scorecard measures an agent's helix-choice rate and standard-tool fallback rate using the reused v1.4 `llm`/`llmjudge` harness, with built-in failing anchors (sabotaged-skill revert-and-fail + negative judge exemplar) so the score can demonstrably fail — and it never blocks merge.
+**Depends on**: Phase 97 (loads the skill body) and Phase 98 (deterministic contract + steering green first)
+**Requirements**: ADOPT-02
+**Success Criteria** (what must be TRUE):
+  1. The scorecard (reusing `test/oracle/llm`, build-tag gated) reports both choice rate and fallback rate, keyed on the first emitted command line (not substring presence), asserts the two are complementary on a known fixture, and rejects empty/one-element task buckets as a pass.
+  2. The judge rubric includes an explicit negative exemplar (a response that runs `grep -r` to find a definition scores 0 on adoption) so the rubric can return a failing score; the layer never blocks merge.
+  3. Anti-vacuity proven: a sabotaged-skill revert-and-fail self-test runs the scorer against a skill body with the decision matrix stripped and asserts `choice_rate` drops materially — if the score is identical with and without the skill, the test fails (deliberate break-the-invariant test ships in this phase).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
+**Goal**: Two stdlib-only leaf evaluators measure Helix's existing `internal/repomap` ranking quality and `internal/fuzzy` strategy-selection/ambiguity-refusal against broad multi-language gold/drift corpora authored from task ground truth (not tool output), each guarded by a reversed/random-ranker discriminator that must fail the corpus, with committed byte-reproducible baselines.
+**Depends on**: Phase 99 (corpus can reuse vendored fixture ground truth); corpus authored before each evaluator (avoid self-confirming gold)
+**Requirements**: REPOEVAL-01, REPOEVAL-02, FUZZBENCH-01, FUZZBENCH-02, BASELINE-02
+**Success Criteria** (what must be TRUE):
+  1. `bench/evaluators/repomapeval` (stdlib-only, respecting the `vet-ablation-leakage` no-kernel-import boundary) measures `get-repo-map` / `get-context` ranking quality (recall@k / MRR / nDCG) and token-budget fit against a broad multi-language gold corpus authored from task ground truth (e.g. exercism `files.solution`), independent of `get-repo-map` output, with a documented per-language size floor.
+  2. `bench/evaluators/fuzzyrobust` (stdlib-only + `editsim.ES`, respecting the leaf-import boundary) measures `internal/fuzzy` 4-strategy selection and ambiguity refusal against a broad native drift corpus whose expected strategy is derived from the drift type (not observed behavior), including at least one known-ambiguous case that MUST be refused, with a documented size floor.
+  3. Committed RepoMap-eval and fuzzy-robustness baseline artifacts are captured `HELIX_BIN`-gated, fail-not-skip, byte-reproducible, deterministic-metrics-only (routed through the existing deterministic `renderAll`, seeded resamples, sort-before-emit).
+  4. Anti-vacuity proven: a reversed/random ranker MUST fail the RepoMap gold corpus and the known-ambiguous case MUST be refused by `fuzzyrobust`; each evaluator ships a hermetic golden sibling that runs with no binary and no network (deliberate break-the-invariant discriminators ship in this phase).
+**Plans**: TBD
+**UI hint**: no
+
+## Progress (v2.1)
+
+**Execution Order:** Two interleavable thrusts; intra-thrust order fixed. Thrust 1: 97 → 98 → 101. Thrust 2: 99 → 100 → 102. (98 depends on 97; 101 depends on 97+98; 100 depends on 99; 102 depends on 99.)
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 97. Generated Reference + Adoption Contract | v2.1 | 0/TBD | Not started | - |
+| 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/TBD | Not started | - |
+| 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
+| 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |
+| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |
+| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22
 

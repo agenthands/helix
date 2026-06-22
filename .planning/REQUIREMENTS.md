@@ -101,39 +101,40 @@ Explicitly excluded (anti-features from research). Documented to prevent scope c
 
 ## Traceability
 
-Populated during roadmap creation (phases continue from 97). Each requirement maps to exactly one phase.
+Populated during roadmap creation (phases continue from 97, after v2.0 closed at Phase 96). Each requirement maps to exactly one phase. Coverage 23/23.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REF-01 | TBD | Pending |
-| REF-02 | TBD | Pending |
-| REF-03 | TBD | Pending |
-| STEER-01 | TBD | Pending |
-| STEER-02 | TBD | Pending |
-| STEER-03 | TBD | Pending |
-| AGENT-01 | TBD | Pending |
-| AGENT-02 | TBD | Pending |
-| AGENT-03 | TBD | Pending |
-| ADOPT-01 | TBD | Pending |
-| ADOPT-02 | TBD | Pending |
-| VENDOR-01 | TBD | Pending |
-| VENDOR-02 | TBD | Pending |
-| VENDOR-03 | TBD | Pending |
-| EDITBENCH-01 | TBD | Pending |
-| EDITBENCH-02 | TBD | Pending |
-| EDITBENCH-03 | TBD | Pending |
-| REPOEVAL-01 | TBD | Pending |
-| REPOEVAL-02 | TBD | Pending |
-| FUZZBENCH-01 | TBD | Pending |
-| FUZZBENCH-02 | TBD | Pending |
-| BASELINE-01 | TBD | Pending |
-| BASELINE-02 | TBD | Pending |
+| REF-01 | Phase 97 | Pending |
+| REF-02 | Phase 97 | Pending |
+| REF-03 | Phase 97 | Pending |
+| STEER-01 | Phase 98 | Pending |
+| STEER-02 | Phase 98 | Pending |
+| STEER-03 | Phase 98 | Pending |
+| AGENT-01 | Phase 98 | Pending |
+| AGENT-02 | Phase 98 | Pending |
+| AGENT-03 | Phase 98 | Pending |
+| ADOPT-01 | Phase 97 | Pending |
+| ADOPT-02 | Phase 101 | Pending |
+| VENDOR-01 | Phase 99 | Pending |
+| VENDOR-02 | Phase 99 | Pending |
+| VENDOR-03 | Phase 99 | Pending |
+| EDITBENCH-01 | Phase 100 | Pending |
+| EDITBENCH-02 | Phase 100 | Pending |
+| EDITBENCH-03 | Phase 100 | Pending |
+| REPOEVAL-01 | Phase 102 | Pending |
+| REPOEVAL-02 | Phase 102 | Pending |
+| FUZZBENCH-01 | Phase 102 | Pending |
+| FUZZBENCH-02 | Phase 102 | Pending |
+| BASELINE-01 | Phase 100 | Pending |
+| BASELINE-02 | Phase 102 | Pending |
 
 **Coverage:**
 - v1 requirements: 23 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 23 ⚠️ (resolved at roadmap creation)
+- Mapped to phases: 23 ✓ (Phases 97-102)
+- Unmapped: 0
+- Double-mapped: 0 (each requirement maps to exactly one phase)
 
 ---
 *Requirements defined: 2026-06-22*
-*Last updated: 2026-06-22 after initial definition*
+*Last updated: 2026-06-22 — roadmap created, traceability mapped (Phases 97-102)*

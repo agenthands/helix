@@ -79,8 +79,8 @@ Plans:
 Plans:
 **Wave 1** *(two file-disjoint thrusts run in parallel)*
 
-- [ ] 98-01-PLAN.md — STEER thrust (TDD): broaden `isGrepReadTool` token-anchored on `fields[0]` to steer Bash sed/cat (STEER-01); flip the DEFER-97-01 golden firing + remove the silent loop + bump floor 5→7 + revert-and-fail; STEER-03 prose/log/config negative controls (exit-0); SessionStart priming matrix constant, size-capped, fail-open (STEER-02)
-- [ ] 98-02-PLAN.md — AGENT thrust (TDD + 1 blocking human-verify): `EmbeddedReference()` shared reference (AGENT-01); idempotent sentinel-delimited `writeAgentInstructions` (no-clobber / no-duplicate / Codex AGENTS.md ≤32 KiB) (AGENT-02); `CodexRegistrar` (AGENTS.md + hooks.json→`helix nudge`, one engine) + flip gemini-cli/generic instruction-file-only + no-Gemini-hook proof + codex ValidArg (AGENT-03)
+- [x] 98-01-PLAN.md — STEER thrust (TDD): broaden `isGrepReadTool` token-anchored on `fields[0]` to steer Bash sed/cat (STEER-01); flip the DEFER-97-01 golden firing + remove the silent loop + bump floor 5→7 + revert-and-fail; STEER-03 prose/log/config negative controls (exit-0); SessionStart priming matrix constant, size-capped, fail-open (STEER-02)
+- [x] 98-02-PLAN.md — AGENT thrust (TDD + 1 blocking human-verify): `EmbeddedReference()` shared reference (AGENT-01); idempotent sentinel-delimited `writeAgentInstructions` (no-clobber / no-duplicate / Codex AGENTS.md ≤32 KiB) (AGENT-02); `CodexRegistrar` (AGENTS.md + hooks.json→`helix nudge`, one engine) + flip gemini-cli/generic instruction-file-only + no-Gemini-hook proof + codex ValidArg (AGENT-03)
 
 **UI hint**: no
 
@@ -150,7 +150,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete    | 2026-06-22 |
-| 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/2 | Not started | - |
+| 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete   | 2026-06-22 |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |

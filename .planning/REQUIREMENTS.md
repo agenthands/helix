@@ -6,6 +6,7 @@
 **Milestone goal:** Make AI coding agents reliably reach for `helix` verbs over standard tools (comprehensive generated reference + stronger steering + multi-agent coverage + a measured adoption contract), then prove the toolset works end-to-end with vendored Aider benchmarks and committed local baselines.
 
 **Cross-cutting invariants (apply to every requirement below; not separate line items):**
+
 - **Anti-vacuity:** every gate this milestone adds ships a deliberate break-the-invariant → assert-RED test (the v1.12 lesson — four named vacuous-pass CRITICALs were caught only by adversarial revert-and-fail tests).
 - **HELIX_BIN fail-not-skip:** every bench surface ships a hermetic golden sibling as the sole authoritative proof AND fails (not silently SKIPs) when `HELIX_BIN` is set but the run produces no `result.v2.json` / empty bucket / missing metric line.
 - **Local-only benches:** no CI benchstat gate is (re)introduced (firm rule since v1.9); baselines are captured + committed locally.
@@ -17,9 +18,9 @@
 
 ### Per-Verb Reference & Skill Bundle (REF)
 
-- [ ] **REF-01**: A new `cmd/helix-refgen` generates an agent-facing `reference.md` from the live tool registry (`skill.ToolProviders()` + `internal/kernel/help`), covering every verb in `internal/cli/verbs_gen.go` with synopsis, args, output shape, a worked example, and explicit "use this not that" guidance.
-- [ ] **REF-02**: `internal/cli/skill.go` switches from a single embedded `string` to an `embed.FS` skill bundle; `installSkill` ships `reference.md` alongside `SKILL.md` atomically with the existing path-containment guarantee.
-- [ ] **REF-03**: `helix-refgen --check` is a merge-gating drift gate (wired into `make` + CI) sourced from `verbs_gen.go` as the authority, inheriting the docgen blank-import-parity-with-daemon rule; a hand-edited or stale `reference.md` fails the gate.
+- [x] **REF-01**: A new `cmd/helix-refgen` generates an agent-facing `reference.md` from the live tool registry (`skill.ToolProviders()` + `internal/kernel/help`), covering every verb in `internal/cli/verbs_gen.go` with synopsis, args, output shape, a worked example, and explicit "use this not that" guidance.
+- [x] **REF-02**: `internal/cli/skill.go` switches from a single embedded `string` to an `embed.FS` skill bundle; `installSkill` ships `reference.md` alongside `SKILL.md` atomically with the existing path-containment guarantee.
+- [x] **REF-03**: `helix-refgen --check` is a merge-gating drift gate (wired into `make` + CI) sourced from `verbs_gen.go` as the authority, inheriting the docgen blank-import-parity-with-daemon rule; a hand-edited or stale `reference.md` fails the gate.
 
 ### Steering & Nudge (STEER)
 
@@ -35,7 +36,7 @@
 
 ### Adoption Evaluation (ADOPT)
 
-- [ ] **ADOPT-01**: A deterministic, merge-gating adoption-contract test asserts (a) `reference ⊇ VerbToolNames()` completeness and (b) a per-shape nudge-fires golden table mapping each standard-tool shape to the specific suggested verb — non-vacuous (revert-and-fail proven), keyed on the emitted command, rejecting empty-bucket-as-pass.
+- [x] **ADOPT-01**: A deterministic, merge-gating adoption-contract test asserts (a) `reference ⊇ VerbToolNames()` completeness and (b) a per-shape nudge-fires golden table mapping each standard-tool shape to the specific suggested verb — non-vacuous (revert-and-fail proven), keyed on the emitted command, rejecting empty-bucket-as-pass.
 - [ ] **ADOPT-02**: An opt-in LLM-behavioral adoption scorecard (reusing the v1.4 `llm`/`llmjudge` harness, build-tag gated, never blocks merge) measures an agent's helix-choice rate and standard-tool fallback rate, with a sabotaged-skill revert-and-fail self-test and a negative judge exemplar so the score can actually fail.
 
 ### Aider Fixture Vendoring (VENDOR)
@@ -105,16 +106,16 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REF-01 | Phase 97 | Pending |
-| REF-02 | Phase 97 | Pending |
-| REF-03 | Phase 97 | Pending |
+| REF-01 | Phase 97 | Complete |
+| REF-02 | Phase 97 | Complete |
+| REF-03 | Phase 97 | Complete |
 | STEER-01 | Phase 98 | Pending |
 | STEER-02 | Phase 98 | Pending |
 | STEER-03 | Phase 98 | Pending |
 | AGENT-01 | Phase 98 | Pending |
 | AGENT-02 | Phase 98 | Pending |
 | AGENT-03 | Phase 98 | Pending |
-| ADOPT-01 | Phase 97 | Pending |
+| ADOPT-01 | Phase 97 | Complete |
 | ADOPT-02 | Phase 101 | Pending |
 | VENDOR-01 | Phase 99 | Pending |
 | VENDOR-02 | Phase 99 | Pending |
@@ -130,6 +131,7 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | BASELINE-02 | Phase 102 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 23 total
 - Mapped to phases: 23 ✓ (Phases 97-102)
 - Unmapped: 0

@@ -28,7 +28,7 @@ Two independent, interleavable thrusts; intra-thrust order is fixed by hard depe
 
 **Cross-cutting exit gates baked into every relevant phase (anchored to named v1.12 failures, not new work):** (a) anti-vacuity — every gate ships a deliberate break-the-invariant → assert-RED test; (b) `HELIX_BIN` fail-not-skip + a hermetic golden sibling as the sole authoritative proof on every bench-surface phase; (c) `vet-ablation-leakage` leaf-import boundary respected by new bench/evaluator leaves; (d) benches stay local-only — no CI benchstat gate.
 
-- [ ] **Phase 97: Generated Per-Verb Reference + Deterministic Adoption Contract** - `embed.FS` skill bundle, `cmd/helix-refgen` + generated `reference.md`, merge-gating completeness + nudge-fires contract
+- [x] **Phase 97: Generated Per-Verb Reference + Deterministic Adoption Contract** - `embed.FS` skill bundle, `cmd/helix-refgen` + generated `reference.md`, merge-gating completeness + nudge-fires contract (completed 2026-06-22)
 - [ ] **Phase 98: Multi-Agent Coverage + Stronger Steering** - per-agent instruction files (Codex/Gemini/generic), Codex hook reuse, broadened nudge + SessionStart priming, negative-control coverage
 - [ ] **Phase 99: Vendored Aider Fixtures + Mixed-License Gate** - MIT polyglot + Apache-2.0 edit-format fixtures, dual `verify-licenses` hard-fail + tamper test
 - [ ] **Phase 100: Polyglot Edit Benchmark + Committed Baseline** - EDIT-verb `AgentFn` via reused `RunExercise`, `aider_edit` mode, `edit_format_applied` open key, byte-reproducible baseline
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete   | 2026-06-22 |
+| 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/TBD | Not started | - |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |

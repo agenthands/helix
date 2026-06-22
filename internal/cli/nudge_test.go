@@ -341,8 +341,11 @@ func TestNudgeAdvisory_BashCodeGrep_Suggests(t *testing.T) {
 	adv, ok := parseAdvisory(t, out)
 	require.True(t, ok, "expected a suggestion JSON, got %q", out)
 	assert.Equal(t, "PreToolUse", adv.HookSpecificOutput.HookEventName)
-	assert.Contains(t, adv.HookSpecificOutput.AdditionalContext, "helix",
-		"advisory should name a helix verb")
+	// ADOPT-01b: key on the SPECIFIC emitted verb for this shape (plain grep over
+	// a code file -> `helix search-symbols`), NOT a weak Contains(..., "helix")
+	// substring that the prompt/skill text would also satisfy (97-RESEARCH Pitfall 3).
+	assert.Contains(t, adv.HookSpecificOutput.AdditionalContext, "helix search-symbols",
+		"plain grep over a code file must steer to `helix search-symbols`")
 }
 
 func TestNudgeAdvisory_BashNonCodeGrep_Silent(t *testing.T) {
@@ -439,4 +442,150 @@ func TestSaveSessionStats_AtomicWrite(t *testing.T) {
 	var loaded sessionStats
 	require.NoError(t, json.Unmarshal(data, &loaded))
 	assert.Equal(t, "atomic-test", loaded.SessionID)
+}
+
+// nudgeShapeCase pairs a standard-tool call (a Claude Code tool name + its input)
+// with the SPECIFIC `helix <verb>` token the nudge classifier emits for it. wantVerb
+// is mapped VERBATIM from steerMessage/bashSteerMessage (nudge.go:158-206): the
+// golden keys on the chosen verb, NOT on a weak "helix" substring.
+//
+// IMPORTANT — this golden asserts the LIVE current mapping, not bashSteerMessage's
+// aspirational branch set. runNudge only reaches steerMessage when
+// isGrepReadTool() is true; its Bash arm (nudge.go:434-438) matches ONLY
+// grep/find/rg/ag — NOT sed/cat. So a Bash `sed`/`cat` command is SILENT today (the
+// cat/sed branches in bashSteerMessage are dead for Bash callers). The
+// cat-equivalent shape DOES steer to `helix read-file` via the Read TOOL, and the
+// grep-equivalent via the Grep TOOL. Broadening the classifier to fire on Bash
+// sed/cat is STEER-01 (Phase 98), explicitly OUT OF SCOPE here — see
+// deferred-items.md DEFER-97-01. Asserting Bash sed/cat -> a verb would be a FALSE
+// golden (the very vacuity this phase exists to kill), so this table asserts the
+// shapes that genuinely emit, and the silent Bash sed/cat shapes are asserted SILENT.
+type nudgeShapeCase struct {
+	name     string
+	toolName string
+	input    map[string]any
+	wantVerb string
+}
+
+// nudgeShapeGoldenCases is the ADOPT-01b per-shape golden: the five standard-tool
+// shapes the classifier genuinely steers, each mapped to the SPECIFIC emitted helix
+// verb. This is the anti-vacuity heart: keyed on the emitted command, asserted
+// per-shape, with a floor that rejects an empty-bucket pass. Each wantVerb is mapped
+// VERBATIM from steerMessage/bashSteerMessage (nudge.go line cited per case).
+func nudgeShapeGoldenCases() []nudgeShapeCase {
+	return []nudgeShapeCase{
+		// (1) grep (plain) over a code file -> search-symbols (nudge.go:203-204)
+		{"bash-grep", "Bash", map[string]any{"command": `grep "func Foo" main.go`}, "helix search-symbols"},
+		// (2) grep -r / -R over code -> find-references (nudge.go:199-201)
+		{"bash-grep-r", "Bash", map[string]any{"command": `grep -r "Bar(" internal/x.go`}, "helix find-references"},
+		// (3) find -name -> find-files (nudge.go:189)
+		{"bash-find", "Bash", map[string]any{"command": `find . -name '*.go'`}, "helix find-files"},
+		// (4) the cat-equivalent shape: the Read tool -> read-file (nudge.go:163-165).
+		//     (Claude Code's idiomatic "cat a file" IS the Read tool; the Bash `cat`
+		//     spelling is silent today — DEFER-97-01.)
+		{"read-tool", "Read", map[string]any{"file_path": "internal/edit.go"}, "helix read-file"},
+		// (5) the grep-tool shape: the Grep tool -> search-symbols (nudge.go:160-162).
+		{"grep-tool", "Grep", map[string]any{"pattern": "Foo"}, "helix search-symbols"},
+	}
+}
+
+// TestNudgeShapeGolden is the ADOPT-01b golden table. For each of the five
+// standard-tool shapes it asserts: (1) runNudge returns nil (exit-0 / fail-open
+// contract preserved), (2) the advisory parses, (3) AdditionalContext contains the
+// SPECIFIC expected `helix <verb>` token — never merely "helix". It enforces an
+// empty-bucket floor (>= 5 shapes) and asserts per-shape, never an empty-iteration
+// pass (97-RESEARCH Pitfall 3 + Phase 87 CR-01 empty-bucket defect). It also pins
+// the negative control (prose grep silent) and the DEFER-97-01 silent Bash sed/cat
+// shapes so a future STEER-01 change that makes them fire is a visible test update.
+func TestNudgeShapeGolden(t *testing.T) {
+	cases := nudgeShapeGoldenCases()
+
+	// Empty-bucket guard: the five distinct steering shapes (grep / grep-r / find /
+	// read / grep-tool) MUST be present. A 0/0 "all pass" is the Phase 87 CR-01
+	// defect; require a concrete floor AND assert per-shape below.
+	require.GreaterOrEqual(t, len(cases), 5,
+		"golden must cover at least the five steering shapes; rejecting empty-bucket-as-pass")
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runNudgeCapture(t, hookInput{
+				ToolName:  tc.toolName,
+				ToolInput: tc.input,
+			})
+			require.NoError(t, err, "runNudge must always return nil (exit 0) — fail-open contract")
+
+			adv, ok := parseAdvisory(t, out)
+			require.Truef(t, ok, "shape %q (%s) must emit an advisory, got %q", tc.name, tc.toolName, out)
+			assert.Equal(t, "PreToolUse", adv.HookSpecificOutput.HookEventName)
+			assert.Containsf(t, adv.HookSpecificOutput.AdditionalContext, tc.wantVerb,
+				"shape %q must steer to %q, got %q",
+				tc.name, tc.wantVerb, adv.HookSpecificOutput.AdditionalContext)
+		})
+	}
+
+	// Negative control (folded in): a prose-file grep produces NO advisory, and the
+	// classifier still returns nil (exit-0). Proves the golden is not over-firing.
+	t.Run("negative-control-prose-grep", func(t *testing.T) {
+		out, err := runNudgeCapture(t, hookInput{
+			ToolName:  "Bash",
+			ToolInput: map[string]any{"command": `grep TODO README.md`},
+		})
+		require.NoError(t, err, "negative control must preserve exit-0")
+		_, ok := parseAdvisory(t, out)
+		assert.Falsef(t, ok, "prose-file grep must produce no advisory, got %q", out)
+	})
+
+	// DEFER-97-01: Bash `sed -i` / `cat` over a CODE file are SILENT today because
+	// isGrepReadTool's Bash arm matches only grep/find/rg/ag. Pin the current
+	// silence (and exit-0) so STEER-01 (Phase 98) makes them fire as a deliberate,
+	// visible test change rather than a silent drift.
+	for _, silent := range []struct{ name, cmd string }{
+		{"bash-sed-i-silent", `sed -i 's/a/b/' pkg/s.go`},
+		{"bash-cat-silent", `cat internal/edit.go`},
+	} {
+		silent := silent
+		t.Run(silent.name, func(t *testing.T) {
+			out, err := runNudgeCapture(t, hookInput{
+				ToolName:  "Bash",
+				ToolInput: map[string]any{"command": silent.cmd},
+			})
+			require.NoError(t, err, "silent Bash shape must preserve exit-0")
+			_, ok := parseAdvisory(t, out)
+			assert.Falsef(t, ok,
+				"DEFER-97-01: Bash %q is silent today (isGrepReadTool excludes sed/cat); got %q", silent.cmd, out)
+		})
+	}
+}
+
+// TestNudgeGoldenRevertFails is the MANDATORY revert-and-fail proof for ADOPT-01b
+// (T-97-06). It runs the SAME harness for the Read tool (the read-file shape) and
+// asserts the advisory does NOT contain a deliberately-WRONG verb
+// (`helix rename-symbol`) while it DOES contain the correct one (`helix read-file`).
+// This proves the golden keys on the SPECIFIC verb: a wrong-verb expectation in
+// TestNudgeShapeGolden would genuinely FAIL, not pass on a "helix" substring.
+func TestNudgeGoldenRevertFails(t *testing.T) {
+	out, err := runNudgeCapture(t, hookInput{
+		ToolName:  "Read",
+		ToolInput: map[string]any{"file_path": "x.go"},
+	})
+	require.NoError(t, err)
+	adv, ok := parseAdvisory(t, out)
+	require.True(t, ok, "the Read-tool shape must emit an advisory, got %q", out)
+
+	const wrongVerb = "helix rename-symbol"
+	const correctVerb = "helix read-file"
+
+	// The wrong expectation MUST fail: a golden keyed on read -> `helix rename-symbol`
+	// would not pass. If this Contains were true, the golden would be vacuous (any
+	// "helix" mention would satisfy a wrong-verb expectation).
+	require.NotContainsf(t, adv.HookSpecificOutput.AdditionalContext, wrongVerb,
+		"revert proof: the read shape must NOT steer to %q — a wrong-verb golden must go RED, got %q",
+		wrongVerb, adv.HookSpecificOutput.AdditionalContext)
+
+	// And the correct verb IS present — confirming the advisory is the read-file one,
+	// i.e. the golden distinguishes the specific verb rather than any "helix" token.
+	require.Containsf(t, adv.HookSpecificOutput.AdditionalContext, correctVerb,
+		"the read shape must steer to %q, got %q",
+		correctVerb, adv.HookSpecificOutput.AdditionalContext)
 }

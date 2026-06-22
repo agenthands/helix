@@ -54,42 +54,6 @@ func clientRegistry() map[string]ClientRegistrar {
 
 // --- Shared helpers ---
 
-// mergeJSONConfig reads an existing JSON config file, merges a server entry under the
-// given key, and writes back. Creates parent directories and the file if they don't exist.
-// Uses encoding/json Marshal/Unmarshal (never string concatenation) per T-34-01.
-func mergeJSONConfig(path, key, serverName string, serverConfig map[string]any) error {
-	existing := make(map[string]any)
-	if data, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(data, &existing); err != nil {
-			return fmt.Errorf("parsing existing config %s: %w", path, err)
-		}
-	}
-
-	// Get or create nested map at key
-	servers, ok := existing[key].(map[string]any)
-	if !ok {
-		servers = make(map[string]any)
-	}
-	servers[serverName] = serverConfig
-	existing[key] = servers
-
-	data, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-
-	// Create parent directories with 0755 per T-34-01
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
-
-	// Write file with 0644 per T-34-03
-	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
-		return fmt.Errorf("writing config %s: %w", path, err)
-	}
-	return nil
-}
-
 // removeFromJSONConfig removes a server entry from a JSON config file.
 // If the file doesn't exist, returns nil (nothing to remove) per T-34-05.
 func removeFromJSONConfig(path, key, serverName string) error {

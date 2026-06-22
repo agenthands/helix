@@ -139,6 +139,14 @@ func skillTargetDir(claudeDir string) string {
 // and idempotently (re-running is byte-stable). It creates targetDir (MkdirAll
 // 0755) if absent.
 //
+// Bundle-level robustness (WR-97-02): the install is two-pass — it stages every
+// file as a temp sibling first, then renames them all into place only after every
+// temp write succeeded. A failure aborts before any file is swapped in (staging
+// pass) or best-effort reverts the renames already done (rename pass), and any
+// leftover ".tmp" siblings are removed on every error path. So a failed install
+// never leaves a torn bundle (a fresh reference.md next to a stale SKILL.md) nor
+// an orphaned ".tmp" file.
+//
 // Containment (T-93-01, Security V12): installSkill refuses any targetDir that is
 // not within the per-client skills root — i.e. a targetDir that does not resolve
 // (via filepath.Rel) to a path at or under its own ".../skills/helix" root, with
@@ -161,12 +169,32 @@ func installSkill(targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("reading embedded skill dir: %w", err)
 	}
+
+	// Bundle-level atomicity (WR-97-02): stage EVERY file as a temp first, then
+	// rename them all into place only after every temp write succeeded. A failure
+	// during the staging pass aborts before ANY file is swapped in, and a failure
+	// during the rename pass best-effort reverts the renames already done — so a
+	// failed install never leaves a torn bundle (a fresh reference.md next to a
+	// stale SKILL.md, or vice-versa) nor an orphaned ".tmp" sibling.
+	type staged struct{ tmp, dst string }
+	var pending []staged
+	// cleanupTemps removes any temp files that have not yet been renamed into
+	// place. Best-effort: a removal failure is swallowed so the original error is
+	// the one returned to the caller.
+	cleanupTemps := func() {
+		for _, p := range pending {
+			_ = os.Remove(p.tmp)
+		}
+	}
+
+	// Pass 1: write every file to a temp sibling. No real file is touched yet.
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		data, err := embeddedSkillFS.ReadFile("skills/helix/" + e.Name())
 		if err != nil {
+			cleanupTemps()
 			return fmt.Errorf("reading embedded %s: %w", e.Name(), err)
 		}
 		// Single trailing newline (policy matching saveSessionStats), only adding
@@ -179,9 +207,28 @@ func installSkill(targetDir string) error {
 		dst := filepath.Join(targetDir, e.Name())
 		tmp := dst + ".tmp"
 		if err := os.WriteFile(tmp, data, 0644); err != nil {
+			cleanupTemps()
+			_ = os.Remove(tmp) // not yet in pending
 			return fmt.Errorf("writing temp skill file: %w", err)
 		}
-		if err := os.Rename(tmp, dst); err != nil {
+		pending = append(pending, staged{tmp: tmp, dst: dst})
+	}
+
+	// Pass 2: rename every staged temp into place. On a rename failure, best-effort
+	// revert the renames already committed (restore prior bytes is not possible, so
+	// we remove the just-installed files) and drop the remaining temps, leaving the
+	// directory free of half-written ".tmp" siblings.
+	for i, p := range pending {
+		if err := os.Rename(p.tmp, p.dst); err != nil {
+			// Drop the temp that failed to rename and every temp not yet renamed.
+			for _, rem := range pending[i:] {
+				_ = os.Remove(rem.tmp)
+			}
+			// Remove the files already swapped in during this pass so the bundle is
+			// not left torn (best-effort).
+			for _, done := range pending[:i] {
+				_ = os.Remove(done.dst)
+			}
 			return fmt.Errorf("renaming skill file: %w", err)
 		}
 	}

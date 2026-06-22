@@ -1,10 +1,11 @@
 ---
 phase: 96
 slug: address-v2-0-tech-debt
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: passed
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-22
+audited: 2026-06-22
 ---
 
 # Phase 96 — Validation Strategy
@@ -39,10 +40,10 @@ created: 2026-06-22
 
 | Task Ref | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |----------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TD-01 | 1 | TD-01 | T-96-01 | `validateAdminAddr` refuses empty-host (`:9090`) + wildcard/unspecified bind; accepts loopback — admin instrumentation never binds `0.0.0.0`/`::` | unit (table) | `go test ./internal/daemon/ -run TestValidateAdminAddr` | ✅ extend `telemetry_test.go` | ⬜ pending |
-| TD-02 | 1 | TD-02 | — | N/A (dead-code removal; live sibling `removeFromJSONConfig` preserved) | build/vet + suite | `go build ./... && go vet ./... && go test ./internal/cli/...` | ✅ remove merge tests from `setup_test.go` | ⬜ pending |
-| TD-03 | 1 | TD-03 | T-96-02 | grep/rg/ag/egrep/fgrep PATTERN not counted as file operand; hook stays fail-open / exit-0 | unit (table) | `go test ./internal/cli/ -run TestClassifyBashTarget` | ✅ extend `nudge_test.go` | ⬜ pending |
-| TD-04 | 1 | TD-04 | — | N/A (generated-doc correction; README regenerated via docgen, not hand-edited) | drift gate | `make docs && make verify-docs` | ✅ docgen `--check` | ⬜ pending |
+| TD-01 | 1 | TD-01 | T-96-01 | `validateAdminAddr` refuses empty-host (`:9090`) + wildcard/unspecified bind; accepts loopback — admin instrumentation never binds `0.0.0.0`/`::` | unit (table) | `go test ./internal/daemon/ -run TestValidateAdminAddr` | ✅ extend `telemetry_test.go` | ✅ green |
+| TD-02 | 1 | TD-02 | — | N/A (dead-code removal; live sibling `removeFromJSONConfig` preserved) | build/vet + suite | `go build ./... && go vet ./... && go test ./internal/cli/...` | ✅ remove merge tests from `setup_test.go` | ✅ green |
+| TD-03 | 1 | TD-03 | T-96-02 | grep/rg/ag/egrep/fgrep PATTERN not counted as file operand; hook stays fail-open / exit-0 | unit (table) | `go test ./internal/cli/ -run TestClassifyBashTarget` | ✅ extend `nudge_test.go` | ✅ green |
+| TD-04 | 1 | TD-04 | — | N/A (generated-doc correction; README regenerated via docgen, not hand-edited) | drift gate | `make docs && make verify-docs` | ✅ docgen `--check` | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -62,11 +63,21 @@ created: 2026-06-22
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (none for this phase)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (none for this phase)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-06-22 (Phase 96 verification passed 6/6; all four TD tasks green)
+
+## Validation Audit 2026-06-22
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All four tasks (TD-01..TD-04) have automated tests green: `TestValidateAdminAddr` + new wildcard rows (TD-01), build/vet/test + `mergeJSONConfig` zero-refs (TD-02), `TestClassifyBashTarget` incl. the new grep-pattern case (TD-03), `make verify-docs` drift gate (TD-04). Phase verification passed 6/6 must-haves. No MISSING gaps.

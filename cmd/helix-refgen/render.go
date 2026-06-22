@@ -41,7 +41,8 @@ func renderReference() string {
 	for _, d := range cli.VerbSpecsForDocs() {
 		sb.WriteString(renderVerb(d, synopsis[d.Verb]))
 	}
-	return sb.String()
+	// Normalize to exactly one trailing newline (each section ends in "\n\n").
+	return strings.TrimRight(sb.String(), "\n") + "\n"
 }
 
 // renderVerb renders a single verb's section deterministically.

@@ -111,6 +111,13 @@ jobs:
         # v1.12 docgen-drift hole. Regenerate with: go run ./cmd/docgen
         run: go run ./cmd/docgen --check
 
+      - name: helix-refgen drift gate (REF-03)
+        # HARD-FAIL if internal/cli/skills/helix/reference.md is stale relative to
+        # the live tool registry (a tool/description/flag change without regen).
+        # Inherits the docgen blank-import-parity discipline. Regenerate with:
+        # go run ./cmd/helix-refgen
+        run: go run ./cmd/helix-refgen --check
+
       - name: eval-quick (harness validation)
         # eval-quick runs the in-process scripted-agent harness validation (<30s wall-time).
         # This is the ONLY eval target allowed in PR-gating CI (project rule: benchmarks local-only).

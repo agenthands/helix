@@ -77,11 +77,17 @@ fmt:
 docs: ## Regenerate tool and language tables in README.md
 	$(GO) run ./cmd/docgen
 
+reference: ## Regenerate internal/cli/skills/helix/reference.md from the live tool registry
+	$(GO) run ./cmd/helix-refgen
+
 verify-cligen: ## HARD-FAIL drift gate: internal/cli/verbs_gen.go must match the live tool registry (VERB-02)
 	$(GO) run ./cmd/helix-cligen --check
 
 verify-docs: ## HARD-FAIL drift gate: README.md tool table must match the live registry (DOCS-02)
 	$(GO) run ./cmd/docgen --check
+
+verify-reference: ## HARD-FAIL drift gate: internal/cli/skills/helix/reference.md must match the live registry (REF-03)
+	$(GO) run ./cmd/helix-refgen --check
 
 sync-docs: ## Copy root GUARDRAILS.md / DoD.md into internal/kernel/help/docs/ (Phase 66 IN-05)
 	@cp GUARDRAILS.md internal/kernel/help/docs/guardrails.md.tmp

@@ -973,4 +973,3 @@ helix write-memory
 ```
 
 **Use this, not that:** Use `helix write-memory` for durable project/session memory instead of ad-hoc scratch notes.
-

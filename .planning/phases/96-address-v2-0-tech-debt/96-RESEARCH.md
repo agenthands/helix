@@ -322,7 +322,9 @@ Not applicable — no external technology version changes are involved. This is 
 
 **This table is empty:** Every factual claim in this research was verified against the live tree at research time (file reads, grep for callers, and a clean `go build` / `go vet` / `docgen --check` baseline run). No `[ASSUMED]` claims remain.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+RESOLVED: reword all four per recommendation (adopted in 96-01 Task 4).
 
 1. **Should the two `tools.go` Descriptions and the `skill_adapter.go` BriefDescription also be reworded, or only the README-driving `skill_adapter.go` Description?**
    - What we know: only `skill_adapter.go:31` `Description` renders into README:332; the audit item names "any MCP tool" generically.

@@ -114,6 +114,19 @@ func TestIsGrepReadTool(t *testing.T) {
 	assert.True(t, isGrepReadTool("Bash", map[string]any{"command": "rg pattern"}))
 	assert.True(t, isGrepReadTool("Bash", map[string]any{"command": "ag pattern"}))
 
+	// STEER-01: Bash sed/cat are now recognized (token-anchored on fields[0]) so
+	// the already-correct sed→replace-in-file / cat→read-file branches in
+	// bashSteerMessage become reachable for Bash callers (DEFER-97-01 landing).
+	assert.True(t, isGrepReadTool("Bash", map[string]any{"command": "sed -i 's/a/b/' pkg/s.go"}))
+	assert.True(t, isGrepReadTool("Bash", map[string]any{"command": "cat internal/edit.go"}))
+
+	// Token-anchored, NOT strings.Contains: a command whose fields[0] is NOT a
+	// recognized read tool stays false even when a path literally contains the
+	// substring "cat"/"sed" (e.g. concatenate.go / parsed.go). This is the
+	// 98-RESEARCH Open Question 1 precision guard.
+	assert.False(t, isGrepReadTool("Bash", map[string]any{"command": "go build ./internal/concatenate.go"}))
+	assert.False(t, isGrepReadTool("Bash", map[string]any{"command": "echo parsed.go"}))
+
 	// Bash without grep-like commands.
 	assert.False(t, isGrepReadTool("Bash", map[string]any{"command": "echo hello"}))
 	assert.False(t, isGrepReadTool("Bash", map[string]any{"command": "go build ./..."}))
@@ -393,6 +406,13 @@ func TestNudgeAdvisory_AlwaysExitZero(t *testing.T) {
 		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep "func Foo" main.go`}},
 		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep TODO README.md`}},
 		{ToolName: "Bash", ToolInput: map[string]any{"command": `grep`}},
+		// STEER-01 broadened sed/cat shapes: firing (code) and silent (prose/log/config),
+		// all of which must still return nil (exit 0 / fail-open).
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `sed -i 's/a/b/' pkg/s.go`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `cat internal/edit.go`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `sed -i 's/x/y/' README.md`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `cat app.log`}},
+		{ToolName: "Bash", ToolInput: map[string]any{"command": `cat config.yaml`}},
 		{ToolName: "Grep"},
 		{ToolName: "Read"},
 		{ToolName: "find_symbol"},
@@ -449,17 +469,13 @@ func TestSaveSessionStats_AtomicWrite(t *testing.T) {
 // is mapped VERBATIM from steerMessage/bashSteerMessage (nudge.go:158-206): the
 // golden keys on the chosen verb, NOT on a weak "helix" substring.
 //
-// IMPORTANT — this golden asserts the LIVE current mapping, not bashSteerMessage's
-// aspirational branch set. runNudge only reaches steerMessage when
-// isGrepReadTool() is true; its Bash arm (nudge.go:434-438) matches ONLY
-// grep/find/rg/ag — NOT sed/cat. So a Bash `sed`/`cat` command is SILENT today (the
-// cat/sed branches in bashSteerMessage are dead for Bash callers). The
-// cat-equivalent shape DOES steer to `helix read-file` via the Read TOOL, and the
-// grep-equivalent via the Grep TOOL. Broadening the classifier to fire on Bash
-// sed/cat is STEER-01 (Phase 98), explicitly OUT OF SCOPE here — see
-// deferred-items.md DEFER-97-01. Asserting Bash sed/cat -> a verb would be a FALSE
-// golden (the very vacuity this phase exists to kill), so this table asserts the
-// shapes that genuinely emit, and the silent Bash sed/cat shapes are asserted SILENT.
+// IMPORTANT — this golden asserts the LIVE current mapping. As of Phase 98 STEER-01,
+// isGrepReadTool's Bash arm is token-anchored on fields[0] ∈ {grep,find,rg,ag,sed,cat}
+// (DEFER-97-01 landing), so a Bash `sed -i`/`cat` over a CODE file now reaches
+// steerMessage → classifyBashTarget → bashSteerMessage's already-correct
+// sed→replace-in-file / cat→read-file branches. The previously-silent
+// `bash-sed-i-silent`/`bash-cat-silent` sub-cases are therefore GONE; the two shapes
+// are now asserted FIRING on the SPECIFIC verb (non-vacuously) below.
 type nudgeShapeCase struct {
 	name     string
 	toolName string
@@ -481,30 +497,36 @@ func nudgeShapeGoldenCases() []nudgeShapeCase {
 		// (3) find -name -> find-files (nudge.go:189)
 		{"bash-find", "Bash", map[string]any{"command": `find . -name '*.go'`}, "helix find-files"},
 		// (4) the cat-equivalent shape: the Read tool -> read-file (nudge.go:163-165).
-		//     (Claude Code's idiomatic "cat a file" IS the Read tool; the Bash `cat`
-		//     spelling is silent today — DEFER-97-01.)
 		{"read-tool", "Read", map[string]any{"file_path": "internal/edit.go"}, "helix read-file"},
 		// (5) the grep-tool shape: the Grep tool -> search-symbols (nudge.go:160-162).
 		{"grep-tool", "Grep", map[string]any{"pattern": "Foo"}, "helix search-symbols"},
+		// (6) STEER-01 / DEFER-97-01: Bash `sed -i` over a code file -> replace-in-file
+		//     (nudge.go:194-195). Previously SILENT (isGrepReadTool excluded sed); now firing.
+		{"bash-sed-i", "Bash", map[string]any{"command": `sed -i 's/a/b/' pkg/s.go`}, "helix replace-in-file"},
+		// (7) STEER-01 / DEFER-97-01: Bash `cat` over a code file -> read-file
+		//     (nudge.go:191-192). Previously SILENT (isGrepReadTool excluded cat); now firing.
+		{"bash-cat", "Bash", map[string]any{"command": `cat internal/edit.go`}, "helix read-file"},
 	}
 }
 
-// TestNudgeShapeGolden is the ADOPT-01b golden table. For each of the five
+// TestNudgeShapeGolden is the ADOPT-01b golden table. For each of the seven
 // standard-tool shapes it asserts: (1) runNudge returns nil (exit-0 / fail-open
 // contract preserved), (2) the advisory parses, (3) AdditionalContext contains the
 // SPECIFIC expected `helix <verb>` token — never merely "helix". It enforces an
-// empty-bucket floor (>= 5 shapes) and asserts per-shape, never an empty-iteration
+// empty-bucket floor (>= 7 shapes) and asserts per-shape, never an empty-iteration
 // pass (97-RESEARCH Pitfall 3 + Phase 87 CR-01 empty-bucket defect). It also pins
-// the negative control (prose grep silent) and the DEFER-97-01 silent Bash sed/cat
-// shapes so a future STEER-01 change that makes them fire is a visible test update.
+// the STEER-03 negative controls (prose/log/config grep+sed+cat stay silent) so the
+// broadened sed/cat recognition never over-fires.
 func TestNudgeShapeGolden(t *testing.T) {
 	cases := nudgeShapeGoldenCases()
 
-	// Empty-bucket guard: the five distinct steering shapes (grep / grep-r / find /
-	// read / grep-tool) MUST be present. A 0/0 "all pass" is the Phase 87 CR-01
-	// defect; require a concrete floor AND assert per-shape below.
-	require.GreaterOrEqual(t, len(cases), 5,
-		"golden must cover at least the five steering shapes; rejecting empty-bucket-as-pass")
+	// Empty-bucket guard: the seven distinct steering shapes (grep / grep-r / find /
+	// read / grep-tool / bash-sed-i / bash-cat) MUST be present. A 0/0 "all pass" is
+	// the Phase 87 CR-01 defect; require a concrete floor AND assert per-shape below.
+	// Floor bumped 5→7 by STEER-01 (DEFER-97-01): the two formerly-silent Bash
+	// sed/cat shapes now fire on the specific verb.
+	require.GreaterOrEqual(t, len(cases), 7,
+		"golden must cover at least the seven steering shapes (incl. STEER-01 bash sed/cat); rejecting empty-bucket-as-pass")
 
 	for _, tc := range cases {
 		tc := tc
@@ -524,36 +546,27 @@ func TestNudgeShapeGolden(t *testing.T) {
 		})
 	}
 
-	// Negative control (folded in): a prose-file grep produces NO advisory, and the
-	// classifier still returns nil (exit-0). Proves the golden is not over-firing.
-	t.Run("negative-control-prose-grep", func(t *testing.T) {
-		out, err := runNudgeCapture(t, hookInput{
-			ToolName:  "Bash",
-			ToolInput: map[string]any{"command": `grep TODO README.md`},
-		})
-		require.NoError(t, err, "negative control must preserve exit-0")
-		_, ok := parseAdvisory(t, out)
-		assert.Falsef(t, ok, "prose-file grep must produce no advisory, got %q", out)
-	})
-
-	// DEFER-97-01: Bash `sed -i` / `cat` over a CODE file are SILENT today because
-	// isGrepReadTool's Bash arm matches only grep/find/rg/ag. Pin the current
-	// silence (and exit-0) so STEER-01 (Phase 98) makes them fire as a deliberate,
-	// visible test change rather than a silent drift.
-	for _, silent := range []struct{ name, cmd string }{
-		{"bash-sed-i-silent", `sed -i 's/a/b/' pkg/s.go`},
-		{"bash-cat-silent", `cat internal/edit.go`},
+	// STEER-03 negative controls: broadening isGrepReadTool to pass sed/cat through
+	// must NOT make the nudge fire on prose/log/config targets — the SILENCE comes
+	// from classifyBashTarget returning non-code, so every shape below produces NO
+	// advisory and preserves exit-0. These prove the broadened recognizer does not
+	// over-fire (98-RESEARCH Pitfall 3). One t.Run per shape.
+	for _, neg := range []struct{ name, cmd string }{
+		{"negative-control-prose-grep", `grep TODO README.md`},
+		{"negative-control-prose-sed", `sed -i 's/x/y/' README.md`},
+		{"negative-control-log-cat", `cat app.log`},
+		{"negative-control-config-cat", `cat config.yaml`},
 	} {
-		silent := silent
-		t.Run(silent.name, func(t *testing.T) {
+		neg := neg
+		t.Run(neg.name, func(t *testing.T) {
 			out, err := runNudgeCapture(t, hookInput{
 				ToolName:  "Bash",
-				ToolInput: map[string]any{"command": silent.cmd},
+				ToolInput: map[string]any{"command": neg.cmd},
 			})
-			require.NoError(t, err, "silent Bash shape must preserve exit-0")
+			require.NoError(t, err, "negative control must preserve exit-0 for %q", neg.cmd)
 			_, ok := parseAdvisory(t, out)
 			assert.Falsef(t, ok,
-				"DEFER-97-01: Bash %q is silent today (isGrepReadTool excludes sed/cat); got %q", silent.cmd, out)
+				"STEER-03: Bash %q over a prose/log/config target must produce no advisory, got %q", neg.cmd, out)
 		})
 	}
 }
@@ -588,4 +601,45 @@ func TestNudgeGoldenRevertFails(t *testing.T) {
 	require.Containsf(t, adv.HookSpecificOutput.AdditionalContext, correctVerb,
 		"the read shape must steer to %q, got %q",
 		correctVerb, adv.HookSpecificOutput.AdditionalContext)
+}
+
+// TestNudgeGoldenRevertFails_BashSedCat is the STEER-01 anti-vacuity proof for the
+// BROADENED Bash sed/cat shapes (98-RESEARCH anti-vacuity reminder). It runs the
+// same harness for a Bash `cat …code.go` (and `sed -i …code.go`) and asserts the
+// advisory keys on the SPECIFIC verb: the cat shape steers to `helix read-file` and
+// must NOT contain a wrong verb (`helix rename-symbol`); the sed -i shape steers to
+// `helix replace-in-file` and must NOT contain `helix read-file`. A wrong-verb
+// golden for either shape would therefore go RED, proving the new firing rows are
+// non-vacuous (they distinguish the specific verb, not a bare "helix" substring).
+func TestNudgeGoldenRevertFails_BashSedCat(t *testing.T) {
+	// cat over a code file -> read-file, NOT rename-symbol.
+	outCat, errCat := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `cat internal/edit.go`},
+	})
+	require.NoError(t, errCat)
+	advCat, okCat := parseAdvisory(t, outCat)
+	require.Truef(t, okCat, "the bash-cat shape must emit an advisory, got %q", outCat)
+	require.NotContainsf(t, advCat.HookSpecificOutput.AdditionalContext, "helix rename-symbol",
+		"revert proof: the bash-cat shape must NOT steer to a wrong verb, got %q",
+		advCat.HookSpecificOutput.AdditionalContext)
+	require.Containsf(t, advCat.HookSpecificOutput.AdditionalContext, "helix read-file",
+		"the bash-cat shape must steer to `helix read-file`, got %q",
+		advCat.HookSpecificOutput.AdditionalContext)
+
+	// sed -i over a code file -> replace-in-file, NOT read-file (proves the two
+	// broadened shapes are NOT collapsed to one generic verb).
+	outSed, errSed := runNudgeCapture(t, hookInput{
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": `sed -i 's/a/b/' pkg/s.go`},
+	})
+	require.NoError(t, errSed)
+	advSed, okSed := parseAdvisory(t, outSed)
+	require.Truef(t, okSed, "the bash-sed-i shape must emit an advisory, got %q", outSed)
+	require.Containsf(t, advSed.HookSpecificOutput.AdditionalContext, "helix replace-in-file",
+		"the bash-sed-i shape must steer to `helix replace-in-file`, got %q",
+		advSed.HookSpecificOutput.AdditionalContext)
+	require.NotContainsf(t, advSed.HookSpecificOutput.AdditionalContext, "helix read-file",
+		"revert proof: the bash-sed-i shape must steer to the EDIT verb, not the read verb, got %q",
+		advSed.HookSpecificOutput.AdditionalContext)
 }

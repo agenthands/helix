@@ -424,18 +424,35 @@ func classifyBashTarget(cmd string) (isCode bool, ok bool) {
 	return false, false
 }
 
-// isGrepReadTool returns true if the tool is Grep, Read, or Bash running a grep-like command.
-// Never executes values from stdin -- only reads ToolName/ToolInput as data (per T-36-01).
+// isGrepReadTool returns true if the tool is Grep, Read, or Bash running a
+// grep/read-like command. Never executes values from stdin -- only reads
+// ToolName/ToolInput as DATA (per T-36-01).
+//
+// The Bash arm is TOKEN-ANCHORED on the command's fields[0] (the leading command
+// word), matching classifyBashTarget's own fields[0] switch (nudge.go:344-345) and
+// keeping the two gates in lockstep. STEER-01 broadens the recognized set to
+// include `sed` and `cat` (DEFER-97-01): a Bash `sed -i`/`cat` over a CODE file now
+// reaches steerMessage, where classifyBashTarget still gates code-vs-prose and
+// bashSteerMessage's already-correct sed→replace-in-file / cat→read-file branches
+// (nudge.go:191-197) finally become reachable for Bash callers. Anchoring on
+// fields[0] (not strings.Contains) avoids a spurious match on a path that merely
+// CONTAINS "cat"/"sed" as a substring (e.g. concatenate.go) — 98-RESEARCH Open
+// Question 1. An empty / zero-field command stays false (fail-open).
 func isGrepReadTool(name string, input map[string]any) bool {
 	switch name {
 	case "Grep", "Read":
 		return true
 	case "Bash":
 		cmd, _ := input["command"].(string)
-		return strings.Contains(cmd, "grep") ||
-			strings.Contains(cmd, "find") ||
-			strings.Contains(cmd, "rg") ||
-			strings.Contains(cmd, "ag")
+		fields := strings.Fields(cmd)
+		if len(fields) == 0 {
+			return false
+		}
+		switch fields[0] {
+		case "grep", "rg", "ag", "egrep", "fgrep", "find", "sed", "cat":
+			return true
+		}
+		return false
 	}
 	return false
 }

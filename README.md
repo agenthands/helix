@@ -329,7 +329,7 @@ This is a deliberate first-release scope (per `SPEC-DRAFT.md`: *"scope productio
 | `helix replace-in-file` | file-ops | Replace all occurrences of a pattern in a file (literal or regex) |
 | `helix fuzzy-edit` | file-ops | Fuzzy-match and replace text in a file using 4-strategy cascade |
 | `helix get-health` | health | Get workspace health status and language server states |
-| `helix get-tool-help` | help | Get comprehensive documentation for any MCP tool including parameters, types, and usage examples |
+| `helix get-tool-help` | help | Get comprehensive documentation for any Helix tool including parameters, types, and usage examples |
 | `helix write-memory` | memory | Write information about this project that can be useful for future tasks to a memory in md format. |
 | `helix read-memory` | memory | Read the content of a memory file. |
 | `helix list-memories` | memory | List available memories, optionally filtered by scope ("project" or "global") and topic. |

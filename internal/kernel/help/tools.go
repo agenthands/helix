@@ -24,7 +24,7 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 
 	mcpsdk.AddTool(server.SDK(), &mcpsdk.Tool{
 		Name:        "get_tool_help",
-		Description: "Get comprehensive documentation for any MCP tool including parameters, types, and usage examples",
+		Description: "Get comprehensive documentation for any Helix tool including parameters, types, and usage examples",
 	}, kernel.WrapToolSpan(tracer, "get_tool_help", func(ctx context.Context, req *mcpsdk.CallToolRequest, args GetToolHelpArgs) (*mcpsdk.CallToolResult, any, error) {
 		// Dispatch on Topic first (D-24 additive path).
 		if args.Topic != "" {
@@ -78,7 +78,7 @@ func RegisterTools(server *mcp.SerenaMCPServer, k *kernel.Kernel) {
 
 	server.Registry().Register(&mcp.ToolDef{
 		Name:             "get_tool_help",
-		Description:      "Get comprehensive documentation for any MCP tool including parameters, types, and usage examples",
+		Description:      "Get comprehensive documentation for any Helix tool including parameters, types, and usage examples",
 		BriefDescription: "Get detailed help and usage examples for a tool",
 		HelpText: `## Usage
 

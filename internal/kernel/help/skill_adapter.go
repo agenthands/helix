@@ -28,6 +28,6 @@ func (s *HelpSkill) Init(deps skill.SkillDeps) error { return nil }
 // the daemon owns MCP registration (D-01).
 func (s *HelpSkill) Tools() []*mcp.ToolDef {
 	return []*mcp.ToolDef{
-		{Name: "get_tool_help", Description: "Get comprehensive documentation for any MCP tool including parameters, types, and usage examples", BriefDescription: "Get detailed usage documentation for an MCP tool"},
+		{Name: "get_tool_help", Description: "Get comprehensive documentation for any Helix tool including parameters, types, and usage examples", BriefDescription: "Get detailed usage documentation for a Helix tool"},
 	}
 }

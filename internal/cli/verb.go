@@ -87,6 +87,89 @@ func VerbToolNames() []string {
 	return names
 }
 
+// FlagDoc is the read-only, doc-facing view of a single verb flag. It mirrors the
+// package-private verbFlag fields with the flagKind rendered as a stable lowercase
+// string token ("string"/"int"/"bool"/"string-slice"/"json") so an out-of-package
+// generator (cmd/helix-refgen) can render the reference deterministically without
+// reaching into verbSpecs.
+type FlagDoc struct {
+	Name     string
+	ToolArg  string
+	Kind     string
+	Required bool
+	Help     string
+}
+
+// VerbDoc is the read-only, doc-facing view of a single verb (a verbSpec keyed by
+// its kebab verb name) plus its flags. It is the out-of-package seam refgen uses to
+// render reference.md.
+type VerbDoc struct {
+	Verb     string
+	ToolName string
+	GroupID  string
+	Short    string
+	Flags    []FlagDoc
+}
+
+// flagKindToken maps the package-private flagKind to a stable lowercase string
+// token used in the generated reference. The mapping is exhaustive over the
+// declared flagKind constants; an unknown kind renders as "string" (the scalar
+// default) so the generator never panics on a future kind.
+func flagKindToken(k flagKind) string {
+	switch k {
+	case flagString:
+		return "string"
+	case flagInt:
+		return "int"
+	case flagBool:
+		return "bool"
+	case flagStringSlice:
+		return "string-slice"
+	case flagJSON:
+		return "json"
+	default:
+		return "string"
+	}
+}
+
+// VerbSpecsForDocs returns the verb catalog (verbSpecs) as a sorted, doc-facing
+// view: one VerbDoc per verb, sorted by the kebab verb key, each carrying a fresh
+// deep copy of its flag slice. It is the read-only seam out-of-package consumers
+// (e.g. cmd/helix-refgen) use to render per-verb documentation without touching
+// internal state or depending on the daemon's InputSchema — the returned slices
+// are fresh copies, so mutating them (or their flag slices) does not affect
+// verbSpecs. Mirrors VerbToolNames's fresh-copy discipline.
+func VerbSpecsForDocs() []VerbDoc {
+	verbs := make([]string, 0, len(verbSpecs))
+	for v := range verbSpecs {
+		verbs = append(verbs, v)
+	}
+	sort.Strings(verbs)
+
+	docs := make([]VerbDoc, 0, len(verbs))
+	for _, v := range verbs {
+		spec := verbSpecs[v]
+		flags := make([]FlagDoc, 0, len(spec.flags))
+		for _, f := range spec.flags {
+			flags = append(flags, FlagDoc{
+				Name:     f.name,
+				ToolArg:  f.toolArg,
+				Kind:     flagKindToken(f.kind),
+				Required: f.required,
+				Help:     f.help,
+			})
+		}
+		docs = append(docs, VerbDoc{
+			Verb:     v,
+			ToolName: spec.toolName,
+			GroupID:  spec.groupID,
+			Short:    spec.short,
+			Flags:    flags,
+		})
+	}
+	return docs
+}
+
 // registerGeneratedVerbs attaches one root subcommand per entry in verbSpecs,
 // grouped by capability (flatten-onto-root per Open Q1; replaces the legacy
 // `call` parent). Each verb reuses the spine's newVerbSubcommand so the pre-dial

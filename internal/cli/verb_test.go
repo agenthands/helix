@@ -112,3 +112,104 @@ func TestVerb_MissingRequiredArgErrorsBeforeDial(t *testing.T) {
 		t.Fatalf("callToolFn was reached despite a missing required flag — validation must run before dialing")
 	}
 }
+
+// TestVerbSpecsForDocs_CountMatchesAuthority asserts the doc accessor returns one
+// entry per verb, sorted by verb key, with the same count as VerbToolNames()
+// (the frozen 50-verb registry authority).
+func TestVerbSpecsForDocs_CountMatchesAuthority(t *testing.T) {
+	docs := VerbSpecsForDocs()
+	names := VerbToolNames()
+	if len(docs) != len(names) {
+		t.Fatalf("VerbSpecsForDocs() len = %d, VerbToolNames() len = %d; must match (same authority)", len(docs), len(names))
+	}
+	if len(docs) != len(verbSpecs) {
+		t.Fatalf("VerbSpecsForDocs() len = %d, len(verbSpecs) = %d; must be one entry per verb", len(docs), len(verbSpecs))
+	}
+	// Sorted by the kebab verb key.
+	for i := 1; i < len(docs); i++ {
+		if docs[i-1].Verb >= docs[i].Verb {
+			t.Fatalf("VerbSpecsForDocs() not sorted by verb key at %d: %q >= %q", i, docs[i-1].Verb, docs[i].Verb)
+		}
+	}
+}
+
+// TestVerbSpecsForDocs_FieldsMirrorCatalog asserts each doc entry faithfully
+// mirrors its underlying verbSpec (toolName, groupID, short, and the per-flag
+// view with a stable lowercase kind token).
+func TestVerbSpecsForDocs_FieldsMirrorCatalog(t *testing.T) {
+	wantKind := map[flagKind]string{
+		flagString:      "string",
+		flagInt:         "int",
+		flagBool:        "bool",
+		flagStringSlice: "string-slice",
+		flagJSON:        "json",
+	}
+	for _, d := range VerbSpecsForDocs() {
+		spec, ok := verbSpecs[d.Verb]
+		if !ok {
+			t.Fatalf("doc entry %q has no matching verbSpec", d.Verb)
+		}
+		if d.ToolName != spec.toolName {
+			t.Errorf("verb %q: ToolName = %q, want %q", d.Verb, d.ToolName, spec.toolName)
+		}
+		if d.GroupID != spec.groupID {
+			t.Errorf("verb %q: GroupID = %q, want %q", d.Verb, d.GroupID, spec.groupID)
+		}
+		if d.Short != spec.short {
+			t.Errorf("verb %q: Short = %q, want %q", d.Verb, d.Short, spec.short)
+		}
+		if len(d.Flags) != len(spec.flags) {
+			t.Fatalf("verb %q: Flags len = %d, want %d", d.Verb, len(d.Flags), len(spec.flags))
+		}
+		for i, f := range spec.flags {
+			df := d.Flags[i]
+			if df.Name != f.name || df.ToolArg != f.toolArg || df.Required != f.required || df.Help != f.help {
+				t.Errorf("verb %q flag %d: doc view %+v does not mirror %+v", d.Verb, i, df, f)
+			}
+			if df.Kind != wantKind[f.kind] {
+				t.Errorf("verb %q flag %d: Kind = %q, want %q", d.Verb, i, df.Kind, wantKind[f.kind])
+			}
+		}
+	}
+}
+
+// TestVerbSpecsForDocs_ReadOnly proves the accessor returns a fresh deep copy:
+// mutating a returned flag slice (or its elements) does not affect verbSpecs on a
+// subsequent read. Mirrors VerbToolNames's fresh-copy discipline.
+func TestVerbSpecsForDocs_ReadOnly(t *testing.T) {
+	// Pick a verb known to carry flags.
+	const verb = "analyze-blast-radius"
+	first := VerbSpecsForDocs()
+	var target *VerbDoc
+	for i := range first {
+		if first[i].Verb == verb {
+			target = &first[i]
+			break
+		}
+	}
+	if target == nil {
+		t.Fatalf("verb %q not present in VerbSpecsForDocs()", verb)
+	}
+	if len(target.Flags) == 0 {
+		t.Fatalf("verb %q unexpectedly has no flags to mutate", verb)
+	}
+	origName := target.Flags[0].Name
+	// Mutate the returned copy aggressively.
+	target.Flags[0].Name = "MUTATED"
+	target.Flags = target.Flags[:0]
+
+	second := VerbSpecsForDocs()
+	for _, d := range second {
+		if d.Verb != verb {
+			continue
+		}
+		if len(d.Flags) == 0 {
+			t.Fatalf("mutation truncated the underlying flag slice for %q", verb)
+		}
+		if d.Flags[0].Name != origName {
+			t.Errorf("mutation leaked into verbSpecs: flag[0].Name = %q, want %q", d.Flags[0].Name, origName)
+		}
+		return
+	}
+	t.Fatalf("verb %q missing on re-read", verb)
+}

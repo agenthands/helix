@@ -74,7 +74,14 @@ Plans:
   3. The `PreToolUse` nudge's code-target classifier is broadened to steer more standard-tool invocations (grep/sed/cat/find/Read-shaped Bash) toward the specific equivalent `helix` verb, preserving the advisory exit-0 / fail-open contract (asserted exit-0 on every shape).
   4. A SessionStart priming surface presents the terse "use X not Y" decision matrix once per session, size-capped (SKILL-04-style idle-cost bound) and fail-open; negative-control golden classifier rows prove the nudge does NOT fire on prose/log/config/build-output targets (e.g. `grep TODO README.md`).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1** *(two file-disjoint thrusts run in parallel)*
+
+- [ ] 98-01-PLAN.md — STEER thrust (TDD): broaden `isGrepReadTool` token-anchored on `fields[0]` to steer Bash sed/cat (STEER-01); flip the DEFER-97-01 golden firing + remove the silent loop + bump floor 5→7 + revert-and-fail; STEER-03 prose/log/config negative controls (exit-0); SessionStart priming matrix constant, size-capped, fail-open (STEER-02)
+- [ ] 98-02-PLAN.md — AGENT thrust (TDD + 1 blocking human-verify): `EmbeddedReference()` shared reference (AGENT-01); idempotent sentinel-delimited `writeAgentInstructions` (no-clobber / no-duplicate / Codex AGENTS.md ≤32 KiB) (AGENT-02); `CodexRegistrar` (AGENTS.md + hooks.json→`helix nudge`, one engine) + flip gemini-cli/generic instruction-file-only + no-Gemini-hook proof + codex ValidArg (AGENT-03)
+
 **UI hint**: no
 
 ### Phase 99: Vendored Aider Fixtures + Mixed-License Gate
@@ -143,7 +150,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete    | 2026-06-22 |
-| 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/TBD | Not started | - |
+| 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 0/2 | Not started | - |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |

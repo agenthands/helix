@@ -51,7 +51,7 @@ helix create-file --path=internal/foo/bar.go --content=<content>
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a confirmation that the named memory was removed (markdown + FTS5 index).
 
 **Example:**
 
@@ -59,7 +59,7 @@ helix create-file --path=internal/foo/bar.go --content=<content>
 helix delete-memory
 ```
 
-**Use this, not that:** Use `helix delete-memory` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix delete-memory` to remove a stored memory instead of editing the markdown file directly — the index is updated too.
 
 ## `helix edit-memory`
 
@@ -69,7 +69,7 @@ helix delete-memory
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a confirmation that the named memory's body was updated in place.
 
 **Example:**
 
@@ -77,7 +77,7 @@ helix delete-memory
 helix edit-memory
 ```
 
-**Use this, not that:** Use `helix edit-memory` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix edit-memory` to update a stored memory's body instead of re-writing it by hand — the FTS5 index stays in sync.
 
 ## `helix explain-cluster`
 
@@ -363,7 +363,7 @@ helix get-diagnostics --path=internal/foo/bar.go
 
 - `--verbose` (bool, optional) — Show all language servers including healthy ones. Default false returns only unhealthy LSes.
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** per-workspace language-server status, capabilities, and indexing progress.
 
 **Example:**
 
@@ -371,7 +371,7 @@ helix get-diagnostics --path=internal/foo/bar.go
 helix get-health --verbose=true
 ```
 
-**Use this, not that:** Use `helix get-health` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix get-health` to inspect language-server status and indexing progress instead of guessing whether the daemon is warm.
 
 ## `helix get-hover-info`
 
@@ -477,7 +477,7 @@ helix get-symbol-overview --path=internal/foo/bar.go
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** the per-tool token budget for the active profile/mode.
 
 **Example:**
 
@@ -485,7 +485,7 @@ helix get-symbol-overview --path=internal/foo/bar.go
 helix get-token-budget
 ```
 
-**Use this, not that:** Use `helix get-token-budget` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix get-token-budget` to read the active profile's per-tool token budget instead of guessing limits.
 
 ## `helix get-tool-help`
 
@@ -496,7 +496,7 @@ helix get-token-budget
 - `--tool-name` (string, optional) — Name of the tool to get help for
 - `--topic` (string, optional) — Documentation topic name (alternative to tool_name): guardrails, dod, workflow:rename, workflow:delete, workflow:large-edit, workflow:security-sensitive-edit
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** comprehensive on-demand documentation for the named tool (args, output, usage).
 
 **Example:**
 
@@ -504,7 +504,7 @@ helix get-token-budget
 helix get-tool-help --tool-name=<tool-name> --topic=<topic>
 ```
 
-**Use this, not that:** Use `helix get-tool-help` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix get-tool-help` for authoritative on-demand tool docs instead of guessing a verb's args or output shape.
 
 ## `helix get-type-hierarchy`
 
@@ -651,7 +651,7 @@ helix list-memories
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a workspace onboarding summary (detected languages, entry points, suggested first memories).
 
 **Example:**
 
@@ -659,7 +659,7 @@ helix list-memories
 helix onboard-project
 ```
 
-**Use this, not that:** Use `helix onboard-project` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix onboard-project` to bootstrap workspace context instead of manually exploring the tree — it detects languages and entry points for you.
 
 ## `helix prepare-for-new-conversation`
 
@@ -669,7 +669,7 @@ helix onboard-project
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a session-handoff summary seeding the next conversation with the current working context.
 
 **Example:**
 
@@ -677,7 +677,7 @@ helix onboard-project
 helix prepare-for-new-conversation
 ```
 
-**Use this, not that:** Use `helix prepare-for-new-conversation` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix prepare-for-new-conversation` to capture a session handoff instead of re-deriving context next time.
 
 ## `helix read-file`
 
@@ -745,7 +745,7 @@ helix refresh-semantic-graph --paths=a,b --wait-for-lsp=true --max-wait-ms=1
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a confirmation that the memory was renamed (old name freed, new name indexed).
 
 **Example:**
 
@@ -753,7 +753,7 @@ helix refresh-semantic-graph --paths=a,b --wait-for-lsp=true --max-wait-ms=1
 helix rename-memory
 ```
 
-**Use this, not that:** Use `helix rename-memory` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix rename-memory` to rename a stored memory instead of moving the file by hand — references and the index follow.
 
 ## `helix rename-symbol`
 
@@ -908,7 +908,7 @@ helix search-symbols --query=Foo
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** the active profile mode after the switch and the tool surface it now gates.
 
 **Example:**
 
@@ -916,7 +916,7 @@ helix search-symbols --query=Foo
 helix switch-mode
 ```
 
-**Use this, not that:** Use `helix switch-mode` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix switch-mode` to change the active profile mode instead of editing config by hand — it re-gates the tool surface atomically.
 
 ## `helix validate-graph-edge`
 
@@ -964,7 +964,7 @@ helix verify-edit --path=internal/foo/bar.go
 
 - (none)
 
-**Output:** the memory body or a ranked FTS5 search result set, one entry per line.
+**Output:** a confirmation that the named memory was written (durable markdown + FTS5 index updated).
 
 **Example:**
 
@@ -972,4 +972,4 @@ helix verify-edit --path=internal/foo/bar.go
 helix write-memory
 ```
 
-**Use this, not that:** Use `helix write-memory` for durable project/session memory instead of ad-hoc scratch notes.
+**Use this, not that:** Use `helix write-memory` to persist a durable project/session note instead of leaving it in chat scratch — it is indexed for later recall.

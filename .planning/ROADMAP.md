@@ -74,7 +74,9 @@
   3. The `reference ⊇ VerbToolNames()` contract and the Phase 97 `--check` drift gate stay green, and the blank-import parity between the generator and the daemon is re-verified when touching refgen.
   4. Vacuity guards prove the override map is real: no override key is a non-verb, and an overridden Output line differs from the old group default it replaced (deliberate break-the-invariant test).
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 104-01-PLAN.md — RED override golden + SC #4 vacuity guards → per-verb override maps + extracted group-default helpers in cmd/helix-refgen/render.go → regenerate reference.md, --check/cligen/docgen parity green
 
 ### Phase 105: SKILL.md Decision-Matrix Rewrite
 

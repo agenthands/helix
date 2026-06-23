@@ -32,7 +32,7 @@ Two independent, interleavable thrusts; intra-thrust order is fixed by hard depe
 - [x] **Phase 98: Multi-Agent Coverage + Stronger Steering** - per-agent instruction files (Codex/Gemini/generic), Codex hook reuse, broadened nudge + SessionStart priming, negative-control coverage (completed 2026-06-23)
 - [x] **Phase 99: Vendored Aider Fixtures + Mixed-License Gate** - MIT polyglot + Apache-2.0 edit-format fixtures, dual `verify-licenses` hard-fail + tamper test (completed 2026-06-23)
 - [x] **Phase 100: Polyglot Edit Benchmark + Committed Baseline** - EDIT-verb `AgentFn` via reused `RunExercise`, `aider_edit` mode, `edit_format_applied` open key, byte-reproducible baseline (completed 2026-06-23)
-- [ ] **Phase 101: Opt-In LLM-Behavioral Adoption Scorecard** - choice/fallback-rate scorecard with sabotaged-skill revert-and-fail + negative judge exemplar, build-tag gated, never blocks merge
+- [x] **Phase 101: Opt-In LLM-Behavioral Adoption Scorecard** - choice/fallback-rate scorecard with sabotaged-skill revert-and-fail + negative judge exemplar, build-tag gated, never blocks merge (completed 2026-06-23)
 - [ ] **Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines** - gold/drift corpora authored from ground truth, `repomapeval` + `fuzzyrobust` leaves, reversed-ranker discriminators, committed baselines
 
 ## Phase Details
@@ -177,7 +177,7 @@ Plans:
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete   | 2026-06-23 |
+| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22

@@ -37,7 +37,7 @@
 ### Adoption Evaluation (ADOPT)
 
 - [x] **ADOPT-01**: A deterministic, merge-gating adoption-contract test asserts (a) `reference ⊇ VerbToolNames()` completeness and (b) a per-shape nudge-fires golden table mapping each standard-tool shape to the specific suggested verb — non-vacuous (revert-and-fail proven), keyed on the emitted command, rejecting empty-bucket-as-pass.
-- [ ] **ADOPT-02**: An opt-in LLM-behavioral adoption scorecard (reusing the v1.4 `llm`/`llmjudge` harness, build-tag gated, never blocks merge) measures an agent's helix-choice rate and standard-tool fallback rate, with a sabotaged-skill revert-and-fail self-test and a negative judge exemplar so the score can actually fail.
+- [x] **ADOPT-02**: An opt-in LLM-behavioral adoption scorecard (reusing the v1.4 `llm`/`llmjudge` harness, build-tag gated, never blocks merge) measures an agent's helix-choice rate and standard-tool fallback rate, with a sabotaged-skill revert-and-fail self-test and a negative judge exemplar so the score can actually fail.
 
 ### Aider Fixture Vendoring (VENDOR)
 
@@ -116,7 +116,7 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | AGENT-02 | Phase 98 | Complete |
 | AGENT-03 | Phase 98 | Complete |
 | ADOPT-01 | Phase 97 | Complete |
-| ADOPT-02 | Phase 101 | Pending |
+| ADOPT-02 | Phase 101 | Complete |
 | VENDOR-01 | Phase 99 | Complete |
 | VENDOR-02 | Phase 99 | Complete |
 | VENDOR-03 | Phase 99 | Complete |

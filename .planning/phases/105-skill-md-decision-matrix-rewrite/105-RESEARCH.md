@@ -359,12 +359,13 @@ No external services, no LSP, no network. Purely a content + unit-test change.
 
 **These are LOW-risk assumptions consistent with the codebase; none require user confirmation before planning, but A2 is the one a strict reviewer might tighten.**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Grouping presentation: lead `Capability` column vs `###` sub-headings vs `†` markers?**
    - What we know: criterion #3 requires "grouped by capability"; current file uses a trailing prose sentence listing groups.
    - What's unclear: which presentation the reviewer prefers.
    - Recommendation: use a leading `Capability` column (or capability sub-rows) INSIDE the single matrix table — explicit grouping with NO new `## ` heading after the matrix (preserves the StripDecisionMatrix EOF endpoint). Avoid `###` headings between table chunks if they'd split the table; a single table with a Capability column is safest.
+   - **RESOLVED:** lead `Capability` column inside the single table, with `†` markers on the indexed-graph rows; NO new `## ` heading after the matrix (preserves the StripDecisionMatrix EOF endpoint). Adopted by 105-PATTERNS.md and 105-01-PLAN.md.
 
 ## Sources
 

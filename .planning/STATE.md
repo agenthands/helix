@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Agent Adoption & Aider-Derived Validation
-current_phase: 1
-status: Awaiting next milestone
-stopped_at: Completed 102-01-PLAN.md
-last_updated: "2026-06-23T19:57:57.510Z"
+milestone: v2.2
+milestone_name: Agent-Facing Skill Quality & Prompt Tuning
+status: planning
+last_updated: "2026-06-23T20:11:49.149Z"
 last_activity: 2026-06-23
-last_activity_desc: Milestone v2.1 completed and archived
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
-current_phase_name: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: Milestone v2.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-23 — Milestone v2.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-23 — Milestone v2.2 started
 
 ## Performance Metrics
 

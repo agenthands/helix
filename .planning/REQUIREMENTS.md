@@ -53,8 +53,8 @@
 
 ### RepoMap-Quality Eval (REPOEVAL)
 
-- [ ] **REPOEVAL-01**: A new `bench/evaluators/repomapeval` leaf measures `get-repo-map` / `get-context` ranking quality (recall@k / MRR / nDCG) and token-budget fit against a gold corpus, stdlib-only and respecting the `vet-ablation-leakage` no-kernel-import boundary.
-- [ ] **REPOEVAL-02**: A broad, multi-language gold corpus is authored from task ground truth (e.g. exercism `files.solution`) independent of `get-repo-map` output, with a documented per-language size floor and a reversed/random-ranker discriminator that MUST fail the corpus.
+- [x] **REPOEVAL-01**: A new `bench/evaluators/repomapeval` leaf measures `get-repo-map` / `get-context` ranking quality (recall@k / MRR / nDCG) and token-budget fit against a gold corpus, stdlib-only and respecting the `vet-ablation-leakage` no-kernel-import boundary.
+- [x] **REPOEVAL-02**: A broad, multi-language gold corpus is authored from task ground truth (e.g. exercism `files.solution`) independent of `get-repo-map` output, with a documented per-language size floor and a reversed/random-ranker discriminator that MUST fail the corpus.
 
 ### Fuzzy / Edit-Format Robustness Bench (FUZZBENCH)
 
@@ -123,8 +123,8 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | EDITBENCH-01 | Phase 100 | Complete |
 | EDITBENCH-02 | Phase 100 | Complete |
 | EDITBENCH-03 | Phase 100 | Complete |
-| REPOEVAL-01 | Phase 102 | Pending |
-| REPOEVAL-02 | Phase 102 | Pending |
+| REPOEVAL-01 | Phase 102 | Complete |
+| REPOEVAL-02 | Phase 102 | Complete |
 | FUZZBENCH-01 | Phase 102 | Pending |
 | FUZZBENCH-02 | Phase 102 | Pending |
 | BASELINE-01 | Phase 100 | Complete |

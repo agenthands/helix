@@ -5,15 +5,15 @@ milestone_name: Agent Adoption & Aider-Derived Validation
 current_phase: 102
 current_phase_name: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
 status: executing
-stopped_at: Phase 102 context gathered
-last_updated: "2026-06-23T15:31:21.026Z"
+stopped_at: Completed 102-01-PLAN.md
+last_updated: "2026-06-23T16:19:03.407Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 101 verified (UAT 9/9) + threat-secured (9/9 closed); ready to plan Phase 102
+last_activity_desc: Phase 102 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 13
+  completed_plans: 11
   percent: 83
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 102 — RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
-Plan: Not started
-Status: Ready to plan Phase 102
-Last activity: 2026-06-23 — Phase 101 verified (UAT 9/9) + threat-secured (9/9 closed); ready to plan Phase 102
+Phase: 102 (RepoMap-Quality + Fuzzy-Robustness Evals + Baselines) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-23 — Phase 102 execution started
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Last activity: 2026-06-23 — Phase 101 verified (UAT 9/9) + threat-secured (9/9
 | Phase 95 P01 | 3min | 3 tasks | 6 files |
 | Phase 95 P02 | 18 | 3 tasks | 3 files |
 | Phase 96 P01 | 6min | 4 tasks | 10 files |
+| Phase 102 P01 | 11 | 4 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -128,9 +129,9 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-23T15:31:21.019Z
-Stopped at: Phase 102 context gathered
-Resume file: .planning/phases/102-repomap-quality-fuzzy-robustness-evals-baselines/102-CONTEXT.md
+Last session: 2026-06-23T16:18:57.531Z
+Stopped at: Completed 102-01-PLAN.md
+Resume file: None
 
 ## Decisions
 
@@ -165,6 +166,8 @@ Resume file: .planning/phases/102-repomap-quality-fuzzy-robustness-evals-baselin
 - [Phase 96]: TD-01: validateAdminAddr refuses empty-host/wildcard binds via explicit empty-host switch case + !ip.IsUnspecified() guard, preserving the empty-ADDR error contract
 - [Phase 96]: TD-03: classifyBashTarget grep-family leading-PATTERN skip gated to grep/rg/ag/egrep/fgrep only; cat/sed/find unchanged; fail-open preserved
 - [Phase 96]: TD-04: reworded four get_tool_help metadata literals to 'Helix tool'; regenerated README + tool-descriptions golden via tooling (no hand-edit)
+- [Phase ?]: RepoMap-eval gold is file:symbol (relpath:SymbolName, receiver-qualified); leaf is stdlib-only with a TestLeafImports self-test (vet-ablation-leakage does not gate bench/evaluators/*)
+- [Phase ?]: RepoMap-eval DiscriminatorMargin=0.30 committed; reversed+seeded-random both bite (fwd 1.0 vs rev 0.005 / rnd 0.52)
 
 ## Operator Next Steps
 

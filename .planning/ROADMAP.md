@@ -169,7 +169,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 102-01-PLAN.md — repomapeval leaf: gold corpus from ground truth + recall@10/MRR/nDCG@10 + budget-fit + reversed/random discriminator + leaf self-test + capture regenerator (REPOEVAL-01, REPOEVAL-02)
+- [x] 102-01-PLAN.md — repomapeval leaf: gold corpus from ground truth + recall@10/MRR/nDCG@10 + budget-fit + reversed/random discriminator + leaf self-test + capture regenerator (REPOEVAL-01, REPOEVAL-02)
 - [ ] 102-02-PLAN.md — fuzzyrobust leaf: per-tier perturbation + drift corpus + strategy/refusal scoring via editsim.ES + duplicate-block must-refuse + leaf self-test + capture harness (FUZZBENCH-01, FUZZBENCH-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -189,7 +189,7 @@ Plans:
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
+| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 1/3 | In Progress|  |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22
 

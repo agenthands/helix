@@ -218,9 +218,18 @@ func captureExercise(repoRoot, fixturesRoot, helixBin, lang, exercise string) (c
 		return capturedExercise{}, fmt.Errorf("get_context: %w", err)
 	}
 
+	repoMapIDs, err := parseTreeToIDs(repoMapTree)
+	if err != nil {
+		return capturedExercise{}, fmt.Errorf("parse get_repo_map tree: %w", err)
+	}
+	contextIDs, err := parseTreeToIDs(contextTree)
+	if err != nil {
+		return capturedExercise{}, fmt.Errorf("parse get_context tree: %w", err)
+	}
+
 	return capturedExercise{
-		RepoMap: parseTreeToIDs(repoMapTree),
-		Context: parseTreeToIDs(contextTree),
+		RepoMap: repoMapIDs,
+		Context: contextIDs,
 	}, nil
 }
 
@@ -276,47 +285,84 @@ func firstText(res any) string {
 // parseTreeToIDs parses the rendered RepoMap tree text into an ordered
 // file:symbol ID list per the CORPUS.md parse contract: file order = appearance
 // order of file lines in the tree; symbol order = in-file elided-def appearance
-// order under that file. Directory nesting is tracked so the relpath is
-// reconstructed; symbol names are extracted from the indented elided-def lines
-// per language.
-func parseTreeToIDs(tree string) []string {
+// order under that file.
+//
+// It is anchored to the renderer's EXACT structure (internal/repomap/render.go
+// renderNode, :179-209) rather than a spaces/2 + LangFromExt heuristic:
+//
+//   - every structural level is indented by 2*depth spaces;
+//   - a directory line is "<indent><name>/" — its depth is indent/2;
+//   - a file line is "<indent><basename>" at its parent directory's depth
+//     (indent == 2*len(dirStack), i.e. one level deeper than the enclosing
+//     dirs already on the stack — there is no further indent for the file
+//     itself, files sit at the directory level);
+//   - an elided-def content line is indented EXACTLY fileIndent+4 (render.go:200).
+//
+// Depth is derived from the line's own indent (not from sibling order), so a
+// file at a shallower depth following a deeper directory subtree is attributed
+// to the correct parent: the dirStack is truncated to indent/2 on every
+// structural line. Content lines are recognized by their exact fileIndent+4
+// indent, NOT by LangFromExt of arbitrary trimmed text, so a def line whose
+// trailing token happens to look like a file extension (e.g. a Go literal
+// `"x.go"`) can never be misclassified as a file leaf.
+//
+// Any line that does not fit one of these three shapes (e.g. a content line
+// with no current file, or an indent that is neither a structural multiple of 2
+// nor a fileIndent+4 content line) is a HARD parse error (fail-not-skip): the
+// regenerator refuses to commit silently mis-attributed IDs.
+func parseTreeToIDs(tree string) ([]string, error) {
 	var ids []string
 	var dirStack []string
 	curFile := ""
+	curFileIndent := -1
 	for _, raw := range strings.Split(tree, "\n") {
 		if strings.TrimSpace(raw) == "" {
 			continue
 		}
 		indent := len(raw) - len(strings.TrimLeft(raw, " "))
-		line := strings.TrimRight(raw, " ")
-		trimmed := strings.TrimSpace(line)
+		trimmed := strings.TrimSpace(strings.TrimRight(raw, " "))
 
-		// Elided-def content lines are indented +4 relative to their file line.
-		// A file line carries no leading content indent we can rely on alone, so
-		// distinguish: directory lines end with "/", file lines have a known ext,
-		// everything else (deeper indent) is content under curFile.
-		switch {
-		case strings.HasSuffix(trimmed, "/"):
-			depth := indent / 2
-			name := strings.TrimSuffix(trimmed, "/")
-			if depth < len(dirStack) {
-				dirStack = dirStack[:depth]
-			}
-			dirStack = append(dirStack, name)
-			curFile = ""
-		case repomap.LangFromExt(trimmed) != "":
-			// A file leaf line (basename with a known extension).
-			curFile = filepath.Join(append(append([]string(nil), dirStack...), trimmed)...)
-		default:
-			if curFile == "" {
-				continue
-			}
+		// A content line is indented EXACTLY fileIndent+4 (render.go:200). Check
+		// this FIRST so a def line that ends in an extension-like token is never
+		// mistaken for a file leaf.
+		if curFile != "" && indent == curFileIndent+4 {
 			if sym := symbolFromDefLine(trimmed, repomap.LangFromExt(curFile)); sym != "" {
 				ids = append(ids, curFile+":"+sym)
 			}
+			continue
 		}
+
+		// Structural (directory or file) lines sit at an even indent that is at
+		// most one level deeper than the current directory stack. A deeper or
+		// odd indent with no current file is a malformed tree.
+		if indent%2 != 0 {
+			return nil, fmt.Errorf("malformed tree: odd indent %d on line %q", indent, trimmed)
+		}
+		depth := indent / 2
+		if depth > len(dirStack) {
+			return nil, fmt.Errorf("malformed tree: line %q at depth %d exceeds dir stack depth %d", trimmed, depth, len(dirStack))
+		}
+
+		if strings.HasSuffix(trimmed, "/") {
+			// Directory line: truncate the stack to this depth, then push.
+			dirStack = append(dirStack[:depth], strings.TrimSuffix(trimmed, "/"))
+			curFile = ""
+			curFileIndent = -1
+			continue
+		}
+
+		// File leaf line at directory depth. It must carry a recognized
+		// extension; a structural line at directory depth that does NOT is a
+		// shape we do not understand — fail-not-skip rather than guess.
+		if repomap.LangFromExt(trimmed) == "" {
+			return nil, fmt.Errorf("malformed tree: structural line %q at depth %d is neither a directory nor a known file", trimmed, depth)
+		}
+		// Files sit at the enclosing directory's depth, so dirStack[:depth] is
+		// the parent prefix for this file.
+		curFile = filepath.Join(append(append([]string(nil), dirStack[:depth]...), trimmed)...)
+		curFileIndent = indent
 	}
-	return dedupeStable(ids)
+	return dedupeStable(ids), nil
 }
 
 // symbolFromDefLine extracts a symbol name from an elided-def line for the given

@@ -120,11 +120,11 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 100-01-PLAN.md — EDITBENCH wiring substrate (TDD): thin exported loader accessors (`LoadExercise`/`NativeTestCommand`, leaf boundary preserved) + deterministic daemon-dialing EDIT-verb `AgentFn` + live `TestFn` in `bench/runtime` + `edit_format_applied *bool` additive open key (mirror `swebench_raw_resolved`, no schema v3) + `bench/runners/aider_edit/MODE.md` (zero resolver change); hermetic proof only (EDITBENCH-01/02/03)
+- [x] 100-01-PLAN.md — EDITBENCH wiring substrate (TDD): thin exported loader accessors (`LoadExercise`/`NativeTestCommand`, leaf boundary preserved) + deterministic daemon-dialing EDIT-verb `AgentFn` + live `TestFn` in `bench/runtime` + `edit_format_applied *bool` additive open key (mirror `swebench_raw_resolved`, no schema v3) + `bench/runners/aider_edit/MODE.md` (zero resolver change); hermetic proof only (EDITBENCH-01/02/03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 100-02-PLAN.md — Live cell + committed baseline (TDD): `runAiderEditCell` mode-name branch (sibling of `runRAGCell`) driving `RunExercise` verbatim against the warm daemon (WR-01 preserved) + committed byte-reproducible baseline at `bench/reports/aider-edit-baseline/` (deterministic metrics only, `.gitignore` allowlist) + double-render byte-reproducibility golden + HELIX_BIN fail-not-skip "did it RUN" sentinel (EDITBENCH-01, BASELINE-01)
+- [x] 100-02-PLAN.md — Live cell + committed baseline (TDD): `runAiderEditCell` mode-name branch (sibling of `runRAGCell`) driving `RunExercise` verbatim against the warm daemon (WR-01 preserved) + committed byte-reproducible baseline at `bench/reports/aider-edit-baseline/` (deterministic metrics only, `.gitignore` allowlist) + double-render byte-reproducibility golden + HELIX_BIN fail-not-skip "did it RUN" sentinel (EDITBENCH-01, BASELINE-01)
 
 **UI hint**: no
 
@@ -166,7 +166,7 @@ Plans:
 | 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/2 | Not started | - |
+| 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete   | 2026-06-23 |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |
 | 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
 

@@ -77,33 +77,65 @@ func writeCodexHooks(path, binaryPath string) error {
 		return fmt.Errorf("refusing hooks.json write: %q contains a path traversal escape", path)
 	}
 
-	config := map[string]any{
-		"hooks": map[string]any{
-			"PreToolUse": []any{
-				map[string]any{
-					"matcher": "Bash",
-					"hooks": []any{
-						map[string]any{
-							"type":    "command",
-							"command": []any{binaryPath, "nudge"},
-							"timeout": 5,
-						},
-					},
-				},
-			},
-		},
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating codex hooks directory: %w", err)
 	}
 
+	// Read any existing file. Four cases drive the write (AGENT-03, no-clobber):
+	//  1. absent              → fresh write of our entry.
+	//  2. valid {"hooks":...} → MERGE our Bash→nudge entry, preserving all other
+	//                           events and PreToolUse matchers; refresh a stale
+	//                           prior Helix entry rather than duplicating it.
+	//  3. legacy/foreign JSON (parseable but no top-level hooks object) → back up
+	//                           the original to <path>.bak, then fresh write.
+	//  4. unparseable JSON    → same as (3): back up to <path>.bak, fresh write.
+	existing, readErr := os.ReadFile(path)
+	absent := readErr != nil && os.IsNotExist(readErr)
+	if readErr != nil && !absent {
+		return fmt.Errorf("reading existing codex hooks file %s: %w", path, readErr)
+	}
+
+	var hooks map[string]any
+	if !absent {
+		var parsed map[string]any
+		if err := json.Unmarshal(existing, &parsed); err == nil {
+			if h, ok := parsed["hooks"].(map[string]any); ok {
+				hooks = h // case 2: valid Codex shape — merge into it.
+			}
+		}
+		if hooks == nil {
+			// case 3/4: foreign/legacy/unparseable — back up the original
+			// recoverably before replacing it with a Codex-valid file.
+			if err := os.WriteFile(path+".bak", existing, 0644); err != nil {
+				return fmt.Errorf("backing up existing codex hooks file: %w", err)
+			}
+		}
+	}
+	if hooks == nil {
+		hooks = make(map[string]any)
+	}
+
+	// Merge our Bash→nudge entry into PreToolUse: strip any prior Helix-managed
+	// entry (structurally detected) then append exactly one fresh entry. All other
+	// events and all other PreToolUse matchers are preserved untouched.
+	var preToolUse []any
+	if raw, ok := hooks["PreToolUse"].([]any); ok {
+		preToolUse = raw
+	}
+	preToolUse = filterOutCodexNudgeEntries(preToolUse)
+	preToolUse = append(preToolUse, codexNudgeEntry(binaryPath))
+	hooks["PreToolUse"] = preToolUse
+
+	config := map[string]any{"hooks": hooks}
+
+	// json.MarshalIndent sorts map keys, so emitting maps yields deterministic,
+	// byte-stable output on re-run.
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling codex hooks config: %w", err)
 	}
 	data = append(data, '\n')
-
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("creating codex hooks directory: %w", err)
-	}
 
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
@@ -114,6 +146,71 @@ func writeCodexHooks(path, binaryPath string) error {
 		return fmt.Errorf("renaming codex hooks file: %w", err)
 	}
 	return nil
+}
+
+// codexNudgeEntry builds our single advisory-only PreToolUse matcher object:
+// matcher "Bash", a type:"command" handler invoking `<binaryPath> nudge` with a
+// 5s timeout. It carries NO marker field (e.g. helix_managed) because Codex's
+// hooks schema is strict and rejects unknown fields — our entry is detected
+// structurally instead (see isCodexNudgeEntry). Maps are emitted so MarshalIndent
+// produces deterministic key ordering.
+func codexNudgeEntry(binaryPath string) map[string]any {
+	return map[string]any{
+		"matcher": "Bash",
+		"hooks": []any{
+			map[string]any{
+				"type":    "command",
+				"command": []any{binaryPath, "nudge"},
+				"timeout": 5,
+			},
+		},
+	}
+}
+
+// filterOutCodexNudgeEntries returns entries with every Helix-managed Bash→nudge
+// matcher removed, preserving all other matchers in order.
+func filterOutCodexNudgeEntries(entries []any) []any {
+	var result []any
+	for _, e := range entries {
+		if isCodexNudgeEntry(e) {
+			continue
+		}
+		result = append(result, e)
+	}
+	return result
+}
+
+// isCodexNudgeEntry reports whether a PreToolUse matcher object is our Helix
+// entry, detected STRUCTURALLY (Codex's schema forbids a marker field): matcher
+// == "Bash" AND it carries a command handler whose command is a 2-element array
+// whose last element is "nudge". The first element may be a stale/old binary
+// path; the caller refreshes it by re-appending a fresh entry.
+func isCodexNudgeEntry(entry any) bool {
+	m, ok := entry.(map[string]any)
+	if !ok {
+		return false
+	}
+	if m["matcher"] != "Bash" {
+		return false
+	}
+	hooksArr, ok := m["hooks"].([]any)
+	if !ok {
+		return false
+	}
+	for _, h := range hooksArr {
+		hm, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+		cmd, ok := hm["command"].([]any)
+		if !ok || len(cmd) != 2 {
+			continue
+		}
+		if cmd[len(cmd)-1] == "nudge" {
+			return true
+		}
+	}
+	return false
 }
 
 // Sentinel markers bracketing the Helix-managed block inside a per-agent

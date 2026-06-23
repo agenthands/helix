@@ -131,12 +131,36 @@ func newDeterministicEditAgent(sockPath string, applied *bool) aiderpolyglot.Age
 			if callRes != nil && callRes.IsError {
 				return fmt.Errorf("replace_in_file returned error: %s", toolErrText(callRes))
 			}
-			return nil
+			// WR-02: fail CLOSED on a no-op edit (replace_in_file returns a NON-error
+			// "0 replacement(s) made" when the literal whole-stub pattern matched zero
+			// times — see verifyStubApplied).
+			return verifyStubApplied(workDir, stub, body)
 		}
 
 		// Delegate the read-reference + per-stub apply + bookkeeping to the shared core.
 		return newEditAgentWithApply(applied, apply)(ctx, ex, workDir, prompt)
 	}
+}
+
+// verifyStubApplied fails CLOSED on a no-op edit (WR-02). The live replace_in_file
+// EDIT verb returns a NON-error "0 replacement(s) made" when the literal whole-stub
+// pattern matched zero times AND the fuzzy fallback is unavailable (the ABLATE-07
+// structured-edit-disabled path, an empty/whitespace-only stub, or CRLF/newline
+// drift in the stub content). Trusting the tool's !IsError there would record
+// edit_format_applied=true for a stub that still holds the original panic body — a
+// false-green on the exact "could NOT apply" verdict the key exists to protect.
+// The post-edit file content is the authoritative "did the edit land" signal: it
+// must equal the intended reference body, otherwise the seam reports an apply error
+// and the shared core sets *applied = false.
+func verifyStubApplied(workDir, stub, body string) error {
+	post, err := os.ReadFile(filepath.Join(workDir, stub))
+	if err != nil {
+		return fmt.Errorf("verify applied stub %q: %w", stub, err)
+	}
+	if string(post) != body {
+		return fmt.Errorf("replace_in_file applied no edit to %q (stub content unchanged; literal pattern did not match)", stub)
+	}
+	return nil
 }
 
 // newNativeTestFn returns the live TestFn that grades an exercise by running the

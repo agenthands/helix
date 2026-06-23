@@ -118,6 +118,71 @@ func TestAiderEditAgentAntiTamper(t *testing.T) {
 	}
 }
 
+// TestAiderEditAgentNoOpEditFailsClosed (WR-02 regression): the live apply seam ends
+// with verifyStubApplied, which fails CLOSED when the post-edit stub content does NOT
+// equal the reference body — the exact situation when replace_in_file returns a
+// non-error "0 replacement(s) made" (literal pattern miss + fuzzy unavailable). Here
+// the apply seam is a NO-OP (leaves the stub at its original body and runs the same
+// verify the live seam runs); the agent MUST return an error and set
+// edit_format_applied=false, NOT record a vacuous true.
+func TestAiderEditAgentNoOpEditFailsClosed(t *testing.T) {
+	ex, workDir, refBody := seedExercise(t)
+
+	var applied bool
+	// No-op seam: simulate replace_in_file's "0 replacement(s) made" — the tool call
+	// "succeeds" but the stub is unchanged. Then run the SAME post-edit verification
+	// the live seam runs (verifyStubApplied). It must reject the no-op.
+	agent := newEditAgentWithApply(&applied, func(_ context.Context, wd, stub, body string) error {
+		// deliberately do NOT write body — the stub keeps its original (≠ body) content
+		return verifyStubApplied(wd, stub, body)
+	})
+
+	tester := fakeNativeTester{stub: "wordy.go", wantBody: refBody}
+	res := aiderpolyglot.RunExercise(context.Background(), ex, workDir, tester.run, agent)
+
+	if res.Passed {
+		t.Fatal("RunExercise Passed on a no-op edit — the verify-applied guard did not fail closed (WR-02)")
+	}
+	if applied {
+		t.Fatal("edit_format_applied = true on a no-op edit — WR-02 false-green (a non-matching replace_in_file recorded as applied)")
+	}
+}
+
+// TestVerifyStubApplied is the focused unit proof of the WR-02 guard: it accepts only
+// when the post-edit stub content equals the intended reference body, and rejects the
+// no-op (stub unchanged) and missing-file cases.
+func TestVerifyStubApplied(t *testing.T) {
+	const stub = "wordy.go"
+	const body = "package wordy\n\nfunc Answer(q string) (int, bool) { return 42, true }\n"
+
+	t.Run("applied-equals-body", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, stub), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyStubApplied(dir, stub, body); err != nil {
+			t.Fatalf("verifyStubApplied rejected a correctly-applied stub: %v", err)
+		}
+	})
+
+	t.Run("no-op-stub-unchanged-rejected", func(t *testing.T) {
+		dir := t.TempDir()
+		// stub still holds the ORIGINAL body (the "0 replacement(s) made" no-op case)
+		if err := os.WriteFile(filepath.Join(dir, stub), []byte("package wordy\n\nfunc Answer(q string) (int, bool) { panic(\"stub\") }\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyStubApplied(dir, stub, body); err == nil {
+			t.Fatal("verifyStubApplied accepted a no-op edit (stub unchanged); want fail-closed error")
+		}
+	})
+
+	t.Run("missing-file-rejected", func(t *testing.T) {
+		if err := verifyStubApplied(t.TempDir(), stub, body); err == nil {
+			t.Fatal("verifyStubApplied accepted a missing stub; want fail-closed error")
+		}
+	})
+}
+
 // TestNativeTestFn proves newNativeTestFn builds the per-language argv via
 // NativeTestCommand and fail-closes for an unknown language WITHOUT shelling a
 // real toolchain (a trivially-passing /-failing command exercises the exit path).

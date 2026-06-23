@@ -1,0 +1,21 @@
+{
+  "schema_version": "v2",
+  "task_id": "repomap-eval-corpus",
+  "mode": "repomap_eval",
+  "benchmark": "repomap-eval",
+  "language": "multi",
+  "repomap_eval": {
+    "corpus_exercises": 28,
+    "corpus_languages": ["go", "python", "rust"],
+    "ndcg_at_10": 1.0,
+    "recall_at_10": 1.0,
+    "mrr": 1.0,
+    "budget_fit_ratio": 1.0,
+    "discriminator": {
+      "margin": 0.3,
+      "forward_ndcg_at_10": 1.0,
+      "reversed_ndcg_at_10": 0.0048,
+      "seeded_random_ndcg_at_10": 0.5243
+    }
+  }
+}

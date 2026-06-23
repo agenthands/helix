@@ -4,9 +4,9 @@ milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
 current_phase: 105
 current_phase_name: SKILL.md Decision-Matrix Rewrite
-status: verifying
+status: executing
 stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-23T22:08:58.058Z"
+last_updated: "2026-06-23T22:26:25.359Z"
 last_activity: 2026-06-23
 last_activity_desc: Phase 104 complete, transitioned to Phase 105
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 Phase: 105 — SKILL.md Decision-Matrix Rewrite
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-06-23 — Phase 104 complete, transitioned to Phase 105
 
 ## Performance Metrics

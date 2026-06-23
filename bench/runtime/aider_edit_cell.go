@@ -158,6 +158,17 @@ func assembleAiderEditResult(in aiderEditResultInput) ([]byte, error) {
 // (ResultPath/MergedTracePath) and Task/Mode. A non-nil return is an infrastructure
 // failure (scratch preserved); a graded fail is a normal CellResult.
 func runAiderEditCell(ctx context.Context, cfg CellConfig, res CellResult) (CellResult, error) {
+	// WR-03: honor cfg.Benchmark instead of silently stamping the const. The arm only
+	// runs the aider-polyglot suite, so an empty cfg.Benchmark defaults to the const,
+	// but a caller that passes a CONFLICTING benchmark must fail closed rather than
+	// emit a row whose benchmark field disagrees with the requested config (an
+	// undetected provenance mismatch). The const is still the value stamped onto the
+	// row (via assembleAiderEditResult) once this guard confirms agreement.
+	if cfg.Benchmark != "" && cfg.Benchmark != aiderEditBenchmark {
+		return res, fmt.Errorf("bench/runtime: aider_edit cell requires benchmark %q, got %q",
+			aiderEditBenchmark, cfg.Benchmark)
+	}
+
 	sb, err := benchsandbox.New(cfg.RunID, cfg.HelixBin, cfg.OutDir)
 	if err != nil {
 		return res, fmt.Errorf("bench/runtime: create sandbox: %w", err)

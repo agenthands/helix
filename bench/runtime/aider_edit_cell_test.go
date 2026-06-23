@@ -218,6 +218,27 @@ func TestAiderEditBaselineIsGitIndependent(t *testing.T) {
 	}, pvMetrics, "exactly the 3 explicit patch_validator baseline nulls must be present")
 }
 
+// TestAiderEditCellConflictingBenchmark (WR-03 regression): runAiderEditCell honors
+// cfg.Benchmark and fails CLOSED when a caller passes a benchmark that conflicts with
+// the aider-polyglot suite, rather than silently stamping the const and emitting a row
+// whose benchmark field disagrees with the requested config.
+func TestAiderEditCellConflictingBenchmark(t *testing.T) {
+	cfg := CellConfig{
+		RunID:     "aider-edit-conflict",
+		Benchmark: "some-other-suite", // conflicts with aiderEditBenchmark
+		Language:  "go",
+		Task:      "wordy",
+		Mode:      aiderEditMode,
+		HelixBin:  "/nonexistent/helix", // never reached: the guard returns first
+		SeedDir:   t.TempDir(),
+		OutDir:    t.TempDir(),
+	}
+	_, err := runAiderEditCell(context.Background(), cfg, CellResult{})
+	require.Error(t, err, "a conflicting cfg.Benchmark must fail closed (WR-03)")
+	assert.Contains(t, err.Error(), aiderEditBenchmark, "error must name the required benchmark")
+	assert.Contains(t, err.Error(), "some-other-suite", "error must name the conflicting benchmark the caller passed")
+}
+
 // TestAiderEditCellLiveRan is the HELIX_BIN "did it RUN" sentinel (fail-CLOSED).
 func TestAiderEditCellLiveRan(t *testing.T) {
 	helixBin := os.Getenv("HELIX_BIN")

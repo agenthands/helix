@@ -160,11 +160,27 @@ func TestOverrideKeysAreRealVerbs(t *testing.T) {
 		"the key-validity helper must flag the fabricated key %q — it keys on the frozen authority, not ∅", fabricated)
 }
 
+// dispatchOutput mirrors the production outputShape dispatch (override-then-
+// group-default) but against a CALLER-SUPPLIED override map, so the same
+// override-branch logic can be exercised with both the real map and a synthetic
+// copied-default map. Keeping the dispatch identical to outputShape is what makes
+// the discriminator below a genuine break-the-invariant check rather than a
+// tautology: if outputShape's override branch were removed (returning the group
+// default), both the loop and the discriminator would observe equality and fail.
+func dispatchOutput(overrides map[string]string, verb, group string) string {
+	if s, ok := overrides[verb]; ok {
+		return s
+	}
+	return groupOutputDefault(group)
+}
+
 // TestOverrideDiffersFromGroupDefault (Guard B, Template B — break-the-invariant).
 // For each overridden verb, the rendered Output/Use-this line must DIFFER from the
 // old group default for that verb's GroupID ("memory"); a "fix" that copied the
-// default verbatim would be a no-op. The discriminator constructs a synthetic
-// copied-default value and asserts the SAME difference-check helper flags it.
+// default verbatim would be a no-op. The discriminator routes a synthetic
+// copied-default value through the SAME dispatch the loop relies on and asserts
+// the difference-check predicate (NotEqual) correctly sees NO difference — proving
+// the loop's check is what rejects a no-op fix, not a vacuous always-true branch.
 func TestOverrideDiffersFromGroupDefault(t *testing.T) {
 	const group = "memory"
 
@@ -178,16 +194,62 @@ func TestOverrideDiffersFromGroupDefault(t *testing.T) {
 			"verb %q Use-this override must differ from the group default", verb)
 	}
 
-	// Discriminator: a synthetic override whose value EQUALS the group default is a
-	// no-op masquerading as a fix; the difference check must flag it. We assert the
-	// raw equality predicate (the same one the loop relies on) catches a copied
-	// default, with exact cardinality.
-	const group2 = "memory"
-	copiedDefault := groupOutputDefault(group2)
-	var noOps []string
-	if copiedDefault == groupOutputDefault(group2) {
-		noOps = append(noOps, "synthetic-copied-default")
+	// Discriminator (break-the-invariant): pick a real overridden verb and build a
+	// SYNTHETIC override map whose value is a copied group default — a no-op "fix".
+	// Routed through the same dispatch the loop uses (dispatchOutput, identical to
+	// outputShape), the difference-check predicate MUST see no difference: a copied
+	// default is indistinguishable from the group default. This is the case the
+	// loop's NotEqual check exists to reject.
+	const verb = "switch-mode"
+	require.Containsf(t, outputShapeOverrides, verb,
+		"precondition: %q must be a real overridden verb", verb)
+
+	syntheticNoOp := map[string]string{verb: groupOutputDefault(group)} // copied default
+	require.Equalf(t, groupOutputDefault(group), dispatchOutput(syntheticNoOp, verb, group),
+		"a copied-default override routed through the dispatch is indistinguishable from "+
+			"the group default — this is the no-op the loop's NotEqual check rejects")
+
+	// And confirm the REAL override genuinely differs through the SAME dispatch,
+	// so the no-op assertion above is not vacuous. If outputShape's override branch
+	// were removed (so it returned the group default), this would fail — exactly the
+	// break-the-invariant property required.
+	require.NotEqualf(t, groupOutputDefault(group), dispatchOutput(outputShapeOverrides, verb, group),
+		"the real %q override must differ from the group default via the production dispatch", verb)
+	require.Equalf(t, dispatchOutput(outputShapeOverrides, verb, group), outputShape(verb, group),
+		"dispatchOutput must match the production outputShape for the real override map")
+}
+
+// TestOverrideMapsHaveIdenticalKeys (Guard C — anti-drift). outputShapeOverrides
+// and useThisNotThatOverrides are two independent maps that, by design, must cover
+// the IDENTICAL verb set: a verb gaining an Output override but not a Use-this
+// override (or vice versa) would emit a corrected Output line beside a stale
+// group-default Use-this line in reference.md — the exact per-verb inconsistency
+// this phase exists to prevent. No other test pins the two maps to each other
+// directly (TestRenderOverride keys off the hand-maintained overriddenVerbs slice,
+// which cannot catch a key added to only one map AND not added to that slice).
+func TestOverrideMapsHaveIdenticalKeys(t *testing.T) {
+	require.NotEmpty(t, outputShapeOverrides, "outputShapeOverrides must be non-empty")
+	require.NotEmpty(t, useThisNotThatOverrides, "useThisNotThatOverrides must be non-empty")
+
+	for k := range outputShapeOverrides {
+		_, ok := useThisNotThatOverrides[k]
+		assert.Truef(t, ok, "%q in outputShapeOverrides but missing from useThisNotThatOverrides", k)
 	}
-	require.Lenf(t, noOps, 1,
-		"a copied-default override (value == group default) MUST be flagged as a no-op, got %v", noOps)
+	for k := range useThisNotThatOverrides {
+		_, ok := outputShapeOverrides[k]
+		assert.Truef(t, ok, "%q in useThisNotThatOverrides but missing from outputShapeOverrides", k)
+	}
+	assert.Lenf(t, useThisNotThatOverrides, len(outputShapeOverrides),
+		"override maps must cover the identical verb set (got out=%d use=%d)",
+		len(outputShapeOverrides), len(useThisNotThatOverrides))
+
+	// Pin the test's own overriddenVerbs slice to the production maps so the
+	// hand-maintained list cannot silently shrink coverage (IN-01 surface).
+	assert.Lenf(t, overriddenVerbs, len(outputShapeOverrides),
+		"overriddenVerbs test slice must match the production override-map size "+
+			"(got slice=%d map=%d)", len(overriddenVerbs), len(outputShapeOverrides))
+	for _, verb := range overriddenVerbs {
+		_, ok := outputShapeOverrides[verb]
+		assert.Truef(t, ok, "overriddenVerbs lists %q but it is not in outputShapeOverrides", verb)
+	}
 }

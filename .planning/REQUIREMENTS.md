@@ -47,9 +47,9 @@
 
 ### Polyglot Edit Benchmark (EDITBENCH)
 
-- [ ] **EDITBENCH-01**: An EDIT-verb `AgentFn` (in `bench/runtime`, daemon-dialing) routes the model's edit through helix edit verbs (`replace-symbol-body` / `fuzzy-edit` / `replace-in-file` / `insert-before-symbol` / `insert-after-symbol`), plugged into the existing `RunExercise` verb-agnostic seam — loader untouched, WR-01 anti-tamper pristine-test restore preserved.
-- [ ] **EDITBENCH-02**: A new `bench/runners/aider_edit/MODE.md` adds the polyglot-edit bench mode via the filesystem-as-table pattern with zero mode-resolver Go change.
-- [ ] **EDITBENCH-03**: An additive `edit_format_applied` (`*bool`, `omitempty`) open key is recorded on `result.v2.json` with no `schema_version` v3 bump.
+- [x] **EDITBENCH-01**: An EDIT-verb `AgentFn` (in `bench/runtime`, daemon-dialing) routes the model's edit through helix edit verbs (`replace-symbol-body` / `fuzzy-edit` / `replace-in-file` / `insert-before-symbol` / `insert-after-symbol`), plugged into the existing `RunExercise` verb-agnostic seam — loader untouched, WR-01 anti-tamper pristine-test restore preserved.
+- [x] **EDITBENCH-02**: A new `bench/runners/aider_edit/MODE.md` adds the polyglot-edit bench mode via the filesystem-as-table pattern with zero mode-resolver Go change.
+- [x] **EDITBENCH-03**: An additive `edit_format_applied` (`*bool`, `omitempty`) open key is recorded on `result.v2.json` with no `schema_version` v3 bump.
 
 ### RepoMap-Quality Eval (REPOEVAL)
 
@@ -63,7 +63,7 @@
 
 ### Committed Baselines (BASELINE)
 
-- [ ] **BASELINE-01**: A committed polyglot-edit baseline artifact (`bench/reports/<run>/BENCH-RESULTS.md` + `result.v2.json`) is captured `HELIX_BIN`-gated, fail-not-skip, with byte-reproducible deterministic metrics only (latency excluded — local `bench-micro`).
+- [x] **BASELINE-01**: A committed polyglot-edit baseline artifact (`bench/reports/<run>/BENCH-RESULTS.md` + `result.v2.json`) is captured `HELIX_BIN`-gated, fail-not-skip, with byte-reproducible deterministic metrics only (latency excluded — local `bench-micro`).
 - [ ] **BASELINE-02**: Committed RepoMap-eval and fuzzy-robustness baseline artifacts are captured under the same guards (fail-not-skip, byte-reproducible, deterministic-metrics-only).
 
 ---
@@ -120,14 +120,14 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | VENDOR-01 | Phase 99 | Complete |
 | VENDOR-02 | Phase 99 | Complete |
 | VENDOR-03 | Phase 99 | Complete |
-| EDITBENCH-01 | Phase 100 | Pending |
-| EDITBENCH-02 | Phase 100 | Pending |
-| EDITBENCH-03 | Phase 100 | Pending |
+| EDITBENCH-01 | Phase 100 | Complete |
+| EDITBENCH-02 | Phase 100 | Complete |
+| EDITBENCH-03 | Phase 100 | Complete |
 | REPOEVAL-01 | Phase 102 | Pending |
 | REPOEVAL-02 | Phase 102 | Pending |
 | FUZZBENCH-01 | Phase 102 | Pending |
 | FUZZBENCH-02 | Phase 102 | Pending |
-| BASELINE-01 | Phase 100 | Pending |
+| BASELINE-01 | Phase 100 | Complete |
 | BASELINE-02 | Phase 102 | Pending |
 
 **Coverage:**

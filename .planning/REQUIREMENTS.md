@@ -64,7 +64,7 @@
 ### Committed Baselines (BASELINE)
 
 - [x] **BASELINE-01**: A committed polyglot-edit baseline artifact (`bench/reports/<run>/BENCH-RESULTS.md` + `result.v2.json`) is captured `HELIX_BIN`-gated, fail-not-skip, with byte-reproducible deterministic metrics only (latency excluded — local `bench-micro`).
-- [ ] **BASELINE-02**: Committed RepoMap-eval and fuzzy-robustness baseline artifacts are captured under the same guards (fail-not-skip, byte-reproducible, deterministic-metrics-only).
+- [x] **BASELINE-02**: Committed RepoMap-eval and fuzzy-robustness baseline artifacts are captured under the same guards (fail-not-skip, byte-reproducible, deterministic-metrics-only).
 
 ---
 
@@ -128,7 +128,7 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | FUZZBENCH-01 | Phase 102 | Complete |
 | FUZZBENCH-02 | Phase 102 | Complete |
 | BASELINE-01 | Phase 100 | Complete |
-| BASELINE-02 | Phase 102 | Pending |
+| BASELINE-02 | Phase 102 | Complete |
 
 **Coverage:**
 

@@ -174,7 +174,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 102-03-PLAN.md — committed baselines: aggregator renderers + double-render byte-reproducibility + stripped-metric anti-vacuity + .gitignore allowlist + Makefile regen targets (BASELINE-02)
+- [x] 102-03-PLAN.md — committed baselines: aggregator renderers + double-render byte-reproducibility + stripped-metric anti-vacuity + .gitignore allowlist + Makefile regen targets (BASELINE-02)
 
 **UI hint**: no
 
@@ -189,7 +189,7 @@ Plans:
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 2/3 | In Progress|  |
+| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 3/3 | Complete   | 2026-06-23 |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22
 

@@ -31,9 +31,9 @@ blocked: 0
 ## Gaps
 
 - truth: "helix setup codex installs the PreToolUse nudge hook WITHOUT clobbering a user's existing Codex hooks.json (other events / other matchers preserved)"
-  status: failed
-  reason: "writeCodexHooks overwrites the entire file; surfaced by live Codex test where a pre-existing ~/.codex/hooks.json (GSD tooling) coexists. Helix schema itself is correct."
+  status: resolved
+  reason: "writeCodexHooks now MERGES our Bash→nudge PreToolUse entry into an existing valid {\"hooks\":...} file, preserving all other events and matchers; legacy/foreign/unparseable files are backed up to <path>.bak before a fresh write; re-run is idempotent (structural matcher=Bash + command-tail=nudge detection, no helix_managed marker since Codex's schema is strict). Resolved in commit 5689f76a (test RED 078cdfd1)."
   severity: major
   test: 1
   artifacts: ["internal/cli/setup_agents.go (writeCodexHooks)", "internal/cli/setup_agents_test.go"]
-  missing: ["merge-into-existing-hooks.json logic (preserve other events/matchers)", "idempotent re-run (structural match on matcher=Bash + command ends with nudge, NOT an extra helix_managed field — Codex schema is strict)", "no-clobber for legacy/foreign existing file (back up to .bak rather than silently overwrite)", "tests: merge-preserves-others, idempotent-no-dup, legacy-backed-up, fresh-when-absent"]
+  resolved_by: ["merge-into-existing-hooks.json logic (preserves other events/matchers)", "idempotent re-run via structural match (matcher=Bash + command tail=nudge, no helix_managed field)", "no-clobber for legacy/foreign existing file (backed up to .bak)", "tests: TestWriteCodexHooksMergePreservesOthers, TestWriteCodexHooksIdempotentRefreshesStalePath, TestWriteCodexHooksLegacyForeignBackedUp, TestWriteCodexHooks (fresh-when-absent regression)"]

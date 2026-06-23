@@ -22,9 +22,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	aiderpolyglot "github.com/agenthands/helix/bench/datasets/aider-polyglot"
+	"github.com/agenthands/helix/bench/evaluators"
 	"github.com/agenthands/helix/bench/evaluators/coordinator"
 	"github.com/agenthands/helix/bench/languages"
 	"github.com/agenthands/helix/bench/runners"
@@ -85,6 +87,33 @@ func assembleAiderEditResult(in aiderEditResultInput) ([]byte, error) {
 		Merged:          trace.MergedTrace{},
 		UsagePresent:    false,
 		Agent:           "scripted",
+	})
+
+	// Pitfall 3 (non-reproducible committed baseline): the patch_validator metrics
+	// (files_modified / edit_locality / edit_distance_patch) are computed from a LIVE
+	// git working tree (RepoDir) — they vary with the machine's repo state and the
+	// ephemeral scratch path, so they are NOT byte-reproducible and MUST NOT enter the
+	// committed baseline. NULL them explicitly (an honest "not computed for the
+	// deterministic baseline" null, never a fabricated value) and record the reason in
+	// the metric_errors annotations so the row stays self-describing. Only the truly
+	// deterministic quality metrics (task_success, verified_correctness,
+	// edit_format_applied, outcome) survive into the committed bytes.
+	metrics.FilesModified = nil
+	metrics.EditLocality = nil
+	metrics.EditDistancePatch = nil
+	const baselineNullReason = "excluded from the deterministic committed baseline (repo-derived, non-reproducible)"
+	metricErrs = append(metricErrs,
+		evaluators.MetricError{Metric: "files_modified", Grader: "patch_validator", Reason: baselineNullReason},
+		evaluators.MetricError{Metric: "edit_locality", Grader: "patch_validator", Reason: baselineNullReason},
+		evaluators.MetricError{Metric: "edit_distance_patch", Grader: "patch_validator", Reason: baselineNullReason},
+	)
+	// Sort the annotations by (metric, grader) so the emitted order can never drift on
+	// a grader-iteration change (Pitfall 3 — deterministic sort-before-emit).
+	sort.Slice(metricErrs, func(i, j int) bool {
+		if metricErrs[i].Metric != metricErrs[j].Metric {
+			return metricErrs[i].Metric < metricErrs[j].Metric
+		}
+		return metricErrs[i].Grader < metricErrs[j].Grader
 	})
 
 	applied := in.Applied

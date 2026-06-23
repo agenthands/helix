@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs verify-cligen verify-docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
+.PHONY: build clean proto test vet fmt docs verify-cligen verify-docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick bench-aider-edit release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
 
 BINARY=helix
 GO=go
@@ -156,6 +156,20 @@ bench-quick: ## Build helix, then run the hermetic scripted bench smoke (<=90s C
 		--agent=scripted \
 		--helix-bin=$(CURDIR)/$(BINARY) \
 		--out bench/reports
+
+bench-aider-edit: ## Build helix, then regenerate the committed byte-reproducible polyglot-edit baseline (BASELINE-01)
+	# Local-only regenerate path (no CI benchstat gate — STATE.md local-only-benches).
+	# cmd/helix-bench run does not route the aider-polyglot fixtures through the matrix
+	# (the aider fixtures use a different on-disk layout than cellSeedDir expects), so
+	# the regenerator drives the smallest entrypoint that exercises runAiderEditCell
+	# directly: the //go:build ignore script bench/runtime/aider_edit_baseline_regen.go.
+	# It drives the DETERMINISTIC scripted arm (applies the exercism reference solution
+	# via replace_in_file → guaranteed PASS) over go/wordy against the warm daemon and
+	# writes the deterministic-metrics-only result.v2.json + BENCH-RESULTS.md into the
+	# force-tracked bench/reports/aider-edit-baseline/ dir. The committed bytes are the
+	# CI contract; re-running this regenerates them byte-identically.
+	$(GO) build -o $(BINARY) ./cmd/helix
+	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/aider_edit_baseline_regen.go
 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \

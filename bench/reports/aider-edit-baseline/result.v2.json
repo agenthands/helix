@@ -1,0 +1,70 @@
+{
+  "schema_version": "v2",
+  "task_id": "wordy",
+  "mode": "aider_edit",
+  "benchmark": "aider-polyglot",
+  "run_index": 0,
+  "tokens_input": null,
+  "tokens_output": null,
+  "fairness": {
+    "overrides": []
+  },
+  "outcome": "success",
+  "trace_ref": "",
+  "model_id": "claude-sonnet-4-5-20250929",
+  "language": "go",
+  "edit_format_applied": true,
+  "metrics": {
+    "task_success": true,
+    "verified_correctness": true,
+    "tokens_input": null,
+    "tokens_output": null,
+    "tokens_input_cached_read": null,
+    "tokens_input_cache_write": null,
+    "tool_calls": 0,
+    "wall_time_seconds": null,
+    "files_read": 0,
+    "bytes_read": 0,
+    "files_modified": null,
+    "edit_locality": null,
+    "regression_rate": null,
+    "lsp_diagnostics_used": 0,
+    "semantic_tool_calls": 0,
+    "edit_distance_patch": null,
+    "retry_count": 0,
+    "compile_errors_before": 0,
+    "compile_errors_after": 0
+  },
+  "metric_errors": [
+    {
+      "metric": "edit_distance_patch",
+      "grader": "patch_validator",
+      "reason": "excluded from the deterministic committed baseline (repo-derived, non-reproducible)"
+    },
+    {
+      "metric": "edit_locality",
+      "grader": "patch_validator",
+      "reason": "excluded from the deterministic committed baseline (repo-derived, non-reproducible)"
+    },
+    {
+      "metric": "files_modified",
+      "grader": "patch_validator",
+      "reason": "excluded from the deterministic committed baseline (repo-derived, non-reproducible)"
+    },
+    {
+      "metric": "regression_rate",
+      "grader": "regression_checker",
+      "reason": "no pre-patch passing tests (undefined denominator)"
+    },
+    {
+      "metric": "tokens_input",
+      "grader": "token_meter",
+      "reason": "no provider usage block (scripted run)"
+    },
+    {
+      "metric": "wall_time_seconds",
+      "grader": "tool_trace_analyzer",
+      "reason": "no timing captured (StartedAt/EndedAt unset)"
+    }
+  ]
+}

@@ -270,3 +270,7 @@ test/bench/baselines/local.txt
 # Bench stack runtime reports (generated per-run; keep the tracked .gitkeep)
 /bench/reports/*
 !/bench/reports/.gitkeep
+# Phase 100 BASELINE-01: force-track the committed, byte-reproducible polyglot-edit
+# baseline under the otherwise-ignored bench/reports/* (mirrors the .gitkeep allowlist).
+!/bench/reports/aider-edit-baseline/
+!/bench/reports/aider-edit-baseline/**

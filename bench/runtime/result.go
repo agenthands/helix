@@ -138,6 +138,19 @@ type ResultInput struct {
 	SwebenchRawResolved      *bool
 	SwebenchRescoredVerified *bool
 
+	// EditFormatApplied is the Phase 100 (EDITBENCH-03) open-provenance key the
+	// polyglot-edit (aider_edit) cell STAMPS onto the row to record whether the
+	// deterministic EDIT-verb agent actually applied the reference edit format to
+	// the solution stub (true) or could not (false). It is a *bool (NOT bool) WITH
+	// omitempty so a nil drops the key but a literal false — the load-bearing "edit
+	// format NOT applied" verdict, the WHOLE POINT — is PRESERVED; a value-type
+	// omitempty would wrongly drop a load-bearing false (Pitfall 2). It mirrors the
+	// SwebenchRawResolved additive-minor discipline EXACTLY: additive-minor,
+	// omitempty, schema_version stays "v2", additionalProperties stays OPEN, NOT
+	// added to required. Only the aider_edit path populates it; honest non-edit-bench
+	// rows leave it nil so old artifacts stay byte-compatible.
+	EditFormatApplied *bool
+
 	// Metrics is the canonical Phase 79 nullable metric record (D-06/METRIC-01),
 	// assembled by the coordinator. Every field is a pointer; a nil marshals to an
 	// explicit JSON null (never omitted), so a metric a grader could not compute is
@@ -228,6 +241,13 @@ type resultDoc struct {
 	SwebenchRawResolved      *bool `json:"swebench_raw_resolved,omitempty"`
 	SwebenchRescoredVerified *bool `json:"swebench_rescored_verified,omitempty"`
 
+	// EditFormatApplied is the Phase 100 (EDITBENCH-03) polyglot-edit open key.
+	// *bool (NOT bool) WITH omitempty so a nil drops the key but a literal false
+	// (the "edit format NOT applied" verdict) is PRESERVED — a value-type omitempty
+	// would wrongly drop a load-bearing false (Pitfall 2). additive-minor open key —
+	// additionalProperties is OPEN at the schema top level, no v3 bump.
+	EditFormatApplied *bool `json:"edit_format_applied,omitempty"`
+
 	// Phase 79 canonical metric record (METRIC-01/D-06). Metrics has NO omitempty:
 	// the object (and every nullable field within it) is always emitted so a
 	// missing metric is an explicit JSON null, never an omission (D-07).
@@ -281,6 +301,8 @@ func BuildResult(in ResultInput) ([]byte, error) {
 
 		SwebenchRawResolved:      in.SwebenchRawResolved,
 		SwebenchRescoredVerified: in.SwebenchRescoredVerified,
+
+		EditFormatApplied: in.EditFormatApplied,
 
 		Metrics: in.Metrics,
 		MetricErrors:   in.MetricErrors,

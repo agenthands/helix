@@ -1,0 +1,42 @@
+NOTICE — Rust exercise fixtures (MIT)
+
+SPDX-License-Identifier: MIT
+
+The exercise data under `rust/exercises/practice/<exercise>/` (except the
+repo-authored hermetic stub `leap`, see below) is Exercism Rust track content,
+redistributed by the Aider Polyglot benchmark
+(github.com/Aider-AI/polyglot-benchmark@7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f)
+and vendored here BYTE-IDENTICAL. It is licensed under the MIT License.
+
+Upstream provenance (MIT): exercism/rust@557695ebd2fbe2cf99d51e91a4c8a556b7e2133b
+(the canonical Exercism Rust track LICENSE; sha256
+e52f804e74f0fbd34e8927962319df346166b8194094309a0aee318693df44df — identical to
+all six Exercism tracks, see ../../LICENSE-AUDIT.md).
+
+Note: `rust/exercises/practice/leap/` in this tree is a REPO-AUTHORED hermetic
+loader-test stub (its `.meta/config.json` carries `authors:["fixture"]`), NOT the
+Exercism MIT exercise. Its disposition is recorded as "internal — repo license" in
+../../VENDOR-MANIFEST.md.
+
+----------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2021 Exercism
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

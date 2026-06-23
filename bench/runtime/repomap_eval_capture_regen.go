@@ -19,12 +19,24 @@
 //	go build -o ./helix ./cmd/helix
 //	HELIX_BIN="$(pwd)/helix" go run bench/runtime/repomap_eval_capture_regen.go
 //
+// SCOPE: this regenerator writes ONLY the committed CAPTURED corpus under
+// testdata/captured/{go,python,rust}.json. It does NOT write the committed
+// bench/reports/repomap-eval-baseline/{result.v2.json,BENCH-RESULTS.md} summary —
+// that report is authored/refreshed separately (result.v2.json is hand-authored
+// from the captured-corpus metrics; BENCH-RESULTS.md is rendered from it by
+// bench/aggregator.RenderRepoMapEvalBaseline, gated byte-for-byte by the
+// TestRepoMapEvalBaseline* golden in ./bench/aggregator). The committed captured
+// corpus is the artifact THIS file regenerates; the hermetic leaf golden
+// (go test ./bench/evaluators/repomapeval/, no binary) scores committed gold
+// against it.
+//
 // FAIL-NOT-SKIP (the Phase 100 determinism contract): when HELIX_BIN is set this
 // regenerator os.Exit(2)s if HELIX_BIN is unset/empty, get_repo_map returns empty
-// output, a language bucket parses to zero exercises, or a "did it RUN" sentinel
-// count is unmet — a missing capture is a HARD failure, never a silent skip. Only
-// deterministic bytes are written (no latency / timestamp / absolute path). The
-// committed artifact under version control IS the CI contract; the hermetic golden
+// output, a language bucket parses to zero exercises, the rendered tree fails to
+// parse, or a "did it RUN" sentinel count is unmet — a missing or mis-parsed
+// capture is a HARD failure, never a silent skip. Only deterministic bytes are
+// written (no latency / timestamp / absolute path). The committed captured corpus
+// under version control IS the CI contract; the hermetic golden
 // (go test ./bench/evaluators/repomapeval/, no binary) is the authoritative proof.
 package main
 

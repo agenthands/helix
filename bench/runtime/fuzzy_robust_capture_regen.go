@@ -9,6 +9,14 @@
 // observed {strategy, refused, error_kind, matched_text}, writing the result into
 // bench/evaluators/fuzzyrobust/testdata/captured/{go,python,rust}.json.
 //
+// SCOPE: this regenerator writes ONLY the committed CAPTURED outcomes under
+// testdata/captured/. It does NOT write the committed
+// bench/reports/fuzzy-robust-baseline/{result.v2.json,BENCH-RESULTS.md} summary —
+// that report is authored/refreshed separately (result.v2.json is hand-authored
+// from the captured-corpus metrics; BENCH-RESULTS.md is rendered from it by
+// bench/aggregator.RenderFuzzyRobustBaseline, gated byte-for-byte by the
+// TestFuzzyRobustBaseline* golden in ./bench/aggregator).
+//
 // NON-LEAF: this harness MAY import internal/fuzzy — the leaf NEVER can, since
 // internal/fuzzy/match.go:8 imports internal/errors (so internal/fuzzy is not
 // stdlib-only — RESEARCH Pitfall 5). The leaf consumes the captured JSON as data

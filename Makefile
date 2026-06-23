@@ -171,25 +171,47 @@ bench-aider-edit: ## Build helix, then regenerate the committed byte-reproducibl
 	$(GO) build -o $(BINARY) ./cmd/helix
 	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/aider_edit_baseline_regen.go
 
-bench-repomap-eval: ## Build helix, then regenerate the committed byte-reproducible RepoMap-eval baseline (BASELINE-02)
+bench-repomap-eval: ## Build helix, then regenerate the committed RepoMap-eval CAPTURED corpus (BASELINE-02)
 	# Local-only regenerate path (no CI benchstat gate — STATE.md local-only-benches).
 	# Drives the //go:build ignore script bench/runtime/repomap_eval_capture_regen.go,
 	# which (HELIX_BIN-gated, fail-not-skip) spawns the warm daemon, captures the
 	# get-repo-map / get-context rankings, parses the {tree} envelope into ordered
-	# file:symbol JSON, and writes the deterministic-metrics-only captured corpus. The
-	# committed bytes under the force-tracked bench/reports/repomap-eval-baseline/ dir are
-	# the CI contract; re-running this regenerates them byte-identically.
+	# file:symbol JSON, and writes the deterministic-metrics-only CAPTURED corpus to
+	# bench/evaluators/repomapeval/testdata/captured/{go,python,rust}.json. THAT captured
+	# corpus is what this target regenerates byte-identically; the hermetic leaf golden
+	# (go test ./bench/evaluators/repomapeval/, no binary) scores committed gold against it.
+	#
+	# This target does NOT write the committed bench/reports/repomap-eval-baseline/
+	# {result.v2.json,BENCH-RESULTS.md} summary — those are authored/refreshed separately:
+	# result.v2.json is hand-authored from the captured-corpus metrics, and BENCH-RESULTS.md
+	# is rendered from it by aggregator.RenderRepoMapEvalBaseline. The aggregator golden test
+	# (go test ./bench/aggregator/ -run TestRepoMapEvalBaseline) gates the render step
+	# byte-for-byte against the committed BENCH-RESULTS.md. If you change a metric or the
+	# render format, refresh bench/reports/repomap-eval-baseline/ by hand and re-run that
+	# test — re-running this target alone will NOT refresh the reports.
 	$(GO) build -o $(BINARY) ./cmd/helix
 	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/repomap_eval_capture_regen.go
 
-bench-fuzzy-robust: ## Build helix, then regenerate the committed byte-reproducible fuzzy-robustness baseline (BASELINE-02)
+bench-fuzzy-robust: ## Build helix, then regenerate the committed fuzzy-robustness CAPTURED corpus (BASELINE-02)
 	# Local-only regenerate path (no CI benchstat gate — STATE.md local-only-benches).
 	# Drives the //go:build ignore script bench/runtime/fuzzy_robust_capture_regen.go, a
-	# non-leaf harness that (HELIX_BIN-gated, fail-not-skip) calls internal/fuzzy.Match per
-	# drift case, mapping ErrAmbiguous → ambiguous_match / ErrNoMatch → no_match, and writes
-	# the deterministic-only captured outcomes. The committed bytes under the force-tracked
-	# bench/reports/fuzzy-robust-baseline/ dir are the CI contract; re-running regenerates
-	# them byte-identically.
+	# non-leaf harness that (fail-not-skip) calls internal/fuzzy.Match per drift case,
+	# mapping ErrAmbiguous → ambiguous_match / ErrNoMatch → no_match, and writes the
+	# deterministic-only CAPTURED outcomes to
+	# bench/evaluators/fuzzyrobust/testdata/captured/{go,python,rust}.json. THOSE captured
+	# outcomes are what this target regenerates byte-identically; the hermetic leaf golden
+	# (go test ./bench/evaluators/fuzzyrobust/, no binary) scores them. The harness exercises
+	# a pure in-process function, so HELIX_BIN is not required (the build + env export below
+	# are harmless but unused by this regenerator).
+	#
+	# This target does NOT write the committed bench/reports/fuzzy-robust-baseline/
+	# {result.v2.json,BENCH-RESULTS.md} summary — those are authored/refreshed separately:
+	# result.v2.json is hand-authored from the captured-corpus metrics, and BENCH-RESULTS.md
+	# is rendered from it by aggregator.RenderFuzzyRobustBaseline. The aggregator golden test
+	# (go test ./bench/aggregator/ -run TestFuzzyRobustBaseline) gates the render step
+	# byte-for-byte against the committed BENCH-RESULTS.md. If you change a metric or the
+	# render format, refresh bench/reports/fuzzy-robust-baseline/ by hand and re-run that
+	# test — re-running this target alone will NOT refresh the reports.
 	$(GO) build -o $(BINARY) ./cmd/helix
 	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/fuzzy_robust_capture_regen.go
 

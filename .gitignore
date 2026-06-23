@@ -274,3 +274,9 @@ test/bench/baselines/local.txt
 # baseline under the otherwise-ignored bench/reports/* (mirrors the .gitkeep allowlist).
 !/bench/reports/aider-edit-baseline/
 !/bench/reports/aider-edit-baseline/**
+# Phase 102 BASELINE-02: force-track the committed, byte-reproducible RepoMap-eval and
+# fuzzy-robustness baselines under the otherwise-ignored bench/reports/* (mirror line 275).
+!/bench/reports/repomap-eval-baseline/
+!/bench/reports/repomap-eval-baseline/**
+!/bench/reports/fuzzy-robust-baseline/
+!/bench/reports/fuzzy-robust-baseline/**

@@ -1,4 +1,4 @@
-.PHONY: build clean proto test vet fmt docs verify-cligen verify-docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick bench-aider-edit release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
+.PHONY: build clean proto test vet fmt docs verify-cligen verify-docs clean-jdtls-cache bench-jdtls-warm bench-micro bench-baseline bench bench-quick bench-aider-edit bench-repomap-eval bench-fuzzy-robust release-snapshot release-smoke update-trust-root eval eval-quick eval-no-network eval-attestation-check validate-cost-table verify-tos verify-licenses verify-no-docker-sdk verify-verified-md
 
 BINARY=helix
 GO=go
@@ -170,6 +170,28 @@ bench-aider-edit: ## Build helix, then regenerate the committed byte-reproducibl
 	# CI contract; re-running this regenerates them byte-identically.
 	$(GO) build -o $(BINARY) ./cmd/helix
 	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/aider_edit_baseline_regen.go
+
+bench-repomap-eval: ## Build helix, then regenerate the committed byte-reproducible RepoMap-eval baseline (BASELINE-02)
+	# Local-only regenerate path (no CI benchstat gate — STATE.md local-only-benches).
+	# Drives the //go:build ignore script bench/runtime/repomap_eval_capture_regen.go,
+	# which (HELIX_BIN-gated, fail-not-skip) spawns the warm daemon, captures the
+	# get-repo-map / get-context rankings, parses the {tree} envelope into ordered
+	# file:symbol JSON, and writes the deterministic-metrics-only captured corpus. The
+	# committed bytes under the force-tracked bench/reports/repomap-eval-baseline/ dir are
+	# the CI contract; re-running this regenerates them byte-identically.
+	$(GO) build -o $(BINARY) ./cmd/helix
+	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/repomap_eval_capture_regen.go
+
+bench-fuzzy-robust: ## Build helix, then regenerate the committed byte-reproducible fuzzy-robustness baseline (BASELINE-02)
+	# Local-only regenerate path (no CI benchstat gate — STATE.md local-only-benches).
+	# Drives the //go:build ignore script bench/runtime/fuzzy_robust_capture_regen.go, a
+	# non-leaf harness that (HELIX_BIN-gated, fail-not-skip) calls internal/fuzzy.Match per
+	# drift case, mapping ErrAmbiguous → ambiguous_match / ErrNoMatch → no_match, and writes
+	# the deterministic-only captured outcomes. The committed bytes under the force-tracked
+	# bench/reports/fuzzy-robust-baseline/ dir are the CI contract; re-running regenerates
+	# them byte-identically.
+	$(GO) build -o $(BINARY) ./cmd/helix
+	HELIX_BIN="$(CURDIR)/$(BINARY)" $(GO) run bench/runtime/fuzzy_robust_capture_regen.go
 
 release-snapshot: ## Run a local goreleaser dry-run; writes archives to dist/ (overwrites; gitignored)
 	@command -v goreleaser >/dev/null 2>&1 || { \

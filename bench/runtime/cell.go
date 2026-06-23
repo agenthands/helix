@@ -440,6 +440,22 @@ func RunCell(ctx context.Context, cfg CellConfig) (CellResult, error) {
 		return runRAGCell(ctx, cfg, res)
 	}
 
+	// (1d) Phase 100 aider_edit REAL ARM (EDITBENCH-01 live half + BASELINE-01): the
+	// polyglot-edit arm spawns the warm daemon, loads the vendored exercise from
+	// cfg.SeedDir (the caller owns the fixture-path resolution — the standard
+	// seed-dir/scripted_agent.yaml assumptions do NOT apply), drives the Plan 01
+	// deterministic EDIT-verb AgentFn + live native TestFn through
+	// aiderpolyglot.RunExercise VERBATIM (WR-01 intact), stamps edit_format_applied,
+	// and emits a schema-valid result.v2 row. Detection stays BY MODE NAME (not a
+	// MODE.md frontmatter key — the resolver is strict two-key with KnownFields(true));
+	// the aider_edit MODE.md still resolves to bench-full as a side effect, validating
+	// the two-key frontmatter. The path layout (ResultPath/MergedTracePath) and the
+	// unconditional fairness gate above already ran.
+	if cfg.Mode == aiderEditMode {
+		_ = profileName
+		return runAiderEditCell(ctx, cfg, res)
+	}
+
 	// (2) Bench sandbox (D-07): ephemeral OS-temp scratch for HOME/repo/socket;
 	// durable artifacts go under cfg.OutDir.
 	sb, err := benchsandbox.New(cfg.RunID, cfg.HelixBin, cfg.OutDir)

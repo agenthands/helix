@@ -84,7 +84,11 @@ func Aggregate(scores []*Score) *AggregateReport {
 		}
 	}
 	sort.Slice(report.WorstDimensions, func(i, j int) bool {
-		return report.DimensionAvgs[report.WorstDimensions[i]] < report.DimensionAvgs[report.WorstDimensions[j]]
+		a, b := report.WorstDimensions[i], report.WorstDimensions[j]
+		if report.DimensionAvgs[a] != report.DimensionAvgs[b] {
+			return report.DimensionAvgs[a] < report.DimensionAvgs[b]
+		}
+		return a < b // stable, name-keyed tiebreak on tied averages
 	})
 
 	sort.Strings(report.WorstPerformers)

@@ -90,7 +90,8 @@
   3. Every indexed-graph verb (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`) carries a "requires `index-semantic-graph` first" prerequisite note, and the matrix is grouped by capability.
   4. The `## Decision matrix` heading (the `StripDecisionMatrix` anchor) is preserved, the rewritten `SKILL.md` stays under the SKILL-04 idle-cost (size) cap, and a SKILL.md↔`VerbToolNames()` cross-check test holds.
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 105-01-PLAN.md — RED 3 anti-vacuity matrix guards (SKILL-01/02/03) → GREEN rewrite the SKILL.md decision matrix (split QUERY/ACTION, fill "Not this", graph prereqs, capability grouping); preserve anchor + cap + drift cross-check
 
 ### Phase 106: Exploratory DSPy Offline Tuning Harness (spike)
 
@@ -113,7 +114,7 @@
 |-------|-----------|----------------|--------|-----------|
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete    | 2026-06-23 |
-| 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/TBD | Not started | - |
+| 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/1 | Not started | - |
 | 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |
 
 ### ✅ v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — SHIPPED 2026-06-23

@@ -142,7 +142,7 @@ Score the following transcript on 6 dimensions using this scale:
 - 1.0: Correctly handled language context, or task was language-agnostic (score 1.0 for N/A)
 
 ### adoption
-- 0.0: Chose a standard shell tool (grep, sed, cat, find) as the FIRST command for a code-symbol question — for example reaching for a grep invocation to locate a function definition instead of the dedicated helix verb
+- 0.0: Chose a standard shell tool (grep, sed, cat, find, rg, ls) as the FIRST command for a code-symbol question — for example reaching for a grep invocation to locate a function definition instead of the dedicated helix verb
 - 0.5: Chose a helix verb but a suboptimal one for the task
 - 1.0: Chose the correct helix verb as the first command for the code-symbol question
 

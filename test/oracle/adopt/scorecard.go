@@ -38,11 +38,16 @@ type Bucket struct {
 // ScorecardResult is the aggregated two-metric scorecard over a task bucket. ChoiceRate
 // and FallbackRate are complementary over the classified transcripts: on a bucket where
 // every Response is either a helix choice or a standard-tool fallback they sum to 1.0.
+// The 1.0 sum is contingent on every response being classifiable; a response that is
+// neither a helix choice nor a fallback prefix (prose, or any non-listed first command)
+// is counted in Unclassified and lowers both rates so their sum is < 1.0. Unclassified
+// makes that non-complementary bucket observable rather than silently absorbed (IN-02).
 type ScorecardResult struct {
 	ChoiceRate   float64
 	FallbackRate float64
 	Choices      int
 	Fallbacks    int
+	Unclassified int
 	Total        int
 }
 
@@ -125,14 +130,18 @@ func Scorecard(buckets []Bucket) (ScorecardResult, error) {
 	if len(buckets) < MinTasks {
 		return ScorecardResult{}, fmt.Errorf("empty/under-sized task bucket: %d < %d", len(buckets), MinTasks)
 	}
-	var choices, fallbacks int
+	var choices, fallbacks, unclassified int
 	for _, b := range buckets {
 		chose, fellBack := ClassifyChoice(b.Response)
-		if chose {
+		switch {
+		case chose:
 			choices++
-		}
-		if fellBack {
+		case fellBack:
 			fallbacks++
+		default:
+			// Neither a helix choice nor a fallback prefix: prose or an unlisted
+			// first command. Counted so ChoiceRate+FallbackRate < 1.0 is observable.
+			unclassified++
 		}
 	}
 	total := len(buckets)
@@ -141,6 +150,7 @@ func Scorecard(buckets []Bucket) (ScorecardResult, error) {
 		FallbackRate: float64(fallbacks) / float64(total),
 		Choices:      choices,
 		Fallbacks:    fallbacks,
+		Unclassified: unclassified,
 		Total:        total,
 	}, nil
 }

@@ -12,10 +12,13 @@ import (
 // TestAdoptionNegativeExemplarVerdict is the hermetic-on-a-Score proof for
 // ROADMAP SC#2: the judge rubric ships a 6th `adoption` dimension whose
 // grep-finds-a-definition response scores 0.0, and that zero flows through
-// ComputeVerdict to a FAILING verdict. It needs no API key — it constructs a
-// Score directly (a grep response would be judged adoption=0.0) and asserts the
-// verdict, proving the rubric can demonstrably FAIL rather than being a
-// trivially-always-pass gate (T-101-06).
+// ComputeVerdict to a non-pass verdict. A lone adoption=0.0 yields a
+// `soft_fail` (one-zero rule, rubric.go ComputeVerdict), and the second
+// `doubleZero` case below escalates to a hard `fail`. Together they prove the
+// rubric can demonstrably reach a non-pass / FAILING verdict rather than being a
+// trivially-always-pass gate. It needs no API key — it constructs Scores
+// directly (a grep response would be judged adoption=0.0) and asserts the
+// verdicts (T-101-06).
 func TestAdoptionNegativeExemplarVerdict(t *testing.T) {
 	// A grep-finds-a-definition response: every other dimension is fine, but the
 	// model reached for `grep` as the first command for a code-symbol question, so

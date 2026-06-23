@@ -53,7 +53,8 @@
   2. `SKILL-ISSUE.md` no longer compiles into the `helix` binary or installs to users — it has been moved out of the embed dir, and `installSkill`/`uninstallSkill` drive an explicit closed-set allowlist (filter applied once up front; atomic stage→rename and `withinSkillRoot` containment unchanged; uninstall filtered identically).
   3. The reference-completeness contract test is non-vacuous: it asserts the generated `reference.md` covers the frozen verb set by EXACT count (`== len(VerbToolNames())`, currently 50) and goes RED when a known verb is absent — proven by a deliberate break-the-invariant assertion that runs RED before the fix.
   4. The hardened contract lands BEFORE the Phase 104/105 reference and skill rewrites, so the superset check cannot pass vacuously (`∅ ⊇ ∅`) through the format churn.
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 103-01-PLAN.md — closed-set bundleFiles allowlist on install+uninstall + RED-first closed-set bundle test, move SKILL-ISSUE.md out of the embed dir, seal the reference contract with a fabricated-absent-verb discriminator (BUNDLE-01, BUNDLE-02)
 
 ### Phase 104: Reference Generator Per-Verb Correctness
 **Goal**: Every verb's "use this, not that" and "Output" lines in the generated `reference.md` are correct for that verb's actual semantics, fixed at the generator root cause (the group collapse), with the corrected `reference.md` regenerated, committed, and reproducible.
@@ -93,7 +94,7 @@
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 0/TBD | Not started | - |
+| 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 0/1 | Not started | - |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 0/TBD | Not started | - |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/TBD | Not started | - |
 | 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |

@@ -41,9 +41,9 @@
 
 ### Aider Fixture Vendoring (VENDOR)
 
-- [ ] **VENDOR-01**: The MIT-licensed Exercism polyglot fixtures (a recorded, deterministic subset) are vendored into the tree under `bench/datasets/aider-polyglot/fixtures/` with `SPDX-License-Identifier: MIT`, per-track NOTICE/attribution, and a `VENDOR-MANIFEST.md`.
-- [ ] **VENDOR-02**: Aider's Apache-2.0 edit-format fixtures are vendored with `SPDX-License-Identifier: Apache-2.0` + attribution, producing a documented mixed-license vendored tree.
-- [ ] **VENDOR-03**: `make verify-licenses` is extended to hard-fail over the full vendored tree (dual MIT + Apache-2.0 disposition), with a tamper test proving the gate goes RED on a missing/incorrect SPDX header or NOTICE.
+- [x] **VENDOR-01**: The MIT-licensed Exercism polyglot fixtures (a recorded, deterministic subset) are vendored into the tree under `bench/datasets/aider-polyglot/fixtures/` with MIT disposition recorded in `VENDOR-MANIFEST.md` (per-file sha256 + `exercism/<lang>@<sha>` provenance) + per-track NOTICE/attribution. _(Phase 99: SPDX disposition lives in the manifest + NOTICE sidecars, NOT inline in executed fixtures — inline headers would mutate bench inputs, be invalid in `.json`, and break byte-reproducibility; threat T-99-05.)_
+- [x] **VENDOR-02**: Aider's Apache-2.0 edit-format fixtures are vendored under `fixtures/_aider-edit-format/` with Apache-2.0 disposition (manifest + NOTICE/LICENSE sidecars) + attribution, producing a documented mixed-license vendored tree.
+- [x] **VENDOR-03**: `make verify-licenses` is extended to hard-fail over the full vendored tree (dual MIT + Apache-2.0 disposition, manifest-vs-disk sha256 walk), with a tamper test proving the gate goes RED on a missing/incorrect disposition, a mutated fixture byte, a dropped/extra manifest entry, or a removed NOTICE.
 
 ### Polyglot Edit Benchmark (EDITBENCH)
 
@@ -117,9 +117,9 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | AGENT-03 | Phase 98 | Complete |
 | ADOPT-01 | Phase 97 | Complete |
 | ADOPT-02 | Phase 101 | Pending |
-| VENDOR-01 | Phase 99 | Pending |
-| VENDOR-02 | Phase 99 | Pending |
-| VENDOR-03 | Phase 99 | Pending |
+| VENDOR-01 | Phase 99 | Complete |
+| VENDOR-02 | Phase 99 | Complete |
+| VENDOR-03 | Phase 99 | Complete |
 | EDITBENCH-01 | Phase 100 | Pending |
 | EDITBENCH-02 | Phase 100 | Pending |
 | EDITBENCH-03 | Phase 100 | Pending |

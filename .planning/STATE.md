@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
-current_phase: 105
-current_phase_name: SKILL.md Decision-Matrix Rewrite
+current_phase: 106
+current_phase_name: spike
 status: verifying
 stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-23T22:33:31.608Z"
+last_updated: "2026-06-23T22:43:25.428Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 105 execution started
+last_activity_desc: Phase 105 complete, transitioned to Phase 106
 progress:
   total_phases: 4
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 105 (SKILL.md Decision-Matrix Rewrite) — EXECUTING
-Plan: 1 of 1
+Phase: 106 — Exploratory DSPy Offline Tuning Harness (spike)
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-23 — Phase 105 execution started
+Last activity: 2026-06-23 — Phase 105 complete, transitioned to Phase 106
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Last activity: 2026-06-23 — Phase 105 execution started
 | 101 | 2 | - | - |
 | 102 | 3 | - | - |
 | 104 | 1 | - | - |
+| 105 | 1 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

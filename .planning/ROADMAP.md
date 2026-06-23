@@ -164,7 +164,12 @@ Plans:
   3. Committed RepoMap-eval and fuzzy-robustness baseline artifacts are captured `HELIX_BIN`-gated, fail-not-skip, byte-reproducible, deterministic-metrics-only (routed through the existing deterministic `renderAll`, seeded resamples, sort-before-emit).
   4. Anti-vacuity proven: a reversed/random ranker MUST fail the RepoMap gold corpus and the known-ambiguous case MUST be refused by `fuzzyrobust`; each evaluator ships a hermetic golden sibling that runs with no binary and no network (deliberate break-the-invariant discriminators ship in this phase).
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 102-01-PLAN.md — repomapeval leaf: gold corpus from ground truth + recall@10/MRR/nDCG@10 + budget-fit + reversed/random discriminator + leaf self-test + capture regenerator (REPOEVAL-01, REPOEVAL-02)
+- [ ] 102-02-PLAN.md — fuzzyrobust leaf: per-tier perturbation + drift corpus + strategy/refusal scoring via editsim.ES + duplicate-block must-refuse + leaf self-test + capture harness (FUZZBENCH-01, FUZZBENCH-02)
+- [ ] 102-03-PLAN.md — committed baselines: aggregator renderers + double-render byte-reproducibility + stripped-metric anti-vacuity + .gitignore allowlist + Makefile regen targets (BASELINE-02)
 **UI hint**: no
 
 ## Progress (v2.1)

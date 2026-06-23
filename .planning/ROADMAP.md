@@ -144,11 +144,11 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 101-01-PLAN.md — Hermetic pure scorer (TDD): build-tag-FREE `test/oracle/adopt` package — lifted `FirstCommand`/`ClassifyChoice` (first-command prefix, not substring) + `Scorecard` (choice_rate/fallback_rate, empty-bucket floor) + `StripDecisionMatrix` (section-strip, len-guarded no-noop) + 12 committed fixtures + the 5 anti-vacuity tests (revert-and-fail material drop, complementary, empty-bucket, sabotage-non-noop, first-command-not-substring); runs in `go test ./...` with no key (ADOPT-02)
+- [x] 101-01-PLAN.md — Hermetic pure scorer (TDD): build-tag-FREE `test/oracle/adopt` package — lifted `FirstCommand`/`ClassifyChoice` (first-command prefix, not substring) + `Scorecard` (choice_rate/fallback_rate, empty-bucket floor) + `StripDecisionMatrix` (section-strip, len-guarded no-noop) + 12 committed fixtures + the 5 anti-vacuity tests (revert-and-fail material drop, complementary, empty-bucket, sabotage-non-noop, first-command-not-substring); runs in `go test ./...` with no key (ADOPT-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 101-02-PLAN.md — Tag-gated adapters (TDD): judge `adoption` dimension on `Score`/`ValidateScoreValues`/`ComputeVerdict`/`RubricPrompt` + grep-scores-0 negative exemplar + verdict proof (`//go:build llmjudge`) + aggregate dims; `//go:build llm` live capture leg over the SAME `adopt.Scorecard` (SkipWithoutAPIKey, informational); neither runs in `go test ./...`, never blocks merge (ADOPT-02)
+- [x] 101-02-PLAN.md — Tag-gated adapters (TDD): judge `adoption` dimension on `Score`/`ValidateScoreValues`/`ComputeVerdict`/`RubricPrompt` + grep-scores-0 negative exemplar + verdict proof (`//go:build llmjudge`) + aggregate dims; `//go:build llm` live capture leg over the SAME `adopt.Scorecard` (SkipWithoutAPIKey, informational); neither runs in `go test ./...`, never blocks merge (ADOPT-02)
 
 **UI hint**: no
 
@@ -177,7 +177,7 @@ Plans:
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/2 | Not started | - |
+| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete   | 2026-06-23 |
 | 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22

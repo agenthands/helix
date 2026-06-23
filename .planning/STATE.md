@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Agent Adoption & Aider-Derived Validation
 current_phase: 101
-current_phase_name: Opt-In LLM-Behavioral Adoption Scorecard
+current_phase_name: opt-in-llm-behavioral-adoption-scorecard
 status: executing
 stopped_at: Completed 96-01-PLAN.md
-last_updated: "2026-06-23T11:25:51.598Z"
+last_updated: "2026-06-23T11:58:26.029Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 100 complete, transitioned to Phase 101
+last_activity_desc: Phase 101 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 8
+  total_plans: 10
   completed_plans: 8
   percent: 67
 ---
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 100 — polyglot-edit-benchmark-committed-baseline
+**Current focus:** Phase 101 — opt-in-llm-behavioral-adoption-scorecard
 
 ## Current Position
 
-Phase: 101 — Opt-In LLM-Behavioral Adoption Scorecard
-Plan: Not started
-Status: Executing Phase 100
-Last activity: 2026-06-23 — Phase 100 complete, transitioned to Phase 101
+Phase: 101 (opt-in-llm-behavioral-adoption-scorecard) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 101
+Last activity: 2026-06-23 — Phase 101 execution started
 
 ## Performance Metrics
 

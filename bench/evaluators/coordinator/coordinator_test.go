@@ -284,4 +284,39 @@ func TestUncomputableFilesModifiedAnnotated(t *testing.T) {
 	}
 }
 
+// TestSkipPatchValidatorEmitsNoGitMetrics (WR-01): when SkipPatchValidator is set,
+// the git-derived patch_validator block is skipped ENTIRELY — files_modified /
+// edit_locality / edit_distance_patch stay nil AND no patch_validator MetricError is
+// appended, EVEN when RepoDir points at a path that would otherwise make git error.
+// This is what makes the deterministic baseline byte-reproducible without depending on
+// git being present (the committed bytes can never embed an env-specific git error).
+func TestSkipPatchValidatorEmitsNoGitMetrics(t *testing.T) {
+	in := GradeInput{
+		TestOutcome:        passingOutcome(),
+		PrePatchOutcome:    passingOutcome(),
+		RepoDir:            filepath.Join(t.TempDir(), "not-a-git-repo"), // would error if git ran
+		Merged:             trace.MergedTrace{},
+		UsagePresent:       false,
+		Agent:              "scripted",
+		SkipPatchValidator: true,
+	}
+
+	m, errs := Grade(context.Background(), in)
+
+	if m.FilesModified != nil || m.EditLocality != nil || m.EditDistancePatch != nil {
+		t.Fatalf("patch metrics must be nil when SkipPatchValidator is set; got files_modified=%v edit_locality=%v edit_distance_patch=%v",
+			m.FilesModified, m.EditLocality, m.EditDistancePatch)
+	}
+	for _, e := range errs {
+		if e.Grader == "patch_validator" {
+			t.Fatalf("SkipPatchValidator must append NO patch_validator metric_errors (would leak a git error into the committed baseline); got %+v", e)
+		}
+	}
+
+	// Sanity: the non-patch graders still ran (token_meter records usage-absent).
+	if len(errs) == 0 {
+		t.Fatal("expected the non-patch graders to still annotate (e.g. token_meter usage-absent); got none")
+	}
+}
+
 func intPtr(i int) *int { return &i }

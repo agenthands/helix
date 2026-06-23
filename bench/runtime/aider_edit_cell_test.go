@@ -161,6 +161,63 @@ func TestAiderEditCellAntiTamper(t *testing.T) {
 	assert.Equal(t, true, doc["edit_format_applied"], "edit_format_applied stays true: apply succeeded, grade failed")
 }
 
+// TestAiderEditBaselineIsGitIndependent (WR-01 regression): the deterministic baseline
+// assembly MUST NOT invoke git. It asserts (a) the assembled bytes are byte-identical
+// whether or not git is on PATH, and (b) the bytes never embed an environment-specific
+// git error string (e.g. "git ... not found in $PATH"). Before the fix,
+// assembleAiderEditResult called coordinator.Grade with RepoDir:"" and ran the
+// patch_validator git graders against the regenerator's CWD, so a host without git
+// would leak a machine-specific error into the committed metric_errors and break
+// byte-reproducibility. The fix skips the git graders entirely (SkipPatchValidator).
+func TestAiderEditBaselineIsGitIndependent(t *testing.T) {
+	in := aiderEditResultInput{Task: "wordy", Language: "go", Passed: true, Applied: true}
+
+	withGit, err := assembleAiderEditResult(in)
+	require.NoError(t, err, "assemble with git on PATH")
+
+	// Strip git (and everything else) from PATH so any git invocation would FAIL with
+	// an env-specific "executable file not found" error. If the bytes are unchanged,
+	// no git was spawned.
+	t.Setenv("PATH", "")
+	noGit, err := assembleAiderEditResult(in)
+	require.NoError(t, err, "assemble with PATH stripped of git")
+
+	require.Equal(t, string(withGit), string(noGit),
+		"baseline bytes diverged when git was removed from PATH — the deterministic path is still invoking git (WR-01)")
+
+	// Belt-and-suspenders: the committed bytes must never carry a git error string.
+	body := string(noGit)
+	for _, needle := range []string{"git ls-files", "git diff", "executable file not found", "git-unavailable"} {
+		assert.NotContains(t, body, needle,
+			"baseline result.v2 embeds a git-derived error string (%q) — non-reproducible across hosts (WR-01)", needle)
+	}
+
+	// The only patch_validator metric_errors must be the 3 explicit baseline nulls,
+	// each carrying the deterministic exclusion reason (never a git error reason).
+	var doc struct {
+		MetricErrors []struct {
+			Metric string `json:"metric"`
+			Grader string `json:"grader"`
+			Reason string `json:"reason"`
+		} `json:"metric_errors"`
+	}
+	require.NoError(t, json.Unmarshal(noGit, &doc))
+	pvMetrics := map[string]bool{}
+	for _, e := range doc.MetricErrors {
+		if e.Grader != "patch_validator" {
+			continue
+		}
+		pvMetrics[e.Metric] = true
+		assert.Contains(t, e.Reason, "excluded from the deterministic committed baseline",
+			"patch_validator metric_error %q carries a non-deterministic reason: %q", e.Metric, e.Reason)
+	}
+	assert.Equal(t, map[string]bool{
+		"files_modified":      true,
+		"edit_locality":       true,
+		"edit_distance_patch": true,
+	}, pvMetrics, "exactly the 3 explicit patch_validator baseline nulls must be present")
+}
+
 // TestAiderEditCellLiveRan is the HELIX_BIN "did it RUN" sentinel (fail-CLOSED).
 func TestAiderEditCellLiveRan(t *testing.T) {
 	helixBin := os.Getenv("HELIX_BIN")

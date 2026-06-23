@@ -59,6 +59,16 @@ type GradeInput struct {
 	// CompileErrorsBefore is the optional pre-patch compile-error count, threaded
 	// into test_runner. nil when no pre-patch outcome was captured.
 	CompileErrorsBefore *int
+	// SkipPatchValidator suppresses the two git-derived patch_validator graders
+	// (files_modified / edit_locality + edit_distance_patch) ENTIRELY: no git
+	// process is spawned, files_modified / edit_locality / edit_distance_patch
+	// stay nil, and NO patch_validator MetricError is appended. This is the
+	// byte-reproducible-baseline path (WR-01): the committed deterministic baseline
+	// must never embed an environment-specific git error string (e.g. "git not
+	// found on PATH") into the committed bytes, and the patch metrics are repo-
+	// derived (non-reproducible) anyway. Leaving it false preserves the normal
+	// live-cell behavior where git runs against RepoDir.
+	SkipPatchValidator bool
 }
 
 // Grade runs all five graders over in and assembles the full nullable Metrics
@@ -86,47 +96,53 @@ func Grade(ctx context.Context, in GradeInput) (evaluators.Metrics, []evaluators
 	}
 	errs = append(errs, tr.Errs...)
 
-	// --- patch_validator: files_modified + edit_locality.
-	// EditLocality may return a computable files_modified count TOGETHER with a
-	// locality MetricError (the zero-tracked-files case, where the locality
-	// denominator is undefined but the modified count is still known). Assign
-	// files_modified whenever the grader produced a value, independent of the
-	// locality error — D-07 nulls only the metric a grader could not compute, and
-	// files_modified is a separate, fully-computed metric that must not be nulled
-	// as collateral just because it shares a return tuple with edit_locality.
-	// When files_modified itself is uncomputable (modified == nil, e.g. git
-	// failed), the locErr is appended below so it carries a metric_errors[] entry
-	// rather than being silently null (MD-02).
-	loc, modified, locErr := patch_validator.EditLocality(ctx, in.RepoDir)
-	if modified != nil {
-		m.FilesModified = modified
-	}
-	if locErr != nil {
-		errs = append(errs, *locErr)
-		// If files_modified itself could not be computed (e.g. git absent / not a
-		// repo, where EditLocality returns a nil modified count), the locality
-		// error names only edit_locality — files_modified would otherwise be
-		// silently null with no annotation. Emit a dedicated files_modified
-		// metric_errors[] entry so every nulled metric carries its own provenance
-		// (D-07 / MD-02). When modified IS computable (zero-tracked path), no extra
-		// annotation is needed: the value is reported.
-		if modified == nil {
-			errs = append(errs, evaluators.MetricError{
-				Metric: "files_modified",
-				Grader: "patch_validator",
-				Reason: locErr.Reason,
-			})
+	// --- patch_validator: files_modified + edit_locality + edit_distance_patch.
+	// SkipPatchValidator (WR-01) gates the ENTIRE git-derived block: when set, no
+	// git process is spawned and all three patch metrics stay nil WITHOUT a
+	// MetricError, so the deterministic byte-reproducible baseline can never embed
+	// an environment-specific git error string into the committed bytes.
+	if !in.SkipPatchValidator {
+		// EditLocality may return a computable files_modified count TOGETHER with a
+		// locality MetricError (the zero-tracked-files case, where the locality
+		// denominator is undefined but the modified count is still known). Assign
+		// files_modified whenever the grader produced a value, independent of the
+		// locality error — D-07 nulls only the metric a grader could not compute, and
+		// files_modified is a separate, fully-computed metric that must not be nulled
+		// as collateral just because it shares a return tuple with edit_locality.
+		// When files_modified itself is uncomputable (modified == nil, e.g. git
+		// failed), the locErr is appended below so it carries a metric_errors[] entry
+		// rather than being silently null (MD-02).
+		loc, modified, locErr := patch_validator.EditLocality(ctx, in.RepoDir)
+		if modified != nil {
+			m.FilesModified = modified
 		}
-	} else {
-		m.EditLocality = loc
-	}
+		if locErr != nil {
+			errs = append(errs, *locErr)
+			// If files_modified itself could not be computed (e.g. git absent / not a
+			// repo, where EditLocality returns a nil modified count), the locality
+			// error names only edit_locality — files_modified would otherwise be
+			// silently null with no annotation. Emit a dedicated files_modified
+			// metric_errors[] entry so every nulled metric carries its own provenance
+			// (D-07 / MD-02). When modified IS computable (zero-tracked path), no extra
+			// annotation is needed: the value is reported.
+			if modified == nil {
+				errs = append(errs, evaluators.MetricError{
+					Metric: "files_modified",
+					Grader: "patch_validator",
+					Reason: locErr.Reason,
+				})
+			}
+		} else {
+			m.EditLocality = loc
+		}
 
-	// --- patch_validator: edit_distance_patch.
-	dist, distErr := patch_validator.EditDistancePatch(ctx, in.RepoDir)
-	if distErr != nil {
-		errs = append(errs, *distErr)
-	} else {
-		m.EditDistancePatch = dist
+		// --- patch_validator: edit_distance_patch.
+		dist, distErr := patch_validator.EditDistancePatch(ctx, in.RepoDir)
+		if distErr != nil {
+			errs = append(errs, *distErr)
+		} else {
+			m.EditDistancePatch = dist
+		}
 	}
 
 	// --- regression_checker: regression_rate (pre/post double-run).

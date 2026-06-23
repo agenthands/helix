@@ -80,23 +80,33 @@ func assembleAiderEditResult(in aiderEditResultInput) ([]byte, error) {
 	postOutcome := languages.TestOutcome{Passed: in.Passed, ExitCode: verifyExit}
 	// The aider-edit arm has no separate pre-patch snapshot (the stub is the pre-patch
 	// state); a zero-value pre-patch outcome keeps the grader contract identical.
+	//
+	// WR-01 (byte-reproducible baseline must be git-independent): the patch_validator
+	// graders are SKIPPED entirely via SkipPatchValidator — NO git process is spawned
+	// during baseline assembly, so the committed bytes can never embed an
+	// environment-specific git error string (e.g. "git not found on PATH") into
+	// metric_errors and diverge across machines/CI. The patch_validator metrics are
+	// repo-derived (non-reproducible) anyway, so they are explicitly nulled below with
+	// an honest "excluded from the deterministic baseline" annotation. RepoDir is left
+	// empty because it is never consulted on the skip path.
 	metrics, metricErrs := coordinator.Grade(context.Background(), coordinator.GradeInput{
-		TestOutcome:     postOutcome,
-		PrePatchOutcome: languages.TestOutcome{},
-		RepoDir:         "",
-		Merged:          trace.MergedTrace{},
-		UsagePresent:    false,
-		Agent:           "scripted",
+		TestOutcome:        postOutcome,
+		PrePatchOutcome:    languages.TestOutcome{},
+		RepoDir:            "",
+		Merged:             trace.MergedTrace{},
+		UsagePresent:       false,
+		Agent:              "scripted",
+		SkipPatchValidator: true,
 	})
 
 	// Pitfall 3 (non-reproducible committed baseline): the patch_validator metrics
-	// (files_modified / edit_locality / edit_distance_patch) are computed from a LIVE
-	// git working tree (RepoDir) — they vary with the machine's repo state and the
-	// ephemeral scratch path, so they are NOT byte-reproducible and MUST NOT enter the
-	// committed baseline. NULL them explicitly (an honest "not computed for the
-	// deterministic baseline" null, never a fabricated value) and record the reason in
-	// the metric_errors annotations so the row stays self-describing. Only the truly
-	// deterministic quality metrics (task_success, verified_correctness,
+	// (files_modified / edit_locality / edit_distance_patch) are repo-derived — they
+	// vary with the machine's git working tree, so they are NOT byte-reproducible and
+	// MUST NOT enter the committed baseline. They are NOT computed at all here
+	// (SkipPatchValidator above suppresses the git graders), so they are already nil;
+	// the explicit nil assignments below are belt-and-suspenders. Record the exclusion
+	// reason in the metric_errors annotations so the row stays self-describing. Only
+	// the truly deterministic quality metrics (task_success, verified_correctness,
 	// edit_format_applied, outcome) survive into the committed bytes.
 	metrics.FilesModified = nil
 	metrics.EditLocality = nil

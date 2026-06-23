@@ -28,16 +28,18 @@
 **Coverage:** 7/7 v2.2 requirements mapped (BUNDLE-01/02, REFGEN-01, SKILL-01/02/03, TUNE-01) — 0 unmapped, 0 double-mapped.
 
 **Cross-cutting constraints (carried into success criteria where relevant):**
+
 - **No runtime Python / single-binary preserved** — DSPy is dev-time/offline only; no `helix` subcommand shells to Python, no `go.mod`/`helix setup` edge; a `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path.
 - **`reference.md` is generated, never hand-edited** — all reference corrections go through the generator; the Phase 97 `helix-refgen --check` byte-reproducibility gate and the `reference ⊇ VerbToolNames()` contract stay green.
 - **Anti-vacuity (every gate)** — each new/hardened gate (closed-set bundle test, hardened exact-count contract, generator vacuity guards, leakage analyzer) ships a deliberate break-the-invariant → assert-RED test. A gate with only a green-path test is presumed broken (anchored to the repeated Phase 86/87/89 CR-01 vacuous-pass class).
 
 **Phase ordering rationale (dependency-driven, deterministic-before-exploratory — load-bearing, from research SUMMARY):**
+
 - **103 before 104/105:** the embed-glob leak is LIVE (the binary + every `helix setup` already ship the 18 KB `SKILL-ISSUE.md`); the closed-set allowlist must land BEFORE the dir churns, and the `reference ⊇ VerbToolNames()` contract must be hardened to exact-count==50 BEFORE the format rewrite or it can pass `∅ ⊇ ∅` vacuously.
 - **104 (generator/reference) before 105 (SKILL.md):** the on-demand reference must be correct before the idle-tier matrix is re-authored, so the two tell one consistent story.
 - **106 strictly last:** DSPy tunes against a frozen metric and the stabilized 104/105 surface; it is an exploratory spike with a possible no-ship outcome and a clean Go-search-loop fallback.
 
-- [ ] **Phase 103: Bundle Integrity & Non-Vacuous Reference Contract** - `installSkill` closed-set allowlist + exact-set bundle test, move `SKILL-ISSUE.md` out of the embed dir, harden the reference-completeness contract to exact-count (==50) discriminating a known-absent verb
+- [x] **Phase 103: Bundle Integrity & Non-Vacuous Reference Contract** - `installSkill` closed-set allowlist + exact-set bundle test, move `SKILL-ISSUE.md` out of the embed dir, harden the reference-completeness contract to exact-count (==50) discriminating a known-absent verb (completed 2026-06-23)
 - [ ] **Phase 104: Reference Generator Per-Verb Correctness** - fix the `cmd/helix-refgen`/`cmd/helix-cligen` group-collapse via per-verb overrides so every "use this/not that" + "Output" line is correct; regenerated `reference.md` passes `--check` byte-for-byte
 - [ ] **Phase 105: SKILL.md Decision-Matrix Rewrite** - split QUERY/ACTION rows, "Not this" on every row, indexed-graph prerequisite notes, regroup by capability; preserve the `## Decision matrix` StripDecisionMatrix anchor + the SKILL-04 idle-cost size cap
 - [ ] **Phase 106: Exploratory DSPy Offline Tuning Harness (spike)** - opt-in dev-time-only Python harness under `tools/`, no runtime Python dep, off `go test ./...`; optimizes against the Phase 101 `adopt` scorecard (parity-pinned Python metric) with overfit/gaming guards; may no-ship; a `vet`-style analyzer blocks Python/runtime leakage
@@ -45,48 +47,61 @@
 ## Phase Details
 
 ### Phase 103: Bundle Integrity & Non-Vacuous Reference Contract
+
 **Goal**: `helix setup` installs exactly the two skill-bundle files and nothing else, the embedded bundle can no longer leak stray files into the binary or onto users' disks, and the reference-completeness gate is hardened to be discriminating BEFORE any reference/skill text churns.
 **Depends on**: Nothing (first phase of v2.2; the smallest-blast-radius safety patch)
 **Requirements**: BUNDLE-01, BUNDLE-02
 **Success Criteria** (what must be TRUE):
+
   1. After `helix setup`, the installed skill directory contains exactly `{SKILL.md, reference.md}` and no other file — a bundle-contents test asserts the installed set equals exactly that pair and goes RED on any stray file in `internal/cli/skills/helix/`.
   2. `SKILL-ISSUE.md` no longer compiles into the `helix` binary or installs to users — it has been moved out of the embed dir, and `installSkill`/`uninstallSkill` drive an explicit closed-set allowlist (filter applied once up front; atomic stage→rename and `withinSkillRoot` containment unchanged; uninstall filtered identically).
   3. The reference-completeness contract test is non-vacuous: it asserts the generated `reference.md` covers the frozen verb set by EXACT count (`== len(VerbToolNames())`, currently 50) and goes RED when a known verb is absent — proven by a deliberate break-the-invariant assertion that runs RED before the fix.
   4. The hardened contract lands BEFORE the Phase 104/105 reference and skill rewrites, so the superset check cannot pass vacuously (`∅ ⊇ ∅`) through the format churn.
-**Plans**: 1 plan
-- [ ] 103-01-PLAN.md — closed-set bundleFiles allowlist on install+uninstall + RED-first closed-set bundle test, move SKILL-ISSUE.md out of the embed dir, seal the reference contract with a fabricated-absent-verb discriminator (BUNDLE-01, BUNDLE-02)
+
+**Plans**: 1/1 plans complete
+
+- [x] 103-01-PLAN.md — closed-set bundleFiles allowlist on install+uninstall + RED-first closed-set bundle test, move SKILL-ISSUE.md out of the embed dir, seal the reference contract with a fabricated-absent-verb discriminator (BUNDLE-01, BUNDLE-02)
 
 ### Phase 104: Reference Generator Per-Verb Correctness
+
 **Goal**: Every verb's "use this, not that" and "Output" lines in the generated `reference.md` are correct for that verb's actual semantics, fixed at the generator root cause (the group collapse), with the corrected `reference.md` regenerated, committed, and reproducible.
 **Depends on**: Phase 103 (clean embed dir → no stray-file noise in the generated bundle or its tests)
 **Requirements**: REFGEN-01
 **Success Criteria** (what must be TRUE):
+
   1. The group-collapse root cause is fixed in the GENERATOR (`cmd/helix-refgen`/`cmd/helix-cligen`) via a per-verb override map with group-default fallback — NOT by hand-editing the generated `reference.md` — so verbs that previously inherited the wrong group's `memory`-query prose (e.g. `switch-mode`, `get-token-budget`, `onboard-project`, `get-health`, `get-tool-help`, mutating memory verbs) now read correctly.
   2. The regenerated `reference.md` is committed and passes `helix-refgen --check` byte-for-byte (`git diff` is empty after a fresh regen).
   3. The `reference ⊇ VerbToolNames()` contract and the Phase 97 `--check` drift gate stay green, and the blank-import parity between the generator and the daemon is re-verified when touching refgen.
   4. Vacuity guards prove the override map is real: no override key is a non-verb, and an overridden Output line differs from the old group default it replaced (deliberate break-the-invariant test).
+
 **Plans**: TBD
 
 ### Phase 105: SKILL.md Decision-Matrix Rewrite
+
 **Goal**: The hand-authored `SKILL.md` decision matrix routes an agent's single intent to a single correct tool, with no QUERY/ACTION row mixing, explicit "Not this" guidance on every row, indexed-graph prerequisite notes, and capability-based grouping — consistent with the now-correct generated reference.
 **Depends on**: Phase 104 (the on-demand reference must be correct first, so SKILL.md and reference.md tell one consistent story)
 **Requirements**: SKILL-01, SKILL-02, SKILL-03
 **Success Criteria** (what must be TRUE):
+
   1. No decision-matrix row mixes a QUERY (read-state) verb with an ACTION (mutate-state) verb — query and action verbs occupy separate rows (resolves the SKILL-ISSUE.md rows 68/70/71/72/73 grouping errors).
   2. Every decision-matrix row carries explicit "Not this" guidance — no `—` placeholders remain (the concrete grep/sed/cat/find fallback each verb displaces is named, per the CLAUDE.md routing table as canonical source).
   3. Every indexed-graph verb (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`) carries a "requires `index-semantic-graph` first" prerequisite note, and the matrix is grouped by capability.
   4. The `## Decision matrix` heading (the `StripDecisionMatrix` anchor) is preserved, the rewritten `SKILL.md` stays under the SKILL-04 idle-cost (size) cap, and a SKILL.md↔`VerbToolNames()` cross-check test holds.
+
 **Plans**: TBD
 
 ### Phase 106: Exploratory DSPy Offline Tuning Harness (spike)
+
 **Goal**: An opt-in, dev-time-only DSPy harness can optimize the agent-facing skill/steering text against the Phase 101 adoption scorecard metric and report whether tuning beats the deterministic baseline — with a possible no-ship outcome — while the shipped `helix` binary and `go test ./...` remain 100% Python-free.
 **Depends on**: Phase 105 (tunes against the stabilized 104/105 surface and a frozen metric; tuning a moving target wastes optimizer budget)
 **Requirements**: TUNE-01
 **Success Criteria** (what must be TRUE):
+
   1. The DSPy harness lives under `tools/` as an opt-in dev-time tree (its own pinned `requirements.txt` + git-ignored venv/output), is excluded from `go test ./...`, and adds NO runtime Python dependency to the `helix` binary or `helix setup`.
   2. The harness optimizes the agent-facing skill/steering text against the Phase 101 adoption metric, re-implemented in Python with a golden parity cross-check against the Go `test/oracle/adopt` classifier (the same `choice_rate`/`fallback_rate` scorer drives both the Go gate and the Python optimizer).
   3. Overfit and metric-gaming guards are in place — a held-out TEST split the optimizer never sees, and a degenerate-steering inspection — and the harness may legitimately conclude no-ship (the clean fallback being a hand-rolled Go candidate-search loop keeping the milestone 100% Go).
   4. Any adopted output re-enters only as a human-reviewed commit through SKILL.md/refgen and passes `helix-refgen --check`; a `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path (the artifact is gated, never the optimizer process).
+
 **Plans**: TBD
 **Needs phase-level research**: yes — exploratory spike (corpus-split design, Python↔Go classifier parity contract, metric-AND-quality-oracle composition, leakage-analyzer design); highest uncertainty, mark as spike not a hard adoption-delta gate.
 
@@ -94,7 +109,7 @@
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 0/1 | Not started | - |
+| 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 0/TBD | Not started | - |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/TBD | Not started | - |
 | 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |

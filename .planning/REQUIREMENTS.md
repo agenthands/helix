@@ -8,8 +8,8 @@
 
 ### Bundle Integrity (BUNDLE)
 
-- [ ] **BUNDLE-01**: `helix setup` installs exactly the two skill-bundle files (`SKILL.md` + `reference.md`) — `installSkill`/`uninstallSkill` use an explicit closed-set allowlist, and a bundle-contents test asserts the installed set equals **exactly** `{SKILL.md, reference.md}` (goes RED on any stray file in `internal/cli/skills/helix/`). `SKILL-ISSUE.md` is moved out of the embed dir so it no longer compiles into the binary or installs to users.
-- [ ] **BUNDLE-02**: the reference-completeness contract test is hardened to be non-vacuous — it asserts the generated `reference.md` covers the frozen verb set by **exact count** (`== len(VerbToolNames())`, currently 50) and goes RED when a known verb is absent — landed **before** the reference/skill format rewrite so the gate cannot pass vacuously through the churn.
+- [x] **BUNDLE-01**: `helix setup` installs exactly the two skill-bundle files (`SKILL.md` + `reference.md`) — `installSkill`/`uninstallSkill` use an explicit closed-set allowlist, and a bundle-contents test asserts the installed set equals **exactly** `{SKILL.md, reference.md}` (goes RED on any stray file in `internal/cli/skills/helix/`). `SKILL-ISSUE.md` is moved out of the embed dir so it no longer compiles into the binary or installs to users.
+- [x] **BUNDLE-02**: the reference-completeness contract test is hardened to be non-vacuous — it asserts the generated `reference.md` covers the frozen verb set by **exact count** (`== len(VerbToolNames())`, currently 50) and goes RED when a known verb is absent — landed **before** the reference/skill format rewrite so the gate cannot pass vacuously through the churn.
 
 ### Reference Generator Correctness (REFGEN)
 
@@ -42,8 +42,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUNDLE-01 | Phase 103 | Pending |
-| BUNDLE-02 | Phase 103 | Pending |
+| BUNDLE-01 | Phase 103 | Complete |
+| BUNDLE-02 | Phase 103 | Complete |
 | REFGEN-01 | Phase 104 | Pending |
 | SKILL-01 | Phase 105 | Pending |
 | SKILL-02 | Phase 105 | Pending |

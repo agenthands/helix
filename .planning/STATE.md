@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 101 — opt-in-llm-behavioral-adoption-scorecard
+**Current focus:** Phase 102 — RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
 
 ## Current Position
 
 Phase: 102 — RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
 Plan: Not started
-Status: Executing Phase 101
-Last activity: 2026-06-23 — Phase 101 complete, transitioned to Phase 102
+Status: Ready to plan Phase 102
+Last activity: 2026-06-23 — Phase 101 verified (UAT 9/9) + threat-secured (9/9 closed); ready to plan Phase 102
 
 ## Performance Metrics
 

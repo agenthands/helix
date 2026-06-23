@@ -8,7 +8,15 @@
       "book_store.go:groupCost",
       "book_store_test.go:TestCost",
       "cases_test.go:testCases",
-      "book_store_test.go:BenchmarkCost"
+      "book_store_test.go:BenchmarkCost",
+      "book_store_test.go:noise1",
+      "book_store_test.go:noise2",
+      "book_store_test.go:noise3",
+      "book_store_test.go:noise4",
+      "book_store_test.go:noise5",
+      "book_store_test.go:noise6",
+      "book_store_test.go:noise7",
+      "book_store_test.go:noise8"
     ],
     "context": [
       "book_store.go:Cost",
@@ -17,7 +25,15 @@
       "book_store.go:cost",
       "book_store.go:groupCost",
       "book_store_test.go:TestCost",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "book_store_test.go:noise1",
+      "book_store_test.go:noise2",
+      "book_store_test.go:noise3",
+      "book_store_test.go:noise4",
+      "book_store_test.go:noise5",
+      "book_store_test.go:noise6",
+      "book_store_test.go:noise7",
+      "book_store_test.go:noise8"
     ]
   },
   "bowling": {
@@ -29,7 +45,15 @@
       "bowling.go:Game.rollsThisFrame",
       "bowling_test.go:TestGame",
       "cases_test.go:testCases",
-      "bowling.go:Game.spareBonus"
+      "bowling.go:Game.spareBonus",
+      "bowling_test.go:noise1",
+      "bowling_test.go:noise2",
+      "bowling_test.go:noise3",
+      "bowling_test.go:noise4",
+      "bowling_test.go:noise5",
+      "bowling_test.go:noise6",
+      "bowling_test.go:noise7",
+      "bowling_test.go:noise8"
     ],
     "context": [
       "bowling.go:Game",
@@ -38,7 +62,15 @@
       "bowling.go:NewGame",
       "bowling.go:Game.rollsThisFrame",
       "bowling_test.go:TestGame",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "bowling_test.go:noise1",
+      "bowling_test.go:noise2",
+      "bowling_test.go:noise3",
+      "bowling_test.go:noise4",
+      "bowling_test.go:noise5",
+      "bowling_test.go:noise6",
+      "bowling_test.go:noise7",
+      "bowling_test.go:noise8"
     ]
   },
   "forth": {
@@ -50,7 +82,15 @@
       "forth.go:push",
       "forth_test.go:TestForth",
       "cases_test.go:testCases",
-      "forth.go:pop"
+      "forth.go:pop",
+      "forth_test.go:noise1",
+      "forth_test.go:noise2",
+      "forth_test.go:noise3",
+      "forth_test.go:noise4",
+      "forth_test.go:noise5",
+      "forth_test.go:noise6",
+      "forth_test.go:noise7",
+      "forth_test.go:noise8"
     ],
     "context": [
       "forth.go:Forth",
@@ -59,7 +99,15 @@
       "forth.go:push",
       "forth.go:operatorFn",
       "forth_test.go:TestForth",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "forth_test.go:noise1",
+      "forth_test.go:noise2",
+      "forth_test.go:noise3",
+      "forth_test.go:noise4",
+      "forth_test.go:noise5",
+      "forth_test.go:noise6",
+      "forth_test.go:noise7",
+      "forth_test.go:noise8"
     ]
   },
   "pig-latin": {
@@ -68,13 +116,29 @@
       "pig_latin.go:Word",
       "pig_latin_test.go:TestSentence",
       "cases_test.go:testCases",
-      "pig_latin_test.go:BenchmarkSentence"
+      "pig_latin_test.go:BenchmarkSentence",
+      "pig_latin_test.go:noise1",
+      "pig_latin_test.go:noise2",
+      "pig_latin_test.go:noise3",
+      "pig_latin_test.go:noise4",
+      "pig_latin_test.go:noise5",
+      "pig_latin_test.go:noise6",
+      "pig_latin_test.go:noise7",
+      "pig_latin_test.go:noise8"
     ],
     "context": [
       "pig_latin.go:Sentence",
       "pig_latin.go:Word",
       "pig_latin_test.go:TestSentence",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "pig_latin_test.go:noise1",
+      "pig_latin_test.go:noise2",
+      "pig_latin_test.go:noise3",
+      "pig_latin_test.go:noise4",
+      "pig_latin_test.go:noise5",
+      "pig_latin_test.go:noise6",
+      "pig_latin_test.go:noise7",
+      "pig_latin_test.go:noise8"
     ]
   },
   "poker": {
@@ -86,7 +150,15 @@
       "poker.go:card",
       "poker_test.go:TestPoker",
       "cases_test.go:testCases",
-      "poker.go:isFlush"
+      "poker.go:isFlush",
+      "poker_test.go:noise1",
+      "poker_test.go:noise2",
+      "poker_test.go:noise3",
+      "poker_test.go:noise4",
+      "poker_test.go:noise5",
+      "poker_test.go:noise6",
+      "poker_test.go:noise7",
+      "poker_test.go:noise8"
     ],
     "context": [
       "poker.go:BestHand",
@@ -95,7 +167,15 @@
       "poker.go:handValue",
       "poker.go:card",
       "poker_test.go:TestPoker",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "poker_test.go:noise1",
+      "poker_test.go:noise2",
+      "poker_test.go:noise3",
+      "poker_test.go:noise4",
+      "poker_test.go:noise5",
+      "poker_test.go:noise6",
+      "poker_test.go:noise7",
+      "poker_test.go:noise8"
     ]
   },
   "react": {
@@ -107,7 +187,15 @@
       "react.go:cell.SetValue",
       "react_test.go:TestReact",
       "cases_test.go:testCases",
-      "react.go:reactor.trigger"
+      "react.go:reactor.trigger",
+      "react_test.go:noise1",
+      "react_test.go:noise2",
+      "react_test.go:noise3",
+      "react_test.go:noise4",
+      "react_test.go:noise5",
+      "react_test.go:noise6",
+      "react_test.go:noise7",
+      "react_test.go:noise8"
     ],
     "context": [
       "react.go:New",
@@ -116,7 +204,15 @@
       "react.go:cell",
       "react.go:cell.SetValue",
       "react_test.go:TestReact",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "react_test.go:noise1",
+      "react_test.go:noise2",
+      "react_test.go:noise3",
+      "react_test.go:noise4",
+      "react_test.go:noise5",
+      "react_test.go:noise6",
+      "react_test.go:noise7",
+      "react_test.go:noise8"
     ]
   },
   "two-bucket": {
@@ -128,7 +224,15 @@
       "two_bucket.go:performStep",
       "two_bucket_test.go:TestSolve",
       "cases_test.go:testCases",
-      "two_bucket.go:pour"
+      "two_bucket.go:pour",
+      "two_bucket_test.go:noise1",
+      "two_bucket_test.go:noise2",
+      "two_bucket_test.go:noise3",
+      "two_bucket_test.go:noise4",
+      "two_bucket_test.go:noise5",
+      "two_bucket_test.go:noise6",
+      "two_bucket_test.go:noise7",
+      "two_bucket_test.go:noise8"
     ],
     "context": [
       "two_bucket.go:Solve",
@@ -137,7 +241,15 @@
       "two_bucket.go:problem",
       "two_bucket.go:state",
       "two_bucket_test.go:TestSolve",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "two_bucket_test.go:noise1",
+      "two_bucket_test.go:noise2",
+      "two_bucket_test.go:noise3",
+      "two_bucket_test.go:noise4",
+      "two_bucket_test.go:noise5",
+      "two_bucket_test.go:noise6",
+      "two_bucket_test.go:noise7",
+      "two_bucket_test.go:noise8"
     ]
   },
   "variable-length-quantity": {
@@ -148,7 +260,15 @@
       "variable_length_quantity.go:decodeInt",
       "variable_length_quantity_test.go:TestEncode",
       "cases_test.go:testCases",
-      "variable_length_quantity_test.go:TestDecode"
+      "variable_length_quantity_test.go:TestDecode",
+      "variable_length_quantity_test.go:noise1",
+      "variable_length_quantity_test.go:noise2",
+      "variable_length_quantity_test.go:noise3",
+      "variable_length_quantity_test.go:noise4",
+      "variable_length_quantity_test.go:noise5",
+      "variable_length_quantity_test.go:noise6",
+      "variable_length_quantity_test.go:noise7",
+      "variable_length_quantity_test.go:noise8"
     ],
     "context": [
       "variable_length_quantity.go:EncodeVarint",
@@ -156,7 +276,15 @@
       "variable_length_quantity.go:encodeInt",
       "variable_length_quantity.go:decodeInt",
       "variable_length_quantity_test.go:TestEncode",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "variable_length_quantity_test.go:noise1",
+      "variable_length_quantity_test.go:noise2",
+      "variable_length_quantity_test.go:noise3",
+      "variable_length_quantity_test.go:noise4",
+      "variable_length_quantity_test.go:noise5",
+      "variable_length_quantity_test.go:noise6",
+      "variable_length_quantity_test.go:noise7",
+      "variable_length_quantity_test.go:noise8"
     ]
   },
   "wordy": {
@@ -164,12 +292,28 @@
       "wordy.go:Answer",
       "wordy_test.go:TestAnswer",
       "cases_test.go:testCases",
-      "wordy_test.go:BenchmarkAnswer"
+      "wordy_test.go:BenchmarkAnswer",
+      "wordy_test.go:noise1",
+      "wordy_test.go:noise2",
+      "wordy_test.go:noise3",
+      "wordy_test.go:noise4",
+      "wordy_test.go:noise5",
+      "wordy_test.go:noise6",
+      "wordy_test.go:noise7",
+      "wordy_test.go:noise8"
     ],
     "context": [
       "wordy.go:Answer",
       "wordy_test.go:TestAnswer",
-      "cases_test.go:testCases"
+      "cases_test.go:testCases",
+      "wordy_test.go:noise1",
+      "wordy_test.go:noise2",
+      "wordy_test.go:noise3",
+      "wordy_test.go:noise4",
+      "wordy_test.go:noise5",
+      "wordy_test.go:noise6",
+      "wordy_test.go:noise7",
+      "wordy_test.go:noise8"
     ]
   }
 }

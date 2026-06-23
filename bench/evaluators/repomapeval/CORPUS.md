@@ -76,8 +76,12 @@ adversarial rankers must individually score below forward (the discriminator
 BITES). The committed margin constant is `DiscriminatorMargin` in `rankers.go`:
 
 - **`DiscriminatorMargin = 0.30`.** Chosen after observing the real forward-vs-
-  reversed spread on this authored corpus: forward mean nDCG@10 is ≈1.0 (gold is
-  front-loaded), reversed/random sink well below it because the gold prefix is
-  pushed off the top-k discount window. 0.30 sits comfortably under the observed
-  spread (≥0.2 is the guide per D-09/A6) while leaving headroom so a near-tie on
-  a small corpus cannot sneak through.
+  adversarial spread on this authored corpus (n=28 exercises across py/go/rust):
+  forward mean nDCG@10 ≈ 1.0 (gold is front-loaded), reversed ≈ 0.005 (the gold
+  prefix is pushed entirely off the top-10 discount window — each captured
+  ranking carries a >10-ID noise tail), and seeded-random ≈ 0.52 (a shuffle
+  still keeps some gold inside the top-10 on these short rankings). The binding
+  constraint is `forward - max(reversed, random) ≈ 1.0 - 0.52 = 0.48`. 0.30 sits
+  comfortably under that observed spread (≥0.2 is the guide per D-09/A6) while
+  leaving ≈0.18 of headroom so a near-tie on a small corpus cannot sneak a
+  vacuous pass through.

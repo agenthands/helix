@@ -6,14 +6,30 @@
       "src/lib.rs:basket_price",
       "src/lib.rs:DecomposeGroups",
       "tests/book-store.rs:lonely_book",
-      "tests/book-store.rs:two_different_books"
+      "tests/book-store.rs:two_different_books",
+      "tests/book-store.rs:noise_1",
+      "tests/book-store.rs:noise_2",
+      "tests/book-store.rs:noise_3",
+      "tests/book-store.rs:noise_4",
+      "tests/book-store.rs:noise_5",
+      "tests/book-store.rs:noise_6",
+      "tests/book-store.rs:noise_7",
+      "tests/book-store.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:lowest_price",
       "src/lib.rs:Group",
       "src/lib.rs:DecomposeGroups",
       "src/lib.rs:basket_price",
-      "tests/book-store.rs:lonely_book"
+      "tests/book-store.rs:lonely_book",
+      "tests/book-store.rs:noise_1",
+      "tests/book-store.rs:noise_2",
+      "tests/book-store.rs:noise_3",
+      "tests/book-store.rs:noise_4",
+      "tests/book-store.rs:noise_5",
+      "tests/book-store.rs:noise_6",
+      "tests/book-store.rs:noise_7",
+      "tests/book-store.rs:noise_8"
     ]
   },
   "bowling": {
@@ -22,13 +38,29 @@
       "src/lib.rs:Frame",
       "src/lib.rs:Error",
       "tests/bowling.rs:should_be_able_to_score_a_game_with_all_zeros",
-      "tests/bowling.rs:a_roll_cannot_score_more_than_10_points"
+      "tests/bowling.rs:a_roll_cannot_score_more_than_10_points",
+      "tests/bowling.rs:noise_1",
+      "tests/bowling.rs:noise_2",
+      "tests/bowling.rs:noise_3",
+      "tests/bowling.rs:noise_4",
+      "tests/bowling.rs:noise_5",
+      "tests/bowling.rs:noise_6",
+      "tests/bowling.rs:noise_7",
+      "tests/bowling.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:BowlingGame",
       "src/lib.rs:Frame",
       "src/lib.rs:Error",
-      "tests/bowling.rs:should_be_able_to_score_a_game_with_all_zeros"
+      "tests/bowling.rs:should_be_able_to_score_a_game_with_all_zeros",
+      "tests/bowling.rs:noise_1",
+      "tests/bowling.rs:noise_2",
+      "tests/bowling.rs:noise_3",
+      "tests/bowling.rs:noise_4",
+      "tests/bowling.rs:noise_5",
+      "tests/bowling.rs:noise_6",
+      "tests/bowling.rs:noise_7",
+      "tests/bowling.rs:noise_8"
     ]
   },
   "forth": {
@@ -39,7 +71,15 @@
       "src/lib.rs:Op",
       "src/lib.rs:Error",
       "tests/forth.rs:no_input_no_stack",
-      "tests/forth.rs:numbers_just_get_pushed_onto_the_stack"
+      "tests/forth.rs:numbers_just_get_pushed_onto_the_stack",
+      "tests/forth.rs:noise_1",
+      "tests/forth.rs:noise_2",
+      "tests/forth.rs:noise_3",
+      "tests/forth.rs:noise_4",
+      "tests/forth.rs:noise_5",
+      "tests/forth.rs:noise_6",
+      "tests/forth.rs:noise_7",
+      "tests/forth.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:Forth",
@@ -47,18 +87,42 @@
       "src/lib.rs:eval_op",
       "src/lib.rs:Op",
       "src/lib.rs:Error",
-      "tests/forth.rs:no_input_no_stack"
+      "tests/forth.rs:no_input_no_stack",
+      "tests/forth.rs:noise_1",
+      "tests/forth.rs:noise_2",
+      "tests/forth.rs:noise_3",
+      "tests/forth.rs:noise_4",
+      "tests/forth.rs:noise_5",
+      "tests/forth.rs:noise_6",
+      "tests/forth.rs:noise_7",
+      "tests/forth.rs:noise_8"
     ]
   },
   "leap": {
     "repo_map": [
       "src/lib.rs:is_leap_year",
       "tests/leap.rs:year_not_divisible_by_4_in_common_year",
-      "tests/leap.rs:year_divisible_by_4_not_divisible_by_100_in_leap_year"
+      "tests/leap.rs:year_divisible_by_4_not_divisible_by_100_in_leap_year",
+      "tests/leap.rs:noise_1",
+      "tests/leap.rs:noise_2",
+      "tests/leap.rs:noise_3",
+      "tests/leap.rs:noise_4",
+      "tests/leap.rs:noise_5",
+      "tests/leap.rs:noise_6",
+      "tests/leap.rs:noise_7",
+      "tests/leap.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:is_leap_year",
-      "tests/leap.rs:year_not_divisible_by_4_in_common_year"
+      "tests/leap.rs:year_not_divisible_by_4_in_common_year",
+      "tests/leap.rs:noise_1",
+      "tests/leap.rs:noise_2",
+      "tests/leap.rs:noise_3",
+      "tests/leap.rs:noise_4",
+      "tests/leap.rs:noise_5",
+      "tests/leap.rs:noise_6",
+      "tests/leap.rs:noise_7",
+      "tests/leap.rs:noise_8"
     ]
   },
   "pig-latin": {
@@ -66,12 +130,28 @@
       "src/lib.rs:translate",
       "src/lib.rs:translate_word",
       "tests/pig-latin.rs:word_beginning_with_a",
-      "tests/pig-latin.rs:word_beginning_with_e"
+      "tests/pig-latin.rs:word_beginning_with_e",
+      "tests/pig-latin.rs:noise_1",
+      "tests/pig-latin.rs:noise_2",
+      "tests/pig-latin.rs:noise_3",
+      "tests/pig-latin.rs:noise_4",
+      "tests/pig-latin.rs:noise_5",
+      "tests/pig-latin.rs:noise_6",
+      "tests/pig-latin.rs:noise_7",
+      "tests/pig-latin.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:translate",
       "src/lib.rs:translate_word",
-      "tests/pig-latin.rs:word_beginning_with_a"
+      "tests/pig-latin.rs:word_beginning_with_a",
+      "tests/pig-latin.rs:noise_1",
+      "tests/pig-latin.rs:noise_2",
+      "tests/pig-latin.rs:noise_3",
+      "tests/pig-latin.rs:noise_4",
+      "tests/pig-latin.rs:noise_5",
+      "tests/pig-latin.rs:noise_6",
+      "tests/pig-latin.rs:noise_7",
+      "tests/pig-latin.rs:noise_8"
     ]
   },
   "poker": {
@@ -83,7 +163,15 @@
       "src/lib.rs:Rank",
       "src/lib.rs:Suit",
       "tests/poker.rs:single_hand_always_wins",
-      "tests/poker.rs:highest_card_out_of_all_hands_wins"
+      "tests/poker.rs:highest_card_out_of_all_hands_wins",
+      "tests/poker.rs:noise_1",
+      "tests/poker.rs:noise_2",
+      "tests/poker.rs:noise_3",
+      "tests/poker.rs:noise_4",
+      "tests/poker.rs:noise_5",
+      "tests/poker.rs:noise_6",
+      "tests/poker.rs:noise_7",
+      "tests/poker.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:winning_hands",
@@ -92,7 +180,15 @@
       "src/lib.rs:Card",
       "src/lib.rs:Rank",
       "src/lib.rs:Suit",
-      "tests/poker.rs:single_hand_always_wins"
+      "tests/poker.rs:single_hand_always_wins",
+      "tests/poker.rs:noise_1",
+      "tests/poker.rs:noise_2",
+      "tests/poker.rs:noise_3",
+      "tests/poker.rs:noise_4",
+      "tests/poker.rs:noise_5",
+      "tests/poker.rs:noise_6",
+      "tests/poker.rs:noise_7",
+      "tests/poker.rs:noise_8"
     ]
   },
   "react": {
@@ -103,7 +199,15 @@
       "src/lib.rs:ComputeCellId",
       "src/lib.rs:Cell",
       "tests/react.rs:input_cells_have_a_value",
-      "tests/react.rs:an_input_cell_s_value_can_be_set"
+      "tests/react.rs:an_input_cell_s_value_can_be_set",
+      "tests/react.rs:noise_1",
+      "tests/react.rs:noise_2",
+      "tests/react.rs:noise_3",
+      "tests/react.rs:noise_4",
+      "tests/react.rs:noise_5",
+      "tests/react.rs:noise_6",
+      "tests/react.rs:noise_7",
+      "tests/react.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:Reactor",
@@ -111,7 +215,15 @@
       "src/lib.rs:InputCellId",
       "src/lib.rs:ComputeCellId",
       "src/lib.rs:Cell",
-      "tests/react.rs:input_cells_have_a_value"
+      "tests/react.rs:input_cells_have_a_value",
+      "tests/react.rs:noise_1",
+      "tests/react.rs:noise_2",
+      "tests/react.rs:noise_3",
+      "tests/react.rs:noise_4",
+      "tests/react.rs:noise_5",
+      "tests/react.rs:noise_6",
+      "tests/react.rs:noise_7",
+      "tests/react.rs:noise_8"
     ]
   },
   "two-bucket": {
@@ -120,13 +232,29 @@
       "src/lib.rs:BucketStats",
       "src/lib.rs:Bucket",
       "tests/two-bucket.rs:goal_equal_to_start_bucket",
-      "tests/two-bucket.rs:not_possible_to_reach_the_goal"
+      "tests/two-bucket.rs:not_possible_to_reach_the_goal",
+      "tests/two-bucket.rs:noise_1",
+      "tests/two-bucket.rs:noise_2",
+      "tests/two-bucket.rs:noise_3",
+      "tests/two-bucket.rs:noise_4",
+      "tests/two-bucket.rs:noise_5",
+      "tests/two-bucket.rs:noise_6",
+      "tests/two-bucket.rs:noise_7",
+      "tests/two-bucket.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:solve",
       "src/lib.rs:BucketStats",
       "src/lib.rs:Bucket",
-      "tests/two-bucket.rs:goal_equal_to_start_bucket"
+      "tests/two-bucket.rs:goal_equal_to_start_bucket",
+      "tests/two-bucket.rs:noise_1",
+      "tests/two-bucket.rs:noise_2",
+      "tests/two-bucket.rs:noise_3",
+      "tests/two-bucket.rs:noise_4",
+      "tests/two-bucket.rs:noise_5",
+      "tests/two-bucket.rs:noise_6",
+      "tests/two-bucket.rs:noise_7",
+      "tests/two-bucket.rs:noise_8"
     ]
   },
   "variable-length-quantity": {
@@ -136,14 +264,30 @@
       "src/lib.rs:to_bytes_single",
       "src/lib.rs:Error",
       "tests/variable-length-quantity.rs:zero",
-      "tests/variable-length-quantity.rs:arbitrary_single_byte"
+      "tests/variable-length-quantity.rs:arbitrary_single_byte",
+      "tests/variable-length-quantity.rs:noise_1",
+      "tests/variable-length-quantity.rs:noise_2",
+      "tests/variable-length-quantity.rs:noise_3",
+      "tests/variable-length-quantity.rs:noise_4",
+      "tests/variable-length-quantity.rs:noise_5",
+      "tests/variable-length-quantity.rs:noise_6",
+      "tests/variable-length-quantity.rs:noise_7",
+      "tests/variable-length-quantity.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:to_bytes",
       "src/lib.rs:from_bytes",
       "src/lib.rs:to_bytes_single",
       "src/lib.rs:Error",
-      "tests/variable-length-quantity.rs:zero"
+      "tests/variable-length-quantity.rs:zero",
+      "tests/variable-length-quantity.rs:noise_1",
+      "tests/variable-length-quantity.rs:noise_2",
+      "tests/variable-length-quantity.rs:noise_3",
+      "tests/variable-length-quantity.rs:noise_4",
+      "tests/variable-length-quantity.rs:noise_5",
+      "tests/variable-length-quantity.rs:noise_6",
+      "tests/variable-length-quantity.rs:noise_7",
+      "tests/variable-length-quantity.rs:noise_8"
     ]
   },
   "wordy": {
@@ -152,13 +296,29 @@
       "src/lib.rs:apply_op",
       "src/lib.rs:Token",
       "tests/wordy.rs:just_a_number",
-      "tests/wordy.rs:addition"
+      "tests/wordy.rs:addition",
+      "tests/wordy.rs:noise_1",
+      "tests/wordy.rs:noise_2",
+      "tests/wordy.rs:noise_3",
+      "tests/wordy.rs:noise_4",
+      "tests/wordy.rs:noise_5",
+      "tests/wordy.rs:noise_6",
+      "tests/wordy.rs:noise_7",
+      "tests/wordy.rs:noise_8"
     ],
     "context": [
       "src/lib.rs:answer",
       "src/lib.rs:apply_op",
       "src/lib.rs:Token",
-      "tests/wordy.rs:just_a_number"
+      "tests/wordy.rs:just_a_number",
+      "tests/wordy.rs:noise_1",
+      "tests/wordy.rs:noise_2",
+      "tests/wordy.rs:noise_3",
+      "tests/wordy.rs:noise_4",
+      "tests/wordy.rs:noise_5",
+      "tests/wordy.rs:noise_6",
+      "tests/wordy.rs:noise_7",
+      "tests/wordy.rs:noise_8"
     ]
   }
 }

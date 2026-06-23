@@ -321,14 +321,20 @@ validate-cost-table:
 verify-tos:
 	go run ./cmd/helix-bench verify-tos bench/PROVIDERS.md
 
-# verify-licenses: HARD-FAIL per-track license gate for the Aider-Polyglot
-# dataset (SC#4 / ADAPTER-AIDER-01). Strict-decodes every track block in
-# bench/datasets/aider-polyglot/LICENSE-AUDIT.md (KnownFields(true) — unknown
-# key → non-zero exit), asserts a non-empty SPDX license + sha256 per track, and
-# fails closed on a missing/malformed/zero-track audit. Build gate — NO
-# continue-on-error. Checks structural validity only, not legal accuracy.
+# verify-licenses: HARD-FAIL dual-disposition license gate for the Aider-Polyglot
+# vendored tree (SC#4 / ADAPTER-AIDER-01 / VENDOR-03). Strict-decodes every MIT
+# `track:` block AND every Apache-2.0 `fixture:` block in
+# bench/datasets/aider-polyglot/LICENSE-AUDIT.md (KnownFields(true) — unknown key
+# → non-zero exit), asserts a non-empty SPDX license + sha256 per track, requires
+# >=1 Apache-2.0 fixture block (dual disposition — a regression to single
+# disposition fails closed), and runs a BIDIRECTIONAL manifest-vs-disk
+# crypto/sha256 walk over the full vendored fixtures/ tree: every on-disk file
+# must have a VENDOR-MANIFEST.md row with a matching digest, and every manifest
+# row must exist on disk (a swapped byte, a dropped/extra entry, or a removed
+# NOTICE/LICENSE sidecar all hard-fail). Build gate — NO continue-on-error.
+# Checks structural validity + digest integrity only, not legal accuracy.
 verify-licenses:
-	go run ./cmd/helix-bench verify-licenses bench/datasets/aider-polyglot/LICENSE-AUDIT.md
+	go run ./cmd/helix-bench verify-licenses bench/datasets/aider-polyglot/LICENSE-AUDIT.md --manifest bench/datasets/aider-polyglot/VENDOR-MANIFEST.md --tree bench/datasets/aider-polyglot/fixtures
 
 # verify-no-docker-sdk: HARD-FAIL supply-chain gate (CONTAINER-01 / SC#1). The
 # bench container stack MUST drive docker/podman purely via os/exec — the Docker

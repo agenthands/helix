@@ -167,9 +167,15 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 102-01-PLAN.md — repomapeval leaf: gold corpus from ground truth + recall@10/MRR/nDCG@10 + budget-fit + reversed/random discriminator + leaf self-test + capture regenerator (REPOEVAL-01, REPOEVAL-02)
 - [ ] 102-02-PLAN.md — fuzzyrobust leaf: per-tier perturbation + drift corpus + strategy/refusal scoring via editsim.ES + duplicate-block must-refuse + leaf self-test + capture harness (FUZZBENCH-01, FUZZBENCH-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 102-03-PLAN.md — committed baselines: aggregator renderers + double-render byte-reproducibility + stripped-metric anti-vacuity + .gitignore allowlist + Makefile regen targets (BASELINE-02)
+
 **UI hint**: no
 
 ## Progress (v2.1)

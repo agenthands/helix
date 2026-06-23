@@ -34,49 +34,57 @@ stderr and exits non-zero.
 
 ## Decision matrix
 
-| Question | Use this | Not this |
-|---|---|---|
-| Where is symbol `X` defined? | `helix go-to-definition --path --line --column` | `grep "X"` |
-| Find a symbol by name | `helix search-symbols --query=Foo` | `grep "func Foo"` |
-| Who calls / references `Y`? | `helix find-references` / `helix get-call-hierarchy` | `grep -r "Y("` |
-| Implementations of an interface | `helix find-implementations` | `grep "implements"` |
-| Type hierarchy (super/sub) | `helix get-type-hierarchy` | `grep "extends"` |
-| Type/signature at a position | `helix get-hover-info` | infer by reading |
-| A file's shape (outline) | `helix get-symbol-overview` | `cat file` |
-| Impact of changing a symbol | `helix analyze-blast-radius` | recursive grep |
-| Content search across code | `helix search-in-files --pattern=...` | `grep -r ...` |
-| Find files by glob | `helix find-files --pattern='**/*.go'` | `find . -name` |
-| List a directory | `helix list-directory --path=...` | `ls` |
-| Read a file (or a range) | `helix read-file --path=...` | `cat` / `sed -n` |
-| Create a new file | `helix create-file --path --content` | `cat >file` |
-| Rename a symbol across files | `helix rename-symbol --new-name=...` | `sed -i` |
-| Replace a function body | `helix replace-symbol-body` | `sed -i` |
-| Find-and-replace in a file | `helix replace-in-file` | `sed -i` |
-| Edit tolerant of LLM drift | `helix fuzzy-edit` | `sed -i` |
-| Insert near a symbol | `helix insert-before-symbol` / `helix insert-after-symbol` | manual splice |
-| Delete a symbol safely | `helix safe-delete-symbol` | `sed -i '/d'` |
-| Confirm an edit applied | `helix verify-edit` | re-`cat` the file |
-| Errors / warnings in a file | `helix get-diagnostics` | parse build output |
-| Quick fixes for a diagnostic | `helix get-code-actions` | hand-edit |
-| Format code | `helix format-code` | external formatter |
-| Ranked structural repo overview | `helix get-repo-map` | `tree` / many `cat` |
-| Context around a symbol/task | `helix get-context` / `helix get-semantic-context` | grep chain |
-| Cluster map of the codebase | `helix get-cluster-map` / `helix explain-cluster` | manual grouping |
-| Deep explanation of a symbol | `helix explain-symbol-deep` | read every caller |
-| Symbols related to one symbol | `helix find-related-symbols` | recursive grep |
-| Change-impact graph | `helix get-change-impact-graph` | manual trace |
-| Semantic graph status / build | `helix get-semantic-graph-status` / `helix index-semantic-graph` / `helix refresh-semantic-graph` | — |
-| Validate a graph edge | `helix validate-graph-edge` | — |
-| Project memory (read/write/list) | `helix read-memory` / `helix write-memory` / `helix list-memories` | scratch files |
-| Search / rename / edit / delete memory | `helix search-memories` / `helix rename-memory` / `helix edit-memory` / `helix delete-memory` | — |
-| Onboard a project / new conversation | `helix onboard-project` / `helix prepare-for-new-conversation` | — |
-| Switch profile mode / token budget | `helix switch-mode` / `helix get-token-budget` | — |
-| Daemon / LS health | `helix get-health` | guess |
-| Full tool help | `helix get-tool-help` | — |
+Rows marked † require an indexed semantic graph — run `helix index-semantic-graph` first.
 
-Verbs are grouped by capability (navigation, edit, fileops, diagnostics,
-repomap, memory). Run `helix get-tool-help` for the full argument reference of
-any verb.
+| Capability | Question | Use this | Not this |
+|---|---|---|---|
+| Navigation | Where is symbol `X` defined? | `helix go-to-definition --path --line --column` | `grep "X"` |
+| Navigation | Find a symbol by name | `helix search-symbols --query=Foo` | `grep "func Foo"` |
+| Navigation | Who calls / references `Y`? | `helix find-references` / `helix get-call-hierarchy` | `grep -r "Y("` |
+| Navigation | Implementations of an interface | `helix find-implementations` | `grep "implements"` |
+| Navigation | Type hierarchy (super/sub) | `helix get-type-hierarchy` | `grep "extends"` |
+| Navigation | Type/signature at a position | `helix get-hover-info` | infer by reading |
+| Navigation | A file's shape (outline) | `helix get-symbol-overview` | `cat file` |
+| Navigation | Impact of changing a symbol | `helix analyze-blast-radius` | recursive grep |
+| Fileops | Content search across code | `helix search-in-files --pattern=...` | `grep -r ...` |
+| Fileops | Find files by glob | `helix find-files --pattern='**/*.go'` | `find . -name` |
+| Fileops | List a directory | `helix list-directory --path=...` | `ls` |
+| Fileops | Read a file (or a range) | `helix read-file --path=...` | `cat` / `sed -n` |
+| Fileops | Create a new file | `helix create-file --path --content` | `cat >file` |
+| Edit | Rename a symbol across files | `helix rename-symbol --new-name=...` | `sed -i` |
+| Edit | Replace a function body | `helix replace-symbol-body` | `sed -i` |
+| Edit | Find-and-replace in a file | `helix replace-in-file` | `sed -i` |
+| Edit | Edit tolerant of LLM drift | `helix fuzzy-edit` | `sed -i` |
+| Edit | Insert near a symbol | `helix insert-before-symbol` / `helix insert-after-symbol` | manual splice |
+| Edit | Delete a symbol safely | `helix safe-delete-symbol` | `sed -i '/d'` |
+| Edit | Confirm an edit applied | `helix verify-edit` | re-`cat` the file |
+| Diagnostics | Errors / warnings in a file | `helix get-diagnostics` | parse build output |
+| Diagnostics | Quick fixes for a diagnostic | `helix get-code-actions` | hand-edit |
+| Diagnostics | Format code | `helix format-code` | external formatter |
+| RepoMap | Ranked structural repo overview | `helix get-repo-map` | `tree` / many `cat` |
+| RepoMap | Context around a symbol/task | `helix get-context` | grep chain |
+| Semantic graph | Context around a symbol/task † | `helix get-semantic-context` | grep chain |
+| Semantic graph | Cluster map of the codebase † | `helix get-cluster-map` / `helix explain-cluster` | manual grouping |
+| Semantic graph | Deep explanation of a symbol † | `helix explain-symbol-deep` | read every caller |
+| Semantic graph | Symbols related to one symbol † | `helix find-related-symbols` | recursive grep |
+| Semantic graph | Change-impact graph † | `helix get-change-impact-graph` | manual trace |
+| Semantic graph | Semantic graph status † | `helix get-semantic-graph-status` | manual indexing |
+| Semantic graph | Build / refresh semantic graph | `helix index-semantic-graph` / `helix refresh-semantic-graph` | manual indexing |
+| Semantic graph | Validate a graph edge † | `helix validate-graph-edge` | manual trace |
+| Memory | Read project memory | `helix read-memory` / `helix list-memories` | scratch files |
+| Memory | Write project memory | `helix write-memory` | ad-hoc notes |
+| Memory | Search memory | `helix search-memories` | grep notes |
+| Memory | Edit / rename / delete memory | `helix edit-memory` / `helix rename-memory` / `helix delete-memory` | manual file edits |
+| Workflow | Onboard a new project | `helix onboard-project` | manual exploration |
+| Workflow | Prepare session handoff | `helix prepare-for-new-conversation` | ad-hoc summaries |
+| Session | Switch operational mode | `helix switch-mode` | manual config edit |
+| Session | View token budget | `helix get-token-budget` | mental math |
+| Meta | Daemon / LS health | `helix get-health` | guess |
+| Meta | Full tool help | `helix get-tool-help` | infer by reading |
+
+The `Capability` column groups verbs (navigation, edit, fileops, diagnostics,
+repomap, semantic graph, memory, workflow, session, meta). Run `helix
+get-tool-help` for the full argument reference of any verb.
 
 <!-- Token note (SKILL-04): idle skill cost = 599 bytes (this frontmatter
      description, the only text loaded into context until the skill triggers;

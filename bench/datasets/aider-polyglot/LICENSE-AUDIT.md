@@ -28,6 +28,27 @@ Provenance — each `license_sha256` is the sha256 of the `LICENSE` text fetched
 from `https://raw.githubusercontent.com/exercism/<track>/<pinned_sha>/LICENSE`
 at the pinned sha recorded in the `source_repo` field below.
 
+## Dual disposition (Phase 99)
+
+As of Phase 99 this audit records a **mixed-license** vendored fixture tree under
+`fixtures/`:
+
+- **MIT track blocks** (keyed by a top-level `track:` key) — the six Exercism
+  tracks below; these are byte-unchanged from Phase 85. The vendored MIT
+  polyglot subset under `{python,go,rust}/exercises/practice/` derives its
+  provenance from these `exercism/<lang>@<sha>` blocks.
+- **Apache-2.0 fixture block(s)** (keyed by a top-level `fixture:` key) — the
+  aider edit-format fixtures under `_aider-edit-format/`, vendored from
+  `Aider-AI/aider@5dc9490` under Apache-2.0, with a bundled `NOTICE` + `LICENSE`
+  copy. See the `fixture:` block at the end of this file.
+
+In addition to strict-decoding both block kinds, the Phase 99 gate runs a
+**manifest-vs-disk sha256 walk**: every on-disk file under `fixtures/` must have
+a matching real-sha256 row in `VENDOR-MANIFEST.md`, and vice-versa, failing
+closed on any mismatch (tamper detection on individual vendored bytes). No inline
+SPDX is injected into executed fixture bytes — disposition lives here, in the
+manifest, and in the per-track/per-subtree NOTICE sidecars only.
+
 ---
 track: cpp
 source_repo: github.com/exercism/cpp@9ca0c11dabd771bfae6fe5d9c09c6dd3ac51c4b8
@@ -64,4 +85,10 @@ source_repo: github.com/exercism/rust@557695ebd2fbe2cf99d51e91a4c8a556b7e2133b
 license: MIT
 license_sha256: e52f804e74f0fbd34e8927962319df346166b8194094309a0aee318693df44df
 redistribution_clause_excerpt: "Permission is hereby granted, free of charge, to any person obtaining a copy of this software ... to use, copy, modify, merge, publish, distribute, sublicense ... The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software."
+---
+fixture: _aider-edit-format
+source_repo: Aider-AI/aider@5dc9490bb35f9729ef2c95d00a19ccd30c26339c
+license: Apache-2.0
+notice_path: fixtures/_aider-edit-format/NOTICE
+license_path: fixtures/_aider-edit-format/LICENSE
 ---

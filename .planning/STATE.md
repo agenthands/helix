@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
 status: planning
-last_updated: "2026-06-23T20:11:49.149Z"
+last_updated: "2026-06-23T20:30:00.000Z"
 last_activity: 2026-06-23
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-23)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.1 shipped 2026-06-23 — planning next milestone. Candidate v2.2: Agent-Facing Skill Quality & Prompt Tuning (SKILL/reference rewrite + DSPy offline tuning; ROADMAP Backlog BL-SKILL-01/02). In-progress now: starting the SKILL.md/reference.md rewrite per `internal/cli/skills/helix/SKILL-ISSUE.md`.
+**Current focus:** v2.2 roadmap created 2026-06-23 (Phases 103-106) — Agent-Facing Skill Quality & Prompt Tuning. 7 v2.2 reqs mapped 100% (BUNDLE-01/02→103, REFGEN-01→104, SKILL-01/02/03→105, TUNE-01→106). Next: plan Phase 103 (bundle integrity + non-vacuous reference contract). The deterministic Go-side fixes (103/104/105) add ZERO new Go deps; the DSPy spike (106) stays strictly dev-time/offline.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 103 (Bundle Integrity & Non-Vacuous Reference Contract) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-23 — Milestone v2.2 started
+Status: Roadmap created; ready to plan Phase 103
+Last activity: 2026-06-23 — v2.2 roadmap created (Phases 103-106)
 
 ## Performance Metrics
 
@@ -78,12 +78,25 @@ Last activity: 2026-06-23 — Milestone v2.2 started
 
 ### Roadmap Evolution
 
+- 2026-06-23: v2.2 roadmap created (Phases 103-106) from REQUIREMENTS.md (7 v2.2 REQs across BUNDLE/REFGEN/SKILL/TUNE) + research SUMMARY.md. Coarse granularity, sequential phase IDs, numbering continued from v2.1 (ended at 102). Dependency-driven, deterministic-before-exploratory order honored: 103 (BUNDLE-01/02 — installSkill closed-set allowlist + exact-set bundle test + move SKILL-ISSUE.md out of embed dir + harden reference-completeness contract to exact-count==50 BEFORE the churn), 104 (REFGEN-01 — per-verb generator override fixing the cmd/helix-cligen group-collapse; regenerated reference.md passes --check; MUST precede 105), 105 (SKILL-01/02/03 — hand-authored matrix rewrite: split QUERY/ACTION rows, "Not this" everywhere, indexed-graph prereqs, regroup by capability; preserve StripDecisionMatrix anchor + SKILL-04 size cap), 106 (TUNE-01 — exploratory DSPy dev-time/offline harness under tools/, parity-pinned Python adopt metric, overfit/gaming guards, may no-ship, vet-style leakage analyzer; strictly LAST against a frozen surface). 7/7 reqs mapped, 0 unmapped, 0 double-mapped. ZERO new Go deps for 103/104/105; DSPy quarantined out of the binary/module/CI. Both backlog candidates (BL-SKILL-01/02) promoted into this milestone. Phase 106 flagged for phase-level research (spike).
 - 2026-06-22: v2.1 roadmap created (Phases 97-102) from REQUIREMENTS.md (23 v1 REQs across REF/STEER/AGENT/ADOPT/VENDOR/EDITBENCH/REPOEVAL/FUZZBENCH/BASELINE) + 5 research files. Two interleavable thrusts, intra-thrust order fixed by hard deps (reference→contract, vendor→baseline, corpus→eval). 6 phases under coarse granularity: 97 (REF+ADOPT-01 substrate+merge-gating contract), 98 (STEER+AGENT multi-agent+steering), 99 (VENDOR mixed-license fixtures), 100 (EDITBENCH+BASELINE-01 wiring+baseline), 101 (ADOPT-02 opt-in LLM scorecard), 102 (REPOEVAL+FUZZBENCH+BASELINE-02 evals+baselines). All 23 reqs mapped, 0 unmapped, 0 double-mapped. ZERO new Go deps; only structural change is skill.go string→embed.FS.
 - 2026-06-21: v2.0 roadmap created from REQUIREMENTS.md (31 REQ-IDs across CLI/VERB/OUT/SEC/SKILL/RETIRE/DOCS/TEST) and the 5 research files. Strangler-fig 6-phase shape (90→95) honored; TEST-* threaded into 90/92/93 (E2E oracle early, contract oracle at output-freeze, behavioral oracle with the skill).
 - 2026-06-21: v1.12 Bench Stack & Tool Evaluation functionally complete at Phase 89 (15/15 phases); formal `/gsd-complete-milestone` archival pending.
 - Phase 96 added: Address v2.0 tech debt
 
-### Critical Roadmap Constraints (v2.1 — Phases 97-102)
+### Critical Roadmap Constraints (v2.2 — Phases 103-106)
+
+Cross-cutting exit gates baked into every relevant phase (a content/codegen milestone, NOT a stack milestone):
+
+- **Anti-vacuity (every gate):** each gate a phase adds/hardens (closed-set bundle test P103, exact-count==50 reference contract P103, generator vacuity guards P104, SKILL↔VerbToolNames cross-check P105, Python↔Go parity + leakage analyzer P106) MUST ship a deliberate break-the-invariant → assert-RED test. A gate with only a green-path test is presumed broken (anchored to the repeated Phase 86/87/89 CR-01 vacuous-pass class).
+- **No runtime Python / single-binary preserved (P106, but enforced milestone-wide):** DSPy is dev-time/offline only — no `helix` subcommand shells to Python, no `go.mod`/`helix setup` edge, off the default `go test ./...` / merge path. A `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path. Gate the committed ARTIFACT, never the optimizer PROCESS (LLM optimization isn't bit-reproducible).
+- **`reference.md` generated, never hand-edited (P104, P106):** all reference corrections go through `cmd/helix-refgen` (per-verb override map, group-default fallback retained, lookups keyed not ranged for determinism); the Phase 97 `--check` byte-reproducibility gate and the `reference ⊇ VerbToolNames()` contract stay green; blank-import parity between generator and daemon re-verified when touching refgen (the v1.12 docgen-drift lesson).
+- **Harden-the-contract-BEFORE-the-rewrite (P103 → 104/105):** the `reference ⊇ VerbToolNames()` contract MUST be hardened to exact-count==50 + known-absent-verb discriminator + RED-first proof BEFORE the format rewrite, or it goes vacuously `∅ ⊇ ∅` true through the churn. Land the closed-set bundle allowlist FIRST (the embed-glob leak is LIVE — the binary + every `helix setup` already ship the 18 KB `SKILL-ISSUE.md`).
+- **Generator-before-matrix (P104 → 105):** the on-demand `reference.md` must be correct before the idle-tier `SKILL.md` matrix is re-authored, so the two tell one consistent story.
+- **Preserve the StripDecisionMatrix anchor + SKILL-04 idle-cost cap (P105):** keep the `## Decision matrix` heading and stay under the SKILL-04 size cap during the matrix rewrite (split rows ~37→44, terse "Not this" everywhere — guard against token bloat).
+- **Spike discipline (P106):** exploratory, possible no-ship; the corpus is small (`MinTasks=5`) so a held-out TEST split the optimizer never sees is the FIRST harness task; pair `choice_rate` with a correctness/quality oracle to defend against metric-gaming the gameable first-command proxy; clean fallback is a hand-rolled Go candidate-search loop keeping the milestone 100% Go.
+
+### Critical Roadmap Constraints (v2.1 — Phases 97-102, historical)
 
 Cross-cutting exit gates baked into every relevant phase (anchored to named v1.12 vacuous-pass CRITICALs — gates, not new work):
 
@@ -130,8 +143,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-23T16:42:40.513Z
-Stopped at: Completed 102-01-PLAN.md
+Last session: 2026-06-23T20:30:00.000Z
+Stopped at: v2.2 roadmap created (Phases 103-106)
 Resume file: None
 
 ## Decisions
@@ -172,4 +185,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 103 with /gsd-plan-phase 103 (Bundle Integrity & Non-Vacuous Reference Contract — BUNDLE-01/02)

@@ -42,10 +42,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUNDLE-01 | TBD | Pending |
-| BUNDLE-02 | TBD | Pending |
-| REFGEN-01 | TBD | Pending |
-| SKILL-01 | TBD | Pending |
-| SKILL-02 | TBD | Pending |
-| SKILL-03 | TBD | Pending |
-| TUNE-01 | TBD | Pending |
+| BUNDLE-01 | Phase 103 | Pending |
+| BUNDLE-02 | Phase 103 | Pending |
+| REFGEN-01 | Phase 104 | Pending |
+| SKILL-01 | Phase 105 | Pending |
+| SKILL-02 | Phase 105 | Pending |
+| SKILL-03 | Phase 105 | Pending |
+| TUNE-01 | Phase 106 | Pending |

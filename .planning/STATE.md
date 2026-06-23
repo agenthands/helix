@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
-current_phase: 104
-current_phase_name: Reference Generator Per-Verb Correctness
+current_phase: 105
+current_phase_name: SKILL.md Decision-Matrix Rewrite
 status: verifying
 stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-23T21:50:18.332Z"
+last_updated: "2026-06-23T22:08:58.058Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 104 execution started
+last_activity_desc: Phase 104 complete, transitioned to Phase 105
 progress:
   total_phases: 4
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 104 (Reference Generator Per-Verb Correctness) — EXECUTING
-Plan: 1 of 1
+Phase: 105 — SKILL.md Decision-Matrix Rewrite
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-23 — Phase 104 execution started
+Last activity: 2026-06-23 — Phase 104 complete, transitioned to Phase 105
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Last activity: 2026-06-23 — Phase 104 execution started
 | 100 | 2 | - | - |
 | 101 | 2 | - | - |
 | 102 | 3 | - | - |
+| 104 | 1 | - | - |
 
 *Updated after each plan completion.*
 | Phase 90 P01 | 5min | 2 tasks | 5 files |

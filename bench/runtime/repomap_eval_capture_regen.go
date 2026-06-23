@@ -260,7 +260,7 @@ func firstText(res any) string {
 	var shape struct {
 		Content []struct {
 			Text string `json:"text"`
-		} `json:"Content"`
+		} `json:"content"`
 	}
 	if err := json.Unmarshal(b, &shape); err != nil {
 		return ""

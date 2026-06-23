@@ -616,4 +616,12 @@ Plans:
 
 ## Backlog
 
-_No items in backlog._
+### Candidate milestone — v2.2: Agent-Facing Skill Quality & Prompt Tuning
+
+Seed scope for the next milestone (capture only — not yet planned via `/gsd-new-milestone`). Source analysis: `internal/cli/skills/helix/SKILL-ISSUE.md` (authored by the maintainer).
+
+- **BL-SKILL-01 — Full SKILL.md + reference.md decision-matrix rewrite.** The current `internal/cli/skills/helix/SKILL.md` decision matrix is thin and incorrectly structured. Per `SKILL-ISSUE.md`: (1) split rows that mix QUERY verbs with ACTION verbs that mutate state (e.g. `get-semantic-graph-status` vs `index-semantic-graph`/`refresh-semantic-graph`; `read-memory`/`list-memories` vs `write-memory`; `search-memories` vs `rename`/`edit`/`delete-memory`; `switch-mode` vs `get-token-budget`); (2) add the missing "Not this" guidance to every row (8+ rows currently `—`); (3) fix the `reference.md` "Use this, not that" copy-paste errors and incorrect "Output" descriptions; (4) add prerequisite notes for the indexed-graph verbs (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context` all require `index-semantic-graph` first); (5) regroup the matrix by capability. Must stay consistent with the Phase 97 generator (`cmd/helix-refgen`) + `--check` drift gate and the `reference ⊇ VerbToolNames()` adoption contract — i.e. the rewrite likely means improving the generator/templates, not hand-editing generated output.
+
+- **BL-SKILL-02 — DSPy-based offline prompt tuning of the agent-facing surface (exploratory).** Use DSPy (Stanford) to optimize the SKILL.md decision-matrix / nudge-steering prompt text against a measurable adoption metric. **Constraint:** Helix ships as a Go single binary with no Python/runtime deps — DSPy would be a **dev-time/offline optimization harness** (Python, under e.g. `tools/` or `bench/`) that emits an optimized, committed `SKILL.md`/`reference.md`, NOT a runtime dependency. **Metric already exists:** the Phase 101 opt-in LLM-behavioral adoption scorecard (`test/oracle/adopt` — `choice_rate`/`fallback_rate`, keyed on the first emitted command) is the natural DSPy objective, closing the loop from v2.1's measurement work to v2.2's optimization. Open questions for `/gsd-discuss-phase` when promoted: DSPy optimizer choice (MIPROv2 / BootstrapFewShot), train/dev task corpus source (reuse the adopt fixtures + vendored exercism tasks), and how to keep the optimized output reproducible/diffable under the existing `helix-refgen --check` gate.
+
+_Promote via `/gsd-new-milestone` (after v2.1 is closed) or `/gsd-phase --add` once scoped._

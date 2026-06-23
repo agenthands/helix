@@ -24,15 +24,15 @@
 
 ### Steering & Nudge (STEER)
 
-- [ ] **STEER-01**: The `PreToolUse` nudge's code-target classifier is broadened to steer more standard-tool invocations (grep/sed/cat/find/Read-shaped Bash) toward the specific equivalent `helix` verb, preserving the advisory exit-0 / fail-open contract.
-- [ ] **STEER-02**: A SessionStart priming surface presents the terse "use X not Y" decision matrix once per session, size-capped (SKILL-04-style idle-cost bound) and fail-open.
-- [ ] **STEER-03**: Negative-control coverage proves the nudge does NOT fire on legitimately-correct standard-tool use (prose/log/config/build-output targets, e.g. `grep TODO README.md`), enforced by golden classifier rows.
+- [x] **STEER-01**: The `PreToolUse` nudge's code-target classifier is broadened to steer more standard-tool invocations (grep/sed/cat/find/Read-shaped Bash) toward the specific equivalent `helix` verb, preserving the advisory exit-0 / fail-open contract.
+- [x] **STEER-02**: A SessionStart priming surface presents the terse "use X not Y" decision matrix once per session, size-capped (SKILL-04-style idle-cost bound) and fail-open.
+- [x] **STEER-03**: Negative-control coverage proves the nudge does NOT fire on legitimately-correct standard-tool use (prose/log/config/build-output targets, e.g. `grep TODO README.md`), enforced by golden classifier rows.
 
 ### Multi-Agent Coverage (AGENT)
 
-- [ ] **AGENT-01**: The generated verb reference is installable for non-Claude agents (shared markdown reference, not a per-agent bespoke skill engine).
-- [ ] **AGENT-02**: `helix setup` writes/updates per-agent instruction files (Codex `AGENTS.md` ≤32 KiB, Gemini `GEMINI.md`, generic) via idempotent sentinel-delimited append that never clobbers a user's existing file.
-- [ ] **AGENT-03**: Codex's `PreToolUse` hook is wired to `helix nudge` reusing the existing advisory envelope; agents with no PreToolUse-equivalent (Gemini, IDE, generic) get instruction-file steering only — no fabricated hook.
+- [x] **AGENT-01**: The generated verb reference is installable for non-Claude agents (shared markdown reference, not a per-agent bespoke skill engine).
+- [x] **AGENT-02**: `helix setup` writes/updates per-agent instruction files (Codex `AGENTS.md` ≤32 KiB, Gemini `GEMINI.md`, generic) via idempotent sentinel-delimited append that never clobbers a user's existing file.
+- [x] **AGENT-03**: Codex's `PreToolUse` hook is wired to `helix nudge` reusing the existing advisory envelope; agents with no PreToolUse-equivalent (Gemini, IDE, generic) get instruction-file steering only — no fabricated hook.
 
 ### Adoption Evaluation (ADOPT)
 
@@ -109,12 +109,12 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | REF-01 | Phase 97 | Complete |
 | REF-02 | Phase 97 | Complete |
 | REF-03 | Phase 97 | Complete |
-| STEER-01 | Phase 98 | Pending |
-| STEER-02 | Phase 98 | Pending |
-| STEER-03 | Phase 98 | Pending |
-| AGENT-01 | Phase 98 | Pending |
-| AGENT-02 | Phase 98 | Pending |
-| AGENT-03 | Phase 98 | Pending |
+| STEER-01 | Phase 98 | Complete |
+| STEER-02 | Phase 98 | Complete |
+| STEER-03 | Phase 98 | Complete |
+| AGENT-01 | Phase 98 | Complete |
+| AGENT-02 | Phase 98 | Complete |
+| AGENT-03 | Phase 98 | Complete |
 | ADOPT-01 | Phase 97 | Complete |
 | ADOPT-02 | Phase 101 | Pending |
 | VENDOR-01 | Phase 99 | Pending |

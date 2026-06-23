@@ -1,0 +1,104 @@
+[
+  {
+    "id": "rust-leap-isleap",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "pub fn is_leap_year(year: u64) -\u003e bool {\n    year % 4 == 0 \u0026\u0026 (year % 100 != 0 || year % 400 == 0)\n}"
+  },
+  {
+    "id": "rust-piglatin-translateword",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "pub fn translate_word(word: \u0026str) -\u003e String {\n    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }\n}"
+  },
+  {
+    "id": "rust-piglatin-vowel",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "    static VOWEL: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([aeiou]|y[^aeiou]|xr)[a-z]*\").unwrap());"
+  },
+  {
+    "id": "rust-piglatin-cons",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "    static CONSONANTS: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([^aeiou]?qu|[^aeiou][^aeiouy]*)([a-z]*)\").unwrap());"
+  },
+  {
+    "id": "rust-piglatin-else",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "    } else {\n        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"\n    }"
+  },
+  {
+    "id": "rust-piglatin-use",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "use std::sync::LazyLock;\n\nuse regex::Regex;"
+  },
+  {
+    "id": "rust-leap-test",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "fn check(year: u64) -\u003e bool {\n    is_leap_year(year)\n}"
+  },
+  {
+    "id": "rust-piglatin-translate",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "pub fn translate(text: \u0026str) -\u003e String {\n    text.split_whitespace()\n        .map(translate_word)\n        .collect::\u003cVec\u003c_\u003e\u003e()\n        .join(\" \")\n}"
+  },
+  {
+    "id": "rust-leap-guard",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "pub fn classify(year: u64) -\u003e \u0026'static str {\n    if is_leap_year(year) {\n        \"leap\"\n    } else {\n        \"common\"\n    }\n}"
+  },
+  {
+    "id": "rust-piglatin-match",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }"
+  },
+  {
+    "id": "rust-leap-mod",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "mod leap {\n    pub fn is_leap_year(year: u64) -\u003e bool {\n        year % 4 == 0\n    }\n}"
+  },
+  {
+    "id": "rust-piglatin-caps",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\""
+  },
+  {
+    "id": "rust-leap-div",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "fn divisible(n: u64, d: u64) -\u003e bool {\n...\n}"
+  },
+  {
+    "id": "rust-piglatin-collect",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "    text.split_whitespace()\n...\n        .join(\" \")"
+  },
+  {
+    "id": "rust-leap-const",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "const CYCLE: u64 = 400;\n...\nconst LEAP: u64 = 4;"
+  },
+  {
+    "id": "rust-piglatin-new",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "fn empty() -\u003e String {\n...\n}"
+  },
+  {
+    "id": "rust-ambiguous-0",
+    "strategy": "ambiguous_match",
+    "refused": true,
+    "error_kind": "ambiguous"
+  }
+]

@@ -74,3 +74,66 @@ func TestStrategy_TotalNoPanic(t *testing.T) {
 	_ = ScoreCase("日本語", "日本x", "日本語", "日本x")
 	_ = ScoreCase(StrategyEllipsis, StrategyExact, "café", "cafe")
 }
+
+// TestScoreDriftCorpus is the HERMETIC GOLDEN (the sole authoritative proof): it
+// scores the committed drift corpus (expected strategy per tier) against the
+// committed captured outcomes for ALL of py/go/rust, producing a per-case
+// strategy-match + editsim.ES — with NO binary and NO network. Every drift case
+// must have a committed captured outcome (fail-closed), the corpus must be at
+// floor, and at least one ambiguous refusal must be scored.
+func TestScoreDriftCorpus(t *testing.T) {
+	scored := 0
+	refusals := 0
+	exactMatches := 0
+	for _, lang := range corpusLanguages {
+		corpus, err := LoadDrift(testdataDir, lang)
+		if err != nil {
+			t.Fatalf("LoadDrift(%q): %v", lang, err)
+		}
+		captured, err := LoadCaptured(testdataDir, lang)
+		if err != nil {
+			t.Fatalf("LoadCaptured(%q): %v", lang, err)
+		}
+		for _, c := range corpus.Cases {
+			o, ok := captured.Outcomes[c.ID]
+			if !ok {
+				t.Fatalf("%s: drift case %q has NO committed captured outcome (fail-closed)", lang, c.ID)
+			}
+			cs := ScoreCase(c.ExpectedStrategy, o.Strategy, o.MatchedText, c.ExpectedText)
+			if cs.Similarity < 0 || cs.Similarity > 1 {
+				t.Fatalf("%s case %q: Similarity=%v out of [0,1]", lang, c.ID, cs.Similarity)
+			}
+			if c.Ambiguous {
+				if !cs.Refused {
+					t.Fatalf("%s case %q: ambiguous case not scored as a refusal", lang, c.ID)
+				}
+				refusals++
+			}
+			// A successful (non-refusal, non-no_match) NON-ellipsis match must
+			// carry a high text similarity — the matched region equals the
+			// expected base block. Ellipsis cases are exempt: the segmented match
+			// lands on the collapsed "head\n...\ntail" form (the search block),
+			// which by construction differs from the full expected block, so a
+			// low editsim.ES is correct there (documented in CORPUS.md).
+			if !cs.Refused && !cs.NoMatch && c.ExpectedStrategy != StrategyEllipsis {
+				if cs.Similarity < 0.99 {
+					t.Errorf("%s case %q: matched but Similarity=%v < 0.99 (matched text should equal expected text)",
+						lang, c.ID, cs.Similarity)
+				}
+				if cs.StrategyMatch && c.ExpectedStrategy == StrategyExact {
+					exactMatches++
+				}
+			}
+			scored++
+		}
+	}
+	if scored < 48 {
+		t.Fatalf("scored %d cases across all languages, want >= 48 (corpus floor)", scored)
+	}
+	if refusals < len(corpusLanguages) {
+		t.Fatalf("scored %d refusals, want >= %d (>=1 ambiguous per language)", refusals, len(corpusLanguages))
+	}
+	if exactMatches == 0 {
+		t.Fatal("zero exact-tier selection matches scored — the golden would be vacuous")
+	}
+}

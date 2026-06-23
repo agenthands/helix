@@ -1,0 +1,104 @@
+[
+  {
+    "id": "py-piglatin-split",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def split_initial_consonant_sound(word):\n    return re_cons.match(word).groups()"
+  },
+  {
+    "id": "py-piglatin-vowel",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def starts_with_vowel_sound(word):\n    return re_vowel.match(word) is not None"
+  },
+  {
+    "id": "py-piglatin-translate",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def translate(text):\n    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)"
+  },
+  {
+    "id": "py-piglatin-regex",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "re_cons = re.compile('^([^aeiou]?qu|[^aeiouy]+|y(?=[aeiou]))([a-z]*)')\nre_vowel = re.compile('^([aeiou]|y[^aeiou]|xr)[a-z]*')"
+  },
+  {
+    "id": "py-piglatin-branch",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')\n        else:\n            head, tail = split_initial_consonant_sound(word)\n            words.append(tail + head + 'ay')"
+  },
+  {
+    "id": "py-piglatin-import",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "import re\n\n\nre_cons = None\nre_vowel = None"
+  },
+  {
+    "id": "py-wordy-answer",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "def answer(question):\n    words = question.split()\n    if not words:\n        return 0\n    return 5"
+  },
+  {
+    "id": "py-wordy-guard",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "def answer(question):\n    if not question.startswith('What is'):\n        raise ValueError('unknown')\n    return 0"
+  },
+  {
+    "id": "py-piglatin-head",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "        head, tail = split_initial_consonant_sound(word)\n        words.append(tail + head + 'ay')\n        continue"
+  },
+  {
+    "id": "py-piglatin-loop",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "    for word in text.split():\n        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')"
+  },
+  {
+    "id": "py-wordy-compute",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "def compute(a, op, b):\n    if op == 'plus':\n        return a + b\n    if op == 'minus':\n        return a - b\n    return 0"
+  },
+  {
+    "id": "py-wordy-parse",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "def parse(tokens):\n    result = []\n    for t in tokens:\n        result.append(t)\n    return result"
+  },
+  {
+    "id": "py-piglatin-defcons",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def split_initial_consonant_sound(word):\n...\n    return m.groups()"
+  },
+  {
+    "id": "py-wordy-tokenize",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def tokenize(q):\n...\n    return q.split()"
+  },
+  {
+    "id": "py-piglatin-result",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "    words = []\n...\n    return ' '.join(words)"
+  },
+  {
+    "id": "py-wordy-validate",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "def validate(words):\n...\n    return True"
+  },
+  {
+    "id": "python-ambiguous-0",
+    "strategy": "ambiguous_match",
+    "refused": true,
+    "error_kind": "ambiguous"
+  }
+]

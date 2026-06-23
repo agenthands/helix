@@ -23,6 +23,29 @@ one of FIVE values. `failed` is **NEVER** a strategy label.
 A refusal (`ambiguous_match`) is distinct from a no-match (`no_match`) and from a
 successful match — conflating them is the FUZZBENCH anti-vacuity failure (D-06).
 
+### Expected (structural) vs captured (observed) — they may DIVERGE
+
+The leaf grades **strategy SELECTION**: it compares each case's structurally
+EXPECTED strategy (the perturbation tier) against the CAPTURED outcome (what
+`internal/fuzzy.Match` actually selected). These are deliberately independent —
+a divergence is a real, honest MEASUREMENT, not a corpus bug. Two divergences are
+inherent to the live cascade and are expected:
+
+- **`indentation_flexible` cases capture as `whitespace_normalized`.** The cascade
+  tries whitespace (tier 2, `TrimSpace` per line) BEFORE indentation-flexible
+  (tier 3, `TrimLeft(" \t")` per line). Because `TrimSpace` is strictly more
+  aggressive than `TrimLeft`, any pure leading-indentation drift already
+  re-matches at tier 2, so tier 3 is never the FIRST unique hit. The expected
+  `indentation_flexible` therefore scores as a selection mismatch against the
+  captured `whitespace_normalized` — the leaf records this faithfully.
+- **`ellipsis` cases capture as `exact`.** The ellipsis path matches each `...`
+  segment through the cascade and reports the WEAKEST tier across segments. Since
+  the head/tail anchors are un-drifted, every segment matches exactly, so the
+  aggregated strategy is `exact`.
+
+This is why `ScoreCase` reports both `StrategyMatch` (selection) AND
+`editsim.ES` similarity (text) — selection and text-fidelity are orthogonal.
+
 ## Expected strategy is DERIVED from the perturbation tier (D-05)
 
 Each single-site drift case is a **real vendored fixture code block** (drawn from

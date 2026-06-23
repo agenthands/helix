@@ -1,0 +1,104 @@
+[
+  {
+    "id": "go-wordy-answer",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tif len(w) \u003c 3 {\n\t\treturn\n\t}\n}"
+  },
+  {
+    "id": "go-wordy-trail",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "\tw = w[2:]\n\tlast := len(w) - 1\n\twl := w[last]\n\tif wl[len(wl)-1] != '?' {\n\t\treturn\n\t}"
+  },
+  {
+    "id": "go-bowling-newgame",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "func NewGame() *Game {\n\treturn \u0026Game{}\n}"
+  },
+  {
+    "id": "go-bowling-roll",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "func (g *Game) Roll(pins int) error {\n\tif pins \u003e pinsPerFrame {\n\t\treturn ErrPinCountExceedsPinsOnTheLane\n\t}\n\treturn nil\n}"
+  },
+  {
+    "id": "go-bowling-game",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "type Game struct {\n\trolls       [maxRolls]int\n\tnRolls      int\n\tnFrames     int\n\trFrameStart int\n}"
+  },
+  {
+    "id": "go-twobucket-bucket",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "type bucket int\n\nconst (\n\tbOne bucket = iota\n\tbTwo\n)"
+  },
+  {
+    "id": "go-twobucket-problem",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "type problem struct {\n\tcapacity [2]int\n\tgoal     int\n\tstart    bucket\n}"
+  },
+  {
+    "id": "go-bowling-consts",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "const (\n\tpinsPerFrame      = 10\n\tframesPerGame     = 10\n\tmaxRollsPerFrame  = 2\n)"
+  },
+  {
+    "id": "go-wordy-loop",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "\tfor i := 1; i \u003c len(w); i++ {\n\t\top := w[i]\n\t\ti++\n\t\tswitch op {\n\t\tcase \"multiplied\", \"divided\":\n\t\t\ti++\n\t\t}\n\t}"
+  },
+  {
+    "id": "go-wordy-apply",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "\t\tswitch op {\n\t\tcase \"plus\":\n\t\t\ta += x\n\t\tcase \"minus\":\n\t\t\ta -= x\n\t\t}"
+  },
+  {
+    "id": "go-bowling-import",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "import (\n\t\"errors\"\n\t\"fmt\"\n)"
+  },
+  {
+    "id": "go-twobucket-step",
+    "strategy": "whitespace_normalized",
+    "refused": false,
+    "matched_text": "const (\n\temptyOne step = iota\n\temptyTwo\n\tfillOne\n\tfillTwo\n)"
+  },
+  {
+    "id": "go-wordy-fields",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "func Answer(q string) (a int, ok bool) {\n...\n}"
+  },
+  {
+    "id": "go-bowling-pkg",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "package bowling\n...\nvar ErrNegativeRollIsInvalid = errors.New(\"Negative roll is invalid\")"
+  },
+  {
+    "id": "go-twobucket-pkg",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "package twobucket\n...\ntype bucket int"
+  },
+  {
+    "id": "go-bowling-score",
+    "strategy": "exact",
+    "refused": false,
+    "matched_text": "func (g *Game) Score() (int, error) {\n...\n}"
+  },
+  {
+    "id": "go-ambiguous-0",
+    "strategy": "ambiguous_match",
+    "refused": true,
+    "error_kind": "ambiguous"
+  }
+]

@@ -13,7 +13,7 @@
 
 ### Reference Generator Correctness (REFGEN)
 
-- [ ] **REFGEN-01**: every verb's "use this, not that" and "Output" lines in the generated `reference.md` are correct for that verb's actual semantics — fixing the `cmd/helix-cligen`/`cmd/helix-refgen` group-collapse root cause via a per-verb override in the **generator** (not hand-edits); the corrected `reference.md` is regenerated, committed, and passes `helix-refgen --check` byte-for-byte.
+- [x] **REFGEN-01**: every verb's "use this, not that" and "Output" lines in the generated `reference.md` are correct for that verb's actual semantics — fixing the `cmd/helix-cligen`/`cmd/helix-refgen` group-collapse root cause via a per-verb override in the **generator** (not hand-edits); the corrected `reference.md` is regenerated, committed, and passes `helix-refgen --check` byte-for-byte.
 
 ### Skill Decision-Matrix Quality (SKILL)
 
@@ -44,7 +44,7 @@
 |-------------|-------|--------|
 | BUNDLE-01 | Phase 103 | Complete |
 | BUNDLE-02 | Phase 103 | Complete |
-| REFGEN-01 | Phase 104 | Pending |
+| REFGEN-01 | Phase 104 | Complete |
 | SKILL-01 | Phase 105 | Pending |
 | SKILL-02 | Phase 105 | Pending |
 | SKILL-03 | Phase 105 | Pending |

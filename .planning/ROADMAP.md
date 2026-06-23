@@ -40,7 +40,7 @@
 - **106 strictly last:** DSPy tunes against a frozen metric and the stabilized 104/105 surface; it is an exploratory spike with a possible no-ship outcome and a clean Go-search-loop fallback.
 
 - [x] **Phase 103: Bundle Integrity & Non-Vacuous Reference Contract** - `installSkill` closed-set allowlist + exact-set bundle test, move `SKILL-ISSUE.md` out of the embed dir, harden the reference-completeness contract to exact-count (==50) discriminating a known-absent verb (completed 2026-06-23)
-- [ ] **Phase 104: Reference Generator Per-Verb Correctness** - fix the `cmd/helix-refgen`/`cmd/helix-cligen` group-collapse via per-verb overrides so every "use this/not that" + "Output" line is correct; regenerated `reference.md` passes `--check` byte-for-byte
+- [x] **Phase 104: Reference Generator Per-Verb Correctness** - fix the `cmd/helix-refgen`/`cmd/helix-cligen` group-collapse via per-verb overrides so every "use this/not that" + "Output" line is correct; regenerated `reference.md` passes `--check` byte-for-byte (completed 2026-06-23)
 - [ ] **Phase 105: SKILL.md Decision-Matrix Rewrite** - split QUERY/ACTION rows, "Not this" on every row, indexed-graph prerequisite notes, regroup by capability; preserve the `## Decision matrix` StripDecisionMatrix anchor + the SKILL-04 idle-cost size cap
 - [ ] **Phase 106: Exploratory DSPy Offline Tuning Harness (spike)** - opt-in dev-time-only Python harness under `tools/`, no runtime Python dep, off `go test ./...`; optimizes against the Phase 101 `adopt` scorecard (parity-pinned Python metric) with overfit/gaming guards; may no-ship; a `vet`-style analyzer blocks Python/runtime leakage
 
@@ -74,9 +74,9 @@
   3. The `reference ⊇ VerbToolNames()` contract and the Phase 97 `--check` drift gate stay green, and the blank-import parity between the generator and the daemon is re-verified when touching refgen.
   4. Vacuity guards prove the override map is real: no override key is a non-verb, and an overridden Output line differs from the old group default it replaced (deliberate break-the-invariant test).
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans complete
 
-- [ ] 104-01-PLAN.md — RED override golden + SC #4 vacuity guards → per-verb override maps + extracted group-default helpers in cmd/helix-refgen/render.go → regenerate reference.md, --check/cligen/docgen parity green
+- [x] 104-01-PLAN.md — RED override golden + SC #4 vacuity guards → per-verb override maps + extracted group-default helpers in cmd/helix-refgen/render.go → regenerate reference.md, --check/cligen/docgen parity green
 
 ### Phase 105: SKILL.md Decision-Matrix Rewrite
 
@@ -112,7 +112,7 @@
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
-| 104. Reference Generator Per-Verb Correctness | v2.2 | 0/TBD | Not started | - |
+| 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/TBD | Not started | - |
 | 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |
 

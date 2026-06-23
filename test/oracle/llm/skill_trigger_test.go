@@ -13,51 +13,23 @@ import (
 
 	"github.com/agenthands/helix/internal/cli"
 	"github.com/agenthands/helix/test/harness"
+	"github.com/agenthands/helix/test/oracle/adopt"
 )
 
-// mentionsHelix reports whether the model's chosen command line invokes the
-// `helix` CLI (TEST-03 "shifted toward a helix verb"). Per the "ONLY the single
-// command line" contract (prompt.go), it requires the response — after trimming
-// whitespace and stripping a leading fence/`$ `/`> ` shell-prompt decoration — to
-// START WITH "helix " rather than merely containing the substring anywhere. This
-// rejects prose mentions ("the helix tool would...") and only counts an actually
-// emitted helix command (WR-93-05).
-func mentionsHelix(response string) bool {
-	cmd := firstCommandLine(response)
-	return strings.HasPrefix(strings.ToLower(cmd), "helix ")
-}
-
-// firstCommandLine returns the first non-empty line of the response with common
-// command-line decoration stripped: surrounding code fences, a leading "$ " or
-// "> " shell prompt, and leading/trailing backticks/whitespace. It mirrors the
-// "ONLY the single command line" contract so the detectors evaluate the command
-// the model actually chose, not surrounding prose.
-func firstCommandLine(response string) string {
-	for _, raw := range strings.Split(response, "\n") {
-		line := strings.TrimSpace(raw)
-		if line == "" || strings.HasPrefix(line, "```") {
-			continue
-		}
-		line = strings.Trim(line, "`")
-		line = strings.TrimSpace(line)
-		line = strings.TrimPrefix(line, "$ ")
-		line = strings.TrimPrefix(line, "> ")
-		return strings.TrimSpace(line)
-	}
-	return ""
-}
-
-// mentionsGrepBaseline reports whether the response reaches for a grep/sed/cat
-// /find baseline tool (the "before" approach we expect the skill to displace).
-func mentionsGrepBaseline(response string) bool {
-	lower := strings.ToLower(response)
-	for _, tool := range []string{"grep ", "sed ", "cat ", "find ", "rg ", "ls "} {
-		if strings.Contains(lower, tool) {
-			return true
-		}
-	}
-	return false
-}
+// The first-command detector triad (firstCommandLine / mentionsHelix /
+// mentionsGrepBaseline) was LIFTED into the build-tag-FREE test/oracle/adopt
+// package as the single source of truth (Plan 01: adopt.FirstCommand /
+// adopt.ClassifyChoice). This live leg now delegates to those exported helpers
+// rather than carrying a local copy, so there is exactly ONE classifier
+// implementation and no drift between the hermetic scorer and the live oracle.
+//
+// adopt.ClassifyChoice keys BOTH chose ("helix " prefix) and fellBack
+// (grep/sed/cat/find/rg/ls prefix) on the FIRST emitted command, so the prior
+// `mentionsGrepBaseline(resp) && !mentionsHelix(resp)` baseline-chose-grep
+// predicate collapses to ClassifyChoice's fellBack (a fallback-prefixed first
+// command is, by construction, not a helix command). The prior fallback detector
+// used a looser strings.Contains form; the lifted prefix classifier is the
+// intentional, stricter single source of truth (101-PATTERNS Pitfall 2).
 
 // TestSkillVsBaseline is the TEST-03 behavioral oracle: for each helix-appropriate
 // code task it asks the subject model TWICE — once with a grep/sed/cat baseline
@@ -131,7 +103,10 @@ func TestSkillVsBaseline(t *testing.T) {
 		callIdx++
 		baseResp, baseStop, err := AskSingleTurn(ctx, client, model, baselineSystem, SkillTaskUserPrompt(task))
 		require.NoError(t, err, "baseline AskSingleTurn failed for task %d", i)
-		baseChoseGrep := mentionsGrepBaseline(baseResp) && !mentionsHelix(baseResp)
+		// Single source of truth: the first emitted command falling back to a
+		// grep/sed/cat baseline tool (adopt.ClassifyChoice fellBack). A fallback
+		// first command is, by construction, not a helix command.
+		_, baseChoseGrep := adopt.ClassifyChoice(baseResp)
 		if baseChoseGrep {
 			baselineGrep++
 		}
@@ -150,7 +125,9 @@ func TestSkillVsBaseline(t *testing.T) {
 		callIdx++
 		skillResp, skillStop, err := AskSingleTurn(ctx, client, model, skillSystem, SkillTaskUserPrompt(task))
 		require.NoError(t, err, "skill AskSingleTurn failed for task %d", i)
-		skillChoseHelix := mentionsHelix(skillResp)
+		// Single source of truth: the first emitted command is a helix verb
+		// (adopt.ClassifyChoice chose).
+		skillChoseHelix, _ := adopt.ClassifyChoice(skillResp)
 		if skillChoseHelix {
 			skillHelix++
 		}

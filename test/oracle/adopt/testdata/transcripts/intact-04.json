@@ -4,6 +4,6 @@
   "model": "fixture",
   "system": "helix Agent Skill (intact, with decision matrix)",
   "user_prompt": "Rename FormatToolList to RenderToolList everywhere.",
-  "response": "helix rename-symbol FormatToolList RenderToolList",
+  "response": "helix rename-symbol --path internal/cli/setup_output.go --line 42 --column 6 --new-name RenderToolList",
   "stop_reason": "end_turn"
 }

@@ -1,5 +1,21 @@
 # Milestones
 
+## v2.1 Agent Adoption & Aider-Derived Validation (Shipped: 2026-06-23)
+
+**Phases completed:** 6 phases, 13 plans, 14 tasks
+
+**Key accomplishments:**
+
+- `runAiderEditCell` (an `aider_edit` mode-name branch off `RunCell`) drives the Plan 01 deterministic EDIT-verb AgentFn + live native TestFn through `RunExercise` VERBATIM against the warm daemon, stamps `edit_format_applied`, and produces a committed, byte-reproducible polyglot-edit baseline (deterministic metrics only) — proven hermetically with no HELIX_BIN/network and fail-closed under HELIX_BIN.
+- [plan-checker fix — detector lift made REAL]
+- 1. [Rule 1 - Bug] Discriminator margin exceeded the initial observed spread
+- 1. [Rule 1 - Bug] Ambiguous case construction (whole-function duplicate matched only one site)
+- cmd/helix-refgen generates a 50-verb reference.md from the live tool registry (args from the new VerbSpecsForDocs accessor, not InputSchema), shipped via an embed.FS skill bundle and gated by a `--check` drift gate wired into make + CI.
+- Two merge-gating, non-vacuous contracts: (a) reference.md covers every frozen verb sourced from VerbToolNames() as authority, and (b) each standard-tool shape steers to the SPECIFIC emitted `helix <verb>` keyed on the command — both with mandatory revert-and-fail proofs and an empty-bucket floor, replacing the weak `Contains(...,"helix")` assertion.
+- 1. [Rule 1 — Test breakage] Pre-existing generic-registrar tests leaked an `AGENTS.md` into the package dir
+
+---
+
 ## v2.0 v2.0 (Shipped: 2026-06-22)
 
 **Phases completed:** 7 phases, 20 plans, 41 tasks

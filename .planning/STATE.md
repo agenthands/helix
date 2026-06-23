@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Agent Adoption & Aider-Derived Validation
-current_phase: 102
-status: verifying
+current_phase: 1
+status: Awaiting next milestone
 stopped_at: Completed 102-01-PLAN.md
-last_updated: "2026-06-23T16:49:57.103Z"
+last_updated: "2026-06-23T19:57:57.510Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 102 complete
+last_activity_desc: Milestone v2.1 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
@@ -21,17 +21,17 @@ current_phase_name: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-21)
+See: .planning/PROJECT.md (updated 2026-06-23)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 102 — RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
+**Current focus:** v2.1 shipped 2026-06-23 — planning next milestone. Candidate v2.2: Agent-Facing Skill Quality & Prompt Tuning (SKILL/reference rewrite + DSPy offline tuning; ROADMAP Backlog BL-SKILL-01/02). In-progress now: starting the SKILL.md/reference.md rewrite per `internal/cli/skills/helix/SKILL-ISSUE.md`.
 
 ## Current Position
 
-Phase: 102
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-23 — Phase 102 complete
+Phase: Milestone v2.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-23 — Milestone v2.1 completed and archived
 
 ## Performance Metrics
 
@@ -130,6 +130,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 > These four items were surfaced by the v2.0 milestone-close open-artifact audit (2026-06-22). All are pre-existing (none from v2.0 phases 90–96); acknowledged and deferred so the v2.0 close can proceed. None are v2.0 blockers.
 
+> **Re-surfaced at v2.1 close (2026-06-23):** the 3 quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x`) were re-flagged by the v2.1 open-artifact audit. Triage confirmed all three are **already completed work** (each has a SUMMARY.md with a completion date — `260617-j29` re-pinned `DefaultContract.ModelID` to `claude-sonnet-4-5-20250929`; `260617-t7x` did the docgen tool-manifest resync; `260414-e5n` did the REQUIREMENTS checkbox bookkeeping) — they are stale tracking entries lacking a `status: complete` marker, not real outstanding work. Re-acknowledged; not v2.1 blockers.
+
 ## Session Continuity
 
 Last session: 2026-06-23T16:42:40.513Z
@@ -174,5 +176,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- v2.1 roadmap created (Phases 97-102). Plan the first phase with `/gsd-plan-phase 97`.
-- Research flags for deeper planning passes (`/gsd-plan-phase --research-phase <N>`): Phase 101 (LLM scorecard rubric / sabotaged-skill self-test) and Phase 102 (gold-relevance labeling methodology + anti-self-confirming discriminator + corpus size floors).
+- Start the next milestone with /gsd-new-milestone

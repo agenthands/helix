@@ -123,6 +123,25 @@ func loadExercise(dir, language string) (*Exercise, error) {
 	return ex, nil
 }
 
+// LoadExercise is the exported, pure-stdlib accessor over loadExercise so a
+// non-leaf caller (the polyglot-edit cell) can load a fixture exercise WITHOUT
+// this loader leaf taking on any daemon-dial dependency (the vet-ablation-leakage
+// boundary the leaf-import discipline above enforces). It delegates verbatim: the
+// returned Exercise carries SrcDir=dir (loadExercise:120), which is load-bearing —
+// RunExercise only runs the WR-01 restorePristineTests anti-tamper step when
+// ex.SrcDir != "" (RunExercise:243-249).
+func LoadExercise(dir, language string) (*Exercise, error) {
+	return loadExercise(dir, language)
+}
+
+// NativeTestCommand is the exported, pure-stdlib accessor over nativeTestCommand
+// so the polyglot-edit cell's live TestFn can build the dataset's native per-
+// language test argv without pulling daemon-dial logic into this leaf. It
+// delegates verbatim; an unknown language fail-closes with an error.
+func NativeTestCommand(language string) ([]string, error) {
+	return nativeTestCommand(language)
+}
+
 // copyFile copies srcRoot/rel to workRoot/rel verbatim, creating parent dirs. rel
 // is taken from the validated config; it is cleaned and rejected if it escapes
 // either root (defense in depth on top of the exercise-name validation).

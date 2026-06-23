@@ -59,6 +59,24 @@ func TestModeResolverAblationModes(t *testing.T) {
 	}
 }
 
+// TestResolveAiderEdit (EDITBENCH-02) proves the new polyglot-edit mode dir
+// bench/runners/aider_edit/MODE.md resolves to the bench-full profile with ZERO
+// Go change to mode_resolver.go — the filesystem-as-table grew, not the resolver
+// code. It uses ResolveProfileFromRoot against the package-derived runners root.
+func TestResolveAiderEdit(t *testing.T) {
+	root, err := runnersRoot()
+	if err != nil {
+		t.Fatalf("runnersRoot: %v", err)
+	}
+	got, err := ResolveProfileFromRoot(root, "aider_edit")
+	if err != nil {
+		t.Fatalf("ResolveProfileFromRoot(aider_edit) returned error: %v", err)
+	}
+	if got != "bench-full" {
+		t.Fatalf("ResolveProfileFromRoot(aider_edit) = %q, want %q", got, "bench-full")
+	}
+}
+
 // TestModeResolverUnknownMode verifies an unknown mode name (no MODE.md dir)
 // fails closed with a non-nil error.
 func TestModeResolverUnknownMode(t *testing.T) {

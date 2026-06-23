@@ -19,3 +19,14 @@ the pre-plan baseline tree.
 Scope: the authoritative hermetic gate for this plan
 (`go test ./bench/evaluators/repomapeval/`, no binary, no network) is GREEN, as
 is `go vet ./bench/...` and `gofmt -l`.
+
+## 102-02: same pre-existing cmd/helix-bench failure (out of scope)
+
+Re-confirmed during the Plan 102-02 full-suite regression gate. 102-02 added the
+disjoint `bench/evaluators/fuzzyrobust/` leaf + an ignore-tagged
+`bench/runtime/fuzzy_robust_capture_regen.go` harness and never touched
+`cmd/helix-bench`. `TestRunSubcommandWiresDeltaPass` fails identically on the
+102-02 baseline commit (`e743a0c8~1`), proving it is pre-existing and unrelated.
+The authoritative hermetic gate for this plan
+(`go test ./bench/evaluators/fuzzyrobust/`, no binary, no network) is GREEN, as
+is `go vet ./bench/...` and `gofmt -l`.

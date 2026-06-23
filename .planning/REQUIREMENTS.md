@@ -58,8 +58,8 @@
 
 ### Fuzzy / Edit-Format Robustness Bench (FUZZBENCH)
 
-- [ ] **FUZZBENCH-01**: A new `bench/evaluators/fuzzyrobust` leaf measures `internal/fuzzy` 4-strategy selection and ambiguity refusal (reusing `editsim.ES`), stdlib-only and respecting the leaf-import boundary.
-- [ ] **FUZZBENCH-02**: A broad native drift corpus (across the 4 strategies and multiple languages) is authored with expected strategy derived from the drift type (not observed behavior), including at least one known-ambiguous case that MUST be refused, with a documented size floor.
+- [x] **FUZZBENCH-01**: A new `bench/evaluators/fuzzyrobust` leaf measures `internal/fuzzy` 4-strategy selection and ambiguity refusal (reusing `editsim.ES`), stdlib-only and respecting the leaf-import boundary.
+- [x] **FUZZBENCH-02**: A broad native drift corpus (across the 4 strategies and multiple languages) is authored with expected strategy derived from the drift type (not observed behavior), including at least one known-ambiguous case that MUST be refused, with a documented size floor.
 
 ### Committed Baselines (BASELINE)
 
@@ -125,8 +125,8 @@ Populated during roadmap creation (phases continue from 97, after v2.0 closed at
 | EDITBENCH-03 | Phase 100 | Complete |
 | REPOEVAL-01 | Phase 102 | Complete |
 | REPOEVAL-02 | Phase 102 | Complete |
-| FUZZBENCH-01 | Phase 102 | Pending |
-| FUZZBENCH-02 | Phase 102 | Pending |
+| FUZZBENCH-01 | Phase 102 | Complete |
+| FUZZBENCH-02 | Phase 102 | Complete |
 | BASELINE-01 | Phase 100 | Complete |
 | BASELINE-02 | Phase 102 | Pending |
 

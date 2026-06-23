@@ -73,6 +73,30 @@ func TestReferenceCoversEveryVerb(t *testing.T) {
 	}
 }
 
+// TestReferenceContractDiscriminatesAbsentVerb is the explicit anti-vacuity
+// discriminator (BUNDLE-02, SC-3): it proves referenceMissingVerbs keys on the
+// real frozen VerbToolNames() authority and reports a verb that is genuinely
+// absent from the reference. Appending a fabricated token that has no section in
+// reference.md and asserting it is reported missing seals the gate against an
+// "∅ ⊇ ∅" vacuous pass through the Phase 104/105 reference/skill churn. It is a
+// confirm-and-seal anchor (expected green today); its value is that it would go
+// RED if a future refactor made the membership check stop reporting genuinely
+// absent names.
+func TestReferenceContractDiscriminatesAbsentVerb(t *testing.T) {
+	ref := readEmbeddedReference(t)
+	// A fabricated token that is NOT a real frozen verb and carries no markdown
+	// that could accidentally match a "## `helix ...`" section header.
+	const fabricated = "totally-not-a-verb"
+	require.NotContains(t, ref, referenceSectionHeader(fabricated),
+		"precondition: the fabricated verb must have no section in reference.md")
+
+	authorityPlus := append(append([]string{}, VerbToolNames()...), fabricated)
+	missing := referenceMissingVerbs(ref, authorityPlus)
+	require.Contains(t, missing, fabricated,
+		"referenceMissingVerbs must report a genuinely-absent verb %q — the gate keys on the real frozen authority, not ∅ ⊇ ∅",
+		fabricated)
+}
+
 // TestReferenceCompletenessRevertFails is the MANDATORY revert-and-fail proof
 // (97-RESEARCH Anti-Vacuity Architecture, T-97-06). It takes the real embedded
 // reference.md, strips ONE verb's section header in-memory, and asserts the SAME

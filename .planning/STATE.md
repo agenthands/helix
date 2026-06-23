@@ -4,17 +4,17 @@ milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
 current_phase: 105
 current_phase_name: SKILL.md Decision-Matrix Rewrite
-status: executing
+status: verifying
 stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-23T22:26:25.359Z"
+last_updated: "2026-06-23T22:33:31.608Z"
 last_activity: 2026-06-23
-last_activity_desc: Phase 104 complete, transitioned to Phase 105
+last_activity_desc: Phase 105 execution started
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-23)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 104 — Reference Generator Per-Verb Correctness
+**Current focus:** Phase 105 — SKILL.md Decision-Matrix Rewrite
 
 ## Current Position
 
-Phase: 105 — SKILL.md Decision-Matrix Rewrite
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-23 — Phase 104 complete, transitioned to Phase 105
+Phase: 105 (SKILL.md Decision-Matrix Rewrite) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-06-23 — Phase 105 execution started
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Last activity: 2026-06-23 — Phase 104 complete, transitioned to Phase 105
 | Phase 102 P03 | 16 | 3 tasks | 10 files |
 | Phase 103 P01 | 4m | 3 tasks | 5 files |
 | Phase 104 P01 | 3 | 3 tasks | 4 files |
+| Phase 105 P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -150,7 +151,7 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-23T21:49:51.922Z
+Last session: 2026-06-23T22:33:16.906Z
 Stopped at: v2.2 roadmap created (Phases 103-106)
 Resume file: None
 
@@ -190,6 +191,8 @@ Resume file: None
 - [Phase ?]: RepoMap-eval gold is file:symbol (relpath:SymbolName, receiver-qualified); leaf is stdlib-only with a TestLeafImports self-test (vet-ablation-leakage does not gate bench/evaluators/*)
 - [Phase ?]: RepoMap-eval DiscriminatorMargin=0.30 committed; reversed+seeded-random both bite (fwd 1.0 vs rev 0.005 / rnd 0.52)
 - [Phase ?]: Phase 104: refgen per-verb override maps fix collapsed-prose in the generator, not via reference.md hand-edit; categoryToGroup untouched.
+- [Phase 105]: 105-01: split get-context (RepoMap, no prereq) from get-semantic-context (Semantic graph, †) so the indexed-graph reader carries the marker without mis-tagging the repomap reader; 43 data rows (37 baseline + 6 net splits)
+- [Phase 105]: 105-01: anti-vacuity matrix guards run each pure checker on the real embed (positive arm) + a synthetic fabricated offender (negative arm) parsed by the SAME parseMatrixRows; querySet/actionSet keyed to VerbToolNames() with a completeness gate (every frozen verb classified exactly once)
 
 ## Operator Next Steps
 

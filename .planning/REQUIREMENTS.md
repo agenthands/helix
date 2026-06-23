@@ -17,9 +17,9 @@
 
 ### Skill Decision-Matrix Quality (SKILL)
 
-- [ ] **SKILL-01**: no `SKILL.md` decision-matrix row mixes a QUERY (read-state) verb with an ACTION (mutate-state) verb — query and action verbs occupy separate rows (resolves the SKILL-ISSUE.md rows 68/70/71/72/73 grouping errors).
-- [ ] **SKILL-02**: every decision-matrix row carries explicit "Not this" guidance — no `—` placeholders remain.
-- [ ] **SKILL-03**: every indexed-graph verb (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`) carries a "requires `index-semantic-graph` first" prerequisite note, and the matrix is grouped by capability — while preserving the `## Decision matrix` StripDecisionMatrix anchor and the SKILL-04 idle-cost (size) cap.
+- [x] **SKILL-01**: no `SKILL.md` decision-matrix row mixes a QUERY (read-state) verb with an ACTION (mutate-state) verb — query and action verbs occupy separate rows (resolves the SKILL-ISSUE.md rows 68/70/71/72/73 grouping errors).
+- [x] **SKILL-02**: every decision-matrix row carries explicit "Not this" guidance — no `—` placeholders remain.
+- [x] **SKILL-03**: every indexed-graph verb (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`) carries a "requires `index-semantic-graph` first" prerequisite note, and the matrix is grouped by capability — while preserving the `## Decision matrix` StripDecisionMatrix anchor and the SKILL-04 idle-cost (size) cap.
 
 ### Offline Prompt Tuning (TUNE) — exploratory
 
@@ -45,7 +45,7 @@
 | BUNDLE-01 | Phase 103 | Complete |
 | BUNDLE-02 | Phase 103 | Complete |
 | REFGEN-01 | Phase 104 | Complete |
-| SKILL-01 | Phase 105 | Pending |
-| SKILL-02 | Phase 105 | Pending |
-| SKILL-03 | Phase 105 | Pending |
+| SKILL-01 | Phase 105 | Complete |
+| SKILL-02 | Phase 105 | Complete |
+| SKILL-03 | Phase 105 | Complete |
 | TUNE-01 | Phase 106 | Pending |

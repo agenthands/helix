@@ -41,7 +41,7 @@
 
 - [x] **Phase 103: Bundle Integrity & Non-Vacuous Reference Contract** - `installSkill` closed-set allowlist + exact-set bundle test, move `SKILL-ISSUE.md` out of the embed dir, harden the reference-completeness contract to exact-count (==50) discriminating a known-absent verb (completed 2026-06-23)
 - [x] **Phase 104: Reference Generator Per-Verb Correctness** - fix the `cmd/helix-refgen`/`cmd/helix-cligen` group-collapse via per-verb overrides so every "use this/not that" + "Output" line is correct; regenerated `reference.md` passes `--check` byte-for-byte (completed 2026-06-23)
-- [ ] **Phase 105: SKILL.md Decision-Matrix Rewrite** - split QUERY/ACTION rows, "Not this" on every row, indexed-graph prerequisite notes, regroup by capability; preserve the `## Decision matrix` StripDecisionMatrix anchor + the SKILL-04 idle-cost size cap
+- [x] **Phase 105: SKILL.md Decision-Matrix Rewrite** - split QUERY/ACTION rows, "Not this" on every row, indexed-graph prerequisite notes, regroup by capability; preserve the `## Decision matrix` StripDecisionMatrix anchor + the SKILL-04 idle-cost size cap (completed 2026-06-23)
 - [ ] **Phase 106: Exploratory DSPy Offline Tuning Harness (spike)** - opt-in dev-time-only Python harness under `tools/`, no runtime Python dep, off `go test ./...`; optimizes against the Phase 101 `adopt` scorecard (parity-pinned Python metric) with overfit/gaming guards; may no-ship; a `vet`-style analyzer blocks Python/runtime leakage
 
 ## Phase Details
@@ -90,8 +90,9 @@
   3. Every indexed-graph verb (`get-semantic-graph-status`, `explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`) carries a "requires `index-semantic-graph` first" prerequisite note, and the matrix is grouped by capability.
   4. The `## Decision matrix` heading (the `StripDecisionMatrix` anchor) is preserved, the rewritten `SKILL.md` stays under the SKILL-04 idle-cost (size) cap, and a SKILL.md↔`VerbToolNames()` cross-check test holds.
 
-**Plans**: 1 plan
-- [ ] 105-01-PLAN.md — RED 3 anti-vacuity matrix guards (SKILL-01/02/03) → GREEN rewrite the SKILL.md decision matrix (split QUERY/ACTION, fill "Not this", graph prereqs, capability grouping); preserve anchor + cap + drift cross-check
+**Plans**: 1/1 plans complete
+
+- [x] 105-01-PLAN.md — RED 3 anti-vacuity matrix guards (SKILL-01/02/03) → GREEN rewrite the SKILL.md decision matrix (split QUERY/ACTION, fill "Not this", graph prereqs, capability grouping); preserve anchor + cap + drift cross-check
 
 ### Phase 106: Exploratory DSPy Offline Tuning Harness (spike)
 
@@ -114,7 +115,7 @@
 |-------|-----------|----------------|--------|-----------|
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete    | 2026-06-23 |
-| 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 0/1 | Not started | - |
+| 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |
 
 ### ✅ v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — SHIPPED 2026-06-23

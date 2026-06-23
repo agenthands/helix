@@ -44,6 +44,7 @@ func Aggregate(scores []*Score) *AggregateReport {
 		"output_interpretation": 0,
 		"uncertainty_handling":  0,
 		"polyglot_reasoning":    0,
+		"adoption":              0,
 	}
 
 	for _, s := range scores {
@@ -62,6 +63,7 @@ func Aggregate(scores []*Score) *AggregateReport {
 		sums["output_interpretation"] += s.OutputInterpretation
 		sums["uncertainty_handling"] += s.UncertaintyHandling
 		sums["polyglot_reasoning"] += s.PolyglotReasoning
+		sums["adoption"] += s.Adoption
 
 		if s.SelfJudged {
 			report.SelfJudged = true
@@ -120,7 +122,7 @@ func WriteAggregate(t *testing.T, report *AggregateReport) {
 		sb.WriteString("WARNING: Self-judged run (subject == judge model)\n")
 	}
 	sb.WriteString("\nDimension Averages:\n")
-	dims := []string{"tool_choice", "description_use", "output_interpretation", "uncertainty_handling", "polyglot_reasoning"}
+	dims := []string{"tool_choice", "description_use", "output_interpretation", "uncertainty_handling", "polyglot_reasoning", "adoption"}
 	for _, d := range dims {
 		fmt.Fprintf(&sb, "  %-25s %.2f\n", d, report.DimensionAvgs[d])
 	}

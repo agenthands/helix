@@ -15,6 +15,7 @@ type Score struct {
 	OutputInterpretation float64  `json:"output_interpretation"`
 	UncertaintyHandling  float64  `json:"uncertainty_handling"`
 	PolyglotReasoning    float64  `json:"polyglot_reasoning"`
+	Adoption             float64  `json:"adoption"`
 	Total                float64  `json:"total"`
 	Verdict              string   `json:"verdict"`
 	Failures             []string `json:"failures"`
@@ -46,6 +47,9 @@ func ValidateScoreValues(s *Score) error {
 	if !validScoreValue(s.PolyglotReasoning) {
 		invalid = append(invalid, fmt.Sprintf("polyglot_reasoning=%.2f", s.PolyglotReasoning))
 	}
+	if !validScoreValue(s.Adoption) {
+		invalid = append(invalid, fmt.Sprintf("adoption=%.2f", s.Adoption))
+	}
 	if len(invalid) > 0 {
 		return fmt.Errorf("invalid score values (must be 0.0, 0.5, or 1.0): %s", strings.Join(invalid, ", "))
 	}
@@ -73,6 +77,7 @@ func ComputeVerdict(s *Score) error {
 		{"output_interpretation", s.OutputInterpretation},
 		{"uncertainty_handling", s.UncertaintyHandling},
 		{"polyglot_reasoning", s.PolyglotReasoning},
+		{"adoption", s.Adoption},
 	}
 
 	s.Total = 0
@@ -100,11 +105,11 @@ func ComputeVerdict(s *Score) error {
 }
 
 // RubricPrompt returns the full judge system prompt with anchor definitions
-// for all 5 dimensions (D-08).
+// for all 6 dimensions (D-08, ADOPT-02 adoption dimension).
 func RubricPrompt() string {
 	return `You are an expert judge evaluating an LLM's interaction with MCP (Model Context Protocol) tools.
 
-Score the following transcript on 5 dimensions using this scale:
+Score the following transcript on 6 dimensions using this scale:
 - 0.0 = fail
 - 0.5 = partial
 - 1.0 = pass
@@ -136,6 +141,11 @@ Score the following transcript on 5 dimensions using this scale:
 - 0.5: Mostly correct but missed language-specific nuances
 - 1.0: Correctly handled language context, or task was language-agnostic (score 1.0 for N/A)
 
+### adoption
+- 0.0: Chose a standard shell tool (grep, sed, cat, find) as the FIRST command for a code-symbol question — for example reaching for a grep invocation to locate a function definition instead of the dedicated helix verb
+- 0.5: Chose a helix verb but a suboptimal one for the task
+- 1.0: Chose the correct helix verb as the first command for the code-symbol question
+
 Respond with ONLY a JSON object in this exact format, no other text:
-{"tool_choice": <0.0|0.5|1.0>, "description_use": <0.0|0.5|1.0>, "output_interpretation": <0.0|0.5|1.0>, "uncertainty_handling": <0.0|0.5|1.0>, "polyglot_reasoning": <0.0|0.5|1.0>}`
+{"tool_choice": <0.0|0.5|1.0>, "description_use": <0.0|0.5|1.0>, "output_interpretation": <0.0|0.5|1.0>, "uncertainty_handling": <0.0|0.5|1.0>, "polyglot_reasoning": <0.0|0.5|1.0>, "adoption": <0.0|0.5|1.0>}`
 }

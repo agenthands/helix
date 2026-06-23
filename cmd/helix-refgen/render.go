@@ -76,9 +76,9 @@ func renderVerb(d cli.VerbDoc, syn string) string {
 		sb.WriteString("\n")
 	}
 
-	// Output shape (per group).
+	// Output shape (per-verb override, else per-group default).
 	sb.WriteString("**Output:** ")
-	sb.WriteString(outputShape(d.GroupID))
+	sb.WriteString(outputShape(d.Verb, d.GroupID))
 	sb.WriteString("\n\n")
 
 	// Worked example.
@@ -86,9 +86,9 @@ func renderVerb(d cli.VerbDoc, syn string) string {
 	sb.WriteString(workedExample(d))
 	sb.WriteString("\n```\n\n")
 
-	// Use-this-not-that.
+	// Use-this-not-that (per-verb override, else per-group default).
 	sb.WriteString("**Use this, not that:** ")
-	sb.WriteString(useThisNotThat(d.GroupID, d.Verb))
+	sb.WriteString(useThisNotThat(d.Verb, d.GroupID))
 	sb.WriteString("\n\n")
 
 	return sb.String()
@@ -199,8 +199,51 @@ func placeholder(f cli.FlagDoc) string {
 	}
 }
 
-// outputShape returns the deterministic per-group output-shape note.
-func outputShape(group string) string {
+// outputShapeOverrides corrects the Output prose for verbs whose collapsed
+// GroupID ("memory", from cligen's categoryToGroup folding profile/workflow/
+// health/help/memory-mutate into groupMemory) would otherwise inherit the
+// memory-query default. Keyed on the kebab verb; consulted by KEYED lookup
+// (never ranged) so renderReference stays byte-deterministic.
+var outputShapeOverrides = map[string]string{
+	"write-memory":                 "a confirmation that the named memory was written (durable markdown + FTS5 index updated).",
+	"edit-memory":                  "a confirmation that the named memory's body was updated in place.",
+	"delete-memory":                "a confirmation that the named memory was removed (markdown + FTS5 index).",
+	"rename-memory":                "a confirmation that the memory was renamed (old name freed, new name indexed).",
+	"switch-mode":                  "the active profile mode after the switch and the tool surface it now gates.",
+	"get-token-budget":             "the per-tool token budget for the active profile/mode.",
+	"onboard-project":              "a workspace onboarding summary (detected languages, entry points, suggested first memories).",
+	"prepare-for-new-conversation": "a session-handoff summary seeding the next conversation with the current working context.",
+	"get-health":                   "per-workspace language-server status, capabilities, and indexing progress.",
+	"get-tool-help":                "comprehensive on-demand documentation for the named tool (args, output, usage).",
+}
+
+// useThisNotThatOverrides corrects the "use this, not that" prose for the same
+// 10 verbs (see outputShapeOverrides). Values are full sentences (the verb
+// reference is built inline via `helix <verb>`); keyed lookup only.
+var useThisNotThatOverrides = map[string]string{
+	"write-memory":                 "Use `helix write-memory` to persist a durable project/session note instead of leaving it in chat scratch — it is indexed for later recall.",
+	"edit-memory":                  "Use `helix edit-memory` to update a stored memory's body instead of re-writing it by hand — the FTS5 index stays in sync.",
+	"delete-memory":                "Use `helix delete-memory` to remove a stored memory instead of editing the markdown file directly — the index is updated too.",
+	"rename-memory":                "Use `helix rename-memory` to rename a stored memory instead of moving the file by hand — references and the index follow.",
+	"switch-mode":                  "Use `helix switch-mode` to change the active profile mode instead of editing config by hand — it re-gates the tool surface atomically.",
+	"get-token-budget":             "Use `helix get-token-budget` to read the active profile's per-tool token budget instead of guessing limits.",
+	"onboard-project":              "Use `helix onboard-project` to bootstrap workspace context instead of manually exploring the tree — it detects languages and entry points for you.",
+	"prepare-for-new-conversation": "Use `helix prepare-for-new-conversation` to capture a session handoff instead of re-deriving context next time.",
+	"get-health":                   "Use `helix get-health` to inspect language-server status and indexing progress instead of guessing whether the daemon is warm.",
+	"get-tool-help":                "Use `helix get-tool-help` for authoritative on-demand tool docs instead of guessing a verb's args or output shape.",
+}
+
+// outputShape returns the per-verb Output override when one exists, else the
+// per-group default. Keyed lookup keeps renderReference deterministic.
+func outputShape(verb, group string) string {
+	if s, ok := outputShapeOverrides[verb]; ok {
+		return s
+	}
+	return groupOutputDefault(group)
+}
+
+// groupOutputDefault returns the deterministic per-group output-shape note.
+func groupOutputDefault(group string) string {
 	switch group {
 	case "navigation":
 		return "terse `relpath:line:col<TAB>payload`, one locus per line, sorted and deduped (1-based); navigation verbs append a snippet line."
@@ -219,9 +262,18 @@ func outputShape(group string) string {
 	}
 }
 
-// useThisNotThat returns the deterministic per-group "use this verb, not the
+// useThisNotThat returns the per-verb "use this, not that" override when one
+// exists, else the per-group default. Keyed lookup keeps render deterministic.
+func useThisNotThat(verb, group string) string {
+	if s, ok := useThisNotThatOverrides[verb]; ok {
+		return s
+	}
+	return groupUseDefault(group, verb)
+}
+
+// groupUseDefault returns the deterministic per-group "use this verb, not the
 // standard tool" pointer.
-func useThisNotThat(group, verb string) string {
+func groupUseDefault(group, verb string) string {
 	cmd := "`helix " + verb + "`"
 	switch group {
 	case "navigation":

@@ -234,6 +234,217 @@ func TestWriteCodexHooks(t *testing.T) {
 	assert.Equal(t, data, data2, "re-running writeCodexHooks must be byte-stable")
 }
 
+// codexPreToolUseEntries is a test helper extracting the PreToolUse matcher
+// array from a Codex hooks.json file. It fails the test if the schema is not the
+// expected {"hooks":{"PreToolUse":[...]}} shape.
+func codexPreToolUseEntries(t *testing.T, path string) []any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(data, &parsed), "hooks.json must be valid JSON")
+	hooks, ok := parsed["hooks"].(map[string]any)
+	require.True(t, ok, "hooks.json must have a top-level hooks object")
+	pre, ok := hooks["PreToolUse"].([]any)
+	require.True(t, ok, "hooks.json must have a PreToolUse array")
+	return pre
+}
+
+// countHelixNudgeEntries counts PreToolUse matcher objects that are our
+// structural Helix entry: matcher=="Bash" AND command is a 2-element array whose
+// last element is "nudge".
+func countHelixNudgeEntries(entries []any) int {
+	n := 0
+	for _, e := range entries {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["matcher"] != "Bash" {
+			continue
+		}
+		hooksArr, ok := m["hooks"].([]any)
+		if !ok || len(hooksArr) == 0 {
+			continue
+		}
+		for _, h := range hooksArr {
+			hm, ok := h.(map[string]any)
+			if !ok {
+				continue
+			}
+			cmd, ok := hm["command"].([]any)
+			if !ok || len(cmd) != 2 {
+				continue
+			}
+			if cmd[len(cmd)-1] == "nudge" {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// TestWriteCodexHooksMergePreservesOthers asserts that writing into an existing
+// Codex hooks.json MERGES our PreToolUse Bash→nudge entry while preserving (a) an
+// unrelated event (Stop) and (b) an unrelated PreToolUse matcher (non-Bash). This
+// is the core no-clobber goal of AGENT-03.
+func TestWriteCodexHooksMergePreservesOthers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	bin := "/usr/local/bin/helix"
+
+	// Pre-existing user hooks.json in valid Codex shape with an unrelated Stop
+	// event and an unrelated (non-Bash) PreToolUse matcher.
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": []any{"/opt/user/cleanup", "run"},
+							"timeout": 10,
+						},
+					},
+				},
+			},
+			"PreToolUse": []any{
+				map[string]any{
+					"matcher": "Edit",
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": []any{"/opt/user/lint", "check"},
+							"timeout": 7,
+						},
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.MarshalIndent(existing, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, raw, 0644))
+
+	require.NoError(t, writeCodexHooks(path, bin))
+
+	// No backup should be created for a valid Codex-shaped file.
+	_, statErr := os.Stat(path + ".bak")
+	assert.True(t, os.IsNotExist(statErr), "valid Codex hooks.json must not be backed up")
+
+	out, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(out, &parsed))
+	hooks := parsed["hooks"].(map[string]any)
+
+	// (a) the unrelated Stop event survives.
+	stop, ok := hooks["Stop"].([]any)
+	require.True(t, ok, "Stop event must survive the merge")
+	require.Len(t, stop, 1)
+	assert.Contains(t, string(out), "/opt/user/cleanup", "user Stop hook command must survive")
+
+	// (b) the unrelated PreToolUse matcher survives AND our Bash→nudge entry is added.
+	pre := codexPreToolUseEntries(t, path)
+	assert.Contains(t, string(out), "/opt/user/lint", "unrelated PreToolUse matcher must survive")
+	assert.Contains(t, string(out), bin, "our nudge entry must reference the binary")
+	assert.Equal(t, 1, countHelixNudgeEntries(pre), "exactly one Helix Bash→nudge entry after merge")
+}
+
+// TestWriteCodexHooksIdempotentRefreshesStalePath asserts that re-running over an
+// existing file containing a Bash→nudge entry with a STALE first-element binary
+// path refreshes that path to the current binaryPath and does NOT duplicate the
+// entry, and that a subsequent run is byte-identical.
+func TestWriteCodexHooksIdempotentRefreshesStalePath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	bin := "/usr/local/bin/helix"
+	stale := "/old/path/helix"
+
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"PreToolUse": []any{
+				map[string]any{
+					"matcher": "Bash",
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": []any{stale, "nudge"},
+							"timeout": 5,
+						},
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.MarshalIndent(existing, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, raw, 0644))
+
+	require.NoError(t, writeCodexHooks(path, bin))
+
+	out, err := os.ReadFile(path)
+	require.NoError(t, err)
+	pre := codexPreToolUseEntries(t, path)
+	assert.Equal(t, 1, countHelixNudgeEntries(pre), "stale entry must be refreshed, not duplicated")
+	assert.Contains(t, string(out), bin, "the refreshed entry must use the current binary path")
+	assert.NotContains(t, string(out), stale, "the stale binary path must be gone")
+
+	// Second run is byte-identical.
+	require.NoError(t, writeCodexHooks(path, bin))
+	out2, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, out, out2, "merge re-run must be byte-stable")
+}
+
+// TestWriteCodexHooksLegacyForeignBackedUp asserts that an existing file NOT in
+// the {"hooks":...} shape (legacy Claude-style top-level event keys, or invalid
+// JSON) is preserved at <path>.bak and replaced with a valid Codex file rather
+// than silently clobbered.
+func TestWriteCodexHooksLegacyForeignBackedUp(t *testing.T) {
+	bin := "/usr/local/bin/helix"
+
+	t.Run("legacy claude-style top-level event keys", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "hooks.json")
+		legacy := []byte(`{"SessionStart":[{"matcher":"startup"}]}`)
+		require.NoError(t, os.WriteFile(path, legacy, 0644))
+
+		require.NoError(t, writeCodexHooks(path, bin))
+
+		// Original preserved at .bak.
+		bak, err := os.ReadFile(path + ".bak")
+		require.NoError(t, err, "legacy file must be backed up to .bak")
+		assert.Equal(t, legacy, bak, ".bak must contain the original bytes verbatim")
+
+		// New file is valid Codex shape with our entry.
+		pre := codexPreToolUseEntries(t, path)
+		assert.Equal(t, 1, countHelixNudgeEntries(pre), "fresh Codex file must carry our entry")
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "hooks.json")
+		junk := []byte("not json at all {{{")
+		require.NoError(t, os.WriteFile(path, junk, 0644))
+
+		require.NoError(t, writeCodexHooks(path, bin))
+
+		bak, err := os.ReadFile(path + ".bak")
+		require.NoError(t, err, "unparseable file must be backed up to .bak")
+		assert.Equal(t, junk, bak, ".bak must contain the original bytes verbatim")
+
+		pre := codexPreToolUseEntries(t, path)
+		assert.Equal(t, 1, countHelixNudgeEntries(pre), "fresh Codex file must carry our entry")
+
+		// And the new file contains no deny default (advisory-only invariant).
+		out, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.NotContains(t, string(out), "permissionDecision")
+		assert.NotContains(t, string(out), "deny")
+	})
+}
+
 // TestCodexRegistrar asserts CodexRegistrar.Register writes BOTH an AGENTS.md
 // (sentinel-delimited Helix block, idempotent) and a Codex hooks.json invoking
 // `<bin> nudge`, advisory-only.

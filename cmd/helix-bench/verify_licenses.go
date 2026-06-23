@@ -245,8 +245,13 @@ func verifyManifestVsDisk(manifestPath, treeRoot string, auditedLicenses map[str
 	// Skipped when the caller passes no audit dispositions (nil map).
 	if auditedLicenses != nil {
 		for rel, row := range manifest {
+			// WR-03: every vendored file must carry an explicit license
+			// disposition. An empty license column is an unverifiable claim,
+			// not "no claim to check" — treating it as exempt would silently
+			// disable the license half of the gate for that row while the sha
+			// half still passes. Fail closed.
 			if row.license == "" {
-				continue
+				return fmt.Errorf("verify-licenses: manifest row %q has an empty license column", rel)
 			}
 			// The pre-existing hermetic stubs carry a non-SPDX
 			// `internal — repo license` disposition recorded in the manifest
@@ -266,6 +271,21 @@ func verifyManifestVsDisk(manifestPath, treeRoot string, auditedLicenses map[str
 	walkErr := filepath.WalkDir(treeRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		// WR-01: filepath.WalkDir lstat's each entry and does NOT follow
+		// symlinks — a symlinked directory is reported as a single non-dir
+		// entry whose target subtree is never walked (so files behind it are
+		// never required to be manifest-pinned), and a symlinked file is
+		// hashed by its dereferenced (possibly out-of-tree) target bytes. A
+		// vendored third-party fixture tree must contain no symlinks, so we
+		// refuse any symlink in the tree rather than let the integrity
+		// contract silently fail to cover what it cannot traverse.
+		if d.Type()&fs.ModeSymlink != 0 {
+			rel, relErr := filepath.Rel(treeRoot, p)
+			if relErr != nil {
+				rel = p
+			}
+			return fmt.Errorf("verify-licenses: refusing to verify symlink %q in tree (integrity walk does not follow symlinks)", filepath.ToSlash(rel))
 		}
 		if d.IsDir() {
 			return nil
@@ -328,23 +348,41 @@ func parseManifestRows(s string) (map[string]manifestRow, error) {
 			continue
 		}
 		cols := strings.Split(line, "|")
-		// cols[0] is empty (leading `|`); cols[1]=path, cols[2]=sha256,
-		// cols[3]=license, cols[4]=provenance.
-		if len(cols) < 3 {
-			continue
+		// A well-formed table row is `| <path> | <sha> | <license> | <prov> |`,
+		// which strings.Split on "|" yields as 6 fields: cols[0]="" (leading
+		// `|`), cols[1]=path, cols[2]=sha256, cols[3]=license, cols[4]=
+		// provenance, cols[5]="" (trailing `|`).
+		//
+		// WR-04: positional parsing makes a `|` embedded in a path, or a row
+		// missing a column, silently shift every subsequent field. Previously a
+		// shifted row landed a non-hex value in cols[2], failed isHex64, and was
+		// silently `continue`d out of the map — a digest claim evaporating with
+		// no diagnostic. Require a minimum column count for every `| `-prefixed
+		// row so a malformed row is loud rather than dropped. The upstream-
+		// sources table rows are also `| `-prefixed and well-formed (6 fields),
+		// so this does not reject them; they are still skipped below by the
+		// isHex64 row-type discriminator.
+		if len(cols) < 5 {
+			return nil, fmt.Errorf("manifest row %q has too few columns (| path | sha | license | provenance | expected)", line)
 		}
 		rel := strings.Trim(strings.TrimSpace(cols[1]), "`")
 		sha := strings.TrimSpace(cols[2])
 		if !isHex64(sha) {
-			// Not a per-file digest row (e.g. the upstream-sources table).
+			// Not a per-file digest row (e.g. the upstream-sources table whose
+			// column 2 is a backtick-wrapped ref, not a 64-hex sha256).
 			continue
 		}
-		license := ""
-		if len(cols) >= 4 {
-			license = strings.TrimSpace(cols[3])
-		}
+		license := strings.TrimSpace(cols[3])
 		if err := validatePathSegmentSafe(rel); err != nil {
 			return nil, fmt.Errorf("manifest path %q: %w", rel, err)
+		}
+		// WR-02: rows are keyed by relpath into a map, so two rows for the same
+		// path would silently collapse last-wins — a wrong-digest row followed
+		// by a correct row for the same path would pass the gate because only
+		// the surviving entry is checked against disk. Reject duplicates so
+		// every byte is pinned exactly once.
+		if _, dup := out[rel]; dup {
+			return nil, fmt.Errorf("manifest has a duplicate row for path %q", rel)
 		}
 		out[rel] = manifestRow{sha: sha, license: license}
 	}

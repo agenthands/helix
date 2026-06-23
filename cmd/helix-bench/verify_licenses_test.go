@@ -384,6 +384,112 @@ func TestVerifyLicensesFull_FixtureUnknownKeyFailsStrictDecode(t *testing.T) {
 	}
 }
 
+// TestVerifyLicensesFull_TamperSymlinkInTree (WR-01) — a symlink inside the
+// --tree root is refused: filepath.WalkDir does not follow symlinks, so a
+// symlinked directory's subtree would never be required to be manifest-pinned
+// and a symlinked file would be hashed by out-of-tree target bytes. The gate
+// must hard-fail rather than silently fail to cover what it cannot traverse.
+func TestVerifyLicensesFull_TamperSymlinkInTree(t *testing.T) {
+	vt := vendorTempTree(t)
+	// Replace a real on-disk file with a symlink pointing at an out-of-tree
+	// target whose bytes match the manifest digest. Without the WR-01 refusal
+	// the dereferenced read would hash the target and PASS — exactly the
+	// fail-open this test pins shut.
+	rel := "go/exercises/practice/bowling/bowling.go"
+	target := filepath.Join(vt.tree, rel)
+	content := "package bowling\n" // identical bytes to the original file
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.go")
+	if err := os.WriteFile(outside, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, target); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+	err := verifyLicensesFull(vt.audit, vt.manifest, vt.tree)
+	if err == nil {
+		t.Fatal("expected error on a symlink inside the tree, got nil")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected a 'symlink' refusal error, got: %v", err)
+	}
+}
+
+// TestVerifyLicensesFull_TamperDuplicateManifestRow (WR-02) — a manifest with a
+// wrong-digest row followed by a correct row for the SAME path must hard-fail
+// rather than silently collapse last-wins. 3 rows → 2 distinct paths.
+func TestVerifyLicensesFull_TamperDuplicateManifestRow(t *testing.T) {
+	vt := vendorTempTree(t)
+	b, _ := os.ReadFile(vt.manifest)
+	rel := "go/exercises/practice/bowling/bowling.go"
+	// Inject a wrong-digest DUPLICATE row for an existing path. The genuine
+	// (correct) row for the same path remains, so under last-wins the gate
+	// would pass; the duplicate-key refusal is what catches it.
+	dupRow := "| `" + rel + "` | " + sha256Hex([]byte("WRONG BYTES")) + " | MIT | upstream@deadbeef |\n"
+	tampered := string(b) + dupRow
+	if err := os.WriteFile(vt.manifest, []byte(tampered), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := verifyLicensesFull(vt.audit, vt.manifest, vt.tree)
+	if err == nil {
+		t.Fatal("expected error on a duplicate manifest row, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate row") {
+		t.Fatalf("expected a 'duplicate row' error, got: %v", err)
+	}
+}
+
+// TestVerifyLicensesFull_TamperEmptyLicenseColumn (WR-03) — a per-file manifest
+// row whose license column was blanked must hard-fail. An empty license is an
+// unverifiable claim, not an exemption from the audit-disposition cross-check.
+func TestVerifyLicensesFull_TamperEmptyLicenseColumn(t *testing.T) {
+	vt := vendorTempTree(t)
+	b, _ := os.ReadFile(vt.manifest)
+	// Blank the license column of the bowling.go row (MIT → empty) while
+	// keeping its digest correct, so only the license half is tampered.
+	blanked := strings.Replace(string(b),
+		"bowling/bowling.go` | "+sha256Hex([]byte("package bowling\n"))+" | MIT |",
+		"bowling/bowling.go` | "+sha256Hex([]byte("package bowling\n"))+" |  |", 1)
+	if blanked == string(b) {
+		t.Fatal("test setup: nothing blanked")
+	}
+	if err := os.WriteFile(vt.manifest, []byte(blanked), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := verifyLicensesFull(vt.audit, vt.manifest, vt.tree)
+	if err == nil {
+		t.Fatal("expected error on an empty license column, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty license column") {
+		t.Fatalf("expected an 'empty license column' error, got: %v", err)
+	}
+}
+
+// TestVerifyLicensesFull_TamperMalformedShortRow (WR-04) — a per-file row that
+// is missing a column must hard-fail loudly instead of being silently dropped
+// from the map (where a digest claim would evaporate with no diagnostic).
+func TestVerifyLicensesFull_TamperMalformedShortRow(t *testing.T) {
+	vt := vendorTempTree(t)
+	b, _ := os.ReadFile(vt.manifest)
+	// Append a malformed short row (only path + sha, no license/provenance
+	// columns). Its path is NOT on disk, so the old code's silent `continue`
+	// would drop it with no error; the column-count check makes it loud.
+	shortRow := "| `ghost/short.txt` | " + sha256Hex([]byte("x")) + " |\n"
+	tampered := string(b) + shortRow
+	if err := os.WriteFile(vt.manifest, []byte(tampered), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := verifyLicensesFull(vt.audit, vt.manifest, vt.tree)
+	if err == nil {
+		t.Fatal("expected error on a malformed short manifest row, got nil")
+	}
+	if !strings.Contains(err.Error(), "too few columns") {
+		t.Fatalf("expected a 'too few columns' error, got: %v", err)
+	}
+}
+
 // TestVerifyLicensesFull_CommittedTreePasses runs the FULL gate (audit +
 // manifest + tree) against the REAL committed Plan 01 tree.
 func TestVerifyLicensesFull_CommittedTreePasses(t *testing.T) {

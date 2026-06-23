@@ -21,6 +21,37 @@ import (
 //go:embed skills/helix/*
 var embeddedSkillFS embed.FS
 
+// bundleFiles is the EXACT closed set of files shipped to a user's
+// .claude/skills/helix/ by installSkill — the single source of truth that BOTH
+// installSkill and uninstallSkill consult via one filter-once-up-front pass. Any
+// other entry the embed glob may pick up (e.g. non-bundle maintainer notes that
+// live alongside the bundle in the source tree) is filtered out at install AND
+// uninstall time, so it is neither shipped into a user's dir nor orphaned on
+// upgrade. Defense-in-depth: the maintainer notes are also kept OUT of the embed
+// dir, but the allowlist guarantees only the bundle reaches disk regardless.
+var bundleFiles = map[string]bool{
+	"SKILL.md":     true,
+	"reference.md": true,
+}
+
+// filterBundleEntries returns only the embed entries that are allowlisted bundle
+// files — non-directories whose name is in bundleFiles. It is the single
+// filter-once-up-front pass both installSkill and uninstallSkill consult, so the
+// install staging and the uninstall removal operate over the IDENTICAL closed
+// set. Order is preserved from the input ReadDir slice.
+func filterBundleEntries(entries []os.DirEntry) []os.DirEntry {
+	var keep []os.DirEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if bundleFiles[e.Name()] {
+			keep = append(keep, e)
+		}
+	}
+	return keep
+}
+
 // embeddedSkillBytes returns the verbatim embedded SKILL.md content (ONLY
 // SKILL.md, never the bundle). It is the SKILL.md-only accessor every former
 // embeddedSkillMD consumer reads — the idle-cost description parser, the body
@@ -191,6 +222,12 @@ func installSkill(targetDir string) error {
 		return fmt.Errorf("reading embedded skill dir: %w", err)
 	}
 
+	// Closed-set filter (BUNDLE-01): keep ONLY the allowlisted bundle files,
+	// filtered ONCE up front so the 2-pass stage→rename body below operates over
+	// exactly {SKILL.md, reference.md}. No `.tmp` sibling is ever created for a
+	// filtered-out entry, and the all-or-nothing rename stays scoped to the bundle.
+	entries = filterBundleEntries(entries)
+
 	// Bundle-level atomicity (WR-97-02): stage EVERY file as a temp first, then
 	// rename them all into place only after every temp write succeeded. A failure
 	// during the staging pass aborts before ANY file is swapped in, and a failure
@@ -321,10 +358,11 @@ func uninstallSkill(targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("reading embedded skill dir: %w", err)
 	}
+	// IDENTICAL closed-set filter to installSkill (T-103-04): the removal loop
+	// only touches allowlisted bundle files, so an upgrade that stops shipping a
+	// file removes it from disk rather than orphaning a now-un-allowlisted entry.
+	entries = filterBundleEntries(entries)
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
 		dst := filepath.Join(targetDir, e.Name())
 		if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing skill file: %w", err)

@@ -1,305 +1,151 @@
-# Technology Stack
+# Stack Research
 
-**Project:** Helix v2.1 — Agent Adoption & Aider-Derived Validation
-**Researched:** 2026-06-22
-**Mode:** Ecosystem / tooling (subsequent milestone — additions to a mature Go product)
-**Overall confidence:** HIGH (conventions verified via official Claude Code / Codex / Gemini docs and the in-tree existing adapters; one assumption in the prompt corrected — see below)
+**Domain:** Go single-binary CLI tooling + (exploratory) dev-time/offline Python prompt-optimization harness
+**Researched:** 2026-06-23
+**Confidence:** HIGH (DSPy version/extras/LM-config verified against PyPI + dspy.ai; Go-side surfaces read directly from the tree)
 
-> **Bottom line:** This milestone needs **almost no new Go dependencies.** Both
-> thrusts are overwhelmingly served by code and libraries that already ship in the
-> tree (the v1.12 bench stack, the v1.4 `llm`/`llmjudge` harness, the v2.0 skill +
-> nudge). The *new* work is **file-format conventions, vendored data, and Go-native
-> glue** — not library acquisition. The few genuinely new things are: (1) a
-> bundled `reference.md` (+ optional per-verb refs) under the skill dir, (2)
-> per-runtime instruction files (`AGENTS.md`, `GEMINI.md`) + a Codex `PreToolUse`
-> hook config, and (3) a vendored snapshot of Aider fixtures with SPDX headers.
+## Scope
 
----
+v2.2 "Agent-Facing Skill Quality & Prompt Tuning" is **mostly a content/codegen milestone, not a stack milestone.** Three of its four features (SKILL.md rewrite, `cmd/helix-refgen` fixes, `installSkill` allowlist) need **ZERO new dependencies** — they are pure Go edits inside packages that already exist. The only feature that introduces anything new is the **exploratory, dev-time-only DSPy harness**, and even that must stay strictly out of the shipped binary, the Go module graph, and the merge-gating CI path.
 
-## Prompt assumptions corrected up front (read this first)
+The central constraint from `PROJECT.md` (line 192): *"Helix stays a Go single binary with no Python/runtime deps — DSPy is dev-time/offline only; its output is committed and gated by `helix-refgen --check`."* This research's primary job is to honor that.
 
-Two premises in the research question are factually wrong against the tree / upstream and must be fixed before requirements:
+## Recommended Stack
 
-1. **The exercism polyglot fixtures are MIT, NOT Apache-2.0.** The milestone brief
-   says "vendor Aider's fixtures (Apache-2.0)". That conflates two repos:
-   - `github.com/Aider-AI/aider` (the **tool**) is **Apache-2.0** (`LICENSE.txt`). [HIGH]
-   - `github.com/Aider-AI/polyglot-benchmark` (the **fixtures**) redistributes
-     **Exercism** content; all six tracks (cpp/go/java/javascript/python/rust)
-     ship an **identical MIT `LICENSE`** (verified byte-for-byte in the existing
-     `bench/datasets/aider-polyglot/LICENSE-AUDIT.md`, sha256
-     `e52f804e…df44df`). [HIGH — in-tree audit]
-   - **Implication:** vendored polyglot fixtures need **MIT** attribution +
-     `SPDX-License-Identifier: MIT` headers, not Apache-2.0. Apache-2.0 only
-     applies if you also vendor code/prompts *from the aider tool repo* (e.g. the
-     edit-format coder prompts) — see Thrust 2.
+### Core Technologies
 
-2. **A polyglot adapter already exists and is substantial (Phase 85).**
-   `bench/datasets/aider-polyglot/` already has `clone.go` (pinned-SHA shallow
-   clone), `loader.go` (the `.meta/config.json` → solution/test/example mapping +
-   the upstream 2-attempt / 180s / stderr-reprompt protocol + anti-tamper pristine
-   test restore), `pin.go` (pinned `7e0611e7…` SHA + hex guard), and
-   `LICENSE-AUDIT.md`. **Do NOT re-propose the polyglot edit driver.** The v2.1
-   surface is the *delta*: vendoring (not just cloning), the RepoMap eval, and the
-   edit-format/fuzzy surface. See the "What NOT to add" section.
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Go | 1.25.1 (existing) | All shipped code: SKILL.md rewrite is content; `cmd/helix-refgen` + `installSkill` are Go | No change. The three non-DSPy features touch only existing packages (`cmd/helix-refgen`, `internal/cli/skill.go`, `internal/cli/skills/helix/`). No new Go import is required or wanted. |
+| DSPy (Python) | **3.2.1** (stable, PyPI 2026-05; `3.3.0b1` beta available) | The exploratory **offline** prompt-optimizer that tunes SKILL.md decision-matrix / nudge text against the adoption scorecard | DSPy is the de-facto framework for *programmatic* prompt optimization with a measurable metric. It separates the program (signature) from the optimizer and optimizes against a `metric(example, prediction) -> float` — which maps exactly onto the existing `choice_rate`/`fallback_rate` scorecard. It is **dev-time only**; its *output* is committed text, so the runtime stays pure-Go. |
+| Python | **>=3.10, <3.15** (DSPy's own pin) | Interpreter for the DSPy harness only | DSPy requires Python ≥3.10. `python3` is already invoked in one Makefile CI helper (`Makefile:297`), so a base interpreter is already assumed in some CI lanes — but `pip`/venv/DSPy must remain an **opt-in dev target**, never on the default `go test ./...` / merge path. |
 
----
+### Supporting Libraries
 
-## Thrust 1 — Agent Adoption Layer
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `dspy[anthropic]` extra | pulled by DSPy 3.2.1 | Anthropic provider wiring for the optimization LM | Use because the existing Go harness already keys on `ANTHROPIC_API_KEY` (`test/oracle/llm/client.go:18`). DSPy → LiteLLM reads the **same** `ANTHROPIC_API_KEY` env var, so the dev sets one key for both the Go scorecard and the Python optimizer. |
+| GEPA (`dspy.GEPA`, or standalone `gepa`) | bundled with DSPy 3.x (GEPA 0.1.x) | Reflective prompt-evolution optimizer — the recommended optimizer for *instruction/prose* tuning (which is exactly what SKILL.md text is) | Prefer GEPA over MIPROv2 for this task: GEPA optimizes free-form instruction text via reflective evolution (ICLR 2026), needs far fewer rollouts, and does not require few-shot demonstration sets — SKILL.md is prose, not a demo bank. Already integrated as `dspy.GEPA`. |
+| `dspy[optuna]` extra (Optuna) | pulled by extra | Bayesian search backend for **MIPROv2** only | Only if you fall back to MIPROv2 (`dspy.MIPROv2`) instead of GEPA. Optuna is a required dep of MIPROv2/BootstrapFewShotWithOptuna. Skip it if you use GEPA. |
+| LiteLLM | transitively via DSPy | Provider normalization layer DSPy calls under the hood | Not chosen directly — it is DSPy's transitive dep. Relevant only because it is what reads `ANTHROPIC_API_KEY` and accepts the `anthropic/claude-…` / `deepseek/deepseek-chat` model strings, mirroring the Go harness's provider switch. |
 
-### 1A. SKILL reference & per-verb doc conventions (file format, not a library)
+### Development Tools
 
-**No new dependency.** This is a content/convention change to the existing
-`internal/cli/skills/helix/SKILL.md` (go:embed) authoring pipeline. The
-authoritative conventions, verified against the live Claude Code skills doc:
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `uv` **or** `python -m venv` + `pip` | Isolate the DSPy install away from the Go build | Recommended: a dedicated venv under e.g. `tools/promptopt/.venv` (git-ignored) created by an **opt-in** `make promptopt-setup`. `uv` is faster but optional; plain venv keeps the bar low. The venv MUST be git-ignored and never referenced by any default `make test` / `go test` target. |
+| `requirements.txt` (pinned) | Reproducible harness install: `dspy==3.2.1` (+ extras) | Pin the exact DSPy version so the optimizer is reproducible across dev machines. Lives next to the Python harness (e.g. `tools/promptopt/requirements.txt`), NOT in repo root. |
+| `cmd/helix-refgen --check` (existing) | The re-entry gate: optimizer output is committed, then this gate proves it is byte-reproducible | The DSPy harness does NOT write `reference.md`/SKILL.md directly to the embed path as a side effect of CI. The loop is: human runs the optimizer offline → reviews the proposed text → commits it (or feeds tuned prose into the generator templates) → the **existing** `helix-refgen --check` gate (Phase 97) keeps `reference ⊇ VerbToolNames()` true. |
 
-| Convention | Value | Source / confidence |
-|---|---|---|
-| Frontmatter fields | `name`, `description` (recommended), `when_to_use`, `allowed-tools`, `disallowed-tools`, `effort`, `paths`, `disable-model-invocation`, `user-invocable` — **all optional except by recommendation** | code.claude.com/docs/en/skills [HIGH] |
-| Idle-cost cap | `description` **+** `when_to_use` is truncated at **1,536 characters** in the skill listing (the only text loaded until the skill fires) | docs [HIGH] — matches the existing SKILL-04 in-tree assertion |
-| Body size guidance | **Keep `SKILL.md` under 500 lines**; move detailed reference material to separate files | docs [HIGH] |
-| Progressive disclosure | Bundle additional files (`reference.md`, examples, scripts) **in the skill directory**; reference them from `SKILL.md` via markdown links (`see [reference.md](reference.md)`) so the model loads them **on demand**, not at idle | docs [HIGH] |
-| `allowed-tools` Bash form | `Bash(helix *)` (space-then-star) — already used correctly in the current SKILL.md | docs [HIGH] |
-| Directory layout | `<.claude>/skills/helix/SKILL.md` + sibling reference files; `${CLAUDE_SKILL_DIR}` resolves the dir for bundled-file references | docs [HIGH] — matches `skillTargetDir()` |
+## Integration Points (how the Python harness re-enters the Go world)
 
-**What to build (format, no library):**
-- A new bundled **`reference.md`** (and optionally per-capability files, e.g.
-  `reference-edit.md`, `reference-nav.md`) in `internal/cli/skills/helix/`,
-  embedded via **`go:embed` with a directory glob** (`//go:embed skills/helix/*`)
-  — the current code embeds a single file as a string (`//go:embed
-  skills/helix/SKILL.md`), so the embed directive + `installSkill` must move to a
-  **multi-file copy** (walk the embedded FS, write each file into the target
-  `skills/helix/` dir). **Switch `embeddedSkillMD string` → `embed.FS`.** This is
-  the one structural code change in 1A.
-- Per-verb content (args, output shape, worked examples, "use X not Y") is
-  **generated from the existing tool registry** the same way `cmd/docgen`
-  produces the README table — reuse `cmd/docgen` plumbing rather than hand-writing
-  50 verbs (avoids drift; the README tool table is already auto-generated). [HIGH]
+This is the load-bearing part of the design — the seam between the offline optimizer and the committed, `--check`-gated artifacts.
 
-**Why:** the v2.0 skill is deliberately terse (599-byte idle description). The
-1,536-char cap means the *richer* per-verb material **cannot** go in frontmatter —
-it MUST be progressive-disclosure reference files, which is exactly the documented
-pattern. No YAML library is needed (the existing minimal stdlib frontmatter
-splitter in `skill.go` already handles the block-scalar `description`).
+1. **Metric source (Go ↔ Python):** the optimizer's metric is the Phase 101 adoption scorecard. Two viable wirings, in preference order:
+   - **(Preferred) Re-implement the trivial classifier in Python, validate against the Go scorer.** `test/oracle/adopt` is build-tag-FREE and runs hermetically. Its `ClassifyChoice` rule is ~10 lines: strip code fences/backticks, take the FIRST command line, `HasPrefix("helix ")` for a choice vs the `{"grep ","sed ","cat ","find ","rg ","ls "}` fallback set (`scorecard.go:77,85`). Re-implement that exactly in the Python `metric` so the harness is self-contained, and treat the Go `adopt` package as the **authoritative** scorer the *committed* result is finally validated against.
+   - Alternatively, shell the Python `metric` out to a thin Go CLI/test shim over `adopt.Scorecard` for a single source of truth — heavier wiring, only worth it if the classifier ever stops being frozen.
+   - Live transcript generation (model emitting a first command given a candidate SKILL.md) reuses the **same** Anthropic/DeepSeek providers as `test/oracle/llm` — same `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` env vars.
+2. **Optimization target (what DSPy mutates):** the SKILL.md **decision-matrix text** and/or the `PreToolUse` nudge-steering prose. DSPy proposes candidate instruction strings; the metric scores each candidate by running it through the (model → first-command → scorecard) loop and maximizing `choice_rate` (equivalently minimizing `fallback_rate`).
+3. **Output landing zone (Python → Go):** the optimizer writes a **proposed** SKILL.md body / generator-template snippet to a dev scratch path (e.g. `tools/promptopt/out/`). A human reviews it, then either (a) commits the tuned SKILL.md directly, or (b) feeds tuned per-verb prose into `cmd/helix-refgen`'s render templates and regenerates `reference.md`. **The DSPy harness never writes into `internal/cli/skills/helix/` in CI.**
+4. **Re-entry gate (the contract that keeps the binary honest):** after the tuned text is committed, the **existing** gates enforce — `helix-refgen --check` (drift), the `reference ⊇ VerbToolNames()` contract (`internal/cli/reference_contract_test.go`), and the new v2.2 `installSkill` bundle allowlist test. DSPy adds **no** new CI gate on the default path.
 
-### 1B. Per-runtime install conventions (config-file formats, no new libraries)
+## Go-side additions for the SKILL/reference rewrite + allowlist
 
-Each target runtime expects a different instruction-file + hook convention. The
-existing `internal/cli/setup_clients.go` already does MCP-teardown for 7 clients;
-v2.1 adds **instruction-file writing** (and, where supported, a PreToolUse hook).
-All are plain file writes — **no new Go dependency.**
+**Confirmed: NONE new.** Verified against the tree:
 
-| Runtime | Instruction file | Location | Hook capability (PreToolUse-equiv?) | Confidence |
-|---|---|---|---|---|
-| **Claude Code** | `SKILL.md` (+ bundled `reference.md`) | `<.claude>/skills/helix/` (project) or `~/.claude/skills/helix/` | **Yes** — `PreToolUse` hook already installed (`internal/cli/nudge.go`, `setup_hooks.go`); emits `hookSpecificOutput.additionalContext` at exit 0 | HIGH (in-tree) |
-| **OpenAI Codex CLI** | `AGENTS.md` (overridable via `AGENTS.override.md`; fallbacks via `project_doc_fallback_filenames`) | project root → cwd walk; home `~/.codex/AGENTS.md`. **32 KiB/file cap** (`project_doc_max_bytes`) | **Yes** — Codex `PreToolUse` hook intercepts Bash + `apply_patch` + MCP calls; returns `additionalContext` or `permissionDecision:"deny"`. Config: `~/.codex/hooks.json` or `.codex/hooks.json` / `config.toml [hooks]`. **Only `type:"command"` handlers run today.** | HIGH (developers.openai.com/codex/hooks) |
-| **Gemini CLI** | `GEMINI.md` (filename configurable via `context.fileName` in settings.json) | `~/.gemini/GEMINI.md` (global); workspace + parent dirs | **No PreToolUse-equivalent.** Steering is via `GEMINI.md` context + optional custom commands (`~/.gemini/commands/*.toml`). MCP config in `~/.gemini/settings.json` | HIGH (geminicli.com docs) |
-| **IDE assistants / generic** | No standard skill/hook surface | n/a | **No.** Best Helix can do is write an `AGENTS.md` (the emerging cross-tool standard at agents.md) into the project root and document manual setup | MEDIUM |
+- `cmd/helix-refgen/{main.go,render.go}` already exists and owns reference.md rendering + the `--check` gate (`main.go` header + blank-import parity rule). The "use this / not that" + "Output" copy-paste fixes (per `SKILL-ISSUE.md`) are edits to `render.go`'s per-verb / per-`groupID` text and templates — no new import.
+- `internal/cli/skill.go` already holds `installSkill`, the `//go:embed skills/helix/*` FS (`skill.go:21`), and the containment/atomicity logic. The "bundle allowlist" is a code edit: replace the `embeddedSkillFS.ReadDir("skills/helix")` **walk** (which currently ships *every* file in the dir) with an explicit `{"SKILL.md","reference.md"}` allowlist plus a bundle-contents test. No new dependency — `embed`, `os`, `path/filepath` are already imported.
+- The adoption contract test (`internal/cli/reference_contract_test.go`) and scorer (`test/oracle/adopt`) already exist and need no new deps.
 
-**Key design consequence:** Codex's `PreToolUse` hook uses the **same
-`additionalContext` / `permissionDecision` envelope shape** as Claude Code's. The
-existing `runNudge` / `emitAdvisory` logic in `nudge.go` is **directly portable** —
-add a Codex-flavored output struct (camelCase keys are already what the Claude path
-emits) and a `helix setup codex` path that writes `AGENTS.md` + a `hooks.json`
-pointing at `helix nudge`. **Reuse the nudge command; do not write a second
-steering engine.** [HIGH]
+So the entire Go surface of v2.2 is edits inside already-vendored packages. `testify`, `cobra`, `jsonschema/v6`, `anthropic-sdk-go` are all already in `go.mod`; nothing is added.
 
-For Gemini/IDE/generic there is no hook — adoption relies on the instruction file
-plus the (already-shipped) terse CLI ergonomics. Setup for these writes
-`GEMINI.md` / `AGENTS.md` and is otherwise teardown-only (mirrors today's
-`teardownOnlyRegister`).
+## Installation
 
-### 1C. Adoption-contract test (deterministic, pure Go) + LLM-behavioral score (opt-in)
+```bash
+# Go side: nothing new. Existing build/test pipeline is unchanged.
+make build && make test
 
-| Layer | What it is | New deps? | Reuses |
-|---|---|---|---|
-| **Deterministic CI gate** | Pure-Go table tests: (a) every frozen verb appears in the generated reference with args+example; (b) the nudge fires for each grep/sed/cat/find/Read shape (extend `nudge_test.go`); (c) frontmatter ≤1,536 chars (extend SKILL-04); (d) every runtime's instruction file round-trips (golden files) | **None** — `testing` + existing `test/harness` golden pattern | `internal/cli/nudge_test.go`, the SKILL-04 assertion, `test/harness/golden.go` |
-| **LLM-behavioral adoption score (opt-in, never blocks)** | Given a coding task + the installed skill, does a real model emit `helix <verb>` over grep/sed/cat? Scored by a judge model | **None new** — `github.com/anthropics/anthropic-sdk-go v1.35.0` is already a dep; DeepSeek multi-provider path exists | `test/oracle/llm` (build tags `llm`/`llmjudge`), `mentionsHelix`/`firstCommandLine`/`mentionsGrepBaseline` detectors, `AskSingleTurn`, `test/oracle/judge` scorer + rubric. The `skill_trigger_test.go` is the seed — extend it into a multi-task adoption scorecard. |
+# Reference/skill regen + drift gate (existing, unchanged):
+go run ./cmd/helix-refgen            # regenerate reference.md
+go run ./cmd/helix-refgen --check    # CI drift gate
 
-**Why no new deps:** the v1.4 harness already loads the embedded skill body into a
-system prompt (`cli.EmbeddedSkillBody()`), asks the model to choose a command, and
-scores "did it pick helix vs grep". The adoption score is a **broadening of
-existing tests**, build-tag gated so it stays out of the merge gate (consistent
-with the locked "LLM tests never block merge" decision).
+# ---- Exploratory DSPy harness: OPT-IN, dev-time only, isolated venv ----
+# (lives under e.g. tools/promptopt/, git-ignored .venv, never on default test path)
+python3 -m venv tools/promptopt/.venv
+. tools/promptopt/.venv/bin/activate
+pip install -r tools/promptopt/requirements.txt   # pins: dspy==3.2.1  (+ extras below)
+#   requirements.txt content:
+#     dspy[anthropic]==3.2.1          # GEPA bundled as dspy.GEPA
+#     # dspy[optuna]==3.2.1           # ONLY if falling back to MIPROv2
 
----
+# Run the optimizer offline (reads the SAME key the Go harness uses):
+export ANTHROPIC_API_KEY=...          # or DEEPSEEK_API_KEY for the cheaper leg
+python tools/promptopt/optimize_skill.py   # writes proposed text to tools/promptopt/out/
+# Human reviews out/, commits tuned SKILL.md / regenerates reference.md, then:
+go run ./cmd/helix-refgen --check     # the committed artifact must pass the existing gate
+```
 
-## Thrust 2 — Aider-Derived Validation
+DSPy LM config inside the harness (verified format):
 
-### 2A. Vendoring Aider fixtures (data + SPDX headers, not a library)
-
-**Decision: vendor a pinned snapshot into the tree** (the milestone asks for a
-*committed baseline* and a vendored fixture set; the current adapter only
-*clones* at runtime, which is network-gated and skips offline). The vendored set
-lives alongside the existing two hermetic fixtures under
-`bench/datasets/aider-polyglot/fixtures/`.
-
-| Item | Detail | Confidence |
-|---|---|---|
-| Source repo | `github.com/Aider-AI/polyglot-benchmark` @ pinned SHA (reuse `pin.go`'s `PinnedSHA = 7e0611e7…`; re-pin via `git ls-remote … main`) | HIGH (in-tree) |
-| Fixture license | **MIT** per Exercism track (NOT Apache-2.0). Add `SPDX-License-Identifier: MIT` provenance + a `NOTICE`/attribution per track citing `exercism/<lang>@<sha>` | HIGH (in-tree LICENSE-AUDIT.md) |
-| Exercise structure | `<lang>/exercises/practice/<name>/` with `.meta/config.json` (`files.solution` / `files.test` / `files.example`) — already modeled by `loader.go`'s `Config` struct. Pristine test-restore anti-tamper invariant already implemented (`restorePristineTests`, WR-01) | HIGH (in-tree) |
-| Per-language test argv | `pytest` / `cargo test -- --include-ignored` / `go test ./...` / `./gradlew test` / `./npm-test.sh` / `./cpp-test.sh` — already in `nativeTestCommand()`; **Rust's `--include-ignored` is load-bearing** (WR-02, vacuous-pass guard) | HIGH (in-tree) |
-| Attribution gate | Extend the existing `make verify-licenses` HARD-FAIL gate to cover the **vendored** tree (it currently audits the cloned tracks) | HIGH |
-
-**Vendoring scope guard:** vendor only the **subset of exercises actually
-exercised** by the three bench surfaces, not all six full tracks (keeps the tree
-small and the MIT NOTICE auditable). The selection must be deterministic and
-recorded (a manifest), so the committed baseline is reproducible.
-
-**Apache-2.0 only if** you also vendor **edit-format material from the aider TOOL
-repo** (`github.com/Aider-AI/aider`, e.g. its `benchmark/` harness logic or coder
-edit-format prompt fixtures). Those files carry `Apache-2.0` and would need an
-`Apache-2.0` SPDX header + a copy of `LICENSE.txt` + `NOTICE`. **Prefer NOT to
-vendor aider tool code** — re-derive the edit-format *drift cases* natively against
-Helix's own fuzzy cascade (see 2C) to avoid mixing licenses. [MEDIUM —
-recommendation]
-
-### 2B. RepoMap eval surface (reuse, no new library)
-
-Aider's repomap is a tree-sitter PageRank ranked symbol graph — **the same design
-as Helix's `internal/repomap`**. The eval measures `get-repo-map` / `get-context`
-ranking quality + token-budget fitting.
-
-| Need | Use | New deps? |
-|---|---|---|
-| Ranking-quality metric (does the right file/symbol rank in top-k for a task?) | A new evaluator under `bench/evaluators/` modeled on the existing `editsim` / `ragindex` leaf pattern (stdlib-only, no kernel import). Standard IR metrics: **recall@k, MRR, nDCG** — all ~30 LOC pure Go, no library | **None** |
-| Token-budget correctness | Assert `get-repo-map`'s budget-fit output stays ≤ budget across repo sizes (binary-search fitter already exists) | **None** |
-| Optional embedding baseline to compare against | `bench/ragindex` already vendors **`chromem-go`** (embedded vector index) as a leaf — reusable as a retrieval baseline to contrast PageRank vs embedding ranking | **None** (chromem-go already in go.mod) |
-
-**Why no library:** recall@k/MRR/nDCG are trivial pure-Go; the project's bench
-philosophy is stdlib-only leaf evaluators (see `editsim`'s deliberate
-no-cross-package-reach doc). Adding an IR-metrics dependency would violate that.
-
-### 2C. Edit-format / fuzzy-robustness surface (reuse, no new library)
-
-Measures the 4-strategy fuzzy cascade (`internal/fuzzy`) against LLM output drift —
-exactly what aider's edit-format benchmark probes (whitespace drift, ellipsis
-placeholders, indentation reflow, ambiguity refusal).
-
-| Need | Use | New deps? |
-|---|---|---|
-| Edit-similarity scoring of applied vs gold | **`bench/evaluators/editsim`** already implements CM-ES (normalized rune-level Levenshtein, CrossCodeEval) — reuse it directly | **None** |
-| Drift corpus | Native Helix corpus of (intended edit, drifted-LLM-rendering) pairs exercising each of the 4 strategies; assert correct strategy selection + ambiguity refusal. Re-derive natively to keep it MIT/Apache-free | **None** |
-| Wiring into the harness | Add as a `bench/runners/<mode>` surface emitting `result.v2.json`; aggregate via the existing `bench/aggregator` (BCa bootstrap + pass@k already hand-rolled, stdlib-only) | **None** |
-
-### 2D. Baseline comparison tooling
-
-| Question | Answer | Confidence |
-|---|---|---|
-| Need `golang.org/x/perf/benchstat`? | **No.** PROJECT.md's historical "benchstat gate" was **removed** when the bench harness went local-only at v1.9 (Phase 50). `go.mod` has no benchstat dep, and `bench/aggregator` already ships a **hand-rolled BCa bootstrap + pass@k + per-language slicing**. The committed baseline is a `result.v2.json` / `BENCH-RESULTS.md` artifact, compared by the existing aggregator — not benchstat. | HIGH (verified `go.mod` + `bench/aggregator/`) |
-| Any new vendoring lib? | **No.** Vendoring is `git`-driven (existing `clone.go` shallow-clone-at-SHA) + a `go:generate`/`make` snapshot step + SPDX headers. No new module. | HIGH |
-| Microbench/Go benchmark lib? | **No.** `testing.B.Loop` + `make bench-micro` (local-only rule) already covers it; benches stay non-CI-gated; `HELIX_BIN` must be set or smoke tests are false-green (known guard — the harness must enforce it). | HIGH |
-
----
-
-## Recommended Stack (delta only)
-
-### New Go dependencies
-**NONE.** Every capability is served by existing modules.
-
-| Already in `go.mod` (reused) | Version | v2.1 use |
-|---|---|---|
-| `github.com/anthropics/anthropic-sdk-go` | v1.35.0 | LLM-behavioral adoption score + judge scorer |
-| `github.com/modelcontextprotocol/go-sdk` | v1.5.0 | tool-registry typed args drive per-verb reference generation |
-| `chromem-go` (via `bench/ragindex`) | (in tree) | optional embedding baseline for RepoMap eval |
-| stdlib `embed` | go 1.25.1 | multi-file skill bundle (`SKILL.md` + `reference.md`) |
-
-### New file-format / convention artifacts (the real work)
-| Artifact | Location | Format | Why |
-|---|---|---|---|
-| Bundled skill reference | `internal/cli/skills/helix/reference.md` (+ optional per-capability files) | Markdown, linked from `SKILL.md` | Progressive disclosure; per-verb depth can't fit the 1,536-char cap |
-| Multi-file embed | `internal/cli/skill.go` `//go:embed skills/helix/*` → `embed.FS`; `installSkill` walks + copies | Go | ships `reference.md` alongside `SKILL.md` |
-| Codex instruction file + hook | `helix setup codex` writes `AGENTS.md` + `~/.codex/hooks.json` (`type:"command"` → `helix nudge`) | Markdown + JSON | Codex `PreToolUse` mirrors Claude's envelope — reuse `nudge.go` |
-| Gemini instruction file | `helix setup gemini-cli` writes `GEMINI.md` | Markdown | No hook surface; context-file steering only |
-| Vendored fixtures | `bench/datasets/aider-polyglot/fixtures/<lang>/exercises/practice/<name>/` | exercism tree + `.meta/config.json` | committed offline baseline |
-| SPDX/NOTICE | per-track `NOTICE` + `SPDX-License-Identifier: MIT` | text | **MIT** redistribution compliance |
-| Committed baseline | `bench/reports/.../BENCH-RESULTS.md` + `result.v2.json` | existing schema | local-only baseline per project rule |
-
----
+```python
+import os, dspy
+# Same env var the Go scorecard keys on (test/oracle/llm/client.go:18).
+lm = dspy.LM("anthropic/claude-…", api_key=os.environ["ANTHROPIC_API_KEY"])
+# Cheaper optimization leg, mirroring the Go DeepSeek provider:
+# lm = dspy.LM("deepseek/deepseek-chat", api_key=os.environ["DEEPSEEK_API_KEY"])
+dspy.configure(lm=lm)
+optimizer = dspy.GEPA(metric=adoption_metric)   # metric = choice_rate-driven scorer
+```
 
 ## Alternatives Considered
 
-| Decision point | Recommended | Alternative | Why not |
-|---|---|---|---|
-| Per-verb reference delivery | Bundled `reference.md` (progressive disclosure) | Cram into SKILL.md body | 500-line body guidance + 1,536-char idle cap make this the documented, lower-idle-cost path |
-| Codex steering | Reuse `helix nudge` via Codex `PreToolUse` hook | New Codex-specific steering engine | Codex hook envelope == Claude's (`additionalContext`); duplication is waste |
-| Stats for baseline | Existing hand-rolled BCa bootstrap | `golang.org/x/perf/benchstat` | benchstat gate was deliberately removed at v1.9 (local-only rule); aggregator already does it |
-| Fixture delivery | Vendor a pinned subset with SPDX | Keep clone-only | Milestone explicitly wants a *committed* baseline + vendored fixtures that work offline |
-| Edit-format corpus | Native Helix drift corpus | Vendor aider tool's Apache-2.0 edit-format fixtures | Avoids mixing Apache-2.0 into an otherwise MIT-fixture tree; keeps `editsim` reuse clean |
-| RepoMap metrics | Pure-Go recall@k/MRR/nDCG leaf evaluator | An IR-metrics library | Violates the stdlib-only leaf-evaluator invariant for ~90 LOC of trivial math |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| DSPy `GEPA` optimizer | DSPy `MIPROv2` (+ Optuna) | Use MIPROv2 if you later want to optimize few-shot *demonstrations* (example banks) rather than free-form instruction prose. For SKILL.md text (prose), GEPA is the better fit and needs no Optuna. |
+| DSPy framework | Hand-rolled prompt-search loop in Go | A pure-Go loop over the existing `adopt` scorer avoids Python entirely — viable if the team wants zero Python. But it forfeits DSPy's reflective optimization and the GEPA literature. Given the feature is explicitly *exploratory*, DSPy is the right first bet; the Go scorer remains the authority. |
+| Isolated venv (`tools/promptopt/.venv`) | Conda / system pip install | Conda/system installs leak DSPy into the dev environment and risk it drifting onto a CI lane. A git-ignored venv keeps the blast radius to one directory. |
+| DSPy 3.2.1 (stable) | DSPy 3.3.0b1 (beta) | Pin stable 3.2.1 for reproducibility. Only move to 3.3.x once it leaves beta and you re-verify the GEPA/LM-string API. |
+| Reuse `ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY` | Add an OpenAI leg | OpenAI works via `dspy.LM("openai/…")`, but the Go harness has no OpenAI provider — adding one splits the key surface. Stay on the two providers the scorecard already supports. |
 
----
+## What NOT to Use / NOT to Add
 
-## Installation (no `go get` needed)
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| **Any runtime Python dependency in the shipped binary** | Helix's entire identity is a single Go binary with zero Python/Docker/runtime deps (CLAUDE.md, PROJECT.md). DSPy at *runtime* would violate the product thesis. | DSPy strictly **dev-time/offline**; only its *committed text output* enters the binary, gated by `helix-refgen --check`. |
+| **New Go module dependencies** | The three non-DSPy features are edits to existing packages; no new import is needed. Adding Go deps for a content/codegen milestone is pure risk. | `embed`, `os`, `path/filepath`, `cobra`, `testify`, `jsonschema/v6`, `anthropic-sdk-go` — all already vendored. |
+| **DSPy/pip on the default CI / `go test ./...` path** | A merge-gating job that needs DSPy would (a) require Python+pip+API-key in CI and (b) make merges depend on a live LLM — both forbidden by the milestone's "no runtime/CI Python requirement" intent. The adoption *score* is opt-in and never blocks merge (v2.1 contract). | An **opt-in** `make promptopt-*` target run by a human locally; default CI keeps only the deterministic `helix-refgen --check` + bundle-allowlist + `reference ⊇ VerbToolNames()` gates. |
+| **Letting the DSPy harness write directly into `internal/cli/skills/helix/`** | A side-effecting optimizer that mutates the embed path turns generated/committed artifacts into a moving target and can break the `--check` gate non-deterministically. | Optimizer writes to a dev scratch dir (`tools/promptopt/out/`); a human reviews, commits, and the existing gate validates. |
+| **Committing the venv / DSPy wheels / `__pycache__`** | Bloats the repo and risks the Python tree being picked up by the `installSkill` embed walk (the very bug the allowlist fixes). | Git-ignore `tools/promptopt/.venv/`, `**/__pycache__/`; keep the embed bundle restricted to the `{SKILL.md, reference.md}` allowlist. |
+| **MIPROv2 + Optuna by default** | Optuna is an extra dep that only MIPROv2 needs; the SKILL.md task is prose tuning, not demo-set search. | GEPA (`dspy.GEPA`), which is bundled and needs no Optuna. |
+| **Adding an OpenAI provider just for DSPy** | Splits the API-key surface away from the two providers the Go scorecard already supports. | `anthropic/…` (primary) or `deepseek/deepseek-chat` (cheap leg) — same env vars as `test/oracle/llm`. |
 
-```bash
-# No new modules. Verify the tree builds + the existing gates pass:
-go build ./cmd/helix
-go vet ./...
-go test ./...
+## Stack Patterns by Variant
 
-# Bench surfaces are HELIX_BIN-gated (false-green guard) — local only, never CI:
-make build
-HELIX_BIN="$(pwd)/helix" go test ./bench/...
-HELIX_BIN="$(pwd)/helix" make bench-micro   # if touching microbenches
+**If the team wants the DSPy harness fully reproducible across machines:**
+- Pin `dspy==3.2.1` in `tools/promptopt/requirements.txt`, optionally generate a `requirements.lock` via `pip freeze` / `uv pip compile`.
+- Because the optimization LM is non-deterministic, treat the optimizer's *output* (not its run) as the reproducible artifact: the committed SKILL.md/reference.md is what `helix-refgen --check` enforces.
 
-# Fixture license gate (extend to cover the vendored tree):
-make verify-licenses
-```
+**If the team decides Python is too much surface even for dev-time:**
+- Drop DSPy entirely and run a hand-rolled candidate-search loop directly over the Go `test/oracle/adopt` scorer (`go test`-driven), keeping the milestone 100% Go. The other three features are unaffected. This is the clean fallback because DSPy is explicitly the *exploratory* item.
 
----
+## Version Compatibility
 
-## What NOT to add / what already exists (explicit overlap resolution)
-
-**Do NOT re-build (already ships):**
-- The polyglot **edit driver** — `bench/datasets/aider-polyglot/{clone,loader,pin}.go`
-  already implements pinned-SHA clone, `.meta/config.json` mapping, the 2-attempt
-  + 180s + stderr-reprompt protocol, the anti-tamper pristine-test restore, and
-  the per-language native test argv. v2.1 only **vendors a snapshot** + adds the
-  two *new* surfaces (RepoMap eval, edit-format).
-- A second **steering engine** — `internal/cli/nudge.go` already classifies
-  grep/sed/cat/find/Read and emits the advisory envelope; Codex reuses it.
-- The v2.0 **terse SKILL.md** — keep it as the idle-cost frontmatter; v2.1
-  *adds* `reference.md`, it does not rewrite the skill.
-- **benchstat** / any new stats lib — `bench/aggregator` has BCa bootstrap +
-  pass@k; the benchstat CI gate was removed at v1.9.
-- **CM-ES / edit-similarity** scorer — `bench/evaluators/editsim` exists.
-- Any **LLM client / judge** — `anthropic-sdk-go` + `test/oracle/{llm,judge}`
-  (build-tag gated) already do tool-selection + judge scoring.
-- A **YAML library** for the skill frontmatter — the stdlib splitter in
-  `skill.go` handles it; zero-dep invariant must hold.
-
-**Genuinely new (must build):**
-- Bundled `reference.md` (+ multi-file `embed.FS` switch in `skill.go`/`installSkill`).
-- `helix setup codex` (writes `AGENTS.md` + `~/.codex/hooks.json`) and
-  `helix setup gemini-cli` (writes `GEMINI.md`); generic/IDE gets `AGENTS.md`.
-- Vendored fixture snapshot + **MIT** SPDX/NOTICE headers + extended
-  `make verify-licenses`.
-- RepoMap-eval leaf evaluator (recall@k/MRR/nDCG) + a `bench/runners/<mode>` surface.
-- Edit-format/fuzzy drift corpus + runner reusing `editsim`.
-- Deterministic adoption-contract tests (reference completeness + per-runtime
-  install golden + nudge-fires) and an opt-in multi-task LLM adoption scorecard.
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Notes |
-|---|---|---|
-| SKILL.md conventions (1,536 cap, <500 lines, progressive disclosure) | HIGH | Live Claude Code docs + in-tree SKILL-04 assertion agree |
-| Codex `AGENTS.md` + `PreToolUse` hook (32 KiB cap, `type:command` only) | HIGH | developers.openai.com/codex/hooks |
-| Gemini `GEMINI.md` (no hook) | HIGH | geminicli.com docs |
-| Fixture licensing = MIT (not Apache-2.0) | HIGH | In-tree LICENSE-AUDIT.md, byte-verified |
-| No new Go deps required | HIGH | `go.mod` + `bench/` + `test/oracle/` inspected directly |
-| "Vendor vs clone" recommendation | MEDIUM | Milestone intent inferred ("committed baseline", "vendor fixtures") — confirm in requirements |
-| Native edit-format corpus over vendoring aider Apache-2.0 fixtures | MEDIUM | Recommendation to keep license tree clean; not a hard constraint |
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| `dspy==3.2.1` | Python `>=3.10,<3.15` | DSPy's own interpreter pin (PyPI metadata). `python3` already present in one Makefile CI helper, but keep DSPy off the default path. |
+| `dspy[anthropic]` | `ANTHROPIC_API_KEY` env (via LiteLLM) | Reuses the **same** env var as `test/oracle/llm/client.go` — one key for Go scorer + Python optimizer. |
+| `dspy.GEPA` (GEPA 0.1.x) | bundled with DSPy 3.x | No separate `pip install gepa` needed when using integrated `dspy.GEPA`. |
+| Go 1.25.1 / shipped binary | (no DSPy at all) | The binary never links, embeds, or shells to Python. Hard isolation. |
 
 ## Sources
 
-- [Claude Code — Skills](https://code.claude.com/docs/en/skills) — frontmatter fields, 1,536-char cap, <500-line guidance, progressive disclosure, bundled reference files [HIGH]
-- [OpenAI Codex — Custom instructions (AGENTS.md)](https://developers.openai.com/codex/guides/agents-md) — discovery order, 32 KiB cap, override/fallback filenames [HIGH]
-- [OpenAI Codex — Hooks](https://developers.openai.com/codex/hooks) — `PreToolUse` event, `additionalContext`/`permissionDecision`, `type:"command"`-only, hooks.json location [HIGH]
-- [Gemini CLI — GEMINI.md context files](https://geminicli.com/docs/cli/gemini-md/) and [configuration](https://geminicli.com/docs/reference/configuration/) — context file location, `context.fileName`, custom `.toml` commands, no PreToolUse hook [HIGH]
-- [Aider-AI/aider LICENSE.txt](https://github.com/Aider-AI/aider/blob/main/LICENSE.txt) — Apache-2.0 (the tool repo) [HIGH]
-- [Aider-AI/polyglot-benchmark](https://github.com/Aider-AI/polyglot-benchmark) — exercism redistribution, per-language `exercises/practice/<name>/` layout [HIGH]
-- In-tree: `bench/datasets/aider-polyglot/{clone,loader,pin}.go`, `LICENSE-AUDIT.md` (MIT, byte-verified), `bench/aggregator/{bootstrap,passk}.go`, `bench/evaluators/editsim`, `bench/ragindex` (chromem-go), `internal/cli/{nudge.go,skill.go,setup_clients.go}`, `test/oracle/{llm,judge}`, `go.mod` [HIGH — direct inspection]
+- https://pypi.org/project/dspy/ — verified latest stable **3.2.1** (2026-05), Python `>=3.10,<3.15`, extras include `anthropic`/`optuna`/`mcp`/`langchain` — HIGH confidence
+- https://dspy.ai/ — `pip install -U dspy`, `dspy.LM("provider/model", api_key=…)` + `dspy.configure(lm=lm)` pattern, Python ≥3.10 — HIGH confidence
+- https://dspy.ai/api/models/LM/ — LM string format + explicit `api_key=` and `ANTHROPIC_API_KEY` env-var path via LiteLLM — HIGH
+- https://github.com/stanfordnlp/dspy/releases — `3.3.0b1` beta exists; GEPA integrated (`dspy.GEPA`), Optuna required only by MIPROv2 — MEDIUM (release-page snapshot dates appeared stale; reconciled against PyPI)
+- https://www.morphllm.com/gepa-prompt-optimization — GEPA is reflective prompt-evolution (ICLR 2026), bundled in DSPy, fewer rollouts than MIPROv2 — MEDIUM
+- Repo tree (read directly): `cmd/helix-refgen/{main.go,render.go}`, `internal/cli/skill.go` (`installSkill` + embed walk), `test/oracle/adopt/scorecard.go` (choice_rate/fallback_rate classifier), `test/oracle/llm/client.go` (`ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY` providers), `go.mod` (Go 1.25.1), `Makefile` (`helix-refgen` targets, lone `python3` CI helper) — HIGH confidence on Go-side "no new deps" claim
+
+---
+*Stack research for: v2.2 Agent-Facing Skill Quality & Prompt Tuning (DSPy offline harness + Go-side codegen/skill rewrite)*
+*Researched: 2026-06-23*

@@ -1,364 +1,209 @@
 # Architecture Research
 
-**Domain:** Integration architecture for a v2.1 milestone (agent-adoption layer + Aider-derived bench validation) ON TOP OF a mature Go-native CLI-first code-intelligence platform (single binary + persistent daemon).
-**Milestone:** v2.1 Agent Adoption & Aider-Derived Validation
-**Researched:** 2026-06-22
-**Confidence:** HIGH — every integration point below was read from real in-tree source (`internal/cli/{skill,nudge,setup_clients}.go`, `cmd/docgen/main.go`, `internal/kernel/help/help.go`, `internal/cli/verbs_gen.go`, `bench/datasets/aider-polyglot/loader.go`, `bench/runtime/{result,cell,mode_resolver}.go`, `bench/evaluators/editsim/editsim.go`, `Makefile`). This is an INTEGRATION map, not a domain survey: it states where the new code attaches, what is NEW vs MODIFIED, the data-flow deltas, and a dependency-honoring build order.
+**Domain:** Helix v2.2 — Agent-facing skill quality & offline prompt tuning (Go single binary, dev-time Python harness)
+**Milestone:** v2.2 Agent-Facing Skill Quality & Prompt Tuning
+**Researched:** 2026-06-23
+**Confidence:** HIGH (Go integration points read directly from source; DSPy patterns cross-checked against dspy.ai)
 
-> **Framing for the roadmapper:** v2.1 adds NO new architectural layer and NO new Go dependency. Both thrusts are *leaf additions and small edits* against existing seams: Thrust 1 attaches to the `internal/cli/` skill+nudge+setup surface and reuses `cmd/docgen`/`get_tool_help`/`test/oracle`; Thrust 2 attaches to the `bench/` stack (the v1.12 aider-polyglot loader, `bench/runtime` cell spine, `bench/evaluators/*` leaves, `bench/runners/<mode>` filesystem-table). The single structural code change in the entire milestone is switching `internal/cli/skill.go` from an embedded `string` to an `embed.FS` so the skill can ship `reference.md` alongside `SKILL.md`.
+> NOTE: `.planning/codebase/ARCHITECTURE.md` is STALE — it describes the pre-rename Python Serena (2026-04-07), not the current Go `helix`. All integration claims below are grounded in the live Go tree (`cmd/helix-refgen/`, `cmd/helix-cligen/`, `internal/cli/skill.go`, `internal/cli/verb.go`, `test/oracle/adopt/scorecard.go`, `test/oracle/llm/`), not that file.
 
----
+## Scope
 
-## Standard Architecture
-
-### System Overview — where v2.1 attaches (★ = NEW, ◆ = MODIFIED, · = reused unchanged)
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  THRUST 1 — ADOPTION LAYER  (internal/cli/, cmd/, test/oracle/)           │
-├──────────────────────────────────────────────────────────────────────────┤
-│  ★ cmd/helix-refgen ──reads──> · skill.ToolProviders() / help.ExtractParam│
-│   (per-verb reference generator,        Docs()  (tool registry, same       │
-│    --check drift gate, mirrors          source as cmd/docgen + get_tool_help)│
-│    cmd/docgen)                                                              │
-│        │ writes                                                            │
-│        ▼                                                                   │
-│  ★ internal/cli/skills/helix/reference.md  (+ per-capability files)        │
-│  ◆ internal/cli/skill.go   string ──► embed.FS  (multi-file install)       │
-│  · internal/cli/skills/helix/SKILL.md   (terse idle-cost tier, unchanged)  │
-│        │ installed by                                                      │
-│        ▼                                                                   │
-│  ◆ internal/cli/setup_clients.go                                           │
-│     · ClaudeCodeRegistrar  ──► installs SKILL.md + reference.md (was 1 file)│
-│     ★ codex / gemini-cli / generic registrars: teardown-only ──► ALSO write│
-│       AGENTS.md / GEMINI.md  (per-agent instruction file; no skill engine) │
-│  ◆ internal/cli/nudge.go   broaden classifyBashTarget (awk/head/tail/pipe);│
-│       ★ reuse emitAdvisory envelope for a Codex hooks.json handler          │
-│        │ asserted by                                                       │
-│        ▼                                                                   │
-│  ★ adoption-contract tests (internal/cli/*_test.go):                       │
-│     reference ⊇ VerbToolNames();  nudge-fires;  per-agent install goldens  │
-│  ★ test/oracle/llm adoption scorecard  (build-tag llm/llmjudge, opt-in)    │
-└──────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────┐
-│  THRUST 2 — AIDER-DERIVED VALIDATION  (bench/)                            │
-├──────────────────────────────────────────────────────────────────────────┤
-│  ★ bench/datasets/aider-polyglot/fixtures/<lang>/...  (VENDORED subset     │
-│       + per-track MIT NOTICE/SPDX)                                          │
-│  · loader.go RunExercise / restorePristineTests  (REUSED VERBATIM)        │
-│  ★ EDIT-verb AgentFn  (drives replace-symbol-body / fuzzy-edit / ...       │
-│       via the warm daemon)  ──plugs into──> RunExercise's AgentFn seam     │
-│        │ run by                                                            │
-│        ▼                                                                   │
-│  ★ bench/runners/aider_edit/MODE.md   (filesystem-table mode, 0 Go change) │
-│  ◆ bench/runtime/result.go  + additive open key `edit_format_applied`      │
-│       (*bool, omitempty — mirrors swebench_* keys; NO schema v3 bump)       │
-│                                                                            │
-│  ★ bench/evaluators/repomapeval/   (recall@k / MRR / nDCG leaf, stdlib)    │
-│       ──measures──> · get-repo-map / get-context (internal/repomap)        │
-│  ★ bench/datasets/repomap-gold/    (hand-labeled relevance corpus)         │
-│  ★ bench/evaluators/fuzzyrobust/   (drift corpus runner, reuses editsim.ES)│
-│       ──measures──> · internal/fuzzy 4-strategy cascade + refusal           │
-│                                                                            │
-│  · bench/aggregator (BCa/pass@k)  ◆ ByLanguage already exists; consumes    │
-│       result.v2 rows for committed baseline                                │
-│  ★ bench/reports/<run>/BENCH-RESULTS.md  (committed local baseline)        │
-│  ◆ Makefile  verify-licenses extended to vendored tree; bench targets       │
-│       HELIX_BIN-guarded (fail-not-skip)                                     │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | New / Modified / Reused |
-|-----------|----------------|-------------------------|
-| `cmd/helix-refgen` (or `cmd/docgen` extension) | Generate `reference.md` from `skill.ToolProviders()` + `help.ExtractParamDocs`; `--check` drift gate | **NEW** (or modify `cmd/docgen` to emit a 2nd artifact) |
-| `internal/cli/skills/helix/reference.md` | Per-verb synopsis/args/output/example, progressive-disclosure tier | **NEW** (generated, committed) |
-| `internal/cli/skill.go` | Embed + install the skill bundle | **MODIFIED** — `string` → `embed.FS`, `installSkill` walks+copies all files |
-| `internal/cli/setup_clients.go` | Per-client install | **MODIFIED** — Claude path copies reference too; codex/gemini/generic flip teardown-only → also-write instruction file |
-| `internal/cli/nudge.go` | PreToolUse steering | **MODIFIED** — broaden `classifyBashTarget`; envelope reused for Codex hooks.json |
-| adoption-contract tests (`internal/cli/*_test.go`) | Deterministic CI gate: reference completeness, nudge-fires, per-agent install goldens | **NEW** (extend `nudge_test.go`, `verbs_gen_test.go` pattern) |
-| `test/oracle/llm` adoption scorecard | Opt-in LLM-behavioral "does a model pick helix" score | **NEW oracle test** in existing build-tag-gated harness |
-| `bench/datasets/aider-polyglot/loader.go` `RunExercise` | 2-attempt + pristine-test-restore protocol | **REUSED VERBATIM** — do NOT touch WR-01 anti-tamper |
-| EDIT-verb `AgentFn` | Route the model's edit through `helix` verbs against the warm daemon | **NEW** — supplies the loader's existing `AgentFn` seam |
-| `bench/datasets/aider-polyglot/fixtures/` | Vendored exercism subset + MIT SPDX/NOTICE | **NEW** (data) |
-| `bench/runners/aider_edit/MODE.md` | Filesystem-table mode binding | **NEW** (1 dir, 0 Go change — like Phase 80) |
-| `bench/runtime/result.go` | `result.v2` builder | **MODIFIED** — add `edit_format_applied *bool` additive open key |
-| `bench/evaluators/repomapeval/` | recall@k/MRR/nDCG ranking-quality leaf | **NEW** (stdlib-only leaf) |
-| `bench/datasets/repomap-gold/` | Hand-labeled "relevant symbols for task T" corpus | **NEW** (data) |
-| `bench/evaluators/fuzzyrobust/` | Drift-corpus runner; asserts strategy selection + refusal; scores with `editsim.ES` | **NEW** (leaf, reuses `editsim`) |
-| `bench/aggregator` | BCa bootstrap / pass@k / per-language rollup → baseline | **REUSED** (already has `ByLanguage`) |
+This is a **subsequent-milestone, integrate-WITH** research note. Three deterministic Go-side features plus one exploratory Python harness, all hanging off the EXISTING skill-bundle generation/install/measurement spine. No new runtime dependency, no breaking change (minor version), phase numbering continues from 102.
 
 ---
 
-## Recommended Project Structure (delta only — what lands where)
+## Existing Architecture (the spine v2.2 hooks into)
 
 ```
-cmd/
-├── docgen/                       ◆ option A: extend to also emit reference.md
-└── helix-refgen/                 ★ option B (recommended): dedicated generator
-    ├── main.go                       (blank-imports == docgen/daemon for registry parity)
-    └── main_test.go
-
-internal/cli/
-├── skill.go                      ◆ embeddedSkillMD string → //go:embed skills/helix/* embed.FS
-├── skills/helix/
-│   ├── SKILL.md                  · terse idle-cost tier (unchanged)
-│   ├── reference.md              ★ generated per-verb reference (committed)
-│   └── reference-edit.md ...     ★ optional per-capability splits
-├── setup_clients.go              ◆ Claude copies bundle; codex/gemini/generic write instruction file
-├── setup_agents.go               ★ AGENTS.md / GEMINI.md writers + Codex hooks.json writer (new file)
-├── nudge.go                      ◆ broaden classifyBashTarget; Codex-envelope reuse
-├── reference_contract_test.go    ★ reference ⊇ VerbToolNames() drift gate
-├── setup_agents_test.go          ★ per-agent install goldens
-└── nudge_test.go                 ◆ add broadened-shape nudge-fires cases
-
-test/oracle/llm/
-└── adoption_scorecard_test.go    ★ opt-in choice-rate / fallback-rate (build tags llm,llmjudge)
-
-bench/
-├── datasets/
-│   ├── aider-polyglot/
-│   │   ├── loader.go             · RunExercise REUSED VERBATIM (WR-01 untouched)
-│   │   ├── fixtures/<lang>/...   ★ VENDORED exercism subset
-│   │   ├── NOTICE / *.SPDX       ★ MIT attribution per track
-│   │   └── VENDOR-MANIFEST.md    ★ deterministic vendored-exercise selection
-│   └── repomap-gold/             ★ hand-labeled relevance corpus + task specs
-├── runners/
-│   └── aider_edit/MODE.md        ★ filesystem-table mode (0 Go change)
-├── runtime/
-│   ├── result.go                 ◆ + edit_format_applied open key
-│   └── aider_edit_agent.go       ★ EDIT-verb AgentFn (daemon-dialing)
-├── evaluators/
-│   ├── editsim/                  · ES() REUSED by fuzzyrobust
-│   ├── repomapeval/              ★ recall@k / MRR / nDCG (stdlib leaf)
-│   └── fuzzyrobust/              ★ drift-corpus runner (leaf, reuses editsim)
-└── reports/<run>/BENCH-RESULTS.md ★ committed local baseline
-
-Makefile                          ◆ verify-licenses → vendored tree; bench targets HELIX_BIN-guarded
+                         GENERATE-TIME (dev / CI)                         RUNTIME (helix binary)
+┌──────────────────────────────────────────────────┐   ┌──────────────────────────────────────────┐
+│ live tool registry (skill.ToolProviders())        │   │ //go:embed skills/helix/*                  │
+│   ↑ blank-imports (same set as daemon/imports.go)  │   │   → embeddedSkillFS (embed.FS)             │
+│                                                    │   │       ├─ SKILL.md  (hand-authored)         │
+│ cmd/helix-cligen  ──generates──▶ verbs_gen.go      │   │       ├─ reference.md (generated)          │
+│   (verbSpecs: verb→tool, GroupID via              │   │       └─ SKILL-ISSUE.md  ◀── LEAKS today   │
+│    categoryToGroup[category])                      │   │                                            │
+│       │ --check drift gate (verify-cligen)         │   │ installSkill(targetDir):                    │
+│       ▼                                            │   │   ReadDir("skills/helix") → writes EVERY    │
+│ cli.VerbSpecsForDocs() / cli.VerbToolNames()       │   │   entry atomically (2-pass stage+rename),  │
+│       │  (read-only doc seam: Verb, GroupID,       │   │   withinSkillRoot() containment guard       │
+│       │   Short, Flags)                            │   │                                            │
+│       ▼                                            │   │ EmbeddedSkillBody()  → SKILL.md bytes       │
+│ cmd/helix-refgen/render.go  ──renders──▶           │   │ EmbeddedReference()  → reference.md bytes   │
+│   reference.md  (synopsis + Args + Output +        │   │   (multi-agent instruction surface)         │
+│    Example + "Use this, not that")                 │   └──────────────────────────────────────────┘
+│       │  Output line = outputShape(GroupID)        │
+│       │  UseThisNotThat = useThisNotThat(GroupID)  │   MEASUREMENT (the v2.2 optimization metric)
+│       ▼                                            │   ┌──────────────────────────────────────────┐
+│   --check drift gate (verify-reference, REF-03)    │   │ test/oracle/adopt (NO build tag, hermetic) │
+│   contract: reference ⊇ VerbToolNames() (50/50)    │   │   Scorecard([]Bucket) → {ChoiceRate,       │
+└──────────────────────────────────────────────────┘   │     FallbackRate, ...}                      │
+                                                         │   FirstCommand / ClassifyChoice /          │
+                                                         │   StripDecisionMatrix                      │
+                                                         │ test/oracle/llm (//go:build llm)           │
+                                                         │   live-capture leg → feeds same Scorecard  │
+                                                         │   SkillSystemPrompt(body), task corpus     │
+                                                         └──────────────────────────────────────────┘
 ```
 
-### Structure Rationale
+### Component responsibilities (verified against source)
 
-- **`cmd/helix-refgen` over hand-writing:** The 50 verbs are FROZEN and the registry (`skill.ToolProviders()` → `tool.Name`, `tool.Description`, `tool.InputSchema`) is the single source `cmd/docgen` and `get_tool_help` already read. Generating `reference.md` from the same source makes the completeness contract test trivial (`reference ⊇ VerbToolNames()`) and structurally prevents drift. `cmd/docgen/main.go:110-134` is the exact plumbing to clone; `help.ExtractParamDocs` (`internal/kernel/help/help.go:21`) already turns an `InputSchema` into typed `ParamDoc`s — the per-verb args section is `FormatHelp`'s output, no new parsing.
-- **Bundled `reference.md` (progressive disclosure), not a fatter SKILL.md:** STACK.md confirms the 1,536-char idle cap and the <500-line body guidance. The terse `SKILL.md` stays the idle tier; `reference.md` loads on demand. This is why `skill.go` MUST move to `embed.FS` — the only structural code change.
-- **Leaf evaluators under `bench/evaluators/`:** `editsim` is the proven precedent: stdlib-only, no cross-package reach, unit-tested against paper examples. `repomapeval` and `fuzzyrobust` follow it. The `vet-ablation-leakage` analyzer already forbids `bench/runners → lspool|semantic/store`; new leaves must respect it.
-- **Filesystem-as-table mode (`bench/runners/aider_edit/MODE.md`):** Phase 80 grew 1→6 modes with ZERO resolver Go change by dropping in `MODE.md` dirs (`mode_resolver.go:5-9`). The aider edit surface is one more dir.
+| Component | Responsibility | File |
+|-----------|----------------|------|
+| `verbSpecs` + `categoryToGroup` | verb→tool catalog with `GroupID` derived from ToolProvider category | `cmd/helix-cligen/render.go:60-73`, generated into `internal/cli/verbs_gen.go` |
+| `VerbSpecsForDocs()` / `VerbDoc` | read-only doc seam: `Verb, ToolName, GroupID, Short, Flags` (fresh copies, deterministic sort) | `internal/cli/verb.go:103-171` |
+| `renderReference()` / `renderVerb()` | render reference.md; **`Output` = `outputShape(d.GroupID)`; "Use this, not that" = `useThisNotThat(d.GroupID, d.Verb)`** | `cmd/helix-refgen/render.go:17-95, 203-242` |
+| `--check` gate (`referenceStale`) | byte-compare on-disk vs freshly-rendered; exit 1 if drift | `cmd/helix-refgen/main.go:60-88` |
+| `referenceMissingVerbs` contract | reference ⊇ `VerbToolNames()` (50 frozen verbs) | `internal/cli/reference_contract_test.go:32-62` |
+| `installSkill` | write embedded bundle to disk, 2-pass atomic, `withinSkillRoot` containment | `internal/cli/skill.go:180-257` |
+| `adopt.Scorecard` | choice_rate/fallback_rate over classified transcripts; floor `MinTasks=5`; `MaterialDrop=0.4` | `test/oracle/adopt/scorecard.go:124-156` |
+| `test/oracle/llm` live leg | captures real-model transcripts intact vs matrix-stripped, feeds same Scorecard | `test/oracle/llm/adoption_scorecard_test.go` |
 
 ---
 
-## Architectural Patterns (the seams v2.1 plugs into)
+## Root-cause findings (what actually produces the buggy lines)
 
-### Pattern 1: Registry-as-source generation with a `--check` drift gate
+### (a) Generator fixes — `Output` and "Use this, not that" are GROUP-keyed, not verb-keyed
 
-**What:** `cmd/docgen` imports all tool-providing packages (blank imports, `cmd/docgen/main.go:32-46`), calls `skill.ToolProviders()`, and renders markdown between `<!-- BEGIN -->/<!-- END -->` markers; `--check` exits 1 if the file would change (CI gate).
-**When to use:** Any committed artifact derived from the 50 frozen verbs — exactly `reference.md`.
-**Trade-off:** Must keep the generator's blank-import set == the daemon's (the documented "blank-import parity rule", `cmd/docgen/main.go:23-31`) or the generated set diverges from the runtime set. `helix-refgen` inherits this constraint verbatim.
+The SKILL-ISSUE.md "copy-paste errors" are NOT hand-edit mistakes in reference.md — **reference.md is generated**, and the generator keys those two lines off `GroupID` only:
 
-**Example:**
+- `cmd/helix-refgen/render.go:204-220 outputShape(group)` — a 7-arm switch on group; `memory` → `"the memory body or a ranked FTS5 search result set, one entry per line."`
+- `cmd/helix-refgen/render.go:224-242 useThisNotThat(group, verb)` — `memory` → `"…for durable project/session memory instead of ad-hoc scratch notes."`
+
+**The leak:** `cmd/helix-cligen/render.go:68-72` collapses FOUR distinct ToolProvider categories into the single `memory` group:
+```
+"memory"   → groupMemory
+"workflow" → groupMemory   // onboard-project, prepare-for-new-conversation
+"health"   → groupMemory   // get-health
+"help"     → groupMemory   // get-tool-help
+"profile"  → groupMemory   // switch-mode, get-token-budget
+```
+So `switch-mode`, `get-token-budget`, `onboard-project`, `prepare-for-new-conversation`, `get-health`, `get-tool-help`, AND the mutating memory verbs (`write/edit/rename/delete-memory`) all inherit the memory-query Output + "durable memory" steering text. Every SKILL-ISSUE.md finding §4/§5 is one symptom of this single grouping collapse.
+
+**Fix shape (deterministic, contract-preserving):** keep both lines **table-driven, generated**. Two viable seams:
+1. **Per-verb override map keyed in the generator** — add `outputShapeFor(verb, group)` / `useThisNotThatFor(verb, group)` that consult a `map[verb]string` first, falling back to the group default. Smallest blast radius; lives entirely in `cmd/helix-refgen/render.go`.
+2. **Split the group taxonomy upstream** — give `categoryToGroup` finer groups (`memory-query` vs `memory-mutate`, `workflow`, `session`, `health`, `help`) in `cmd/helix-cligen/render.go`, add matching `cobra.Group`s in `internal/cli/root.go`, and extend the `outputShape`/`useThisNotThat` switches. Cleaner conceptually but touches the cobra root command grouping (and the SKILL.md footer "grouped by capability" claim).
+
+**Recommendation: option 1 (per-verb override map in refgen).** It is the minimal change that (i) keeps `GroupID` and the cobra root grouping untouched, (ii) keeps everything generated (no hand-edits to reference.md), and (iii) is trivially deterministic. Option 2 is a larger, riskier refactor better deferred unless SKILL.md regrouping (feature 1) independently demands new cobra groups.
+
+**Determinism & contract invariants the fix MUST preserve:**
+- `renderReference()` is already deterministic (sorted `VerbSpecsForDocs()` iteration, map-free output assembly) — any override map must be a literal `map[string]string` read in sorted-verb order, never iterated for output. ✓ trivially satisfied since lookups are keyed, not ranged.
+- `--check` (`referenceStale`, `main.go:82`) stays a pure byte-compare; regenerate-then-commit is the workflow, exactly as today.
+- `reference ⊇ VerbToolNames()` (`reference_contract_test.go`) is unaffected — the override only changes Output/UseThisNotThat PROSE, never whether a verb section exists. Existing `TestRenderCoversAllVerbs` + `TestReferenceCoversAllVerbs` keep passing.
+- Add a **vacuity guard**: a test asserting NO override key is a non-existent verb and that each overridden verb's rendered Output differs from its old group default (so a future verb rename can't silently re-stale the override).
+
+### (b) installSkill hardening — `ReadDir` writes EVERYTHING; the allowlist is a filter pass
+
+`installSkill` (`skill.go:189, 212-236`) does `embeddedSkillFS.ReadDir("skills/helix")` and stages/writes **every non-dir entry**. Today `skills/helix/` contains `SKILL.md`, `reference.md`, AND `SKILL-ISSUE.md` (the 18 KB maintainer analysis). So:
+- `SKILL-ISSUE.md` is **embedded into the binary** (via `//go:embed skills/helix/*`) and **installed to every user's `.claude/skills/helix/`** on `helix setup`.
+- `EmbeddedReference()` is safe (reads `reference.md` by name), but the bundle install + `uninstallSkill` both walk the whole dir.
+
+**Fix shape:** introduce a single allowlist constant and filter the `ReadDir` loop in BOTH `installSkill` and `uninstallSkill`:
 ```go
-// helix-refgen reuses the docgen registry walk:
-for _, tp := range skill.ToolProviders() {
-    for _, tool := range tp.Tools() {
-        verb := strings.ReplaceAll(tool.Name, "_", "-")      // frozen mechanical mapping
-        params := help.ExtractParamDocs(tool.InputSchema)    // typed args from schema
-        section := help.FormatHelp(verb, tool.Description, params, "")
-        // ... emit reference.md section ...
-    }
-}
+// bundleFiles is the EXACT set shipped to disk. Any other entry in skills/helix/
+// (e.g. SKILL-ISSUE.md maintainer notes) is embedded-but-never-installed.
+var bundleFiles = map[string]bool{"SKILL.md": true, "reference.md": true}
+```
+Filter `if !bundleFiles[e.Name()] { continue }` inside the existing loops. This:
+- **Does NOT touch** the 2-pass stage→rename atomicity (`pending []staged`, the rename-revert path at `skill.go:242-255`) — the filter runs BEFORE staging, so the all-or-nothing property over the *allowlisted* set is preserved.
+- **Does NOT touch** `withinSkillRoot` / `lexicalSkillRoot` / `containedIn` containment (`skill.go:273-306`) — orthogonal path-traversal guard, still runs first.
+- Entry names still come ONLY from the embedded FS (the T-97-01 posture holds; the allowlist just narrows it further).
+
+**Bundle-contents test (the new gate):** a hermetic `_test.go` in `internal/cli` that walks `embeddedSkillFS` (or installs into a `t.TempDir()` via `installSkill`) and asserts the installed set is EXACTLY `{SKILL.md, reference.md}`. This is the regression that fails if a future stray `.md` (issue notes, scratch) lands in the embed dir. Pairs naturally with moving `SKILL-ISSUE.md` OUT of `skills/helix/` (it is planning/maintainer content, belongs under `.planning/` or a `docs/` sibling) — but the allowlist makes the bundle robust even if it stays.
+
+**Order note:** the allowlist (feature 3) is independent of the generator fix (feature 2) and the SKILL.md rewrite (feature 1) — it can land first as a pure safety patch.
+
+### (c) DSPy harness — where it lives, how it reads the metric, how output re-enters --check
+
+**Where (new component, isolated):** a dev-time/offline Python tree that is NOT part of the Go module and NOT embedded. Recommended `tools/skill-tune/` (sibling to `cmd/`, `bench/`, `test/`) with its own `pyproject.toml`/`requirements.txt`, a `README.md` stating "dev-time only, never shipped, no runtime dependency," and ignored from the Go build (Go ignores non-`.go` dirs automatically; add to `.gitignore` only for venv/artifacts, NOT the source). This mirrors how `bench/` already hosts dev-time corpora and how `eval/` hosts attestation tooling — Helix already has the "dev-time non-Go subtree" precedent.
+
+**How it consumes the Scorecard as its METRIC (data flow):** DSPy optimizers (MIPROv2 / GEPA) take `(program, dataset, metric)` and search instructions to maximize the metric (dspy.ai). The Helix optimization metric is `adopt.Scorecard.ChoiceRate` (higher = more `helix` adoption, lower fallback). Two seams to expose it to Python:
+
+1. **Pure-text classifier parity (preferred):** the DSPy metric must classify a model response with the SAME logic as `adopt.ClassifyChoice` / `adopt.FirstCommand` (first-command-prefix, `fallbackPrefixes = {grep,sed,cat,find,rg,ls}`). Re-implement that ~15-line classifier in Python AND pin it to the Go source of truth with a **golden cross-check**: a committed fixture of `(response, chose, fellBack)` triples that BOTH `test/oracle/adopt` (Go) and the Python metric must agree on. This keeps the Go scorecard the single authority while letting DSPy run offline without CGO/subprocess-into-Go.
+2. **(Alternative) shell out to a tiny Go scorer:** add a `cmd/helix-score` (or `helix-bench score`) subcommand that reads transcripts on stdin and prints `choice_rate`, and have the DSPy metric invoke it. Heavier (process per eval), but zero classifier duplication. Defer unless parity-drift becomes a real problem.
+
+The DSPy program's **dataset** is the existing task corpus: `test/oracle/llm/prompt.go SkillTaskDescriptions()` (the helix-appropriate code tasks) + `SkillSystemPrompt(body)` template. The optimizer's "instructions" being tuned ARE the SKILL.md decision-matrix / steering text.
+
+**How optimized output re-enters the Go --check-gated surface (the critical loop closure):**
+
+```
+tools/skill-tune/ (offline, manual, gated by API key — NEVER in CI gate)
+  DSPy program (signature: task → command)
+  + dataset = SkillTaskDescriptions()
+  + metric  = choice_rate (parity classifier)
+       │ optimizer.compile() → search instructions
+       ▼
+  optimized_program.save("optimized.json")   ← DSPy artifact (gitignored or archived, NOT shipped)
+       │  human extracts the improved decision-matrix / steering prose
+       ▼
+  HUMAN edits internal/cli/skills/helix/SKILL.md   (hand-authored — DSPy PROPOSES, human COMMITS)
+  and/or the refgen Output/UseThisNotThat override map (feature 2)
+       │
+       ▼
+  go run ./cmd/helix-refgen        ← regenerate reference.md from the (possibly tuned) registry/templates
+  go run ./cmd/helix-refgen --check  +  go test ./...  (adopt + contract gates)
+       │  --check byte-reproducible, reference ⊇ VerbToolNames() still 50/50
+       ▼
+  git commit  →  the committed, deterministic surface
 ```
 
-### Pattern 2: `embed.FS` skill bundle + path-contained atomic install
-
-**What:** `installSkill` (`skill.go:131`) atomically writes the embedded skill (temp+rename) into a `withinSkillRoot`-contained target dir. Today it embeds ONE file as a `string`.
-**When to use:** Shipping `reference.md` alongside `SKILL.md`.
-**Trade-off:** The `embed.FS` switch ripples into `EmbeddedSkillBody()` (still returns just `SKILL.md`), the SKILL-04 idle-cost assertion (reads `SKILL.md` only), and `installSkill` (now walks the FS). All three are small, localized edits; the path-traversal guard (`withinSkillRoot`/`lexicalSkillRoot`) is unchanged.
-
-**Example:**
-```go
-//go:embed skills/helix/*
-var embeddedSkillFS embed.FS
-
-func installSkill(targetDir string) error {
-    if !withinSkillRoot(targetDir) { /* unchanged guard */ }
-    // walk embeddedSkillFS, write each entry atomically (temp+rename)
-}
-```
-
-### Pattern 3: PreToolUse advisory envelope, reused across Claude + Codex
-
-**What:** `nudge.go` emits `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":...}}` at exit 0 (advisory, never blocks — `nudge.go:123-149`). Codex's PreToolUse hook (STACK.md, HIGH-confidence) uses the SAME camelCase `additionalContext` envelope.
-**When to use:** Codex steering — write a `~/.codex/hooks.json` (`type:"command"` → `helix nudge`) and reuse `emitAdvisory`.
-**Trade-off:** Gemini/IDE/generic have NO hook surface — steering there is instruction-file-only (`GEMINI.md`/`AGENTS.md`). Do not build a per-agent steering engine; the one nudge command serves both hook-capable runtimes.
-
-### Pattern 4: Injected `AgentFn`/`TestFn` seam in `RunExercise` (verb-agnostic loader)
-
-**What:** `RunExercise(ctx, ex, workDir, runTests TestFn, agent AgentFn)` (`loader.go:230`) is verb-agnostic — `AgentFn` is "whatever drives the edit". The loader already does pinned-clone, config-map, 2-attempt reprompt, and the WR-01 pristine-test restore.
-**When to use:** The v2.1 polyglot edit bench supplies an `AgentFn` that routes the model's diff through `helix replace-symbol-body`/`fuzzy-edit`/`replace-in-file`/`insert-*` against the warm daemon.
-**Trade-off:** The `AgentFn` must dial the daemon (the v2.0 one-shot `helix <verb>` path) — it is NOT a leaf; it lives in `bench/runtime` (or a sibling) where daemon-dialing is allowed, not in the `aiderpolyglot` leaf package (stdlib-only). The pristine-test restore is load-bearing; do not move it into the AgentFn.
-
-### Pattern 5: Additive open `result.v2` key (no schema v3 bump)
-
-**What:** `result.go` carries open provenance keys (`embedder_id`, `language`, `container_id`, `swebench_*`) as `omitempty` (pointer for booleans so a literal `false` survives). `additionalProperties` stays OPEN; `schema_version` stays `"v2"` (`result.go:126-139, 220-229`).
-**When to use:** The "edit-format-applied-correctly" signal — `edit_format_applied *bool` mirrors `swebench_raw_resolved` exactly (a `*bool` so an applied=false is preserved, not dropped).
-**Trade-off:** None structurally; this is the project's established additive contract. Do NOT add it to `required` and do NOT bump to v3.
+**Key invariant:** DSPy output is a SUGGESTION fed back through the existing hand-authored SKILL.md / generated-reference pipeline; it NEVER writes reference.md directly (that would break `--check` determinism and the generated-from-registry contract). The DSPy `optimized.json` is a dev artifact, not a shipped file. This keeps "Helix stays a Go single binary, no Python runtime dep" (PROJECT.md L192) literally true: nothing in `tools/skill-tune/` is imported, embedded, or invoked by the binary or the CI gate.
 
 ---
 
-## Data Flow
+## New vs Modified components (explicit)
 
-### New flow A — per-verb reference generation + install
-
-```
-skill.ToolProviders() ──► helix-refgen ──► reference.md (committed)
-        (tool.Name, .Description, .InputSchema)        │
-                                                       │ embed.FS
-helix setup claude-code ──► installSkill walks bundle ──► <.claude>/skills/helix/{SKILL.md,reference.md}
-helix setup codex       ──► AGENTS.md + ~/.codex/hooks.json(→ helix nudge)
-helix setup gemini-cli  ──► GEMINI.md
-        ▲
-   make check / CI: helix-refgen --check  +  reference ⊇ VerbToolNames() test  (BLOCKS merge)
-```
-
-### New flow B — polyglot edit bench (reuses RunExercise)
-
-```
-vendored fixtures ──► loadExercise (.meta/config.json map)
-        │
-        ▼
-RunExercise(ctx, ex, workDir, realTestFn, EDIT-verb AgentFn)   [REUSED VERBATIM]
-   attempt i: AgentFn drives `helix replace-symbol-body|fuzzy-edit|...` against warm daemon
-              │
-              ▼ restorePristineTests (WR-01)  ──►  nativeTestCommand (pytest/cargo --include-ignored/...)
-   pass/fail ──► BuildResult{ outcome, language, edit_format_applied:&bool }  ──► result.v2.json
-        │
-        ▼
-bench/aggregator (BCa, pass@k, ByLanguage) ──► bench/reports/<run>/BENCH-RESULTS.md (committed baseline)
-```
-
-### New flow C — RepoMap-quality + fuzzy-robustness evals
-
-```
-repomap-gold corpus (task T, relevant symbols) ──► get-repo-map / get-context (internal/repomap)
-        │                                                   │ ranked output
-        ▼                                                   ▼
-repomapeval leaf: recall@k / MRR / nDCG + budget-fit invariant ──► result.v2 ──► aggregator
-
-drift corpus (intended edit, drifted rendering) ──► fuzzy-edit / replace-in-file (internal/fuzzy)
-        │                                                   │ strategy used + refusal
-        ▼                                                   ▼
-fuzzyrobust leaf: assert strategy selected + ambiguity REFUSED; score with editsim.ES ──► result.v2
-```
-
-### Key invariants the data flow MUST preserve
-
-1. **HELIX_BIN guard (fail-not-skip):** bench smoke is false-green without `HELIX_BIN` (MEMORY: helix-bench-smoke-false-green). The new edit/repomap/fuzzy runners must FAIL or REFUSE when `HELIX_BIN` is unset, never silently SKIP into a green. The committed baseline is captured `HELIX_BIN`-gated, local-only.
-2. **WR-01 anti-tamper:** the graded test file is restored pristine before each grade. The EDIT-verb AgentFn must not bypass `restorePristineTests`.
-3. **Leaf discipline:** `repomapeval`/`fuzzyrobust` import stdlib (+ `editsim`) only — no `internal/kernel`, `internal/semantic`, or `bench/runtime`. The daemon-dialing AgentFn lives OUTSIDE the leaf.
-4. **Generator parity:** `helix-refgen`'s blank-import set must equal the daemon's (else the reference covers the wrong tool set).
+| Component | New / Modified | What |
+|-----------|----------------|------|
+| `internal/cli/skills/helix/SKILL.md` | **Modified** | decision-matrix rewrite (split query/action rows, "Not this" everywhere, indexed-graph prereq notes) — hand-authored; must keep `## Decision matrix` heading (the `StripDecisionMatrix` anchor) and stay under the 1,536-char idle-cost cap (SKILL-04) |
+| `cmd/helix-refgen/render.go` | **Modified** | add per-verb override maps for `Output` + "Use this, not that"; group-default fallback retained |
+| `cmd/helix-refgen/*_test.go` | **New tests** | vacuity guard (no override key is a non-verb; overridden Output ≠ old group default) |
+| `internal/cli/skills/helix/reference.md` | **Regenerated** | not hand-edited — output of `go run ./cmd/helix-refgen` after the override change |
+| `internal/cli/skill.go` | **Modified** | add `bundleFiles` allowlist; filter `installSkill` + `uninstallSkill` ReadDir loops |
+| `internal/cli/skill_bundle_test.go` | **New** | hermetic bundle-contents test: installed set == `{SKILL.md, reference.md}` |
+| `internal/cli/skills/helix/SKILL-ISSUE.md` | **Moved (recommended)** | out of the embed dir to `.planning/` — the allowlist makes this optional but cleaner |
+| `cmd/helix-cligen/render.go` `categoryToGroup` | **Modified ONLY IF** option 2 chosen (finer groups) — NOT recommended for v2.2 | — |
+| `tools/skill-tune/` (Python: `pyproject.toml`, `program.py`, `metric.py`, `dataset.py`, `README.md`) | **New** | exploratory DSPy harness; dev-time only, not in Go module, not in CI gate |
+| `tools/skill-tune/testdata/classifier_parity.json` + Go cross-check | **New** | golden fixture asserting Python metric ≡ `adopt.ClassifyChoice` |
+| `test/oracle/adopt` | **Unchanged** | remains the single source of truth for the metric; Python mirrors it |
+| `installSkill` 2-pass atomicity + `withinSkillRoot` | **Unchanged** | allowlist is a pre-filter; both invariants preserved |
 
 ---
 
-## Scaling Considerations
+## Suggested build order (phases 103+)
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| Vendored fixture subset (tens of exercises) | Vendor only the exercises actually exercised (VENDOR-MANIFEST.md), not all 6 full tracks — keeps the tree small and the MIT NOTICE auditable |
-| Full 225-task live polyglot run | Local/`HELIX_BIN`-gated only; NEVER a CI gate (network + 6 toolchains). Hermetic vendored subset is the CI proof (Phase 85 precedent) |
-| RepoMap gold corpus growth | Hand-labeling is the cost driver; start with a small curated set per language; recall@k is O(k), nDCG O(n log n) — math is not the bottleneck |
-| LLM adoption scorecard | Opt-in, never blocks; nondeterminism stays out of the merge gate (v1.4 precedent) |
+Dependency-driven: deterministic safety + correctness FIRST, exploratory DSPy LAST (it consumes the rewritten surface and the metric, both of which should be stable before tuning against them).
 
-### Scaling Priorities
+| Phase | Feature | Rationale / deps |
+|-------|---------|------------------|
+| **103** | installSkill allowlist + bundle-contents test (+ move SKILL-ISSUE.md out of embed dir) | Pure safety patch, **zero deps**, smallest blast radius. Stops the SKILL-ISSUE.md leak immediately and gives later phases a clean embed dir. Preserves 2-pass atomicity + containment. |
+| **104** | reference.md generator fixes (per-verb Output / "Use this, not that" override map in `cmd/helix-refgen`) + vacuity tests + regenerate | Fixes the §4/§5 copy-paste errors at the GENERATOR (root cause), not by hand-edit. Must land BEFORE the SKILL.md rewrite so the generated reference is already correct when the matrix is re-authored. Preserves `--check` byte-reproducibility and `reference ⊇ VerbToolNames()`. |
+| **105** | SKILL.md decision-matrix rewrite (split query/action, "Not this" everywhere, regroup, indexed-graph prereqs) | Hand-authored. Keep `## Decision matrix` heading (StripDecisionMatrix anchor) + idle-cost cap (SKILL-04). The hermetic `test/oracle/adopt` MaterialDrop test re-validates the rewritten matrix still materially drives adoption. Depends on 104 (reference prose already correct) so SKILL + reference tell ONE consistent story. |
+| **106 (exploratory)** | DSPy offline tuning harness (`tools/skill-tune/`) + Python↔Go classifier parity golden | LAST: consumes the stabilized metric (`adopt.Scorecard`) and the rewritten surface from 104/105. Dev-time only, no runtime dep, output re-enters via human → SKILL.md/refgen → `--check`. Marked exploratory: success = a reproducible harness + a parity-pinned metric, NOT a hard adoption-delta gate (live models are nondeterministic, mirroring the informational `//go:build llm` leg). |
 
-1. **First bottleneck:** human curation of the repomap-gold and fuzzy-drift corpora — gate these features (P2) behind the P1 substrate so the milestone isn't blocked on labeling.
-2. **Second bottleneck:** vendored-tree size / license audit surface — bound by the VENDOR-MANIFEST subset + the extended `make verify-licenses` hard-fail.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Hand-writing the per-verb reference
-**What people do:** Author 50 verbs of args/examples by hand in `reference.md`.
-**Why it's wrong:** Drifts from the frozen registry the moment a description changes; the completeness test becomes a stale duplicate.
-**Do this instead:** Generate from `skill.ToolProviders()` + `help.ExtractParamDocs` via `helix-refgen --check`, identical to `cmd/docgen`.
-
-### Anti-Pattern 2: Rebuilding the aider polyglot adapter
-**What people do:** Treat "add the aider benchmark" as new harness work.
-**Why it's wrong:** The v1.12 loader (clone + config-map + 2-attempt + WR-01 anti-tamper + native test argv) already exists and is correct; rebuilding risks regressing WR-01.
-**Do this instead:** Reuse `RunExercise` verbatim; only supply the EDIT-verb `AgentFn`, vendor fixtures, add the `edit_format_applied` field, and commit a baseline.
-
-### Anti-Pattern 3: A per-agent skill engine for Codex/Gemini/IDE
-**What people do:** Build a bespoke skill runtime per non-Claude agent.
-**Why it's wrong:** Those agents read a markdown instruction file (AGENTS.md/GEMINI.md), not Claude Agent Skills. High cost, no return.
-**Do this instead:** One shared generated reference + a thin per-agent instruction file; reuse the single `helix nudge` for the only other hook-capable runtime (Codex).
-
-### Anti-Pattern 4: Bumping `result.v2` to v3 for the edit-format signal
-**What people do:** Add a required field / new schema version.
-**Why it's wrong:** Breaks byte-compat of existing artifacts; the project's contract is additive-minor open keys.
-**Do this instead:** `edit_format_applied *bool` with `omitempty`, `additionalProperties` open, `schema_version` stays `"v2"` (mirror `swebench_raw_resolved`).
-
-### Anti-Pattern 5: A deny/block PreToolUse hook to "force" adoption
-**What people do:** exit 2 on grep/sed/cat.
-**Why it's wrong:** grep/sed/cat are legitimately correct for prose/logs/config/unknown-symbol discovery; blocking trains the model to fight the tool. `nudge.go` deliberately exits 0.
-**Do this instead:** Keep advisory exit-0; broaden detection only.
+**Ordering invariants:**
+- 103 before 104/105 → clean embed dir, no stray-file noise in the bundle-contents test or the generated reference.
+- 104 (generator/reference) before 105 (SKILL.md) → the on-demand reference is already correct when the idle-tier matrix is re-authored, avoiding a window where SKILL.md and reference.md disagree.
+- 106 strictly last → DSPy tunes AGAINST a frozen metric and a stable surface; tuning against a moving target wastes optimizer budget and muddies attribution.
 
 ---
 
-## Integration Points
+## Pitfalls / risks for downstream phases
 
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `helix-refgen` ↔ tool registry | `skill.ToolProviders()` + `help.ExtractParamDocs` | Same source as `cmd/docgen`/`get_tool_help`; keep blank-import parity with daemon |
-| `skill.go` ↔ `setup_clients.go` | `installSkill(targetDir)` walks `embed.FS` | Claude/Claude-Desktop registrars copy the bundle; path-traversal guard unchanged |
-| `setup_clients.go` ↔ non-Claude agents | write `AGENTS.md`/`GEMINI.md` (+ Codex `hooks.json`) | Flip teardown-only → also-write; Codex hooks.json points at `helix nudge` |
-| `nudge.go` ↔ Codex hook | shared `additionalContext` exit-0 envelope | One steering engine, two runtimes |
-| EDIT-verb `AgentFn` ↔ warm daemon | one-shot `helix <verb>` dial (v2.0 path) | Lives in `bench/runtime` (daemon-dialing allowed), NOT the stdlib leaf |
-| `aiderpolyglot.RunExercise` ↔ AgentFn/TestFn | injected func seams | REUSED VERBATIM; WR-01 restore untouched |
-| `repomapeval`/`fuzzyrobust` ↔ kernel engines | measure `get-repo-map`/`get-context` & `internal/fuzzy` outputs | Leaves import stdlib + `editsim` only; `vet-ablation-leakage` forbids kernel imports from `bench/runners` |
-| new runners ↔ `bench/runtime` | `BuildResult` → `result.v2.json` → `bench/aggregator` | Additive `edit_format_applied` key; aggregator's `ByLanguage` already exists |
-| Makefile gates | `verify-licenses` (vendored tree), `bench`/`bench-quick` (HELIX_BIN) | License gate already exists for the cloned tracks; extend to vendored fixtures |
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Aider-AI/polyglot-benchmark | pinned-SHA clone (`pin.go` `7e0611e7…`) → snapshot into `fixtures/` | Exercism content is **MIT** (in-tree byte-verified LICENSE-AUDIT.md), NOT Apache-2.0 |
-| Anthropic / DeepSeek LLM | `anthropic-sdk-go v1.35.0` (already a dep) via `test/oracle/{llm,judge}` | Opt-in adoption scorecard; build-tag gated; never blocks merge |
-| Claude Code / Codex / Gemini hook & instruction surfaces | file writes (SKILL.md/reference.md, AGENTS.md, GEMINI.md, hooks.json) | No new dependency; conventions verified in STACK.md (HIGH) |
-
----
-
-## Suggested Build Order (dependency-honoring — roadmap phases from 97)
-
-The order encodes three hard dependencies the question calls out: **reference → contract-test**, **vendor → baseline**, **output/corpus → eval**. Thrust 1 and Thrust 2 are independent and could interleave; within each, order is fixed.
-
-**Thrust 1 (adoption):**
-1. **`embed.FS` switch + `helix-refgen` + generated `reference.md`** — the substrate everything else asserts/installs. (`skill.go` MODIFIED, `helix-refgen` NEW, `reference.md` NEW.) *Depends on: nothing new.*
-2. **Deterministic adoption-contract tests** — reference ⊇ `VerbToolNames()`, nudge-fires (broadened), idle-cost cap. *Depends on: 1 (reference must exist to assert completeness).* BLOCKS merge.
-3. **Multi-agent instruction files + Codex hook** — `setup_clients.go`/`setup_agents.go` write AGENTS.md/GEMINI.md, Codex hooks.json reuses `nudge`. *Depends on: 1 (shared reference is the substrate) + the nudge broadening.* Add per-agent install goldens.
-4. **(P2) LLM-behavioral adoption scorecard** — `test/oracle/llm`, opt-in. *Depends on: 1 (loads the skill body) + 2 (deterministic layer green first).*
-
-**Thrust 2 (validation):**
-5. **Vendor fixtures + MIT SPDX/NOTICE + extended `verify-licenses`** — committed offline data. *Depends on: nothing new (reuses `pin.go`).* Must precede the baseline.
-6. **EDIT-verb AgentFn + `aider_edit` MODE.md + `edit_format_applied` key** — wires `RunExercise` to helix verbs. *Depends on: 5 (vendored fixtures) + the result.v2 additive key.*
-7. **Committed polyglot baseline** — HELIX_BIN-gated local capture → `BENCH-RESULTS.md`. *Depends on: 5 + 6 (must run the wired bench offline).*
-8. **(P2) RepoMap-gold corpus → `repomapeval` leaf → baseline** — corpus before eval. *Depends on: corpus authored first.*
-9. **(P2) Fuzzy-drift corpus → `fuzzyrobust` leaf (reuses `editsim.ES`) → baseline** — corpus before eval. *Depends on: corpus authored first.*
-
-**Cross-cutting ordering rule for every bench phase:** the HELIX_BIN guard (fail-not-skip) and the leaf-import boundary (`vet-ablation-leakage`) are pre-existing gates the new code must satisfy, not new work — verify them in each bench phase's exit criteria.
-
----
+| Risk | Mitigation |
+|------|------------|
+| Treating reference.md "copy-paste errors" as hand-edits | They are GENERATED — fix `outputShape`/`useThisNotThat` in `cmd/helix-refgen`, never edit reference.md by hand (a hand-edit fails `--check`). |
+| Override map iterated for output → non-determinism | Lookups are KEYED, never ranged; render order stays the sorted `VerbSpecsForDocs()` walk. Determinism test already exists (`TestRenderDeterministic`). |
+| Allowlist filter placed after staging → breaks atomicity reasoning | Filter BEFORE the stage loop so all-or-nothing is over the allowlisted set; do not touch the rename-revert path. |
+| SKILL.md rewrite renames `## Decision matrix` heading | Breaks `adopt.StripDecisionMatrix` anchor (silent vacuity). Keep the literal heading; the `TestSabotageNonNoop` guard catches a rename. |
+| SKILL.md rewrite blows the 1,536-char idle-cost cap | SKILL-ISSUE.md estimates +7 rows ≈ +51 bytes to frontmatter; the cap applies to the FRONTMATTER description only (`skillDescription()`), not the body — verify with the existing SKILL-04 unit test. |
+| DSPy harness drifts from the Go classifier | Pin with a committed `(response → chose/fellBack)` golden cross-checked by BOTH Go (`test/oracle/adopt`) and Python; do NOT let DSPy invent its own classifier. |
+| DSPy output written to reference.md / embedded | Forbidden — DSPy PROPOSES prose; human commits to SKILL.md / refgen overrides; output re-enters only through `--check`. Keep `tools/skill-tune/` out of the Go module and CI gate. |
 
 ## Sources
 
-- In-tree source (read directly, HIGH): `internal/cli/skill.go`, `internal/cli/nudge.go`, `internal/cli/setup_clients.go`, `internal/cli/verbs_gen.go`, `cmd/docgen/main.go`, `internal/kernel/help/help.go`, `bench/datasets/aider-polyglot/loader.go`, `bench/runtime/result.go`, `bench/runtime/cell.go`, `bench/runners/mode_resolver.go`, `bench/evaluators/editsim/editsim.go`, `Makefile`
-- `.planning/research/STACK.md`, `.planning/research/FEATURES.md` (this cycle — established findings)
-- `.planning/PROJECT.md` (v2.1 milestone section + v1.12 bench phase history)
-- MEMORY: helix-bench-smoke-false-green (HELIX_BIN fail-not-skip guard)
-
----
-*Architecture integration research for: Helix v2.1 — Agent Adoption & Aider-Derived Validation*
-*Researched: 2026-06-22*
+- Live Go source (read directly): `cmd/helix-refgen/{main,render}.go`, `cmd/helix-cligen/render.go`, `internal/cli/{skill,verb}.go`, `internal/cli/skills/helix/{SKILL.md,SKILL-ISSUE.md}`, `test/oracle/adopt/scorecard.go`, `test/oracle/llm/{adoption_scorecard_test,prompt}.go`, `internal/cli/reference_contract_test.go`, `Makefile`, `.github/workflows/go-test.yml`. Confidence: HIGH.
+- [GEPA optimization — DSPy](https://dspy.ai/getting-started/gepa-optimization/)
+- [MIPROv2 — DSPy](https://dspy.ai/api/optimizers/MIPROv2/)
+- [DSPy cheatsheet (compile / save program JSON)](https://dspy.ai/cheatsheet/)

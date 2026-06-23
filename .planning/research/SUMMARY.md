@@ -1,182 +1,147 @@
 # Project Research Summary
 
-**Project:** Helix v2.1 — Agent Adoption & Aider-Derived Validation
-**Domain:** Coding-agent adoption layer (skill/reference + steering + multi-agent) and Aider-derived benchmark validation, added to a mature Go-native CLI-first code-intelligence platform
-**Researched:** 2026-06-22
+**Project:** Helix
+**Domain:** Agent-facing tool-selection skill docs + generated-doc gates + (exploratory) offline DSPy prompt tuning, on a Go single-binary CLI
+**Researched:** 2026-06-23
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Helix v2.1 is a **subsequent milestone — additive integration, not greenfield.** Both of its thrusts attach to existing seams in a mature Go single-binary product and require **ZERO new Go dependencies.** Thrust 1 (Agent Adoption) hangs off the `internal/cli/` skill+nudge+setup surface and reuses `cmd/docgen`, `get_tool_help`, and the `test/oracle` LLM harness. Thrust 2 (Aider-Derived Validation) hangs off the `bench/` stack — specifically the v1.12 aider-polyglot loader (`RunExercise`), the `bench/runtime` cell spine, the `bench/evaluators/*` leaves, and the `bench/runners/<mode>` filesystem-table. The real v2.1 work is **file-format conventions, vendored data, and Go-native glue**, not library acquisition. The single structural code change in the whole milestone is switching `internal/cli/skill.go` from an embedded `string` to an `embed.FS` so the skill can ship `reference.md` alongside `SKILL.md`.
+Helix v2.2 ("Agent-Facing Skill Quality & Prompt Tuning") is a content/codegen milestone, NOT a stack milestone. It carries four features: three deterministic Go-side skill-surface fixes (a SKILL.md decision-matrix rewrite, `reference.md` generator corrections, and an `installSkill` bundle allowlist) plus one exploratory, dev-time-only DSPy prompt-optimization harness. All four hang off the existing skill-bundle generate→install→measure spine — the 50-verb CLI, the `//go:embed skills/helix/*` bundle, `cmd/helix-refgen` with its `--check` drift gate and `reference ⊇ VerbToolNames()` contract, and the Phase 101 `test/oracle/adopt` `choice_rate`/`fallback_rate` scorecard. The three deterministic features need ZERO new Go dependencies (edits inside already-vendored packages); only the DSPy spike introduces anything new, and it must stay strictly out of the shipped binary, the Go module graph, and the merge-gating CI path.
 
-The recommended approach is **reuse-don't-fork, generate-don't-hand-write, measure-don't-port.** The per-verb reference MUST be generated from the frozen 50-verb tool registry (same source as `get_tool_help` and the README table) — never hand-authored — or it drifts. The polyglot edit benchmark MUST reuse `RunExercise` verbatim (the v2.1 delta is supplying an EDIT-verb `AgentFn`, vendoring fixtures, adding an additive `edit_format_applied` open key, and committing a baseline) — never rebuilt, or it regresses the WR-01 anti-tamper invariant. The RepoMap-quality and fuzzy-robustness evals **measure** Helix's existing `internal/repomap` and `internal/fuzzy` engines against curated corpora — they do NOT port aider's algorithm.
+The recommended approach is dependency-driven and sequences deterministic-before-exploratory. Land the `installSkill` allowlist FIRST: the embed-glob leak is live right now (the binary and every `helix setup` already ship the 18 KB `SKILL-ISSUE.md`), the existing bundle test is positive-only, and putting a closed-set allowlist in place before the rewrite stops further leakage during the dir churn. Then fix the `reference.md` generator at its root cause (`cmd/helix-refgen` per-verb prose driven off a `cmd/helix-cligen` group collapse that folds memory/workflow/health/help/profile into one `memory` group) BEFORE re-authoring the SKILL.md matrix, so the on-demand reference is already correct when the idle-tier matrix is rewritten and the two tell one consistent story. The DSPy harness comes last, tuning against a frozen metric and a stabilized surface — and it is explicitly a spike with a possible no-ship outcome (Go-search-loop fallback).
 
-The dominant risk is **vacuity.** v1.12 shipped four named vacuous-pass CRITICALs (Phases 82/86/87/89) caught only by adversarial revert-and-fail tests, never by the happy-path test. The meta-lesson is binding: **for every gate v2.1 adds (adoption contract, HELIX_BIN guard, license gate, bench baselines), there must be a test that deliberately breaks the protected invariant and asserts the gate goes RED.** Two correction flags must also be ratified in requirements: (1) the milestone brief mis-states the fixture license — the Aider **polyglot fixtures are MIT** (Exercism redistribution, byte-verified in the in-tree `LICENSE-AUDIT.md`), NOT Apache-2.0; only the aider *tool repo* is Apache-2.0, and the recommendation is to NOT vendor tool-repo code so the fixture tree stays single-license MIT. (2) "Vendor vs clone" is inferred from "committed baseline" intent and should be confirmed.
+The dominant risk class is vacuous gates — a failure pattern this repo has been bitten by repeatedly (Phase 86/87/89 CR-01). Two hard rules govern the whole milestone: (1) `reference.md` corrections are GENERATOR fixes, never hand-edits — a hand-edit fails `--check` or certifies an irreproducible file; and (2) the contract test must be hardened to be DISCRIMINATING (exact count == 50, fails on a known-absent verb) BEFORE the format rewrite, or the superset check can go `∅ ⊇ ∅` vacuously green. For DSPy, the risks are overfit on a tiny corpus, metric-gaming of the gameable `choice_rate` proxy, LLM nondeterminism breaking reproducibility, and accidental runtime-Python coupling — all mitigated by treating DSPy as offline/human-in-the-loop whose only output that crosses into the binary is committed static bytes gated by `--check`.
 
 ## Key Findings
 
 ### Recommended Stack
 
-**No new Go dependencies.** Every capability is served by modules already in `go.mod`: the v1.12 bench stack, the v1.4 `llm`/`llmjudge` harness, the v2.0 skill + nudge, and stdlib `embed`. The genuinely new artifacts are **file-format conventions and data**, not libraries. See [STACK.md](STACK.md).
+v2.2 adds NO new Go dependencies. The three deterministic features are edits inside existing packages (`cmd/helix-refgen/render.go`, `cmd/helix-cligen/render.go`, `internal/cli/skill.go`, `internal/cli/skills/helix/`); `embed`, `os`, `path/filepath`, `cobra`, `testify`, `jsonschema/v6`, `anthropic-sdk-go` are all already vendored. The only new surface is the exploratory DSPy harness, quarantined to a dev-time/offline Python tree (recommended `tools/skill-tune/` or `tools/promptopt/`) with its own pinned `requirements.txt` and a git-ignored venv — never on the default `go test ./...` / merge path.
 
-**Core technologies (all reused):**
-- `anthropic-sdk-go v1.35.0` — drives the opt-in LLM-behavioral adoption score + judge scorer (already a dep; DeepSeek multi-provider path exists)
-- `modelcontextprotocol/go-sdk v1.5.0` — typed tool-registry args drive per-verb reference generation
-- stdlib `embed` — the one structural change: `embeddedSkillMD string` -> `embed.FS` to bundle `reference.md` with `SKILL.md`
-- `chromem-go` (via `bench/ragindex`) — optional embedding baseline to contrast against PageRank in the RepoMap eval
-- `bench/aggregator` (hand-rolled BCa bootstrap + pass@k) — NOT `benchstat` (its CI gate was deliberately removed at v1.9; benches are local-only)
-
-**Verified conventions (HIGH):** Claude Code skill 1,536-char idle cap + <500-line body + progressive disclosure; Codex `AGENTS.md` (32 KiB cap) + `PreToolUse` hook (`type:"command"`-only, same `additionalContext`/`permissionDecision` envelope as Claude); Gemini CLI `GEMINI.md` (NO PreToolUse-equivalent — context-file steering only).
+**Core technologies:**
+- **Go 1.25.1 (existing)**: all shipped code; the deterministic features touch only existing packages — no new import wanted or needed.
+- **DSPy (Python) 3.2.1 (stable)**: the offline prompt-optimizer that tunes SKILL.md/nudge prose against the adoption scorecard; dev-time only, output committed as static text. Pin stable 3.2.1 (3.3.0b1 beta exists; defer).
+- **GEPA optimizer (`dspy.GEPA`, bundled)**: recommended for free-form instruction/prose tuning (which SKILL.md is) — fewer rollouts, no demo bank. MIPROv2 (`auto="light"`, needs Optuna) / COPRO are alternates if few-shot demos prove valuable. Reuses the existing `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` (same vars as `test/oracle/llm`, via LiteLLM).
 
 ### Expected Features
 
-See [FEATURES.md](FEATURES.md). The net gap is narrow because the v1.12 bench stack and v2.0 skill already exist.
+The maintainer analysis (`SKILL-ISSUE.md`) already identified what is broken; the table-stakes fixes are well-specified and low-complexity.
 
-**Must have (table stakes / P1):**
-- Comprehensive per-verb reference (generated from registry, progressive-disclosure tier)
-- Deterministic adoption-contract test (completeness + nudge-fires; **blocks merge**)
-- Multi-agent shared reference + per-agent instruction file (Codex/Gemini/IDE/generic — flip teardown-only -> also-install)
-- Vendored Aider fixtures (MIT + attribution + license-audit gate)
-- Polyglot edit benchmark wired to Helix EDIT verbs (reuse `RunExercise`; pass/fail; tries=2)
-- Committed baseline results artifact (HELIX_BIN-gated, **fail-not-skip**)
+**Must have (table stakes):**
+- **`installSkill` bundle allowlist + closed-set bundle test** — predictable, minimal `{SKILL.md, reference.md}` bundle; stops the live stray-file leak. Hygiene table-stakes.
+- **One-question-per-row matrix** — split the 5 mixed QUERY/ACTION rows (37→44 rows); an agent maps one intent → one tool.
+- **Explicit "use this NOT that" on every row** — fill every blank `—` cell (the semantic-graph/memory/workflow verbs least familiar to agents) with the concrete fallback it displaces; CLAUDE.md routing table is the canonical source.
+- **Per-verb accuracy in the generated reference** — fix the 13 copy-pasted "use this/not that" + 22 copy-pasted FTS5 "Output" lines AT THE GENERATOR, keeping `--check` and `⊇ VerbToolNames()` green.
+- **Indexed-graph prerequisite annotations** — 7 semantic-graph verbs silently degrade without `index-semantic-graph`; without a prereq note the agent gets an empty result and falls back to grep.
+- **Reproducible, `--check`-gated output** — every generated/tuned artifact must round-trip through `helix-refgen --check`.
 
-**Should have (competitive / P2):**
-- Two-layer adoption eval — deterministic contract (blocks) + LLM-behavioral choice/fallback rate (informational, never blocks)
-- Stronger steering — broadened code-target detection + SessionStart priming, still advisory exit-0
-- RepoMap-quality eval (top-k recall / MRR / nDCG + budget-fit) — needs hand-labeled gold set
-- Fuzzy/edit-format robustness bench — drift corpus across the 4 strategies
-- `edit_format_applied` additive result.v2 open key (no schema v3 bump)
+**Should have (competitive):**
+- **Adoption-metric-driven content** — regression-check the rewrite against the hermetic `choice_rate`/`fallback_rate` scorecard (runs in default `go test ./...`, no network), not maintainer taste.
+- **DSPy offline tuning harness** (exploratory) — auto-optimize the matrix/nudge text to maximize `choice_rate`; reuse the `test/oracle/adopt` first-command classifier as the single metric for both the Go gate and the Python optimizer.
 
-**Defer / anti-features:**
-- Deny/block PreToolUse hook (exit 2) — anti-feature; grep/sed/cat are legitimately correct for prose/logs/config/build output
-- Per-agent bespoke skill engine — anti-feature; non-Claude agents read a markdown instruction file
-- Rebuilding the polyglot adapter, reimplementing aider's RepoMap, or making the LLM score a merge gate — all anti-features
-- Live full 225-task polyglot run in CI — local/HELIX_BIN-gated only
+**Defer (v2+ / exploratory):**
+- **DSPy harness itself** — highest complexity, exploratory spike, possible no-ship; value unproven until the deterministic rewrite establishes a baseline `choice_rate`. Clean fallback: a hand-rolled Go candidate-search loop over the `adopt` scorer, keeping the milestone 100% Go.
 
 ### Architecture Approach
 
-v2.1 adds **NO new architectural layer.** Both thrusts are leaf additions and small edits against existing seams. The hard-dependency chains are: **reference -> contract-test**, **vendor -> baseline**, **output/corpus -> eval**. The two thrusts are independent and interleavable. See [ARCHITECTURE.md](ARCHITECTURE.md).
+v2.2 is a subsequent-milestone, integrate-WITH note (phase numbering continues from 102). The generate-time spine (`cmd/helix-cligen` → `verbs_gen.go` → `VerbSpecsForDocs()`/`VerbToolNames()` → `cmd/helix-refgen/render.go` → `reference.md`, all `--check`-gated) and the runtime spine (`//go:embed skills/helix/*` → `installSkill`) are both touched only at well-isolated seams. The root cause of the reference.md "copy-paste errors" is that `outputShape(group)` and `useThisNotThat(group, verb)` are GROUP-keyed, and `cmd/helix-cligen`'s `categoryToGroup` collapses four distinct categories (memory, workflow, health, help, profile) into the single `memory` group — so `switch-mode`, `get-token-budget`, `onboard-project`, `get-health`, `get-tool-help`, and the mutating memory verbs all inherit the memory-query prose. The recommended fix is a per-verb override map in refgen (option 1, minimal blast radius), NOT an upstream group-taxonomy split (option 2, larger/riskier).
 
 **Major components:**
-1. `cmd/helix-refgen` (NEW) — generates `reference.md` from `skill.ToolProviders()` + `help.ExtractParamDocs`, with a `--check` drift gate; mirrors `cmd/docgen` and inherits its blank-import-parity-with-daemon rule
-2. `internal/cli/skill.go` (MODIFIED) — `string` -> `embed.FS`; `installSkill` walks+copies the bundle (the milestone's only structural code change)
-3. `internal/cli/setup_clients.go` + `setup_agents.go` (MODIFIED/NEW) — Claude path copies reference; Codex/Gemini/generic flip teardown-only -> also-write `AGENTS.md`/`GEMINI.md` (+ Codex `hooks.json` -> `helix nudge`)
-4. EDIT-verb `AgentFn` in `bench/runtime` (NEW) — routes the model's edit through `replace-symbol-body`/`fuzzy-edit`/`replace-in-file`/`insert-*` against the warm daemon; plugs into `RunExercise`'s verb-agnostic seam (loader untouched, WR-01 preserved)
-5. `bench/evaluators/repomapeval` + `fuzzyrobust` (NEW leaves) — stdlib-only (+ `editsim.ES`); measure `get-repo-map`/`get-context` and `internal/fuzzy`; respect the `vet-ablation-leakage` no-kernel-import boundary
-6. `bench/runners/aider_edit/MODE.md` (NEW) — filesystem-table mode, zero resolver Go change
+1. **`internal/cli/skill.go` (`installSkill`/`uninstallSkill`)** — add a `bundleFiles` allowlist, filter the entry list ONCE up front, feed the same filtered slice to the unchanged 2-pass atomic stage→rename and `withinSkillRoot` containment; filter uninstall identically. New closed-set bundle test.
+2. **`cmd/helix-refgen/render.go`** — add per-verb `Output` + "use this, not that" override maps with group-default fallback; lookups keyed (never ranged) so determinism holds. New vacuity-guard tests.
+3. **`internal/cli/skills/helix/SKILL.md`** — hand-authored matrix rewrite (split rows, "Not this" everywhere, regroup by subsystem reality, indexed-graph prereqs); MUST keep the `## Decision matrix` heading (the `StripDecisionMatrix` anchor) and stay under the SKILL-04 idle-cost cap.
+4. **`tools/skill-tune/` (new, exploratory)** — dev-time DSPy harness; NOT in the Go module, NOT embedded, NOT in CI; consumes the metric via a Python re-implementation of the `adopt` classifier pinned by a golden parity cross-check; output re-enters only as a human-reviewed commit through SKILL.md/refgen → `--check`.
 
 ### Critical Pitfalls
 
-See [PITFALLS.md](PITFALLS.md). Every item is anchored to a named v1.12 failure or an in-tree contract.
-
-1. **Adoption eval is vacuous** — passes without proving an agent chose `helix`. Avoid: source the completeness verb list from `verbs_gen.go` (the authority), NOT the generator's own output; assert the *specific* suggested verb per shape; add a sabotaged-skill revert-and-fail self-test for the behavioral score; key detectors on the first emitted command line, not substring; reject empty-bucket-as-pass.
-2. **HELIX_BIN false-green** — every new bench surface SKIPs silently instead of failing. Avoid: ship a hermetic golden sibling (no binary, no network) per surface as the sole authoritative proof; add a "did it RUN" sentinel when HELIX_BIN is set; fail-closed on missing `result.v2.json`/empty run dir/missing metric line.
-3. **License vendoring trap** — the brief says Apache-2.0; the fixtures are **MIT**. Avoid: stamp `SPDX-License-Identifier: MIT` + per-track NOTICE; do NOT vendor Apache-2.0 tool-repo code (re-derive the drift corpus natively); vendor only the exercised subset via a manifest; extend `make verify-licenses` to the vendored tree with a tamper test.
-4. **Non-reproducible committed baseline** — unseeded RNG, map-order leakage, machine-specific paths/timestamps/latency. Avoid: route through the existing deterministic `renderAll`; seed every resample; sort-before-emit; commit only deterministic quality metrics (latency -> local `bench-micro`); one renderer for `aggregate` and `report`.
-5. **Self-confirming gold corpus** — labels snapshotted from the tool under test prove nothing. Avoid: author relevance from the task ground truth (e.g. exercism `files.solution`), independent of `get-repo-map`; add a reversed/random-ranker discriminator that MUST fail the corpus; size floor per strategy/language; derive fuzzy "expected strategy" from the drift type, not observed behavior.
-6. **Steering over-reach** — over-firing the nudge on legitimate prose/log/config, or breaking the fail-open exit-0 contract. Avoid: keep advisory exit-0 (assert it); negative-control classifier rows (`grep TODO README.md` MUST NOT fire); SessionStart primes only the terse matrix with a SKILL-04-style size cap.
+1. **Embed glob ships stray files (LIVE leak)** — `installSkill` writes every `ReadDir("skills/helix")` entry, so `SKILL-ISSUE.md` is already in the binary and on every user's disk; the existing test is positive-only. Fix: closed-set allowlist assertion (embedded FS == exactly `{SKILL.md, reference.md}`) + move `SKILL-ISSUE.md` out of the embed dir. Land EARLY.
+2. **Hand-editing the generated `reference.md`** — it is generated and `--check`-gated; a hand-edit either reverts on next regen or certifies an irreproducible file. Fix `render.go`'s per-verb mapping, regenerate, commit both together; verify `git diff` empty after a fresh regen.
+3. **The `reference ⊇ VerbToolNames()` contract goes vacuous after the format rewrite** — if the matcher's anchor format changes, the superset check becomes `∅ ⊇ ∅` true. HARDEN FIRST: assert matched count == 50, discriminate a known-absent verb, run the test RED against the old format to prove it bites — all BEFORE rewriting the format.
+4. **DSPy overfit + metric-gaming on a tiny corpus** — with ~5 transcripts the optimizer memorizes surface cues (MIPROv2 only auto-protects when `val_size > 50`), and `choice_rate` is a gameable first-command proxy ("always emit helix"). Hold out a TEST split the optimizer never sees; pair `choice_rate` with a correctness/task-success oracle; inspect for degenerate steering.
+5. **DSPy nondeterminism / runtime-Python coupling** — LLM optimization isn't bit-reproducible (even temp-0), so never make "re-run DSPy" a CI gate; gate the committed artifact, not the process. Keep DSPy out-of-band (no `helix` subcommand shells to Python, no `go.mod`/setup edge); add a `make vet`-style leakage analyzer.
 
 ## Implications for Roadmap
 
-Two interleavable thrusts; within each, order is fixed by hard dependencies. Phase numbering continues from the v2.0 close (~Phase 97+).
+Based on combined research, the convergent suggested phase structure (continuing from Phase 102) is:
 
-### Phase A1: embed.FS switch + helix-refgen + generated reference.md
-**Rationale:** The substrate everything else asserts and installs; depends on nothing new.
-**Delivers:** `cmd/helix-refgen` (with `--check`), generated `internal/cli/skills/helix/reference.md`, `skill.go` switched to `embed.FS`.
-**Addresses:** Comprehensive per-verb reference (P1).
-**Avoids:** Pitfall 8 (generate from registry, not by hand); Pitfall 1 (re-source completeness from `verbs_gen.go`).
+### Phase 103: installSkill allowlist + closed-set bundle test
+**Rationale:** Pure safety patch, zero deps, smallest blast radius; the leak is live and the dir will churn during the rewrite, so the allowlist must precede it. Churns least.
+**Delivers:** `bundleFiles` allowlist filtering install + uninstall (single up-front filter, atomicity/containment untouched), a closed-set bundle-contents test, `SKILL-ISSUE.md` moved out of the embed dir, AND a hardened `reference ⊇ VerbToolNames()` contract test (exact count == 50, discriminates a known-absent verb, RED-first).
+**Addresses:** allowlist + bundle hygiene (table stakes).
+**Avoids:** Pitfall 1 (live leak), Pitfall 2 (atomicity regression via uninstall parity test), Pitfall 5 (vacuous contract — harden it here, before the format changes).
 
-### Phase A2: Deterministic adoption-contract test
-**Rationale:** Reference must exist before completeness can be asserted; this is the merge-gating contract PROJECT.md demands.
-**Delivers:** `reference superset-of VerbToolNames()` drift gate, nudge-fires golden table (per-shape correct verb), idle-cost cap, negative-control rows. **Blocks merge.**
-**Avoids:** Pitfall 1 (non-tautological, revert-and-fail); Pitfall 6 (exit-0 + negative-control).
+### Phase 104: reference.md generator per-verb override fixes
+**Rationale:** Fix the §4/§5 copy-paste errors at the GENERATOR root cause (the group collapse), not by hand-edit; MUST precede the SKILL.md rewrite so the reference is already correct when the matrix is re-authored.
+**Delivers:** per-verb `Output` + "use this, not that" override maps in `cmd/helix-refgen/render.go` (group-default fallback retained), vacuity tests (no override key is a non-verb; overridden Output ≠ old group default), regenerated `reference.md`.
+**Uses:** existing `cmd/helix-refgen` + `--check` gate; no new deps.
+**Implements:** generator override seam (architecture option 1).
+**Avoids:** Pitfall 3 (hand-edit), Pitfall 4 (blank-import parity re-verified when touching refgen).
 
-### Phase A3: Multi-agent instruction files + Codex hook + stronger steering
-**Rationale:** Shared reference is the substrate; nudge envelope is portable to Codex.
-**Delivers:** `setup_agents.go` writes sentinel-delimited `AGENTS.md`/`GEMINI.md` + Codex `hooks.json` (-> `helix nudge`); broadened `classifyBashTarget`; per-agent install goldens.
-**Avoids:** Pitfall 7 (append not overwrite, idempotent, 32 KiB cap, no Gemini hook); Pitfall 6 (advisory exit-0).
+### Phase 105: SKILL.md decision-matrix rewrite
+**Rationale:** Hand-authored idle-tier rewrite; depends on 104 so SKILL.md and reference.md tell one consistent story.
+**Delivers:** split QUERY/ACTION rows (37→44), "Not this" on every row, regroup by subsystem reality, indexed-graph prereq notes; keep the `## Decision matrix` StripDecisionMatrix anchor and the SKILL-04 idle-cost cap; SKILL.md↔VerbToolNames cross-check test.
+**Addresses:** the core mis-routing fixes (table stakes).
+**Avoids:** Pitfall 11 (over-split/token bloat — target ~44 rows, terse "Not this"), Pitfall 12 (ambiguous/stale steering), Pitfall 13 (missing prerequisites), the StripDecisionMatrix anchor break.
 
-### Phase B1: Vendor fixtures + MIT SPDX/NOTICE + extended verify-licenses
-**Rationale:** Committed offline data must precede the baseline; reuses `pin.go`.
-**Delivers:** vendored exercism subset under `bench/datasets/aider-polyglot/fixtures/`, per-track MIT NOTICE/SPDX, `VENDOR-MANIFEST.md`, extended hard-fail license gate + tamper test.
-**Avoids:** Pitfall 3 (MIT not Apache-2.0; subset not all six tracks).
-
-### Phase B2: EDIT-verb AgentFn + aider_edit mode + edit_format_applied key
-**Rationale:** Wires `RunExercise` to helix verbs; depends on vendored fixtures.
-**Delivers:** EDIT-verb `AgentFn` (daemon-dialing, in `bench/runtime`), `bench/runners/aider_edit/MODE.md`, additive `edit_format_applied *bool` open key.
-**Avoids:** Pitfall 8 (reuse `RunExercise` verbatim, WR-01 untouched, no schema v3 bump).
-
-### Phase B3: Committed polyglot baseline
-**Rationale:** Must run the wired bench offline after vendoring + wiring.
-**Delivers:** HELIX_BIN-gated local capture -> `bench/reports/<run>/BENCH-RESULTS.md` + `result.v2.json`.
-**Avoids:** Pitfall 2 (fail-not-skip, hermetic golden sibling, bench-guard audit); Pitfall 4 (byte-reproducible, deterministic metrics only).
-
-### Phase P2-1: LLM-behavioral adoption scorecard (opt-in)
-**Rationale:** Add once the deterministic contract is green and the rubric settles.
-**Delivers:** `test/oracle/llm` scorecard — choice rate / fallback rate, build-tag gated, never blocks merge.
-**Avoids:** Pitfall 1 (sabotaged-skill revert-and-fail; negative judge exemplar; first-command-line detector).
-
-### Phase P2-2: RepoMap-gold corpus -> repomapeval leaf -> baseline
-**Rationale:** Corpus must be authored before the eval; corpus is the cost driver.
-**Delivers:** `bench/datasets/repomap-gold/` + `bench/evaluators/repomapeval/` (recall@k/MRR/nDCG + budget-fit).
-**Avoids:** Pitfall 5 (gold from task ground truth; reversed-ranker discriminator); Pitfall 2; Pitfall 4.
-
-### Phase P2-3: Fuzzy-drift corpus -> fuzzyrobust leaf -> baseline
-**Rationale:** Corpus before eval; reuses `editsim.ES`.
-**Delivers:** native drift corpus + `bench/evaluators/fuzzyrobust/` asserting strategy selection + ambiguity refusal.
-**Avoids:** Pitfall 5 (expected strategy from drift type; known-ambiguous-must-refuse case; size floor); Pitfall 2; Pitfall 4.
+### Phase 106 (exploratory): DSPy offline tuning harness
+**Rationale:** LAST — tunes against a frozen metric and the stabilized 104/105 surface; tuning against a moving target wastes optimizer budget.
+**Delivers:** `tools/skill-tune/` dev-time harness (DSPy 3.2.1 + GEPA), a Python re-implementation of the `adopt` classifier pinned by a golden parity cross-check against the Go scorer, train/dev/held-out splits, offline optimize → human-reviewed commit → `--check`.
+**Uses:** DSPy 3.2.1, GEPA, reused `ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY`.
+**Avoids:** Pitfalls 6–10 (overfit, metric-gaming, nondeterminism, contamination, runtime-Python coupling).
 
 ### Phase Ordering Rationale
 
-- **Hard dependencies drive order within each thrust:** reference -> contract-test (can't assert completeness without the reference); vendor -> baseline (offline reproducibility); corpus -> eval (avoid self-confirming gold).
-- **Thrusts T1 and T2 are independent** and can interleave or run in parallel waves; only intra-thrust order is fixed.
-- **P2 work (LLM score, RepoMap eval, fuzzy bench) is gated behind the P1 substrate** because the curated gold/drift corpora are the milestone's main cost driver and labeling shouldn't block the milestone.
-- **Cross-cutting rule for every bench phase:** the HELIX_BIN fail-not-skip guard and the `vet-ablation-leakage` leaf-import boundary are pre-existing gates the new code must satisfy in its exit criteria — not new work.
+- **103 before 104/105:** a clean embed dir means no stray-file noise in the bundle-contents test or the generated reference; the allowlist stops leakage during the rewrite churn.
+- **104 (generator/reference) before 105 (SKILL.md):** the on-demand reference must be correct before the idle-tier matrix is re-authored, avoiding a window where the two disagree.
+- **106 strictly last:** DSPy tunes against a frozen metric and a stable surface; it is exploratory with a possible no-ship outcome and a Go-search-loop fallback.
+- All three research files (ARCHITECTURE build order, PITFALLS phase mapping, FEATURES dependency graph) converge on this exact sequence.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning (`/gsd-plan-phase --research-phase <N>`):
-- **P2-2 (RepoMap-gold corpus / repomapeval):** the gold-relevance labeling methodology and anti-self-confirming discriminator design are the highest-uncertainty, highest-cost items; corpus size floor is TBD.
-- **P2-3 (Fuzzy-drift corpus / fuzzyrobust):** mapping drift types -> expected strategy and authoring a discriminating ambiguity-refusal case need care.
-- **P2-1 (LLM-behavioral scorecard):** rubric design (negative exemplar, sabotaged-skill self-test) and detector keying need a research pass to avoid vacuity.
+Phases likely needing deeper research during planning:
+- **Phase 106 (DSPy harness):** exploratory spike — needs corpus-split design, the Python↔Go classifier parity contract, the metric-AND-quality-oracle composition, and a leakage-analyzer design. Highest uncertainty; mark as spike, not a hard adoption-delta gate.
 
-Phases with standard patterns (skip research-phase — patterns verified in-tree):
-- **A1/A2 (refgen + contract test):** `cmd/docgen` blank-import + `--check` + golden-test patterns are established.
-- **B1/B2/B3 (vendor + AgentFn + baseline):** the v1.12 aider-polyglot loader, result.v2 additive-key pattern, filesystem-table mode, and license-gate pattern all have direct precedents.
-- **A3 (multi-agent + steering):** Codex/Gemini conventions are HIGH-confidence; sentinel-append + idempotency + nudge-reuse are well-scoped.
+Phases with standard patterns (skip research-phase):
+- **Phase 103 (allowlist):** well-understood install hardening; the seam (filter entry list once, preserve atomicity) is fully specified.
+- **Phase 104 (generator fix):** root cause and fix shape (per-verb override map) are identified and grounded in source.
+- **Phase 105 (SKILL.md rewrite):** hand-authored Markdown against the maintainer-specified `SKILL-ISSUE.md` target; constraints (anchor, idle-cost cap) are explicit.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | `go.mod` + `bench/` + `test/oracle/` inspected directly; agent-runtime conventions verified against official Claude Code / Codex / Gemini docs |
-| Features | HIGH | Existing Helix surface read from source; Aider mechanics confirmed against aider.chat; hook semantics against current docs |
-| Architecture | HIGH | Every integration point read from real in-tree source; this is an integration map, not a domain survey |
-| Pitfalls | HIGH | Every pitfall anchored to a named shipped v1.12 vacuous-pass CRITICAL or a byte-verified in-tree contract |
+| Stack | HIGH | DSPy version/extras/LM-config verified against PyPI + dspy.ai; Go "no new deps" read directly from the tree. |
+| Features | HIGH | Skill-doc fixes grounded in `SKILL-ISSUE.md`; DSPy mechanics Context7-verified (`/websites/dspy_ai`). |
+| Architecture | HIGH | All Go integration points (refgen, cligen, skill.go, scorecard) read directly from live source; group-collapse root cause pinned to file/line. |
+| Pitfalls | HIGH | Generator/gate/bundle pitfalls verified against live source; DSPy pitfalls Context7/web-verified (MEDIUM-HIGH). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **License correction (MIT != Apache-2.0):** the brief is factually wrong; the fixtures are MIT (in-tree byte-verified). **Flag for requirements to ratify** the MIT SPDX + per-track NOTICE decision and the "do not vendor Apache-2.0 tool code" recommendation. (Confidence on the fact is HIGH; the recommendation is MEDIUM.)
-- **Vendor-vs-clone:** inferred from "committed baseline" + "vendor fixtures" intent (MEDIUM). Confirm in requirements that vendoring (not runtime clone) is wanted.
-- **Corpus size floors:** the RepoMap-gold and fuzzy-drift corpus sizes (per language / per strategy) are the milestone's main cost driver and are TBD — set a defensible floor in requirements so empty/under-sized buckets can't pass vacuously.
-- **Vendored exercise selection:** the deterministic subset must be recorded in `VENDOR-MANIFEST.md`; the exact exercise list is a planning-time decision.
+- **DSPy generalization on a tiny corpus:** the live adoption corpus is small (`MinTasks=5`); a held-out test split must be established (and likely the corpus grown) before any optimizer call. Handle in Phase 106 planning — the split is the FIRST harness task.
+- **Optimizer-reproducibility vs `--check`:** the artifact/process split must be an explicit Phase 106 architecture decision (commit the tuned artifact, never re-run the optimizer in `--check`).
+- **Per-verb override vs group-taxonomy split (104):** option 1 (override map) is recommended; if the 105 SKILL.md regroup independently demands new cobra groups, re-evaluate option 2 during 104/105 planning.
+- **Stale codebase docs:** `.planning/codebase/{ARCHITECTURE,CONCERNS}.md` describe the removed Python Serena tree and were NOT used as sources — do not let them re-enter planning context.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- In-tree source (direct read): `internal/cli/{skill,nudge,setup_clients}.go`, `internal/cli/verbs_gen.go`, `cmd/docgen/main.go`, `internal/kernel/help/help.go`, `bench/datasets/aider-polyglot/{clone,loader,pin}.go`, `bench/datasets/aider-polyglot/LICENSE-AUDIT.md` (MIT, byte-verified), `bench/runtime/{result,cell,mode_resolver}.go`, `bench/evaluators/editsim/editsim.go`, `bench/aggregator/`, `bench/BENCH.md`, `go.mod`, `Makefile`, `.planning/PROJECT.md` (v2.1 milestone + v1.12 four-CRITICAL progress log)
-- [Claude Code — Skills](https://code.claude.com/docs/en/skills) — 1,536-char idle cap, <500-line body, progressive disclosure, bundled reference files, `Bash(helix *)` form
-- [OpenAI Codex — AGENTS.md](https://developers.openai.com/codex/guides/agents-md) + [Hooks](https://developers.openai.com/codex/hooks) — 32 KiB cap, discovery order, `PreToolUse` `additionalContext`/`permissionDecision`, `type:"command"`-only
-- [Gemini CLI — GEMINI.md](https://geminicli.com/docs/cli/gemini-md/) + [configuration](https://geminicli.com/docs/reference/configuration/) — context file location, `context.fileName`, no PreToolUse hook
-- [Aider polyglot benchmark](https://aider.chat/2024/12/21/polyglot.html) + [scoring](https://aider.chat/docs/benchmarks.html) + [RepoMap](https://aider.chat/2023/10/22/repomap.html) — Exercism MIT redistribution, 225 exercises, tries=2, % correct edit format, tree-sitter PageRank token-budget
-- Project memory: `helix-bench-smoke-false-green` (HELIX_BIN fail-not-skip), `helix-tool-docs-drift` (docgen blank-import == daemon)
+- Live Go tree (read directly): `cmd/helix-refgen/{main,render}.go`, `cmd/helix-cligen/render.go`, `internal/cli/{skill,verb}.go`, `internal/cli/reference_contract_test.go`, `internal/cli/skills/helix/{SKILL.md,SKILL-ISSUE.md}`, `test/oracle/adopt/scorecard.go`, `test/oracle/llm/*`, `go.mod`, `Makefile` — confirms "no new Go deps," the group-collapse root cause, the live leak, and the scorecard classifier.
+- `.planning/PROJECT.md` §v2.2 + Constraints — four target features; single Go binary, no runtime Python; DSPy dev-time only; committed `--check`-reproducible artifact.
+- Context7 `/websites/dspy_ai` — optimizers (GEPA/COPRO/MIPROv2/BootstrapFewShot), metric signature `(example, pred, trace=None)->float|bool`, `compile(student, trainset, valset)`, `save()` static artifact.
+- https://pypi.org/project/dspy/ — DSPy 3.2.1 stable (2026-05), Python `>=3.10,<3.15`, `anthropic`/`optuna` extras.
+- MEMORY: "Helix tool docs drift" (docgen blank-import parity trap); "Helix bench smoke false-green" / Phase 87/89 CR-01 (vacuous-gate failure class).
 
 ### Secondary (MEDIUM confidence)
-- "Vendor vs clone" recommendation — milestone intent inferred from "committed baseline" + "vendor fixtures"
-- "Re-derive edit-format drift corpus natively over vendoring aider Apache-2.0 fixtures" — recommendation to keep the fixture tree single-license MIT; not a hard constraint
+- https://dspy.ai/getting-started/gepa-optimization/ , /api/optimizers/MIPROv2/ , /cheatsheet/ — GEPA/MIPROv2 usage, program save/load.
+- https://www.morphllm.com/gepa-prompt-optimization — GEPA reflective prompt-evolution, fewer rollouts than MIPROv2.
+- https://dspy.ai/deep-dive/optimizers/miprov2/ + DeepWiki — minibatch auto-enabled only when `val_size > 50` (overfit-on-small-sets warning).
+
+### Tertiary (LOW confidence)
+- https://arxiv.org/pdf/2506.09501 — even temp-0 greedy decoding is not bit-reproducible (FP/GPU nondeterminism); grounds the "gate the artifact, not the optimizer" decision.
 
 ---
-*Research completed: 2026-06-22*
+*Research completed: 2026-06-23*
 *Ready for roadmap: yes*

@@ -96,7 +96,9 @@ Plans:
   3. `make verify-licenses` is extended to hard-fail over the full vendored tree under both the MIT and Apache-2.0 dispositions.
   4. Anti-vacuity proven: a tamper test flipping a license header or removing a NOTICE turns the `verify-licenses` gate RED (deliberate break-the-invariant test ships in this phase).
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 99-01-PLAN.md — Vendor the mixed-license tree: MIT polyglot 9-exercise subset (×py/go/rust) + Apache-2.0 aider edit-format subset + NOTICE/LICENSE sidecars + VENDOR-MANIFEST.md (real sha256) + dual-disposition LICENSE-AUDIT.md (VENDOR-01, VENDOR-02)
+- [ ] 99-02-PLAN.md — Extend the verify-licenses gate to dual disposition + bidirectional manifest-vs-disk sha256 walk + anti-vacuity tamper test + Makefile wiring (VENDOR-03)
 **UI hint**: no
 
 ### Phase 100: Polyglot Edit Benchmark + Committed Baseline

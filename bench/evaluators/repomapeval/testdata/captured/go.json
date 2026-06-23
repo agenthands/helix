@@ -1,0 +1,175 @@
+{
+  "book-store": {
+    "repo_map": [
+      "book_store.go:Cost",
+      "book_store.go:organize",
+      "book_store.go:cost",
+      "book_store.go:getDistinctBooks",
+      "book_store.go:groupCost",
+      "book_store_test.go:TestCost",
+      "cases_test.go:testCases",
+      "book_store_test.go:BenchmarkCost"
+    ],
+    "context": [
+      "book_store.go:Cost",
+      "book_store.go:organize",
+      "book_store.go:getDistinctBooks",
+      "book_store.go:cost",
+      "book_store.go:groupCost",
+      "book_store_test.go:TestCost",
+      "cases_test.go:testCases"
+    ]
+  },
+  "bowling": {
+    "repo_map": [
+      "bowling.go:Game",
+      "bowling.go:NewGame",
+      "bowling.go:Game.Roll",
+      "bowling.go:Game.Score",
+      "bowling.go:Game.rollsThisFrame",
+      "bowling_test.go:TestGame",
+      "cases_test.go:testCases",
+      "bowling.go:Game.spareBonus"
+    ],
+    "context": [
+      "bowling.go:Game",
+      "bowling.go:Game.Roll",
+      "bowling.go:Game.Score",
+      "bowling.go:NewGame",
+      "bowling.go:Game.rollsThisFrame",
+      "bowling_test.go:TestGame",
+      "cases_test.go:testCases"
+    ]
+  },
+  "forth": {
+    "repo_map": [
+      "forth.go:Forth",
+      "forth.go:parse",
+      "forth.go:operatorTyp",
+      "forth.go:operatorFn",
+      "forth.go:push",
+      "forth_test.go:TestForth",
+      "cases_test.go:testCases",
+      "forth.go:pop"
+    ],
+    "context": [
+      "forth.go:Forth",
+      "forth.go:parse",
+      "forth.go:operatorTyp",
+      "forth.go:push",
+      "forth.go:operatorFn",
+      "forth_test.go:TestForth",
+      "cases_test.go:testCases"
+    ]
+  },
+  "pig-latin": {
+    "repo_map": [
+      "pig_latin.go:Sentence",
+      "pig_latin.go:Word",
+      "pig_latin_test.go:TestSentence",
+      "cases_test.go:testCases",
+      "pig_latin_test.go:BenchmarkSentence"
+    ],
+    "context": [
+      "pig_latin.go:Sentence",
+      "pig_latin.go:Word",
+      "pig_latin_test.go:TestSentence",
+      "cases_test.go:testCases"
+    ]
+  },
+  "poker": {
+    "repo_map": [
+      "poker.go:BestHand",
+      "poker.go:evalHand",
+      "poker.go:handValue",
+      "poker.go:handValue.Compare",
+      "poker.go:card",
+      "poker_test.go:TestPoker",
+      "cases_test.go:testCases",
+      "poker.go:isFlush"
+    ],
+    "context": [
+      "poker.go:BestHand",
+      "poker.go:evalHand",
+      "poker.go:handValue.Compare",
+      "poker.go:handValue",
+      "poker.go:card",
+      "poker_test.go:TestPoker",
+      "cases_test.go:testCases"
+    ]
+  },
+  "react": {
+    "repo_map": [
+      "react.go:New",
+      "react.go:reactor",
+      "react.go:cell",
+      "react.go:reactor.CreateInput",
+      "react.go:cell.SetValue",
+      "react_test.go:TestReact",
+      "cases_test.go:testCases",
+      "react.go:reactor.trigger"
+    ],
+    "context": [
+      "react.go:New",
+      "react.go:reactor",
+      "react.go:reactor.CreateInput",
+      "react.go:cell",
+      "react.go:cell.SetValue",
+      "react_test.go:TestReact",
+      "cases_test.go:testCases"
+    ]
+  },
+  "two-bucket": {
+    "repo_map": [
+      "two_bucket.go:Solve",
+      "two_bucket.go:findGoal",
+      "two_bucket.go:problem",
+      "two_bucket.go:state",
+      "two_bucket.go:performStep",
+      "two_bucket_test.go:TestSolve",
+      "cases_test.go:testCases",
+      "two_bucket.go:pour"
+    ],
+    "context": [
+      "two_bucket.go:Solve",
+      "two_bucket.go:findGoal",
+      "two_bucket.go:performStep",
+      "two_bucket.go:problem",
+      "two_bucket.go:state",
+      "two_bucket_test.go:TestSolve",
+      "cases_test.go:testCases"
+    ]
+  },
+  "variable-length-quantity": {
+    "repo_map": [
+      "variable_length_quantity.go:EncodeVarint",
+      "variable_length_quantity.go:DecodeVarint",
+      "variable_length_quantity.go:encodeInt",
+      "variable_length_quantity.go:decodeInt",
+      "variable_length_quantity_test.go:TestEncode",
+      "cases_test.go:testCases",
+      "variable_length_quantity_test.go:TestDecode"
+    ],
+    "context": [
+      "variable_length_quantity.go:EncodeVarint",
+      "variable_length_quantity.go:DecodeVarint",
+      "variable_length_quantity.go:encodeInt",
+      "variable_length_quantity.go:decodeInt",
+      "variable_length_quantity_test.go:TestEncode",
+      "cases_test.go:testCases"
+    ]
+  },
+  "wordy": {
+    "repo_map": [
+      "wordy.go:Answer",
+      "wordy_test.go:TestAnswer",
+      "cases_test.go:testCases",
+      "wordy_test.go:BenchmarkAnswer"
+    ],
+    "context": [
+      "wordy.go:Answer",
+      "wordy_test.go:TestAnswer",
+      "cases_test.go:testCases"
+    ]
+  }
+}

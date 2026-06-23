@@ -1,0 +1,57 @@
+{
+  "book-store": [
+    "book_store.go:Cost",
+    "book_store.go:organize",
+    "book_store.go:cost",
+    "book_store.go:getDistinctBooks",
+    "book_store.go:groupCost"
+  ],
+  "bowling": [
+    "bowling.go:Game",
+    "bowling.go:NewGame",
+    "bowling.go:Game.Roll",
+    "bowling.go:Game.Score",
+    "bowling.go:Game.rollsThisFrame"
+  ],
+  "forth": [
+    "forth.go:operatorFn",
+    "forth.go:operatorTyp",
+    "forth.go:Forth",
+    "forth.go:parse",
+    "forth.go:push"
+  ],
+  "pig-latin": [
+    "pig_latin.go:Sentence",
+    "pig_latin.go:Word"
+  ],
+  "poker": [
+    "poker.go:card",
+    "poker.go:handValue",
+    "poker.go:handValue.Compare",
+    "poker.go:BestHand",
+    "poker.go:evalHand"
+  ],
+  "react": [
+    "react.go:reactor",
+    "react.go:cell",
+    "react.go:New",
+    "react.go:reactor.CreateInput",
+    "react.go:cell.SetValue"
+  ],
+  "two-bucket": [
+    "two_bucket.go:problem",
+    "two_bucket.go:state",
+    "two_bucket.go:Solve",
+    "two_bucket.go:findGoal",
+    "two_bucket.go:performStep"
+  ],
+  "variable-length-quantity": [
+    "variable_length_quantity.go:encodeInt",
+    "variable_length_quantity.go:decodeInt",
+    "variable_length_quantity.go:EncodeVarint",
+    "variable_length_quantity.go:DecodeVarint"
+  ],
+  "wordy": [
+    "wordy.go:Answer"
+  ]
+}

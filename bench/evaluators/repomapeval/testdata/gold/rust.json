@@ -1,0 +1,58 @@
+{
+  "book-store": [
+    "src/lib.rs:Group",
+    "src/lib.rs:basket_price",
+    "src/lib.rs:lowest_price",
+    "src/lib.rs:DecomposeGroups"
+  ],
+  "bowling": [
+    "src/lib.rs:Error",
+    "src/lib.rs:BowlingGame",
+    "src/lib.rs:Frame"
+  ],
+  "forth": [
+    "src/lib.rs:Error",
+    "src/lib.rs:Forth",
+    "src/lib.rs:Op",
+    "src/lib.rs:parse_op",
+    "src/lib.rs:eval_op"
+  ],
+  "leap": [
+    "src/lib.rs:is_leap_year"
+  ],
+  "pig-latin": [
+    "src/lib.rs:translate_word",
+    "src/lib.rs:translate"
+  ],
+  "poker": [
+    "src/lib.rs:winning_hands",
+    "src/lib.rs:Suit",
+    "src/lib.rs:Rank",
+    "src/lib.rs:Card",
+    "src/lib.rs:PokerHand",
+    "src/lib.rs:Hand"
+  ],
+  "react": [
+    "src/lib.rs:InputCellId",
+    "src/lib.rs:ComputeCellId",
+    "src/lib.rs:CellId",
+    "src/lib.rs:Reactor",
+    "src/lib.rs:Cell"
+  ],
+  "two-bucket": [
+    "src/lib.rs:Bucket",
+    "src/lib.rs:BucketStats",
+    "src/lib.rs:solve"
+  ],
+  "variable-length-quantity": [
+    "src/lib.rs:Error",
+    "src/lib.rs:to_bytes",
+    "src/lib.rs:to_bytes_single",
+    "src/lib.rs:from_bytes"
+  ],
+  "wordy": [
+    "src/lib.rs:Token",
+    "src/lib.rs:apply_op",
+    "src/lib.rs:answer"
+  ]
+}

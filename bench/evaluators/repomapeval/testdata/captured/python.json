@@ -1,0 +1,124 @@
+{
+  "book-store": {
+    "repo_map": [
+      "book_store.py:total",
+      "book_store.py:_total",
+      "book_store_test.py:BookStoreTest",
+      "book_store_test.py:test_only_a_single_book"
+    ],
+    "context": [
+      "book_store.py:total",
+      "book_store.py:_total",
+      "book_store_test.py:BookStoreTest"
+    ]
+  },
+  "bowling": {
+    "repo_map": [
+      "bowling.py:BowlingGame",
+      "bowling.py:Frame",
+      "bowling_test.py:BowlingTest",
+      "bowling_test.py:test_should_be_able_to_score_a_game_with_all_zeros"
+    ],
+    "context": [
+      "bowling.py:BowlingGame",
+      "bowling.py:Frame",
+      "bowling_test.py:BowlingTest"
+    ]
+  },
+  "forth": {
+    "repo_map": [
+      "forth.py:evaluate",
+      "forth.py:is_integer",
+      "forth.py:StackUnderflowError",
+      "forth_test.py:ForthTest",
+      "forth_test.py:test_numbers_just_get_pushed_onto_the_stack"
+    ],
+    "context": [
+      "forth.py:evaluate",
+      "forth.py:is_integer",
+      "forth.py:StackUnderflowError",
+      "forth_test.py:ForthTest"
+    ]
+  },
+  "pig-latin": {
+    "repo_map": [
+      "pig_latin.py:translate",
+      "pig_latin.py:starts_with_vowel_sound",
+      "pig_latin.py:split_initial_consonant_sound",
+      "pig_latin_test.py:PigLatinTest",
+      "pig_latin_test.py:test_word_beginning_with_a"
+    ],
+    "context": [
+      "pig_latin.py:translate",
+      "pig_latin.py:starts_with_vowel_sound",
+      "pig_latin.py:split_initial_consonant_sound",
+      "pig_latin_test.py:PigLatinTest"
+    ]
+  },
+  "poker": {
+    "repo_map": [
+      "poker.py:best_hands",
+      "poker.py:hand_rank",
+      "poker.py:allmax",
+      "poker_test.py:PokerTest",
+      "poker_test.py:test_single_hand_always_wins"
+    ],
+    "context": [
+      "poker.py:best_hands",
+      "poker.py:hand_rank",
+      "poker.py:allmax",
+      "poker_test.py:PokerTest"
+    ]
+  },
+  "react": {
+    "repo_map": [
+      "react.py:Cell",
+      "react.py:InputCell",
+      "react.py:ComputeCell",
+      "react_test.py:ReactTest",
+      "react_test.py:test_input_cells_have_a_value"
+    ],
+    "context": [
+      "react.py:Cell",
+      "react.py:ComputeCell",
+      "react.py:InputCell",
+      "react_test.py:ReactTest"
+    ]
+  },
+  "two-bucket": {
+    "repo_map": [
+      "two_bucket.py:measure",
+      "two_bucket_test.py:TwoBucketTest",
+      "two_bucket_test.py:test_measure_using_bucket_one_of_size_3_and_bucket_two_of_size_5"
+    ],
+    "context": [
+      "two_bucket.py:measure",
+      "two_bucket_test.py:TwoBucketTest"
+    ]
+  },
+  "variable-length-quantity": {
+    "repo_map": [
+      "variable_length_quantity.py:encode",
+      "variable_length_quantity.py:decode",
+      "variable_length_quantity.py:encode_single",
+      "variable_length_quantity_test.py:VariableLengthQuantityTest"
+    ],
+    "context": [
+      "variable_length_quantity.py:encode",
+      "variable_length_quantity.py:decode",
+      "variable_length_quantity.py:encode_single",
+      "variable_length_quantity_test.py:VariableLengthQuantityTest"
+    ]
+  },
+  "wordy": {
+    "repo_map": [
+      "wordy.py:answer",
+      "wordy_test.py:WordyTest",
+      "wordy_test.py:test_addition"
+    ],
+    "context": [
+      "wordy.py:answer",
+      "wordy_test.py:WordyTest"
+    ]
+  }
+}

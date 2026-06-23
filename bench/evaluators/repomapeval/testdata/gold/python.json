@@ -1,0 +1,41 @@
+{
+  "book-store": [
+    "book_store.py:_total",
+    "book_store.py:total"
+  ],
+  "bowling": [
+    "bowling.py:Frame",
+    "bowling.py:BowlingGame"
+  ],
+  "forth": [
+    "forth.py:StackUnderflowError",
+    "forth.py:is_integer",
+    "forth.py:evaluate"
+  ],
+  "pig-latin": [
+    "pig_latin.py:split_initial_consonant_sound",
+    "pig_latin.py:starts_with_vowel_sound",
+    "pig_latin.py:translate"
+  ],
+  "poker": [
+    "poker.py:best_hands",
+    "poker.py:allmax",
+    "poker.py:hand_rank"
+  ],
+  "react": [
+    "react.py:Cell",
+    "react.py:InputCell",
+    "react.py:ComputeCell"
+  ],
+  "two-bucket": [
+    "two_bucket.py:measure"
+  ],
+  "variable-length-quantity": [
+    "variable_length_quantity.py:encode_single",
+    "variable_length_quantity.py:encode",
+    "variable_length_quantity.py:decode"
+  ],
+  "wordy": [
+    "wordy.py:answer"
+  ]
+}

@@ -139,7 +139,17 @@ Plans:
   2. The judge rubric includes an explicit negative exemplar (a response that runs `grep -r` to find a definition scores 0 on adoption) so the rubric can return a failing score; the layer never blocks merge.
   3. Anti-vacuity proven: a sabotaged-skill revert-and-fail self-test runs the scorer against a skill body with the decision matrix stripped and asserts `choice_rate` drops materially — if the score is identical with and without the skill, the test fails (deliberate break-the-invariant test ships in this phase).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 101-01-PLAN.md — Hermetic pure scorer (TDD): build-tag-FREE `test/oracle/adopt` package — lifted `FirstCommand`/`ClassifyChoice` (first-command prefix, not substring) + `Scorecard` (choice_rate/fallback_rate, empty-bucket floor) + `StripDecisionMatrix` (section-strip, len-guarded no-noop) + 12 committed fixtures + the 5 anti-vacuity tests (revert-and-fail material drop, complementary, empty-bucket, sabotage-non-noop, first-command-not-substring); runs in `go test ./...` with no key (ADOPT-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 101-02-PLAN.md — Tag-gated adapters (TDD): judge `adoption` dimension on `Score`/`ValidateScoreValues`/`ComputeVerdict`/`RubricPrompt` + grep-scores-0 negative exemplar + verdict proof (`//go:build llmjudge`) + aggregate dims; `//go:build llm` live capture leg over the SAME `adopt.Scorecard` (SkipWithoutAPIKey, informational); neither runs in `go test ./...`, never blocks merge (ADOPT-02)
+
 **UI hint**: no
 
 ### Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines
@@ -167,7 +177,7 @@ Plans:
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |
+| 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/2 | Not started | - |
 | 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22

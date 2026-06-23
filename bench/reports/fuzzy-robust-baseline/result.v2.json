@@ -1,0 +1,20 @@
+{
+  "schema_version": "v2",
+  "task_id": "fuzzy-robust-corpus",
+  "mode": "fuzzy_robust",
+  "benchmark": "fuzzy-robust",
+  "language": "multi",
+  "fuzzy_robust": {
+    "corpus_cases": 51,
+    "corpus_languages": ["go", "python", "rust"],
+    "ambiguous_cases": 3,
+    "ambiguous_refused": true,
+    "strategy_counts": {
+      "exact": 24,
+      "whitespace_normalized": 24,
+      "indentation_flexible": 0,
+      "ambiguous_match": 3,
+      "no_match": 0
+    }
+  }
+}

@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: Apache-2.0
+# TRIMMED EXCERPT — NOT the full upstream gold transcript.
+# Source: Aider-AI/aider@5dc9490bb35f9729ef2c95d00a19ccd30c26339c
+#         tests/fixtures/chat-history-search-replace-gold.txt (27810 lines upstream).
+# This excerpt reproduces two complete SEARCH/REPLACE blocks VERBATIM from that
+# file (gold lines 3-89 and 419-439); intervening blocks are elided. See
+# ../../VENDOR-MANIFEST.md and ../../LICENSE-AUDIT.md for disposition.
+# ----------------------------------------------------------------------
+# === Block A: gold lines 3-89 (verbatim) ===
+@@@ #### Use the Spinner instead of the inlined custom spinner @@@@@@@@@@@@@@@@@@@@
+@@@ SEARCH: aider/utils.py @@@@@@@@@@@@@@@@@@@@
+def run_install(cmd):
+    print()
+    print("Installing: ", " ".join(cmd))
+
+    try:
+        output = []
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+        spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+        last_update = time.time()
+        update_interval = 0.2  # 5 times per second
+
+        while True:
+            char = process.stdout.read(1)
+            if not char:
+                break
+
+            output.append(char)
+
+            current_time = time.time()
+            if current_time - last_update >= update_interval:
+                print(f" Installing... {next(spinner)}", end="\r", flush=True)
+                last_update = current_time
+
+        return_code = process.wait()
+        output = "".join(output)
+
+        if return_code == 0:
+            print("\rInstallation complete.")
+            print()
+            return True, output
+
+    except subprocess.CalledProcessError as e:
+        print(f"\nError running pip install: {e}")
+
+    print("\nInstallation failed.\n")
+
+    return False, output
+@@@@@@@@@@@@@@@@@@@@
+def run_install(cmd):
+    print()
+    print("Installing: ", " ".join(cmd))
+
+    try:
+        output = []
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+        spinner = Spinner("Installing...")
+
+        while True:
+            char = process.stdout.read(1)
+            if not char:
+                break
+
+            output.append(char)
+            spinner.step()
+
+        spinner.end()
+        return_code = process.wait()
+        output = "".join(output)
+
+        if return_code == 0:
+            print("Installation complete.")
+            print()
+            return True, output
+
+    except subprocess.CalledProcessError as e:
+        print(f"\nError running pip install: {e}")
+
+    print("\nInstallation failed.\n")
+
+    return False, output
+@@@ REPLACE @@@@@@@@@@@@@@@@@@@@
+# === [ ... intervening blocks elided ... ] ===
+# === Block B: gold lines 419-439 (verbatim) ===
+@@@ #### /test pytest tests/basic/test_repomap.py @@@@@@@@@@@@@@@@@@@@
+@@@ SEARCH: tests/basic/test_repomap.py @@@@@@@@@@@@@@@@@@@@
+import os
+import unittest
+
+from aider.dump import dump  # noqa: F401
+from aider.io import InputOutput
+from aider.models import Model
+from aider.repomap import RepoMap
+from aider.utils import IgnorantTemporaryDirectory
+@@@@@@@@@@@@@@@@@@@@
+import os
+import unittest
+
+from aider.dump import dump  # noqa: F401
+from aider.io import InputOutput
+from aider.models import Model
+from aider.repomap import RepoMap
+from aider.repo import GitRepo
+from aider.utils import IgnorantTemporaryDirectory
+@@@ REPLACE @@@@@@@@@@@@@@@@@@@@

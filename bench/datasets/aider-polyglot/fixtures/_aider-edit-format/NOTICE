@@ -1,0 +1,41 @@
+NOTICE — Aider edit-format fixtures (Apache-2.0)
+
+SPDX-License-Identifier: Apache-2.0
+
+The edit-format fixtures under `_aider-edit-format/` are derived from the Aider
+tool repository (github.com/Aider-AI/aider) at the pinned commit
+5dc9490bb35f9729ef2c95d00a19ccd30c26339c, which is licensed under the
+Apache License, Version 2.0.
+
+Contents and provenance:
+
+  - languages/{python,go,rust,java,javascript}/test.<ext>
+      Vendored BYTE-IDENTICAL from aider@5dc9490 `tests/fixtures/languages/<lang>/test.<ext>`.
+      These small per-language source files are the edit-application targets the
+      Phase 100 EDIT bench applies SEARCH/REPLACE edits against.
+
+  - search-replace-sample.txt
+      A TRIMMED excerpt (two complete SEARCH/REPLACE blocks, verbatim) of
+      aider@5dc9490 `tests/fixtures/chat-history-search-replace-gold.txt`
+      (27810 lines upstream). The full gold transcript and the ~100k-line
+      `chat-history.md` are intentionally NOT vendored (kept lean/auditable).
+
+  - LICENSE
+      A byte-identical copy of aider@5dc9490 `LICENSE.txt` (Apache License 2.0).
+
+Attribution / Apache-2.0 obligations:
+
+  The upstream aider repository ships NO `NOTICE` file at its root (verified at
+  the pinned commit), so Apache-2.0 §4(d) "if the Work includes a NOTICE file"
+  propagation does not apply — there is no upstream NOTICE to carry forward. The
+  obligations satisfied here are: (1) retention of the Apache-2.0 LICENSE text
+  (this directory's `LICENSE`), (2) attribution to Aider-AI/aider@5dc9490 (this
+  NOTICE), and (3) the recorded disposition in ../../VENDOR-MANIFEST.md and the
+  `fixture:` block in ../../LICENSE-AUDIT.md.
+
+NO inline SPDX header is injected into the executed `test.<ext>` source files —
+they are kept byte-identical so the Phase 100 bench runs them unmutated. Their
+Apache-2.0 disposition lives in this NOTICE + LICENSE + the manifest + the audit.
+
+This `_aider-edit-format/` subtree is an underscore-prefixed sibling so the
+(walk-free) exercise loader (../../loader.go) never picks it up as an exercise.

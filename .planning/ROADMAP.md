@@ -33,7 +33,7 @@ Two independent, interleavable thrusts; intra-thrust order is fixed by hard depe
 - [x] **Phase 99: Vendored Aider Fixtures + Mixed-License Gate** - MIT polyglot + Apache-2.0 edit-format fixtures, dual `verify-licenses` hard-fail + tamper test (completed 2026-06-23)
 - [x] **Phase 100: Polyglot Edit Benchmark + Committed Baseline** - EDIT-verb `AgentFn` via reused `RunExercise`, `aider_edit` mode, `edit_format_applied` open key, byte-reproducible baseline (completed 2026-06-23)
 - [x] **Phase 101: Opt-In LLM-Behavioral Adoption Scorecard** - choice/fallback-rate scorecard with sabotaged-skill revert-and-fail + negative judge exemplar, build-tag gated, never blocks merge (completed 2026-06-23)
-- [ ] **Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines** - gold/drift corpora authored from ground truth, `repomapeval` + `fuzzyrobust` leaves, reversed-ranker discriminators, committed baselines
+- [x] **Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines** - gold/drift corpora authored from ground truth, `repomapeval` + `fuzzyrobust` leaves, reversed-ranker discriminators, committed baselines (completed 2026-06-23)
 
 ## Phase Details
 
@@ -189,7 +189,7 @@ Plans:
 | 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 2/2 | Complete    | 2026-06-23 |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 2/2 | Complete    | 2026-06-23 |
-| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 3/3 | Complete   | 2026-06-23 |
+| 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 3/3 | Complete    | 2026-06-23 |
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22
 
@@ -244,7 +244,7 @@ Plans:
 **Depends on**: Phase 75, v1.10 Phase 65 (SemanticLookup seam — read for context only)
 
 **Requirements**: ABLATE-02, ABLATE-05, ABLATE-07, ABLATE-08
-**Plans:** 2/2 plans complete
+**Plans:** 3/3 plans complete
 **Wave 1**
 
 - [x] 76-01-PLAN.md — Wave 1: kernel disable flags + accessors + structured-edit Unsupported guard + replace_in_file exact-match-only (TDD; ABLATE-07)

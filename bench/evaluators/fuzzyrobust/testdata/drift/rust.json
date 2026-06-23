@@ -1,0 +1,155 @@
+[
+  {
+    "id": "rust-leap-isleap",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "exact",
+    "source": "pub fn is_leap_year(year: u64) -\u003e bool {\n    year % 4 == 0 \u0026\u0026 (year % 100 != 0 || year % 400 == 0)\n}",
+    "search_block": "pub fn is_leap_year(year: u64) -\u003e bool {\n    year % 4 == 0 \u0026\u0026 (year % 100 != 0 || year % 400 == 0)\n}",
+    "expected_text": "pub fn is_leap_year(year: u64) -\u003e bool {\n    year % 4 == 0 \u0026\u0026 (year % 100 != 0 || year % 400 == 0)\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-translateword",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "pub fn translate_word(word: \u0026str) -\u003e String {\n    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }\n}",
+    "search_block": "pub fn translate_word(word: \u0026str) -\u003e String {\n    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }\n}",
+    "expected_text": "pub fn translate_word(word: \u0026str) -\u003e String {\n    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-vowel",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "    static VOWEL: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([aeiou]|y[^aeiou]|xr)[a-z]*\").unwrap());",
+    "search_block": "    static VOWEL: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([aeiou]|y[^aeiou]|xr)[a-z]*\").unwrap());",
+    "expected_text": "    static VOWEL: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([aeiou]|y[^aeiou]|xr)[a-z]*\").unwrap());",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-cons",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "    static CONSONANTS: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([^aeiou]?qu|[^aeiou][^aeiouy]*)([a-z]*)\").unwrap());",
+    "search_block": "    static CONSONANTS: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([^aeiou]?qu|[^aeiou][^aeiouy]*)([a-z]*)\").unwrap());",
+    "expected_text": "    static CONSONANTS: LazyLock\u003cRegex\u003e =\n        LazyLock::new(|| Regex::new(r\"^([^aeiou]?qu|[^aeiou][^aeiouy]*)([a-z]*)\").unwrap());",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-else",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "whitespace_normalized",
+    "source": "    } else {\n        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"\n    }",
+    "search_block": "     } else {  \n         let caps = CONSONANTS.captures(word).unwrap();  \n         String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"  \n     }  ",
+    "expected_text": "    } else {\n        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"\n    }",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-use",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "whitespace_normalized",
+    "source": "use std::sync::LazyLock;\n\nuse regex::Regex;",
+    "search_block": " use std::sync::LazyLock;  \n\n use regex::Regex;  ",
+    "expected_text": "use std::sync::LazyLock;\n\nuse regex::Regex;",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-leap-test",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "whitespace_normalized",
+    "source": "fn check(year: u64) -\u003e bool {\n    is_leap_year(year)\n}",
+    "search_block": " fn check(year: u64) -\u003e bool {  \n     is_leap_year(year)  \n }  ",
+    "expected_text": "fn check(year: u64) -\u003e bool {\n    is_leap_year(year)\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-translate",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "whitespace_normalized",
+    "source": "pub fn translate(text: \u0026str) -\u003e String {\n    text.split_whitespace()\n        .map(translate_word)\n        .collect::\u003cVec\u003c_\u003e\u003e()\n        .join(\" \")\n}",
+    "search_block": " pub fn translate(text: \u0026str) -\u003e String {  \n     text.split_whitespace()  \n         .map(translate_word)  \n         .collect::\u003cVec\u003c_\u003e\u003e()  \n         .join(\" \")  \n }  ",
+    "expected_text": "pub fn translate(text: \u0026str) -\u003e String {\n    text.split_whitespace()\n        .map(translate_word)\n        .collect::\u003cVec\u003c_\u003e\u003e()\n        .join(\" \")\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-leap-guard",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "indentation_flexible",
+    "source": "pub fn classify(year: u64) -\u003e \u0026'static str {\n    if is_leap_year(year) {\n        \"leap\"\n    } else {\n        \"common\"\n    }\n}",
+    "search_block": "\tpub fn classify(year: u64) -\u003e \u0026'static str {\n\t\tif is_leap_year(year) {\n\t\t\t\"leap\"\n\t\t} else {\n\t\t\t\"common\"\n\t\t}\n\t}",
+    "expected_text": "pub fn classify(year: u64) -\u003e \u0026'static str {\n    if is_leap_year(year) {\n        \"leap\"\n    } else {\n        \"common\"\n    }\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-match",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "indentation_flexible",
+    "source": "    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }",
+    "search_block": "\t\tif VOWEL.is_match(word) {\n\t\t\tString::from(word) + \"ay\"\n\t\t} else {\n\t\t\tString::new()\n\t\t}",
+    "expected_text": "    if VOWEL.is_match(word) {\n        String::from(word) + \"ay\"\n    } else {\n        String::new()\n    }",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-leap-mod",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "indentation_flexible",
+    "source": "mod leap {\n    pub fn is_leap_year(year: u64) -\u003e bool {\n        year % 4 == 0\n    }\n}",
+    "search_block": "\tmod leap {\n\t\tpub fn is_leap_year(year: u64) -\u003e bool {\n\t\t\tyear % 4 == 0\n\t\t}\n\t}",
+    "expected_text": "mod leap {\n    pub fn is_leap_year(year: u64) -\u003e bool {\n        year % 4 == 0\n    }\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-caps",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "indentation_flexible",
+    "source": "        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"",
+    "search_block": "\t\t\tlet caps = CONSONANTS.captures(word).unwrap();\n\t\t\tString::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"",
+    "expected_text": "        let caps = CONSONANTS.captures(word).unwrap();\n        String::from(\u0026caps[2]) + \u0026caps[1] + \"ay\"",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-leap-div",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "ellipsis",
+    "source": "fn divisible(n: u64, d: u64) -\u003e bool {\n    n % d == 0\n}",
+    "search_block": "fn divisible(n: u64, d: u64) -\u003e bool {\n...\n}",
+    "expected_text": "fn divisible(n: u64, d: u64) -\u003e bool {\n    n % d == 0\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-collect",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "ellipsis",
+    "source": "    text.split_whitespace()\n        .map(translate_word)\n        .collect::\u003cVec\u003c_\u003e\u003e()\n        .join(\" \")",
+    "search_block": "    text.split_whitespace()\n...\n        .join(\" \")",
+    "expected_text": "    text.split_whitespace()\n        .map(translate_word)\n        .collect::\u003cVec\u003c_\u003e\u003e()\n        .join(\" \")",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-leap-const",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "ellipsis",
+    "source": "const CYCLE: u64 = 400;\nconst CENTURY: u64 = 100;\nconst LEAP: u64 = 4;",
+    "search_block": "const CYCLE: u64 = 400;\n...\nconst LEAP: u64 = 4;",
+    "expected_text": "const CYCLE: u64 = 400;\nconst CENTURY: u64 = 100;\nconst LEAP: u64 = 4;",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-piglatin-new",
+    "fixture": "rust/exercises/practice/pig-latin",
+    "expected_strategy": "ellipsis",
+    "source": "fn empty() -\u003e String {\n    String::new()\n}",
+    "search_block": "fn empty() -\u003e String {\n...\n}",
+    "expected_text": "fn empty() -\u003e String {\n    String::new()\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "rust-ambiguous-0",
+    "fixture": "rust/exercises/practice/leap",
+    "expected_strategy": "ambiguous_match",
+    "source": "fn a(year: u64) -\u003e bool {\n    let r = is_leap_year(year);\n    r\n}\nfn helper(year: u64) -\u003e bool {\n    let r = is_leap_year(year);\n    r\n}\n",
+    "search_block": "     let r = is_leap_year(year);  \n     r  ",
+    "expected_text": "    let r = is_leap_year(year);\n    r",
+    "ambiguous": true
+  }
+]

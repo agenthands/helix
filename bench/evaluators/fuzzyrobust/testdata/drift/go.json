@@ -1,0 +1,155 @@
+[
+  {
+    "id": "go-wordy-answer",
+    "fixture": "go/exercises/practice/wordy",
+    "expected_strategy": "exact",
+    "source": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tif len(w) \u003c 3 {\n\t\treturn\n\t}\n}",
+    "search_block": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tif len(w) \u003c 3 {\n\t\treturn\n\t}\n}",
+    "expected_text": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tif len(w) \u003c 3 {\n\t\treturn\n\t}\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-wordy-trail",
+    "fixture": "go/exercises/practice/wordy",
+    "expected_strategy": "exact",
+    "source": "\tw = w[2:]\n\tlast := len(w) - 1\n\twl := w[last]\n\tif wl[len(wl)-1] != '?' {\n\t\treturn\n\t}",
+    "search_block": "\tw = w[2:]\n\tlast := len(w) - 1\n\twl := w[last]\n\tif wl[len(wl)-1] != '?' {\n\t\treturn\n\t}",
+    "expected_text": "\tw = w[2:]\n\tlast := len(w) - 1\n\twl := w[last]\n\tif wl[len(wl)-1] != '?' {\n\t\treturn\n\t}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-newgame",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "exact",
+    "source": "func NewGame() *Game {\n\treturn \u0026Game{}\n}",
+    "search_block": "func NewGame() *Game {\n\treturn \u0026Game{}\n}",
+    "expected_text": "func NewGame() *Game {\n\treturn \u0026Game{}\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-roll",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "exact",
+    "source": "func (g *Game) Roll(pins int) error {\n\tif pins \u003e pinsPerFrame {\n\t\treturn ErrPinCountExceedsPinsOnTheLane\n\t}\n\treturn nil\n}",
+    "search_block": "func (g *Game) Roll(pins int) error {\n\tif pins \u003e pinsPerFrame {\n\t\treturn ErrPinCountExceedsPinsOnTheLane\n\t}\n\treturn nil\n}",
+    "expected_text": "func (g *Game) Roll(pins int) error {\n\tif pins \u003e pinsPerFrame {\n\t\treturn ErrPinCountExceedsPinsOnTheLane\n\t}\n\treturn nil\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-game",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "whitespace_normalized",
+    "source": "type Game struct {\n\trolls       [maxRolls]int\n\tnRolls      int\n\tnFrames     int\n\trFrameStart int\n}",
+    "search_block": " type Game struct {  \n \trolls       [maxRolls]int  \n \tnRolls      int  \n \tnFrames     int  \n \trFrameStart int  \n }  ",
+    "expected_text": "type Game struct {\n\trolls       [maxRolls]int\n\tnRolls      int\n\tnFrames     int\n\trFrameStart int\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-twobucket-bucket",
+    "fixture": "go/exercises/practice/two-bucket",
+    "expected_strategy": "whitespace_normalized",
+    "source": "type bucket int\n\nconst (\n\tbOne bucket = iota\n\tbTwo\n)",
+    "search_block": " type bucket int  \n\n const (  \n \tbOne bucket = iota  \n \tbTwo  \n )  ",
+    "expected_text": "type bucket int\n\nconst (\n\tbOne bucket = iota\n\tbTwo\n)",
+    "ambiguous": false
+  },
+  {
+    "id": "go-twobucket-problem",
+    "fixture": "go/exercises/practice/two-bucket",
+    "expected_strategy": "whitespace_normalized",
+    "source": "type problem struct {\n\tcapacity [2]int\n\tgoal     int\n\tstart    bucket\n}",
+    "search_block": " type problem struct {  \n \tcapacity [2]int  \n \tgoal     int  \n \tstart    bucket  \n }  ",
+    "expected_text": "type problem struct {\n\tcapacity [2]int\n\tgoal     int\n\tstart    bucket\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-consts",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "whitespace_normalized",
+    "source": "const (\n\tpinsPerFrame      = 10\n\tframesPerGame     = 10\n\tmaxRollsPerFrame  = 2\n)",
+    "search_block": " const (  \n \tpinsPerFrame      = 10  \n \tframesPerGame     = 10  \n \tmaxRollsPerFrame  = 2  \n )  ",
+    "expected_text": "const (\n\tpinsPerFrame      = 10\n\tframesPerGame     = 10\n\tmaxRollsPerFrame  = 2\n)",
+    "ambiguous": false
+  },
+  {
+    "id": "go-wordy-loop",
+    "fixture": "go/exercises/practice/wordy",
+    "expected_strategy": "indentation_flexible",
+    "source": "\tfor i := 1; i \u003c len(w); i++ {\n\t\top := w[i]\n\t\ti++\n\t\tswitch op {\n\t\tcase \"multiplied\", \"divided\":\n\t\t\ti++\n\t\t}\n\t}",
+    "search_block": "\t\tfor i := 1; i \u003c len(w); i++ {\n\t\t\top := w[i]\n\t\t\ti++\n\t\t\tswitch op {\n\t\t\tcase \"multiplied\", \"divided\":\n\t\t\t\ti++\n\t\t\t}\n\t\t}",
+    "expected_text": "\tfor i := 1; i \u003c len(w); i++ {\n\t\top := w[i]\n\t\ti++\n\t\tswitch op {\n\t\tcase \"multiplied\", \"divided\":\n\t\t\ti++\n\t\t}\n\t}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-wordy-apply",
+    "fixture": "go/exercises/practice/wordy",
+    "expected_strategy": "indentation_flexible",
+    "source": "\t\tswitch op {\n\t\tcase \"plus\":\n\t\t\ta += x\n\t\tcase \"minus\":\n\t\t\ta -= x\n\t\t}",
+    "search_block": "\t\t\tswitch op {\n\t\t\tcase \"plus\":\n\t\t\t\ta += x\n\t\t\tcase \"minus\":\n\t\t\t\ta -= x\n\t\t\t}",
+    "expected_text": "\t\tswitch op {\n\t\tcase \"plus\":\n\t\t\ta += x\n\t\tcase \"minus\":\n\t\t\ta -= x\n\t\t}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-import",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "indentation_flexible",
+    "source": "import (\n\t\"errors\"\n\t\"fmt\"\n)",
+    "search_block": "\timport (\n\t\t\"errors\"\n\t\t\"fmt\"\n\t)",
+    "expected_text": "import (\n\t\"errors\"\n\t\"fmt\"\n)",
+    "ambiguous": false
+  },
+  {
+    "id": "go-twobucket-step",
+    "fixture": "go/exercises/practice/two-bucket",
+    "expected_strategy": "indentation_flexible",
+    "source": "const (\n\temptyOne step = iota\n\temptyTwo\n\tfillOne\n\tfillTwo\n)",
+    "search_block": "\tconst (\n\t\temptyOne step = iota\n\t\temptyTwo\n\t\tfillOne\n\t\tfillTwo\n\t)",
+    "expected_text": "const (\n\temptyOne step = iota\n\temptyTwo\n\tfillOne\n\tfillTwo\n)",
+    "ambiguous": false
+  },
+  {
+    "id": "go-wordy-fields",
+    "fixture": "go/exercises/practice/wordy",
+    "expected_strategy": "ellipsis",
+    "source": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tlast := len(w) - 1\n\t_ = last\n\treturn 0, true\n}",
+    "search_block": "func Answer(q string) (a int, ok bool) {\n...\n}",
+    "expected_text": "func Answer(q string) (a int, ok bool) {\n\tw := strings.Fields(q)\n\tlast := len(w) - 1\n\t_ = last\n\treturn 0, true\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-pkg",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "ellipsis",
+    "source": "package bowling\n\nimport \"errors\"\n\nvar ErrNegativeRollIsInvalid = errors.New(\"Negative roll is invalid\")",
+    "search_block": "package bowling\n...\nvar ErrNegativeRollIsInvalid = errors.New(\"Negative roll is invalid\")",
+    "expected_text": "package bowling\n\nimport \"errors\"\n\nvar ErrNegativeRollIsInvalid = errors.New(\"Negative roll is invalid\")",
+    "ambiguous": false
+  },
+  {
+    "id": "go-twobucket-pkg",
+    "fixture": "go/exercises/practice/two-bucket",
+    "expected_strategy": "ellipsis",
+    "source": "package twobucket\n\nimport (\n\t\"errors\"\n)\n\ntype bucket int",
+    "search_block": "package twobucket\n...\ntype bucket int",
+    "expected_text": "package twobucket\n\nimport (\n\t\"errors\"\n)\n\ntype bucket int",
+    "ambiguous": false
+  },
+  {
+    "id": "go-bowling-score",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "ellipsis",
+    "source": "func (g *Game) Score() (int, error) {\n\tif g.nFrames \u003c framesPerGame {\n\t\treturn 0, ErrPrematureScore\n\t}\n\treturn 0, nil\n}",
+    "search_block": "func (g *Game) Score() (int, error) {\n...\n}",
+    "expected_text": "func (g *Game) Score() (int, error) {\n\tif g.nFrames \u003c framesPerGame {\n\t\treturn 0, ErrPrematureScore\n\t}\n\treturn 0, nil\n}",
+    "ambiguous": false
+  },
+  {
+    "id": "go-ambiguous-0",
+    "fixture": "go/exercises/practice/bowling",
+    "expected_strategy": "ambiguous_match",
+    "source": "func a(g *Game) error {\n\tg.nFrames++\n\treturn nil\n}\nfunc helper(g *Game) error {\n\tg.nFrames++\n\treturn nil\n}\n",
+    "search_block": " \tg.nFrames++  \n \treturn nil  ",
+    "expected_text": "\tg.nFrames++\n\treturn nil",
+    "ambiguous": true
+  }
+]

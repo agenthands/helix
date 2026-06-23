@@ -1,0 +1,155 @@
+[
+  {
+    "id": "py-piglatin-split",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "def split_initial_consonant_sound(word):\n    return re_cons.match(word).groups()",
+    "search_block": "def split_initial_consonant_sound(word):\n    return re_cons.match(word).groups()",
+    "expected_text": "def split_initial_consonant_sound(word):\n    return re_cons.match(word).groups()",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-vowel",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "def starts_with_vowel_sound(word):\n    return re_vowel.match(word) is not None",
+    "search_block": "def starts_with_vowel_sound(word):\n    return re_vowel.match(word) is not None",
+    "expected_text": "def starts_with_vowel_sound(word):\n    return re_vowel.match(word) is not None",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-translate",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "def translate(text):\n    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)",
+    "search_block": "def translate(text):\n    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)",
+    "expected_text": "def translate(text):\n    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-regex",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "exact",
+    "source": "re_cons = re.compile('^([^aeiou]?qu|[^aeiouy]+|y(?=[aeiou]))([a-z]*)')\nre_vowel = re.compile('^([aeiou]|y[^aeiou]|xr)[a-z]*')",
+    "search_block": "re_cons = re.compile('^([^aeiou]?qu|[^aeiouy]+|y(?=[aeiou]))([a-z]*)')\nre_vowel = re.compile('^([aeiou]|y[^aeiou]|xr)[a-z]*')",
+    "expected_text": "re_cons = re.compile('^([^aeiou]?qu|[^aeiouy]+|y(?=[aeiou]))([a-z]*)')\nre_vowel = re.compile('^([aeiou]|y[^aeiou]|xr)[a-z]*')",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-branch",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "whitespace_normalized",
+    "source": "        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')\n        else:\n            head, tail = split_initial_consonant_sound(word)\n            words.append(tail + head + 'ay')",
+    "search_block": "         if starts_with_vowel_sound(word):  \n             words.append(word + 'ay')  \n         else:  \n             head, tail = split_initial_consonant_sound(word)  \n             words.append(tail + head + 'ay')  ",
+    "expected_text": "        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')\n        else:\n            head, tail = split_initial_consonant_sound(word)\n            words.append(tail + head + 'ay')",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-import",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "whitespace_normalized",
+    "source": "import re\n\n\nre_cons = None\nre_vowel = None",
+    "search_block": " import re  \n\n\n re_cons = None  \n re_vowel = None  ",
+    "expected_text": "import re\n\n\nre_cons = None\nre_vowel = None",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-answer",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "whitespace_normalized",
+    "source": "def answer(question):\n    words = question.split()\n    if not words:\n        return 0\n    return 5",
+    "search_block": " def answer(question):  \n     words = question.split()  \n     if not words:  \n         return 0  \n     return 5  ",
+    "expected_text": "def answer(question):\n    words = question.split()\n    if not words:\n        return 0\n    return 5",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-guard",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "whitespace_normalized",
+    "source": "def answer(question):\n    if not question.startswith('What is'):\n        raise ValueError('unknown')\n    return 0",
+    "search_block": " def answer(question):  \n     if not question.startswith('What is'):  \n         raise ValueError('unknown')  \n     return 0  ",
+    "expected_text": "def answer(question):\n    if not question.startswith('What is'):\n        raise ValueError('unknown')\n    return 0",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-head",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "indentation_flexible",
+    "source": "        head, tail = split_initial_consonant_sound(word)\n        words.append(tail + head + 'ay')\n        continue",
+    "search_block": "\t\t\thead, tail = split_initial_consonant_sound(word)\n\t\t\twords.append(tail + head + 'ay')\n\t\t\tcontinue",
+    "expected_text": "        head, tail = split_initial_consonant_sound(word)\n        words.append(tail + head + 'ay')\n        continue",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-loop",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "indentation_flexible",
+    "source": "    for word in text.split():\n        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')",
+    "search_block": "\t\tfor word in text.split():\n\t\t\tif starts_with_vowel_sound(word):\n\t\t\t\twords.append(word + 'ay')",
+    "expected_text": "    for word in text.split():\n        if starts_with_vowel_sound(word):\n            words.append(word + 'ay')",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-compute",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "indentation_flexible",
+    "source": "def compute(a, op, b):\n    if op == 'plus':\n        return a + b\n    if op == 'minus':\n        return a - b\n    return 0",
+    "search_block": "\tdef compute(a, op, b):\n\t\tif op == 'plus':\n\t\t\treturn a + b\n\t\tif op == 'minus':\n\t\t\treturn a - b\n\t\treturn 0",
+    "expected_text": "def compute(a, op, b):\n    if op == 'plus':\n        return a + b\n    if op == 'minus':\n        return a - b\n    return 0",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-parse",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "indentation_flexible",
+    "source": "def parse(tokens):\n    result = []\n    for t in tokens:\n        result.append(t)\n    return result",
+    "search_block": "\tdef parse(tokens):\n\t\tresult = []\n\t\tfor t in tokens:\n\t\t\tresult.append(t)\n\t\treturn result",
+    "expected_text": "def parse(tokens):\n    result = []\n    for t in tokens:\n        result.append(t)\n    return result",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-defcons",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "ellipsis",
+    "source": "def split_initial_consonant_sound(word):\n    m = re_cons.match(word)\n    return m.groups()",
+    "search_block": "def split_initial_consonant_sound(word):\n...\n    return m.groups()",
+    "expected_text": "def split_initial_consonant_sound(word):\n    m = re_cons.match(word)\n    return m.groups()",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-tokenize",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "ellipsis",
+    "source": "def tokenize(q):\n    q = q.rstrip('?')\n    return q.split()",
+    "search_block": "def tokenize(q):\n...\n    return q.split()",
+    "expected_text": "def tokenize(q):\n    q = q.rstrip('?')\n    return q.split()",
+    "ambiguous": false
+  },
+  {
+    "id": "py-piglatin-result",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "ellipsis",
+    "source": "    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)",
+    "search_block": "    words = []\n...\n    return ' '.join(words)",
+    "expected_text": "    words = []\n    for word in text.split():\n        words.append(word)\n    return ' '.join(words)",
+    "ambiguous": false
+  },
+  {
+    "id": "py-wordy-validate",
+    "fixture": "python/exercises/practice/wordy",
+    "expected_strategy": "ellipsis",
+    "source": "def validate(words):\n    if len(words) \u003c 3:\n        raise ValueError('too short')\n    return True",
+    "search_block": "def validate(words):\n...\n    return True",
+    "expected_text": "def validate(words):\n    if len(words) \u003c 3:\n        raise ValueError('too short')\n    return True",
+    "ambiguous": false
+  },
+  {
+    "id": "python-ambiguous-0",
+    "fixture": "python/exercises/practice/pig-latin",
+    "expected_strategy": "ambiguous_match",
+    "source": "def a(word):\n    words = []\n    words.append(word)\n    return words\n\n\ndef helper(word):\n    words = []\n    words.append(word)\n    return words\n",
+    "search_block": "     words = []  \n     words.append(word)  \n     return words  ",
+    "expected_text": "    words = []\n    words.append(word)\n    return words",
+    "ambiguous": true
+  }
+]

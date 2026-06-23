@@ -1,0 +1,9 @@
+{
+  "scenario_id": "sabotaged-03",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (sabotaged: decision matrix stripped)",
+  "user_prompt": "Show me the skill.go file.",
+  "response": "cat internal/cli/skill.go",
+  "stop_reason": "end_turn"
+}

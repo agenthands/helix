@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-05",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "Show me the outline of internal/cli/skill.go.",
+  "response": "> helix get-symbol-overview internal/cli/skill.go",
+  "stop_reason": "end_turn"
+}

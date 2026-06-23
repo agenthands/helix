@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-01",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "Where is NewClient defined?",
+  "response": "helix go-to-definition --symbol NewClient",
+  "stop_reason": "end_turn"
+}

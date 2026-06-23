@@ -1,0 +1,9 @@
+{
+  "scenario_id": "sabotaged-01",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (sabotaged: decision matrix stripped)",
+  "user_prompt": "Where is NewClient defined?",
+  "response": "grep -rn 'func NewClient' .",
+  "stop_reason": "end_turn"
+}

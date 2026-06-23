@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-06",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "What implements io.Reader here?",
+  "response": "helix find-implementations io.Reader",
+  "stop_reason": "end_turn"
+}

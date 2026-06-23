@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-02",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "Who calls AskSingleTurn?",
+  "response": "```\nhelix find-references --symbol AskSingleTurn\n```",
+  "stop_reason": "end_turn"
+}

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "sabotaged-06",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (sabotaged: decision matrix stripped)",
+  "user_prompt": "Search the repo for Prompt usages.",
+  "response": "grep -rn Prompt .",
+  "stop_reason": "end_turn"
+}

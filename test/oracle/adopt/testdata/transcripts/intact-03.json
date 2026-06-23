@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-03",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "Find the Transcript symbol.",
+  "response": "$ helix search-symbols --query Transcript",
+  "stop_reason": "end_turn"
+}

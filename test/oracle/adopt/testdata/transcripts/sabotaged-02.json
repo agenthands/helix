@@ -1,0 +1,9 @@
+{
+  "scenario_id": "sabotaged-02",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (sabotaged: decision matrix stripped)",
+  "user_prompt": "Who calls CallTool?",
+  "response": "grep -r CallTool .",
+  "stop_reason": "end_turn"
+}

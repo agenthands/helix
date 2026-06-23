@@ -1,0 +1,9 @@
+{
+  "scenario_id": "intact-04",
+  "category": "adoption",
+  "model": "fixture",
+  "system": "helix Agent Skill (intact, with decision matrix)",
+  "user_prompt": "Rename FormatToolList to RenderToolList everywhere.",
+  "response": "helix rename-symbol FormatToolList RenderToolList",
+  "stop_reason": "end_turn"
+}

@@ -97,8 +97,10 @@ Plans:
   4. Anti-vacuity proven: a tamper test flipping a license header or removing a NOTICE turns the `verify-licenses` gate RED (deliberate break-the-invariant test ships in this phase).
 
 **Plans**: 2 plans
-- [ ] 99-01-PLAN.md — Vendor the mixed-license tree: MIT polyglot 9-exercise subset (×py/go/rust) + Apache-2.0 aider edit-format subset + NOTICE/LICENSE sidecars + VENDOR-MANIFEST.md (real sha256) + dual-disposition LICENSE-AUDIT.md (VENDOR-01, VENDOR-02)
-- [ ] 99-02-PLAN.md — Extend the verify-licenses gate to dual disposition + bidirectional manifest-vs-disk sha256 walk + anti-vacuity tamper test + Makefile wiring (VENDOR-03)
+
+- [x] 99-01-PLAN.md — Vendor the mixed-license tree: MIT polyglot 9-exercise subset (×py/go/rust) + Apache-2.0 aider edit-format subset + NOTICE/LICENSE sidecars + VENDOR-MANIFEST.md (real sha256) + dual-disposition LICENSE-AUDIT.md (VENDOR-01, VENDOR-02)
+- [x] 99-02-PLAN.md — Extend the verify-licenses gate to dual disposition + bidirectional manifest-vs-disk sha256 walk + anti-vacuity tamper test + Makefile wiring (VENDOR-03)
+
 **UI hint**: no
 
 ### Phase 100: Polyglot Edit Benchmark + Committed Baseline
@@ -153,7 +155,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 97. Generated Reference + Adoption Contract | v2.1 | 2/2 | Complete    | 2026-06-22 |
 | 98. Multi-Agent Coverage + Stronger Steering | v2.1 | 2/2 | Complete    | 2026-06-22 |
-| 99. Vendored Aider Fixtures + License Gate | v2.1 | 0/TBD | Not started | - |
+| 99. Vendored Aider Fixtures + License Gate | v2.1 | 2/2 | Complete   | 2026-06-23 |
 | 100. Polyglot Edit Benchmark + Baseline | v2.1 | 0/TBD | Not started | - |
 | 101. LLM-Behavioral Adoption Scorecard | v2.1 | 0/TBD | Not started | - |
 | 102. RepoMap + Fuzzy Evals + Baselines | v2.1 | 0/TBD | Not started | - |

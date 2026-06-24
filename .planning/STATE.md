@@ -161,7 +161,9 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet. Watch items for v2.4:
+**ACTIVE BLOCKER (Phase 113, 2026-06-24): workspace-activation gap stops the real run.** The v2.3 dev-time agent was never actually run end-to-end against real helix — its hermetic fakes masked two real defects. (1) FIXED: `agent/tools.py` passed `location` as a positional, but helix verbs take named `--flags` (`read-file --path X`) → every verb failed `required flag --path not set`. (2) BLOCKER: the file/edit verbs return `no_workspace` because the daemon's file-tool active-workspace state is set ONLY by the MCP `activate_project` tool (`repo_path`, persists globally per-daemon via `ActivateCallback`), and there is **no `activate_project` CLI verb**. `helix activate` (gRPC `ActivateWorkspace`) sets only kernel/LS state, NOT the file-tool workspace (confirmed empirically + by the verb.go:153 E2E comment). A one-shot `helix <verb>` sends no cwd, so LazyInit (which keys on `repo_path`) can't auto-activate. This is also a likely **real product bug**: the CLI-first file/edit verbs cannot obtain an active workspace from the shipped CLI surface (SessionStart's `helix activate` does not enable them). DeepSeek auth works (probe OK); corpus + hardening (111/112) are done. Awaiting user decision on how to unblock (see Session Continuity).
+
+Watch items for v2.4:
 - **Phase 111 corpus composition:** confirm which Aider tracks/exercises + count materialize cleanly (≥101 tasks, each with a runnable native test command) so `val_size>50` clears affordably; some Exercism tracks need a toolchain present to grade.
 - **Phase 113 environment:** the SWE-bench confirming leg needs Podman + the docker-compat socket (`podman system service --time=0 &` + `DOCKER_HOST`) and ~3–5 GiB image pull for K=50 on an exec-capable, roomy storage path (rootless subuid/subgid + overlay driver pre-checks). If unavailable, RUN-03 becomes a surfaced blocker (fail-not-skip on a requested run), not a silent skip.
 - **Phase 113 billing:** real GEPA run is genuinely billed (~$5–15 worst case). Needs `DEEPSEEK_API_KEY` (or OpenAI fallback key) present in the dev shell.

@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-23)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** Phase 107 — ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering
+**Current focus:** v2.3 paused at 2/4 — next is Phase 109 (SWE-bench Oracle via Podman + ON/OFF Attribution-Delta)
 
 ## Current Position
 
-Phase: 107 (ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 107
-Last activity: 2026-06-24 — Phase 107 execution started
+Phase: 108 complete (2/4 v2.3 phases done); next = Phase 109
+Plan: —
+Status: Paused at phase boundary (107 + 108 shipped & verified; tree clean)
+Last activity: 2026-06-24 — Phases 107 + 108 executed inline with uv; paused before live-infra Phase 109. See `.planning/.continue-here.md`.
 
 ## Performance Metrics
 

@@ -53,13 +53,13 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGENT-01 | Phase 107 | Pending |
-| AGENT-02 | Phase 107 | Pending |
-| AGENT-03 | Phase 107 | Pending |
-| ORACLE-01 | Phase 108 | Pending |
+| AGENT-01 | Phase 107 | Complete |
+| AGENT-02 | Phase 107 | Complete |
+| AGENT-03 | Phase 107 | Complete |
+| ORACLE-01 | Phase 108 | Complete |
 | ORACLE-02 | Phase 109 | Pending |
-| TUNE-02 | Phase 108 | Pending |
-| TUNE-03 | Phase 108 | Pending |
+| TUNE-02 | Phase 108 | Complete |
+| TUNE-03 | Phase 108 | Complete |
 | TUNE-04 | Phase 109 | Pending |
 | ADOPT-03 | Phase 110 | Pending |
 | ADOPT-04 | Phase 110 | Pending |

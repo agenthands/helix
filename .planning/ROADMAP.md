@@ -42,7 +42,7 @@
 - [x] **Phase 103: Bundle Integrity & Non-Vacuous Reference Contract** - `installSkill` closed-set allowlist + exact-set bundle test, move `SKILL-ISSUE.md` out of the embed dir, harden the reference-completeness contract to exact-count (==50) discriminating a known-absent verb (completed 2026-06-23)
 - [x] **Phase 104: Reference Generator Per-Verb Correctness** - fix the `cmd/helix-refgen`/`cmd/helix-cligen` group-collapse via per-verb overrides so every "use this/not that" + "Output" line is correct; regenerated `reference.md` passes `--check` byte-for-byte (completed 2026-06-23)
 - [x] **Phase 105: SKILL.md Decision-Matrix Rewrite** - split QUERY/ACTION rows, "Not this" on every row, indexed-graph prerequisite notes, regroup by capability; preserve the `## Decision matrix` StripDecisionMatrix anchor + the SKILL-04 idle-cost size cap (completed 2026-06-23)
-- [ ] **Phase 106: Exploratory DSPy Offline Tuning Harness (spike)** - opt-in dev-time-only Python harness under `tools/`, no runtime Python dep, off `go test ./...`; optimizes against the Phase 101 `adopt` scorecard (parity-pinned Python metric) with overfit/gaming guards; may no-ship; a `vet`-style analyzer blocks Python/runtime leakage
+- [x] **Phase 106: Exploratory DSPy Offline Tuning Harness (spike)** - opt-in dev-time-only Python harness under `tools/`, no runtime Python dep, off `go test ./...`; optimizes against the Phase 101 `adopt` scorecard (parity-pinned Python metric) with overfit/gaming guards; may no-ship; a `vet`-style analyzer blocks Python/runtime leakage (completed 2026-06-24)
 
 ## Phase Details
 
@@ -106,7 +106,7 @@
   3. Overfit and metric-gaming guards are in place — a held-out TEST split the optimizer never sees, and a degenerate-steering inspection — and the harness may legitimately conclude no-ship (the clean fallback being a hand-rolled Go candidate-search loop keeping the milestone 100% Go).
   4. Any adopted output re-enters only as a human-reviewed commit through SKILL.md/refgen and passes `helix-refgen --check`; a `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path (the artifact is gated, never the optimizer process).
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -115,7 +115,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 106-02-PLAN.md — dev-time Python `tools/dspy-tune/` tree: parity-pinned `scorer.py` + held-out TEST split + parity/planted-divergence/overfit/degenerate pytest guards + DSPy GEPA `optimize.py` + pinned `requirements.txt` + README + no-ship/ship REPORT + `.gitignore` output ignore [Wave 2, depends_on 106-01]
+- [x] 106-02-PLAN.md — dev-time Python `tools/dspy-tune/` tree: parity-pinned `scorer.py` + held-out TEST split + parity/planted-divergence/overfit/degenerate pytest guards + DSPy GEPA `optimize.py` + pinned `requirements.txt` + README + no-ship/ship REPORT + `.gitignore` output ignore [Wave 2, depends_on 106-01]
 
 **Needs phase-level research**: yes — exploratory spike (corpus-split design, Python↔Go classifier parity contract, metric-AND-quality-oracle composition, leakage-analyzer design); highest uncertainty, mark as spike not a hard adoption-delta gate.
 
@@ -126,7 +126,7 @@ Plans:
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete    | 2026-06-23 |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 1/1 | Complete    | 2026-06-23 |
-| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 1/2 | In Progress|  |
+| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 2/2 | Complete   | 2026-06-24 |
 
 ### ✅ v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — SHIPPED 2026-06-23
 

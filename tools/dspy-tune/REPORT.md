@@ -1,3 +1,55 @@
+# v2.4 REPORT — Corpus Growth & Real Optimization Verdict (TUNE-FUT-01)
+
+**Milestone:** v2.4 (Phases 111–114) · **Requirements:** REPORT-01, ADOPT-05 · **Date:** 2026-06-24
+**This is REPORT-ONLY:** no `SKILL.md`/`reference.md` adoption is committed by this
+milestone. Adoption remains a separate, human-reviewed `helix-refgen --check`-gated
+edit (see Recommendation).
+
+## Verdict: SHIP-by-rule (marginal) — adoption NOT recommended on this margin
+
+The v2.3 corpus-too-small no-ship is now a **real, gate-cleared, measured verdict**.
+Running the pipeline for real on the grown corpus:
+
+| Arm | success_rate | successes / n | cost (USD) |
+|-----|--------------|---------------|------------|
+| OFF (control)            | 0.0196 | 1 / 51 | 0.074 |
+| ON (steering = SKILL.md) | 0.0588 | 3 / 51 | 0.160 |
+
+- **Attribution delta (ON − OFF): +0.0392** on a **sequestered held-out split of 51 (> 50)** tasks. Total LLM cost **$0.234** (DeepSeek-`v4-flash`).
+- **`decide_ship` → SHIP** (delta > 0 AND val_size > 50). This is the honest output of the defined rule.
+- **SWE-bench Verified confirming leg:** gold patches **2/2 resolved** on Podman (sympy tests_checked=18, scikit-learn tests_checked=3) — the secondary task-success oracle works end-to-end on real instances.
+
+### Honest caveats (why adoption is NOT recommended on this run alone)
+1. **Thin, likely-noise margin.** The delta is +2 solved tasks (3 vs 1) on n=51. `decide_ship` uses a bare `delta > 0` rule with **no statistical significance test** — at this scale +2 is well within binomial noise. SHIP-by-rule ≠ a confident effect.
+2. **The ON candidate is the EXISTING `SKILL.md`, not a GEPA-evolved candidate.** This measures "does the current shipped steering help the agent?" (answer: marginally yes) — it does **not** demonstrate the optimizer *found better* steering.
+3. **GEPA optimization was non-evolving this run.** `optimize.py` ran to completion (30 rollouts, `val_size=51`, `output/optimized.json` written) but reflective mutation was a no-op: the agent-as-program surfaces the evolving instruction without emitting a predictor LM trace for GEPA to reflect on. So RUN-01 is a *real run that clears the gate* but produced no improved candidate. Recorded as **TUNE-FUT-06** (rebuild the program as a proper agent module GEPA can reflect on).
+4. **K=2 SWE-bench** (resource/time-bounded gold confirm). The oracle + fail-not-skip are proven on real instances; a larger stratified K is mechanically identical (**TUNE-FUT-05**).
+
+### Recommendation
+Do **not** adopt steering into `SKILL.md` on this margin. The milestone's win is that the
+**pipeline is now actually functional end-to-end** (three v2.3 integration gaps fixed —
+see below) and produces an **honest, gate-cleared verdict** instead of a corpus-size
+artifact. Before a confident adoption: add a significance test to `decide_ship`, fix the
+GEPA-as-agent program (TUNE-FUT-06), and re-run. If a future run shows a robust positive
+delta, adopt via a human-reviewed `SKILL.md` edit passing `helix-refgen --check` (the gate
+is proven live: a desynced `reference.md` makes `--check` exit 1).
+
+## What v2.4 actually delivered (the v2.3 pipeline was never functional end-to-end)
+
+The hermetic fakes had hidden three real defects; the real run surfaced and fixed all:
+1. **Agent verb argv** — passed `location` positionally; helix verbs take named `--flags`. Fixed (`agent/tools.py` per-verb flag specs).
+2. **Workspace activation (real product bug, user-approved)** — `helix activate` set only kernel state; the file-tool workspace is set by the `activate_project` tool, which had no CLI verb → file/edit verbs returned `no_workspace`. Fixed: `runActivate` now also calls `activate_project` + honors `--socket`; E2E regression test.
+3. **GEPA candidate→agent threading** — the metric ignored `pred` and the runner hardcoded steering OFF (vacuous). Fixed: `AgentProgram.forward` injects the evolving instruction as the agent's ON steering, runs the real agent + grades.
+
+## ADOPT-04 boundary (re-verified at corpus scale)
+- `go.mod`/`go.sum` **untouched since v2.0 Phase 90** (`7f20a874`) → zero new Go deps across v2.1–v2.4. The only Go change is the approved `helix activate` product-bug fix (existing `forwarder.CallTool`).
+- No `helix` subcommand shells to Python; `optimize.py` references `skills/helix|reference.md` **0** times (gate-the-artifact); optimizer writes only git-ignored `output/`. `make vet` (incl. `toolsquarantine`) green; `go test ./internal/cli` green.
+
+## Artifacts (git-ignored, `tools/dspy-tune/output/`)
+`optimized.json` · `heldout_test.json` (the sequestered split) · `attribution.json` · `REPORT-RUN.md` · `swebench_confirm.json`.
+
+---
+
 # Spike REPORT — DSPy offline tuning harness (Phase 106)
 
 **Spike:** exploratory-dspy-offline-tuning-harness-spike

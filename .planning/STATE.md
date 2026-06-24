@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Agent-Facing Skill Quality & Prompt Tuning
-current_phase: 2
-status: Awaiting next milestone
-stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-24T06:29:38.010Z"
+milestone: v2.3
+milestone_name: Task-Success-Driven Skill Optimization
+status: planning
+last_updated: "2026-06-24T08:08:03.057Z"
 last_activity: 2026-06-24
-last_activity_desc: Milestone v2.2 completed and archived
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
-current_phase_name: Exploratory DSPy Offline Tuning Harness (spike
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: Milestone v2.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-24 — Milestone v2.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-24 — Milestone v2.3 started
 
 ## Performance Metrics
 
@@ -156,9 +152,9 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 ## Session Continuity
 
-Last session: 2026-06-24T05:54:52.572Z
-Stopped at: v2.2 roadmap created (Phases 103-106)
-Resume file: None
+Last session: 2026-06-24 (resumed)
+Stopped at: Session resumed; v2.3 gating questions settled (transport=helix CLI subprocess verbs; bench scope=Aider polyglot + SWE-bench via Podman). Proceeding to /gsd-new-milestone v2.3 (Task-Success-Driven Skill Optimization, TUNE-FUT-02).
+Resume file: None (HANDOFF.json + .continue-here.md consumed and removed)
 
 ## Decisions
 

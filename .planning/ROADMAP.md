@@ -126,7 +126,7 @@ Plans:
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete    | 2026-06-23 |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 1/1 | Complete    | 2026-06-23 |
-| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 2/2 | Complete   | 2026-06-24 |
+| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 2/2 | Complete    | 2026-06-24 |
 
 ### ✅ v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — SHIPPED 2026-06-23
 

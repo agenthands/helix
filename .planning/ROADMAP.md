@@ -31,7 +31,7 @@
 
 - [x] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02) — completed 2026-06-24
 - [x] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03) — completed 2026-06-24
-- [ ] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03)
+- [x] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03) — completed 2026-06-24 (SHIP, delta +0.0392, val_size=51)
 - [ ] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05)
 
 ## Phase Details
@@ -81,7 +81,7 @@
   4. Run artifacts (optimized.json, attribution record, SWE-bench reports) are captured for the REPORT, with cost recorded per arm.
   5. **Boundary preserved (ADOPT-04)**: the run shells `helix <verb>` + the upstream harness as subprocesses only; zero new Go deps; `go.mod` untouched; no `helix` runtime Python edge.
 
-**Plans**: TBD
+**Plans**: 1 plan (113-01) — completed 2026-06-24
 **Research**: false — logistics resolved in `SUMMARY.md`; the K≈2 gold-patch smoke IS the implementation-time confirmation.
 
 ### Phase 114: Verdict & Boundary Re-Verification

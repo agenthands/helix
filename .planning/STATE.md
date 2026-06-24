@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Corpus Growth & Real Optimization Verdict
 status: in_progress
-current_phase: 113
-current_phase_name: The Real Cost-Aware Run
-last_updated: "2026-06-24T14:35:00.000Z"
+current_phase: 114
+current_phase_name: Verdict & Boundary Re-Verification
+last_updated: "2026-06-24T15:30:00.000Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 112 complete (optimizer DeepSeek pin + cost caps + SWE-bench footgun)
+last_activity_desc: Phase 113 complete — real run SHIP verdict (delta +0.0392, val_size=51, $0.23) + SWE-bench 2/2 gold confirm
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -161,7 +161,8 @@ None yet.
 
 ### Blockers/Concerns
 
-**ACTIVE BLOCKER (Phase 113, 2026-06-24): workspace-activation gap stops the real run.** The v2.3 dev-time agent was never actually run end-to-end against real helix — its hermetic fakes masked two real defects. (1) FIXED: `agent/tools.py` passed `location` as a positional, but helix verbs take named `--flags` (`read-file --path X`) → every verb failed `required flag --path not set`. (2) BLOCKER: the file/edit verbs return `no_workspace` because the daemon's file-tool active-workspace state is set ONLY by the MCP `activate_project` tool (`repo_path`, persists globally per-daemon via `ActivateCallback`), and there is **no `activate_project` CLI verb**. `helix activate` (gRPC `ActivateWorkspace`) sets only kernel/LS state, NOT the file-tool workspace (confirmed empirically + by the verb.go:153 E2E comment). A one-shot `helix <verb>` sends no cwd, so LazyInit (which keys on `repo_path`) can't auto-activate. This is also a likely **real product bug**: the CLI-first file/edit verbs cannot obtain an active workspace from the shipped CLI surface (SessionStart's `helix activate` does not enable them). DeepSeek auth works (probe OK); corpus + hardening (111/112) are done. Awaiting user decision on how to unblock (see Session Continuity).
+**RESOLVED (Phase 113, 2026-06-24): workspace-activation gap — fixed (user-approved Go product fix: `helix activate` now also calls `activate_project`; committed + E2E regression-tested). The real run completed: SHIP verdict, delta +0.0392, val_size=51, $0.23 + SWE-bench 2/2 gold confirm on Podman.** [Historical detail of the blocker:]
+**(Phase 113, 2026-06-24): workspace-activation gap stopped the real run.** The v2.3 dev-time agent was never actually run end-to-end against real helix — its hermetic fakes masked two real defects. (1) FIXED: `agent/tools.py` passed `location` as a positional, but helix verbs take named `--flags` (`read-file --path X`) → every verb failed `required flag --path not set`. (2) BLOCKER: the file/edit verbs return `no_workspace` because the daemon's file-tool active-workspace state is set ONLY by the MCP `activate_project` tool (`repo_path`, persists globally per-daemon via `ActivateCallback`), and there is **no `activate_project` CLI verb**. `helix activate` (gRPC `ActivateWorkspace`) sets only kernel/LS state, NOT the file-tool workspace (confirmed empirically + by the verb.go:153 E2E comment). A one-shot `helix <verb>` sends no cwd, so LazyInit (which keys on `repo_path`) can't auto-activate. This is also a likely **real product bug**: the CLI-first file/edit verbs cannot obtain an active workspace from the shipped CLI surface (SessionStart's `helix activate` does not enable them). DeepSeek auth works (probe OK); corpus + hardening (111/112) are done. Awaiting user decision on how to unblock (see Session Continuity).
 
 Watch items for v2.4:
 - **Phase 111 corpus composition:** confirm which Aider tracks/exercises + count materialize cleanly (≥101 tasks, each with a runnable native test command) so `val_size>50` clears affordably; some Exercism tracks need a toolchain present to grade.

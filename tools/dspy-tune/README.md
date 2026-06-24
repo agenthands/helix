@@ -23,32 +23,32 @@ agent-facing helix steering text against the Phase 101 adoption metric.
 | `requirements.txt` | Pinned dev deps (`dspy`, `pytest`). |
 | `REPORT.md` | The documented spike outcome (no-ship/ship). |
 
-## Setup (dev-time only)
+## Setup (dev-time only — ALWAYS use `uv`, never bare `python`/`pip`)
 
 ```bash
 cd tools/dspy-tune
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
+uv venv                              # creates .venv/ (git-ignored)
+uv pip install -r requirements.txt
 ```
 
-The `.venv/` and `output/` directories are git-ignored.
+The `.venv/` and `output/` directories are git-ignored. All commands below run through `uv run` (which uses `.venv/` automatically); `uvx` for one-off tools.
 
 ## Run the hermetic gates (LM-free — no API key needed)
 
 ```bash
-pytest tools/dspy-tune/test_split.py tools/dspy-tune/test_parity.py tools/dspy-tune/test_degenerate.py
-# or, without pytest installed, each file runs as a plain script:
-python3 tools/dspy-tune/test_split.py
-python3 tools/dspy-tune/test_parity.py
-python3 tools/dspy-tune/test_degenerate.py
+cd tools/dspy-tune
+uv run pytest test_split.py test_parity.py test_degenerate.py test_agent.py
+# each file is also runnable as a plain script under the env:
+uv run python test_split.py
 ```
 
 ## Run the optimization (dev env only — needs an LM key)
 
 ```bash
+cd tools/dspy-tune
 export OPENAI_API_KEY=sk-...        # DEV ENVIRONMENT ONLY — never committed, never read by any Go code
 export DSPY_LM_MODEL=openai/gpt-4.1-mini   # optional; any litellm-supported provider
-python3 tools/dspy-tune/optimize.py
+uv run python optimize.py
 ```
 
 If `OPENAI_API_KEY` is unset, `optimize.py` prints an informative message and

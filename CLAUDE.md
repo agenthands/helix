@@ -13,6 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always run go vet and go test before completing any Go task.**
 
+## Python (dev-time tooling only — `tools/dspy-tune/`, benches)
+
+The shipped product is a single Go binary with **no runtime Python**. Python appears ONLY in dev-time/offline tooling (e.g. `tools/dspy-tune/` — the DSPy tuning harness and the v2.3 ReAct agent). For ALL Python work in this repo:
+
+- **ALWAYS use `uv` / `uvx` with a virtual environment — never bare `python`/`python3`/`pip`.** Create/sync the env with `uv venv` + `uv pip install -r requirements.txt` (or `uv pip sync`), and run commands through `uv run` (e.g. `uv run pytest`, `uv run python optimize.py`). One-off tools go through `uvx`. The `.venv/` is git-ignored.
+- Do NOT invoke `pip install` directly or rely on a system/global Python.
+- This is non-negotiable and applies to subagents too — any spawned executor doing Python work must use `uv`/`uvx`, not `python -m pip` / bare `python`.
+
+**Containers are Podman** (see Technology Stack below) — `podman`, not `docker`; never report "Docker not installed → blocked".
+
 ## Project
 
 **Helix** — The IDE for your coding agent. A Go-native, CLI-first code intelligence platform.

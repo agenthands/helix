@@ -30,8 +30,80 @@ TRAIN_PATH = os.path.join(HERE, "data", "train.jsonl")
 TEST_PATH = os.path.join(HERE, "data", "test.jsonl")
 OUTPUT_PATH = os.path.join(HERE, "output", "optimized.json")  # git-ignored
 
-# Dev-time LM backend. Illustrative; any litellm-supported provider works.
-LM_MODEL = os.environ.get("DSPY_LM_MODEL", "openai/gpt-4.1-mini")
+# Dev-time LM backend (SCALE-01). The optimizer's program LM AND reflection_lm
+# are DeepSeek-primary / OpenAI-fallback, consistent with the Phase-107 agent
+# (agent/llm.py). The model is a config var (DSPY_LM_MODEL); the default is the
+# EXPLICIT successor id `deepseek-v4-flash` — the `deepseek-chat`/`deepseek-reasoner`
+# aliases retire 2026-07-24 15:59 UTC (and `deepseek-reasoner` has no tool-calling),
+# so pinning the explicit id makes the cutover a one-line change.
+DEFAULT_LM_MODEL = "deepseek-v4-flash"
+DEFAULT_FALLBACK_MODEL = "gpt-4.1-mini"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+# 429 backoff: DeepSeek limits by concurrency (HTTP 429), so the LM retries with
+# litellm's exponential backoff (SCALE-02).
+LM_NUM_RETRIES = 4
+
+
+class LMConfig:
+    """Resolved LM backend for the optimizer (program LM + reflection_lm)."""
+
+    def __init__(self, model, api_key, api_base, num_retries=LM_NUM_RETRIES):
+        self.model = model
+        self.api_key = api_key
+        self.api_base = api_base
+        self.num_retries = num_retries
+
+
+def resolve_lm(environ=None):
+    """Resolve the optimizer LM: DeepSeek-primary / OpenAI-fallback (SCALE-01).
+
+    Returns an LMConfig, or None when no usable key is set (the caller then takes
+    the quiet hermetic-gate exit-0 path — symmetric with the agent's loud-fail but
+    on the OPTIMIZER side, which must stay CI/executor-safe). Model precedence:
+    explicit `DSPY_LM_MODEL` > `DEFAULT_LM_MODEL`. A bare `deepseek-*` id selects
+    the DeepSeek provider when its key is present; otherwise it falls back to
+    OpenAI; an explicit provider-prefixed id (`openai/…`, `deepseek/…`) is honored.
+    """
+    environ = environ if environ is not None else os.environ
+    raw = environ.get("DSPY_LM_MODEL") or DEFAULT_LM_MODEL
+    deepseek_key = environ.get("DEEPSEEK_API_KEY")
+    openai_key = environ.get("OPENAI_API_KEY")
+    wants_deepseek = raw.startswith("deepseek")  # "deepseek-v4-flash" or "deepseek/..."
+
+    if wants_deepseek and deepseek_key:
+        model = raw if raw.startswith("deepseek/") else f"deepseek/{raw}"
+        return LMConfig(model=model, api_key=deepseek_key, api_base=DEEPSEEK_BASE_URL)
+    # Fallback (or an explicitly OpenAI-pinned model) → OpenAI.
+    if openai_key:
+        if raw.startswith("openai/"):
+            model = raw
+        elif wants_deepseek:
+            model = f"openai/{DEFAULT_FALLBACK_MODEL}"  # default deepseek id, but only openai key
+        elif "/" in raw:
+            model = raw  # some other litellm provider the user pinned explicitly
+        else:
+            model = f"openai/{raw}"
+        return LMConfig(model=model, api_key=openai_key, api_base=None)
+    return None
+
+
+def build_gepa_kwargs(environ=None):
+    """Cost-bounded GEPA kwargs (SCALE-02). Default `auto="light"` (~600 rollouts);
+    an explicit `GEPA_MAX_METRIC_CALLS` replaces it with a hard rollout cap.
+    `num_threads` is bounded (default 4, `GEPA_NUM_THREADS`) so the in-process
+    evaluation never opens unbounded concurrent LM connections (DeepSeek 429).
+    `seed` is fixed for reproducibility; `track_stats` on for the attribution report.
+    """
+    environ = environ if environ is not None else os.environ
+    kwargs = {"track_stats": True, "seed": 0}
+    max_calls = environ.get("GEPA_MAX_METRIC_CALLS")
+    if max_calls:
+        kwargs["max_metric_calls"] = int(max_calls)  # explicit hard cap wins over auto
+    else:
+        kwargs["auto"] = "light"
+    num_threads = int(environ.get("GEPA_NUM_THREADS") or 4)
+    kwargs["num_threads"] = max(1, min(num_threads, 8))  # bounded, never unbounded
+    return kwargs
 
 # TUNE-03: the held-out validation split must exceed this many tasks before ANY
 # adoption recommendation is trustworthy. This is the explicit fix for the v2.2
@@ -114,16 +186,18 @@ def _load_jsonl(path):
 
 
 def main():
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        # Dev-env-only guard: never crash when the key is absent (CI / executor).
+    # SCALE-01: DeepSeek-primary / OpenAI-fallback (config var DSPY_LM_MODEL,
+    # default deepseek-v4-flash). None ⇒ no usable key ⇒ quiet hermetic-gate exit-0.
+    lm_cfg = resolve_lm()
+    if lm_cfg is None:
+        # Dev-env-only guard: never crash when no key is present (CI / executor).
         print(
-            "OPENAI_API_KEY is not set in the dev environment.\n"
+            "No LM key set (DEEPSEEK_API_KEY primary / OPENAI_API_KEY fallback).\n"
             "The GEPA optimization run is dev-time/offline only and needs an LM "
             "key.\nThe hermetic gates run WITHOUT a key:\n"
-            "  pytest tools/dspy-tune/test_split.py tools/dspy-tune/test_parity.py "
-            "tools/dspy-tune/test_degenerate.py\n"
-            "Set OPENAI_API_KEY (and optionally DSPY_LM_MODEL) in your dev shell "
+            "  uv run pytest test_split.py test_parity.py test_degenerate.py "
+            "test_corpus.py test_scale.py\n"
+            "Set DEEPSEEK_API_KEY (and optionally DSPY_LM_MODEL) in your dev shell "
             "to run the optimization.\n"
             "NOTE: no-ship is a legitimate, success-meeting outcome (see "
             "README.md / REPORT.md)."
@@ -157,7 +231,15 @@ def main():
 
     from taskmetric import make_gepa_metric
 
-    dspy.configure(lm=dspy.LM(model=LM_MODEL, api_key=api_key))
+    def _build_lm(temperature=None):
+        kw = {"model": lm_cfg.model, "api_key": lm_cfg.api_key, "num_retries": lm_cfg.num_retries}
+        if lm_cfg.api_base:
+            kw["api_base"] = lm_cfg.api_base  # litellm passthrough (deepseek base url)
+        if temperature is not None:
+            kw["temperature"] = temperature
+        return dspy.LM(**kw)
+
+    dspy.configure(lm=_build_lm())
 
     class Solve(dspy.Signature):
         """Solve the coding task by driving helix verbs to a passing solution."""
@@ -223,9 +305,8 @@ def main():
     )
     optimizer = GEPA(
         metric=metric,
-        auto="light",
-        track_stats=True,
-        reflection_lm=dspy.LM(model=LM_MODEL, temperature=1.0, api_key=api_key),
+        reflection_lm=_build_lm(temperature=1.0),
+        **build_gepa_kwargs(),  # SCALE-02: rollout cap + bounded num_threads + seed
     )
     optimized = optimizer.compile(student=program, trainset=trainset, valset=valset)
 

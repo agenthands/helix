@@ -12,6 +12,7 @@ across consecutive turns), plus a tool-error budget.
 """
 
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -36,6 +37,22 @@ OFF_CONTROL_PROMPT = _BASE_SYSTEM_PROMPT
 _DEFAULT_MAX_TURNS = 12
 _TOOL_ERROR_BUDGET = 5
 _STDOUT_CAP = 4000
+
+
+def _resolve_max_turns(explicit=None):
+    """Resolve the agent's hard turn cap (SCALE-02 cost lever). Precedence:
+    explicit arg > AGENT_MAX_TURNS env > _DEFAULT_MAX_TURNS. The turn count
+    multiplies every GEPA rollout, so it is the highest-leverage cost knob after
+    the held-out split size."""
+    if explicit is not None:
+        return explicit
+    env = os.environ.get("AGENT_MAX_TURNS")
+    if env:
+        try:
+            return max(1, int(env))
+        except ValueError:
+            pass
+    return _DEFAULT_MAX_TURNS
 
 
 def build_system_prompt(steering_text, steering):
@@ -76,7 +93,8 @@ class ReActAgent:
         self.system_prompt = system_prompt
         self.llm = llm
 
-    def run(self, task, cwd=".", max_turns=_DEFAULT_MAX_TURNS):
+    def run(self, task, cwd=".", max_turns=None):
+        max_turns = _resolve_max_turns(max_turns)
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": task},
@@ -131,7 +149,7 @@ class ReActAgent:
         return Transcript(reason="max_turns", final=None, steps=steps)
 
 
-def run(task, steering_text="", steering="off", llm=None, cwd=".", max_turns=_DEFAULT_MAX_TURNS):
+def run(task, steering_text="", steering="off", llm=None, cwd=".", max_turns=None):
     """Convenience entry point: build the system prompt, construct an agent, run.
 
     `llm` must be provided (a constructed `agent.llm.LLM` or a duck-typed fake);

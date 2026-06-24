@@ -170,6 +170,24 @@ def test_not_resolved_on_pass_to_pass_regression():
     assert not resolved and n == 2
 
 
+def test_ignores_harness_resolved_flag_on_zero_tests():
+    # SCALE-03 (research footgun): the upstream harness's compute_fail_to_pass()
+    # returns 1.0 on total==0, so a parsed-but-empty eval can carry resolved=True.
+    # grade_report MUST recompute from tests_status and still hard-error on 0 tests
+    # — never trusting the harness's vacuous resolved flag.
+    rep = {
+        _GOOD_IID: {
+            "resolved": True,  # the harness's vacuous flag — must be ignored
+            "tests_status": {
+                "FAIL_TO_PASS": {"success": [], "failure": []},
+                "PASS_TO_PASS": {"success": [], "failure": []},
+            },
+        }
+    }
+    with pytest.raises(GradeError):
+        grade_report(rep, _GOOD_IID)
+
+
 def test_zero_tests_is_hard_error():
     # Empty test set must NEVER read as success (the Phase-81/108 vacuous class).
     rep = _report(_GOOD_IID, [], [], [], [])

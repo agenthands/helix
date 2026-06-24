@@ -15,13 +15,13 @@
 ### Honest Task-Success Oracle (ORACLE)
 
 - [ ] **ORACLE-01**: Aider-polyglot task-success is graded by running the exercise's native hidden tests in a **per-task sandbox**; a run where **0 tests executed is a hard ERROR** (no vacuous pass), and gold test files are restored from an agent-unwritable path before grading (agent test-tampering cannot force green).
-- [ ] **ORACLE-02**: SWE-bench task-success is graded via the **upstream harness on Podman** (`podman system service` + `DOCKER_HOST`→podman socket), enforcing the **FAIL_TO_PASS + PASS_TO_PASS** resolution contract; the dataset id is pinned to the correct org and fetch-resolution plus a nonzero task-count are asserted before any run.
+- [x] **ORACLE-02**: SWE-bench task-success is graded via the **upstream harness on Podman** (`podman system service` + `DOCKER_HOST`→podman socket), enforcing the **FAIL_TO_PASS + PASS_TO_PASS** resolution contract; the dataset id is pinned to the correct org and fetch-resolution plus a nonzero task-count are asserted before any run.
 
 ### Task-Success Optimization Metric (TUNE)
 
 - [ ] **TUNE-02**: The DSPy GEPA optimization metric is rewired from `choice_rate` to **agent task-success** on the benchmark corpus (`choice_rate` retained at most as a non-optimized diagnostic pre-screen, never a co-optimized reward).
 - [ ] **TUNE-03**: The optimization corpus enforces a **sequestered held-out TEST split** never passed to `compile()`, with **`val_size > 50`** as a hard precondition gate for any adoption recommendation (closes the v2.2 tiny-corpus no-ship root cause; honors TUNE-FUT-01).
-- [ ] **TUNE-04**: Any reported improvement is an **ON-vs-OFF attribution delta** (`success(ON) − success(OFF)`) measured on the held-out split and recorded in a ship/no-ship REPORT alongside `val_size` and per-arm cost.
+- [x] **TUNE-04**: Any reported improvement is an **ON-vs-OFF attribution delta** (`success(ON) − success(OFF)`) measured on the held-out split and recorded in a ship/no-ship REPORT alongside `val_size` and per-arm cost.
 
 ### Adoption & Boundary (ADOPT)
 
@@ -57,10 +57,10 @@
 | AGENT-02 | Phase 107 | Complete |
 | AGENT-03 | Phase 107 | Complete |
 | ORACLE-01 | Phase 108 | Complete |
-| ORACLE-02 | Phase 109 | Pending |
+| ORACLE-02 | Phase 109 | Complete |
 | TUNE-02 | Phase 108 | Complete |
 | TUNE-03 | Phase 108 | Complete |
-| TUNE-04 | Phase 109 | Pending |
+| TUNE-04 | Phase 109 | Complete |
 | ADOPT-03 | Phase 110 | Pending |
 | ADOPT-04 | Phase 110 | Pending |
 

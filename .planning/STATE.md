@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Task-Success-Driven Skill Optimization
-current_phase: 107
-current_phase_name: ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering
+current_phase: 110
+current_phase_name: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT
 status: executing
-stopped_at: "v2.3 roadmap created (Phases 107-110); REQUIREMENTS.md traceability filled (10/10 mapped). Next: plan Phase 107 (ReAct agent + DeepSeek/OpenAI client + ON/OFF steering)."
+stopped_at: "v2.3 at 3/4 — Phases 107 + 108 + 109 shipped & verified (passed); tree to commit. Next: Phase 110 (human-gated adoption via helix-refgen --check + boundary re-verify + ship/no-ship REPORT), then milestone close."
 last_updated: "2026-06-24T10:40:37.588Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 107 execution started
+last_activity_desc: Phase 109 executed inline (uv) — SWE-bench oracle + ON/OFF attribution; 51 py tests green, make vet green
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 1
-  completed_plans: 0
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 108 complete (2/4 v2.3 phases done); next = Phase 109
+Phase: 109 complete (3/4 v2.3 phases done); next = Phase 110
 Plan: —
-Status: Paused at phase boundary (107 + 108 shipped & verified; tree clean)
-Last activity: 2026-06-24 — Phases 107 + 108 executed inline with uv; paused before live-infra Phase 109. See `.planning/.continue-here.md`.
+Status: 107 + 108 + 109 shipped & verified (passed). Phase 109 executed inline with uv (SWE-bench oracle + ON/OFF attribution). Next = Phase 110 + milestone close.
+Last activity: 2026-06-24 — Phase 109 executed inline with uv; 51 py tests + go parity + make vet green. See `.planning/.continue-here.md`.
 
 ## Performance Metrics
 
@@ -170,8 +170,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 ## Session Continuity
 
 Last session: 2026-06-24 (resumed)
-Stopped at: v2.3 roadmap created (Phases 107-110); REQUIREMENTS.md traceability filled (10/10 mapped). Next: plan Phase 107 (ReAct agent + DeepSeek/OpenAI client + ON/OFF steering).
-Resume file: None (HANDOFF.json + .continue-here.md consumed and removed)
+Stopped at: Phase 109 executed inline (uv) and verified (passed); v2.3 now 3/4. Next: Phase 110 (human-gated adoption + boundary re-verify + ship/no-ship REPORT), then milestone close.
+Resume file: .planning/.continue-here.md (refreshed to the Phase 110 checkpoint)
 
 ## Decisions
 
@@ -213,6 +213,9 @@ Resume file: None (HANDOFF.json + .continue-here.md consumed and removed)
 - [Phase 105]: 105-01: anti-vacuity matrix guards run each pure checker on the real embed (positive arm) + a synthetic fabricated offender (negative arm) parsed by the SAME parseMatrixRows; querySet/actionSet keyed to VerbToolNames() with a completeness gate (every frozen verb classified exactly once)
 - [Phase ?]: Phase 106-01: corpus stores RAW first_command (not lowercased); ClassifyChoice lowercases once
 - [Phase ?]: Phase 106-01: toolsquarantine analyzer is import-boundary-ONLY so the pip/pipx LS installer is never flagged
+- [Phase 109]: grade_swebench.py is a Python parity MIRROR of harness.go (argv/dataset-allowlist/env-allowlist), pinned by shared golden/swebench_argv.json + asserted on BOTH sides (argv_parity_test.go); reuses grade_aider.GradeError and plugs into taskmetric via the same (passed, tests_run) contract
+- [Phase 109]: resolution contract recomputed from tests_status (never a bare top-level resolved flag): resolved = non-empty FAIL_TO_PASS all-pass AND no PASS_TO_PASS regression; 0 tests evaluated => GradeError (vacuous-pass refusal, mutation-confirmed RED)
+- [Phase 109]: attribution.py decide_ship gates on optimize.VAL_SIZE_GATE (single source of truth, strict >50) AND positive delta; MeteredLLM is a non-invasive cost wrapper (Phase-107 LLM untouched); filled REPORT artifact deferred to Phase 110 (corpus still < val_size>50 by design)
 
 ## Operator Next Steps
 

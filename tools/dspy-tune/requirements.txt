@@ -17,4 +17,12 @@ dspy==3.2.1
 # test_agent.py injects duck-typed fakes and constructs no client, so it passes
 # even with openai uninstalled.
 openai==2.43.0
+# swebench: NEW (Phase 109) — the upstream SWE-bench harness invoked as
+# `python -m swebench.harness.run_evaluation` by the heaviest task-success
+# grader (grade_swebench.py) on Podman (DOCKER_HOST→podman socket). Dev venv
+# ONLY — never enters go.mod / the helix binary / `helix setup` / `go test ./...`
+# / the merge path. The hermetic test_swebench.py injects a fake harness runner +
+# report reader and imports no swebench symbol, so it passes even with swebench
+# uninstalled; only the gated live leg needs it (plus a running container engine).
+swebench==4.1.0
 pytest==8.3.5

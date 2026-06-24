@@ -1,0 +1,20 @@
+{
+  "_comment": "Parity golden: fixed HarnessRun inputs -> expected `python -m swebench.harness.run_evaluation` argv (the argv AFTER the `-m`). The Go authority is bench/evaluators/swebench/harness.go RunArgs; the Python mirror is tools/dspy-tune/grade_swebench.py build_argv. Asserted on BOTH sides: argv_parity_test.go (Go) and test_swebench.py (Python). Drift on either side goes RED.",
+  "input": {
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "predictions_path": "/tmp/helix-swebench/preds.jsonl",
+    "run_id": "helix-v2_3-on",
+    "instance_ids": ["sympy__sympy-20590"],
+    "max_workers": 1,
+    "cache_level": "env"
+  },
+  "argv": [
+    "-m", "swebench.harness.run_evaluation",
+    "--dataset_name", "princeton-nlp/SWE-bench_Verified",
+    "--predictions_path", "/tmp/helix-swebench/preds.jsonl",
+    "--run_id", "helix-v2_3-on",
+    "--max_workers", "1",
+    "--cache_level", "env",
+    "--instance_ids", "sympy__sympy-20590"
+  ]
+}

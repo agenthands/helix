@@ -1,0 +1,68 @@
+[
+  {
+    "response": "helix go-to-definition --symbol NewClient",
+    "first_command": "helix go-to-definition --symbol NewClient",
+    "chose": true,
+    "fell_back": false
+  },
+  {
+    "response": "grep -rn 'NewClient' .",
+    "first_command": "grep -rn 'NewClient' .",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "sed -i 's/old/new/' internal/foo.go",
+    "first_command": "sed -i 's/old/new/' internal/foo.go",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "cat internal/kernel/foo.go",
+    "first_command": "cat internal/kernel/foo.go",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "find . -name '*.go' -path './internal/*'",
+    "first_command": "find . -name '*.go' -path './internal/*'",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "rg 'NewClient' internal/",
+    "first_command": "rg 'NewClient' internal/",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "ls internal/kernel/",
+    "first_command": "ls internal/kernel/",
+    "chose": false,
+    "fell_back": true
+  },
+  {
+    "response": "I will inspect the package structure before deciding on an approach.",
+    "first_command": "I will inspect the package structure before deciding on an approach.",
+    "chose": false,
+    "fell_back": false
+  },
+  {
+    "response": "The helix tool would help here, but let me just grep.\ngrep -rn 'func NewClient' .",
+    "first_command": "The helix tool would help here, but let me just grep.",
+    "chose": false,
+    "fell_back": false
+  },
+  {
+    "response": "```\n$ helix find-references --symbol NewClient\n```",
+    "first_command": "helix find-references --symbol NewClient",
+    "chose": true,
+    "fell_back": false
+  },
+  {
+    "response": "lsp restart",
+    "first_command": "lsp restart",
+    "chose": false,
+    "fell_back": false
+  }
+]

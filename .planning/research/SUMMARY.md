@@ -1,147 +1,139 @@
 # Project Research Summary
 
 **Project:** Helix
-**Domain:** Agent-facing tool-selection skill docs + generated-doc gates + (exploratory) offline DSPy prompt tuning, on a Go single-binary CLI
-**Researched:** 2026-06-23
+**Milestone:** v2.3 — Task-Success-Driven Skill Optimization
+**Domain:** Dev-time/offline LLM optimization tooling (a DeepSeek/OpenAI tool-using agent driving the `helix` CLI; GEPA metric rewired from a gameable `choice_rate` proxy to real coding-benchmark task-success) bolted onto a shipped Go single-binary product without breaching the no-runtime-Python boundary.
+**Researched:** 2026-06-24
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Helix v2.2 ("Agent-Facing Skill Quality & Prompt Tuning") is a content/codegen milestone, NOT a stack milestone. It carries four features: three deterministic Go-side skill-surface fixes (a SKILL.md decision-matrix rewrite, `reference.md` generator corrections, and an `installSkill` bundle allowlist) plus one exploratory, dev-time-only DSPy prompt-optimization harness. All four hang off the existing skill-bundle generate→install→measure spine — the 50-verb CLI, the `//go:embed skills/helix/*` bundle, `cmd/helix-refgen` with its `--check` drift gate and `reference ⊇ VerbToolNames()` contract, and the Phase 101 `test/oracle/adopt` `choice_rate`/`fallback_rate` scorecard. The three deterministic features need ZERO new Go dependencies (edits inside already-vendored packages); only the DSPy spike introduces anything new, and it must stay strictly out of the shipped binary, the Go module graph, and the merge-gating CI path.
+v2.3 exists to fix a specific, documented failure: v2.2 concluded **no-ship** because its skill-tuning loop optimized a *gameable* proxy (`choice_rate` — "always emit `helix` first," inflated by a `"helix" in response` substring check) over a *tiny corpus* (`MinTasks=5`; the real split was TRAIN=8 / TEST=3). The four researchers converged tightly on the fix: replace the proxy reward with **real benchmark task-success** (Aider polyglot hidden-tests-green; SWE-bench FAIL_TO_PASS-flip + PASS_TO_PASS-no-regression), measured by a **net-new OpenAI-compatible tool-using agent** that drives `helix <verb>` via subprocess — the actual product surface — and attribute any gain to the skill text via a **mandatory ON-vs-OFF control arm** (`delta = success(ON) − success(OFF)`).
 
-The recommended approach is dependency-driven and sequences deterministic-before-exploratory. Land the `installSkill` allowlist FIRST: the embed-glob leak is live right now (the binary and every `helix setup` already ship the 18 KB `SKILL-ISSUE.md`), the existing bundle test is positive-only, and putting a closed-set allowlist in place before the rewrite stops further leakage during the dir churn. Then fix the `reference.md` generator at its root cause (`cmd/helix-refgen` per-verb prose driven off a `cmd/helix-cligen` group collapse that folds memory/workflow/health/help/profile into one `memory` group) BEFORE re-authoring the SKILL.md matrix, so the on-demand reference is already correct when the idle-tier matrix is rewritten and the two tell one consistent story. The DSPy harness comes last, tuning against a frozen metric and a stabilized surface — and it is explicitly a spike with a possible no-ship outcome (Go-search-loop fallback).
+The cross-cutting architectural convergence is unanimous and load-bearing: the new agent + metric live **in Python under `tools/dspy-tune/agent/`** (a sibling of the existing `scorer.py`), NOT in Go `bench/runtime`. GEPA calls its metric **in-process per candidate** thousands of times, so the agent must be a plain Python import the metric can call; putting an LLM client in Go `bench/runtime` would add a forbidden runtime-side `go.mod` dep and force a process-spawn handoff into the optimizer's hot loop. A **single `openai==2.43.0` client** wraps both providers (DeepSeek primary via `base_url=https://api.deepseek.com`, OpenAI fallback) — DeepSeek is OpenAI-compatible. **Zero new Go deps**; the `toolsquarantine` analyzer needs no change (it is import-only and all new edges are Python/`subprocess`, inside the exempt `tools/` prefix). Pins: keep `dspy==3.2.1`, add `openai==2.43.0` + `swebench==4.1.0` to the dev venv only.
 
-The dominant risk class is vacuous gates — a failure pattern this repo has been bitten by repeatedly (Phase 86/87/89 CR-01). Two hard rules govern the whole milestone: (1) `reference.md` corrections are GENERATOR fixes, never hand-edits — a hand-edit fails `--check` or certifies an irreproducible file; and (2) the contract test must be hardened to be DISCRIMINATING (exact count == 50, fails on a known-absent verb) BEFORE the format rewrite, or the superset check can go `∅ ⊇ ∅` vacuously green. For DSPy, the risks are overfit on a tiny corpus, metric-gaming of the gameable `choice_rate` proxy, LLM nondeterminism breaking reproducibility, and accidental runtime-Python coupling — all mitigated by treating DSPy as offline/human-in-the-loop whose only output that crosses into the binary is committed static bytes gated by `--check`.
+The highest-risk work is making the **task-success oracle honest**. A task-success metric removes the always-`helix` exploit but opens new gaming surfaces that silently inflate the delta: **vacuous passes** (0 tests actually ran → benign default coerced to "pass" — the exact Phase 81 false-green shape), **pass-without-using-helix** (agent solves with `cat`/`sed`, skill gets credit), and **in-sandbox test tampering** (agent edits the failing test). Mitigation is a **fail-not-skip, three-part oracle**: assert N>0 tests ran (hard ERROR otherwise), enforce the FAIL_TO_PASS/PASS_TO_PASS contract, and restore/`git checkout` gold tests from an agent-unwritable path before grading. The deeper overfitting fix is the **TUNE-FUT-01 `val_size>50` gate** (hard precondition for adoption, not a footnote) plus a **sequestered held-out TEST split** never passed to `compile()`. Every new gate ships a break-the-invariant → assert-RED test, with code-review+fix folded BEFORE verify (carrying the v2.2 mutation-test discipline that caught a tautological `x==x` Guard B and a real Python↔Go parity bug). SWE-bench is **NOT blocked** — `podman system service --time=0 &` + `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (configuration, not a blocker); watch the dataset-org drift (`princeton-nlp/` datasets vs the `SWE-bench/` repo org).
 
 ## Key Findings
 
 ### Recommended Stack
 
-v2.2 adds NO new Go dependencies. The three deterministic features are edits inside existing packages (`cmd/helix-refgen/render.go`, `cmd/helix-cligen/render.go`, `internal/cli/skill.go`, `internal/cli/skills/helix/`); `embed`, `os`, `path/filepath`, `cobra`, `testify`, `jsonschema/v6`, `anthropic-sdk-go` are all already vendored. The only new surface is the exploratory DSPy harness, quarantined to a dev-time/offline Python tree (recommended `tools/skill-tune/` or `tools/promptopt/`) with its own pinned `requirements.txt` and a git-ignored venv — never on the default `go test ./...` / merge path.
+All net-new dependencies are **dev-time Python in the `tools/dspy-tune/` venv only** — never `go.mod`, the binary, `helix setup`, or `go test ./...`. The Go side reuses existing assets (aider-polyglot loader, swebench harness wrapper, `bench/container` podman detect) with no new module deps. (See STACK.md.)
 
 **Core technologies:**
-- **Go 1.25.1 (existing)**: all shipped code; the deterministic features touch only existing packages — no new import wanted or needed.
-- **DSPy (Python) 3.2.1 (stable)**: the offline prompt-optimizer that tunes SKILL.md/nudge prose against the adoption scorecard; dev-time only, output committed as static text. Pin stable 3.2.1 (3.3.0b1 beta exists; defer).
-- **GEPA optimizer (`dspy.GEPA`, bundled)**: recommended for free-form instruction/prose tuning (which SKILL.md is) — fewer rollouts, no demo bank. MIPROv2 (`auto="light"`, needs Optuna) / COPRO are alternates if few-shot demos prove valuable. Reuses the existing `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` (same vars as `test/oracle/llm`, via LiteLLM).
+- **DSPy `3.2.1`** (keep the existing pin): GEPA optimizer + `dspy.LM`. Metric signature `metric(gold,pred,trace,pred_name,pred_trace)->dspy.Prediction(score=,feedback=)` is stable 3.1→3.2; only the metric *body* changes.
+- **OpenAI SDK `openai==2.43.0`** (NEW): the single tool-use client for BOTH DeepSeek (OpenAI-compatible `base_url`) primary and OpenAI fallback. Drives the agentic `tools=[...]`/`tool_calls` loop.
+- **swebench `4.1.0`** (NEW pin): the upstream `python -m swebench.harness.run_evaluation` harness; pin is **mandatory** due to dataset-org drift.
+- **Python 3.13** (host 3.13.5; the `>=3.10,<3.15` intersection of all three pins).
+- **Podman 5.4.2** + `podman system service` socket via `DOCKER_HOST` for the SWE-bench arm. Per-language Aider toolchains (go/python/node/cargo/g++/openjdk via checked-in gradle wrapper) all verified present.
+
+**Critical version note:** DeepSeek `deepseek-chat`/`-reasoner` aliases **retire 2026-07-24** (→ `deepseek-v4-flash`/`-pro`). Make the model a config var (`DSPY_LM_MODEL` precedent); prefer the explicit `deepseek-v4-*` id.
 
 ### Expected Features
 
-The maintainer analysis (`SKILL-ISSUE.md`) already identified what is broken; the table-stakes fixes are well-specified and low-complexity.
+(See FEATURES.md.)
 
-**Must have (table stakes):**
-- **`installSkill` bundle allowlist + closed-set bundle test** — predictable, minimal `{SKILL.md, reference.md}` bundle; stops the live stray-file leak. Hygiene table-stakes.
-- **One-question-per-row matrix** — split the 5 mixed QUERY/ACTION rows (37→44 rows); an agent maps one intent → one tool.
-- **Explicit "use this NOT that" on every row** — fill every blank `—` cell (the semantic-graph/memory/workflow verbs least familiar to agents) with the concrete fallback it displaces; CLAUDE.md routing table is the canonical source.
-- **Per-verb accuracy in the generated reference** — fix the 13 copy-pasted "use this/not that" + 22 copy-pasted FTS5 "Output" lines AT THE GENERATOR, keeping `--check` and `⊇ VerbToolNames()` green.
-- **Indexed-graph prerequisite annotations** — 7 semantic-graph verbs silently degrade without `index-semantic-graph`; without a prereq note the agent gets an empty result and falls back to grep.
-- **Reproducible, `--check`-gated output** — every generated/tuned artifact must round-trip through `helix-refgen --check`.
+**Must have (table stakes — without these the milestone repeats a v2.2-class no-ship):**
+- OpenAI-compatible tool-calling agent loop driving `helix <verb>` via subprocess (DeepSeek primary, OpenAI fallback, one client)
+- Hard turn/budget cap + deterministic termination + per-run trace/transcript capture
+- Per-task sandboxed working copy (pristine-then-patched, reset between tasks)
+- Aider-polyglot pass/fail oracle (hidden tests green; anti-tamper test restore)
+- Task-success wired as the GEPA metric **replacing** `choice_rate`; sequestered held-out TEST split; vacuous-pass + degenerate-steering refusal
+- **Mandatory ON-vs-OFF control arm** + attribution Δ report
+- Human-gated adoption via `helix-refgen --check`; no auto-write; `toolsquarantine` green; single-binary / no-runtime-Python invariant preserved
 
 **Should have (competitive):**
-- **Adoption-metric-driven content** — regression-check the rewrite against the hermetic `choice_rate`/`fallback_rate` scorecard (runs in default `go test ./...`, no network), not maintainer taste.
-- **DSPy offline tuning harness** (exploratory) — auto-optimize the matrix/nudge text to maximize `choice_rate`; reuse the `test/oracle/adopt` first-command classifier as the single metric for both the Go gate and the Python optimizer.
+- SWE-bench oracle (F2P flip + P2P no-regression) via Podman — add once the Aider loop is stable
+- GEPA reflective feedback keyed on *why* a task failed (test-level diagnosis)
+- Steering-attribution (Δ ON-vs-OFF on held-out TEST) as the explicit ship/no-ship gate; per-arm cost/latency accounting
 
-**Defer (v2+ / exploratory):**
-- **DSPy harness itself** — highest complexity, exploratory spike, possible no-ship; value unproven until the deterministic rewrite establishes a baseline `choice_rate`. Clean fallback: a hand-rolled Go candidate-search loop over the `adopt` scorer, keeping the milestone 100% Go.
+**Defer (v2+):**
+- grep-sed-cat-only third control arm; dual-bench joined metric; larger SWE-bench instance lists / more providers
 
 ### Architecture Approach
 
-v2.2 is a subsequent-milestone, integrate-WITH note (phase numbering continues from 102). The generate-time spine (`cmd/helix-cligen` → `verbs_gen.go` → `VerbSpecsForDocs()`/`VerbToolNames()` → `cmd/helix-refgen/render.go` → `reference.md`, all `--check`-gated) and the runtime spine (`//go:embed skills/helix/*` → `installSkill`) are both touched only at well-isolated seams. The root cause of the reference.md "copy-paste errors" is that `outputShape(group)` and `useThisNotThat(group, verb)` are GROUP-keyed, and `cmd/helix-cligen`'s `categoryToGroup` collapses four distinct categories (memory, workflow, health, help, profile) into the single `memory` group — so `switch-mode`, `get-token-budget`, `onboard-project`, `get-health`, `get-tool-help`, and the mutating memory verbs all inherit the memory-query prose. The recommended fix is a per-verb override map in refgen (option 1, minimal blast radius), NOT an upstream group-taxonomy split (option 2, larger/riskier).
+The new agent and metric are **sibling modules inside `tools/dspy-tune/`** (NOT a new `tools/agent/`), because GEPA invokes the metric in-process exactly as it imports `score_choice_rate` today. The pattern is **in-process metric, subprocess everything-the-LLM-touches**: the metric calls the agent as a Python function; the agent shells `helix <verb>`; the graders shell the per-language test command (Aider) or the upstream swebench harness (SWE-bench). The candidate SKILL text reaches the agent as its **system prompt**; the winning text re-enters the shipped binary ONLY via a human-reviewed SKILL.md edit gated by `helix-refgen --check`. (See ARCHITECTURE.md.)
 
 **Major components:**
-1. **`internal/cli/skill.go` (`installSkill`/`uninstallSkill`)** — add a `bundleFiles` allowlist, filter the entry list ONCE up front, feed the same filtered slice to the unchanged 2-pass atomic stage→rename and `withinSkillRoot` containment; filter uninstall identically. New closed-set bundle test.
-2. **`cmd/helix-refgen/render.go`** — add per-verb `Output` + "use this, not that" override maps with group-default fallback; lookups keyed (never ranged) so determinism holds. New vacuity-guard tests.
-3. **`internal/cli/skills/helix/SKILL.md`** — hand-authored matrix rewrite (split rows, "Not this" everywhere, regroup by subsystem reality, indexed-graph prereqs); MUST keep the `## Decision matrix` heading (the `StripDecisionMatrix` anchor) and stay under the SKILL-04 idle-cost cap.
-4. **`tools/skill-tune/` (new, exploratory)** — dev-time DSPy harness; NOT in the Go module, NOT embedded, NOT in CI; consumes the metric via a Python re-implementation of the `adopt` classifier pinned by a golden parity cross-check; output re-enters only as a human-reviewed commit through SKILL.md/refgen → `--check`.
+1. **ReAct agent** (`tools/dspy-tune/agent/` — `react.py`, `llm.py`, `tools.py`) — DeepSeek/OpenAI loop emitting `helix <verb>` argv; system prompt = candidate skill text.
+2. **Task-success metric** (`taskmetric.py` + `optimize.py` body swap) — runs agent per task, grades, returns `dspy.Prediction(score, feedback)`; replaces `score_choice_rate`.
+3. **Graders** (`grade_aider.py` parity-pinned Python mirror of `NativeTestCommand`; `grade_swebench.py` direct call to the upstream harness via Podman) + `sandbox.py` per-task isolated work dir.
+4. **Unchanged guards:** `toolsquarantine` analyzer (no new Go edge), `helix-refgen --check` adoption gate, `scorer.py` (retained as an optional pre-screen, NOT the reward).
 
 ### Critical Pitfalls
 
-1. **Embed glob ships stray files (LIVE leak)** — `installSkill` writes every `ReadDir("skills/helix")` entry, so `SKILL-ISSUE.md` is already in the binary and on every user's disk; the existing test is positive-only. Fix: closed-set allowlist assertion (embedded FS == exactly `{SKILL.md, reference.md}`) + move `SKILL-ISSUE.md` out of the embed dir. Land EARLY.
-2. **Hand-editing the generated `reference.md`** — it is generated and `--check`-gated; a hand-edit either reverts on next regen or certifies an irreproducible file. Fix `render.go`'s per-verb mapping, regenerate, commit both together; verify `git diff` empty after a fresh regen.
-3. **The `reference ⊇ VerbToolNames()` contract goes vacuous after the format rewrite** — if the matcher's anchor format changes, the superset check becomes `∅ ⊇ ∅` true. HARDEN FIRST: assert matched count == 50, discriminate a known-absent verb, run the test RED against the old format to prove it bites — all BEFORE rewriting the format.
-4. **DSPy overfit + metric-gaming on a tiny corpus** — with ~5 transcripts the optimizer memorizes surface cues (MIPROv2 only auto-protects when `val_size > 50`), and `choice_rate` is a gameable first-command proxy ("always emit helix"). Hold out a TEST split the optimizer never sees; pair `choice_rate` with a correctness/task-success oracle; inspect for degenerate steering.
-5. **DSPy nondeterminism / runtime-Python coupling** — LLM optimization isn't bit-reproducible (even temp-0), so never make "re-run DSPy" a CI gate; gate the committed artifact, not the process. Keep DSPy out-of-band (no `helix` subcommand shells to Python, no `go.mod`/setup edge); add a `make vet`-style leakage analyzer.
+(Top 5 of 9 from PITFALLS.md.)
+
+1. **Reward-hacking the task-success oracle** — fail-not-skip three-part oracle: assert N>0 tests ran (vacuous pass = hard ERROR), enforce FAIL_TO_PASS/PASS_TO_PASS, restore gold tests from an agent-unwritable path + reject test-file diffs. Plus a "did the agent actually call helix?" attribution check.
+2. **Tiny-corpus overfit (the literal v2.2 no-ship cause)** — `val_size>50` as a HARD adoption gate; held-out TEST sequestered first and never passed to `compile()`; `test_split.py` RED-fails on a planted leak.
+3. **Attribution failure (gain came from the LM, not the skill)** — mandatory ON-vs-OFF control arm, identical except steering text; `delta = ON − OFF`; OFF prompt provably omits the steering.
+4. **Gating the optimizer process instead of the committed artifact** — gate `reference.md`/`SKILL.md` via `helix-refgen --check`, never re-run `optimize.py` in CI; unset-key exits 0 for hermetic gates but fails loudly on a real run.
+5. **SWE-bench/Podman/dataset drift** — never "Docker → blocked" (auto-detected Podman); pin dataset ids to the correct org; assert fetch resolves and task-count > 0.
+
+Cross-cutting: **anti-vacuity** (every new gate ships a break-the-invariant → assert-RED test; review+fix BEFORE verify) and the **HELIX_BIN fail-not-skip** lesson.
 
 ## Implications for Roadmap
 
-Based on combined research, the convergent suggested phase structure (continuing from Phase 102) is:
+Dependency chain is forced — **agent → grader+metric rewire → SWE-bench → adoption gate**. Phase numbering continues from 106.
 
-### Phase 103: installSkill allowlist + closed-set bundle test
-**Rationale:** Pure safety patch, zero deps, smallest blast radius; the leak is live and the dir will churn during the rewrite, so the allowlist must precede it. Churns least.
-**Delivers:** `bundleFiles` allowlist filtering install + uninstall (single up-front filter, atomicity/containment untouched), a closed-set bundle-contents test, `SKILL-ISSUE.md` moved out of the embed dir, AND a hardened `reference ⊇ VerbToolNames()` contract test (exact count == 50, discriminates a known-absent verb, RED-first).
-**Addresses:** allowlist + bundle hygiene (table stakes).
-**Avoids:** Pitfall 1 (live leak), Pitfall 2 (atomicity regression via uninstall parity test), Pitfall 5 (vacuous contract — harden it here, before the format changes).
+### Phase 107: ReAct agent + LLM client (`tools/dspy-tune/agent/`)
+**Rationale:** Metric, graders, and adoption gate all depend on it; standalone, no benchmark coupling.
+**Delivers:** `llm.py` (DeepSeek-primary/OpenAI-fallback, model as config var, tool-call JSON validation, max-turns + no-progress cap), `react.py`, `tools.py` (subprocess `helix <verb>`), first-class `--steering on|off`.
+**Uses:** `openai==2.43.0` in `requirements.txt` only.
+**Avoids:** Pitfall 7 (pin `deepseek-v4-*`, exercise fallback, fail-loud on missing key for real runs); Pitfall 3 (ON/OFF from start); Pitfall 5 (`make vet` green, no `go.mod` diff).
+**Anti-vacuity gate:** hermetic `test_agent.py` (fake LLM + fake `helix`, no network); degenerate always-grep agent scores 0; OFF prompt provably omits steering.
 
-### Phase 104: reference.md generator per-verb override fixes
-**Rationale:** Fix the §4/§5 copy-paste errors at the GENERATOR root cause (the group collapse), not by hand-edit; MUST precede the SKILL.md rewrite so the reference is already correct when the matrix is re-authored.
-**Delivers:** per-verb `Output` + "use this, not that" override maps in `cmd/helix-refgen/render.go` (group-default fallback retained), vacuity tests (no override key is a non-verb; overridden Output ≠ old group default), regenerated `reference.md`.
-**Uses:** existing `cmd/helix-refgen` + `--check` gate; no new deps.
-**Implements:** generator override seam (architecture option 1).
-**Avoids:** Pitfall 3 (hand-edit), Pitfall 4 (blank-import parity re-verified when touching refgen).
+### Phase 108: Aider grader + sandbox + metric rewire
+**Rationale:** Depends on 107; Aider needs no Podman → cheaper, hermetic-test-friendly grader before SWE-bench. Core `choice_rate → task-success` swap.
+**Delivers:** Python mirror of `NativeTestCommand` + WR-01 restore; per-task sandbox; `taskmetric.py`; `optimize.py` body swap; shared `golden/aider_native_cmd.json` parity corpus asserted by a Go `*_test.go` (under `bench/datasets/aider-polyglot/`, NOT `tools/`) and `test_grade.py`; extended `test_split.py`; `val_size>50` gate.
+**Avoids:** Pitfall 1, 2, 9.
+**Anti-vacuity gate:** do-nothing agent fails Rust (proves `cargo test -- --include-ignored`); test-tampering cannot force green; planted TEST→TRAIN leak goes RED; `val_size=50` no-ships, `51`+delta adoptable.
 
-### Phase 105: SKILL.md decision-matrix rewrite
-**Rationale:** Hand-authored idle-tier rewrite; depends on 104 so SKILL.md and reference.md tell one consistent story.
-**Delivers:** split QUERY/ACTION rows (37→44), "Not this" on every row, regroup by subsystem reality, indexed-graph prereq notes; keep the `## Decision matrix` StripDecisionMatrix anchor and the SKILL-04 idle-cost cap; SKILL.md↔VerbToolNames cross-check test.
-**Addresses:** the core mis-routing fixes (table stakes).
-**Avoids:** Pitfall 11 (over-split/token bloat — target ~44 rows, terse "Not this"), Pitfall 12 (ambiguous/stale steering), Pitfall 13 (missing prerequisites), the StripDecisionMatrix anchor break.
+### Phase 109: SWE-bench grader via Podman
+**Rationale:** Heaviest dependency; depends on 107 + 108; pluggable behind `taskmetric.py`.
+**Delivers:** mirror of dataset-name allowlist + fixed argv + env allowlist; `DOCKER_HOST→podman.sock`; predictions.jsonl from agent diff; harness-report parse.
+**Uses:** `swebench==4.1.0`; `podman system service`.
+**Avoids:** Pitfall 6 (dataset id pinned to the correct org, fetch resolves, task-count > 0, socket up).
+**Anti-vacuity gate:** hermetic fake-harness test asserts exact argv + env allowlist; live run gated, skips offline (fail-not-skip on a *requested* real run).
 
-### Phase 106 (exploratory): DSPy offline tuning harness
-**Rationale:** LAST — tunes against a frozen metric and the stabilized 104/105 surface; tuning against a moving target wastes optimizer budget.
-**Delivers:** `tools/skill-tune/` dev-time harness (DSPy 3.2.1 + GEPA), a Python re-implementation of the `adopt` classifier pinned by a golden parity cross-check against the Go scorer, train/dev/held-out splits, offline optimize → human-reviewed commit → `--check`.
-**Uses:** DSPy 3.2.1, GEPA, reused `ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY`.
-**Avoids:** Pitfalls 6–10 (overfit, metric-gaming, nondeterminism, contamination, runtime-Python coupling).
+### Phase 110: Human-gated adoption re-verification
+**Rationale:** Gates pipeline output; nothing downstream depends on it. Re-verification of v2.2 invariant + REPORT.md verdict.
+**Delivers:** confirm `optimize.py` writes only git-ignored `output/optimized.json`; adoption = human SKILL.md edit (≤1536 chars, `## Decision matrix` anchor) + `helix-refgen --check`; REPORT.md records ON/OFF/Δ/val_size + adopt/no-ship.
+**Avoids:** Pitfall 4, 8 (`grep -E 'skills/helix|reference\.md' optimize.py == 0`, bundle allowlist).
+**Anti-vacuity gate:** hand-edit `reference.md` out of sync → `--check` fails non-zero.
 
 ### Phase Ordering Rationale
-
-- **103 before 104/105:** a clean embed dir means no stray-file noise in the bundle-contents test or the generated reference; the allowlist stops leakage during the rewrite churn.
-- **104 (generator/reference) before 105 (SKILL.md):** the on-demand reference must be correct before the idle-tier matrix is re-authored, avoiding a window where the two disagree.
-- **106 strictly last:** DSPy tunes against a frozen metric and a stable surface; it is exploratory with a possible no-ship outcome and a Go-search-loop fallback.
-- All three research files (ARCHITECTURE build order, PITFALLS phase mapping, FEATURES dependency graph) converge on this exact sequence.
+- Dependency-forced; cheap Aider path proves the loop before heavy SWE-bench; adoption gates the output last.
+- Each phase ships its break-the-invariant test before the next depends on it; review+fix folds in BEFORE verify.
 
 ### Research Flags
-
-Phases likely needing deeper research during planning:
-- **Phase 106 (DSPy harness):** exploratory spike — needs corpus-split design, the Python↔Go classifier parity contract, the metric-AND-quality-oracle composition, and a leakage-analyzer design. Highest uncertainty; mark as spike, not a hard adoption-delta gate.
-
-Phases with standard patterns (skip research-phase):
-- **Phase 103 (allowlist):** well-understood install hardening; the seam (filter entry list once, preserve atomicity) is fully specified.
-- **Phase 104 (generator fix):** root cause and fix shape (per-verb override map) are identified and grounded in source.
-- **Phase 105 (SKILL.md rewrite):** hand-authored Markdown against the maintainer-specified `SKILL-ISSUE.md` target; constraints (anchor, idle-cost cap) are explicit.
+- **Phase 108:** honest-oracle design is the highest-risk surface + the v2.2 no-ship root cause — warrants a research pass.
+- **Phase 109:** live SWE-bench-on-Podman (rootless quirks, `--network=none`, dataset-org resolution) needs implementation-time confirmation.
+- **Phase 107:** standard ReAct/tool-call pattern, DeepSeek docs verified — skip research.
+- **Phase 110:** unchanged v2.2 mechanism — skip research.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | DSPy version/extras/LM-config verified against PyPI + dspy.ai; Go "no new deps" read directly from the tree. |
-| Features | HIGH | Skill-doc fixes grounded in `SKILL-ISSUE.md`; DSPy mechanics Context7-verified (`/websites/dspy_ai`). |
-| Architecture | HIGH | All Go integration points (refgen, cligen, skill.go, scorecard) read directly from live source; group-collapse root cause pinned to file/line. |
-| Pitfalls | HIGH | Generator/gate/bundle pitfalls verified against live source; DSPy pitfalls Context7/web-verified (MEDIUM-HIGH). |
+| Stack | HIGH | Versions verified vs PyPI + official docs + Context7; integration points from live source. |
+| Features | HIGH | Existing harness read directly; v2.2 no-ship lessons from 106 artifacts. |
+| Architecture | HIGH | All integration points from source; only the Python agent is greenfield. |
+| Pitfalls | HIGH | Grounded in Phase 106 spike artifacts, carried memories, primary docs. |
 
 **Overall confidence:** HIGH
 
-### Gaps to Address
-
-- **DSPy generalization on a tiny corpus:** the live adoption corpus is small (`MinTasks=5`); a held-out test split must be established (and likely the corpus grown) before any optimizer call. Handle in Phase 106 planning — the split is the FIRST harness task.
-- **Optimizer-reproducibility vs `--check`:** the artifact/process split must be an explicit Phase 106 architecture decision (commit the tuned artifact, never re-run the optimizer in `--check`).
-- **Per-verb override vs group-taxonomy split (104):** option 1 (override map) is recommended; if the 105 SKILL.md regroup independently demands new cobra groups, re-evaluate option 2 during 104/105 planning.
-- **Stale codebase docs:** `.planning/codebase/{ARCHITECTURE,CONCERNS}.md` describe the removed Python Serena tree and were NOT used as sources — do not let them re-enter planning context.
+### Gaps to Address (pin during requirements)
+- **Exact corpus composition** (the single most important open question): which Aider exercises (and count) + which SWE-bench instance subset, sized so `val_size > 50` is clearable affordably. The literal v2.2 no-ship axis — pin before any GEPA run.
+- **Role of `choice_rate`:** keep as a secondary/diagnostic pre-screen, or drop? MUST NOT be a (co-)optimization target. `scorer.py` is retained unchanged so either choice is cheap.
+- **DeepSeek model id at implementation time** (alias retires 2026-07-24; config var makes cutover one line).
+- **SWE-bench dataset-name allowlist edit** (`princeton-nlp/` datasets vs `SWE-bench/` repo org) — confirm/extend at Phase 109.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Live Go tree (read directly): `cmd/helix-refgen/{main,render}.go`, `cmd/helix-cligen/render.go`, `internal/cli/{skill,verb}.go`, `internal/cli/reference_contract_test.go`, `internal/cli/skills/helix/{SKILL.md,SKILL-ISSUE.md}`, `test/oracle/adopt/scorecard.go`, `test/oracle/llm/*`, `go.mod`, `Makefile` — confirms "no new Go deps," the group-collapse root cause, the live leak, and the scorecard classifier.
-- `.planning/PROJECT.md` §v2.2 + Constraints — four target features; single Go binary, no runtime Python; DSPy dev-time only; committed `--check`-reproducible artifact.
-- Context7 `/websites/dspy_ai` — optimizers (GEPA/COPRO/MIPROv2/BootstrapFewShot), metric signature `(example, pred, trace=None)->float|bool`, `compile(student, trainset, valset)`, `save()` static artifact.
-- https://pypi.org/project/dspy/ — DSPy 3.2.1 stable (2026-05), Python `>=3.10,<3.15`, `anthropic`/`optuna` extras.
-- MEMORY: "Helix tool docs drift" (docgen blank-import parity trap); "Helix bench smoke false-green" / Phase 87/89 CR-01 (vacuous-gate failure class).
-
-### Secondary (MEDIUM confidence)
-- https://dspy.ai/getting-started/gepa-optimization/ , /api/optimizers/MIPROv2/ , /cheatsheet/ — GEPA/MIPROv2 usage, program save/load.
-- https://www.morphllm.com/gepa-prompt-optimization — GEPA reflective prompt-evolution, fewer rollouts than MIPROv2.
-- https://dspy.ai/deep-dive/optimizers/miprov2/ + DeepWiki — minibatch auto-enabled only when `val_size > 50` (overfit-on-small-sets warning).
-
-### Tertiary (LOW confidence)
-- https://arxiv.org/pdf/2506.09501 — even temp-0 greedy decoding is not bit-reproducible (FP/GPU nondeterminism); grounds the "gate the artifact, not the optimizer" decision.
+**Primary (HIGH):** Context7 `/llmstxt/dspy_ai_llms_txt`; DeepSeek API docs (2026-06-24); SWE-bench official + HF datasets; PyPI JSON API (dspy 3.2.1 / openai 2.43.0 / swebench 4.1.0); live source (`tools/dspy-tune/*`, `bench/runtime/*`, `bench/datasets/aider-polyglot/loader.go`, `bench/evaluators/swebench/harness.go`, `internal/lint/toolsquarantine/analyzer.go`, `cmd/helix-refgen/*`); Phase 106 spike artifacts; project memories (anti-vacuity, HELIX_BIN, Podman, bundle allowlist); host probe (2026-06-24).
+**Secondary (MEDIUM):** Rigorous Evaluation of Coding Agents on SWE-Bench (ACL 2025); swebench.com evaluation guide.
 
 ---
-*Research completed: 2026-06-23*
+*Research completed: 2026-06-24*
 *Ready for roadmap: yes*

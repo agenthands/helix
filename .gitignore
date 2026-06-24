@@ -241,6 +241,11 @@ cabal.project.local*
 # `helix-refgen --check`. (.venv/__pycache__/*.py[cod]/.pytest_cache are already
 # ignored recursively above — only the optimizer output dir needs a new entry.)
 /tools/dspy-tune/output/
+# Materialized Aider reward corpus (CORPUS-01): machine-local descriptors that
+# point at the clone cache + a provenance manifest — regenerated via
+# `uv run python build_corpus.py`, never committed (the pristine fixtures live in
+# the pinned upstream clone; licensing in bench/datasets/aider-polyglot/LICENSE-AUDIT.md).
+/tools/dspy-tune/corpus/
 
 zz-misc/
 vue-implementation/

@@ -1,0 +1,7 @@
+{
+  "files": {
+    "solution": ["greeter.py"],
+    "test": ["greeter_test.py"],
+    "example": [".meta/example.py"]
+  }
+}

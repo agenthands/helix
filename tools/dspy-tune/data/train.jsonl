@@ -1,0 +1,8 @@
+{"task": "Where is the symbol NewClient defined in this repo?", "expected_tool_family": "helix"}
+{"task": "Who calls the function Scorecard across the codebase?", "expected_tool_family": "helix"}
+{"task": "List the implementations of the ToolProvider interface.", "expected_tool_family": "helix"}
+{"task": "Rename the symbol FirstCommand to FirstEmittedCommand everywhere.", "expected_tool_family": "helix"}
+{"task": "Show the type hierarchy of the Bucket struct.", "expected_tool_family": "helix"}
+{"task": "Give me the symbol outline of internal/kernel/edit/replace.go.", "expected_tool_family": "helix"}
+{"task": "What is the blast radius of changing ClassifyChoice?", "expected_tool_family": "helix"}
+{"task": "Find the definition of the MaterialDrop constant.", "expected_tool_family": "helix"}

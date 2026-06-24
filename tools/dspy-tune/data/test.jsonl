@@ -1,0 +1,3 @@
+{"task": "Where is the type ScorecardResult declared?", "expected_tool_family": "helix"}
+{"task": "Find every reference to the constant MinTasks.", "expected_tool_family": "helix"}
+{"task": "Show the call hierarchy into StripDecisionMatrix.", "expected_tool_family": "helix"}

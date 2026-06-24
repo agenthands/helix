@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Corpus Growth & Real Optimization Verdict
 status: in_progress
-current_phase: 112
-current_phase_name: Scale Hardening for the Real Run
-last_updated: "2026-06-24T14:10:00.000Z"
+current_phase: 113
+current_phase_name: The Real Cost-Aware Run
+last_updated: "2026-06-24T14:35:00.000Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 111 complete (corpus materializer + 3-way sequestered split)
+last_activity_desc: Phase 112 complete (optimizer DeepSeek pin + cost caps + SWE-bench footgun)
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 25
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State

@@ -61,9 +61,9 @@ Populated during roadmap creation.
 |-------------|-------|--------|
 | CORPUS-01 | Phase 111 | Complete |
 | CORPUS-02 | Phase 111 | Complete |
-| SCALE-01 | Phase 112 | Pending |
-| SCALE-02 | Phase 112 | Pending |
-| SCALE-03 | Phase 112 | Pending |
+| SCALE-01 | Phase 112 | Complete |
+| SCALE-02 | Phase 112 | Complete |
+| SCALE-03 | Phase 112 | Complete |
 | RUN-01 | Phase 113 | Pending |
 | RUN-02 | Phase 113 | Pending |
 | RUN-03 | Phase 113 | Pending |

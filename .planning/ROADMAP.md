@@ -30,7 +30,7 @@
 **Forced dependency chain (do not reorder):** corpus growth + sequestered split (111) → scale hardening (112) → the real billed run (113) → verdict + boundary re-verify (114). Each gate ships a break-the-invariant → assert-RED test; code-review + fix folds in BEFORE verify. Research (`.planning/research/SUMMARY.md`) pinned the model id (`deepseek-v4-flash`), the GEPA cost model (~$5–15/run; trainset free, valset is the lever), and SWE-bench logistics (K=25–50 stratified Verified slice; the harness "0-tests ⇒ resolved" footgun).
 
 - [x] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02) — completed 2026-06-24
-- [ ] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03)
+- [x] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03) — completed 2026-06-24
 - [ ] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03)
 - [ ] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05)
 
@@ -65,7 +65,7 @@
   4. Prompt-prefix caching is enabled where supported (stable system prompt → ~50× cache-hit input discount), or its absence is explicitly documented as accepted.
   5. **Boundary preserved (ADOPT-04)**: hermetic tests run LM-free; zero new Go deps; `make vet` green; all changes stay in `tools/dspy-tune/`.
 
-**Plans**: TBD
+**Plans**: 1 plan (112-01) — completed 2026-06-24
 **Research**: false — model id, pricing, and the harness footgun are resolved in `SUMMARY.md`.
 
 ### Phase 113: The Real Cost-Aware Run

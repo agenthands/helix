@@ -59,21 +59,21 @@ Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORPUS-01 | TBD | Pending |
-| CORPUS-02 | TBD | Pending |
-| SCALE-01 | TBD | Pending |
-| SCALE-02 | TBD | Pending |
-| SCALE-03 | TBD | Pending |
-| RUN-01 | TBD | Pending |
-| RUN-02 | TBD | Pending |
-| RUN-03 | TBD | Pending |
-| REPORT-01 | TBD | Pending |
-| ADOPT-05 | TBD | Pending |
+| CORPUS-01 | Phase 111 | Pending |
+| CORPUS-02 | Phase 111 | Pending |
+| SCALE-01 | Phase 112 | Pending |
+| SCALE-02 | Phase 112 | Pending |
+| SCALE-03 | Phase 112 | Pending |
+| RUN-01 | Phase 113 | Pending |
+| RUN-02 | Phase 113 | Pending |
+| RUN-03 | Phase 113 | Pending |
+| REPORT-01 | Phase 114 | Pending |
+| ADOPT-05 | Phase 114 | Pending |
 
 **Coverage:**
 - v1 requirements: 10 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 10 ⚠️ (resolved at roadmap creation)
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-24*

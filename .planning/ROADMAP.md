@@ -19,12 +19,85 @@
 - [x] **v2.1 Agent Adoption & Aider-Derived Validation** -- Phases 97-102 (shipped 2026-06-23) — see `.planning/milestones/v2.1-ROADMAP.md`
 - [x] **v2.2 Agent-Facing Skill Quality & Prompt Tuning** -- Phases 103-106 (shipped 2026-06-24) — see `.planning/milestones/v2.2-ROADMAP.md`
 - [x] **v2.3 Task-Success-Driven Skill Optimization** -- Phases 107-110 (shipped 2026-06-24) — see `.planning/milestones/v2.3-ROADMAP.md`
+- [ ] **v2.4 Corpus Growth & Real Optimization Verdict** -- Phases 111-114 (in progress)
 
 ## Phases
 
-_No active milestone — v2.3 shipped 2026-06-24. Run `/gsd-new-milestone` to start the next._
+### 🚧 v2.4 Corpus Growth & Real Optimization Verdict (Phases 111-114) — IN PROGRESS
+
+4 phases, 10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05), 100% mapped. Grow the optimization corpus past the strict `val_size > 50` held-out gate and run the v2.3 task-success pipeline **for real** (cost-aware, both tracks — Aider-polyglot primary + SWE-bench_Verified confirming) to turn v2.3's "NO-SHIP by design" into an actual, numbers-backed adopt/no-adopt verdict. **REPORT-only**: adoption stays a separate human `helix-refgen --check`-gated step. Reuses the v2.3 `tools/dspy-tune/` pipeline (agent + Aider/SWE-bench graders + GEPA metric); **fix-as-needed** latitude on defects corpus-scale execution exposes. **Zero new Go deps, no runtime Python** — all new pins are dev-venv Python only (`dspy==3.2.1`, `openai==2.43.0`, `swebench==4.1.0`).
+
+**Forced dependency chain (do not reorder):** corpus growth + sequestered split (111) → scale hardening (112) → the real billed run (113) → verdict + boundary re-verify (114). Each gate ships a break-the-invariant → assert-RED test; code-review + fix folds in BEFORE verify. Research (`.planning/research/SUMMARY.md`) pinned the model id (`deepseek-v4-flash`), the GEPA cost model (~$5–15/run; trainset free, valset is the lever), and SWE-bench logistics (K=25–50 stratified Verified slice; the harness "0-tests ⇒ resolved" footgun).
+
+- [ ] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02)
+- [ ] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03)
+- [ ] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03)
+- [ ] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05)
 
 ## Phase Details
+
+### Phase 111: Corpus Growth & Sequestered Split
+
+**Goal**: Materialize a ≥101-task Aider-polyglot task-success corpus at `AIDER_TASKS_DIR` so `optimize.py`'s 50/50 split clears `val_size > 50`, with a disjoint sequestered TEST/attribution split — the literal v2.2/v2.3 no-ship axis, proven before any spend.
+**Depends on**: Nothing new (first v2.4 phase; builds on the v2.3 `tools/dspy-tune/` harness + the vendored `bench/datasets/aider-polyglot` loader)
+**Requirements**: CORPUS-01, CORPUS-02
+**Success Criteria** (what must be TRUE):
+
+  1. `_load_aider_corpus` consumes a materialized corpus of **≥101** Aider tasks (reusing the vendored `bench/datasets/aider-polyglot` loader; ~225 tasks/6 tracks available), and an offline/dry `optimize.py` path reports `train`/`val` sizes with **`val_size > 50`** (the gate-cleared branch, not the no-ship short-circuit).
+  2. A held-out **TEST/attribution split is sequestered and disjoint** from both `trainset` and `valset`; the corpus loader/splitter never passes it to `compile()` (research: GEPA leaks `valset` into candidate selection, so TEST must stay out of both).
+  3. **Anti-vacuity gate**: a hermetic test asserts `train ∩ val ∩ test = ∅` AND a planted leak (a test example injected into train/val) goes RED — break-the-invariant, not green-path-only; the `val_size==50` no-ship / `51`+ adoptable boundary is preserved.
+  4. Corpus provenance/licensing recorded (reuse the v1.12 Exercism `LICENSE-AUDIT`/`VENDOR-MANIFEST` discipline); no task content is hand-fabricated.
+  5. **Boundary preserved (ADOPT-04 cross-cutting)**: `git diff go.mod` empty; `make vet` (`toolsquarantine`) green; corpus materialization is dev-time Python/loader only — no `helix` runtime edge.
+
+**Plans**: TBD
+**Research**: false — the relevant external facts (corpus sizing math, GEPA split semantics) are pinned in `.planning/research/SUMMARY.md`.
+
+### Phase 112: Scale Hardening for the Real Run
+
+**Goal**: Make the for-real run correct and cost-bounded before spending — pin `deepseek-v4-flash`, bound cost (turns / concurrency / 429 / rollout cap), and defeat the SWE-bench "0 tests ⇒ resolved=true" footgun.
+**Depends on**: the v2.3 pipeline (107–109); independent of Phase 111 but ordered before the real run (113)
+**Requirements**: SCALE-01, SCALE-02, SCALE-03
+**Success Criteria** (what must be TRUE):
+
+  1. `optimize.py`'s program LM **and** `reflection_lm` use an explicit config-var pin (`DSPY_LM_MODEL`) defaulting to **`deepseek-v4-flash`**, DeepSeek-primary / OpenAI-fallback consistent with the Phase-107 agent (replaces the `openai/gpt-4.1-mini` default + `OPENAI_API_KEY`-only guard); a test asserts the default pin and that the deprecation-bound legacy alias is not used.
+  2. The run is **cost-bounded**: the agent tool-turn cap (`max_iters`/`T`) is enforced, provider **concurrency is capped with HTTP-429 retry/backoff**, and a hard rollout cap is available (explicit `max_metric_calls` or `auto="light"`); a test asserts the caps are wired (not silently unbounded).
+  3. `grade_swebench.py` **hard-errors when 0 expected tests were evaluated** — it independently asserts the `FAIL_TO_PASS` bucket is non-empty and matches expected ids, never trusting the harness `resolved` flag; shipped with a **break-the-invariant → assert-RED** test (empty-bucket eval refused).
+  4. Prompt-prefix caching is enabled where supported (stable system prompt → ~50× cache-hit input discount), or its absence is explicitly documented as accepted.
+  5. **Boundary preserved (ADOPT-04)**: hermetic tests run LM-free; zero new Go deps; `make vet` green; all changes stay in `tools/dspy-tune/`.
+
+**Plans**: TBD
+**Research**: false — model id, pricing, and the harness footgun are resolved in `SUMMARY.md`.
+
+### Phase 113: The Real Cost-Aware Run
+
+**Goal**: Execute the v2.3 pipeline for real on the grown corpus — the headline billed phase — producing a real optimized program, an honest ON/OFF attribution delta with per-arm cost, and a SWE-bench Verified confirming agreement.
+**Depends on**: Phase 111 (corpus) + Phase 112 (hardening)
+**Requirements**: RUN-01, RUN-02, RUN-03
+**Success Criteria** (what must be TRUE):
+
+  1. `optimize.py` is **executed for real** against the grown corpus; it writes git-ignored `output/optimized.json` and prints `train`/`val` sizes proving **`val_size > 50`** (gate cleared, not the no-ship short-circuit).
+  2. An **ON-vs-OFF attribution** on the sequestered split records a real task-success delta (`success(ON) − success(OFF)`) with **per-arm cost** via the metered LLM wrapper.
+  3. The **SWE-bench Verified confirming leg** runs a **K=25–50 stratified** instance slice on Podman (`podman system service --time=0` + `DOCKER_HOST`→podman socket), preceded by a **K≈2 gold-patch smoke**; it is **fail-not-skip** — a requested real run yielding no result FAILS loudly (no silent empty success).
+  4. Run artifacts (optimized.json, attribution record, SWE-bench reports) are captured for the REPORT, with cost recorded per arm.
+  5. **Boundary preserved (ADOPT-04)**: the run shells `helix <verb>` + the upstream harness as subprocesses only; zero new Go deps; `go.mod` untouched; no `helix` runtime Python edge.
+
+**Plans**: TBD
+**Research**: false — logistics resolved in `SUMMARY.md`; the K≈2 gold-patch smoke IS the implementation-time confirmation.
+
+### Phase 114: Verdict & Boundary Re-Verification
+
+**Goal**: Turn the run's numbers into the honest ship/no-ship REPORT and re-verify the single-binary / no-runtime-Python boundary at the new corpus scale — the REPORT-only close.
+**Depends on**: Phase 113 (the delta + per-arm cost + SWE-bench agreement feed the REPORT) — nothing downstream depends on this phase
+**Requirements**: REPORT-01, ADOPT-05
+**Success Criteria** (what must be TRUE):
+
+  1. `tools/dspy-tune/REPORT.md` records the **real verdict** — ON/OFF/Δ, `val_size` (>50), per-arm cost, and the SWE-bench confirming agreement — with an explicit adopt / no-ship recommendation. **REPORT-only**: no `SKILL.md`/`reference.md` adoption is committed.
+  2. The **ADOPT-04 boundary is re-verified end-to-end at scale**: `git diff go.mod go.sum` empty (zero new Go deps), no `helix` subcommand shells to Python, agent/optimizer/graders off `helix setup` + default `go test ./...` + the merge path, `make vet` (`toolsquarantine`) green.
+  3. The **human-gated adoption path is proven ready**: the optimizer writes only git-ignored output, and a break-the-invariant test shows a desynced `reference.md` makes `helix-refgen --check` exit non-zero (adoption gate live, not vacuous).
+  4. If the verdict is positive + gate-clearing, the follow-on adoption (TUNE-FUT-03) is recorded as the next step (not executed this milestone).
+
+**Plans**: TBD
+**Research**: false — unchanged v2.3 mechanism; skip research.
 
 ### ✅ v2.3 Task-Success-Driven Skill Optimization (Phases 107-110) — SHIPPED 2026-06-24
 

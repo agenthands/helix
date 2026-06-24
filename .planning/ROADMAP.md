@@ -109,7 +109,12 @@
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 106-01-PLAN.md — Go-side gates: shared golden parity corpus + Go parity test (pins corpus to the `adopt` classifier truth) + `toolsquarantine` go/analysis leakage analyzer (RED/GREEN/lookalike fixtures) + `cmd/vet-tools-quarantine` + Makefile `vet:` wiring [Wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 106-02-PLAN.md — dev-time Python `tools/dspy-tune/` tree: parity-pinned `scorer.py` + held-out TEST split + parity/planted-divergence/overfit/degenerate pytest guards + DSPy GEPA `optimize.py` + pinned `requirements.txt` + README + no-ship/ship REPORT + `.gitignore` output ignore [Wave 2, depends_on 106-01]
 
 **Needs phase-level research**: yes — exploratory spike (corpus-split design, Python↔Go classifier parity contract, metric-AND-quality-oracle composition, leakage-analyzer design); highest uncertainty, mark as spike not a hard adoption-delta gate.

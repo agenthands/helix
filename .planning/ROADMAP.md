@@ -106,7 +106,12 @@
   3. Overfit and metric-gaming guards are in place — a held-out TEST split the optimizer never sees, and a degenerate-steering inspection — and the harness may legitimately conclude no-ship (the clean fallback being a hand-rolled Go candidate-search loop keeping the milestone 100% Go).
   4. Any adopted output re-enters only as a human-reviewed commit through SKILL.md/refgen and passes `helix-refgen --check`; a `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path (the artifact is gated, never the optimizer process).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 106-01-PLAN.md — Go-side gates: shared golden parity corpus + Go parity test (pins corpus to the `adopt` classifier truth) + `toolsquarantine` go/analysis leakage analyzer (RED/GREEN/lookalike fixtures) + `cmd/vet-tools-quarantine` + Makefile `vet:` wiring [Wave 1]
+- [ ] 106-02-PLAN.md — dev-time Python `tools/dspy-tune/` tree: parity-pinned `scorer.py` + held-out TEST split + parity/planted-divergence/overfit/degenerate pytest guards + DSPy GEPA `optimize.py` + pinned `requirements.txt` + README + no-ship/ship REPORT + `.gitignore` output ignore [Wave 2, depends_on 106-01]
+
 **Needs phase-level research**: yes — exploratory spike (corpus-split design, Python↔Go classifier parity contract, metric-AND-quality-oracle composition, leakage-analyzer design); highest uncertainty, mark as spike not a hard adoption-delta gate.
 
 ## Progress

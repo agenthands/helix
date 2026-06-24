@@ -23,6 +23,7 @@ VETTOOL_NOSEMANTIC2KERNEL=$(shell go env GOPATH)/bin/vet-nosemantic2kernel
 VETTOOL_COMPACT_USES_STORE=$(shell go env GOPATH)/bin/vet-compact-uses-store
 VETTOOL_ABLATION_LEAKAGE=$(shell go env GOPATH)/bin/vet-ablation-leakage
 VETTOOL_BENCH_RAG_LEAKAGE=$(shell go env GOPATH)/bin/vet-bench-rag-leakage
+VETTOOL_TOOLS_QUARANTINE=$(shell go env GOPATH)/bin/vet-tools-quarantine
 
 # Phase 61 ENRICH-01: enforce semantic does not import kernel (carve-out:
 # internal/kernel/lspool). The vet-nosemantic2kernel singlechecker is the
@@ -44,7 +45,14 @@ VETTOOL_BENCH_RAG_LEAKAGE=$(shell go env GOPATH)/bin/vet-bench-rag-leakage
 # internal/kernel or internal/semantic (transitively the same as not importing
 # internal/mcp). Static, compile-time complement to the dynamic transitive
 # import-set test in cmd/helix-bench-rag/leakage_test.go.
-vet: verify-no-docker-sdk $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE) $(VETTOOL_BENCH_RAG_LEAKAGE)
+#
+# Phase 106 TUNE-01: vet-tools-quarantine enforces the runtime → dev-time
+# tools/ import boundary — no package outside github.com/agenthands/helix/tools
+# may import the dev-time tools/ tree, so the DSPy offline-tuning harness never
+# leaks into the shipped binary or go.mod. Import-boundary-ONLY (no pip/
+# exec.Command scan), so the legit pip/pipx LS installer in
+# internal/langregistry/installer.go is never flagged.
+vet: verify-no-docker-sdk $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSEMANTIC2KERNEL) $(VETTOOL_COMPACT_USES_STORE) $(VETTOOL_ABLATION_LEAKAGE) $(VETTOOL_BENCH_RAG_LEAKAGE) $(VETTOOL_TOOLS_QUARANTINE)
 	$(GO) vet ./...
 	$(GO) vet -vettool=$(VETTOOL) ./...
 	$(GO) vet -vettool=$(VETTOOL_NOKERNEL2SEMANTIC) ./...
@@ -52,6 +60,7 @@ vet: verify-no-docker-sdk $(VETTOOL) $(VETTOOL_NOKERNEL2SEMANTIC) $(VETTOOL_NOSE
 	$(GO) vet -vettool=$(VETTOOL_COMPACT_USES_STORE) ./...
 	$(GO) vet -vettool=$(VETTOOL_ABLATION_LEAKAGE) ./...
 	$(GO) vet -vettool=$(VETTOOL_BENCH_RAG_LEAKAGE) ./...
+	$(GO) vet -vettool=$(VETTOOL_TOOLS_QUARANTINE) ./...
 
 $(VETTOOL): cmd/vet-noduckdb/main.go internal/lint/noduckdb/*.go
 	$(GO) install ./cmd/vet-noduckdb
@@ -70,6 +79,9 @@ $(VETTOOL_ABLATION_LEAKAGE): cmd/vet-ablation-leakage/main.go internal/lint/abla
 
 $(VETTOOL_BENCH_RAG_LEAKAGE): cmd/vet-bench-rag-leakage/main.go internal/lint/benchragleakage/*.go
 	$(GO) install ./cmd/vet-bench-rag-leakage
+
+$(VETTOOL_TOOLS_QUARANTINE): cmd/vet-tools-quarantine/main.go internal/lint/toolsquarantine/*.go
+	$(GO) install ./cmd/vet-tools-quarantine
 
 fmt:
 	gofmt -w .

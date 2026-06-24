@@ -28,7 +28,7 @@
 
 **Forced dependency chain (do not reorder):** agent (107) → Aider honest oracle + metric rewire (108) → SWE-bench oracle (109) → human-gated adoption (110). Each phase ships its break-the-invariant → assert-RED test before the next depends on it; code-review + fix folds in BEFORE verify (the repeated v2.2 vacuous-pass / parity-bug class).
 
-- [ ] Phase 107: ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering (AGENT-01/02/03)
+- [x] Phase 107: ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering (AGENT-01/02/03) — completed 2026-06-24
 - [ ] Phase 108: Aider Honest Task-Success Oracle + Sandbox + GEPA Metric Rewire + Sequestered Split (ORACLE-01, TUNE-02, TUNE-03) — **research**
 - [ ] Phase 109: SWE-bench Oracle via Podman + ON/OFF Attribution-Delta Report (ORACLE-02, TUNE-04) — **research**
 - [ ] Phase 110: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT (ADOPT-03, ADOPT-04)

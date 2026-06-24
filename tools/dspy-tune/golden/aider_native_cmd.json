@@ -1,0 +1,9 @@
+{
+  "_comment": "Shared parity corpus: the Aider-polyglot per-language native test argv. SINGLE SOURCE OF TRUTH is bench/datasets/aider-polyglot/loader.go nativeTestCommand(). Asserted case-for-case by tools/dspy-tune/test_grade.py (Python mirror) AND bench/datasets/aider-polyglot/native_cmd_parity_test.go (Go). Unknown languages fail-closed (not listed here).",
+  "python": ["pytest"],
+  "rust": ["cargo", "test", "--", "--include-ignored"],
+  "go": ["go", "test", "./..."],
+  "java": ["./gradlew", "test"],
+  "javascript": ["./npm-test.sh"],
+  "cpp": ["./cpp-test.sh"]
+}

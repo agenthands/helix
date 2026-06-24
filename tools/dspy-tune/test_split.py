@@ -46,7 +46,25 @@ def test_test_disjoint_from_train():
     assert not leaked, f"TEST tasks leaked into TRAIN (overfit risk): {sorted(leaked)}"
 
 
+def test_val_size_adoption_gate_boundary():
+    """TUNE-03 (v2.2 no-ship root-cause fix): the val_size>50 adoption gate is a
+    STRICT boundary — val_size==50 NO-SHIPS, val_size==51 is adoptable.
+
+    Break-the-invariant: weakening the gate to `>=50` (or any vacuous
+    always-true form) turns the val_size==50 assertion below RED.
+    """
+    from optimize import VAL_SIZE_GATE, adoption_allowed
+
+    assert VAL_SIZE_GATE == 50
+    assert adoption_allowed(51) is True, "val_size=51 must be adoptable"
+    assert adoption_allowed(50) is False, "val_size=50 must NO-SHIP (strict > gate)"
+    assert adoption_allowed(0) is False
+    # The current tiny corpus must no-ship today (the v2.2 cause is gated, not repeated).
+    assert adoption_allowed(len(_load_tasks(_TRAIN))) is False
+
+
 if __name__ == "__main__":
     test_train_and_test_non_empty()
     test_test_disjoint_from_train()
+    test_val_size_adoption_gate_boundary()
     print("split-disjoint OK")

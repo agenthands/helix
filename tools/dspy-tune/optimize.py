@@ -33,6 +33,25 @@ OUTPUT_PATH = os.path.join(HERE, "output", "optimized.json")  # git-ignored
 # Dev-time LM backend. Illustrative; any litellm-supported provider works.
 LM_MODEL = os.environ.get("DSPY_LM_MODEL", "openai/gpt-4.1-mini")
 
+# TUNE-03: the held-out validation split must exceed this many tasks before ANY
+# adoption recommendation is trustworthy. This is the explicit fix for the v2.2
+# no-ship root cause (corpus too small: MinTasks=5, val≈3). A strict `> 50`
+# boundary: val_size==50 NO-SHIPS, val_size>=51 may be adopted (see test_split.py
+# anti-vacuity: 50 no-ship / 51 adoptable). Honors TUNE-FUT-01.
+VAL_SIZE_GATE = 50
+
+# Path to an Aider-polyglot task-success corpus (a dir of exercise task dirs,
+# each with a `language` and gold tests). When set, GEPA optimizes REAL
+# task-success (taskmetric.score_task via grade_aider); when unset, the harness
+# refuses to optimize on the gameable choice_rate proxy and reports no-ship.
+AIDER_TASKS_DIR = os.environ.get("AIDER_TASKS_DIR", "")
+
+
+def adoption_allowed(val_size):
+    """TUNE-03 gate: adoption is permissible ONLY when the held-out validation
+    split exceeds VAL_SIZE_GATE. Strict `>` so val_size==50 no-ships."""
+    return val_size > VAL_SIZE_GATE
+
 
 def _load_jsonl(path):
     rows = []
@@ -61,68 +80,79 @@ def main():
         )
         return 0
 
+    # choice_rate is now a DIAGNOSTIC PRE-SCREEN ONLY (TUNE-02): it is never the
+    # GEPA optimization reward. The optimization reward is REAL Aider-polyglot
+    # task-success (taskmetric.score_task via grade_aider), which requires a
+    # task-success corpus at AIDER_TASKS_DIR.
+    if not AIDER_TASKS_DIR:
+        # task-success optimization needs a real Aider corpus; choice_rate
+        # (scorer.py) remains available as a diagnostic pre-screen but is never
+        # the optimization reward.
+        test_rows = _load_jsonl(TEST_PATH)
+        print(
+            "AIDER_TASKS_DIR is not set — refusing to optimize on the gameable "
+            "choice_rate proxy (the v2.2 no-ship cause). choice_rate is a "
+            "DIAGNOSTIC pre-screen only; the GEPA reward is real task-success on "
+            "an Aider-polyglot corpus.\n"
+            f"Held-out TEST tasks available for a future task-success run: {len(test_rows)}.\n"
+            "Set AIDER_TASKS_DIR to a task-success corpus to optimize. "
+            "no-ship is a legitimate, success-meeting outcome (README.md / REPORT.md)."
+        )
+        return 0
+
     # Imported lazily so the unset-key guard above works even if dspy is not
     # installed in the current (non-dev) environment.
     import dspy
     from dspy import GEPA
 
-    from scorer import score_choice_rate
+    from taskmetric import make_gepa_metric
 
     dspy.configure(lm=dspy.LM(model=LM_MODEL, api_key=api_key))
 
-    class Steer(dspy.Signature):
-        """Answer the coding-intel task by emitting the single best command."""
+    class Solve(dspy.Signature):
+        """Solve the coding task by driving helix verbs to a passing solution."""
 
         task = dspy.InputField()
-        response = dspy.OutputField(desc="the single command line to run")
+        response = dspy.OutputField(desc="the solution / final answer")
 
-    program = dspy.Predict(Steer)
+    program = dspy.Predict(Solve)
 
-    def adopt_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
-        # pred.response is the model's emitted transcript; score 1.0 iff the
-        # FIRST emitted command is a helix verb (the parity-checked classifier).
-        chose, _fell = score_choice_rate(pred.response)
-        score = 1.0 if chose else 0.0
-        feedback = (
-            "Emitted a helix verb first (good)."
-            if chose
-            else "Fell back to grep/sed/cat — steer toward a helix verb."
-        )
-        return dspy.Prediction(score=score, feedback=feedback)
-
-    # trainset/valset drawn ONLY from TRAIN (val carved from train). TEST is
-    # sequestered and NEVER passed to compile().
-    train_rows = _load_jsonl(TRAIN_PATH)
-    examples = [
-        dspy.Example(task=r["task"]).with_inputs("task") for r in train_rows
-    ]
-    # A real train/val split needs at least 2 TRAIN tasks: one to optimize on,
-    # one to validate on. With fewer, fail loudly rather than collapse val into
-    # train. The previous `examples[split:] or examples[:split]` fallback (WR-03)
-    # silently set valset == trainset when len(examples) == 1 (split=1, so
-    # examples[1:] == [] and the `or` substituted examples[:1]), making GEPA
-    # validate on its own training example — a degenerate, overfit-prone config
-    # with no error. Guard it explicitly and keep trainset/valset DISJOINT.
+    # Load the Aider task-success corpus, split train/val (val carved from train).
+    # TEST stays sequestered and is NEVER passed to compile().
+    examples = _load_aider_corpus(dspy, AIDER_TASKS_DIR)
     if len(examples) < 2:
         print(
-            "TRAIN has <2 tasks; cannot form a disjoint train/val split. "
-            "Add tasks to data/train.jsonl before optimizing.\n"
-            "no-ship is a legitimate outcome (see README.md / REPORT.md)."
+            "Aider corpus has <2 tasks; cannot form a disjoint train/val split. "
+            "no-ship is a legitimate outcome (README.md / REPORT.md)."
         )
         return 0
     split = max(1, len(examples) // 2)
     trainset, valset = examples[:split], examples[split:]
-    # Disjointness is structural here (examples[:split] and examples[split:]
-    # partition the list), but assert it so a future refactor that reintroduces
-    # an overlapping carve fails loudly instead of silently overfitting.
     assert valset, "valset must be non-empty after the >=2-task guard"
     _train_ids = {id(e) for e in trainset}
     assert not any(id(e) in _train_ids for e in valset), (
         "trainset and valset must be disjoint (no example may appear in both)"
     )
 
+    # TUNE-03 ADOPTION GATE (hard precondition). With a too-small held-out
+    # validation split, NO adoption recommendation is trustworthy — this is the
+    # v2.2 no-ship root-cause fix. We refuse before burning a GEPA run.
+    if not adoption_allowed(len(valset)):
+        print(
+            f"val_size={len(valset)} <= {VAL_SIZE_GATE}: NO-SHIP. The held-out "
+            f"validation split is too small for a trustworthy task-success delta "
+            f"(the v2.2 no-ship cause). Grow the Aider corpus so val_size > "
+            f"{VAL_SIZE_GATE} (TUNE-FUT-01) before any adoption recommendation. "
+            f"no-ship is a legitimate, success-meeting outcome."
+        )
+        return 0
+
+    metric = make_gepa_metric(
+        agent_runner_for=lambda ex: _agent_runner_for_example(ex),
+        grader_for=lambda ex: _grader_for_example(ex),
+    )
     optimizer = GEPA(
-        metric=adopt_metric,
+        metric=metric,
         auto="light",
         track_stats=True,
         reflection_lm=dspy.LM(model=LM_MODEL, temperature=1.0, api_key=api_key),
@@ -131,22 +161,64 @@ def main():
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     # git-ignored; re-enters the shipped surface ONLY via a human-reviewed
-    # SKILL.md/refgen commit passing `helix-refgen --check`. This script does NOT
-    # write the embedded skill bundle or the generated reference doc.
+    # SKILL.md/refgen commit passing `helix-refgen --check`.
     optimized.save(OUTPUT_PATH)
-
-    # Final HELD-OUT report only: load TEST purely to report the optimized
-    # choice_rate on data the optimizer never saw. Not passed to compile().
-    test_rows = _load_jsonl(TEST_PATH)
-    print(f"train={len(trainset)} val={len(valset)} test(held-out)={len(test_rows)}")
+    print(f"train={len(trainset)} val={len(valset)} (val_size>{VAL_SIZE_GATE} gate passed)")
     print(f"Saved optimized program to {OUTPUT_PATH} (git-ignored).")
     print(
         "Re-entry is human-review-only: transcribe adopted steering into the "
         "embedded SKILL.md (<=1536 chars, '## Decision matrix' anchor "
-        "preserved) and pass `go run ./cmd/helix-refgen --check`. "
-        "no-ship is a legitimate outcome."
+        "preserved) and pass `go run ./cmd/helix-refgen --check`."
     )
     return 0
+
+
+def _load_aider_corpus(dspy, tasks_dir):
+    """Load Aider task-success examples from a corpus dir. Each task is a JSON
+    descriptor (task prompt + language + gold-test rel paths). Returns dspy
+    Examples. Dev-time only; the live corpus is wired in a future milestone."""
+    examples = []
+    for name in sorted(os.listdir(tasks_dir)):
+        path = os.path.join(tasks_dir, name)
+        if not name.endswith(".json"):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            spec = json.load(fh)
+        examples.append(
+            dspy.Example(
+                task=spec["task"],
+                language=spec["language"],
+                task_dir=spec.get("task_dir", ""),
+                gold_src=spec.get("gold_src", ""),
+                gold_tests=spec.get("gold_tests", []),
+            ).with_inputs("task")
+        )
+    return examples
+
+
+def _agent_runner_for_example(ex):
+    """Return an agent_runner(task) closure that drives the Phase-107 ReAct agent
+    in a sandbox for this example. Live dev-time wiring (needs an LM key)."""
+    def _run(_task):
+        from agent import LLM, ReActAgent, build_system_prompt
+        from sandbox import make_sandbox, restore_gold_tests
+        llm = LLM(provider="deepseek")
+        sb = make_sandbox(ex.task_dir)
+        if ex.gold_tests:
+            restore_gold_tests(sb, ex.gold_src, ex.gold_tests)
+        agent = ReActAgent(system_prompt=build_system_prompt("", "off"), llm=llm)
+        ex._sandbox = sb  # grader reads it
+        return agent.run(ex.task, cwd=sb)
+    return _run
+
+
+def _grader_for_example(ex):
+    """Return a grader() closure that runs the native hidden tests in the
+    example's sandbox and grades honestly (0 tests => GradeError)."""
+    def _grade():
+        from grade_aider import grade_task
+        return grade_task(getattr(ex, "_sandbox", ex.task_dir), ex.language)
+    return _grade
 
 
 if __name__ == "__main__":

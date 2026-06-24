@@ -67,8 +67,8 @@ Populated during roadmap creation.
 | RUN-01 | Phase 113 | Complete |
 | RUN-02 | Phase 113 | Complete |
 | RUN-03 | Phase 113 | Complete |
-| REPORT-01 | Phase 114 | Pending |
-| ADOPT-05 | Phase 114 | Pending |
+| REPORT-01 | Phase 114 | Complete |
+| ADOPT-05 | Phase 114 | Complete |
 
 **Coverage:**
 - v1 requirements: 10 total

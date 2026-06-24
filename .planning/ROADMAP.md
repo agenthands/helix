@@ -32,7 +32,7 @@
 - [x] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02) — completed 2026-06-24
 - [x] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03) — completed 2026-06-24
 - [x] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03) — completed 2026-06-24 (SHIP, delta +0.0392, val_size=51)
-- [ ] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05)
+- [x] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05) — completed 2026-06-24
 
 ## Phase Details
 
@@ -96,7 +96,7 @@
   3. The **human-gated adoption path is proven ready**: the optimizer writes only git-ignored output, and a break-the-invariant test shows a desynced `reference.md` makes `helix-refgen --check` exit non-zero (adoption gate live, not vacuous).
   4. If the verdict is positive + gate-clearing, the follow-on adoption (TUNE-FUT-03) is recorded as the next step (not executed this milestone).
 
-**Plans**: TBD
+**Plans**: 1 plan (114-01) — completed 2026-06-24
 **Research**: false — unchanged v2.3 mechanism; skip research.
 
 ### ✅ v2.3 Task-Success-Driven Skill Optimization (Phases 107-110) — SHIPPED 2026-06-24

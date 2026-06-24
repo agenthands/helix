@@ -1,272 +1,215 @@
 # Pitfalls Research
 
-**Domain:** Agent-facing skill quality + generated-doc gates + offline DSPy prompt-tuning for a Go single-binary code-intelligence CLI (Helix v2.2)
-**Researched:** 2026-06-23
-**Confidence:** HIGH (generator/gate/bundle pitfalls verified against live source; DSPy pitfalls Context7/web-verified MEDIUM-HIGH)
+**Domain:** Task-success-driven skill optimization — a dev-time DeepSeek/OpenAI tool-using agent driving the `helix` CLI, a GEPA metric rewired from `choice_rate` to agent task-success on Aider polyglot + SWE-bench (Podman), human-gated SKILL.md adoption via `helix-refgen --check`. Net-new features added to a shipped Go single-binary product (v2.3, phases 107+).
+**Researched:** 2026-06-24
+**Confidence:** HIGH (grounded in v2.2 Phase 106 spike artifacts, carried-constraint memories, DeepSeek/SWE-bench primary docs)
 
-> Scope note: these are pitfalls specific to **ADDING the four v2.2 features to THIS system** — (1) SKILL.md decision-matrix rewrite, (2) reference.md generator fixes, (3) installSkill bundle allowlist, (4) exploratory offline DSPy tuning. They carry forward the anti-vacuity / reproducibility / no-runtime-Python discipline that v1.12–v2.1 already encoded (`test/oracle/adopt/scorecard.go`, the `helix-refgen --check` gate, the embed bundle). `.planning/codebase/CONCERNS.md` is **stale** (describes the removed Python Serena tree) and was not used as a source.
->
-> Phase numbering continues from **102** per PROJECT.md. Phase names below are descriptive; the roadmapper assigns final numbers.
-
----
+> Scope note: these are pitfalls specific to *adding this optimizer-agent loop to Helix*, not generic ML advice. The dominant repeated failure class in this repo is **anti-vacuity** (a gate that passes green without actually testing the invariant); every new gate below carries a concrete break-the-invariant → assert-RED requirement. The v2.2 no-ship root cause (gameable `choice_rate` proxy + tiny corpus) is addressed head-on by Pitfalls 1, 2, and 3.
 
 ## Critical Pitfalls
 
-### Pitfall 1: The embed glob ships stray files into the binary AND the installed skill (the SKILL-ISSUE.md leak is live RIGHT NOW)
+### Pitfall 1: Reward-hacking the task-success oracle (the metric is the milestone — make it honest first)
 
 **What goes wrong:**
-`internal/cli/skill.go` declares `//go:embed skills/helix/*` and `installSkill` loops over **every** entry from `embeddedSkillFS.ReadDir("skills/helix")`, writing each to the user's `.claude/skills/helix/` dir. Today that directory contains `SKILL.md`, `reference.md`, **and `SKILL-ISSUE.md`** (an 18 KB maintainer analysis doc). So the binary already embeds the issue doc, and `helix setup` already writes it onto every user's disk. Any future file dropped in that dir (a scratch `.bak`, a `NOTES.md`, an editor swapfile, a half-finished `reference.md.new`) leaks the same way. The maintainer doc that *names* this leak is itself being leaked — the canonical irony.
+The whole reason v2.3 exists is that `choice_rate` was gameable ("always emit `helix` first"). A task-success oracle re-introduces *new* gaming surfaces, any of which silently inflates the optimized delta and ships degenerate steering text:
+- **Vacuous pass (zero tests ran).** The harness counts a task "passed" when the test command exited 0 but zero tests actually executed — wrong dataset name → empty test set, a collection error swallowed, a `pytest` that found no matches, or a SWE-bench container that never applied the patch. This is the *exact* shape of the Phase 81 `no_semantic` zero-reads vacuity (missing line read as 0 = "pass") recorded in `helix-bench-smoke-false-green`.
+- **Pass without using helix.** The agent solves the task with its own reasoning / `cat`+`sed` and never calls a `helix` verb, yet the optimized skill text gets credit. The metric must not reward task-success that didn't route through the product surface.
+- **Test tampering inside the sandbox.** The agent edits/deletes the failing test, weakens an assertion, or `git checkout`s the gold patch, then "passes."
+- **Degenerate steering that games the agent.** GEPA evolves SKILL.md text that browbeats the agent into spamming helix verbs (or hard-codes answers) rather than genuinely improving tool selection — the task-success analogue of always-`helix`.
 
 **Why it happens:**
-A wildcard embed + a "loop over all entries" installer is the path of least resistance, and it was correct when the dir held exactly the two intended files. The bundle test (`TestInstallSkillWritesBundle`) only asserts SKILL.md and reference.md are **present and non-empty** — it never asserts the set is **exactly** those two, so the leak is invisible to CI.
+Pass/fail is read from an exit code or a metric line, and the *absence* of a signal is silently coerced to a benign default. The agent runs with write access to the repo under test (it must, to edit code), which is also write access to the oracle.
 
 **How to avoid:**
-Convert to an explicit allowlist in BOTH directions: (a) replace the wildcard with named embeds `//go:embed skills/helix/SKILL.md skills/helix/reference.md` (or keep the glob but filter the install loop against a hardcoded `allowed := map[string]bool{"SKILL.md":true, "reference.md":true}`), and (b) add a **closed-set** bundle test asserting `ReadDir` over the *embedded FS* yields EXACTLY the allowlist — fail on any extra entry. The closed-set assertion is the load-bearing one: a positive-only "are the two files present" test is the vacuous-gate pattern this repo has been bitten by repeatedly (Phase 87 CR-01, Phase 89 CR-01). Move `SKILL-ISSUE.md` out of `skills/helix/` entirely (e.g. to `.planning/` or a `docs/` sibling) so it is neither embeddable nor installable.
+- **Three-part honest oracle, each independently gated:** (1) **fail-not-skip** — if the test set is empty, the dataset name unresolved, the container missing, or the harness can't *prove* N>0 tests ran, the result is a hard ERROR, never "pass" and never silently 0 (carry the HELIX_BIN fail-not-skip lesson). (2) **FAIL_TO_PASS / PASS_TO_PASS contract** — adopt SWE-bench's own resolution gate: the designated failing tests must flip fail→pass AND the previously-passing tests must stay green; a patch that breaks PASS_TO_PASS is not a pass. (3) **gold-test immutability** — run the gold/oracle test from a path the agent cannot write (apply the agent's diff, then `git checkout` the test files / restore them from the pinned dataset before grading), and reject if the agent's diff touches test files.
+- **Attribution of the win to helix use** belongs to the ON/OFF control arm (Pitfall 3) — task-success alone does not prove the *skill* helped.
+- **Degenerate-steering inspection on the optimized text** must run on every GEPA output and must be a *flag-no-flag pair* (degenerate text flagged, legitimate conditional text not), carried forward and broadened from `test_degenerate.py`. The honest backstop remains human review (Pitfall 8) — the smell test is documented as not-sound (Phase 106 IN-01).
 
 **Warning signs:**
-- `helix setup claude-code` then `ls ~/.claude/skills/helix/` shows more than two files.
-- `go tool nm helix | grep SKILL-ISSUE` or `strings helix | grep "SKILL.md Decision Matrix Review"` hits.
-- A bundle test that only does `for _, name := range []string{"SKILL.md","reference.md"}` (present-check) with no reverse "no other files" check.
+A suspiciously high pass rate; pass rate identical with and without the agent actually editing; "passed" tasks whose logs show 0 collected tests; an optimized delta that survives only because TEST tasks with empty test sets count as wins; optimized SKILL.md text that is unconditional imperatives.
 
 **Phase to address:**
-Phase 102 (Bundle allowlist + closed-set test) — and it should run EARLY in the milestone because the SKILL.md rewrite and refgen fixes will add/remove files in that dir, widening the leak window if the allowlist isn't in place first.
+Earliest task-success-oracle phase (the metric core, ~107–108), before any GEPA run is wired. The oracle's honesty gates are prerequisites for the optimization phase.
 
 ---
 
-### Pitfall 2: Adding the allowlist breaks the atomic two-pass install (torn bundle / orphaned `.tmp` / containment regression)
+### Pitfall 2: Overfitting on a tiny corpus — the v2.2 no-ship cause, unfixed
 
 **What goes wrong:**
-The current `installSkill` is a carefully-built two-pass atomic install (stage all temp siblings → rename all → best-effort revert on failure, with a `filepath.Rel` ".."-escape containment guard, T-93-01). The naive way to add an allowlist — early-`continue` inside the existing loop, or a second loop — can (a) leave a renamed SKILL.md next to a NOT-renamed reference.md if the filter logic is wrong (torn bundle), (b) leave `.tmp` siblings on a filtered-out file's error path, or (c) move the containment check so a crafted target escapes. `uninstallSkill` has the SAME loop and must be filtered identically or it will orphan a now-un-allowlisted file (e.g. leave `SKILL-ISSUE.md` on disk forever after an upgrade that stopped shipping it).
+v2.2 concluded **no-ship** precisely because the corpus was tiny (`MinTasks=5` floor; the actual split was TRAIN=8 / TEST=3) and a meaningful held-out split starves the optimizer of signal, so any "win" is noise. If v2.3 rewires the metric but reuses an Aider/SWE-bench slice of a dozen tasks, it reproduces the no-ship — now at far higher cost per task (real container runs, real API spend). A second failure mode is **TEST-split leakage**: the held-out TEST tasks get seen by `optimizer.compile()` (GEPA's reflective loop, val scoring, or few-shot bootstrap), so the reported held-out delta is optimistic and unattributable.
 
 **Why it happens:**
-The atomicity and containment invariants are subtle and spread across staging/rename/cleanup passes; a "just skip the file" edit looks trivial but sits inside that machinery. install and uninstall are separate functions that must stay in lockstep.
+Growing a task-success corpus is expensive (each task is a container build + multi-turn agent loop), so there's pressure to reuse the small `choice_rate` corpus. Split discipline erodes because GEPA wants val data to reflect against, and it's tempting to feed it everything.
 
 **How to avoid:**
-Filter the **entry list once, up front** (derive `allowed := filterAllowlist(entries)`) and feed the SAME filtered slice to the existing staging/rename/cleanup passes unchanged — do not sprinkle `continue`s through the passes. Apply the identical filter to `uninstallSkill`, and add a regression test that an upgrade which drops a file removes it from disk (install old-set → install new-set → assert dropped file gone). Keep the containment guard as the first statement, untouched. Re-run the existing `TestInstallSkillContainment` and the atomic-revert tests after the change; they are the non-vacuity proof.
+- **Honor the TUNE-FUT-01 power threshold as a hard gate, not a footnote.** `val_size > 50` is the documented floor for trusting a tuned delta; below it the harness must conclude no-ship (a legitimate, success-meeting outcome — keep that framing from Phase 106). Treat `val_size > 50` as a precondition for *adopting* any optimized text, asserted in the harness.
+- **TRAIN / VAL / held-out TEST discipline, TEST sequestered from `compile()`.** Keep the Phase 106 pattern verbatim: the held-out split is created as the FIRST harness step (disjoint by construction); `test.jsonl` is loaded only for the final report print and **never** passed to `compile()`; a `test_split.py`-style guard asserts `TEST ∩ (TRAIN∪VAL) == ∅` and RED-fails on a planted leak.
+- **Report the delta only on data the optimizer never saw**, and mirror the `MaterialDrop=0.4`-style margin as a *reporting* threshold (adopt only if it clears the margin on held-out TEST), never a CI gate.
 
 **Warning signs:**
-- A filtered file leaves a `.tmp` sibling after an injected mid-install failure.
-- `uninstallSkill` leaves a file the allowlist no longer recognizes.
-- Diff touches the rename/revert loop bodies rather than the entry-list construction.
+Train/val accuracy near 100% with held-out TEST flat or worse; a delta that swings sign when you reshuffle the split; a corpus under ~50 val tasks paired with a "ship" recommendation; GEPA's val score and the held-out TEST score being implausibly close (leakage).
 
 **Phase to address:**
-Phase 102 (same phase as Pitfall 1 — the allowlist and its atomicity are one unit of work).
+The corpus-construction + split phase (must precede the GEPA run). The `val_size>50` gate and TEST-sequestration guard live here.
 
 ---
 
-### Pitfall 3: Hand-editing the generated `reference.md` to "fix" the copy-paste errors (breaks `--check`, defeats the whole point)
+### Pitfall 3: Attribution failure — the improvement came from the LM, not the skill text
 
 **What goes wrong:**
-SKILL-ISSUE.md lists 13 wrong "use this, not that" strings and 22 wrong "Output:" descriptions in `reference.md`. The tempting fix is to open `internal/cli/skills/helix/reference.md` and edit the strings directly. But `reference.md` is **generated** by `cmd/helix-refgen` and guarded by `go run ./cmd/helix-refgen --check` (exit 1 if the file would change). A hand-edit either (a) is immediately reverted the next time anyone runs the generator, or (b) makes `--check` pass against a hand-edited committed file while the generator's `render.go` still emits the wrong text — so the gate now certifies a file the generator can't reproduce. Both outcomes silently re-introduce the bug.
+The optimized agent scores higher on task-success, the team attributes it to the new SKILL.md steering, and adopts it — but the delta actually came from the agent/LM (a better model checkpoint, more turns, a longer context budget, prompt scaffolding unrelated to the skill). Without a control, you cannot tell "the skill text helped" from "DeepSeek-V4 is just better than what v2.2 measured." This is the deeper version of the v2.2 lesson: `choice_rate` at least measured *helix-choice*; task-success measures *task completion*, which is dominated by the LM's raw coding ability, so the skill's marginal contribution is easily drowned out and mis-credited.
 
 **Why it happens:**
-The wrong strings live in `reference.md` (the visible artifact), but the ROOT lives in `cmd/helix-refgen/render.go` (`useThisNotThat(group, verb)` and the `**Output:**` emitter), which is one layer removed. The copy-paste errors are *generated* — every memory verb shares one `groupID`, so `useThisNotThat` emits the same "durable project/session memory" string for `delete-memory` and `edit-memory` even though those have the OPPOSITE purpose. The fix MUST be in the renderer's per-verb/per-group mapping.
+There's only one arm in the experiment (optimized skill ON). Task-success is a coarse, high-variance signal where the skill text is a small term; the LM and harness scaffold are the large terms.
 
 **How to avoid:**
-Fix `render.go` (the `useThisNotThat` group→string map and the Output emitter) so the *generator* produces the correct per-verb text, THEN run `go run ./cmd/helix-refgen` to regenerate, THEN commit both the render.go change and the regenerated reference.md together. Add the row-split / query-vs-action distinction at the generator level (a verb's `groupID` or a new per-verb override field) — never as a post-hoc text patch. The `--check` gate then certifies the file is byte-reproducible from source. Verify by deleting reference.md, regenerating, and confirming `git diff` is empty.
+- **Mandatory ON-vs-OFF control arm.** Run every evaluation as a paired comparison: skill-steering **present** vs **absent** (same model, same turns, same tasks, same seeds), and report `delta = success(ON) − success(OFF)`. Adopt only if ON beats OFF by a material margin on held-out TEST. A bare ON number is not adoptable. The agent harness must expose a first-class `--steering on|off` (or skill-injected vs baseline-prompt) switch so the two arms are identical except for the skill text.
+- The ON/OFF switch is itself a new gate that needs an anti-vacuity test (Pitfall 9): prove the OFF arm genuinely omits the skill text (assert the rendered prompt in OFF mode does NOT contain the steering, and ON mode does).
 
 **Warning signs:**
-- A PR edits `reference.md` but not `cmd/helix-refgen/render.go`.
-- `go run ./cmd/helix-refgen --check` fails on a freshly-pulled tree.
-- After regeneration, `git diff internal/cli/skills/helix/reference.md` is non-empty (proves a prior hand-edit or generator drift).
+Reported deltas with no OFF baseline; ON and OFF arms differing in model/turns/seed (confounded); a "win" that doesn't reproduce when you re-run OFF; the delta being within run-to-run variance of the OFF arm alone.
 
 **Phase to address:**
-Phase 103 (reference.md generator fixes) — the render.go `useThisNotThat`/Output mapping rewrite.
+The agent-harness phase (the agent must support ON/OFF from the start) and the metric phase (delta = ON−OFF). Wire the control before the GEPA loop.
 
 ---
 
-### Pitfall 4: The docgen/refgen/cligen blank-import-parity-with-daemon trap (generated surface silently diverges from the live tool set)
+### Pitfall 4: Gating the optimizer PROCESS instead of the committed ARTIFACT (non-determinism)
 
 **What goes wrong:**
-`cmd/helix-refgen` enumerates verbs by blank-importing skill packages to fire their `init()` registration, EXACTLY as `internal/daemon/imports.go` does. If the milestone adds/moves a verb or a skill package and updates the daemon's import list but NOT refgen's (or vice-versa), the generated `reference.md` describes a different tool SET than the daemon actually serves. This already bit the repo once: a missing `internal/skill/semantic` blank import in `cmd/docgen` produced docs out of sync with the live 53-tool registry (MEMORY: "Helix tool docs drift" — root cause was a missed blank import, not a missed regen). The same trap exists for `cmd/helix-cligen` and `cmd/docgen`.
+LLM optimization is not bit-reproducible — GEPA's reflective evolution, sampling temperature, API non-determinism, and provider drift mean two runs produce different optimized text. If a phase gate or CI tries to assert "the optimizer produces X" or re-runs `optimize.py` in the merge path, the gate is permanently flaky and pulls Python + API keys + cost into CI — violating the single-binary / off-the-merge-path invariant.
 
 **Why it happens:**
-The import lists are maintained by hand in 3+ places (`daemon/imports.go`, `cmd/helix-refgen/main.go`, `cmd/docgen`, `cmd/helix-cligen`) and only "reciprocal note" comments tie them together. Literal equality is NOT required (health/help are non-blank in the daemon, guardrails contributes zero rows), which makes a naive "diff the import lists" check produce false positives and lull maintainers into ignoring real drift.
+Instinct says "test the thing you built." But the thing built is a stochastic process; only its *output*, once a human accepts it, is a stable artifact.
 
 **How to avoid:**
-The real protection is the `--check` gate **plus** the `reference ⊇ VerbToolNames()` contract test (Pitfall 5) — together they fail CI if the generated set drifts from the live verb registry, regardless of import-list cosmetics. When touching skill packages in v2.2, treat "did I update refgen's blank imports to match the daemon's?" as a checklist item, and rely on the contract test rather than eyeballing imports. Do NOT add `internal/semantic/extract/*` to refgen's imports (per the in-file D-02 note: a second GrammarRegistry breaks the singleton). Run the full generator + `--check` + contract suite after any skill-package change.
+- **Gate the artifact, never the process.** The committed artifact is `reference.md` (generated) and the human-edited `SKILL.md`; the gate is `helix-refgen --check` (the v2.2 invariant: `reference.md` is generated-not-hand-edited and must be regenerated, not hand-patched). `optimize.py` output stays git-ignored (`output/optimized.json`) and re-enters ONLY via a human-reviewed SKILL.md edit + refgen + `--check`. No CI step runs the optimizer.
+- **The GEPA run is dev-time-deferred and key-guarded**: an unset-API-key guard prints an informative message and exits 0 (never crashes, never silently skips into a false pass) — carry the Phase 106 unset-key pattern.
+- Keep `optimize.py` off `go test ./...` and `go.mod` via the `toolsquarantine` analyzer (Pitfall 5).
 
 **Warning signs:**
-- `go run ./cmd/helix-refgen --check` passes locally but a verb is missing from `reference.md`.
-- A skill package import was added to `daemon/imports.go` in the diff but not to `cmd/helix-refgen/main.go`.
-- The `reference ⊇ VerbToolNames()` test is green but a human notices a verb absent from the doc (means the contract test itself regressed — see Pitfall 5).
+A CI job that needs `DEEPSEEK_API_KEY`/`OPENAI_API_KEY`; a test asserting optimizer output equality; `helix-refgen --check` not in the gate set; flaky "optimizer changed" diffs in PRs.
 
 **Phase to address:**
-Phase 103 (reference.md generator fixes) — the phase that touches refgen is where import parity must be re-verified.
+The refgen/adoption phase and the harness phase. `helix-refgen --check` must be the only adoption gate; reaffirm in the boundary-analyzer phase.
 
 ---
 
-### Pitfall 5: The `reference ⊇ VerbToolNames()` adoption contract silently weakens (the gate that guarantees "every verb is documented" turns vacuous)
+### Pitfall 5: Boundary leaks — Python/DSPy/agent code reaching `internal/` or the merge path
 
 **What goes wrong:**
-v2.1 shipped a merge-gating contract that `reference.md` covers (is a superset of) every name in `VerbToolNames()`. The v2.2 SKILL.md rewrite SPLITS rows (37→44) and the refgen rewrite changes how verbs are rendered. If the rewrite changes the heading/anchor format the contract test greps for (e.g. it matches `### helix <verb>` and the new template emits `## helix-<verb>`), the test can pass while actually matching nothing — the superset check becomes `∅ ⊇ ∅` vacuously true. Same risk if a verb is split across two rows and the matcher counts the row, not the verb. The repo's own history is littered with exactly this failure class: Phase 86 CR-01 (`es >= 0.0` always-true oracle collapse), Phase 89 CR-01 (contaminated-row exclusion wired into only some reduces), Phase 101 `MaterialDrop = 0.4` (deliberately NOT `>= 0.0`).
+The dev-time agent + DSPy harness accidentally couples into the shipped binary: a `tools/*.go` file gets imported by a runtime/cmd package, a `helix` subcommand shells to Python, `go.mod` gains a dependency, or the agent code lands somewhere `go test ./...` compiles it. Any of these breaks the "no runtime Python / single binary" invariant. A subtler variant: the *Go-side* agent harness (`bench/runtime/...`) is legitimately in-tree and HELIX_BIN-gated, but its tests skip silently without a binary, giving false-green `go test ./...` (the `helix-bench-smoke-false-green` lesson — `resolveHelixBin()` returns "" and tests PASS-as-skipped).
 
 **Why it happens:**
-The contract test couples to a *textual* shape of the generated artifact; the artifact's shape is exactly what this milestone rewrites. A matcher that finds zero anchors reads as "all covered" instead of "matched nothing."
+The agent naturally wants to call helix internals; the quarantine is a discipline, not a default. The HELIX_BIN skip is invisible because a skipped test is a green test.
 
 **How to avoid:**
-Before changing the SKILL.md/reference.md format, add a **discriminating** assertion to the contract test: assert the matcher finds a KNOWN-PRESENT verb AND fails loudly when given a KNOWN-ABSENT verb (anti-tautology, the `TestGrade_ZeroValueConfig` / `TestSabotageNonNoop` pattern already in the tree). Assert the matched-verb COUNT equals `len(VerbToolNames())` (50), not just "non-empty superset" — an exact-count floor catches the vacuous-empty case. Update the matcher and the format in the SAME commit, and run the contract test in its RED state first (point it at the old format, confirm it fails) to prove it bites.
+- **Carry the `toolsquarantine` go/analysis analyzer** (Phase 106): no package outside `github.com/agenthands/helix/tools/...` may import the `tools/...` tree; wired into `make vet` via `cmd/vet-tools-quarantine`. The Python DSPy + the offline optimizer agent live under `tools/`; the in-tree Go *bench* agent (if added under `bench/runtime/`) is NOT under the quarantine and must instead respect the existing `nokernel2semantic`/`ablationleakage` boundaries.
+- **Decide the agent's home explicitly:** Python optimizer-driver agent → `tools/` (quarantined, off go.mod). A Go subprocess agent that drives `helix` verbs → `bench/runtime/` alongside `aider_edit_agent.go` / `subprocess/claude.go`, in-tree but **HELIX_BIN-gated**. State which, so the boundary analyzer covers the right tree.
+- **Bench gate runs with `HELIX_BIN` exported, not bare `go test ./...`.** Any phase touching `bench/` must `go build -o ./helix ./cmd/helix` then `HELIX_BIN="$(pwd)/helix" go test ./bench/runtime/...`; runner tests further need `helix` on PATH. Do not accept "go test ./... all pass" as verification for bench changes.
 
 **Warning signs:**
-- The contract test passes but `reference.md` is visibly missing a verb.
-- The matcher regex was changed in the same diff as the format with no count assertion.
-- Coverage count is asserted as `> 0` rather than `== 50`.
+`go.mod` diff in a v2.3 PR; `grep -rl python cmd/ internal/` hits; `make vet` newly failing; a bench test that "passes" but logs `SKIP` for lack of HELIX_BIN; `cmd/helix-bench` runner tests failing `exec: "helix" not found`.
 
 **Phase to address:**
-Phase 102/103 boundary — whichever phase changes the reference/SKILL format must first harden the contract test. Recommend folding a "contract test discriminates" success criterion into the refgen phase (103).
+The agent-scaffolding phase (place it correctly, extend the analyzer) and every bench-touching phase (HELIX_BIN gate in the success criteria).
 
 ---
 
-### Pitfall 6: DSPy overfits the SKILL/steering prompt to a tiny dev set (the 5–25 adoption transcripts), so `choice_rate` rises offline but generalization doesn't
+### Pitfall 6: SWE-bench / Podman harness setup gotchas (and the dataset-name drift)
 
 **What goes wrong:**
-The adoption scorecard floor is `MinTasks = 5` (`test/oracle/adopt/scorecard.go`); the live fixture corpus is small. DSPy optimizers (MIPROv2, BootstrapFewShot) maximize the metric over whatever set you hand them. With a handful of transcripts, the optimizer will happily craft a SKILL.md / nudge string that scores `choice_rate ≈ 1.0` on those exact tasks by memorizing their surface cues (specific filenames, specific phrasings) — a prompt that looks great offline and helps nothing on unseen agent interactions. MIPROv2 only auto-enables minibatch protection when `val_size > 50`; below that it evaluates candidates against the full tiny set every trial, maximizing overfit.
+The SWE-bench arm silently fails to a vacuous pass (feeding Pitfall 1) or is wrongly reported "blocked" because of three concrete footguns:
+- **Dataset org-name drift.** Code/docs reference `github.com/SWE-bench/SWE-bench` (the repo moved to the `SWE-bench` org), but the Hugging Face *datasets* are still under `princeton-nlp/` (`princeton-nlp/SWE-bench_Verified`, `princeton-nlp/SWE-bench_Lite`). Mixing the two (`SWE-bench/SWE-bench_Verified` as a dataset id) → 404 → empty task set → vacuous pass. This is already a live tension in-tree (the swebench evaluator cites the `SWE-bench/` repo while datasets are pinned elsewhere), and HuggingFace 404s already cause a pre-existing `cmd/helix-bench` test failure.
+- **Podman socket not started / wrong DOCKER_HOST.** The upstream `swebench` Python harness speaks the Docker API; it needs Podman's docker-compat socket: `podman system service --time=0 &` then `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock`. If the socket isn't up, the harness errors — which must fail-not-skip.
+- **Rootless Podman + `--network=none`.** Rootless permission quirks and the `--network=none` isolation (used for hermetic runs) can make image pulls or test execution fail in ways that look like "0 tests passed."
 
 **Why it happens:**
-Prompt optimization is "fit a function to examples"; with few examples and a high-capacity instruction space (free-text SKILL.md), the optimizer overfits exactly like any ML model on a small training set. The metric (`choice_rate`) is cheap to game when the eval set is the same set you optimize on.
+The repo uses **Podman, not Docker** (`helix-container-engine-podman`); upstream harnesses assume Docker. The dataset/repo org split is a genuine naming trap. None of these surface as an exception by default — they surface as an empty or errored run that the oracle coerces to a benign result.
 
 **How to avoid:**
-Hold out a TEST set the optimizer never sees: split the transcript corpus into train (optimize) / dev (DSPy's internal validation) / **held-out test** (report only). Report `choice_rate` on the held-out test, never on train. Grow the corpus before tuning — aim for materially more than `MinTasks` per split. Treat any offline gain that does not survive the held-out test as noise, and NEVER auto-commit an optimized artifact that only beat baseline on train/dev. Frame DSPy as EXPLORATORY (PROJECT.md already does) — its output is a *candidate*, gated by the same revert-and-fail discipline (`MaterialDrop`) the scorecard already enforces, measured on data the optimizer didn't touch.
+- **Never report "Docker not installed → blocked"** — `bench/container` auto-detects Podman (`Engine.Detect` / `TestDetectFindsPodmanWhenNoDocker`). Stand up `podman system service --time=0 &` + `DOCKER_HOST=...podman.sock` for the upstream harness; this is configuration, not a blocker.
+- **Pin dataset ids to the `princeton-nlp/` org** (or whatever the loader's pinned SHA resolves) and assert resolution: a dataset fetch that 404s is a hard ERROR, and the task-set size must be asserted `> 0` before grading (the fail-not-skip discipline from Pitfall 1).
+- **Reuse the existing pinned-SHA loaders** (`bench/datasets/swebench-utboost`, `multi-swe-bench-mini`) which already refuse mutable refs; extend rather than re-fetch by mutable name.
 
 **Warning signs:**
-- Train `choice_rate` ≫ held-out `choice_rate` (the textbook overfit gap).
-- The optimized SKILL.md contains task-specific tokens (a fixture's filename, a specific symbol name).
-- "It scored 1.0!" with no held-out number reported.
-- Optimizing and evaluating on the same `test/oracle/adopt` fixtures.
+HTTP 404 in dataset fetch logs; `DOCKER_HOST` unset while running the Python harness; `--network=none` runs with 0 collected tests; "blocked for lack of Docker" in a status note; task counts that don't match the dataset's known instance count.
 
 **Phase to address:**
-Phase 104+ (exploratory DSPy harness) — the train/dev/test split is the FIRST thing the harness must establish, before any optimizer call.
+The SWE-bench integration phase (dataset pinning + Podman socket setup + task-count assertion as success criteria).
 
 ---
 
-### Pitfall 7: Metric gaming — DSPy optimizes `choice_rate` in ways that don't generalize (the classifier is gameable)
+### Pitfall 7: Provider gotchas — DeepSeek deprecation, tool-call flakiness, missing-key silent skip
 
 **What goes wrong:**
-The scorecard classifies a transcript as a "helix choice" iff `FirstCommand` starts with `"helix "` (prefix on first emitted command). An optimizer told to maximize `choice_rate` can learn degenerate strategies: a SKILL.md that instructs the model to ALWAYS emit a `helix` command first regardless of task fit (inflating `choice_rate` while producing wrong/empty actions), or steering text that games the FIRST-command detector specifically. The scorecard deliberately does NOT use `strings.Contains` (Pitfall 2 in its own design) precisely because the metric surface is gameable; an optimizer is an adversary that will find the next gap.
+- **Dated model deprecation.** DeepSeek's `deepseek-chat` and `deepseek-reasoner` aliases are **retired after 2026-07-24 15:59 UTC** (they map onto `deepseek-v4-flash` non-thinking/thinking modes); after that, requests using those names FAIL. A milestone that hard-codes `deepseek-chat` will break mid-flight.
+- **Tool-call flakiness in long loops.** DeepSeek's own docs warn that `deepseek-chat` function-calling can be **unstable → looped calls or empty responses**, and that the model may emit invalid JSON or hallucinate parameters. In a multi-turn ReAct loop driving `helix` verbs, this means stuck loops, empty tool args, or malformed verb invocations.
+- **Missing API key → silent skip instead of fail.** `ANTHROPIC_API_KEY` is unset by design; if `DEEPSEEK_API_KEY` is also unset and the harness "skips" (or falls through to OFF-arm scoring) instead of failing loudly, you get a false-green run with no agent activity (a sibling of Pitfall 1's vacuity).
 
 **Why it happens:**
-Any cheap proxy metric becomes a target the optimizer attacks (Goodhart). `choice_rate` measures "did it reach for helix first," not "did it solve the task correctly with helix" — the gap is exploitable.
+Model aliases are convenient and get hard-coded; long agent loops amplify rare per-call tool-format failures; key-guards are written to be lenient so local runs don't crash.
 
 **How to avoid:**
-Pair `choice_rate` with a CORRECTNESS / task-success signal in the optimization metric so "always say helix" doesn't win (reuse the v2.1 Aider-derived edit/repomap benches or the multi-oracle `verified_correctness` pattern as the second term — the exact "metric that resists gaming by joining a quality oracle" lesson from Phase 86/87). Keep `fallback_rate` and `Unclassified` in view (a spike in `Unclassified` or a drop in actual task success alongside a `choice_rate` rise is the tell). Manually inspect the optimized SKILL.md for degenerate "always emit helix" instructions. Gate any candidate on BOTH the scorecard AND an independent quality measure on held-out data.
+- **Pin the concrete model id and record the deprecation date.** Prefer the explicit `deepseek-v4-*` id over the soon-retired alias; add a comment/assert tying the chosen id to the 2026-07-24 cutoff so it's not silently stale. Keep **OpenAI as a configured fallback** (per the locked decision) and exercise the fallback path.
+- **Defensive tool-call handling:** validate tool-call JSON before dispatching to a `helix` verb (reject/repair invalid args, never pass through), cap the ReAct loop with a max-turns + no-progress detector (kill stuck/empty-response loops), and on repeated empty responses fall back to OpenAI. Treat malformed-args / loop-exhaustion as a task FAILURE, not a pass.
+- **Missing-key is fail-not-skip for a real run, exit-0-informative for the hermetic/LM-free gates.** Distinguish the two: the GEPA optimization RUN needs a key and should refuse loudly if asked to actually run without one; the committed unit gates (parity, split, degenerate, ON/OFF-render) must run with NO key and NO network.
 
 **Warning signs:**
-- `choice_rate` up but task-success / `verified_correctness` flat or down.
-- Optimized SKILL.md says "always run helix first" or similar unconditional steering.
-- `Unclassified` count drops to zero suspiciously (model emitting helix even for non-code prose).
+`deepseek-chat` literal in code near mid-2026; agent runs that hang or produce empty turns; tasks "completing" in zero turns; a run summary with no recorded tool calls; CI green with no `DEEPSEEK_API_KEY` present.
 
 **Phase to address:**
-Phase 104+ (DSPy harness) — the optimization metric design (single phase concern: define the metric as scorecard-AND-quality before optimizing).
+The agent-harness phase (model pinning, fallback, defensive tool handling, key-guard semantics).
 
 ---
 
-### Pitfall 8: LLM-in-the-loop optimization is nondeterministic and costly, so the "optimized artifact" isn't reproducible (breaks the committed + `--check`-gated invariant)
+### Pitfall 8: Auto-adopting optimized steering (bypassing the human gate)
 
 **What goes wrong:**
-PROJECT.md requires the DSPy output to be a "committed, `--check`-reproducible reference/skill." But DSPy optimization is LLM-driven: MIPROv2 makes many LLM calls to *propose* candidate instructions and to *evaluate* them, and even temperature-0 greedy decoding is not bit-reproducible across runs (floating-point / GPU-kernel nondeterminism — verified). Run the optimizer twice and you get two different SKILL.md texts. If the v2.2 pipeline tries to make "re-run DSPy" a `--check` gate, the gate will flap forever. It is ALSO expensive (each trial × each minibatch × proposer calls = real API spend), so re-running it in CI is a non-starter.
+`optimize.py` (or a future convenience) writes the optimized text straight into `internal/cli/skills/helix/SKILL.md` or `reference.md`, shipping un-reviewed, possibly degenerate steering into the binary's embedded skill bundle. Compounded by the `helix-skill-embed-ships-whole-dir` lesson: anything dropped into the skill dir leaks into the binary.
 
 **Why it happens:**
-Conflating two different artifacts: (a) the *optimizer run* (nondeterministic, offline, expensive, dev-time) and (b) its *committed output* (a static SKILL.md the build must reproduce byte-for-byte). The `--check` gate belongs to (b) — the generated reference.md from the committed SKILL.md — NOT to (a).
+Closing the loop end-to-end is tempting; the optimizer "knows" the better text, so why not write it.
 
 **How to avoid:**
-Make DSPy a **dev-time, human-in-the-loop** step whose output is a committed static artifact, exactly like a captured benchmark baseline (the v1.9 "local-only bench" / committed-baseline precedent). The `helix-refgen --check` gate verifies `reference.md` is reproducible **from the committed SKILL.md** — it never re-runs DSPy. A human runs the optimizer offline, reviews the candidate SKILL.md, accepts/edits it, commits it; from there the existing deterministic generator + `--check` chain takes over. For optimizer reproducibility during the dev session, pin the model id + seed + temperature=0 and CACHE LLM responses (DSPy caches by default; commit the chosen artifact, not the process). Never put a DSPy invocation in a merge-gating CI job.
+- **No auto-adopt, ever.** Carry the Phase 106 invariant: `optimize.py` writes ONLY git-ignored `output/optimized.json`; it must NOT contain a write path to `skills/helix` or `reference.md` (the acceptance grep `grep -E 'skills/helix|reference\.md' optimize.py == 0`). Adoption is a human SKILL.md edit (within the ≤1536-char budget, `## Decision matrix` anchor preserved) followed by `helix-refgen --check`.
+- Keep the skill bundle allowlist (`bundleFiles`, v2.2 BL-SKILL-01) so stray optimizer artifacts can't leak into the binary even if mis-placed.
 
 **Warning signs:**
-- A CI job that runs `dspy.compile(...)` or hits an LLM API on every PR.
-- `--check` flaps green/red across identical commits.
-- No committed artifact — the "optimized skill" only exists as an optimizer script.
-- Optimizer cost shows up as a recurring API bill tied to CI.
+A write-mode `open()` to the skills dir in `optimize.py`; `reference.md` diffs not produced by refgen; `helix-refgen --check` failing in CI; new files in the skill bundle.
 
 **Phase to address:**
-Phase 104+ (DSPy harness) — establish "offline optimizer → reviewed committed artifact → deterministic --check gate" as the architecture decision up front.
+The refgen/adoption phase; reaffirm in the boundary-analyzer phase.
 
 ---
 
-### Pitfall 9: Train/dev/test contamination — the optimizer sees the eval data, or the SKILL.md being measured includes the fixtures
+### Pitfall 9: Anti-vacuity for THIS milestone's new gates (the dominant recurring failure)
 
 **What goes wrong:**
-Two contamination modes. (a) **Optimizer↔eval contamination:** DSPy's `valset` overlaps the held-out adoption test, so the reported generalization number is inflated (the optimizer already tuned to those tasks). (b) **Artifact↔metric contamination:** the scorecard already guards against the SKILL.md's own "helix" text inflating `choice_rate` (it keys on FIRST command, not `Contains` — `test/oracle/adopt` comment, Pitfall 2/T-101-03). If the DSPy harness builds a NEW classifier or feeds whole transcripts to a judge, it can re-introduce that leak (the injected skill body is full of "helix" and example commands). The contamination canary work in v1.12 (Phase 89 INFRA-05) is the same lesson from the benchmark side.
+A new gate is written, named like a real invariant check, passes green — and tests nothing. v2.2 shipped two such defects that the plan-checker approved and only code-review/verifier *mutation-testing* caught: a tautological `x==x` Guard B (Phase 104) and a Python↔Go parity bug invisible to a point-wise corpus (Phase 106). The plan-checker reviews test *structure/intent/names*; it cannot tell a discriminator from a tautology. v2.3 adds at least three new gates that are each prone to vacuity.
 
 **Why it happens:**
-Small corpora tempt reuse of the same examples for optimize + report. And the SKILL.md-being-optimized literally contains the target token, so any whole-response metric leaks.
+Green-path-only tests are easy to write and look complete; the break-the-invariant arm is extra work and easy to omit.
 
 **How to avoid:**
-Strict, disjoint splits with a documented provenance for each transcript (which split it belongs to), enforced in code (a split that overlaps is a hard error, mirroring the fail-closed split discipline elsewhere). Reuse the EXISTING `test/oracle/adopt` classifier verbatim (it already resists the artifact↔metric leak) rather than building a new judge in the DSPy harness; if a judge is unavoidable, strip/neutralize the injected skill body before scoring, and add a `TestSabotageNonNoop`-style assertion that the metric still drops when the decision matrix is removed. Keep the optimizer's `valset` provably disjoint from the reporting `testset`.
+**Every new gate ships a deliberate break-the-invariant → assert-RED test, and code-review+fix is folded BEFORE verify** (so the verifier validates post-fix code; the verifier and reviewer independently mutation-test each guard). Concretely, per new gate:
+
+| New v2.3 gate | Break-the-invariant test it MUST ship |
+|---|---|
+| **Task-success oracle (honest pass)** | Plant a *vacuous* task (empty test set / 0 collected tests / unresolved dataset) → assert the oracle ERRORs, does NOT report "pass". Separately: plant a diff that touches a test file → assert rejected. Plant a FAIL_TO_PASS regression → assert fail. |
+| **"Used helix" attribution** | Plant a transcript that passes the task with ZERO `helix` verb calls → assert it does NOT count as a helix-attributed success. |
+| **ON/OFF control arm** | Assert the OFF-arm rendered prompt does NOT contain the steering text and the ON-arm DOES (mutate: swap the flag → the prompts swap); a delta computed from two identical arms must be provably ~0. |
+| **TEST-split sequestration** | Leak a TEST task into TRAIN → assert the split guard goes RED (carry Phase 106 `test_split.py`). |
+| **`val_size>50` adoption gate** | Set `val_size=50` (boundary) → assert no-ship; `val_size=51` with a real delta → assert adoptable. |
+| **Degenerate-steering inspection** | Flag/no-flag pair: unconditional always-helix text flagged, conditional steering not (carry + broaden Phase 106 `test_degenerate.py`; honestly scope it as a smell test, not sound). |
+| **`toolsquarantine` boundary analyzer (extended)** | Planted runtime→`tools/` import + `// want` analysistest fixture → assert RED; stripping `// want` fails the test (carry Phase 106 fixture). |
+| **`helix-refgen --check` adoption gate** | Hand-edit `reference.md` out of sync → assert `--check` fails non-zero. |
 
 **Warning signs:**
-- The same transcript file appears in both the optimizer config and the report config.
-- A new DSPy-side classifier uses `Contains("helix")` over the whole response.
-- Held-out scores improbably high and identical to dev scores.
+A test whose assertion compares a value to itself or to a constant it just computed the same way; a "parity" corpus that only pins agreement points (a point-wise corpus only proves the points it pins — scope the claim or widen the domain); a gate with no corresponding RED fixture; a reviewer/verifier that didn't mutation-test.
 
 **Phase to address:**
-Phase 104+ (DSPy harness) — split hygiene + reuse-the-hardened-classifier as explicit success criteria.
-
----
-
-### Pitfall 10: Accidental runtime Python coupling — DSPy (Python) leaks from a dev-time tool into a runtime dependency
-
-**What goes wrong:**
-Helix's defining constraint is "Go single binary, no Python/Docker/runtime deps" (CLAUDE.md, PROJECT.md Constraints). DSPy is Python. The risk is that the prompt-tuning harness — meant to be offline/dev-time — accretes into the runtime: a `helix` subcommand that shells to `python -m dspy...`, a `setup` step that pip-installs DSPy, an embedded Python invocation, or CI that the *product build* depends on. Any of these breaks the single-binary promise that the whole product identity rests on.
-
-**Why it happens:**
-"It's just a script, let's wire it in" convenience; and because v1.12's bench stack DOES legitimately shell to Python (`swebench`, `multi_swe_bench`) for *benchmarking*, there's a local precedent that can be over-generalized into the *product*. The line is: benchmark/dev tooling MAY use Python out-of-band; the shipped `helix` binary and its `setup`/runtime path MUST NOT.
-
-**How to avoid:**
-Quarantine DSPy entirely outside the Go module's runtime surface — a separate `tools/` or `dev/` dir, its own `requirements.txt`/venv, invoked only by a human or a non-product-gating dev workflow. NO `helix` subcommand imports or shells to it. NO `go.mod` / build-pipeline edge to Python. Add a mechanical guard in the spirit of the existing `vet-noduckdb` / `benchragleakage` / `nokernel2semantic` analyzers: a check that the `helix` binary's runtime packages have zero reference to the DSPy harness, and that `helix setup` never invokes Python. The committed artifact (SKILL.md/reference.md) is the ONLY thing that crosses from the Python world into the Go binary, and it crosses as static bytes via `//go:embed`.
-
-**Warning signs:**
-- A `helix <verb>` that calls `exec.Command("python", ...)` for tuning.
-- DSPy / Python in `helix setup`'s install path.
-- `requirements.txt` referenced by the release pipeline or `make build`.
-- The single-binary "no Python runtime" claim in README/CLAUDE drifts.
-
-**Phase to address:**
-Phase 104+ (DSPy harness) — the no-runtime-Python boundary is a phase-entry constraint AND should ship a mechanical leakage analyzer (precedent: every prior "external thing" in this repo got a `make vet` boundary gate).
-
----
-
-## Moderate Pitfalls (Decision-Matrix Design)
-
-### Pitfall 11: Over-splitting decision-matrix rows / token bloat that breaches the idle-cost cap
-
-**What goes wrong:**
-SKILL-ISSUE.md proposes splitting 5 rows into 12 (37→44 rows) to separate QUERY from ACTION verbs. Over-correcting — one row per verb (50 rows), or verbose "Not this" prose on every row — bloats SKILL.md. The frontmatter `description` is hard-capped at ≤1,536 chars (SKILL-04, the idle-cost upper bound asserted by `skillDescription()` parsing). The matrix body is below the frontmatter and loads on-use, but a bloated body still costs context every time the skill triggers and dilutes the steering signal.
-
-**Why it happens:**
-"Split everything for clarity" momentum; each individual split looks justified.
-
-**How to avoid:**
-Split ONLY where a row genuinely conflates a query and an action that an agent would pick between (the SKILL-ISSUE.md set of 5→12 is the calibrated target, not a license to atomize). Keep "Not this" terse (a tool name, not a sentence). Re-run the SKILL-04 ≤1,536-char description assertion after editing; keep the matrix body proportionate. Measure before/after token count (SKILL-ISSUE.md already estimates +51 bytes / +7 rows — stay near that).
-
-**Phase to address:** Phase 102 (SKILL.md rewrite).
-
----
-
-### Pitfall 12: Ambiguous or stale "use X not Y" steering (the matrix tells the agent to use a verb that doesn't fit, or cites a removed tool)
-
-**What goes wrong:**
-A "use X not Y" row where X doesn't actually answer the question, or where the QUERY/ACTION distinction is blurred (SKILL-ISSUE.md's core finding: grouping `read-memory` with `write-memory` confuses when to read vs write). Also: steering that references a verb name that drifts from `VerbToolNames()` (a typo'd or renamed verb in the prose). An ambiguous matrix is worse than none — it sends the agent to the wrong tool confidently.
-
-**Why it happens:**
-Copy-paste grouping (the documented root cause), and hand-authored prose that isn't cross-checked against the live verb registry.
-
-**How to avoid:**
-One row answers ONE question with ONE primary verb; the QUERY (reads state) vs ACTION (mutates state) split is the organizing principle (SKILL-ISSUE.md §2). Cross-check every verb cited in SKILL.md against `VerbToolNames()` — ideally a test that greps SKILL.md's `helix <verb>` mentions and asserts each is a real frozen verb (the prime.go invariant: "every `helix <verb>` cited MUST be a real frozen verb"). Add the indexed-graph prerequisite note for the 7 semantic-graph verbs (SKILL-ISSUE.md §6) so the agent doesn't call `explain-cluster` before `index-semantic-graph`.
-
-**Phase to address:** Phase 102 (SKILL.md rewrite) — add the SKILL.md↔VerbToolNames cross-check test here.
-
----
-
-### Pitfall 13: Stale prerequisites — semantic-graph verbs documented without the "requires index" precondition
-
-**What goes wrong:**
-7 verbs (`explain-cluster`, `explain-symbol-deep`, `get-change-impact-graph`, `validate-graph-edge`, `find-related-symbols`, `get-semantic-context`, `get-semantic-graph-status`) require `index-semantic-graph` to have run. The matrix doesn't say so (SKILL-ISSUE.md §6), so an agent gets an empty/error result and falls back to grep — the exact failure the skill exists to prevent.
-
-**Why it happens:** The prerequisite is implicit in the subsystem, invisible in the doc.
-
-**How to avoid:** Add a prerequisite note/column for the semantic-graph group. Keep it in sync with the actual gating behavior (if a verb later auto-indexes, the note must update — tie it to the generator so it can't drift).
-
-**Phase to address:** Phase 102 (SKILL.md) for the prose; consider emitting the prerequisite from the generator (Phase 103) so it's not a hand-maintained island.
+EVERY phase that introduces a gate. Make "ships a break-the-invariant test, mutation-confirmed by review+verify" an explicit success criterion on each.
 
 ---
 
@@ -274,79 +217,96 @@ One row answers ONE question with ONE primary verb; the QUERY (reads state) vs A
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Hand-edit `reference.md` strings instead of fixing `render.go` | Fix visible in seconds | `--check` flaps or certifies an irreproducible file; bug returns on next regen | **Never** — the generator is the source of truth |
-| Keep the `skills/helix/*` wildcard embed, just "remember not to drop files there" | No code change | Next stray file leaks into the binary + every user's disk; relies on human vigilance | **Never** — convert to allowlist + closed-set test |
-| Positive-only bundle test ("are SKILL.md + reference.md present") | Quick green | Misses extra-file leak; vacuous gate (the repo's recurring failure class) | Never as the SOLE test — must add a closed-set "no other files" assertion |
-| Report DSPy `choice_rate` on the optimize set | One impressive number | Overfit shipped as "improvement"; doesn't generalize | Never for the reported number; fine as an internal training signal |
-| Make "re-run DSPy" a CI gate | Feels rigorous | Nondeterministic flap + recurring API cost; breaks single-binary build | **Never** — gate the committed artifact, not the optimizer |
-| Wire the DSPy harness behind a `helix` subcommand "for convenience" | One entrypoint | Runtime Python coupling; breaks the single-binary identity | Never — keep it out-of-band dev tooling |
-| Split every verb into its own matrix row | Maximal clarity per verb | Token bloat, diluted steering, idle-cost pressure | Only where a row truly conflates query+action |
+| Reuse the v2.2 8+3 `choice_rate` corpus for task-success | No corpus-building cost | Reproduces the no-ship; wastes real container/API spend confirming noise | Never for an adoption decision; OK only to smoke-test plumbing |
+| Read pass/fail from a bare exit code | Simple oracle | Vacuous passes (empty test set, swallowed collection error) | Never — must assert N>0 tests ran + FAIL_TO_PASS/PASS_TO_PASS |
+| Hard-code `deepseek-chat` | Works today | Breaks after 2026-07-24; flaky tool-calls | Never — pin `deepseek-v4-*`, keep OpenAI fallback |
+| Run the optimizer in CI to "test it" | End-to-end coverage | Permanently flaky, pulls Python+keys+cost into merge path | Never — gate the artifact via `--check`, not the process |
+| Lenient missing-key skip on the real run | Local runs don't crash | False-green runs with no agent activity | OK only for the LM-free hermetic gates; the real GEPA run must refuse loudly |
+| Single ON arm, no OFF baseline | Half the runs/cost | Mis-attributes LM gains to the skill; adopts noise | Never for an adoption decision |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `cmd/helix-refgen` ↔ daemon | Update daemon blank imports, forget refgen's (or vice-versa) → generated set ≠ live set | Rely on `--check` + `reference ⊇ VerbToolNames()` contract; treat import parity as a checklist item per the in-file reciprocal note |
-| `reference.md` ↔ `--check` gate | Hand-edit the artifact | Fix `render.go`, regenerate, commit both together; verify `git diff` empty after regen |
-| `installSkill`/`uninstallSkill` | Add allowlist filter to install but not uninstall | Filter the entry list once, feed both; add upgrade-drops-file regression test |
-| SKILL.md ↔ `VerbToolNames()` | Cite a renamed/typo'd/removed verb in prose | Cross-check test: every `helix <verb>` in SKILL.md is a real frozen verb (prime.go invariant) |
-| DSPy ↔ Helix runtime | Shell to `python -m dspy` from a verb or `setup` | Out-of-band dev tooling only; mechanical `make vet` leakage guard; artifact crosses as static embedded bytes |
-| DSPy optimizer ↔ adoption scorecard | Build a new whole-response judge that `Contains("helix")` | Reuse the hardened `test/oracle/adopt` FIRST-command classifier verbatim |
+| SWE-bench datasets (HF) | Using `SWE-bench/SWE-bench_Verified` as a dataset id (repo org ≠ dataset org) | Pin `princeton-nlp/SWE-bench_*` (or the loader's pinned SHA); assert fetch resolves and task-count > 0 |
+| Podman as Docker backend | "Docker not installed → blocked" | `podman system service --time=0 &` + `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock`; `bench/container` auto-detects podman |
+| DeepSeek API | Hard-coded `deepseek-chat`; trust tool-call JSON | Pin `deepseek-v4-*`; validate/repair tool-call JSON; cap loop turns; OpenAI fallback |
+| `helix` CLI from the agent | Driving via MCP or assuming a daemon shape | Drive `helix <verb>` subprocesses (the product surface); reuse `bench/runtime/subprocess` + `forwarder.Session` patterns |
+| Bench tests | `go test ./...` and call it verified | `go build -o ./helix`; `HELIX_BIN="$(pwd)/helix" go test ./bench/runtime/...`; runner tests need `helix` on PATH |
+| DSPy / Python | Adding to `go.mod` or shelling from a `helix` subcommand | Quarantine under `tools/`; `toolsquarantine` analyzer + `make vet`; git-ignored output |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| GEPA hot loop × container task = cost/time blowup | Hours-long runs, large API bills | Cap turns + tasks; cache container images; small val for dev, full only for the adoption run; budget per run | As corpus grows toward `val_size>50` |
+| API rate-limit / timeout storms in the loop | 429s, hung turns, partial runs scored as fail | Backoff + retry with cap; per-turn timeout; treat exhaustion as task-fail (not pass); checkpoint progress (`bench/longwall` pattern) | Under concurrent task fan-out |
+| Container build/pull per task | Slow cold runs | Reuse pinned mirror; `--network=none` for hermetic runs after warm pull | First run / CI cold cache |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| API key committed to a `tools/` file or test fixture | Leaked DeepSeek/OpenAI credentials | Key from dev env only; no key in any committed file (Phase 106 T-106-05); gitignore output |
+| Agent runs with write access to the grading oracle | Test tampering = inflated pass rate | Restore/`git checkout` gold tests before grading; reject diffs touching test files; run grader from agent-unwritable path |
+| Untrusted task repos executed locally | Arbitrary code from SWE-bench instances runs on host | Run in Podman containers (`--network=none` where possible); never execute task code on the host |
+| Raw optimizer dump shipped | Un-reviewed steering in the binary | No auto-adopt; output git-ignored; human SKILL.md edit + `--check`; bundle allowlist |
+
+## UX Pitfalls
+
+(Dev-facing — the "users" here are Helix maintainers running the harness.)
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No-ship treated as a failure | Pressure to ship noise to "succeed" | Document no-ship as a legitimate, success-meeting outcome (carry Phase 106 REPORT framing) |
+| Silent skip on missing key/binary | Maintainer thinks the suite passed | Fail-not-skip for real runs; informative exit-0 only for hermetic gates; print what ran |
+| Unclear ON/OFF/delta reporting | Can't tell if the skill helped | Report ON, OFF, delta, val_size, and adopt/no-ship verdict explicitly in REPORT.md |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Bundle allowlist:** Often missing the **closed-set** assertion — verify a test fails when a stray file is added to `skills/helix/`, not just that the two expected files are present.
-- [ ] **reference.md fix:** Often missing the generator change — verify `cmd/helix-refgen/render.go` was edited and `git diff reference.md` is empty after a fresh regen, not just that the strings look right.
-- [ ] **Contract test:** Often vacuous after a format change — verify it asserts exact coverage count (== 50 / `len(VerbToolNames())`) and discriminates a known-absent verb, not `> 0`.
-- [ ] **SKILL.md rewrite:** Often missing the idle-cost re-check — verify SKILL-04 ≤1,536-char assertion still passes and every cited verb is real.
-- [ ] **Semantic-graph prerequisites:** Often missing — verify the 7 indexed-graph verbs carry the "requires index-semantic-graph" note.
-- [ ] **DSPy generalization:** Often missing the held-out number — verify a test-set `choice_rate` is reported, distinct from train/dev, and the gain survives revert-and-fail (`MaterialDrop`).
-- [ ] **DSPy reproducibility:** Often missing the artifact/process split — verify the committed SKILL.md is byte-reproducible through `--check` WITHOUT re-running the optimizer, and no CI job invokes DSPy.
-- [ ] **No runtime Python:** Often missing the mechanical guard — verify a `make vet`-style analyzer proves the `helix` binary and `setup` path have zero DSPy/Python edge.
-- [ ] **uninstall parity:** Often missing — verify upgrading from an old bundle set removes the dropped file from disk.
+- [ ] **Task-success oracle:** often missing the N>0-tests assertion and FAIL_TO_PASS/PASS_TO_PASS contract — verify a vacuous task ERRORs, not "passes."
+- [ ] **Pass attribution:** often missing the "did the agent actually call helix?" check — verify a zero-helix-call pass is not credited.
+- [ ] **ON/OFF control:** often missing entirely (single arm) — verify the delta is ON−OFF and the OFF prompt provably omits the steering.
+- [ ] **TEST sequestration:** often leaks into `compile()` — verify `test.jsonl` is never passed to the optimizer and the split guard RED-fails on a planted leak.
+- [ ] **`val_size>50` gate:** often a doc note, not a gate — verify the harness no-ships below it.
+- [ ] **Boundary analyzer:** often not extended to the new agent tree — verify a planted runtime→`tools/` import fails `make vet`.
+- [ ] **Bench verification:** often "go test ./... passed" — verify it was run with `HELIX_BIN` exported (else it's false-green).
+- [ ] **Model id:** often the soon-retired `deepseek-chat` alias — verify a `deepseek-v4-*` pin + OpenAI fallback.
+- [ ] **Every new gate:** often green-path-only — verify each ships a break-the-invariant RED test, mutation-confirmed by review+verify.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| SKILL-ISSUE.md / stray file already leaked into a release | MEDIUM | Move file out of `skills/helix/`, add allowlist + closed-set test, cut a patch; `helix setup` re-run overwrites the user dir (uninstall parity removes the orphan) |
-| Hand-edited reference.md merged | LOW | Fix render.go, regenerate, commit; `--check` goes green and stays green |
-| DSPy overfit artifact committed | LOW-MEDIUM | Revert the SKILL.md to prior committed version (it's static bytes); re-run optimizer with held-out split before re-attempting |
-| Runtime Python coupling shipped | HIGH | Rip the Python edge out of the runtime/setup path; re-quarantine to dev tooling; restore single-binary build — expensive because it may have spread |
-| Contract test went vacuous | MEDIUM | Add discriminating + exact-count assertions; run RED-first to prove it bites; audit what slipped through while it was vacuous |
+| Adopted degenerate/noise steering | MEDIUM | Revert the SKILL.md edit; regenerate `reference.md` via refgen; re-run ON/OFF on held-out TEST to confirm |
+| Vacuous-pass oracle shipped | HIGH | Audit all "passed" tasks for N>0 tests + FAIL_TO_PASS; re-grade; add the missing RED gate; discard tainted deltas |
+| TEST leakage into compile() | HIGH | Discard the reported delta (unattributable); re-split with sequestration; re-run; add the leak RED guard |
+| `deepseek-chat` retired mid-milestone | LOW | Swap to pinned `deepseek-v4-*` id; re-run; OpenAI fallback covers the gap |
+| Boundary leak into binary/go.mod | MEDIUM | `make vet` locates it; move code under `tools/` or HELIX_BIN-gate it; revert go.mod |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| 1. Embed glob ships stray files | Phase 102 (bundle allowlist, EARLY) | Closed-set test: embedded FS == {SKILL.md, reference.md}; `strings helix` clean |
-| 2. Allowlist breaks atomic install | Phase 102 | Existing containment + atomic-revert tests green; upgrade-drops-file test |
-| 3. Hand-editing generated reference.md | Phase 103 (refgen fixes) | `--check` green on fresh tree; `git diff` empty after regen |
-| 4. docgen/refgen import-parity drift | Phase 103 | `--check` + contract suite green after skill-package touch |
-| 5. `reference ⊇ VerbToolNames()` goes vacuous | Phase 102/103 boundary | Contract test asserts count == 50 + discriminates known-absent verb; RED-first |
-| 6. DSPy overfits tiny dev set | Phase 104+ (DSPy harness) | Held-out test `choice_rate` reported, distinct from train; gain survives MaterialDrop |
-| 7. Metric gaming of `choice_rate` | Phase 104+ | Optimization metric = scorecard AND a quality/task-success oracle; manual degenerate-instruction inspection |
-| 8. Nondeterministic/expensive optimizer breaks `--check` | Phase 104+ | No CI job runs DSPy; committed artifact byte-reproducible via `--check`; pinned model+seed+temp0+cache |
-| 9. Train/dev/test contamination | Phase 104+ | Disjoint splits enforced in code; reuse hardened FIRST-command classifier; sabotage-non-noop assertion |
-| 10. Runtime Python coupling | Phase 104+ | `make vet`-style analyzer: zero DSPy/Python edge from helix runtime + setup |
-| 11. Row over-split / token bloat | Phase 102 | SKILL-04 ≤1,536-char assertion; row count near 44 |
-| 12. Ambiguous / stale "use X not Y" | Phase 102 | SKILL.md↔VerbToolNames cross-check test (prime.go invariant) |
-| 13. Missing indexed-graph prerequisites | Phase 102 (prose) / 103 (generator) | 7 semantic verbs carry prerequisite note; generator-emitted to prevent drift |
+| 1. Reward-hacking the oracle | Task-success oracle phase (~107–108) | Vacuous-task ERRORs; FAIL_TO_PASS/PASS_TO_PASS enforced; test-file diffs rejected; degenerate-text flagged |
+| 2. Tiny-corpus overfit | Corpus + split phase (pre-GEPA) | `val_size>50` gate no-ships below floor; TEST-leak RED guard fails on a plant |
+| 3. Attribution failure | Agent-harness + metric phase | ON/OFF arms identical-except-steering; delta = ON−OFF; OFF prompt provably omits steering |
+| 4. Gating the process | Refgen/adoption phase | `helix-refgen --check` is the only adoption gate; no optimizer in CI; unset-key exits 0 |
+| 5. Boundary leaks | Agent-scaffolding phase + every bench phase | `toolsquarantine` `make vet` green; `go.mod` 0-diff; bench run with HELIX_BIN exported |
+| 6. SWE-bench/Podman/dataset drift | SWE-bench integration phase | Dataset id pinned to `princeton-nlp/`; fetch resolves; task-count>0; Podman socket up |
+| 7. Provider gotchas | Agent-harness phase | `deepseek-v4-*` pinned; OpenAI fallback exercised; tool-call JSON validated; loop capped; missing-key fails loudly on real run |
+| 8. Auto-adopt | Refgen/adoption phase | `grep -E 'skills/helix|reference\.md' optimize.py == 0`; adoption is human SKILL.md edit + `--check`; bundle allowlist |
+| 9. Anti-vacuity (all new gates) | EVERY gate-introducing phase | Each gate ships a break-the-invariant RED test; code-review+fix folded BEFORE verify; reviewer+verifier mutation-test |
 
 ## Sources
 
-- `internal/cli/skill.go` (`//go:embed skills/helix/*`, `installSkill` two-pass atomic + containment loop over all entries — leak confirmed) — HIGH
-- `internal/cli/skill_test.go` (`TestInstallSkillWritesBundle` positive-only; `TestInstallSkillContainment`) — HIGH
-- `internal/cli/skills/helix/SKILL-ISSUE.md` (maintainer analysis: 37→44 rows, copy-paste + Output errors, missing prerequisites) — HIGH
-- `cmd/helix-refgen/main.go` + `render.go` (`--check` gate, `useThisNotThat(group, verb)` per-group string source, blank-import-parity reciprocal note) — HIGH
-- `test/oracle/adopt/scorecard.go` (`MinTasks=5`, `MaterialDrop=0.4`, FIRST-command classifier, `StripDecisionMatrix`/`TestSabotageNonNoop` anti-vacuity pattern) — HIGH
-- PROJECT.md v2.2 milestone section + Constraints (single Go binary, no runtime Python; DSPy dev-time only; committed `--check`-reproducible artifact) — HIGH
-- MEMORY: "Helix tool docs drift" (docgen missing `internal/skill/semantic` blank import — import-parity trap precedent) — HIGH
-- MEMORY: "Helix bench smoke false-green" / Phase 87 CR-01 / Phase 89 CR-01 (vacuous-gate recurring failure class) — HIGH
-- [MIPROv2 Optimizer — DSPy](https://dspy.ai/deep-dive/optimizers/miprov2/) and [MIPROv2 | DeepWiki](https://deepwiki.com/stanfordnlp/dspy/4.4-miprov2:-instruction-and-parameter-optimization) (minibatch auto-enabled only when val_size > 50; iterative LLM-proposed instructions; overfit on small sets) — MEDIUM-HIGH
-- [Finishing Optimization: Saving and Loading DSPy Programs](https://codesignal.com/learn/courses/how-to-optimize-with-dspy/lessons/finishing-optimization-saving-and-loading-dspy-programs) (compiled program = static loadable artifact distinct from the optimizer run) — MEDIUM
-- [Understanding and Mitigating Numerical Sources of Nondeterminism in LLM Inference](https://arxiv.org/pdf/2506.09501) (even temp-0 greedy decoding is not bit-reproducible — FP/GPU-kernel nondeterminism) — HIGH
+- Phase 106 spike artifacts (HIGH — in-repo authoritative): `106-01-SUMMARY.md`, `106-02-SUMMARY.md`, `106-REVIEW.md`, `106-VERIFICATION.md`, `tools/dspy-tune/REPORT.md` — no-ship cause (`MinTasks=5`, tiny split), TEST-sequestration pattern, degenerate-steering flag/no-flag pair, `toolsquarantine` analyzer + RED fixture, unset-key guard, no-auto-adopt invariant, parity-corpus point-wise limitation.
+- Memory (HIGH — project-specific lessons): `helix-antivacuity-mutation-test-guards` (tautological Guard B 104, Python↔Go parity bug 106, fold review+fix before verify); `helix-bench-smoke-false-green` (HELIX_BIN fail-not-skip, SIGKILL-vacuous-gate); `helix-container-engine-podman` (Podman auto-detect, `DOCKER_HOST` socket, never "Docker → blocked"); `helix-skill-embed-ships-whole-dir` (bundle allowlist).
+- PROJECT.md v2.3 milestone section (HIGH — source of truth): locked decisions (CLI-subprocess transport, Aider+SWE-bench scope, no-runtime-Python, DeepSeek primary / OpenAI fallback, human-gated refgen adoption).
+- [DeepSeek API — Tool Calls / Function Calling docs](https://api-docs.deepseek.com/guides/tool_calls) (HIGH): `deepseek-chat`/`deepseek-reasoner` alias retirement after 2026-07-24 15:59 UTC; function-calling instability (looped calls / empty responses); validate args before dispatch.
+- [SWE-bench datasets (Hugging Face, `princeton-nlp/` org)](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified) + [SWE-bench evaluation guide](https://www.swebench.com/SWE-bench/) (HIGH/MEDIUM): datasets remain under `princeton-nlp/` while the repo moved to the `SWE-bench/` org (the naming-drift trap); FAIL_TO_PASS/PASS_TO_PASS resolution contract.
+- In-repo grounding for dataset drift: `bench/evaluators/swebench/predictions.go` cites `github.com/SWE-bench/SWE-bench`; `bench/datasets/swebench-utboost/`, `multi-swe-bench-mini/` pin dataset SHAs (mutable-ref refusal).
 
 ---
-*Pitfalls research for: Helix v2.2 Agent-Facing Skill Quality & Prompt Tuning*
-*Researched: 2026-06-23*
+*Pitfalls research for: task-success-driven skill optimization (v2.3, Helix)*
+*Researched: 2026-06-24*

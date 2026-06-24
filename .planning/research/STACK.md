@@ -1,151 +1,297 @@
 # Stack Research
 
-**Domain:** Go single-binary CLI tooling + (exploratory) dev-time/offline Python prompt-optimization harness
-**Researched:** 2026-06-23
-**Confidence:** HIGH (DSPy version/extras/LM-config verified against PyPI + dspy.ai; Go-side surfaces read directly from the tree)
+**Domain:** Dev-time/offline LLM optimization tooling for a Go-native CLI product (Helix v2.3 "Task-Success-Driven Skill Optimization")
+**Researched:** 2026-06-24
+**Confidence:** HIGH (versions verified against PyPI + DeepSeek/DSPy/SWE-bench official docs + Context7; integration points read from live source)
 
-## Scope
+> **Scope guard.** This research covers ONLY the THREE net-new v2.3 capabilities: (1) a DeepSeek/OpenAI tool-using agent that drives the `helix` CLI, (2) rewiring the `tools/dspy-tune/` GEPA metric to agent task-success on Aider polyglot + SWE-bench, (3) human-gated SKILL.md adoption via `cmd/helix-refgen`. It does NOT re-research the validated building blocks (aider-polyglot loader, aider_edit harness, bench/container, swebench adapter, test/oracle/adopt).
+>
+> **The load-bearing constraint that governs every choice below:** Helix ships as a single Go binary. DSPy + the optimizer agent are STRICTLY dev-time/offline. ZERO new Go module deps that touch the binary; NO `helix` subcommand shelling to Python; OFF `go.mod` / `helix setup` / default `go test ./...` / the merge path. The `internal/lint/toolsquarantine` analyzer (wired into `make vet` at v2.2 Phase 106) mechanically enforces that no runtime/cmd package imports `github.com/agenthands/helix/tools/...`.
 
-v2.2 "Agent-Facing Skill Quality & Prompt Tuning" is **mostly a content/codegen milestone, not a stack milestone.** Three of its four features (SKILL.md rewrite, `cmd/helix-refgen` fixes, `installSkill` allowlist) need **ZERO new dependencies** — they are pure Go edits inside packages that already exist. The only feature that introduces anything new is the **exploratory, dev-time-only DSPy harness**, and even that must stay strictly out of the shipped binary, the Go module graph, and the merge-gating CI path.
+---
 
-The central constraint from `PROJECT.md` (line 192): *"Helix stays a Go single binary with no Python/runtime deps — DSPy is dev-time/offline only; its output is committed and gated by `helix-refgen --check`."* This research's primary job is to honor that.
+## The Central Architecture Decision: Where Does the Agent Live?
+
+This is the question the downstream roadmapper most needs answered. There are two candidate homes, and they pull in **opposite stack directions**. The verified recommendation is a **split**:
+
+| Concern | Recommendation | Home |
+|---------|---------------|------|
+| **GEPA optimization loop + task-success metric** | **Python**, under `tools/dspy-tune/` | dev-time, quarantined |
+| **The tool-using agent (DeepSeek/OpenAI loop driving `helix` verbs)** | **Python**, alongside `tools/dspy-tune/` (NOT Go `bench/runtime`) | dev-time, quarantined |
+
+### Why the agent must be Python, not Go `bench/runtime`
+
+The instinct is to put the agent in `bench/runtime` to reuse `aider_edit_cell.go` and the daemon-dial plumbing. **Reject this.** Reasoning, verified against source:
+
+1. **DSPy is the metric's caller, and DSPy is Python.** The v2.3 headline is rewiring `optimize.py`'s GEPA `metric=` from `score_choice_rate` to *agent task-success*. GEPA invokes the metric **in-process, per candidate prompt, thousands of times** (`optimizer.compile(...)`). The metric must run the agent. If the agent lived in Go `bench/runtime`, every GEPA metric call would have to shell `go test`/`go run` or a compiled Go bench binary — a process-spawn-per-evaluation tax inside the optimizer's hot loop, plus a brittle text-protocol handoff. Keeping the agent in Python lets GEPA call it as a function.
+
+2. **Putting a DeepSeek/OpenAI agent in `bench/runtime` adds a Go LLM dependency to a package that `go test ./...` compiles.** `bench/runtime` is in-tree Go that the default test command builds. A Go OpenAI client (e.g. `github.com/sashabaranov/go-openai`) added there is a **new `go.mod` dependency on the runtime side** — exactly what the hard constraint forbids. The existing `bench/runtime/subprocess/claude.go` only gets away with shelling the external `claude` *binary* (zero Go LLM SDK); a DeepSeek/OpenAI agent would need an HTTP/SDK client in Go. That crosses the line.
+
+3. **The transport is already subprocess.** The locked decision is "agent drives `helix` via CLI subprocess verbs." A Python agent shelling `helix go-to-definition …` via `subprocess.run` is the *native* expression of that transport — no daemon-dial Go code, no `forwarder.OpenSession` reuse needed. The `claude.go` pattern (delegate to a process, capture stdout, parse) is exactly what the Python agent re-expresses, but the "process" is `helix <verb>` instead of `claude`.
+
+4. **`bench/runtime` reuse is a mirage for this task.** `aider_edit_cell.go` / `aider_edit_agent.go` implement a *deterministic, scripted* edit agent (it copies the reference solution into the stub — `newDeterministicEditAgent`). It is NOT an LLM agent and shares almost no logic with an agentic tool-use loop. The genuinely reusable assets are the **dataset loaders and graders** (`aider-polyglot` `LoadExercise`/`NativeTestCommand`, `bench/evaluators/swebench` harness wrapper), which the Python agent invokes *as subprocesses / as fixtures*, not as linked Go code.
+
+> **Net:** the agent is a new Python package, e.g. `tools/agent/` (or a module inside `tools/dspy-tune/`), reachable only from the dev venv. It shells `helix <verb>` for tool calls and shells the Go graders (`helix-bench` / the swebench harness) for scoring. The Go side gains the agent NOTHING it must compile — preserving `go test ./...`, `go.mod`, and the `toolsquarantine` boundary unchanged.
+
+---
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies (all dev-time Python, `tools/` venv only)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Go | 1.25.1 (existing) | All shipped code: SKILL.md rewrite is content; `cmd/helix-refgen` + `installSkill` are Go | No change. The three non-DSPy features touch only existing packages (`cmd/helix-refgen`, `internal/cli/skill.go`, `internal/cli/skills/helix/`). No new Go import is required or wanted. |
-| DSPy (Python) | **3.2.1** (stable, PyPI 2026-05; `3.3.0b1` beta available) | The exploratory **offline** prompt-optimizer that tunes SKILL.md decision-matrix / nudge text against the adoption scorecard | DSPy is the de-facto framework for *programmatic* prompt optimization with a measurable metric. It separates the program (signature) from the optimizer and optimizes against a `metric(example, prediction) -> float` — which maps exactly onto the existing `choice_rate`/`fallback_rate` scorecard. It is **dev-time only**; its *output* is committed text, so the runtime stays pure-Go. |
-| Python | **>=3.10, <3.15** (DSPy's own pin) | Interpreter for the DSPy harness only | DSPy requires Python ≥3.10. `python3` is already invoked in one Makefile CI helper (`Makefile:297`), so a base interpreter is already assumed in some CI lanes — but `pip`/venv/DSPy must remain an **opt-in dev target**, never on the default `go test ./...` / merge path. |
+| Technology | Version (pin) | Purpose | Why Recommended |
+|------------|---------------|---------|-----------------|
+| **DSPy** | `dspy==3.2.1` | GEPA prompt optimizer + LM abstraction | Already the pinned harness dep (`tools/dspy-tune/requirements.txt`). GEPA top-level API (`from dspy import GEPA`, `metric(gold,pred,trace,pred_name,pred_trace)->dspy.Prediction(score=,feedback=)`, `compile(student,trainset,valset)`) is stable 3.1.x→3.2.x. **Keep the existing 3.2.1 pin** — latest PyPI is also 3.2.1, no bump needed. Requires Python `>=3.10,<3.15`. |
+| **OpenAI Python SDK** | `openai==2.43.0` | The HTTP client for BOTH DeepSeek (OpenAI-compatible `base_url`) and OpenAI (fallback). Drives the agentic tool-use loop (`chat.completions.create(..., tools=[...], tool_choice=...)`). | DeepSeek's API is **OpenAI-compatible**: one SDK, two `base_url`s. This is the single client for the whole agent. Latest PyPI `2.43.0`, requires Python `>=3.9`. DSPy's own LM layer uses litellm and does NOT need this — the AGENT uses `openai` directly; DSPy uses its own `dspy.LM`. |
+| **swebench** | `swebench==4.1.0` | The SWE-bench evaluation harness (`python -m swebench.harness.run_evaluation`) the Go adapter already shells to, and that the task-success metric scores against. | Already the assumed upstream by `bench/evaluators/swebench/harness.go`. Latest PyPI `4.1.0`, requires Python `>=3.10`. **PIN IT** in the dev venv — see the dataset-name drift warning below. |
+| **Python** | `3.13` (host has 3.13.5; require `>=3.10,<3.15`) | Interpreter for the venv | The intersection of dspy (`<3.15,>=3.10`), openai (`>=3.9`), swebench (`>=3.10`) is `>=3.10,<3.15`. Host 3.13.5 satisfies it. |
 
 ### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `dspy[anthropic]` extra | pulled by DSPy 3.2.1 | Anthropic provider wiring for the optimization LM | Use because the existing Go harness already keys on `ANTHROPIC_API_KEY` (`test/oracle/llm/client.go:18`). DSPy → LiteLLM reads the **same** `ANTHROPIC_API_KEY` env var, so the dev sets one key for both the Go scorecard and the Python optimizer. |
-| GEPA (`dspy.GEPA`, or standalone `gepa`) | bundled with DSPy 3.x (GEPA 0.1.x) | Reflective prompt-evolution optimizer — the recommended optimizer for *instruction/prose* tuning (which is exactly what SKILL.md text is) | Prefer GEPA over MIPROv2 for this task: GEPA optimizes free-form instruction text via reflective evolution (ICLR 2026), needs far fewer rollouts, and does not require few-shot demonstration sets — SKILL.md is prose, not a demo bank. Already integrated as `dspy.GEPA`. |
-| `dspy[optuna]` extra (Optuna) | pulled by extra | Bayesian search backend for **MIPROv2** only | Only if you fall back to MIPROv2 (`dspy.MIPROv2`) instead of GEPA. Optuna is a required dep of MIPROv2/BootstrapFewShotWithOptuna. Skip it if you use GEPA. |
-| LiteLLM | transitively via DSPy | Provider normalization layer DSPy calls under the hood | Not chosen directly — it is DSPy's transitive dep. Relevant only because it is what reads `ANTHROPIC_API_KEY` and accepts the `anthropic/claude-…` / `deepseek/deepseek-chat` model strings, mirroring the Go harness's provider switch. |
+| **pytest** | `pytest==8.3.5` | Hermetic LM-free gates (parity, split, degenerate) | Already pinned. Add new gates for the agent loop + metric wiring (each a break-the-invariant→RED test per the anti-vacuity rule). |
+| **litellm** | (transitive via `dspy`) | DSPy's LM backend; how `dspy.LM("openai/<model>", api_base=…, api_key=…)` reaches DeepSeek | Do NOT pin directly — let dspy own it. Relevant only because the **DSPy reflection/student LM** config for DeepSeek goes through it (see DeepSeek-as-DSPy-LM below). |
 
-### Development Tools
+> **No new Go dependencies.** The Go side reuses only what already exists: `bench/datasets/aider-polyglot` (loader/grader), `bench/evaluators/swebench` (harness wrapper), `bench/container` (podman detect), and the `helix` binary itself. Nothing is added to `go.mod`.
+
+### Development Tools / Environment
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| `uv` **or** `python -m venv` + `pip` | Isolate the DSPy install away from the Go build | Recommended: a dedicated venv under e.g. `tools/promptopt/.venv` (git-ignored) created by an **opt-in** `make promptopt-setup`. `uv` is faster but optional; plain venv keeps the bar low. The venv MUST be git-ignored and never referenced by any default `make test` / `go test` target. |
-| `requirements.txt` (pinned) | Reproducible harness install: `dspy==3.2.1` (+ extras) | Pin the exact DSPy version so the optimizer is reproducible across dev machines. Lives next to the Python harness (e.g. `tools/promptopt/requirements.txt`), NOT in repo root. |
-| `cmd/helix-refgen --check` (existing) | The re-entry gate: optimizer output is committed, then this gate proves it is byte-reproducible | The DSPy harness does NOT write `reference.md`/SKILL.md directly to the embed path as a side effect of CI. The loop is: human runs the optimizer offline → reviews the proposed text → commits it (or feeds tuned prose into the generator templates) → the **existing** `helix-refgen --check` gate (Phase 97) keeps `reference ⊇ VerbToolNames()` true. |
+| **Podman** | Container engine for SWE-bench | Host has `podman 5.4.2`. `bench/container.Detect()` already finds it (`docker` then `podman`). |
+| **`podman system service`** | Docker-compatible API socket for the upstream swebench harness | The harness talks the Docker API. Stand up the socket (see SWE-bench section). |
+| **Go toolchain** | `go1.26.0` | For the reused Go graders; unchanged. |
+| **Per-language test toolchains** (Aider polyglot) | Run exercise tests for pass/fail scoring | **Verified present on host:** `go1.26`, `python3 3.13.5` (`pytest` via venv), `node v20.19.6` (JS uses `./npm-test.sh`), `cargo 1.96` (Rust), `g++ 14.2` (C++/ctest), `java/openjdk 21` (Java uses `./gradlew test` — the **gradle wrapper is checked into each exercise**, so system `mvn`/`gradle` are NOT required). **`javac`, `mvn`, `tsc` absence is NOT a blocker** — see the toolchain analysis below. |
 
-## Integration Points (how the Python harness re-enters the Go world)
-
-This is the load-bearing part of the design — the seam between the offline optimizer and the committed, `--check`-gated artifacts.
-
-1. **Metric source (Go ↔ Python):** the optimizer's metric is the Phase 101 adoption scorecard. Two viable wirings, in preference order:
-   - **(Preferred) Re-implement the trivial classifier in Python, validate against the Go scorer.** `test/oracle/adopt` is build-tag-FREE and runs hermetically. Its `ClassifyChoice` rule is ~10 lines: strip code fences/backticks, take the FIRST command line, `HasPrefix("helix ")` for a choice vs the `{"grep ","sed ","cat ","find ","rg ","ls "}` fallback set (`scorecard.go:77,85`). Re-implement that exactly in the Python `metric` so the harness is self-contained, and treat the Go `adopt` package as the **authoritative** scorer the *committed* result is finally validated against.
-   - Alternatively, shell the Python `metric` out to a thin Go CLI/test shim over `adopt.Scorecard` for a single source of truth — heavier wiring, only worth it if the classifier ever stops being frozen.
-   - Live transcript generation (model emitting a first command given a candidate SKILL.md) reuses the **same** Anthropic/DeepSeek providers as `test/oracle/llm` — same `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` env vars.
-2. **Optimization target (what DSPy mutates):** the SKILL.md **decision-matrix text** and/or the `PreToolUse` nudge-steering prose. DSPy proposes candidate instruction strings; the metric scores each candidate by running it through the (model → first-command → scorecard) loop and maximizing `choice_rate` (equivalently minimizing `fallback_rate`).
-3. **Output landing zone (Python → Go):** the optimizer writes a **proposed** SKILL.md body / generator-template snippet to a dev scratch path (e.g. `tools/promptopt/out/`). A human reviews it, then either (a) commits the tuned SKILL.md directly, or (b) feeds tuned per-verb prose into `cmd/helix-refgen`'s render templates and regenerates `reference.md`. **The DSPy harness never writes into `internal/cli/skills/helix/` in CI.**
-4. **Re-entry gate (the contract that keeps the binary honest):** after the tuned text is committed, the **existing** gates enforce — `helix-refgen --check` (drift), the `reference ⊇ VerbToolNames()` contract (`internal/cli/reference_contract_test.go`), and the new v2.2 `installSkill` bundle allowlist test. DSPy adds **no** new CI gate on the default path.
-
-## Go-side additions for the SKILL/reference rewrite + allowlist
-
-**Confirmed: NONE new.** Verified against the tree:
-
-- `cmd/helix-refgen/{main.go,render.go}` already exists and owns reference.md rendering + the `--check` gate (`main.go` header + blank-import parity rule). The "use this / not that" + "Output" copy-paste fixes (per `SKILL-ISSUE.md`) are edits to `render.go`'s per-verb / per-`groupID` text and templates — no new import.
-- `internal/cli/skill.go` already holds `installSkill`, the `//go:embed skills/helix/*` FS (`skill.go:21`), and the containment/atomicity logic. The "bundle allowlist" is a code edit: replace the `embeddedSkillFS.ReadDir("skills/helix")` **walk** (which currently ships *every* file in the dir) with an explicit `{"SKILL.md","reference.md"}` allowlist plus a bundle-contents test. No new dependency — `embed`, `os`, `path/filepath` are already imported.
-- The adoption contract test (`internal/cli/reference_contract_test.go`) and scorer (`test/oracle/adopt`) already exist and need no new deps.
-
-So the entire Go surface of v2.2 is edits inside already-vendored packages. `testify`, `cobra`, `jsonschema/v6`, `anthropic-sdk-go` are all already in `go.mod`; nothing is added.
+---
 
 ## Installation
 
 ```bash
-# Go side: nothing new. Existing build/test pipeline is unchanged.
-make build && make test
-
-# Reference/skill regen + drift gate (existing, unchanged):
-go run ./cmd/helix-refgen            # regenerate reference.md
-go run ./cmd/helix-refgen --check    # CI drift gate
-
-# ---- Exploratory DSPy harness: OPT-IN, dev-time only, isolated venv ----
-# (lives under e.g. tools/promptopt/, git-ignored .venv, never on default test path)
-python3 -m venv tools/promptopt/.venv
-. tools/promptopt/.venv/bin/activate
-pip install -r tools/promptopt/requirements.txt   # pins: dspy==3.2.1  (+ extras below)
-#   requirements.txt content:
-#     dspy[anthropic]==3.2.1          # GEPA bundled as dspy.GEPA
-#     # dspy[optuna]==3.2.1           # ONLY if falling back to MIPROv2
-
-# Run the optimizer offline (reads the SAME key the Go harness uses):
-export ANTHROPIC_API_KEY=...          # or DEEPSEEK_API_KEY for the cheaper leg
-python tools/promptopt/optimize_skill.py   # writes proposed text to tools/promptopt/out/
-# Human reviews out/, commits tuned SKILL.md / regenerates reference.md, then:
-go run ./cmd/helix-refgen --check     # the committed artifact must pass the existing gate
+# Dev venv ONLY — never touches go.mod, the binary, or `helix setup`.
+cd tools/dspy-tune        # (and the new tools/agent/ if split out)
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-DSPy LM config inside the harness (verified format):
+`tools/dspy-tune/requirements.txt` (proposed v2.3 contents — add the two new pins):
+
+```
+# Dev-time-only pins. NEVER enters the helix binary, go.mod, `helix setup`, or `go test ./...`.
+dspy==3.2.1          # GEPA optimizer + dspy.LM (keep — already current)
+openai==2.43.0       # NEW: agent's tool-use client for DeepSeek + OpenAI
+swebench==4.1.0      # NEW: SWE-bench eval harness scored by the task-success metric
+pytest==8.3.5        # hermetic LM-free gates
+```
+
+> The `tools/` tree ships **no `.go`/`go.mod`** (it is invisible to the Go build); `toolsquarantine` is the belt that keeps any future `tools/*.go` from leaking. The `requirements.txt` is dev-only and is installed into a git-ignored `.venv`.
+
+---
+
+## Detail 1 — DeepSeek + OpenAI agent (the tool-using loop)
+
+**Client:** `openai==2.43.0` for both providers — DeepSeek is OpenAI-compatible.
 
 ```python
-import os, dspy
-# Same env var the Go scorecard keys on (test/oracle/llm/client.go:18).
-lm = dspy.LM("anthropic/claude-…", api_key=os.environ["ANTHROPIC_API_KEY"])
-# Cheaper optimization leg, mirroring the Go DeepSeek provider:
-# lm = dspy.LM("deepseek/deepseek-chat", api_key=os.environ["DEEPSEEK_API_KEY"])
-dspy.configure(lm=lm)
-optimizer = dspy.GEPA(metric=adoption_metric)   # metric = choice_rate-driven scorer
+from openai import OpenAI
+import os
+
+# Primary: DeepSeek (DEEPSEEK_API_KEY is SET in this env).
+deepseek = OpenAI(
+    api_key=os.environ["DEEPSEEK_API_KEY"],
+    base_url="https://api.deepseek.com",        # OpenAI-compatible; verified official
+)
+# Fallback: OpenAI (OPENAI_API_KEY is SET).
+openai_fb = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 ```
+
+**Verified facts (DeepSeek official docs, api-docs.deepseek.com, 2026-06-24):**
+- **Base URL:** `https://api.deepseek.com` (OpenAI-compatible). Strict-mode function calling uses `https://api.deepseek.com/beta` with `"strict": true` in the tool schema.
+- **Models:** `deepseek-chat` and `deepseek-reasoner` are documented as **deprecated 2026/07/24**, succeeded by **`deepseek-v4-flash`** (non-thinking) and **`deepseek-v4-pro`** (thinking). **Recommendation: target `deepseek-v4-flash` as primary** (the successor to `deepseek-chat`, the model with confirmed function-calling examples), but make the model name a config var (`DSPY_LM_MODEL` precedent) so the deprecation cutover is a one-line change. Verify the live model name at implementation time.
+- **Tool calling:** YES — `tools=[{type:"function",...}]` + `tool_choice`, OpenAI-format `tool_calls` / `tool_call_id` for multi-turn. This is exactly the agentic loop primitive needed. `deepseek-chat`/`-v4-flash` support it. (DeepSeek docs note historic flakiness in tool-calling; budget a retry + a max-turns cap — mirror `claude.go`'s `MaxToolCalls`.)
+
+**The loop (Python, shelling `helix` verbs as tools):**
+1. Define each `helix` verb the agent may use as an OpenAI function tool (name = verb, params = the verb's args). Keep the toolset small and curated (the verbs in CLAUDE.md's routing table), NOT all 50.
+2. `chat.completions.create(model=…, messages=…, tools=…)`.
+3. On a `tool_call`, execute `subprocess.run(["helix", verb, *args], cwd=workdir, capture_output=True)` — the **CLI subprocess transport** (locked decision). Feed stdout back as a `role:"tool"` message.
+4. Loop until the model emits a final answer or `MaxToolCalls` is hit.
+5. Score the resulting workspace state with the task-success oracle (Detail 3/4).
+
+**Provider fallback:** wrap the `create` call; on DeepSeek error/timeout, retry against `openai_fb` with an equivalent OpenAI model. Keep both behind one `chat(...)` helper so the GEPA metric is provider-agnostic. (Mirrors the v1.4 "DeepSeek as Anthropic fallback" decision already in PROJECT.md Key Decisions.)
+
+> **Why `openai` and NOT a Go client:** putting an LLM client in Go `bench/runtime` adds a runtime-side `go.mod` dep (forbidden); Python keeps it in the quarantined `tools/` venv and lets DSPy call the agent as an in-process function. See "Where Does the Agent Live?" above.
+
+---
+
+## Detail 2 — DSPy GEPA wiring for a task-success metric
+
+**How GEPA metrics work (verified, DSPy 3.2.x official + Context7):**
+
+A GEPA feedback metric has this signature and return contract:
+
+```python
+def metric(gold, pred, trace=None, pred_name=None, pred_trace=None) -> dspy.Prediction:
+    # return dspy.Prediction(score=<float>, feedback=<str>)
+    ...
+```
+
+- `score` is a float (use `1.0` solved / `0.0` unsolved, or a partial-credit fraction).
+- `feedback` is free text GEPA's reflection LM reads to mutate the prompt — this is GEPA's edge over plain bootstrapping; **populate it with WHY the task failed** (e.g. "agent used `grep` instead of `helix find-references`; missed call site X"), not just the score.
+- The existing `adopt_metric` in `optimize.py` already returns `dspy.Prediction(score=, feedback=)` — **the rewire keeps the signature and return type identical; only the body changes** from `score_choice_rate(pred.response)` to "run the agent, run the task's tests, score pass/fail."
+
+**Plugging a non-trivial (subprocess-run, container-backed) evaluation as the metric:**
+
+GEPA does NOT care that the metric is expensive — it just calls it. The metric body becomes:
+
+```python
+def task_success_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    # pred carries the candidate steering text GEPA is optimizing.
+    steering = pred.<field>                       # the SKILL.md-bound instruction under optimization
+    workdir  = setup_task_workspace(gold)         # clone exercise / SWE-bench instance
+    run_agent(steering, workdir)                  # Detail-1 loop: DeepSeek drives `helix` verbs
+    solved, why = grade(gold, workdir)            # Aider: NativeTestCommand; SWE-bench: harness
+    return dspy.Prediction(score=1.0 if solved else 0.0,
+                           feedback=("solved" if solved else f"unsolved: {why}"))
+```
+
+**Practical constraints this introduces (flag for the roadmapper):**
+- **Cost/latency:** GEPA calls the metric many times; each call now spawns an LLM agent loop + a test/container run (seconds–minutes each, vs the old `choice_rate`'s microseconds). Keep the **trainset tiny** (the existing harness already guards `len(examples)<2` and uses `auto="light"`). Consider Aider polyglot (cheap, ~seconds/exercise) for the optimization loop and SWE-bench (expensive, container-backed) for a **final held-out report only** — mirroring the existing `test.jsonl` sequestration discipline.
+- **Determinism / caching:** the agent is non-deterministic (LLM). Document this; do NOT assert byte-stable scores. The hermetic gates must be the LM-free split/parity/degenerate tests (the existing pattern), NOT the agent run.
+- **Key-absence guard:** the existing harness exits 0 when `OPENAI_API_KEY` is unset. v2.3 must extend this to **`DEEPSEEK_API_KEY` (primary)** — exit 0 cleanly when neither key is set, so CI/executor stays green and the metric never crashes.
+
+**DeepSeek-as-DSPy-LM configuration (verified, dspy.ai official):**
+
+DSPy reaches any OpenAI-compatible provider via the `openai/` litellm prefix + `api_base`:
+
+```python
+import dspy
+# Student/program LM AND the GEPA reflection_lm both point at DeepSeek.
+lm = dspy.LM("openai/deepseek-chat",                 # or "openai/deepseek-v4-flash" post-cutover
+             api_key=os.environ["DEEPSEEK_API_KEY"],
+             api_base="https://api.deepseek.com")     # note: api_base, NOT base_url, for dspy.LM
+dspy.configure(lm=lm)
+reflection_lm = dspy.LM("openai/deepseek-chat", temperature=1.0,
+                        api_key=os.environ["DEEPSEEK_API_KEY"],
+                        api_base="https://api.deepseek.com")
+optimizer = GEPA(metric=task_success_metric, auto="light",
+                 track_stats=True, reflection_lm=reflection_lm)
+```
+
+> Note the two distinct knobs: `dspy.LM(..., api_base=...)` is litellm's parameter name (NOT `base_url`); the raw `openai` client (Detail 1) uses `base_url`. They are different libraries — don't conflate. The existing `optimize.py` reads `DSPY_LM_MODEL` from env; extend it to default to a DeepSeek model and read `DEEPSEEK_API_KEY`.
+
+---
+
+## Detail 3 — SWE-bench harness on Podman
+
+The upstream `swebench` harness talks the **Docker API**, not the docker CLI argv. Podman exposes a Docker-compatible API socket; point the harness at it.
+
+**Exact setup (verified against CLAUDE.md's recorded recipe + swebench docs + host probe):**
+
+```bash
+# 1. Start Podman's docker-compatible API socket (host has NO running socket by default — verified).
+podman system service --time=0 &
+#   socket lands at: $XDG_RUNTIME_DIR/podman/podman.sock   (host: /run/user/1000/podman/podman.sock)
+
+# 2. Point the harness at it. The Go wrapper already forwards DOCKER_HOST through its env allowlist.
+export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
+
+# 3. Run the harness (the Go adapter shells exactly this; or run directly in the dev venv).
+python -m swebench.harness.run_evaluation \
+    --dataset_name <dataset> \
+    --predictions_path <abs-clean-path>.jsonl \
+    --run_id <id> \
+    --max_workers <n> \
+    --cache_level base
+```
+
+**Verified integration points in the existing Go adapter (`bench/evaluators/swebench/harness.go`):**
+- It already builds exactly `["-m","swebench.harness.run_evaluation","--dataset_name",…,"--predictions_path",…,"--run_id",…,"--max_workers",…,"--cache_level",…,"--instance_ids",…]`.
+- Its env allowlist **already forwards `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, `DOCKER_CERT_PATH`** when set (`envAllowlist`), and fails closed on empty `PATH`. So Podman support is **already wired** — the only operational step is starting `podman system service`. **Do NOT report "Docker not installed → blocked."**
+
+**Dataset names — VERSION/NAME DRIFT WARNING (important for the roadmapper):**
+- The Go adapter's allowlist currently pins **`princeton-nlp/SWE-bench_Verified`** and `Bertsekas/SWE-Bench_Verified_UTBoost` (`allowedDatasetNames`, harness.go:30–33).
+- **Upstream SWE-bench has since migrated the HF org to `SWE-bench/…`.** Verified current names: SWE-bench Verified = **`SWE-bench/SWE-bench_Verified`**, SWE-bench Lite = **`princeton-nlp/SWE-bench_Lite`** (the `princeton-nlp` mirror still resolves for some suites; the `SWE-bench/` org is canonical going forward).
+- **Action for v2.3:** when scoring against SWE-bench, update `allowedDatasetNames` to include the current `SWE-bench/SWE-bench_Verified` (and add `princeton-nlp/SWE-bench_Lite` if Lite is used) — and pin `swebench==4.1.0` in the venv so the harness module path / dataset expectations are stable. This is a small Go allowlist edit (additive, in the already-existing bench package — NOT a new dep) plus a venv pin. The Phase 87 notes already flagged the dataset name as `[ASSUMED]`/deferred-to-live-confirmation.
+
+**Version pinning:** `swebench==4.1.0` (latest, `requires-python>=3.10`). Pin in `requirements.txt`; the harness module path `swebench.harness.run_evaluation` is stable across recent majors.
+
+---
+
+## Detail 4 — Aider polyglot task-success scoring
+
+**How pass/fail is determined (verified from `bench/datasets/aider-polyglot/loader.go`):**
+
+Each exercise is graded by running the dataset's **NATIVE per-language test command** in the work dir; `Passed = (exit code == 0)`. The native commands (`nativeTestCommand`, loader.go:299–318):
+
+| Language | Test argv | Host toolchain | Present? |
+|----------|-----------|----------------|----------|
+| `python` | `pytest` | `pytest` (from venv) + `python3 3.13.5` | ✅ (venv) |
+| `go` | `go test ./...` | `go 1.26.0` | ✅ |
+| `rust` | `cargo test -- --include-ignored` (acceptance tests are `#[ignore]`) | `cargo 1.96.0` | ✅ |
+| `java` | `./gradlew test` | **gradle wrapper checked into the exercise** + JRE/JDK | ✅ `openjdk 21` (no system gradle/mvn needed) |
+| `javascript` | `./npm-test.sh` | `node v20.19.6` | ✅ |
+| `cpp` | (ctest/JUnit per loader) | `g++ 14.2.0` | ✅ |
+
+**Toolchain verdict — NOT blocked:** all six tracks' required runtimes are present. The earlier-flagged absences (`javac`, `mvn`, `tsc`) are **not used by these commands**: Java runs via the **checked-in `./gradlew` wrapper** (downloads its own gradle; uses `java`/the JDK, present as openjdk 21), JS runs `./npm-test.sh` (uses `node`, present), and TypeScript isn't a separate track here (the JS track covers it). The pristine-test anti-tamper (`restorePristine`, `restorePristineTests`) and the 2-attempt reprompt protocol are already in the loader.
+
+**Reuse for the metric:** the Python agent (Detail 1) edits the exercise via `helix` verbs, then the metric shells the per-language test command — easiest path is to call the Go grader: `aiderpolyglot.NativeTestCommand(lang)` is exported, OR the Python metric replicates the tiny argv map. Prefer invoking the existing Go path through `helix-bench` to keep the single source of truth, but a small Python argv mirror is acceptable if parity-pinned (the project's established pattern — cf. `scorer.py` mirroring `scorecard.go` against a shared golden corpus).
+
+---
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| DSPy `GEPA` optimizer | DSPy `MIPROv2` (+ Optuna) | Use MIPROv2 if you later want to optimize few-shot *demonstrations* (example banks) rather than free-form instruction prose. For SKILL.md text (prose), GEPA is the better fit and needs no Optuna. |
-| DSPy framework | Hand-rolled prompt-search loop in Go | A pure-Go loop over the existing `adopt` scorer avoids Python entirely — viable if the team wants zero Python. But it forfeits DSPy's reflective optimization and the GEPA literature. Given the feature is explicitly *exploratory*, DSPy is the right first bet; the Go scorer remains the authority. |
-| Isolated venv (`tools/promptopt/.venv`) | Conda / system pip install | Conda/system installs leak DSPy into the dev environment and risk it drifting onto a CI lane. A git-ignored venv keeps the blast radius to one directory. |
-| DSPy 3.2.1 (stable) | DSPy 3.3.0b1 (beta) | Pin stable 3.2.1 for reproducibility. Only move to 3.3.x once it leaves beta and you re-verify the GEPA/LM-string API. |
-| Reuse `ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY` | Add an OpenAI leg | OpenAI works via `dspy.LM("openai/…")`, but the Go harness has no OpenAI provider — adding one splits the key surface. Stay on the two providers the scorecard already supports. |
+| Agent in **Python** (`tools/`) | Agent in **Go** `bench/runtime` reusing `aider_edit_cell.go` | Only if the agent were *deterministic/scripted* (no LLM) — then Go + zero LLM SDK works. For an LLM tool-use loop it forces a runtime-side Go LLM dep (forbidden) and a process-spawn handoff to the Python GEPA metric. Rejected. |
+| **`openai` SDK** for DeepSeek | DeepSeek's own SDK / raw `requests` | Never — DeepSeek is OpenAI-compatible; one SDK covers both providers and the fallback. |
+| **`openai` SDK** for the agent | `litellm` directly in the agent | litellm is fine and is already transitive via dspy; but the raw `openai` client gives the cleanest tool-call loop and exactly mirrors DeepSeek's documented examples. Use litellm only inside `dspy.LM`. |
+| Pin **`swebench==4.1.0`** | Unpinned `pip install swebench` | Never — dataset-name/harness drift (the `princeton-nlp`→`SWE-bench` org migration) makes pinning mandatory. |
+| **`deepseek-v4-flash`** (config var) | Hard-code `deepseek-chat` | `deepseek-chat` is deprecated 2026/07/24; keep it as the value only until the cutover, behind the `DSPY_LM_MODEL` env knob. |
+| **SWE-bench Verified** as held-out | SWE-bench full / Multi-SWE | Verified is the curated, container-reproducible set the Go adapter already targets; full set is too expensive for an optimization loop. Lite is a cheaper option for smoke. |
 
-## What NOT to Use / NOT to Add
+## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **Any runtime Python dependency in the shipped binary** | Helix's entire identity is a single Go binary with zero Python/Docker/runtime deps (CLAUDE.md, PROJECT.md). DSPy at *runtime* would violate the product thesis. | DSPy strictly **dev-time/offline**; only its *committed text output* enters the binary, gated by `helix-refgen --check`. |
-| **New Go module dependencies** | The three non-DSPy features are edits to existing packages; no new import is needed. Adding Go deps for a content/codegen milestone is pure risk. | `embed`, `os`, `path/filepath`, `cobra`, `testify`, `jsonschema/v6`, `anthropic-sdk-go` — all already vendored. |
-| **DSPy/pip on the default CI / `go test ./...` path** | A merge-gating job that needs DSPy would (a) require Python+pip+API-key in CI and (b) make merges depend on a live LLM — both forbidden by the milestone's "no runtime/CI Python requirement" intent. The adoption *score* is opt-in and never blocks merge (v2.1 contract). | An **opt-in** `make promptopt-*` target run by a human locally; default CI keeps only the deterministic `helix-refgen --check` + bundle-allowlist + `reference ⊇ VerbToolNames()` gates. |
-| **Letting the DSPy harness write directly into `internal/cli/skills/helix/`** | A side-effecting optimizer that mutates the embed path turns generated/committed artifacts into a moving target and can break the `--check` gate non-deterministically. | Optimizer writes to a dev scratch dir (`tools/promptopt/out/`); a human reviews, commits, and the existing gate validates. |
-| **Committing the venv / DSPy wheels / `__pycache__`** | Bloats the repo and risks the Python tree being picked up by the `installSkill` embed walk (the very bug the allowlist fixes). | Git-ignore `tools/promptopt/.venv/`, `**/__pycache__/`; keep the embed bundle restricted to the `{SKILL.md, reference.md}` allowlist. |
-| **MIPROv2 + Optuna by default** | Optuna is an extra dep that only MIPROv2 needs; the SKILL.md task is prose tuning, not demo-set search. | GEPA (`dspy.GEPA`), which is bundled and needs no Optuna. |
-| **Adding an OpenAI provider just for DSPy** | Splits the API-key surface away from the two providers the Go scorecard already supports. | `anthropic/…` (primary) or `deepseek/deepseek-chat` (cheap leg) — same env vars as `test/oracle/llm`. |
+| A Go LLM SDK (`go-openai`, etc.) in `bench/runtime` or anywhere in-tree | New runtime-side `go.mod` dependency; violates the single-binary / no-runtime-LLM-dep constraint; `toolsquarantine` + `go test ./...` would still compile it | Python `openai` SDK in the `tools/` venv |
+| A `helix` subcommand that shells to Python / DSPy | Violates "no `helix` subcommand shells to Python"; puts dev-time tooling on the product surface | Keep the optimizer/agent invocable ONLY from the dev venv (`python optimize.py`) |
+| Adding `dspy`/`openai`/`swebench` to `go.mod` or any Go import | They are Python; this is structurally impossible but the *intent* (any new merge-path dep) is forbidden | `tools/dspy-tune/requirements.txt`, git-ignored `.venv` |
+| `"helix" in response` style substring scoring (the old proxy's trap) | The whole v2.3 thesis is that `choice_rate` is gameable; do not carry its substring/first-command logic into the task-success metric | Real test-execution pass/fail (Aider `NativeTestCommand`, SWE-bench `report.resolved`) |
+| Auto-adopting optimized text into `SKILL.md`/`reference.md` | Violates the human-gated invariant carried from v2.2 | `cmd/helix-refgen` + `helix-refgen --check`; git-ignored `output/optimized.json`; human transcribes |
+| Reporting "Docker not installed → blocked" for SWE-bench | Host has Podman 5.4.2; `bench/container` auto-detects it; the Go adapter already forwards `DOCKER_HOST` | `podman system service --time=0 &` + `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` |
 
 ## Stack Patterns by Variant
 
-**If the team wants the DSPy harness fully reproducible across machines:**
-- Pin `dspy==3.2.1` in `tools/promptopt/requirements.txt`, optionally generate a `requirements.lock` via `pip freeze` / `uv pip compile`.
-- Because the optimization LM is non-deterministic, treat the optimizer's *output* (not its run) as the reproducible artifact: the committed SKILL.md/reference.md is what `helix-refgen --check` enforces.
+**If the optimization loop must stay cheap (the common case):**
+- Use **Aider polyglot** as the GEPA trainset/valset (seconds/exercise, no containers), DeepSeek as the agent LM.
+- Reserve **SWE-bench (Verified, via Podman)** for a final held-out report only (sequestered like the existing `test.jsonl`).
 
-**If the team decides Python is too much surface even for dev-time:**
-- Drop DSPy entirely and run a hand-rolled candidate-search loop directly over the Go `test/oracle/adopt` scorer (`go test`-driven), keeping the milestone 100% Go. The other three features are unaffected. This is the clean fallback because DSPy is explicitly the *exploratory* item.
+**If `DEEPSEEK_API_KEY` is unset (CI / executor):**
+- The harness exits 0 with an informative message (extend the existing `OPENAI_API_KEY` guard to cover `DEEPSEEK_API_KEY` primary). Hermetic LM-free gates (split/parity/degenerate + new agent-loop unit tests) run without any key.
+
+**If DeepSeek tool-calling flakes or rate-limits:**
+- Fall back to the OpenAI client (`OPENAI_API_KEY` set) behind the single `chat(...)` helper; cap turns via `MaxToolCalls` (mirror `claude.go`).
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `dspy==3.2.1` | Python `>=3.10,<3.15` | DSPy's own interpreter pin (PyPI metadata). `python3` already present in one Makefile CI helper, but keep DSPy off the default path. |
-| `dspy[anthropic]` | `ANTHROPIC_API_KEY` env (via LiteLLM) | Reuses the **same** env var as `test/oracle/llm/client.go` — one key for Go scorer + Python optimizer. |
-| `dspy.GEPA` (GEPA 0.1.x) | bundled with DSPy 3.x | No separate `pip install gepa` needed when using integrated `dspy.GEPA`. |
-| Go 1.25.1 / shipped binary | (no DSPy at all) | The binary never links, embeds, or shells to Python. Hard isolation. |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `dspy==3.2.1` | Python `>=3.10,<3.15` | Host 3.13.5 OK. GEPA API stable 3.1→3.2. |
+| `openai==2.43.0` | Python `>=3.9` | One client for DeepSeek (`base_url=https://api.deepseek.com`) + OpenAI. |
+| `swebench==4.1.0` | Python `>=3.10`; Docker API (Podman socket via `DOCKER_HOST`) | Pin mandatory due to dataset-org drift (`princeton-nlp`→`SWE-bench`). |
+| DSPy ↔ DeepSeek | `dspy.LM("openai/deepseek-…", api_base="https://api.deepseek.com")` | `api_base` (litellm), NOT `base_url`. |
+| Go side | `go1.26.0`; no new `go.mod` deps | Reuses aider-polyglot loader, swebench wrapper, container detect. `toolsquarantine` boundary unchanged. |
 
 ## Sources
 
-- https://pypi.org/project/dspy/ — verified latest stable **3.2.1** (2026-05), Python `>=3.10,<3.15`, extras include `anthropic`/`optuna`/`mcp`/`langchain` — HIGH confidence
-- https://dspy.ai/ — `pip install -U dspy`, `dspy.LM("provider/model", api_key=…)` + `dspy.configure(lm=lm)` pattern, Python ≥3.10 — HIGH confidence
-- https://dspy.ai/api/models/LM/ — LM string format + explicit `api_key=` and `ANTHROPIC_API_KEY` env-var path via LiteLLM — HIGH
-- https://github.com/stanfordnlp/dspy/releases — `3.3.0b1` beta exists; GEPA integrated (`dspy.GEPA`), Optuna required only by MIPROv2 — MEDIUM (release-page snapshot dates appeared stale; reconciled against PyPI)
-- https://www.morphllm.com/gepa-prompt-optimization — GEPA is reflective prompt-evolution (ICLR 2026), bundled in DSPy, fewer rollouts than MIPROv2 — MEDIUM
-- Repo tree (read directly): `cmd/helix-refgen/{main.go,render.go}`, `internal/cli/skill.go` (`installSkill` + embed walk), `test/oracle/adopt/scorecard.go` (choice_rate/fallback_rate classifier), `test/oracle/llm/client.go` (`ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY` providers), `go.mod` (Go 1.25.1), `Makefile` (`helix-refgen` targets, lone `python3` CI helper) — HIGH confidence on Go-side "no new deps" claim
+- `/llmstxt/dspy_ai_llms_txt` (Context7, benchmark 87.12) — DSPy GEPA metric signature/return contract; generic OpenAI-compatible LM config (`dspy.LM("openai/...", api_base=...)`). **HIGH**
+- https://api-docs.deepseek.com/ + /guides/function_calling (DeepSeek official, 2026-06-24) — base_url `https://api.deepseek.com`, models (`deepseek-v4-flash`/`-pro`; `deepseek-chat`/`-reasoner` deprecated 2026/07/24), tool-calling support, strict-mode `/beta`. **HIGH**
+- https://github.com/SWE-bench/SWE-bench (official) — `python -m swebench.harness.run_evaluation` flags; dataset names (`SWE-bench/SWE-bench_Verified`, `princeton-nlp/SWE-bench_Lite`); Docker-based. **HIGH**
+- PyPI JSON API (2026-06-24) — latest+requires-python: `dspy 3.2.1` (`>=3.10,<3.15`), `openai 2.43.0` (`>=3.9`), `swebench 4.1.0` (`>=3.10`). **HIGH**
+- Live source (read 2026-06-24): `tools/dspy-tune/{optimize.py,scorer.py,requirements.txt}`, `bench/runtime/subprocess/claude.go`, `bench/runtime/aider_edit_agent.go`, `bench/datasets/aider-polyglot/loader.go`, `bench/evaluators/swebench/harness.go`, `bench/container/engine.go`, `internal/lint/toolsquarantine/analyzer.go`. **HIGH**
+- Host probe (2026-06-24): `podman 5.4.2` (no running socket), `go 1.26.0`, `python3 3.13.5`, `node v20.19.6`, `cargo 1.96.0`, `g++ 14.2.0`, `openjdk 21`; `javac`/`mvn`/`tsc` absent (NOT required); `DEEPSEEK_API_KEY`+`OPENAI_API_KEY` set, `ANTHROPIC_API_KEY` unset. **HIGH**
 
 ---
-*Stack research for: v2.2 Agent-Facing Skill Quality & Prompt Tuning (DSPy offline harness + Go-side codegen/skill rewrite)*
-*Researched: 2026-06-23*
+*Stack research for: Helix v2.3 Task-Success-Driven Skill Optimization (dev-time/offline LLM optimization tooling for a single-binary Go product)*
+*Researched: 2026-06-24*

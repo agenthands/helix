@@ -275,6 +275,11 @@ test/bench/baselines/local.txt
 # Generated runtime artifact, never tracked.
 /test/oracle/contract/.helix/
 
+# v2.4 dev-time tuning runs (run_real.py / optimize.py / smoke) drive a real
+# helix daemon from cwd=tools/dspy-tune, which writes a cwd-relative
+# .helix/semantic.duckdb store. Generated runtime artifact, never tracked.
+/tools/dspy-tune/.helix/
+
 # Eval harness runtime artifacts
 /eval/reports/
 /cmd/helix-eval/eval/

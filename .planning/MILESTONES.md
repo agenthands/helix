@@ -1,5 +1,23 @@
 # Milestones
 
+## v2.4 Corpus Growth & Real Optimization Verdict (Shipped: 2026-06-24)
+
+**Phases completed:** 4 phases (111–114), 4 plans, 10/10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05)
+
+**Outcome: a REAL, gate-cleared verdict (SHIP-by-rule, marginal — adoption NOT recommended on this margin).** v2.3 no-shipped because the corpus was below the `val_size>50` gate; v2.4 grew the corpus past the gate and ran the task-success pipeline FOR REAL, turning the no-ship into a measured one.
+
+**Key accomplishments:**
+
+- Materialized a 103-task Aider-polyglot reward corpus (go 39 / python 34 / rust 30) with a 3-way disjoint split (train 26 / val 26 / **sequestered held-out 51 > 50**, planted-leak RED test) — the literal v2.2/v2.3 no-ship axis, now cleared (CORPUS-01/02).
+- Hardened the optimizer for the real run: DeepSeek-`v4-flash` pin (program + reflection LM, alias-deprecation-safe), cost caps (rollout / bounded concurrency / 429 backoff / agent turn cap), and a re-verified SWE-bench "0-tests⇒resolved" footgun refusal (SCALE-01/02/03).
+- **Ran the pipeline for real, cost-aware ($0.23 total):** GEPA `optimize.py` (val_size=51), an honest ON-vs-OFF attribution on the sequestered split — **delta +0.0392 (ON 3/51 vs OFF 1/51) → SHIP-by-rule** — and a SWE-bench Verified gold-patch confirm on Podman (**2/2 resolved**, fail-not-skip proven) (RUN-01/02/03).
+- **Fixed three integration gaps the v2.3 hermetic fakes had hidden** (the v2.3 pipeline was never functional end-to-end): agent verb argv (positional → real `--flags`); a **real product bug** — `helix activate` now also calls `activate_project` so the CLI file/edit verbs get a workspace (E2E regression-tested); and the GEPA candidate→agent steering thread.
+- REPORT-only ship/no-ship REPORT with honest caveats (thin/noise margin, GEPA non-evolving, ON candidate = existing SKILL.md, K=2) + ADOPT-04 boundary re-verified (zero new Go deps since v2.0; adoption gate desync → `--check` exit 1) (REPORT-01, ADOPT-05).
+
+**Audit:** PASSED — 10/10 reqs, 4/4 phases verified, E2E real run, build/`make vet`/tests green. Executed inline (gsd-* subagents absent). Follow-ons (non-blocking): TUNE-FUT-06 (rebuild GEPA-as-agent-program so reflection evolves), TUNE-FUT-05 (larger SWE-bench K), a significance test in `decide_ship`, and TUNE-FUT-03 (actual human-gated SKILL.md adoption). See `.planning/milestones/v2.4-ROADMAP.md` + `v2.4-MILESTONE-AUDIT.md`.
+
+---
+
 ## v2.3 Task-Success-Driven Skill Optimization (Shipped: 2026-06-24)
 
 **Phases completed:** 4 phases (107–110), 10/10 requirements (AGENT-01/02/03, ORACLE-01/02, TUNE-02/03/04, ADOPT-03/04)

@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Corpus Growth & Real Optimization Verdict
-status: awaiting_audit
-current_phase: 114
-current_phase_name: Verdict & Boundary Re-Verification
-last_updated: "2026-06-24T15:50:00.000Z"
+current_phase: 4
+status: Awaiting next milestone
+stopped_at: "v2.4 milestone set up — PROJECT.md updated, targeted research synthesized (SUMMARY.md + DEEPSEEK/GEPA-COST/SWEBENCH), REQUIREMENTS.md (10 reqs) + ROADMAP.md (Phases 111-114) created and committed. Next: execute Phase 111 (Corpus Growth & Sequestered Split) — running autonomously via `/gsd-autonomous`."
+last_updated: "2026-06-24T20:14:56.331Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 114 complete — all 4 v2.4 phases done; ready for milestone audit
+last_activity_desc: Milestone v2.4 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 4
   completed_plans: 4
   percent: 100
+current_phase_name: Verdict & Boundary Re-Verification
 ---
 
 # Project State
@@ -27,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 111 — Corpus Growth & Sequestered Split (not started)
+Phase: Milestone v2.4 complete
 Plan: —
-Status: Roadmap created; ready for phase execution
-Last activity: 2026-06-24 — Milestone v2.4 roadmap created (4 phases, 10/10 reqs mapped)
+Status: Awaiting next milestone
+Last activity: 2026-06-24 — Milestone v2.4 completed and archived
 
 ## Performance Metrics
 
@@ -165,6 +166,7 @@ None yet.
 **(Phase 113, 2026-06-24): workspace-activation gap stopped the real run.** The v2.3 dev-time agent was never actually run end-to-end against real helix — its hermetic fakes masked two real defects. (1) FIXED: `agent/tools.py` passed `location` as a positional, but helix verbs take named `--flags` (`read-file --path X`) → every verb failed `required flag --path not set`. (2) BLOCKER: the file/edit verbs return `no_workspace` because the daemon's file-tool active-workspace state is set ONLY by the MCP `activate_project` tool (`repo_path`, persists globally per-daemon via `ActivateCallback`), and there is **no `activate_project` CLI verb**. `helix activate` (gRPC `ActivateWorkspace`) sets only kernel/LS state, NOT the file-tool workspace (confirmed empirically + by the verb.go:153 E2E comment). A one-shot `helix <verb>` sends no cwd, so LazyInit (which keys on `repo_path`) can't auto-activate. This is also a likely **real product bug**: the CLI-first file/edit verbs cannot obtain an active workspace from the shipped CLI surface (SessionStart's `helix activate` does not enable them). DeepSeek auth works (probe OK); corpus + hardening (111/112) are done. Awaiting user decision on how to unblock (see Session Continuity).
 
 Watch items for v2.4:
+
 - **Phase 111 corpus composition:** confirm which Aider tracks/exercises + count materialize cleanly (≥101 tasks, each with a runnable native test command) so `val_size>50` clears affordably; some Exercism tracks need a toolchain present to grade.
 - **Phase 113 environment:** the SWE-bench confirming leg needs Podman + the docker-compat socket (`podman system service --time=0 &` + `DOCKER_HOST`) and ~3–5 GiB image pull for K=50 on an exec-capable, roomy storage path (rootless subuid/subgid + overlay driver pre-checks). If unavailable, RUN-03 becomes a surfaced blocker (fail-not-skip on a requested run), not a silent skip.
 - **Phase 113 billing:** real GEPA run is genuinely billed (~$5–15 worst case). Needs `DEEPSEEK_API_KEY` (or OpenAI fallback key) present in the dev shell.
@@ -244,4 +246,4 @@ Resume file: —
 
 ## Operator Next Steps
 
-- Execute v2.4 phases 111-114 (running autonomously via /gsd-autonomous): discuss → plan → execute each, then milestone audit → complete → cleanup.
+- Start the next milestone with /gsd-new-milestone

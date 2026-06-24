@@ -25,8 +25,8 @@
 
 ### Adoption & Boundary (ADOPT)
 
-- [ ] **ADOPT-03**: Optimized skill text is adopted **only** via a human-reviewed `SKILL.md` edit gated by `helix-refgen --check` (the optimizer writes only git-ignored output; never auto-writes `SKILL.md`/`reference.md`); the `## Decision matrix` anchor and SKILL size cap are preserved.
-- [ ] **ADOPT-04**: The **single-binary / no-runtime-Python invariant** is preserved — zero new Go module dependencies; no `helix` subcommand shells to Python; the agent/optimizer stay off `go.mod`, `helix setup`, the default `go test ./...`, and the merge path; the `make vet` import-boundary (`toolsquarantine`) analyzer stays green.
+- [x] **ADOPT-03**: Optimized skill text is adopted **only** via a human-reviewed `SKILL.md` edit gated by `helix-refgen --check` (the optimizer writes only git-ignored output; never auto-writes `SKILL.md`/`reference.md`); the `## Decision matrix` anchor and SKILL size cap are preserved.
+- [x] **ADOPT-04**: The **single-binary / no-runtime-Python invariant** is preserved — zero new Go module dependencies; no `helix` subcommand shells to Python; the agent/optimizer stay off `go.mod`, `helix setup`, the default `go test ./...`, and the merge path; the `make vet` import-boundary (`toolsquarantine`) analyzer stays green.
 
 > **Cross-cutting (applies to every requirement's exit gate):** **Anti-vacuity** — each gate a phase adds (vacuous-pass refusal, test-tamper restore, TEST-split sequestration, `val_size>50` precondition, ON/OFF attribution, `--check` adoption gate, boundary analyzer) MUST ship a deliberate break-the-invariant → assert-RED test; a green-path-only gate is presumed broken. Fold code-review + fix BEFORE verify (the repeated v2.2 vacuous-pass / parity-bug class). **HELIX_BIN fail-not-skip** — any bench surface that requires `HELIX_BIN` FAILS loudly when it's set but the run produced no result, rather than silently skipping.
 
@@ -61,7 +61,7 @@
 | TUNE-02 | Phase 108 | Complete |
 | TUNE-03 | Phase 108 | Complete |
 | TUNE-04 | Phase 109 | Complete |
-| ADOPT-03 | Phase 110 | Pending |
-| ADOPT-04 | Phase 110 | Pending |
+| ADOPT-03 | Phase 110 | Complete |
+| ADOPT-04 | Phase 110 | Complete |
 
 > **Cross-cutting recurrence (informational; primary owners above):** ADOPT-04 (single-binary / no-runtime-Python boundary) is re-verified as an exit gate in **every** phase (107–110) and owned for traceability by Phase 110. The anti-vacuity (break-the-invariant → assert-RED) and HELIX_BIN-fail-not-skip disciplines recur in every phase that adds a gate or touches a bench surface (107, 108, 109).

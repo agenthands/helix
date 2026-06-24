@@ -22,7 +22,7 @@
 
 ## Phases
 
-### 🚧 v2.3 Task-Success-Driven Skill Optimization (Phases 107-110) — IN PROGRESS
+### ✅ v2.3 Task-Success-Driven Skill Optimization (Phases 107-110) — IN PROGRESS
 
 4 phases, 10 requirements (AGENT-01/02/03, ORACLE-01/02, TUNE-02/03/04, ADOPT-03/04), 100% mapped. Fix the v2.2 no-ship root cause: replace the gameable `choice_rate` adoption proxy with a real **agent task-success** optimization signal. A net-new OpenAI-compatible tool-using agent drives the `helix` CLI via subprocess; GEPA's optimization metric is rewired from `choice_rate` to honest benchmark task-success (Aider hidden-tests-green; SWE-bench FAIL_TO_PASS-flip + PASS_TO_PASS-no-regression); any gain is attributed to the skill text via a mandatory ON-vs-OFF control arm on a sequestered `val_size>50` held-out split; adoption is human-gated via `helix-refgen --check`. The agent + optimizer live entirely dev-time in Python under `tools/dspy-tune/` — **zero new Go deps, no runtime Python**, off `go.mod` / `helix setup` / default `go test ./...` / the merge path.
 
@@ -31,7 +31,7 @@
 - [x] Phase 107: ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering (AGENT-01/02/03) — completed 2026-06-24
 - [x] Phase 108: Aider Honest Task-Success Oracle + Sandbox + GEPA Metric Rewire + Sequestered Split (ORACLE-01, TUNE-02, TUNE-03) — **research** — completed 2026-06-24
 - [x] Phase 109: SWE-bench Oracle via Podman + ON/OFF Attribution-Delta Report (ORACLE-02, TUNE-04) — **research**
-- [ ] Phase 110: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT (ADOPT-03, ADOPT-04)
+- [x] Phase 110: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT (ADOPT-03, ADOPT-04)
 
 ## Phase Details
 

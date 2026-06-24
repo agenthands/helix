@@ -84,3 +84,83 @@ auto-adopted**.
 Research pinned `dspy==3.1.3`; the harness uses `dspy==3.2.1` (the then-current
 release at plan time). The GEPA top-level API used by `optimize.py` is unchanged
 across 3.1.x -> 3.2.x.
+
+---
+
+# v2.3 Ship/No-Ship REPORT — Task-Success-Driven Skill Optimization (Phase 110)
+
+**Milestone:** v2.3 (Phases 107–110)
+**Requirements:** ADOPT-03 (human-gated adoption), ADOPT-04 (single-binary /
+no-runtime-Python re-verification)
+**Date:** 2026-06-24
+
+## Verdict: NO-SHIP (by design — legitimate, success-meeting)
+
+The full task-success optimization pipeline is **built, gated, and green**, but
+**no optimized steering text is adopted into the shipped surface** at this time.
+
+This is the same honest conclusion the Phase-106 spike reached, now reached
+through the *real* task-success machinery rather than the gameable `choice_rate`
+proxy: there is **no trustworthy positive ON-vs-OFF attribution delta on a
+held-out split large enough to trust** (`val_size > 50`), so adopting any tuned
+steering would be premature. NO-SHIP is a success-meeting outcome, not a failure.
+
+### What was built (107–109) and is ready behind the gate
+- **Phase 107** — dev-time DeepSeek/OpenAI ReAct agent driving the real `helix`
+  CLI; loud-fail on missing key; first-class steering ON/OFF.
+- **Phase 108** — honest Aider-polyglot task-success oracle (0-tests = hard
+  error, anti-tamper gold-test restore); the `choice_rate → task-success` GEPA
+  metric swap; sequestered held-out TEST split + strict `val_size > 50` gate.
+- **Phase 109** — heaviest grader: SWE-bench task-success via the upstream
+  `swebench==4.1.0` harness on Podman (FAIL_TO_PASS + PASS_TO_PASS, dataset-org
+  pin, 0-tests refusal); ON-vs-OFF attribution delta + per-arm cost machinery
+  (`attribution.py`).
+
+### The recorded ON/OFF attribution (what the REPORT records)
+
+| Field | Value |
+|-------|-------|
+| ON success_rate | _not measured — no live run cleared the gate_ |
+| OFF success_rate | _not measured — no live run cleared the gate_ |
+| Attribution delta (ON − OFF) | _n/a (no trustworthy held-out delta)_ |
+| Held-out `val_size` | below the strict `> 50` gate (the v2.2 corpus is ~3) |
+| Per-arm cost | $0.00 (no live optimization run executed) |
+
+No numbers are fabricated. `attribution.render_report(...)` is the live renderer
+that fills this table from a real ON/OFF run; `attribution._main()` refuses to
+emit a delta without an LM key AND a corpus, and the corpus is still below the
+gate. Growing the corpus past `val_size > 50` (TUNE-FUT-01) is the precondition
+for a real ship decision.
+
+## Adoption gate (ADOPT-03) — live + non-vacuous
+
+- Optimized text re-enters the shipped surface **only** via a human-reviewed
+  `internal/cli/skills/helix/SKILL.md` edit (the `## Decision matrix` anchor and
+  the SKILL-04 ≤1536-char description cap preserved) or a `helix-refgen` override,
+  passing `go run ./cmd/helix-refgen --check`.
+- The optimizer writes **only** git-ignored `tools/dspy-tune/output/`
+  (`.gitignore:243`); it never auto-writes `SKILL.md` / the generated reference.
+- **Break-the-invariant proof:** a hand-edited reference out of sync with the
+  generator makes `helix-refgen --check` exit `1` (verified live; durable guard:
+  `cmd/helix-refgen/main_test.go::TestCheckRoundTrip`).
+
+## Single-binary / no-runtime-Python (ADOPT-04) — re-verified end-to-end
+
+- **Zero new Go deps:** `go.mod` / `go.sum` last changed at `7f20a874 feat(90-01)`
+  (v2.0) — untouched through v2.1, v2.2, and v2.3.
+- **No optimizer→Python coupling in the binary:** 0 Go import edges from
+  `internal/`/`cmd/` into `tools/dspy-tune`; 0 `.go` files under `tools/dspy-tune`
+  (off the default `go test ./...`); the only Go `pip` exec is the documented
+  `internal/langregistry/installer.go` LS installer (toolsquarantine-exempt).
+- `make vet` (incl. the `vet-tools-quarantine` import-boundary analyzer) green.
+- `grep -E 'skills/helix|reference\.md' tools/dspy-tune/optimize.py == 0`.
+- New deps are dev-venv Python pins only: `dspy==3.2.1`, `openai==2.43.0`,
+  `swebench==4.1.0` — all quarantined out of the binary / module / `helix setup`
+  / merge path.
+
+## Re-entry (if a future tuned run ever ships)
+
+Grow the corpus so `val_size > 50` (TUNE-FUT-01), run the ON/OFF attribution,
+and — only on a materially positive held-out delta — transcribe the adopted
+steering into `SKILL.md` by hand and pass `helix-refgen --check`. The raw
+`output/optimized.json` is git-ignored and never pasted.

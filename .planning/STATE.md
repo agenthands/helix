@@ -4,16 +4,16 @@ milestone: v2.3
 milestone_name: Task-Success-Driven Skill Optimization
 current_phase: 110
 current_phase_name: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT
-status: executing
-stopped_at: "v2.3 at 3/4 — Phases 107 + 108 + 109 shipped & verified (passed); tree to commit. Next: Phase 110 (human-gated adoption via helix-refgen --check + boundary re-verify + ship/no-ship REPORT), then milestone close."
+status: phases_complete
+stopped_at: "v2.3 at 4/4 — all phases (107-110) shipped & verified (passed). Phase 110 verdict NO-SHIP by design. Next: milestone lifecycle (audit → complete → cleanup)."
 last_updated: "2026-06-24T10:40:37.588Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 109 executed inline (uv) — SWE-bench oracle + ON/OFF attribution; 51 py tests green, make vet green
+last_activity_desc: Phase 110 executed inline (uv) — adoption gate proven + boundary re-verified + ship/no-ship REPORT (NO-SHIP)
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 109 complete (3/4 v2.3 phases done); next = Phase 110
+Phase: 110 complete (4/4 v2.3 phases done) — ALL PHASES COMPLETE
 Plan: —
-Status: 107 + 108 + 109 shipped & verified (passed). Phase 109 executed inline with uv (SWE-bench oracle + ON/OFF attribution). Next = Phase 110 + milestone close.
-Last activity: 2026-06-24 — Phase 109 executed inline with uv; 51 py tests + go parity + make vet green. See `.planning/.continue-here.md`.
+Status: 107 + 108 + 109 + 110 shipped & verified (passed). Phase 110 verdict NO-SHIP by design (corpus < val_size>50). Next = milestone lifecycle (audit → complete → cleanup).
+Last activity: 2026-06-24 — Phase 110 executed inline with uv; adoption gate proven live, boundary re-verified, ship/no-ship REPORT written.
 
 ## Performance Metrics
 
@@ -216,6 +216,9 @@ Resume file: .planning/.continue-here.md (refreshed to the Phase 110 checkpoint)
 - [Phase 109]: grade_swebench.py is a Python parity MIRROR of harness.go (argv/dataset-allowlist/env-allowlist), pinned by shared golden/swebench_argv.json + asserted on BOTH sides (argv_parity_test.go); reuses grade_aider.GradeError and plugs into taskmetric via the same (passed, tests_run) contract
 - [Phase 109]: resolution contract recomputed from tests_status (never a bare top-level resolved flag): resolved = non-empty FAIL_TO_PASS all-pass AND no PASS_TO_PASS regression; 0 tests evaluated => GradeError (vacuous-pass refusal, mutation-confirmed RED)
 - [Phase 109]: attribution.py decide_ship gates on optimize.VAL_SIZE_GATE (single source of truth, strict >50) AND positive delta; MeteredLLM is a non-invasive cost wrapper (Phase-107 LLM untouched); filled REPORT artifact deferred to Phase 110 (corpus still < val_size>50 by design)
+- [Phase 110]: ADOPT-03/04 are re-verification reqs — adoption gate (helix-refgen --check), git-ignored optimizer output, and boundary analyzers all already existed (97/104/106/109); 110 proved them end-to-end (break-the-invariant: desync reference.md => --check exit 1) + wrote the v2.3 ship/no-ship REPORT. NO new production code.
+- [Phase 110]: go.mod/go.sum last touched at 7f20a874 feat(90-01) (v2.0) — untouched through v2.1/v2.2/v2.3 => zero new Go deps proven rigorously. openai-go v1.12.0 is a PRE-EXISTING dep, not the Python openai==2.43.0 pin.
+- [Phase 110]: v2.3 ship/no-ship verdict = NO-SHIP by design (corpus val_size≈3 < strict >50 gate, the v2.2 root cause); pipeline complete + correctly gated, no fabricated delta. Re-entry precondition: grow corpus past val_size>50 (TUNE-FUT-01).
 
 ## Operator Next Steps
 

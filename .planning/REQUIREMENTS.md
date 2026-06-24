@@ -59,8 +59,8 @@ Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORPUS-01 | Phase 111 | Pending |
-| CORPUS-02 | Phase 111 | Pending |
+| CORPUS-01 | Phase 111 | Complete |
+| CORPUS-02 | Phase 111 | Complete |
 | SCALE-01 | Phase 112 | Pending |
 | SCALE-02 | Phase 112 | Pending |
 | SCALE-03 | Phase 112 | Pending |

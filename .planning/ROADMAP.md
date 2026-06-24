@@ -29,7 +29,7 @@
 
 **Forced dependency chain (do not reorder):** corpus growth + sequestered split (111) → scale hardening (112) → the real billed run (113) → verdict + boundary re-verify (114). Each gate ships a break-the-invariant → assert-RED test; code-review + fix folds in BEFORE verify. Research (`.planning/research/SUMMARY.md`) pinned the model id (`deepseek-v4-flash`), the GEPA cost model (~$5–15/run; trainset free, valset is the lever), and SWE-bench logistics (K=25–50 stratified Verified slice; the harness "0-tests ⇒ resolved" footgun).
 
-- [ ] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02)
+- [x] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02) — completed 2026-06-24
 - [ ] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03)
 - [ ] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03)
 - [ ] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05)
@@ -49,7 +49,7 @@
   4. Corpus provenance/licensing recorded (reuse the v1.12 Exercism `LICENSE-AUDIT`/`VENDOR-MANIFEST` discipline); no task content is hand-fabricated.
   5. **Boundary preserved (ADOPT-04 cross-cutting)**: `git diff go.mod` empty; `make vet` (`toolsquarantine`) green; corpus materialization is dev-time Python/loader only — no `helix` runtime edge.
 
-**Plans**: TBD
+**Plans**: 1 plan (111-01) — completed 2026-06-24
 **Research**: false — the relevant external facts (corpus sizing math, GEPA split semantics) are pinned in `.planning/research/SUMMARY.md`.
 
 ### Phase 112: Scale Hardening for the Real Run

@@ -27,26 +27,69 @@ class VerbResult:
 
 
 # Curated subset of the helix routing-table verbs (read + light-edit), kebab
-# names verbatim from internal/cli/verbs_gen.go. Kept intentionally small (the
-# CLAUDE.md routing-table read/edit subset) — widen only if Phase-108
-# task-success is recall-limited.
-_READ_VERBS = {
-    "go-to-definition": "Resolve where a symbol is defined (relpath:line:col).",
-    "find-references": "Find all references/callers of a symbol.",
-    "search-symbols": "Find symbols by name across the repository.",
-    "get-symbol-overview": "List the symbols (outline) in a file.",
-    "read-file": "Read a file (or a line range).",
-    "get-diagnostics": "Get compiler/LSP diagnostics for a file.",
-}
-_EDIT_VERBS = {
-    "replace-in-file": "Replace text in a file.",
-    "fuzzy-edit": "Apply a drift-tolerant fuzzy text edit.",
-    "insert-before-symbol": "Insert code before a symbol.",
-    "insert-after-symbol": "Insert code after a symbol.",
+# names verbatim from internal/cli/verbs_gen.go, each declared with its REAL flag
+# surface. T-113 fix: helix verbs take NAMED --flags (e.g. `read-file --path X`),
+# NOT positionals — the Phase-107 shim passed `location` positionally so EVERY
+# verb failed with "required flag --path not set" (the fake-based hermetic test
+# could not catch this; only a real-helix smoke did). Kept small (the CLAUDE.md
+# read/edit subset) — widen only if task-success is recall-limited.
+#
+# _VERB_SPECS: verb -> (description, {param_name: (flag, json_type, required)}).
+_VERB_SPECS = {
+    "read-file": ("Read a file (optionally a line range).", {
+        "path": ("--path", "string", True),
+        "start_line": ("--start-line", "integer", False),
+        "end_line": ("--end-line", "integer", False),
+    }),
+    "get-symbol-overview": ("List the symbols (outline) in a file.", {
+        "path": ("--path", "string", True),
+    }),
+    "get-diagnostics": ("Get compiler/LSP diagnostics for a file.", {
+        "path": ("--path", "string", True),
+    }),
+    "search-symbols": ("Find symbols by name across the repository.", {
+        "query": ("--query", "string", True),
+    }),
+    "go-to-definition": ("Resolve where a symbol is defined.", {
+        "path": ("--path", "string", True),
+        "line": ("--line", "integer", True),
+        "column": ("--column", "integer", True),
+    }),
+    "find-references": ("Find all references/callers of a symbol.", {
+        "path": ("--path", "string", True),
+        "line": ("--line", "integer", True),
+        "column": ("--column", "integer", True),
+    }),
+    "replace-in-file": ("Replace a literal pattern with a replacement in a file.", {
+        "path": ("--path", "string", True),
+        "pattern": ("--pattern", "string", True),
+        "replacement": ("--replacement", "string", True),
+    }),
+    "fuzzy-edit": ("Drift-tolerant edit: replace a (fuzzily matched) search block.", {
+        "path": ("--path", "string", True),
+        "search": ("--search", "string", True),
+        "replacement": ("--replacement", "string", True),
+    }),
+    "insert-before-symbol": ("Insert content immediately before a named symbol.", {
+        "path": ("--path", "string", True),
+        "symbol_name": ("--symbol-name", "string", True),
+        "content": ("--content", "string", True),
+    }),
+    "insert-after-symbol": ("Insert content immediately after a named symbol.", {
+        "path": ("--path", "string", True),
+        "symbol_name": ("--symbol-name", "string", True),
+        "content": ("--content", "string", True),
+    }),
 }
 
 
-def _schema(name, description):
+def _schema(name, description, params):
+    properties = {}
+    required = []
+    for pname, (flag, jtype, req) in params.items():
+        properties[pname] = {"type": jtype, "description": f"value for {flag}"}
+        if req:
+            required.append(pname)
     return {
         "type": "function",
         "function": {
@@ -54,50 +97,35 @@ def _schema(name, description):
             "description": description,
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "A relpath:line:col anchor, a relpath, or a symbol name, as the verb requires.",
-                    },
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Any additional positional arguments for the verb.",
-                    },
-                },
-                "required": [],
+                "properties": properties,
+                "required": required,
             },
         },
     }
 
 
-TOOL_SCHEMAS = [_schema(n, d) for n, d in {**_READ_VERBS, **_EDIT_VERBS}.items()]
+TOOL_SCHEMAS = [_schema(n, d, p) for n, (d, p) in _VERB_SPECS.items()]
 
 # The set of verb names the agent is allowed to spawn (defense-in-depth: even if
 # a model fabricates a tool_call name, run_verb only ever runs `helix <verb>`).
-VERB_NAMES = {s["function"]["name"] for s in TOOL_SCHEMAS}
+VERB_NAMES = set(_VERB_SPECS)
 
 
 def _argv_for(verb, args):
-    """Build a fixed argv for `helix <verb> ...` from decoded tool-call args.
-
-    `location` (if present) is the leading positional; any `args` array follows.
-    Everything is coerced to str and passed as a list element — never shell-quoted.
-    """
+    """Build a fixed argv `helix <verb> --flag value ...` from decoded tool-call
+    args, using the verb's REAL flag surface (_VERB_SPECS). Each declared param
+    present in `args` becomes a `--flag value` pair (stable, spec order). Unknown
+    keys are ignored (defense-in-depth); a missing required flag is left to helix
+    to report so the agent observes the error and retries. Never shell-quoted."""
     argv = ["helix", verb]
-    if isinstance(args, dict):
-        loc = args.get("location")
-        if loc is not None:
-            argv.append(str(loc))
-        extra = args.get("args")
-        if isinstance(extra, (list, tuple)):
-            argv.extend(str(v) for v in extra)
-        else:
-            # Fallback: append remaining scalar values positionally, stably ordered.
-            for k, v in args.items():
-                if k in ("location", "args"):
-                    continue
-                argv.append(str(v))
+    spec = _VERB_SPECS.get(verb)
+    if not spec or not isinstance(args, dict):
+        return argv
+    _desc, params = spec
+    for pname, (flag, _jtype, _req) in params.items():
+        if pname in args and args[pname] is not None:
+            argv.append(flag)
+            argv.append(str(args[pname]))
     return argv
 
 

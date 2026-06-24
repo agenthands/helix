@@ -1023,3 +1023,32 @@ func keysOf(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestCLI_ActivateEnablesFileVerb proves the activate.go fix: `helix activate`
+// (NOT the activate_project tool directly) must enable the CLI file verbs. Before
+// the fix, runActivate called only the gRPC ActivateWorkspace (kernel state), so a
+// subsequent `helix read-file` returned `no_workspace` — the CLI-first file/edit
+// verbs were unusable from the shipped surface after a plain `helix activate`
+// (the SessionStart-hook flow). This is the break-the-invariant regression: revert
+// the activate_project call in runActivate and read-file below goes RED.
+func TestCLI_ActivateEnablesFileVerb(t *testing.T) {
+	f := newE2EFixture(t, "cli-activate-file")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// `helix activate` over the fixture's isolated socket (HELIX_SOCKET is set by
+	// runCLIVerbInDir; activate now honors it). NOT mcpActivate — that would test
+	// the tool, not the fix.
+	if out, err := f.runCLIVerbInDir(ctx, f.repoDir, "activate", "--workspace", f.repoDir); err != nil {
+		t.Fatalf("helix activate failed: %v\n%s", err, out)
+	}
+
+	// A file verb must now succeed against the activated workspace.
+	out, err := f.runCLIVerbInDir(ctx, f.repoDir, "read-file", "--path", "main.go")
+	if err != nil {
+		t.Fatalf("read-file after `helix activate` must succeed (activate must enable file verbs): %v\n%s", err, out)
+	}
+	if !strings.Contains(out, searchPattern) {
+		t.Fatalf("read-file output missing seeded content %q:\n%s", searchPattern, out)
+	}
+}

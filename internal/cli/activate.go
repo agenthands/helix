@@ -12,7 +12,6 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	serenav1 "github.com/agenthands/helix/api/proto/serena/v1"
-	"github.com/agenthands/helix/internal/config"
 	"github.com/agenthands/helix/internal/forwarder"
 )
 
@@ -45,7 +44,10 @@ func runActivate(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("resolving workspace path: %w", err)
 	}
 
-	socketPath := config.DefaultSocketPath()
+	// Honor --socket / HELIX_SOCKET (resolveVerbSocket falls back to the per-uid
+	// default), matching the verb dial path so activate and the verbs target the
+	// SAME daemon — required for socket-isolated tests and multi-daemon setups.
+	socketPath := resolveVerbSocket(cmd)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	// Use ConnectOrStartDaemon to auto-start daemon if not running (per D-05, D-06)
@@ -65,6 +67,19 @@ func runActivate(cmd *cobra.Command, _ []string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("activating workspace: %w", err)
+	}
+
+	// Also activate via the MCP `activate_project` tool. The gRPC
+	// ActivateWorkspace above sets only kernel/LS state; the daemon's file-tool
+	// active-workspace state (read by read_file / the edit verbs, set globally via
+	// the ActivateCallback and persisted across one-shot CLI sessions) is set ONLY
+	// by activate_project. Without this, the CLI-first file/edit verbs return
+	// `no_workspace` after a plain `helix activate` (a one-shot `helix <verb>`
+	// sends no cwd, so LazyInit — which keys on repo_path — cannot auto-activate),
+	// leaving the SessionStart-hook flow unable to use those verbs. Best-effort:
+	// a failure warns but does not fail the hook (fail-open, like the priming text).
+	if _, aerr := callToolFn(ctx, socketPath, resolveVerbGRPCAddr(cmd), logger, CurrentVersion(), "activate_project", map[string]any{"repo_path": absPath}); aerr != nil {
+		fmt.Fprintf(os.Stderr, "warning: activate_project failed (%v); file/edit verbs may report no_workspace\n", aerr)
 	}
 
 	// Output for Claude Code hook stdout (added to agent context)

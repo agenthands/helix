@@ -96,8 +96,30 @@ def main():
     examples = [
         dspy.Example(task=r["task"]).with_inputs("task") for r in train_rows
     ]
+    # A real train/val split needs at least 2 TRAIN tasks: one to optimize on,
+    # one to validate on. With fewer, fail loudly rather than collapse val into
+    # train. The previous `examples[split:] or examples[:split]` fallback (WR-03)
+    # silently set valset == trainset when len(examples) == 1 (split=1, so
+    # examples[1:] == [] and the `or` substituted examples[:1]), making GEPA
+    # validate on its own training example — a degenerate, overfit-prone config
+    # with no error. Guard it explicitly and keep trainset/valset DISJOINT.
+    if len(examples) < 2:
+        print(
+            "TRAIN has <2 tasks; cannot form a disjoint train/val split. "
+            "Add tasks to data/train.jsonl before optimizing.\n"
+            "no-ship is a legitimate outcome (see README.md / REPORT.md)."
+        )
+        return 0
     split = max(1, len(examples) // 2)
-    trainset, valset = examples[:split], examples[split:] or examples[:split]
+    trainset, valset = examples[:split], examples[split:]
+    # Disjointness is structural here (examples[:split] and examples[split:]
+    # partition the list), but assert it so a future refactor that reintroduces
+    # an overlapping carve fails loudly instead of silently overfitting.
+    assert valset, "valset must be non-empty after the >=2-task guard"
+    _train_ids = {id(e) for e in trainset}
+    assert not any(id(e) in _train_ids for e in valset), (
+        "trainset and valset must be disjoint (no example may appear in both)"
+    )
 
     optimizer = GEPA(
         metric=adopt_metric,

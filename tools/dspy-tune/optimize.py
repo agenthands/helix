@@ -229,8 +229,6 @@ def main():
     import dspy
     from dspy import GEPA
 
-    from taskmetric import make_gepa_metric
-
     def _build_lm(temperature=None):
         kw = {"model": lm_cfg.model, "api_key": lm_cfg.api_key, "num_retries": lm_cfg.num_retries}
         if lm_cfg.api_base:
@@ -241,13 +239,43 @@ def main():
 
     dspy.configure(lm=_build_lm())
 
+    # The Signature's instruction text IS the evolving steering artifact GEPA
+    # mutates. AgentProgram.forward injects it into the REAL Phase-107 agent as the
+    # ON steering text (the candidate→agent thread — without this every candidate
+    # scored identically and the optimization was vacuous). The agent shells
+    # `helix <verb>` over a per-task sandbox and the native hidden tests grade it.
     class Solve(dspy.Signature):
-        """Solve the coding task by driving helix verbs to a passing solution."""
+        """Drive the helix CLI verbs to make the task's hidden tests pass. Prefer
+        the symbolic verbs (read-file, search-symbols, fuzzy-edit, ...) over
+        guessing; read before you edit."""
 
         task = dspy.InputField()
         response = dspy.OutputField(desc="the solution / final answer")
 
-    program = dspy.Predict(Solve)
+    _gepa_max_turns = int(os.environ.get("AGENT_MAX_TURNS") or 8)
+
+    class AgentProgram(dspy.Module):
+        def __init__(self):
+            super().__init__()
+            self.solve = dspy.Predict(Solve)
+
+        def forward(self, task, task_dir="", gold_src="", gold_tests=None, language="python"):
+            import runlib
+
+            steering = self.solve.signature.instructions or ""
+            desc = {
+                "task": task, "task_dir": task_dir, "gold_src": gold_src,
+                "gold_tests": gold_tests or [], "language": language,
+            }
+            r = runlib.run_one(desc, steering, "on", max_turns=_gepa_max_turns)
+            fb = (
+                f"task solved: {r['tests_run']} test(s) passed"
+                if r["passed"]
+                else f"task NOT solved: {r['tests_run']} test(s) ran, not all green"
+            )
+            return dspy.Prediction(passed=r["passed"], tests_run=r["tests_run"], feedback=fb)
+
+    program = AgentProgram()
 
     # Load the Aider task-success corpus, split train/val (val carved from train).
     # TEST stays sequestered and is NEVER passed to compile().
@@ -299,10 +327,17 @@ def main():
             indent=2,
         )
 
-    metric = make_gepa_metric(
-        agent_runner_for=lambda ex: _agent_runner_for_example(ex),
-        grader_for=lambda ex: _grader_for_example(ex),
-    )
+    # The metric reads the program's prediction: AgentProgram.forward already ran
+    # the real agent (ON, with the candidate steering) over the task's sandbox and
+    # graded it (honest: 0 tests => not passed). GEPA evolves the Solve instruction
+    # (the steering), so candidates now score differently — non-vacuous.
+    def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+        passed = bool(getattr(pred, "passed", False))
+        return dspy.Prediction(
+            score=1.0 if passed else 0.0,
+            feedback=getattr(pred, "feedback", "no prediction"),
+        )
+
     optimizer = GEPA(
         metric=metric,
         reflection_lm=_build_lm(temperature=1.0),
@@ -347,7 +382,7 @@ def _load_aider_corpus(dspy, tasks_dir):
                 task_dir=spec.get("task_dir", ""),
                 gold_src=spec.get("gold_src", ""),
                 gold_tests=spec.get("gold_tests", []),
-            ).with_inputs("task")
+            ).with_inputs("task", "task_dir", "gold_src", "gold_tests", "language")
         )
     return examples
 

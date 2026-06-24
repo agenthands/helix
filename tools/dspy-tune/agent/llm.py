@@ -84,6 +84,9 @@ class LLM:
             resp = self.primary.chat.completions.create(
                 model=self.model, messages=messages, tools=tools
             )
+            # Expose token usage for cost metering (attribution.MeteredLLM reads
+            # `.last_usage` since the returned message carries no usage block).
+            self.last_usage = getattr(resp, "usage", None)
             return resp.choices[0].message
         except Exception as primary_err:
             fallback_key = os.environ.get("OPENAI_API_KEY")
@@ -100,4 +103,5 @@ class LLM:
             resp = fallback.chat.completions.create(
                 model=self.fallback_model, messages=messages, tools=tools
             )
+            self.last_usage = getattr(resp, "usage", None)
             return resp.choices[0].message

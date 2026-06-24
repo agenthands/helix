@@ -1,5 +1,21 @@
 # Milestones
 
+## v2.2 Agent-Facing Skill Quality & Prompt Tuning (Shipped: 2026-06-24)
+
+**Phases completed:** 4 phases, 5 plans, 5 tasks
+
+**Key accomplishments:**
+
+- Rewrote the hand-authored `## Decision matrix` to route one agent intent to one tool — QUERY/ACTION rows split, every `Not this` cell named, 8 indexed-graph readers marked † — gated by 3 revert-and-fail anti-vacuity guards keyed to the 50 frozen verbs.
+- Shared golden parity corpus pinned to the test/oracle/adopt Go classifier, plus an inverted `toolsquarantine` go/analysis import-boundary analyzer (with RED/GREEN/lookalike fixtures) wired into `make vet` to keep the dev-time `tools/` tree out of the shipped binary, `go.mod`, and `go test ./...`.
+- Per-verb `cmd/helix-refgen` override map fixed the generated `reference.md` group-collapse (10 verbs corrected); closed-set skill bundle ships only `{SKILL.md, reference.md}`; non-vacuous exact-count (==50) reference contract. The DSPy spike concluded a documented **no-ship** (MinTasks=5 too small) — the single binary stays 100% Python-free.
+
+**Audit:** PASSED — 7/7 requirements (BUNDLE-01/02, REFGEN-01, SKILL-01/02/03, TUNE-01), 4/4 phases verified, cross-phase integration wired, 3/3 E2E flows, Nyquist 4/4. Code review caught + fixed a vacuous Guard B (104) and a real Python↔Go parity bug (106).
+
+**Known deferred items at close:** 3 pre-existing quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x` — already-completed stale tracking entries) + 1 pre-existing out-of-scope `cmd/helix-bench` network/HELIX_BIN test failure. None originate from v2.2 phases. See STATE.md Deferred Items.
+
+---
+
 ## v2.1 Agent Adoption & Aider-Derived Validation (Shipped: 2026-06-23)
 
 **Phases completed:** 6 phases, 13 plans, 14 tasks

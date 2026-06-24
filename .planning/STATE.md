@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent-Facing Skill Quality & Prompt Tuning
-current_phase: 106
-status: verifying
+current_phase: 2
+status: Awaiting next milestone
 stopped_at: v2.2 roadmap created (Phases 103-106)
-last_updated: "2026-06-24T06:20:03.586Z"
+last_updated: "2026-06-24T06:29:38.010Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 106 complete
+last_activity_desc: Milestone v2.2 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: 106
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-24 — Phase 106 complete
+Phase: Milestone v2.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-24 — Milestone v2.2 completed and archived
 
 ## Performance Metrics
 
@@ -152,6 +152,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 > **Re-surfaced at v2.1 close (2026-06-23):** the 3 quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x`) were re-flagged by the v2.1 open-artifact audit. Triage confirmed all three are **already completed work** (each has a SUMMARY.md with a completion date — `260617-j29` re-pinned `DefaultContract.ModelID` to `claude-sonnet-4-5-20250929`; `260617-t7x` did the docgen tool-manifest resync; `260414-e5n` did the REQUIREMENTS checkbox bookkeeping) — they are stale tracking entries lacking a `status: complete` marker, not real outstanding work. Re-acknowledged; not v2.1 blockers.
 
+> **Re-surfaced again at v2.2 close (2026-06-24):** the same 3 quick-tasks were re-flagged by the v2.2 open-artifact audit (none originate from v2.2 phases 103–106). Triage unchanged — all already-completed stale tracking entries lacking a `status: complete` marker. Acknowledged and deferred so the v2.2 close can proceed; not v2.2 blockers. (Separately, the pre-existing `cmd/helix-bench/TestRunSubcommandWiresDeltaPass` network/HELIX_BIN failure remains out-of-scope tech debt, recorded in the v2.2 milestone audit.)
+
 ## Session Continuity
 
 Last session: 2026-06-24T05:54:52.572Z
@@ -201,4 +203,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 103 with /gsd-plan-phase 103 (Bundle Integrity & Non-Vacuous Reference Contract — BUNDLE-01/02)
+- Start the next milestone with /gsd-new-milestone

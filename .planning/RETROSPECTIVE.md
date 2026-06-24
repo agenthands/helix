@@ -197,6 +197,34 @@
 - 2 emergent phases (51.1, 56) added ~25% to original phase count (from 10 planned to 12 shipped)
 - Audit work (`/gsd-audit-milestone`, `/gsd-eval-review`, integration check) consumed ~20% of milestone wall-clock — well-spent given Phase 56 discovery
 
+## Milestone: v2.2 — Agent-Facing Skill Quality & Prompt Tuning
+
+**Shipped:** 2026-06-24
+**Phases:** 4 (103–106) | **Plans:** 5
+
+### What Was Built
+Closed-set skill bundle (ships only `{SKILL.md, reference.md}`) + non-vacuous exact-count (==50) reference contract (103); per-verb `cmd/helix-refgen` override map fixing the generated-`reference.md` group-collapse, 10 verbs corrected (104); hand-authored `SKILL.md` decision-matrix rewrite — QUERY/ACTION split, "Not this" on every row, indexed-graph prereqs, capability grouping (105); and a quarantined dev-time DSPy offline-tuning spike with a parity-pinned Python scorer, overfit/leakage guards, and a `make vet` import-boundary analyzer — concluding a documented **no-ship** (106). Zero new Go deps; single binary stays 100% Python-free.
+
+### What Worked
+- **Code review as a real correctness gate, not a formality.** The biggest wins came from the review step *catching what the plan-checker passed*: a vacuous Guard B in 104 (a `x == x` tautology masquerading as a break-the-invariant test) and a genuine Python↔Go parity bug in 106 (`if/elif` prompt-stripping vs Go's two unconditional `TrimPrefix` calls, invisible because the corpus lacked a `$ > ` case). Both were found by **mutation-testing the guard itself**, not by reading it.
+- **Folding review+fix BEFORE verification** (vs after) meant the verifier validated post-fix code, and every fix was re-confirmed green + the anti-vacuity guards mutation-tested independently by the verifier.
+- **Research-grounded planning on the spike.** 106's deep research (the exact `scorecard.go` classifier, GEPA selection, the inverted-`ablationleakage` analyzer pattern) made a 13-file phase land cleanly with all invariants holding.
+
+### What Was Inefficient
+- **The `## Open Questions (RESOLVED)` doc-gate fired as a blocker/warning on 3 of 4 phases** — a convention the researcher didn't apply, forcing an orchestrator touch-up each time. Cheap to fix, but recurring.
+- **VALIDATION.md `nyquist_compliant` draft flag** had to be flipped manually per phase (the planner left the template default).
+- **Phase 103 shipped in a prior session without a VERIFICATION.md**, surfacing as an audit gap that needed a retroactive verifier pass at close.
+
+### Key Lessons
+- **A break-the-invariant test must itself be mutation-tested.** A guard named `TestOverrideDiffersFromGroupDefault` can still be a tautology; the only proof it bites is to break the invariant and watch it go RED. The plan-checker reviews test *structure/intent*; only execution-time mutation catches a vacuous discriminator. In an anti-vacuity milestone, the code-review + verifier mutation passes are the load-bearing gate.
+- **A point-wise golden corpus proves agreement only on the points it pins.** The 106 parity bug lived in the gap between corpus cases; a "verbatim port" claim is only as strong as the corpus's domain coverage — scope the claim or widen the corpus.
+- **No-ship is a real deliverable.** The DSPy spike's honest "MinTasks=5 is too small to trust" conclusion, documented in a committed REPORT.md, is a success-meeting outcome — the value was the parity-pinned, quarantined harness + the guards, not a shipped optimization.
+
+### Cost Observations
+- 4 phases, 5 plans; per phase a full pipeline ran (research → pattern-map → plan → plan-check → execute → code-review+fix → verify), plus the milestone lifecycle (audit → integration-check → complete).
+- Code-review caught 2 genuine defects (1 per the two code-heavy phases) that would otherwise have shipped — the review spawns paid for themselves.
+- Run on Opus 4.8 (1M context) end-to-end autonomously.
+
 ## Cross-Milestone Trends
 
 | Metric | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 | v1.5 | v1.9 |

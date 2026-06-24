@@ -53,13 +53,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGENT-01 | TBD | Pending |
-| AGENT-02 | TBD | Pending |
-| AGENT-03 | TBD | Pending |
-| ORACLE-01 | TBD | Pending |
-| ORACLE-02 | TBD | Pending |
-| TUNE-02 | TBD | Pending |
-| TUNE-03 | TBD | Pending |
-| TUNE-04 | TBD | Pending |
-| ADOPT-03 | TBD | Pending |
-| ADOPT-04 | TBD | Pending |
+| AGENT-01 | Phase 107 | Pending |
+| AGENT-02 | Phase 107 | Pending |
+| AGENT-03 | Phase 107 | Pending |
+| ORACLE-01 | Phase 108 | Pending |
+| ORACLE-02 | Phase 109 | Pending |
+| TUNE-02 | Phase 108 | Pending |
+| TUNE-03 | Phase 108 | Pending |
+| TUNE-04 | Phase 109 | Pending |
+| ADOPT-03 | Phase 110 | Pending |
+| ADOPT-04 | Phase 110 | Pending |
+
+> **Cross-cutting recurrence (informational; primary owners above):** ADOPT-04 (single-binary / no-runtime-Python boundary) is re-verified as an exit gate in **every** phase (107–110) and owned for traceability by Phase 110. The anti-vacuity (break-the-invariant → assert-RED) and HELIX_BIN-fail-not-skip disciplines recur in every phase that adds a gate or touches a bench surface (107, 108, 109).

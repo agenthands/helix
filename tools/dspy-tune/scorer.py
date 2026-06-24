@@ -33,8 +33,15 @@ def first_command(response: str) -> str:
 
     Verbatim port of FirstCommand (scorecard.go:59-72): iterate split("\\n");
     per line strip(); skip "" or startswith("```"); then strip surrounding
-    backticks and re-strip; drop a leading "$ " or "> " prompt; return the
+    backticks and re-strip; drop a leading "$ " THEN a leading "> " prompt
+    (two UNCONDITIONAL SEQUENTIAL strips, mirroring Go's two back-to-back
+    strings.TrimPrefix calls — NOT a mutually-exclusive if/elif); return the
     first surviving line. Returns "" if none.
+
+    The second strip is a separate `if`, not `elif`: on a stacked prompt line
+    like "$ > helix foo" Go strips BOTH prefixes ("$ " then "> ") to yield
+    "helix foo". An if/elif here would strip only "$ " and leave "> helix foo",
+    silently diverging from the Go truth (WR-01).
     """
     for raw in response.split("\n"):
         line = raw.strip()
@@ -43,7 +50,7 @@ def first_command(response: str) -> str:
         line = line.strip("`").strip()
         if line.startswith("$ "):
             line = line[2:]
-        elif line.startswith("> "):
+        if line.startswith("> "):  # second `if`, NOT `elif` — sequential like Go
             line = line[2:]
         return line.strip()
     return ""

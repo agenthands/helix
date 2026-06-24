@@ -64,5 +64,11 @@
     "first_command": "lsp restart",
     "chose": false,
     "fell_back": false
+  },
+  {
+    "response": "$ > helix find-references --symbol X",
+    "first_command": "helix find-references --symbol X",
+    "chose": true,
+    "fell_back": false
   }
 ]

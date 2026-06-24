@@ -235,6 +235,13 @@ cabal.project.local*
 # Lean 4
 .lake/
 
+# Phase 106 — DSPy offline tuning harness (dev-time only).
+# The raw DSPy program.save() dump must NEVER be committed; adopted text
+# re-enters only via a human-reviewed SKILL.md/refgen commit passing
+# `helix-refgen --check`. (.venv/__pycache__/*.py[cod]/.pytest_cache are already
+# ignored recursively above — only the optimizer output dir needs a new entry.)
+/tools/dspy-tune/output/
+
 zz-misc/
 vue-implementation/
 

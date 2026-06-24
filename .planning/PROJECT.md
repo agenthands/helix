@@ -8,6 +8,22 @@ A Go-native, CLI-first code intelligence platform: universal LSP gateway at the 
 
 The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
+## Current Milestone: v2.4 Corpus Growth & Real Optimization Verdict (TUNE-FUT-01)
+
+**Goal:** Grow the optimization corpus past the strict `val_size > 50` held-out gate and execute the v2.3 task-success pipeline for real — turning v2.3's "NO-SHIP by design" into an actual, numbers-backed adopt/no-adopt verdict via an honest ship/no-ship REPORT.
+
+**Target features:**
+- Grow the corpus on **both tracks** — Aider-polyglot as the primary optimization corpus (sized so the sequestered TEST split alone clears `val_size > 50`), SWE-bench_Verified as the confirming secondary grader.
+- **Run the real, cost-aware GEPA optimization** — actually execute `optimize.py` against the grown corpus (DeepSeek-primary/OpenAI-fallback, bounded turns, smallest corpus that clears the gate) to produce a real ON-vs-OFF delta with per-arm cost.
+- **REPORT-only outcome** — produce the honest ship/no-ship REPORT with real numbers and a human-reviewable `helix-refgen --check` adoption gate ready; the actual SKILL.md adoption stays a separate post-review human decision (not committed this milestone).
+- **Fix-as-needed latitude** — corpus-scale execution may expose defects in the v2.3 agent (107) or Aider/SWE-bench oracles (108/109); necessary hardening (flakiness, timeouts, sandbox/Podman issues) is in scope.
+
+**Key context / guardrails (carried from v2.3):**
+- **ADOPT-04 invariant holds** — zero new Go deps; no runtime Python; the agent/optimizer/graders stay off `go.mod`, `helix setup`, default `go test ./...`, and the merge path. New deps remain dev-time Python pins only (e.g. `dspy==3.2.1`, `openai==2.43.0`, `swebench==4.1.0`).
+- **Anti-vacuity** on every new/changed gate (break-the-invariant → assert-RED); **HELIX_BIN fail-not-skip** on bench surfaces; gate the committed **artifact**, never the (non-bit-reproducible) optimizer process.
+- Open for planning: exact corpus composition (which Aider exercises + count; which SWE-bench instances) sized to clear `val_size > 50` affordably; pin the DeepSeek model id at implementation time; confirm the SWE-bench dataset-org allowlist (`princeton-nlp/SWE-bench_Verified`).
+- Builds on the v2.3 pipeline; **no breaking changes** (minor version). Phase numbering continues from **111**.
+
 ## Requirements
 
 ### Validated
@@ -106,9 +122,9 @@ The `helix` CLI is the only surface an agent touches — terse, `relpath:line:co
 
 ### Active
 
-_v2.1 requirements to be defined via this milestone cycle (Agent Adoption & Aider-Derived Validation) — see `.planning/REQUIREMENTS.md`._
+_v2.4 requirements to be defined via this milestone cycle (Corpus Growth & Real Optimization Verdict — TUNE-FUT-01) — see `.planning/REQUIREMENTS.md`._
 
-v2.0 (CLI-First — MCP Surface Retirement) shipped 2026-06-22: 31/31 in-scope REQs satisfied, audit passed. See `.planning/milestones/v2.0-REQUIREMENTS.md`.
+v2.3 (Task-Success-Driven Skill Optimization) shipped 2026-06-24: 10/10 in-scope REQs satisfied, audit PASSED, verdict NO-SHIP by design (corpus below `val_size>50`). See `.planning/milestones/v2.3-ROADMAP.md`.
 
 Carry-over follow-ups (resolved at v1.10 Phase 58):
 - [x] ~~**PKG-01 SC-3** (deployment): maintainer minisign keypair + first v* tag~~ — replaced by sigstore cosign keyless (D-02 hard cut, no minisign coexistence). First signed release `v1.10.0-rc1` pushed 2026-05-04 via Phase 58 REL-01.
@@ -344,4 +360,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 — v2.3 Task-Success-Driven Skill Optimization SHIPPED (4/4 phases, 10/10 reqs, audit PASSED). Replaced the gameable `choice_rate` proxy with a real agent task-success signal: a dev-time DeepSeek/OpenAI ReAct agent driving the `helix` CLI via subprocess (107), an honest Aider hidden-tests oracle + GEPA metric rewire + sequestered `val_size>50` split (108), the SWE-bench oracle on Podman + ON/OFF attribution delta (109), and human-gated `helix-refgen --check` adoption + boundary re-verify + ship/no-ship REPORT (110). Verdict NO-SHIP by design (corpus below the `val_size>50` gate — TUNE-FUT-01 grows it); single-binary / no-runtime-Python invariant preserved (zero new Go deps). Next: run `/gsd-new-milestone` to plan the next milestone.*
+*Last updated: 2026-06-24 — v2.4 Corpus Growth & Real Optimization Verdict (TUNE-FUT-01) STARTED. Grows the optimization corpus past the strict `val_size > 50` held-out gate on both tracks (Aider-polyglot primary, SWE-bench_Verified confirming) and runs the v2.3 task-success pipeline for real (cost-aware DeepSeek-primary GEPA) to turn the v2.3 "NO-SHIP by design" into an actual numbers-backed adopt/no-adopt verdict — REPORT-only (human adopts SKILL.md separately), fix-as-needed on the agent/graders if scale exposes defects. ADOPT-04 single-binary / no-runtime-Python invariant + anti-vacuity + HELIX_BIN-fail-not-skip carried forward. Phase numbering continues from 111. Next: define requirements → roadmap via this milestone cycle.*

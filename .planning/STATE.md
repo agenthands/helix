@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
-milestone_name: Task-Success-Driven Skill Optimization
-current_phase: 110
-status: Awaiting next milestone
-stopped_at: "Milestone v2.3 complete (4/4 phases, 10/10 reqs, audit PASSED) and archived. Verdict NO-SHIP by design. Next: /gsd-new-milestone."
-last_updated: "2026-06-24T12:56:24.225Z"
+milestone: v2.4
+milestone_name: Corpus Growth & Real Optimization Verdict
+status: planning
+last_updated: "2026-06-24T13:34:22.786Z"
 last_activity: 2026-06-24
-last_activity_desc: Milestone v2.3 completed and archived
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
-current_phase_name: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 
 ## Current Position
 
-Phase: Milestone v2.3 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-24 — Milestone v2.3 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-24 — Milestone v2.4 started
 
 ## Performance Metrics
 

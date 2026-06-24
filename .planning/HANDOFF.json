@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-24T07:43:31.784Z",
+  "phase": null,
+  "phase_name": "v2.3 milestone creation (not yet written)",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "context": "default/new-milestone",
+  "completed_tasks": [
+    {"id": 1, "name": "v2.2 milestone fully executed autonomously (phases 104/105/106) + 103 retro-verified", "status": "done"},
+    {"id": 2, "name": "v2.2 audit PASSED, completed, archived, tagged v2.2 (local), cleaned up", "status": "done", "commit": "ca7dcdee (tag)"},
+    {"id": 3, "name": "Recorded Podman as container engine in CLAUDE.md + memory", "status": "done", "commit": "3e6168dc"},
+    {"id": 4, "name": "v2.3 new-milestone: loaded init only (research_enabled=true, agents installed, continues from phase 106, no seeds)", "status": "in_progress", "progress": "no PROJECT/STATE/REQUIREMENTS/ROADMAP changes written for v2.3 — clean slate"}
+  ],
+  "remaining_tasks": [
+    {"id": 5, "name": "Run /gsd-new-milestone v2.3 fresh: confirm shape -> research -> requirements -> roadmap", "status": "not_started"},
+    {"id": 6, "name": "Build net-new DeepSeek/OpenAI tool-using agent that drives the helix CLI", "status": "not_started"},
+    {"id": 7, "name": "Rewire DSPy GEPA metric from choice_rate to agent task-success on Aider polyglot (+SWE via Podman)", "status": "not_started"},
+    {"id": 8, "name": "Human-gated adoption of any optimized SKILL.md via refgen + helix-refgen --check", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "No tool-using agent on DeepSeek/OpenAI exists yet — only bench/runtime/subprocess/claude.go (Claude Code), which needs ANTHROPIC_API_KEY (NOT set). Building the DeepSeek/OpenAI agent is the v2.3 foundational phase.", "type": "technical", "workaround": "DEEPSEEK_API_KEY + OPENAI_API_KEY are set; build the agent on those."},
+    {"description": "SWE-bench upstream python harness needs Docker-compatible socket; Podman provides it via DOCKER_HOST + podman system service. Aider polyglot needs no Docker (toolchains present).", "type": "external", "workaround": "Aider-polyglot-only first cut; add SWE-bench once podman socket exposed."}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Decide agent transport: helix CLI subprocess verbs (simplest) vs internal MCP tools/call wire", "context": "Determines how the new DeepSeek/OpenAI agent invokes helix tools", "blocking": false},
+    {"action": "Decide SWE-bench scope for v2.3 first cut: Aider-polyglot-only, or also wire podman system service + DOCKER_HOST for swebench", "context": "SWE-bench needs the docker-compat socket; Aider does not", "blocking": false},
+    {"action": "Optionally provide ANTHROPIC_API_KEY if reusing the existing Claude-Code agent is ever desired (not the chosen path)", "context": "Chosen path is build DeepSeek/OpenAI agent, so not required", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "v2.3 = Task-Success-Driven Skill Optimization (TUNE-FUT-02)", "rationale": "v2.2 TUNE-01 optimized choice_rate (gameable proxy) and concluded no-ship; the real goal is most-effective-helix-use measured by agent task-success", "phase": "v2.3"},
+    {"decision": "Build a net-new DeepSeek/OpenAI tool-using agent driving the helix CLI (NOT Claude Code)", "rationale": "Only existing agent is Claude Code (needs ANTHROPIC_API_KEY, not set); DeepSeek is the optimizer LM and its key is present", "phase": "v2.3"},
+    {"decision": "GEPA objective = agent task-success on Aider polyglot (+ SWE-bench via Podman), not choice_rate", "rationale": "task-success is the real effectiveness signal; choice_rate is gameable", "phase": "v2.3"},
+    {"decision": "Human-gated adoption only via SKILL.md/refgen + helix-refgen --check; never auto-adopt", "rationale": "carried v2.2 invariant", "phase": "v2.3"},
+    {"decision": "Containers = Podman (recorded in CLAUDE.md 3e6168dc); SWE-bench NOT blocked", "rationale": "bench/container auto-detects podman; my earlier 'Docker blocked' was wrong", "phase": "v2.3"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "/clear, then re-run: /gsd-new-milestone v2.3 Task-Success-Driven Skill Optimization (carry the locked decisions in .continue-here.md). Settle the 2 open transport/scope questions at the start, then research -> requirements -> roadmap -> /gsd-autonomous.",
+  "context_notes": "v2.2 is DONE and durable (tagged, archived, tree clean). v2.3 is a fresh milestone, nothing written yet. Paused at 66% context to avoid exhausting budget mid-research. The build is genuinely net-new (agent component does not exist). Key facts already persisted: Podman in CLAUDE.md+memory; anti-vacuity mutation-test lesson in memory."
+}

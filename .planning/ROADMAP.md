@@ -45,7 +45,9 @@
   3. The agent exposes a first-class `--steering on|off` switch: ON injects the candidate skill text as the system prompt, OFF uses a provably steering-omitted control prompt, so any measured effect is attributable to the skill text.
   4. **Anti-vacuity gate**: a hermetic `test_agent.py` (fake LLM + fake `helix`, no network) proves a deliberately degenerate always-grep agent scores 0 and the OFF prompt provably omits the steering text — break-the-invariant → assert-RED, not green-path-only.
   5. **Boundary preserved (ADOPT-04 cross-cutting)**: `git diff go.mod` is empty, `make vet` (`toolsquarantine`) stays green, and no `helix` subcommand shells to Python — the agent is dev-time Python only.
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 107-01-PLAN.md — Standalone dev-time ReAct agent (`tools/dspy-tune/agent/{llm,tools,react,__init__}.py`): bounded loop driving `helix <verb>` via fixed-argv subprocess, DeepSeek-primary/OpenAI-fallback config-driven LM with loud-fail-on-missing-key, steering ON/OFF with a provably-omitted control, + hermetic anti-vacuity `test_agent.py`
 **Research**: false
 
 ### Phase 108: Aider Honest Task-Success Oracle + Sandbox + GEPA Metric Rewire + Sequestered Split

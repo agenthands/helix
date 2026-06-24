@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Task-Success-Driven Skill Optimization
 current_phase: 110
-current_phase_name: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT
-status: phases_complete
-stopped_at: "v2.3 at 4/4 — all phases (107-110) shipped & verified (passed). Phase 110 verdict NO-SHIP by design. Next: milestone lifecycle (audit → complete → cleanup)."
-last_updated: "2026-06-24T10:40:37.588Z"
+status: Awaiting next milestone
+stopped_at: "Milestone v2.3 complete (4/4 phases, 10/10 reqs, audit PASSED) and archived. Verdict NO-SHIP by design. Next: /gsd-new-milestone."
+last_updated: "2026-06-24T12:56:24.225Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 110 executed inline (uv) — adoption gate proven + boundary re-verified + ship/no-ship REPORT (NO-SHIP)
+last_activity_desc: Milestone v2.3 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 4
   completed_plans: 4
-  percent: 0
+  percent: 100
+current_phase_name: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-23)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.3 paused at 2/4 — next is Phase 109 (SWE-bench Oracle via Podman + ON/OFF Attribution-Delta)
+**Current focus:** v2.3 shipped (NO-SHIP-by-design verdict); awaiting next milestone (`/gsd-new-milestone`).
 
 ## Current Position
 
-Phase: 110 complete (4/4 v2.3 phases done) — ALL PHASES COMPLETE
+Phase: Milestone v2.3 complete
 Plan: —
-Status: 107 + 108 + 109 + 110 shipped & verified (passed). Phase 110 verdict NO-SHIP by design (corpus < val_size>50). Next = milestone lifecycle (audit → complete → cleanup).
-Last activity: 2026-06-24 — Phase 110 executed inline with uv; adoption gate proven live, boundary re-verified, ship/no-ship REPORT written.
+Status: Awaiting next milestone
+Last activity: 2026-06-24 — Milestone v2.3 completed and archived
 
 ## Performance Metrics
 
@@ -167,6 +167,8 @@ Items carried forward from the v1.12 milestone close (see prior STATE history / 
 
 > **Re-surfaced again at v2.2 close (2026-06-24):** the same 3 quick-tasks were re-flagged by the v2.2 open-artifact audit (none originate from v2.2 phases 103–106). Triage unchanged — all already-completed stale tracking entries lacking a `status: complete` marker. Acknowledged and deferred so the v2.2 close can proceed; not v2.2 blockers. (Separately, the pre-existing `cmd/helix-bench/TestRunSubcommandWiresDeltaPass` network/HELIX_BIN failure remains out-of-scope tech debt, recorded in the v2.2 milestone audit.)
 
+> **Re-surfaced again at v2.3 close (2026-06-24):** the same 3 quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x`) were re-flagged by the v2.3 open-artifact audit (none originate from v2.3 phases 107–110). Triage unchanged — already-completed stale trackers lacking a `status: complete` marker. Acknowledged and deferred so the v2.3 close can proceed; not v2.3 blockers. The audit additionally flagged Phase 109's `109-CONTEXT.md` "open questions" — a **false positive**: that section ("Open questions resolved at implementation time") records the RESOLVED answers (dataset org pinned to `princeton-nlp/SWE-bench_Verified`; SWE-bench-on-Podman confirmed not-blocked), not outstanding questions. No action needed. The v2.3 ship/no-ship verdict is NO-SHIP by design (corpus < `val_size>50`); TUNE-FUT-01 (grow the corpus) is the documented follow-on, carried forward.
+
 ## Session Continuity
 
 Last session: 2026-06-24 (resumed)
@@ -222,4 +224,4 @@ Resume file: .planning/.continue-here.md (refreshed to the Phase 110 checkpoint)
 
 ## Operator Next Steps
 
-- Plan Phase 107 with /gsd-plan-phase 107 (ReAct agent + DeepSeek/OpenAI client + ON/OFF steering; no research needed).
+- Start the next milestone with /gsd-new-milestone

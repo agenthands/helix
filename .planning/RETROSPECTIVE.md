@@ -225,6 +225,34 @@ Closed-set skill bundle (ships only `{SKILL.md, reference.md}`) + non-vacuous ex
 - Code-review caught 2 genuine defects (1 per the two code-heavy phases) that would otherwise have shipped — the review spawns paid for themselves.
 - Run on Opus 4.8 (1M context) end-to-end autonomously.
 
+## Milestone: v2.3 — Task-Success-Driven Skill Optimization
+
+**Shipped:** 2026-06-24
+**Phases:** 4 (107–110) | **Verdict:** NO-SHIP by design
+
+### What Was Built
+A dev-time DeepSeek/OpenAI ReAct agent driving the real `helix` CLI via subprocess with a first-class steering ON/OFF switch (107); an honest Aider-polyglot task-success oracle (0-tests=hard-ERROR, anti-tamper gold-test restore) that swapped the gameable `choice_rate` GEPA reward for real task-success behind a sequestered `val_size>50` split (108); the heaviest grader — SWE-bench via the upstream `swebench==4.1.0` harness on Podman, a parity mirror of `harness.go` — plus an ON-vs-OFF attribution delta with per-arm cost (109); and human-gated `helix-refgen --check` adoption + end-to-end boundary re-verification + the ship/no-ship REPORT (110). Zero new Go deps; the whole pipeline is dev-venv Python under `tools/dspy-tune/`.
+
+### What Worked
+- **Honest gating over a shippable-looking result.** The milestone reached the *same* NO-SHIP conclusion as v2.2 — but this time through real task-success machinery, not the gameable proxy. The `val_size>50` gate (a single source of truth shared between `optimize.py` and `attribution.py`) refused to fabricate a delta on a 3-task corpus.
+- **Parity mirrors pinned on both sides.** `grade_swebench.py` ↔ `harness.go` (via `golden/swebench_argv.json` + `argv_parity_test.go`) reused the exact discipline that caught the v2.2 parity bug — no silent Go/Python drift.
+- **Mutation-testing the new guards before sign-off.** Three Phase-109 guards (vacuous-pass refusal, resolution contract, val_size gate) were each broken → confirmed RED → reverted; the Phase-110 adoption gate was proven by desyncing `reference.md` and watching `helix-refgen --check` exit 1.
+- **Inline execution adapted cleanly** when the gsd-* executor/verifier subagents turned out to be absent from the roster — phases 107–110 + the lifecycle all ran in the main context, producing the identical artifacts.
+
+### What Was Inefficient
+- **The roster mismatch** (skills assume `gsd-planner`/`gsd-executor`/`gsd-verifier` that aren't installed) meant the autonomous flow couldn't dispatch subagents; it degraded to inline execution. Correct outcome, but the skills' background-dispatch paths were dead weight.
+- **The milestone-complete CLI is a partial handler** (again): it under-counted plans/tasks in the MILESTONES entry and left ROADMAP/REQUIREMENTS/STATE for the orchestrator to finish — a known recurring touch-up.
+- **The open-artifact audit false-positive recurred** — it flagged a CONTEXT "Open questions resolved at implementation time" section as open questions (same class as the prior backtick/config false positive).
+
+### Key Lessons
+- **NO-SHIP, reached honestly twice, is a finding — not a stall.** The corpus size (`val_size>50`) is the real blocker; until TUNE-FUT-01 grows it, no benchmark plumbing changes the verdict. Building the full gated pipeline so the *next* corpus can be judged trustworthy is the deliverable.
+- **A re-verification phase still needs evidence, not assertion.** Phase 110 added no production code, but every ADOPT-03/04 claim was backed by a live command (`go.mod` last-touch commit, `make vet`, the desync exit-1 demo) — "already true" is only credible when re-proven.
+
+### Cost Observations
+- 4 phases executed inline with `uv` (no subagent fan-out); the milestone lifecycle (audit → complete → cleanup) also ran inline.
+- 51 dev-venv pytest + Go parity/refgen tests as the green bar; `make vet` (incl. `toolsquarantine`) as the boundary gate.
+- Run on Opus 4.8 (1M context) end-to-end autonomously.
+
 ## Cross-Milestone Trends
 
 | Metric | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 | v1.5 | v1.9 |

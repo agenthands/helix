@@ -1,5 +1,24 @@
 # Milestones
 
+## v2.3 Task-Success-Driven Skill Optimization (Shipped: 2026-06-24)
+
+**Phases completed:** 4 phases (107–110), 10/10 requirements (AGENT-01/02/03, ORACLE-01/02, TUNE-02/03/04, ADOPT-03/04)
+
+**Outcome: NO-SHIP by design** — the full task-success pipeline is built, gated, and green, but no optimized steering text was adopted: the corpus is still below the strict `val_size>50` gate (the same v2.2 root cause, now reached through real task-success machinery rather than the gameable `choice_rate` proxy). TUNE-FUT-01 (grow the corpus) is the recorded precondition for a real ship decision.
+
+**Key accomplishments:**
+
+- Shipped a dev-time, importable Python ReAct agent (`tools/dspy-tune/agent/`) that drives the real `helix` CLI in a bounded loop with DeepSeek-primary/OpenAI-fallback provider selection, loud-fail-on-missing-key, and a first-class steering ON/OFF switch — the foundation the task-success metric imports in-process.
+- Replaced the gameable `choice_rate` reward with an honest Aider-polyglot task-success oracle (parity-pinned native test commands, 0-tests=hard-ERROR, anti-tamper gold-test restore) wired as the GEPA metric behind a sequestered held-out split + strict `val_size>50` adoption gate — the direct fix for the v2.2 no-ship root cause.
+- Added the heaviest grader: SWE-bench task-success via the upstream `swebench==4.1.0` harness on Podman (`grade_swebench.py`, a parity mirror of `bench/evaluators/swebench/harness.go` pinned by a shared golden + asserted on both sides), enforcing FAIL_TO_PASS + PASS_TO_PASS with a dataset-org pin and 0-tests refusal, plus an honest ON-vs-OFF attribution delta (`attribution.py`) recording per-arm cost.
+- Gated the pipeline output behind human-reviewed `helix-refgen --check` adoption (optimizer writes only git-ignored output), re-verified the single-binary / no-runtime-Python invariant end-to-end (zero new Go deps — go.mod untouched since v2.0 Phase 90), and recorded the ship/no-ship REPORT.
+
+**Audit:** PASSED — 10/10 requirements, 4/4 phases verified, 5/5 cross-phase integration seams wired, E2E flow confirmed. Every new gate ships a break-the-invariant → assert-RED test (3 guards mutation-confirmed RED in Phase 109; the `helix-refgen --check` desync exit-1 proven live in Phase 110). Executed inline with `uv` (the gsd-* executor/verifier subagents are not installed in this roster).
+
+**Known deferred items at close:** 3 pre-existing quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x` — already-completed stale tracking entries) + 1 pre-existing out-of-scope `cmd/helix-bench` network/HELIX_BIN test failure; plus TUNE-FUT-01 (grow corpus past `val_size>50`). The Phase-109 CONTEXT "open questions" audit flag was a false positive (the section records resolved answers). None originate from v2.3 phases. See STATE.md Deferred Items.
+
+---
+
 ## v2.2 Agent-Facing Skill Quality & Prompt Tuning (Shipped: 2026-06-24)
 
 **Phases completed:** 4 phases, 5 plans, 5 tasks

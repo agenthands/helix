@@ -1,8 +1,8 @@
 ---
 phase: 106
 slug: exploratory-dspy-offline-tuning-harness-spike
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-24
 ---

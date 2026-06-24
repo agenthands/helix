@@ -427,7 +427,12 @@ var Analyzer = &analysis.Analyzer{
 | A5 | The provider is OpenAI-compatible (`openai/gpt-4.1-mini`) for the dev-time LM | Code Examples | Low — any litellm-supported provider works; the model id is illustrative, set at dev-time |
 | A6 | No-ship is the most likely outcome given `MinTasks=5` | Corpus Split / Summary | Low — this is an explicit success-meeting outcome, not a risk |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> **RESOLVED at plan time (106-01/106-02-PLAN.md pin these):**
+> - **Q1 (LM backend):** RESOLVED — `optimize.py` parameterizes the LM via env vars with an unset-key guard; default small OpenAI model documented in the README; dev-time only, never the binary. Does not block the hermetic parity/leakage work.
+> - **Q2 (corpus size):** RESOLVED — run on the small intact set first to honestly surface the "too small to trust → no-ship" finding; TEST split sequestered regardless of any optional TRAIN expansion.
+> - **Q3 (golden corpus location):** RESOLVED — single committed file under `tools/dspy-tune/golden/parity_cases.json`, read by BOTH the Go parity test and pytest (no duplication; path pinned in both).
 
 1. **Where should the dev-time LLM backend point, and is an API key available in the dev environment?**
    - What we know: DSPy needs an LM (`dspy.LM` + `OPENAI_API_KEY`); it must read from the dev env only, never the binary.

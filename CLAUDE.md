@@ -93,6 +93,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - **CLI:** cobra v1.9.1 -- the agent interface; agents drive `helix <verb>` via Bash
 - **Protocol:** MCP Go SDK + gRPC IPC retained as internal daemon plumbing (not an agent-facing surface)
 - **LSP:** LSP 3.17 (generated types from official metamodel)
+- **Container engine:** **Podman** (this dev environment uses Podman, NOT Docker — `podman` is on PATH, `docker` is not). `bench/container` is engine-agnostic and auto-detects docker-or-podman (`Engine.Detect` / `TestDetectFindsPodmanWhenNoDocker`), so container-backed benches (mirror pull, `--network=none` runs, SWE-bench / Multi-SWE-bench / Terminal-Bench) work on Podman. **Do NOT report "Docker not installed → blocked"** — check `podman` first. The only nuance: the upstream `swebench`/`multi_swe_bench` Python harnesses talk the Docker API, so point them at Podman's docker-compatible socket via `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (start it with `podman system service --time=0 &` if no socket is running). That's configuration, not a hard blocker.
 
 **Build pipeline (CGO=1, split-runner per Phase 59.1):**
 

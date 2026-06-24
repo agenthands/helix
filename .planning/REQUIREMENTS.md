@@ -23,7 +23,7 @@
 
 ### Offline Prompt Tuning (TUNE) — exploratory
 
-- [ ] **TUNE-01**: an opt-in, dev-time-only DSPy harness (under `tools/`, gitignored output, excluded from `go test ./...`, with NO runtime Python dependency in the `helix` binary or `helix setup`) optimizes the agent-facing skill/steering text against the Phase 101 adoption scorecard metric (re-implemented in Python with a parity cross-check against the Go `adopt` classifier), with overfit/metric-gaming guards; the harness may conclude **no-ship**, and any adopted output is committed and passes `helix-refgen --check`. A `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path.
+- [x] **TUNE-01**: an opt-in, dev-time-only DSPy harness (under `tools/`, gitignored output, excluded from `go test ./...`, with NO runtime Python dependency in the `helix` binary or `helix setup`) optimizes the agent-facing skill/steering text against the Phase 101 adoption scorecard metric (re-implemented in Python with a parity cross-check against the Go `adopt` classifier), with overfit/metric-gaming guards; the harness may conclude **no-ship**, and any adopted output is committed and passes `helix-refgen --check`. A `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path.
 
 ## Future Requirements (deferred)
 
@@ -48,4 +48,4 @@
 | SKILL-01 | Phase 105 | Complete |
 | SKILL-02 | Phase 105 | Complete |
 | SKILL-03 | Phase 105 | Complete |
-| TUNE-01 | Phase 106 | Pending |
+| TUNE-01 | Phase 106 | Complete |

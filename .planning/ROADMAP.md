@@ -106,12 +106,12 @@
   3. Overfit and metric-gaming guards are in place — a held-out TEST split the optimizer never sees, and a degenerate-steering inspection — and the harness may legitimately conclude no-ship (the clean fallback being a hand-rolled Go candidate-search loop keeping the milestone 100% Go).
   4. Any adopted output re-enters only as a human-reviewed commit through SKILL.md/refgen and passes `helix-refgen --check`; a `make vet`-style analyzer asserts no Python/optimizer coupling leaks into the runtime/merge path (the artifact is gated, never the optimizer process).
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 106-01-PLAN.md — Go-side gates: shared golden parity corpus + Go parity test (pins corpus to the `adopt` classifier truth) + `toolsquarantine` go/analysis leakage analyzer (RED/GREEN/lookalike fixtures) + `cmd/vet-tools-quarantine` + Makefile `vet:` wiring [Wave 1]
+- [x] 106-01-PLAN.md — Go-side gates: shared golden parity corpus + Go parity test (pins corpus to the `adopt` classifier truth) + `toolsquarantine` go/analysis leakage analyzer (RED/GREEN/lookalike fixtures) + `cmd/vet-tools-quarantine` + Makefile `vet:` wiring [Wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -126,7 +126,7 @@ Plans:
 | 103. Bundle Integrity & Non-Vacuous Reference Contract | v2.2 | 1/1 | Complete   | 2026-06-23 |
 | 104. Reference Generator Per-Verb Correctness | v2.2 | 1/1 | Complete    | 2026-06-23 |
 | 105. SKILL.md Decision-Matrix Rewrite | v2.2 | 1/1 | Complete    | 2026-06-23 |
-| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 0/TBD | Not started | - |
+| 106. Exploratory DSPy Offline Tuning Harness | v2.2 | 1/2 | In Progress|  |
 
 ### ✅ v2.1 Agent Adoption & Aider-Derived Validation (Phases 97-102) — SHIPPED 2026-06-23
 

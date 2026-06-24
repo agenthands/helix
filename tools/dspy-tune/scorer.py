@@ -1,11 +1,21 @@
 """Python re-implementation of the Phase 101 adopt classifier.
 
-This module mirrors test/oracle/adopt/scorecard.go EXACTLY. It is the
-parity-pinned Python scorer the DSPy optimizer (optimize.py) wraps as its
-metric. The Go package is the SINGLE SOURCE OF TRUTH; this is a faithful
-port, asserted case-for-case against the SHARED golden corpus
+This module mirrors test/oracle/adopt/scorecard.go over the realistic
+transcript domain (printable agent output). It is the parity-pinned Python
+scorer the DSPy optimizer (optimize.py) wraps as its metric. The Go package
+is the SINGLE SOURCE OF TRUTH; this is a faithful port, asserted
+case-for-case against the SHARED golden corpus
 (tools/dspy-tune/golden/parity_cases.json) by both test_parity.py here and
 test/oracle/adopt/parity_test.go on the Go side.
+
+Known boundary (immaterial, documented — WR-01-A): Python str.strip() also
+strips the C0 ASCII separators U+001C-U+001F, which Go's strings.TrimSpace
+(unicode.IsSpace) does not, so a first line beginning with one of those
+control chars would classify differently. Such chars never begin a real LLM
+transcript line, so the divergence is out-of-domain; the golden corpus pins
+the realistic domain where Go and Python agree exactly. Do NOT "fix" this by
+matching Python's broader whitespace set — that would introduce the opposite
+divergence on the Unicode space separators Go's IsSpace accepts.
 
 Critical invariants (each a Phase 101 Pitfall; see 106-RESEARCH.md):
   * Classification keys on the PREFIX of the FIRST emitted command via

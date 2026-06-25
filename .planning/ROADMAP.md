@@ -23,18 +23,150 @@
 
 ## Phases
 
-_No active milestone — v2.4 shipped 2026-06-24. Run `/gsd-new-milestone` to start the next._
+**Current: v2.5 Agent Harness Rebuild (Phases 115–118)** — defining requirements
 
-## Phase Details
+### Phase 115: Task-Solving Prompt + Feedback Loop
+
+**Goal:** Make the agent actually edit files and verify success — the foundation for all tuning.
+
+**Why first:** You can't tune an agent that doesn't use tools. HARNESS-01 and HARNESS-02 fix the core harness.
+
+**Requirements:**
+- HARNESS-01a: System prompt names solution file
+- HARNESS-01b: Success criterion = hidden tests pass
+- HARNESS-01c: Prose forbidden
+- HARNESS-01d: Anti-vacuity test (prose → FAIL)
+- HARNESS-02a: run-tests in ReAct loop
+- HARNESS-02b: get-diagnostics in ReAct loop
+- HARNESS-02c: Agent uses test results to iterate
+- HARNESS-02d: Anti-vacuity test (done-on-broken → FAIL)
+
+**Success criteria:**
+1. Agent tool-call rate ≥ 80% on held-out split (demonstrates engagement)
+2. All anti-vacuity tests assert FAIL on broken harness
+3. `make vet` + `go test ./...` green
+4. No new Go deps (`go.mod` unchanged)
+
+**Exit gate:** Agent demonstrably edits files AND runs tests AND uses results to iterate.
+
+---
+
+### Phase 116: Verb-Arg Hardening
+
+**Goal:** Stop burning error budget on malformed calls.
+
+**Why second:** Requires Phase 115 — can't harden verbs if agent doesn't use them.
+
+**Requirements:**
+- HARNESS-03a: Audit verb call sites for positional-arg misuse
+- HARNESS-03b: Add error-budget tracking
+- HARNESS-03c: Anti-vacuity test (malformed argv → FAIL)
+
+**Success criteria:**
+1. All verb call sites audited for `--flag=val` pattern
+2. Error-budget counter tracks verb errors and aborts at threshold
+3. Anti-vacuity test asserts FAIL on malformed argv
+4. `make vet` + `go test ./...` green
+5. No new Go deps
+
+**Exit gate:** Verb errors are budgeted and bounded.
+
+---
+
+### Phase 117: Real GEPA Module
+
+**Goal:** Make GEPA actually evolve — rebuild as a `dspy.Module` that emits a reflectable trace.
+
+**Why third:** Requires Phases 115–116 — can't tune GEPA if agent still fails on basics.
+
+**Requirements:**
+- HARNESS-04a: Agent rebuilt as `dspy.Module` (not ad-hoc Python)
+- HARNESS-04b: AgentProgram emits predictor trace
+- HARNESS-04c: GEPA `forward` returns trace for reflective mutation
+- HARNESS-04d: Anti-vacuity test (empty trace → FAIL)
+
+**Success criteria:**
+1. Agent is a subclass of `dspy.Module` with proper `forward` signature
+2. `optimize.py` runs without errors on the real agent
+3. Trace is non-empty and varies across candidates
+4. Anti-vacuity test asserts FAIL on empty/constant trace
+5. `make vet` + `go test ./...` green (Python tests in `tools/dspy-tune/`)
+6. No new Go deps
+
+**Exit gate:** GEPA can actually optimize the agent (non-trivial trace, reflective mutation proposes candidates).
+
+---
+
+### Phase 118: Re-run Attribution + Verdict
+
+**Goal:** Measure a meaningful delta on a fixed harness, gate for adoption.
+
+**Why fourth:** Requires Phases 115–117 — can't measure meaningful delta on broken agent.
+
+**Requirements:**
+- HARNESS-05a: Re-run v2.4 attribution pipeline on fixed harness
+- HARNESS-05b: Verify agent tool-call rate ≥ 80% on held-out
+- HARNESS-05c: Record ON/OFF delta with per-arm cost
+- HARNESS-05d: Gate for TUNE-FUT-03 (adoption path ready if delta significant)
+
+**Success criteria:**
+1. Attribution pipeline runs end-to-end on fixed harness
+2. Tool-call rate ≥ 80% demonstrated (the engagement bar)
+3. ON-vs-OFF delta recorded with cost breakdown
+4. REPORT.md updated with honest verdict and caveats
+5. If delta > 0 and significant: SKILL.md adoption path documented
+6. If delta ≈ 0 or noise: documented as "not yet ready for adoption"
+7. `make vet` + `go test ./...` green
+8. No new Go deps
+
+**Exit gate:** Measured verdict with honest caveats. Adoption gate (TUNE-FUT-03) ready if delta is meaningful.
+
+---
+
+## Requirement Coverage
+
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| HARNESS-01a | 115 | planned |
+| HARNESS-01b | 115 | planned |
+| HARNESS-01c | 115 | planned |
+| HARNESS-01d | 115 | planned |
+| HARNESS-02a | 115 | planned |
+| HARNESS-02b | 115 | planned |
+| HARNESS-02c | 115 | planned |
+| HARNESS-02d | 115 | planned |
+| HARNESS-03a | 116 | planned |
+| HARNESS-03b | 116 | planned |
+| HARNESS-03c | 116 | planned |
+| HARNESS-04a | 117 | planned |
+| HARNESS-04b | 117 | planned |
+| HARNESS-04c | 117 | planned |
+| HARNESS-04d | 117 | planned |
+| HARNESS-05a | 118 | planned |
+| HARNESS-05b | 118 | planned |
+| HARNESS-05c | 118 | planned |
+| HARNESS-05d | 118 | planned |
+
+**Coverage:** 19/19 REQs mapped (100%)
+
+---
+
+## Constraint Verification
+
+| Constraint | Phase 115 | Phase 116 | Phase 117 | Phase 118 |
+|------------|-----------|-----------|-----------|-----------|
+| Zero new Go deps | ✓ | ✓ | ✓ | ✓ |
+| Tuning in dev-venv Python | ✓ | ✓ | ✓ | ✓ |
+| Anti-vacuity tests | ✓ (01d, 02d) | ✓ (03c) | ✓ (04d) | ✓ (embedded) |
+| Dependency chain | — | after 115 | after 116 | after 117 |
+
+---
+
+## Earlier Milestones
 
 ### ✅ v2.4 Corpus Growth & Real Optimization Verdict (Phases 111-114) — SHIPPED 2026-06-24
 
 4 phases, 10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05), 100% mapped. Grew the optimization corpus past the strict `val_size > 50` held-out gate and ran the v2.3 task-success pipeline **for real** (cost-aware, $0.23) — turning v2.3's "NO-SHIP by design" into an actual, numbers-backed verdict: **SHIP-by-rule, marginal** (ON-vs-OFF attribution delta **+0.0392**, ON 3/51 vs OFF 1/51, on a sequestered held-out split of 51 > 50), with a SWE-bench Verified gold-patch confirm on Podman (**2/2 resolved**, fail-not-skip proven). **REPORT-only** — adoption NOT recommended on this thin/noise margin; it stays a separate human `helix-refgen --check`-gated step. The milestone's real win: the v2.3 pipeline was never functional end-to-end (its hermetic fakes hid three integration gaps — agent verb argv, a `helix activate`→`activate_project` **real product bug**, and the GEPA candidate→agent steering thread); all three were fixed. **Zero new Go deps** (go.mod untouched since v2.0); the only Go change is the user-approved product-bug fix. Audit PASSED — 10/10 reqs, 4/4 phases, E2E real run.
-
-- [x] Phase 111: Corpus Growth & Sequestered Split (CORPUS-01, CORPUS-02) — completed 2026-06-24
-- [x] Phase 112: Scale Hardening for the Real Run (SCALE-01, SCALE-02, SCALE-03) — completed 2026-06-24
-- [x] Phase 113: The Real Cost-Aware Run (RUN-01, RUN-02, RUN-03) — completed 2026-06-24 (SHIP-by-rule, delta +0.0392, val_size=51)
-- [x] Phase 114: Verdict & Boundary Re-Verification (REPORT-01, ADOPT-05) — completed 2026-06-24
 
 **Full details:** `.planning/milestones/v2.4-ROADMAP.md`
 
@@ -42,21 +174,11 @@ _No active milestone — v2.4 shipped 2026-06-24. Run `/gsd-new-milestone` to st
 
 4 phases, 10 requirements (AGENT-01/02/03, ORACLE-01/02, TUNE-02/03/04, ADOPT-03/04), 100% mapped. Fixed the v2.2 no-ship root cause by replacing the gameable `choice_rate` adoption proxy with a real **agent task-success** optimization signal: a dev-time OpenAI-compatible ReAct agent drives the `helix` CLI via subprocess (107); GEPA's metric was rewired from `choice_rate` to honest benchmark task-success — Aider hidden-tests-green (108) and SWE-bench FAIL_TO_PASS-flip + PASS_TO_PASS-no-regression on Podman (109); every gain is attributed via a mandatory ON-vs-OFF control arm on a sequestered `val_size>50` split (109); adoption is human-gated via `helix-refgen --check` (110). Zero new Go deps, no runtime Python — the agent + optimizer live entirely in `tools/dspy-tune/`, off `go.mod` / `helix setup` / default `go test ./...` / the merge path. Verdict: **NO-SHIP by design** (corpus still below the `val_size>50` gate; TUNE-FUT-01 grows it). Audit PASSED — 10/10 reqs, 4/4 phases, 5/5 integration seams, E2E wired.
 
-- [x] Phase 107: ReAct Tool-Using Agent + DeepSeek/OpenAI Client + ON/OFF Steering (completed 2026-06-24)
-- [x] Phase 108: Aider Honest Task-Success Oracle + Sandbox + GEPA Metric Rewire + Sequestered Split (completed 2026-06-24)
-- [x] Phase 109: SWE-bench Oracle via Podman + ON/OFF Attribution-Delta Report (completed 2026-06-24)
-- [x] Phase 110: Human-Gated Adoption + Boundary Re-Verification + Ship/No-Ship REPORT (completed 2026-06-24)
-
 **Full details:** `.planning/milestones/v2.3-ROADMAP.md`
 
 ### ✅ v2.2 Agent-Facing Skill Quality & Prompt Tuning (Phases 103-106) — SHIPPED 2026-06-24
 
 4 phases, 7 requirements (BUNDLE-01/02, REFGEN-01, SKILL-01/02/03, TUNE-01), 100% mapped. A content/codegen milestone: rewrote the agent-facing skill surface (hand-authored `SKILL.md` decision matrix + generated `reference.md`) for correctness, hardened the skill bundle so only `{SKILL.md, reference.md}` ship, and explored a quarantined dev-time DSPy offline-tuning harness against the Phase 101 adoption scorecard. Zero new Go dependencies; the DSPy spike stays strictly out of the shipped binary, `go.mod`, and `go test ./...`. Every gate ships a deliberate break-the-invariant → assert-RED test (code review caught and fixed a vacuous Guard B in 104 and a real Python↔Go parity bug in 106). Audit PASSED — 7/7 reqs, 4/4 phases, integration wired, 3/3 E2E flows, Nyquist 4/4.
-
-- [x] Phase 103: Bundle Integrity & Non-Vacuous Reference Contract (completed 2026-06-23)
-- [x] Phase 104: Reference Generator Per-Verb Correctness (completed 2026-06-23)
-- [x] Phase 105: SKILL.md Decision-Matrix Rewrite (completed 2026-06-23)
-- [x] Phase 106: Exploratory DSPy Offline Tuning Harness (spike) — documented no-ship (completed 2026-06-24)
 
 **Full details:** `.planning/milestones/v2.2-ROADMAP.md`
 
@@ -64,26 +186,11 @@ _No active milestone — v2.4 shipped 2026-06-24. Run `/gsd-new-milestone` to st
 
 6 phases, 23 requirements, 100% mapped. Make AI coding agents reliably reach for `helix` verbs over standard tools (generated per-verb reference + stronger multi-agent steering + a measured adoption contract), and prove the toolset end-to-end with vendored Aider benchmarks and committed local baselines (polyglot edit bench + RepoMap-quality and fuzzy-robustness evals). Additive — zero new Go dependencies; the only structural change was `internal/cli/skill.go` switching from an embedded `string` to an `embed.FS`. Audit PASSED — 23/23 reqs, 6/6 phases, 2/2 cross-phase E2E flows wired.
 
-- [x] Phase 97: Generated Per-Verb Reference + Deterministic Adoption Contract (completed 2026-06-22)
-- [x] Phase 98: Multi-Agent Coverage + Stronger Steering (completed 2026-06-23)
-- [x] Phase 99: Vendored Aider Fixtures + Mixed-License Gate (completed 2026-06-23)
-- [x] Phase 100: Polyglot Edit Benchmark + Committed Baseline (completed 2026-06-23)
-- [x] Phase 101: Opt-In LLM-Behavioral Adoption Scorecard (completed 2026-06-23)
-- [x] Phase 102: RepoMap-Quality + Fuzzy-Robustness Evals + Baselines (completed 2026-06-23)
-
 **Full details:** `.planning/milestones/v2.1-ROADMAP.md`
 
 ### ✅ v2.0 CLI-First — MCP Surface Retirement (Phases 90-96) — SHIPPED 2026-06-22
 
 7 phases (6 feature + 1 inserted post-audit tech-debt cleanup), 31 v1 requirements, 100% mapped. The `helix` CLI is the only agent-facing surface; the MCP Go SDK + gRPC IPC are retained as internal daemon plumbing. Strangler-fig: the CLI head was built behind the still-live MCP surface (90–93), parity proven by dual-run, the agent-facing MCP heads deleted **last** (94), docs/identity + docgen regen run against the frozen surface (95), and the non-blocking audit tech debt cleared (96). Re-audit PASSED — 31/31 reqs, 7/7 phases, 4/4 E2E flows, Nyquist 7/7.
-
-- [x] Phase 90: CLI One-Shot Dial Spine + Race-Free Warm Reuse (completed 2026-06-21)
-- [x] Phase 91: Code-Generated Verb Surface + `tools/call` Profile/Mode Enforcement (completed 2026-06-21)
-- [x] Phase 92: Terse Output Renderer + Re-Targeted Contract Oracle (completed 2026-06-21)
-- [x] Phase 93: SKILL.md + Nudge Repurpose + `helix setup` Flip (completed 2026-06-21)
-- [x] Phase 94: Retire the Agent-Facing MCP Surface (DELETE) (completed 2026-06-21)
-- [x] Phase 95: Identity & Docs Rewrite + docgen Regen (completed 2026-06-21)
-- [x] Phase 96: Address v2.0 tech debt — inserted post-audit cleanup (TD-01..TD-04 + Nyquist 93–95) (completed 2026-06-22)
 
 **Full details:** `.planning/milestones/v2.0-ROADMAP.md`
 
@@ -91,34 +198,12 @@ _No active milestone — v2.4 shipped 2026-06-24. Run `/gsd-new-milestone` to st
 
 15 phases, 63 v1 requirements, 100% mapped. Headline claim: *"Same model + same budget — with Helix the agent solves more tasks, with fewer tokens, fewer files read, and fewer destructive edits."*
 
-- [x] Phase 75: Schema, Fairness Contract & Tree Skeleton (completed 2026-06-15)
-- [x] Phase 76: Ablation Profiles + Kernel Subsystem Disable Flags (completed 2026-06-16)
-- [x] Phase 77: Bench Runtime & First E2E Smoke
-- [x] Phase 78: Internal ToolBench — Go First + LanguageRunner Interface (completed 2026-06-17)
-- [x] Phase 79: Evaluators & Result-Schema Metrics Layer (completed 2026-06-18)
-- [x] Phase 80: Five-of-Six Ablation Runners + Fairness Enforcement (completed 2026-06-19)
-- [x] Phase 81: `no_semantic` Kernel Flag + E2E Config-Gate Test
-- [x] Phase 82: Multi-Run Aggregator, BCa Bootstrap, pass@k, Cost Rollup, First Leaderboard (completed 2026-06-20)
-- [x] Phase 83: `cmd/helix-bench-rag` + baseline_rag Mode + Embedding-Index Builder (completed 2026-06-21)
-- [x] Phase 84: Container Runtime + Cosign-Signed GHCR Mirror + Disk-Budget Guard (completed 2026-06-21)
-- [x] Phase 85: Aider Polyglot Adapter + 7 Remaining Per-Language Runners (completed 2026-06-21)
-- [x] Phase 86: CrossCodeEval + RepoBench Adapters + Multi-Oracle Completion Gate (completed 2026-06-21)
-- [x] Phase 87: SWE-bench Verified Adapter + UTBoost Rescorer + Multi-Oracle `verified_correctness` (completed 2026-06-21)
-- [x] Phase 88: Multi-SWE-bench + Terminal-Bench 2.0 Adapters (completed 2026-06-21)
-- [x] Phase 89: Reports, CI Policy & Contamination Canary (completed 2026-06-21)
-
 **Full details:** `.planning/milestones/v1.12-ROADMAP.md`
 
-## Backlog
+---
 
-### ✅ Promoted — v2.3: Task-Success-Driven Skill Optimization
+## Follow-ons (Non-Blocking)
 
-The v2.3 milestone (Phases 107-110) replaces the gameable `choice_rate` adoption proxy (the v2.2 documented no-ship, TUNE-FUT-02) with a real agent task-success optimization signal. It activates the deferred TUNE-FUT-01 `val_size > 50` gate (via TUNE-03) and builds directly on the v2.2 `tools/dspy-tune/` harness + the v2.1 Aider/SWE-bench bench assets. Deferred to a future milestone (recorded in REQUIREMENTS.md): TUNE-FUT-01 (GEPA→MIPROv2/COPRO optimizer upgrade), TUNE-FUT-03 (grep-sed-cat third control arm + dual-bench joined metric), TUNE-FUT-04 (larger SWE-bench instance lists / more providers).
-
-### ✅ Promoted — v2.2: Agent-Facing Skill Quality & Prompt Tuning
-
-These two backlog candidates were promoted into the **v2.2** milestone (Phases 103-106, shipped 2026-06-24, see `.planning/milestones/v2.2-ROADMAP.md`) on 2026-06-23 via `/gsd-new-project`. They are retained here for lineage; the v2.2 phases superseded and shipped them.
-
-- **BL-SKILL-01 → Phases 103-105** (BUNDLE-01/02 + REFGEN-01 + SKILL-01/02/03). Full SKILL.md + reference.md decision-matrix rewrite plus the `installSkill` allowlist + bundle-contents test. The original seed listed: (1) split rows that mix QUERY verbs with ACTION verbs that mutate state; (2) add the missing "Not this" guidance to every row (8+ rows currently `—`); (3) fix the `reference.md` "Use this, not that" copy-paste errors and incorrect "Output" descriptions; (4) add prerequisite notes for the indexed-graph verbs (all require `index-semantic-graph` first); (5) regroup the matrix by capability. Must stay consistent with the Phase 97 generator (`cmd/helix-refgen`) + `--check` drift gate and the `reference ⊇ VerbToolNames()` adoption contract — i.e. fix the GENERATOR, not hand-edit generated output. The allowlist + bundle-contents test became Phase 103; the generator fix became Phase 104; the SKILL.md matrix rewrite became Phase 105.
-
-- **BL-SKILL-02 → Phase 106** (TUNE-01). DSPy-based offline prompt tuning of the agent-facing surface (exploratory). **Constraint:** Helix ships as a Go single binary with no Python/runtime deps — DSPy is a **dev-time/offline optimization harness** (Python, under `tools/`) that emits an optimized, committed `SKILL.md`/`reference.md`, NOT a runtime dependency. **Metric already exists:** the Phase 101 opt-in LLM-behavioral adoption scorecard (`test/oracle/adopt` — `choice_rate`/`fallback_rate`, keyed on the first emitted command) is the DSPy objective, closing the loop from v2.1's measurement work to v2.2's optimization. Promoted as the strictly-last, exploratory Phase 106 (documented no-ship; clean Go-search-loop fallback).
+- **TUNE-FUT-03:** Human-gated SKILL.md adoption (separate milestone, after meaningful delta)
+- **TUNE-FUT-05:** Larger SWE-bench K for confirmation
+- **Significance test:** Add statistical significance to `decide_ship`

@@ -90,26 +90,24 @@ Phase 1 (HARNESS-01/02) ──► Phase 2 (HARNESS-03) ──► Phase 3 (HARNES
 
 ## Traceability
 
-*Phase mapping to be filled by ROADMAP.md*
-
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| HARNESS-01a | — | pending |
-| HARNESS-01b | — | pending |
-| HARNESS-01c | — | pending |
-| HARNESS-01d | — | pending |
-| HARNESS-02a | — | pending |
-| HARNESS-02b | — | pending |
-| HARNESS-02c | — | pending |
-| HARNESS-02d | — | pending |
-| HARNESS-03a | — | pending |
-| HARNESS-03b | — | pending |
-| HARNESS-03c | — | pending |
-| HARNESS-04a | — | pending |
-| HARNESS-04b | — | pending |
-| HARNESS-04c | — | pending |
-| HARNESS-04d | — | pending |
-| HARNESS-05a | — | pending |
-| HARNESS-05b | — | pending |
-| HARNESS-05c | — | pending |
-| HARNESS-05d | — | pending |
+| HARNESS-01a | 115 | planned |
+| HARNESS-01b | 115 | planned |
+| HARNESS-01c | 115 | planned |
+| HARNESS-01d | 115 | planned |
+| HARNESS-02a | 115 | planned |
+| HARNESS-02b | 115 | planned |
+| HARNESS-02c | 115 | planned |
+| HARNESS-02d | 115 | planned |
+| HARNESS-03a | 116 | planned |
+| HARNESS-03b | 116 | planned |
+| HARNESS-03c | 116 | planned |
+| HARNESS-04a | 117 | planned |
+| HARNESS-04b | 117 | planned |
+| HARNESS-04c | 117 | planned |
+| HARNESS-04d | 117 | planned |
+| HARNESS-05a | 118 | planned |
+| HARNESS-05b | 118 | planned |
+| HARNESS-05c | 118 | planned |
+| HARNESS-05d | 118 | planned |

@@ -1,103 +1,65 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.4
-milestone_name: Corpus Growth & Real Optimization Verdict
-current_phase: 4
-status: Awaiting next milestone
-stopped_at: "v2.4 milestone set up — PROJECT.md updated, targeted research synthesized (SUMMARY.md + DEEPSEEK/GEPA-COST/SWEBENCH), REQUIREMENTS.md (10 reqs) + ROADMAP.md (Phases 111-114) created and committed. Next: execute Phase 111 (Corpus Growth & Sequestered Split) — running autonomously via `/gsd-autonomous`."
-last_updated: "2026-06-24T20:14:56.331Z"
-last_activity: 2026-06-24
-last_activity_desc: Milestone v2.4 completed and archived
+milestone: v2.5
+milestone_name: Agent Harness Rebuild
+current_phase: 0
+status: Planning
+stopped_at: "Milestone v2.5 started — requirements definition pending."
+last_updated: "2026-06-26T00:00:00.000Z"
+last_activity: 2026-06-26
+last_activity_desc: Milestone v2.5 started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
-current_phase_name: Verdict & Boundary Re-Verification
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase_name: Not started (defining requirements)
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-23)
+See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.4 roadmap created (Phases 111-114); ready to execute Phase 111 (Corpus Growth & Sequestered Split).
+**Current focus:** v2.5 Agent Harness Rebuild — fix the harness so the agent actually solves tasks by editing.
 
 ## Current Position
 
-Phase: Milestone v2.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-24 — Milestone v2.4 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-26 — Milestone v2.5 started
 
 ## Performance Metrics
 
-**Velocity:** v1.12 closed at 15/15 phases. Per-plan history for shipped milestones lives in the archived milestone ROADMAPs; this table resets at the v2.0 start.
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 90 | 4 | - | - |
-| 91 | 4 | - | - |
-| 92 | 3 | - | - |
-| 93 | 4 | - | - |
-| 94 | 2 | - | - |
-| 95 | 2 | - | - |
-| 97 | 2 | - | - |
-| 98 | 2 | - | - |
-| 99 | 2 | - | - |
-| 100 | 2 | - | - |
-| 101 | 2 | - | - |
-| 102 | 3 | - | - |
-| 104 | 1 | - | - |
-| 105 | 1 | - | - |
-| 106 | 2 | - | - |
+**Velocity:** v2.4 closed at 4/4 phases. Per-plan history for shipped milestones lives in the archived milestone ROADMAPs; this table resets at the v2.5 start.
 
 *Updated after each plan completion.*
-| Phase 90 P01 | 5min | 2 tasks | 5 files |
-| Phase 90 P02 | 3min | 1 tasks | 2 files |
-| Phase 90 P02 | 3min | 1 tasks | 2 files |
-| Phase 90 P03 | 6min | 2 tasks | 6 files |
-| Phase 90 P04 | 35min | 3 tasks | 5 files |
-| Phase 91 P01 | 17min | 3 tasks | 12 files |
-| Phase 91 P02 | 3min | 2 tasks | 3 files |
-| Phase 91 P03 | 3min | 2 tasks | 2 files |
-| Phase 91 P04 | 6min | 2 tasks | 2 files |
-| Phase 92 P01 | 20min | 3 tasks | 6 files |
-| Phase 92 P02 | 6min | 2 tasks | 8 files |
-| Phase 92 P03 | ~10min | 2 tasks | 9 files |
-| Phase 93 P01 | 50m | 2 tasks | 3 files |
-| Phase 93 P02 | 4min | 2 tasks | 2 files |
-| Phase 93 P03 | 9min | 2 tasks | 3 files |
-| Phase 93 P04 | 310 | 2 tasks | 21 files |
-| Phase 94 P01 | 18min | 3 tasks | 14 files |
-| Phase 94 P02 | 25min | 3 tasks | 28 files |
-| Phase 95 P01 | 3min | 3 tasks | 6 files |
-| Phase 95 P02 | 18 | 3 tasks | 3 files |
-| Phase 96 P01 | 6min | 4 tasks | 10 files |
-| Phase 102 P01 | 11 | 4 tasks | 16 files |
-| Phase 102 P02 | 14 | 4 tasks | 17 files |
-| Phase 102 P03 | 16 | 3 tasks | 10 files |
-| Phase 103 P01 | 4m | 3 tasks | 5 files |
-| Phase 104 P01 | 3 | 3 tasks | 4 files |
-| Phase 105 P01 | 5min | 2 tasks | 2 files |
-| Phase 106 P01 | 5min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
-- 2026-06-24: v2.4 roadmap created (Phases 111-114) from REQUIREMENTS.md (10 v2.4 REQs across CORPUS/SCALE/RUN/REPORT/ADOPT) + research SUMMARY.md (DEEPSEEK/GEPA-COST/SWEBENCH). Coarse granularity, sequential phase IDs, numbering continued from v2.3 (ended at 110). Driver: **TUNE-FUT-01** — grow the optimization corpus past the strict `val_size>50` held-out gate and run the v2.3 task-success pipeline FOR REAL (cost-aware, both tracks) to turn v2.3's "NO-SHIP by design" into an actual numbers-backed adopt/no-adopt verdict. **REPORT-only** (adoption stays a separate human `helix-refgen --check` step); **fix-as-needed** latitude on the v2.3 agent/graders. Forced dependency chain honored: 111 (CORPUS-01/02 — materialize ≥101-task Aider corpus at `AIDER_TASKS_DIR` so the 50/50 split clears `val_size>50`, reusing the vendored `bench/datasets/aider-polyglot` loader; disjoint sequestered TEST/attribution split with a planted-leak RED test — research: GEPA leaks valset into selection, so TEST stays out of train AND val), 112 (SCALE-01/02/03 — pin `DSPY_LM_MODEL=deepseek-v4-flash` for program+reflection LM DeepSeek-primary/OpenAI-fallback; cost bounds: agent max_iters cap + concurrency cap + 429 backoff + hard rollout cap; `grade_swebench.py` hard-errors on the harness "0-tests⇒resolved=true" footgun with a break-the-invariant RED test), 113 (RUN-01/02/03 — execute `optimize.py` for real → git-ignored `output/optimized.json` proving `val_size>50`; ON-vs-OFF attribution with per-arm cost via the metered LLM wrapper; SWE-bench Verified K=25–50 stratified confirming slice on Podman with a K≈2 gold-patch smoke, fail-not-skip), 114 (REPORT-01 + ADOPT-05 — fill `tools/dspy-tune/REPORT.md` with the real ON/OFF/Δ/val_size/per-arm-cost/SWE-bench-agreement verdict REPORT-only; re-verify the ADOPT-04 single-binary/no-runtime-Python boundary at scale + prove the `helix-refgen --check` human-gated adoption path ready). 10/10 reqs mapped, 0 unmapped, 0 double-mapped. **ZERO new Go deps** (go.mod untouched since v2.0 Phase 90); all new pins are dev-venv Python only (`dspy==3.2.1`, `openai==2.43.0`, `swebench==4.1.0`). Research resolved the 3 cost/logistics unknowns (model pin `deepseek-v4-flash` — legacy aliases retire 2026-07-24 + `deepseek-reasoner` breaks tool-calls; GEPA `auto="light"` ≈600 rollouts ≈ $5–15/run, trainset free / valset is the lever; SWE-bench K=25–50 stratified Verified slice + the harness 0-tests footgun), so 0 phases flagged for phase-level research.
-- 2026-06-24: v2.3 roadmap created (Phases 107-110) from REQUIREMENTS.md (10 v2.3 REQs across AGENT/ORACLE/TUNE/ADOPT) + research SUMMARY.md. Coarse granularity, sequential phase IDs, numbering continued from v2.2 (ended at 106). Driver: TUNE-FUT-02 — replace the gameable `choice_rate` adoption proxy (the v2.2 documented no-ship) with a real **agent task-success** optimization signal. Forced dependency chain honored (agent → Aider grader + metric rewire → SWE-bench grader → human-gated adoption): 107 (AGENT-01/02/03 — ReAct tool-using agent driving `helix <verb>` via subprocess, one `openai==2.43.0` client, DeepSeek-primary/OpenAI-fallback model-as-config-var, hard turn/no-progress cap, fail-loud-on-missing-key, first-class `--steering on|off`), 108 (ORACLE-01 + TUNE-02 + TUNE-03 — honest Aider hidden-tests oracle in a per-task sandbox with 0-tests-ran-is-ERROR + agent-unwritable gold-test restore, the core `choice_rate → task-success` GEPA metric swap, sequestered held-out TEST split + `val_size>50` hard adoption gate; **research-flagged** — highest-risk surface + v2.2 no-ship root cause), 109 (ORACLE-02 + TUNE-04 — heaviest SWE-bench oracle via upstream `swebench==4.1.0` harness on Podman with `DOCKER_HOST`→podman socket, FAIL_TO_PASS+PASS_TO_PASS contract + dataset-org pin + nonzero-task-count assert, ON-vs-OFF attribution delta; **research-flagged** — live SWE-bench-on-Podman needs implementation-time confirmation), 110 (ADOPT-03 + ADOPT-04 — human-gated adoption via `helix-refgen --check`, no auto-write of SKILL.md/reference.md, single-binary/no-runtime-Python re-verification as ADOPT-04's primary owner, ship/no-ship REPORT recording ON/OFF/Δ/val_size/per-arm-cost). 10/10 reqs mapped, 0 unmapped, 0 double-mapped. ZERO new Go deps (all new deps are dev-time Python pins — `openai==2.43.0` + `swebench==4.1.0` in the `tools/dspy-tune/` venv; keep `dspy==3.2.1`); the agent + optimizer stay strictly off `go.mod` / `helix setup` / default `go test ./...` / merge path. ADOPT-04 + anti-vacuity + HELIX_BIN-fail-not-skip are CROSS-CUTTING exit gates recurring in every relevant phase (ADOPT-04 owned for traceability by 110). Both v2.2 backlog candidates already shipped; v2.3 promoted as the TUNE-FUT-02 follow-on. Phases 108 + 109 flagged for phase-level research; 107 + 110 need none.
-- 2026-06-23: v2.2 roadmap created (Phases 103-106) from REQUIREMENTS.md (7 v2.2 REQs across BUNDLE/REFGEN/SKILL/TUNE) + research SUMMARY.md. Coarse granularity, sequential phase IDs, numbering continued from v2.1 (ended at 102). Dependency-driven, deterministic-before-exploratory order honored: 103 (BUNDLE-01/02 — installSkill closed-set allowlist + exact-set bundle test + move SKILL-ISSUE.md out of embed dir + harden reference-completeness contract to exact-count==50 BEFORE the churn), 104 (REFGEN-01 — per-verb generator override fixing the cmd/helix-cligen group-collapse; regenerated reference.md passes --check; MUST precede 105), 105 (SKILL-01/02/03 — hand-authored matrix rewrite: split QUERY/ACTION rows, "Not this" everywhere, indexed-graph prereqs, regroup by capability; preserve StripDecisionMatrix anchor + SKILL-04 size cap), 106 (TUNE-01 — exploratory DSPy dev-time/offline harness under tools/, parity-pinned Python adopt metric, overfit/gaming guards, may no-ship, vet-style leakage analyzer; strictly LAST against a frozen surface). 7/7 reqs mapped, 0 unmapped, 0 double-mapped. ZERO new Go deps for 103/104/105; DSPy quarantined out of the binary/module/CI. Both backlog candidates (BL-SKILL-01/02) promoted into this milestone. Phase 106 flagged for phase-level research (spike).
-- 2026-06-22: v2.1 roadmap created (Phases 97-102) from REQUIREMENTS.md (23 v1 REQs across REF/STEER/AGENT/ADOPT/VENDOR/EDITBENCH/REPOEVAL/FUZZBENCH/BASELINE) + 5 research files. Two interleavable thrusts, intra-thrust order fixed by hard deps (reference→contract, vendor→baseline, corpus→eval). 6 phases under coarse granularity: 97 (REF+ADOPT-01 substrate+merge-gating contract), 98 (STEER+AGENT multi-agent+steering), 99 (VENDOR mixed-license fixtures), 100 (EDITBENCH+BASELINE-01 wiring+baseline), 101 (ADOPT-02 opt-in LLM scorecard), 102 (REPOEVAL+FUZZBENCH+BASELINE-02 evals+baselines). All 23 reqs mapped, 0 unmapped, 0 double-mapped. ZERO new Go deps; only structural change is skill.go string→embed.FS.
-- 2026-06-21: v2.0 roadmap created from REQUIREMENTS.md (31 REQ-IDs across CLI/VERB/OUT/SEC/SKILL/RETIRE/DOCS/TEST) and the 5 research files. Strangler-fig 6-phase shape (90→95) honored; TEST-* threaded into 90/92/93 (E2E oracle early, contract oracle at output-freeze, behavioral oracle with the skill).
-- 2026-06-21: v1.12 Bench Stack & Tool Evaluation functionally complete at Phase 89 (15/15 phases); formal `/gsd-complete-milestone` archival pending.
-- Phase 96 added: Address v2.0 tech debt
+- 2026-06-26: v2.5 roadmap to be created from investigation findings (agent makes 0 tool calls on ~40% of tasks; no feedback loop; GEPA reflection is a no-op). Driver: **TUNE-FUT-06** — rebuild the harness to make the agent actually solve by editing: task-solving system prompt, feedback loop (run-tests/get-diagnostics in ReAct), verb-arg hardening, real GEPA agent module. THEN re-run attribution for a meaningful delta.
+- 2026-06-24: v2.4 roadmap created (Phases 111-114) from REQUIREMENTS.md (10 v2.4 REQs across CORPUS/SCALE/RUN/REPORT/ADOPT) + research SUMMARY.md (DEEPSEEK/GEPA-COST/SWEBENCH). Driver: **TUNE-FUT-01** — grow the optimization corpus past the strict `val_size>50` held-out gate and run the v2.3 task-success pipeline FOR REAL (cost-aware, both tracks) to turn v2.3's "NO-SHIP by design" into an actual numbers-backed adopt/no-adopt verdict. **REPORT-only** (adoption stays a separate human `helix-refgen --check` step); **fix-as-needed** latitude on the v2.3 agent/graders. Forced dependency chain honored: 111 (CORPUS-01/02 — materialize ≥101-task Aider corpus at `AIDER_TASKS_DIR` so the 50/50 split clears `val_size>50`, reusing the vendored `bench/datasets/aider-polyglot` loader; disjoint sequestered TEST/attribution split with a planted-leak RED test — research: GEPA leaks valset into selection, so TEST stays out of train AND val), 112 (SCALE-01/02/03 — pin `DSPY_LM_MODEL=deepseek-v4-flash` for program+reflection LM DeepSeek-primary/OpenAI-fallback; cost bounds: agent max_iters cap + concurrency cap + 429 backoff + hard rollout cap; `grade_swebench.py` hard-errors on the harness "0-tests⇒resolved=true" footgun with a break-the-invariant RED test), 113 (RUN-01/02/03 — execute `optimize.py` for real → git-ignored `output/optimized.json` proving `val_size>50`; ON-vs-OFF attribution with per-arm cost via the metered LLM wrapper; SWE-bench Verified K=25–50 stratified confirming slice on Podman with a K≈2 gold-patch smoke, fail-not-skip), 114 (REPORT-01 + ADOPT-05 — fill `tools/dspy-tune/REPORT.md` with the real ON/OFF/Δ/val_size/per-arm-cost/SWE-bench-agreement verdict REPORT-only; re-verify the ADOPT-04 single-binary/no-runtime-Python boundary at scale + prove the `helix-refgen --check` human-gated adoption path ready). 10/10 reqs mapped, 0 unmapped, 0 double-mapped. **ZERO new Go deps** (go.mod untouched since v2.0 Phase 90); all new pins are dev-venv Python only (`dspy==3.2.1`, `openai==2.43.0`, `swebench==4.1.0`). Research resolved the 3 cost/logistics unknowns (model pin `deepseek-v4-flash` — legacy aliases retire 2026-07-24 + `deepseek-reasoner` breaks tool-calls; GEPA `auto="light"` ≈600 rollouts ≈ $5–15/run, trainset free / valset is the lever; SWE-bench K=25–50 stratified Verified slice + the harness 0-tests footgun), so 0 phases flagged for phase-level research.
 
-### Critical Roadmap Constraints (v2.4 — Phases 111-114)
+### Critical Roadmap Constraints (v2.5 — TUNE-FUT-06)
+
+Cross-cutting exit gates (an agent-harness rebuild on the v2.3/v2.4 pipeline; carries forward all v2.3/v2.4 discipline):
+
+- **Forced dependency chain (do not reorder):** task-solving prompt + feedback loop (Phase 1) → verb-arg hardening (Phase 2) → real GEPA module (Phase 3) → re-run attribution (Phase 4). Phase 4 is gated on Phases 1–3 completing successfully.
+- **System prompt MUST force editing (HARNESS-01):** the prompt names the solution file, declares "success = hidden tests pass", forbids prose answers, and says "not done until implemented". A break-the-invariant test (agent answers in prose → assert FAIL) ships with Phase 1.
+- **Feedback loop MUST verify completion (HARNESS-02):** run-tests / get-diagnostics in the ReAct loop, so the agent knows when it's done. A break-the-invariant test (no feedback loop → agent declares done on broken code → assert FAIL) ships with Phase 1.
+- **Verb-arg usage MUST be hardened (HARNESS-03):** the error budget is finite; malformed calls burn it. A break-the-invariant test (malformed argv passes silently → assert FAIL) ships with Phase 2.
+- **GEPA MUST evolve (HARNESS-04):** the `AgentProgram` must emit a reflectable trace so GEPA's reflective mutation has something to optimize. A break-the-invariant test (trace is empty/constant → assert FAIL) ships with Phase 3.
+- **Re-run attribution after harness is fixed (HARNESS-05):** Phase 4 re-runs the v2.4 attribution pipeline ON THE FIXED HARNESS. The delta is only meaningful if the agent demonstrably uses helix on most tasks.
+- **ADOPT-04 single-binary / no-runtime-Python (carried forward):** zero new Go deps; all tuning stays in dev-venv Python (`tools/dspy-tune/`); no `helix` subcommand shells to Python.
+- **Corpus is already past the gate:** the 103-task Aider corpus (train 26 / val 26 / held-out 51) is already materialized and past `val_size>50`. No corpus growth needed.
+
+### Critical Roadmap Constraints (v2.4 — Phases 111-114, historical but still relevant)
 
 Cross-cutting exit gates (a corpus-growth + for-real-run milestone on the v2.3 pipeline; carries the v2.3 boundary discipline forward):
 
@@ -111,7 +73,7 @@ Cross-cutting exit gates (a corpus-growth + for-real-run milestone on the v2.3 p
 - **SWE-bench footgun (P112, research-pinned):** the upstream v4.1.0 harness scores **0 tests evaluated as `resolved=True`** (`compute_fail_to_pass` returns 1.0 on `total==0`). `grade_swebench.py` MUST independently assert the FAIL_TO_PASS bucket is non-empty + matches expected ids (the Phase-109 "0 tests ⇒ GradeError" rule) — never trust the harness `resolved` flag. Dataset pin `princeton-nlp/SWE-bench_Verified` still resolves; always pass `--dataset_name` (v4.1.0 default moved to `SWE-bench/SWE-bench_Lite`).
 - **Gate the committed ARTIFACT, never the optimizer PROCESS (P113/P114):** LLM optimization is not bit-reproducible — `optimize.py` writes only git-ignored `output/optimized.json`. Never re-run it in CI. REPORT-only: no `SKILL.md`/`reference.md` adoption committed this milestone; adoption (TUNE-FUT-03) is a separate human `helix-refgen --check`-gated step.
 
-### Critical Roadmap Constraints (v2.3 — Phases 107-110)
+### Critical Roadmap Constraints (v2.3 — Phases 107-110, historical)
 
 Cross-cutting exit gates baked into every relevant phase (a dev-time/offline optimization milestone bolted onto the shipped Go single binary WITHOUT breaching the no-runtime-Python boundary):
 
@@ -163,87 +125,27 @@ None yet.
 ### Blockers/Concerns
 
 **RESOLVED (Phase 113, 2026-06-24): workspace-activation gap — fixed (user-approved Go product fix: `helix activate` now also calls `activate_project`; committed + E2E regression-tested). The real run completed: SHIP verdict, delta +0.0392, val_size=51, $0.23 + SWE-bench 2/2 gold confirm on Podman.** [Historical detail of the blocker:]
+
 **(Phase 113, 2026-06-24): workspace-activation gap stopped the real run.** The v2.3 dev-time agent was never actually run end-to-end against real helix — its hermetic fakes masked two real defects. (1) FIXED: `agent/tools.py` passed `location` as a positional, but helix verbs take named `--flags` (`read-file --path X`) → every verb failed `required flag --path not set`. (2) BLOCKER: the file/edit verbs return `no_workspace` because the daemon's file-tool active-workspace state is set ONLY by the MCP `activate_project` tool (`repo_path`, persists globally per-daemon via `ActivateCallback`), and there is **no `activate_project` CLI verb**. `helix activate` (gRPC `ActivateWorkspace`) sets only kernel/LS state, NOT the file-tool workspace (confirmed empirically + by the verb.go:153 E2E comment). A one-shot `helix <verb>` sends no cwd, so LazyInit (which keys on `repo_path`) can't auto-activate. This is also a likely **real product bug**: the CLI-first file/edit verbs cannot obtain an active workspace from the shipped CLI surface (SessionStart's `helix activate` does not enable them). DeepSeek auth works (probe OK); corpus + hardening (111/112) are done. Awaiting user decision on how to unblock (see Session Continuity).
 
-Watch items for v2.4:
+Watch items for v2.5:
 
-- **Phase 111 corpus composition:** confirm which Aider tracks/exercises + count materialize cleanly (≥101 tasks, each with a runnable native test command) so `val_size>50` clears affordably; some Exercism tracks need a toolchain present to grade.
-- **Phase 113 environment:** the SWE-bench confirming leg needs Podman + the docker-compat socket (`podman system service --time=0 &` + `DOCKER_HOST`) and ~3–5 GiB image pull for K=50 on an exec-capable, roomy storage path (rootless subuid/subgid + overlay driver pre-checks). If unavailable, RUN-03 becomes a surfaced blocker (fail-not-skip on a requested run), not a silent skip.
-- **Phase 113 billing:** real GEPA run is genuinely billed (~$5–15 worst case). Needs `DEEPSEEK_API_KEY` (or OpenAI fallback key) present in the dev shell.
-
-## Deferred Items
-
-Items carried forward from the v1.12 milestone close (see prior STATE history / v1.12 deferred-items.md for full context):
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| v1.12 audit | Live execution of public-benchmark adapters (Docker/swebench/HF-network paths) honestly gated-skip; decision logic hermetically proven | Tracked | v1.12 close |
-| uat (pre-existing) | Phase 75 (v1.12) `75-UAT.md` — status passed, 0 pending scenarios; file simply never formally closed at v1.12 archive | Acknowledged (benign) | v2.0 close |
-| quick_task (pre-existing) | `260414-e5n-fix-requirements-md-checkboxes-check-all` — pre-v2.0 quick task, tracker status unknown | Acknowledged | v2.0 close |
-| quick_task (pre-existing) | `260617-j29-re-pin-fairness-contract-modelid-to-auth` — pre-v2.0 (v1.12-era) quick task, tracker status unknown | Acknowledged | v2.0 close |
-| quick_task (pre-existing) | `260617-t7x-resync-helix-tool-capability-documentation` — work was completed (docgen blank-import resync); tracker status reads unknown, not formally closed | Acknowledged (effectively done) | v2.0 close |
-
-> These four items were surfaced by the v2.0 milestone-close open-artifact audit (2026-06-22). All are pre-existing (none from v2.0 phases 90–96); acknowledged and deferred so the v2.0 close can proceed. None are v2.0 blockers.
-
-> **Re-surfaced at v2.1 close (2026-06-23):** the 3 quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x`) were re-flagged by the v2.1 open-artifact audit. Triage confirmed all three are **already completed work** (each has a SUMMARY.md with a completion date — `260617-j29` re-pinned `DefaultContract.ModelID` to `claude-sonnet-4-5-20250929`; `260617-t7x` did the docgen tool-manifest resync; `260414-e5n` did the REQUIREMENTS checkbox bookkeeping) — they are stale tracking entries lacking a `status: complete` marker, not real outstanding work. Re-acknowledged; not v2.1 blockers.
-
-> **Re-surfaced again at v2.2 close (2026-06-24):** the same 3 quick-tasks were re-flagged by the v2.2 open-artifact audit (none originate from v2.2 phases 103–106). Triage unchanged — all already-completed stale tracking entries lacking a `status: complete` marker. Acknowledged and deferred so the v2.2 close can proceed; not v2.2 blockers. (Separately, the pre-existing `cmd/helix-bench/TestRunSubcommandWiresDeltaPass` network/HELIX_BIN failure remains out-of-scope tech debt, recorded in the v2.2 milestone audit.)
-
-> **Re-surfaced again at v2.3 close (2026-06-24):** the same 3 quick-tasks (`260414-e5n`, `260617-j29`, `260617-t7x`) were re-flagged by the v2.3 open-artifact audit (none originate from v2.3 phases 107–110). Triage unchanged — already-completed stale trackers lacking a `status: complete` marker. Acknowledged and deferred so the v2.3 close can proceed; not v2.3 blockers. The audit additionally flagged Phase 109's `109-CONTEXT.md` "open questions" — a **false positive**: that section ("Open questions resolved at implementation time") records the RESOLVED answers (dataset org pinned to `princeton-nlp/SWE-bench_Verified`; SWE-bench-on-Podman confirmed not-blocked), not outstanding questions. No action needed. The v2.3 ship/no-ship verdict is NO-SHIP by design (corpus < `val_size>50`); TUNE-FUT-01 (grow the corpus) is the documented follow-on, carried forward.
+- **HARNESS-01 system prompt:** must force editing, forbid prose, name the file, success = hidden tests pass. A prose-answer test MUST fail.
+- **HARNESS-02 feedback loop:** must wire run-tests/get-diagnostics into ReAct. A no-feedback test MUST fail.
+- **HARNESS-03 verb hardening:** must stop burning error budget. A malformed-call test MUST fail.
+- **HARNESS-04 GEPA evolution:** AgentProgram MUST emit a predictor trace. An empty-trace test MUST fail.
+- **HARNESS-05 re-run attribution:** only meaningful after HARNESS-01/02/03/04 complete. Delta on a broken agent is noise.
 
 ## Session Continuity
 
-Last session: 2026-06-24 (resumed)
-Stopped at: v2.4 milestone set up — PROJECT.md updated, targeted research synthesized (SUMMARY.md + DEEPSEEK/GEPA-COST/SWEBENCH), REQUIREMENTS.md (10 reqs) + ROADMAP.md (Phases 111-114) created and committed. Next: execute Phase 111 (Corpus Growth & Sequestered Split) — running autonomously via `/gsd-autonomous`.
+Last session: 2026-06-26 (new milestone)
+Stopped at: Milestone v2.5 started — requirements definition pending
 Resume file: —
 
 ## Decisions
 
-- [Phase ?]: Phase 90-01: per-socket gofrs/flock startup lock + double-checked tryConnect in ConnectOrStartDaemon; N parallel cold callers spawn exactly one daemon (CLI-03)
-- [Phase ?]: Phase 90-01: synctest seam pattern - startupGuard takes injectable seams; race test uses an in-process mutex locker since real OS flock deadlocks synctest virtual clock
-- [Phase ?]: Phase 90-02: no-arg helix (mode=auto) prints grouped cobra help and exits 0 (CLI-04); explicit --mode=stdio still runs forwarder (Phase 94 owns head deletion); 3 command groups scaffold Phase 91 verbs
-- [Phase ?]: 90-03: client transport placed in internal/forwarder (no cycle; clirpc fallback unneeded)
-- [Phase ?]: 90-03: forwarder.CallTool takes version as a param to avoid an internal/cli↔forwarder import cycle
-- [Phase ?]: 90-04: E2E oracle fixed 3 latent 90-03 spine bugs (search_for_pattern wrong tool name, no socket override, cold-start :8080 bind); CLI-02 SLO=max(p50*5,50ms), observed p50 ~12ms
-- [Phase ?]: 91-01: AST scan (go/packages+go/ast) recovers tool-name->*Args binding; no manual per-tool table (VERB-04)
-- [Phase ?]: 91-01: verbs_gen.go generated+committed; helix-cligen --check drift gate in CI + make verify-cligen (VERB-02)
-- [Phase ?]: 91-01: internal/cli.VerbToolNames() is the read-only catalog seam for 91-03 integration tests
-- [Phase ?]: SEC-01: tools/call authz returns typed serr.PermissionDenied as an error (not IsError) so errors.Is round-trips CLI-side
-- [Phase ?]: ProfileEnforcementMiddleware installed between Guardrail and LazyInit (step 14b.6); LIFO keeps LazyInit first, ProfileEnforce before Guardrail
-- [Phase ?]: SEC-02: CLI verb surface = intersection(cli.VerbToolNames(), listSessionTools(profile)); byte-identical to profile allowed set via 91-01 parity, compares cleanly vs unchanged goldens; oracle re-pointed in TestProfile_Contract_Golden
-- [Phase ?]: SEC-02: hidden-AND-refused contract — TestProfile_CLI_Surface_Refusal asserts an out-of-profile destructive verb (replace_symbol_body) is absent from CLI surface AND CallTool returns a Go error (91-02 PermissionDenied)
-- [Phase ?]: 91-03 deferred: TestProfile_ExcludedToolNotInvocable + TestProfile_ModeAndBudget/switch_mode fail pre-existing under 91-02 enforcement (expect IsError, now get Go error) — out of 91-03 file scope, logged to deferred-items.md
-- [Phase ?]: 91-04: Phase 90 dial oracle re-pointed to flat helix <verb> (search-in-files/--pattern); call parent removed in 91-01
-- [Phase ?]: 91-04: SEC-01 live proof — ci-bot daemon refuses real helix replace-symbol-body (non-zero exit + typed permission_denied); full profile allows the edit (CLI->gRPC->daemon round trip proven)
-- [Phase ?]: 92-02: --json repurposed as a persistent dual-read flag (log-format on daemon path, verb-output JSON on verb path)
-- [Phase ?]: 92-02: readSnippetLine clamps the CLI-side snippet read to the workspace root before opening (T-92-04)
-- [Phase ?]: 92-03: Contract oracle re-targeted to real helix subprocess stdout goldens (HELIX_BIN-gated); MCP schema meta-validation replaced by default-suite typed-args to cobra-flags parity; OUT-04 chain + OUT-03 self-contained nav snippet proven end-to-end
-- [Phase ?]: 93-01: SKILL.md ships via go:embed (string form); installSkill writes it atomically with skills/helix containment; zero new deps, drift-gated against VerbToolNames
-- [Phase ?]: 93-02: PreToolUse nudge repurposed to per-call advisory steering grep/sed/cat to helix verbs via hookSpecificOutput.additionalContext, fail-open and exit-0 always (T-93-04)
-- [Phase ?]: 93-02: classifyBashTarget uses a static code-extension allowlist (not per-call Registry) for the hot hook path; mixed code+non-code operands classify conservatively as non-code
-- [Phase ?]: Phase 93-03: helix setup flipped to skill+hooks install with MCP-only hook-preserving teardown across all 7 clients; daemon MCP head intact for Phase 94
-- [Phase ?]: 94-02: CLI is the sole agent-facing MCP surface — both stdio (RunForwarder) and HTTP (/mcp) heads deleted; daemon/wire/middleware engine retained behind forwarder.CallTool
-- [Phase ?]: 94-02: --mode retained with only the auto arm; legacy stdio/http modes surface the unknown-mode error
-- [Phase ?]: Phase 95-01: docgen derives helix verbs inline via ReplaceAll; docgen drift gate wired as make verify-docs + CI step (closes v1.12 hole); blank-import parity via --check gate + cross-ref comments, not literal equality (D-02 preserved)
-- [Phase ?]: Phase 95-02: DOCS-03 satisfied by ADDING a Helix-CLI routing matrix to CLAUDE.md; external SMTC matrix left byte-for-byte intact (mcp__smtc__ count unchanged at 31)
-- [Phase ?]: Phase 95-02: docs reframed CLI-first without over-claiming MCP removal — MCP Go SDK + gRPC IPC are retained internal daemon plumbing
-- [Phase 96]: TD-01: validateAdminAddr refuses empty-host/wildcard binds via explicit empty-host switch case + !ip.IsUnspecified() guard, preserving the empty-ADDR error contract
-- [Phase 96]: TD-03: classifyBashTarget grep-family leading-PATTERN skip gated to grep/rg/ag/egrep/fgrep only; cat/sed/find unchanged; fail-open preserved
-- [Phase 96]: TD-04: reworded four get_tool_help metadata literals to 'Helix tool'; regenerated README + tool-descriptions golden via tooling (no hand-edit)
-- [Phase ?]: RepoMap-eval gold is file:symbol (relpath:SymbolName, receiver-qualified); leaf is stdlib-only with a TestLeafImports self-test (vet-ablation-leakage does not gate bench/evaluators/*)
-- [Phase ?]: RepoMap-eval DiscriminatorMargin=0.30 committed; reversed+seeded-random both bite (fwd 1.0 vs rev 0.005 / rnd 0.52)
-- [Phase ?]: Phase 104: refgen per-verb override maps fix collapsed-prose in the generator, not via reference.md hand-edit; categoryToGroup untouched.
-- [Phase 105]: 105-01: split get-context (RepoMap, no prereq) from get-semantic-context (Semantic graph, †) so the indexed-graph reader carries the marker without mis-tagging the repomap reader; 43 data rows (37 baseline + 6 net splits)
-- [Phase 105]: 105-01: anti-vacuity matrix guards run each pure checker on the real embed (positive arm) + a synthetic fabricated offender (negative arm) parsed by the SAME parseMatrixRows; querySet/actionSet keyed to VerbToolNames() with a completeness gate (every frozen verb classified exactly once)
-- [Phase ?]: Phase 106-01: corpus stores RAW first_command (not lowercased); ClassifyChoice lowercases once
-- [Phase ?]: Phase 106-01: toolsquarantine analyzer is import-boundary-ONLY so the pip/pipx LS installer is never flagged
-- [Phase 109]: grade_swebench.py is a Python parity MIRROR of harness.go (argv/dataset-allowlist/env-allowlist), pinned by shared golden/swebench_argv.json + asserted on BOTH sides (argv_parity_test.go); reuses grade_aider.GradeError and plugs into taskmetric via the same (passed, tests_run) contract
-- [Phase 109]: resolution contract recomputed from tests_status (never a bare top-level resolved flag): resolved = non-empty FAIL_TO_PASS all-pass AND no PASS_TO_PASS regression; 0 tests evaluated => GradeError (vacuous-pass refusal, mutation-confirmed RED)
-- [Phase 109]: attribution.py decide_ship gates on optimize.VAL_SIZE_GATE (single source of truth, strict >50) AND positive delta; MeteredLLM is a non-invasive cost wrapper (Phase-107 LLM untouched); filled REPORT artifact deferred to Phase 110 (corpus still < val_size>50 by design)
-- [Phase 110]: ADOPT-03/04 are re-verification reqs — adoption gate (helix-refgen --check), git-ignored optimizer output, and boundary analyzers all already existed (97/104/106/109); 110 proved them end-to-end (break-the-invariant: desync reference.md => --check exit 1) + wrote the v2.3 ship/no-ship REPORT. NO new production code.
-- [Phase 110]: go.mod/go.sum last touched at 7f20a874 feat(90-01) (v2.0) — untouched through v2.1/v2.2/v2.3 => zero new Go deps proven rigorously. openai-go v1.12.0 is a PRE-EXISTING dep, not the Python openai==2.43.0 pin.
-- [Phase 110]: v2.3 ship/no-ship verdict = NO-SHIP by design (corpus val_size≈3 < strict >50 gate, the v2.2 root cause); pipeline complete + correctly gated, no fabricated delta. Re-entry precondition: grow corpus past val_size>50 (TUNE-FUT-01).
+(To be filled during milestone execution)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd-plan-phase 1` after requirements and roadmap are defined

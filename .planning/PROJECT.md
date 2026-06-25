@@ -8,13 +8,45 @@ A Go-native, CLI-first code intelligence platform: universal LSP gateway at the 
 
 The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
+## Current Milestone: v2.5 Agent Harness Rebuild (TUNE-FUT-06)
+
+**Goal:** Make the optimization agent actually solve tasks by editing — with a feedback loop and real GEPA tuning — so that steering deltas become meaningful.
+
+**Why now:** v2.4's +0.0392 delta is **noise between two broken configs**. The agent makes 0 tool calls on ~40% of tasks (answers in prose), has no feedback loop, burns verb-error budget, and GEPA reflection is a no-op (AgentProgram emits no predictor trace). The pipeline plumbing works; the harness doesn't.
+
+**Target features:**
+
+1. **HARNESS-01: Task-solving system prompt** — Name the solution file, "success = hidden tests pass", forbid prose, "not done until implemented"
+2. **HARNESS-02: Feedback loop** — Wire run-tests / get-diagnostics into ReAct so the agent knows when it's done
+3. **HARNESS-03: Verb-arg hardening** — Stop burning error budget on malformed calls
+4. **HARNESS-04: Real GEPA module** — Rebuild as a `dspy` agent that emits a reflectable trace, then tune THAT
+5. **HARNESS-05: Re-run attribution** — After the above, measure a real delta with an engaged agent
+
+**Key constraints:**
+- Zero new Go deps (go.mod stays untouched since v2.0)
+- All tuning stays in dev-venv Python (`tools/dspy-tune/`)
+- Human-gated adoption (no auto-write of SKILL.md)
+- Corpus at 103 tasks (already past `val_size>50` gate)
+
+**Root causes to fix (from v2.4 investigation):**
+
+| Finding | Fix |
+|---------|-----|
+| ~40% of tasks: 0 tool calls | Force editing in system prompt |
+| No run-tests in loop | Add feedback loop |
+| Verb errors burn budget | Harden arg usage |
+| SKILL.md is wrong artifact | Build task-solving prompt |
+| GEPA no-op | Real `dspy` module |
+
+---
+
 ## Last Shipped Milestone: v2.4 Corpus Growth & Real Optimization Verdict (TUNE-FUT-01) — SHIPPED 2026-06-24
 
 **Shipped:** 4 phases (111–114), 10/10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05), audit PASSED. Grew the optimization corpus past the strict `val_size > 50` held-out gate (103 Aider tasks → train 26 / val 26 / sequestered held-out 51) and ran the v2.3 task-success pipeline **for real, cost-aware ($0.23)** — turning v2.3's "NO-SHIP by design" into an actual, numbers-backed verdict.
 
 **Outcome: SHIP-by-rule (marginal) — adoption NOT recommended on this margin (REPORT-only).** The ON-vs-OFF attribution on the sequestered held-out split measured a delta of **+0.0392** (ON 3/51 vs OFF 1/51, val_size 51 > 50); the SWE-bench Verified gold-patch confirming leg resolved **2/2** on Podman (fail-not-skip proven). `decide_ship` returns SHIP (delta > 0 AND val_size > 50), but the +2-task margin at n=51 is within noise — so adoption stays a separate human `helix-refgen --check`-gated decision and is explicitly not recommended on this run alone.
 
-**The real win:** the v2.3 pipeline was never functional end-to-end (its hermetic fakes hid three integration gaps); v2.4 found and fixed all three — agent verb argv (positional → real `--flags`), a **real product bug** (`helix activate` now also calls `activate_project` so the CLI file/edit verbs get a workspace; E2E regression-tested), and the GEPA candidate→agent steering thread. **ADOPT-04 preserved** — zero new Go deps (`go.mod` untouched since v2.0); the only Go change is the user-approved product-bug fix; all tuning deps are dev-venv Python only. Full detail: `.planning/milestones/v2.4-ROADMAP.md` + `v2.4-MILESTONE-AUDIT.md`; ship/no-ship REPORT at `tools/dspy-tune/REPORT.md`. Follow-ons (non-blocking): TUNE-FUT-06 (rebuild GEPA-as-agent-program so reflection evolves), TUNE-FUT-05 (larger SWE-bench K), a `decide_ship` significance test, TUNE-FUT-03 (actual adoption).
+**The real win:** the v2.3 pipeline was never functional end-to-end (its hermetic fakes hid three integration gaps); v2.4 found and fixed all three — agent verb argv (positional → real `--flags`), a **real product bug** (`helix activate` now also calls `activate_project` so the CLI file/edit verbs get a workspace; E2E regression-tested), and the GEPA candidate→agent steering thread. **ADOPT-04 preserved** — zero new Go deps (`go.mod` untouched since v2.0); the only Go change is the user-approved product-bug fix; all tuning deps are dev-venv Python only. Full detail: `.planning/milestones/v2.4-ROADMAP.md` + `v2.4-MILESTONE-AUDIT.md`; ship/no-ship REPORT at `tools/dspy-tune/REPORT.md`.
 
 ## Requirements
 

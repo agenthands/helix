@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-25T08:19:42.442Z",
+  "context": "default",
+  "phase": null,
+  "phase_name": "post-v2.4 root-cause investigation (no active phase — v2.4 shipped + archived)",
+  "status": "paused",
+  "milestone": "v2.4 SHIPPED 2026-06-24 (tagged v2.4 local); investigation done, next milestone not yet started",
+  "completed_this_session": [
+    "Ran full /gsd-new-milestone -> /gsd-autonomous cycle for v2.4 (4 phases 111-114, 10/10 reqs, audit PASSED, archived).",
+    "Real run: ON/OFF attribution delta +0.0392 (ON 3/51 vs OFF 1/51, val_size=51, $0.23); SWE-bench Verified gold 2/2 on Podman.",
+    "Fixed 3 v2.3 integration gaps: agent verb argv (--flags), helix activate->activate_project (real product bug, E2E test), GEPA candidate->agent thread.",
+    "ROOT-CAUSE INVESTIGATION (this session, post-ship): instrumented agent transcripts on 6 real Aider python tasks — see blockers."
+  ],
+  "key_finding": {
+    "summary": "The v2.4 +0.0392 'SHIP' delta is NOISE between two broken configs — the agent barely uses helix.",
+    "evidence_5_tasks": {
+      "affine-cipher": "max_turns, 8 steps (tried edits), FAIL",
+      "beer-song": "reason=done, 0 steps — answered in PROSE, never called helix, FAIL",
+      "book-store": "tool_error_budget (5 verb errors), no successful edit, FAIL",
+      "bottle-song": "reason=done, 0 steps — PROSE only, FAIL",
+      "bowling": "done, 7 steps, used fuzzy-edit, wrong solution, FAIL"
+    },
+    "root_causes": [
+      "~40% of tasks: agent makes 0 tool calls — answers exercise in prose and declares done (no edit).",
+      "System prompt / Solve signature too weak: never forces 'edit the solution file; success=hidden tests pass; no prose; not done until implemented'.",
+      "No feedback loop: agent has no run-tests/get-diagnostics signal, so it declares done blindly.",
+      "Verbs still error-prone (book-store burned the tool-error budget).",
+      "ON steering = the 6923-char SKILL.md grep-vs-helix ROUTING matrix — wrong kind of guidance; says nothing about solving-by-editing.",
+      "GEPA reflective mutation is a no-op (agent-as-program emits no predictor trace) — no tuning actually happened."
+    ]
+  },
+  "blockers": [
+    {"description": "Agent does not reliably use helix tools (prose-answers / verb errors); attribution delta is noise.", "type": "technical", "workaround": "next milestone TUNE-FUT-06: rewrite agent harness"},
+    {"description": "GEPA optimization is a no-op (no candidate evolution).", "type": "technical", "workaround": "rebuild as a real dspy agent module that emits a reflectable trace"}
+  ],
+  "human_actions_pending": [
+    {"action": "Decide next milestone scope (recommend TUNE-FUT-06).", "context": "v2.4 produced a real-but-meaningless verdict; the harness must make the agent actually solve-by-editing before any tuning/adoption is meaningful.", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "v2.4 = REPORT-only, do NOT adopt steering.", "rationale": "+0.0392 is within noise AND (now known) the agent barely uses tools."},
+    {"decision": "helix activate now also calls activate_project (Go product fix).", "rationale": "user-approved; real product bug — CLI file verbs returned no_workspace after plain helix activate."}
+  ],
+  "uncommitted_files": ["(none of consequence — working tree clean except this handoff)"],
+  "next_action": "Start a fresh session; run /gsd-new-milestone for TUNE-FUT-06: (1) task-solving system prompt (edit file X, success=tests green, no prose, name the file), (2) a feedback loop (run tests / get-diagnostics in the ReAct loop), (3) harden verb-arg usage, (4) make GEPA actually evolve (real dspy agent module), THEN re-run attribution. Optionally first run full `go test ./...` to close the test gap.",
+  "context_notes": "v2.4 plumbing is genuinely exercised end-to-end on real code (the real win), but outcomes are hollow: agent doesn't engage the tools, GEPA didn't tune, K=2 SWE-bench, 3 tracks only. Everything committed + tagged v2.4 (local, not pushed). Corpus is git-ignored at tools/dspy-tune/corpus/ (regen via build_corpus.py). Inspect scripts: /tmp/inspect_agent.py, /tmp/inspect5.py. Memory written: helix-v24-pipeline-gaps-and-activate-bug.md."
+}

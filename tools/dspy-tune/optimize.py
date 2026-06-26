@@ -252,7 +252,7 @@ def main():
         task = dspy.InputField()
         response = dspy.OutputField(desc="the solution / final answer")
 
-    _gepa_max_turns = int(os.environ.get("AGENT_MAX_TURNS") or 8)
+    _gepa_max_turns = int(os.environ.get("AGENT_MAX_TURNS") or 20)
 
     class AgentProgram(dspy.Module):
         def __init__(self):

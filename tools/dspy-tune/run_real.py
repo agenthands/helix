@@ -70,7 +70,7 @@ def smoke(n=1, max_turns=6):
     return 0
 
 
-def attribution(max_turns=8):
+def attribution(max_turns=20):
     if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")):
         print("No LM key — attribution is a real billed run and needs one. no-ship stands.")
         return 0
@@ -120,7 +120,7 @@ def main(argv):
         n = int(argv[1]) if len(argv) > 1 else 1
         return smoke(n)
     if mode == "attribution":
-        mt = int(os.environ.get("AGENT_MAX_TURNS") or 8)
+        mt = int(os.environ.get("AGENT_MAX_TURNS") or 20)
         return attribution(max_turns=mt)
     print(f"unknown mode {mode!r}; use: smoke [N] | attribution")
     return 2

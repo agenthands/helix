@@ -21,32 +21,21 @@
 - [x] **v2.3 Task-Success-Driven Skill Optimization** -- Phases 107-110 (shipped 2026-06-24) — see `.planning/milestones/v2.3-ROADMAP.md`
 - [x] **v2.4 Corpus Growth & Real Optimization Verdict** -- Phases 111-114 (shipped 2026-06-24) — see `.planning/milestones/v2.4-ROADMAP.md`
 - [x] **v2.5 Agent Harness Rebuild** -- Phases 115-118 (shipped 2026-06-26) — see `.planning/milestones/v2.5-ROADMAP.md`
-- [ ] **v2.6 Turn Budget Tuning** -- Phase 119 (in progress)
+- [x] **v2.6 Turn Budget Tuning** -- Phase 119 (shipped 2026-06-26)
 
 ## Phases
 
-**Current: v2.6 Turn Budget Tuning (Phase 119)** — plan approved, ready for execution
+**Current: No active milestone** — v2.6 complete, awaiting next phase decision
 
-### Phase 119: Increase Turn Budget
+### Phase 119: Increase Turn Budget (COMPLETE)
 
 **Goal:** Give the agent more time to solve tasks and re-measure the steering delta.
 
-**Why:** v2.5 showed delta=0 because 8 turns is insufficient for Exercism problems. The agent needs 15-30 turns to explore, write code, run tests, and iterate.
+**Result:** delta=+0.0000, same as v2.5. Both arms solve 0/51 tasks even with 20 turns.
+The agent terminates on `no_progress` early — the turn budget isn't the limiting factor.
+Corpus is too hard for current agent capability.
 
-**Requirements:**
-- BUDGET-01: Default max_turns increased from 8 to 20
-- BUDGET-02: Environment override `AGENT_MAX_TURNS` still works
-- BUDGET-03: Re-run attribution with new budget
-- BUDGET-04: Update REPORT.md with honest verdict
-
-**Success criteria:**
-1. Attribution completes with max_turns=20
-2. ON and OFF both run with higher budget
-3. Measurable delta OR documented "corpus too hard"
-4. Cost < $2.00 total
-5. All tests pass
-
-**Exit gate:** Measured verdict. If delta > 0, steering helps with more time. If delta ≈ 0, corpus is too hard for current agent capability.
+**Recommendation:** Phase 120 (Corpus Analysis) — filter to easier tasks or switch benchmarks.
 
 ### Phase 115: Task-Solving Prompt + Feedback Loop
 

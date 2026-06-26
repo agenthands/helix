@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Agent Harness Rebuild
-current_phase: 0
+current_phase_name: defining requirements
 status: Planning
-stopped_at: "Milestone v2.5 started — requirements definition pending."
-last_updated: "2026-06-26T00:00:00.000Z"
+stopped_at: Phase 115 context gathered
+last_updated: "2026-06-26T07:20:48.878Z"
 last_activity: 2026-06-26
 last_activity_desc: Milestone v2.5 started
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase_name: Not started (defining requirements)
+current_phase: 0
 ---
 
 # Project State
@@ -138,9 +138,9 @@ Watch items for v2.5:
 
 ## Session Continuity
 
-Last session: 2026-06-26 (new milestone)
-Stopped at: Milestone v2.5 started — requirements definition pending
-Resume file: —
+Last session: 2026-06-26T07:20:48.873Z
+Stopped at: Phase 115 context gathered
+Resume file: .planning/phases/115-task-solving-prompt-feedback-loop/115-CONTEXT.md
 
 ## Decisions
 

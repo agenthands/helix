@@ -1,113 +1,71 @@
-# Requirements — Milestone v2.5 Agent Harness Rebuild (TUNE-FUT-06)
+# Requirements — Milestone v2.6 Turn Budget Tuning
 
 ## Overview
 
-**Goal:** Make the optimization agent actually solve tasks by editing — with a feedback loop and real GEPA tuning — so that steering deltas become meaningful.
+**Goal:** Increase the agent's turn budget and re-measure the steering delta. v2.5 showed the harness is fixed (agent uses tools) but delta=0 because 8 turns is insufficient for Exercism-style problems.
 
-**Why now:** v2.4's +0.0392 delta is noise between two broken configs. The agent makes 0 tool calls on ~40% of tasks (answers in prose), has no feedback loop, burns verb-error budget, and GEPA reflection is a no-op (AgentProgram emits no predictor trace). The pipeline plumbing works; the harness doesn't.
-
-**Root causes (from v2.4 investigation):**
-
-| Finding | Severity | Fix |
-|---------|----------|-----|
-| ~40% of tasks: 0 tool calls | **blocking** | Force editing in system prompt |
-| No run-tests in loop | **blocking** | Add feedback loop |
-| Verb errors burn budget | **blocking** | Harden arg usage |
-| SKILL.md is wrong artifact | **advisory** | Build task-solving prompt |
-| GEPA no-op | **blocking** | Real `dspy` module |
+**Why now:** v2.5's attribution showed 0/51 tasks solved in 8 turns. The agent IS using tools (ON costs 2.3x higher than OFF), but terminates before converging. A higher turn budget may reveal whether steering helps given more time, or whether the corpus is uniformly too hard.
 
 ---
 
-## HARNESS — Agent Harness Rebuild
+## BUDGET — Turn Budget Increase
 
-### HARNESS-01: Task-solving System Prompt
+### BUDGET-01: Default Turn Budget to 20
 
-- [ ] **HARNESS-01a:** System prompt names the solution file explicitly (e.g., "edit `solution.py` to solve the exercise")
-- [ ] **HARNESS-01b:** Declares success criterion: "success = hidden tests pass"
-- [ ] **HARNESS-01c:** Forbids prose answers: "do NOT answer in prose; not done until implemented"
-- [ ] **HARNESS-01d:** Anti-vacuity test: prose-only answer on a task → assert FAIL
+- [ ] **BUDGET-01a:** Change `run_real.py:73` default from `max_turns=8` to `max_turns=20`
+- [ ] **BUDGET-01b:** Change `optimize.py:255` default from `8` to `20`
+- [ ] **BUDGET-01c:** Keep `_DEFAULT_MAX_TURNS = 12` in `agent/react.py` (attribution overrides it)
 
-### HARNESS-02: Feedback Loop
+### BUDGET-02: Environment Override Preserved
 
-- [ ] **HARNESS-02a:** Wire run-tests into ReAct loop (agent runs tests after edit)
-- [ ] **HARNESS-02b:** Wire get-diagnostics into ReAct loop (agent checks for compilation errors)
-- [ ] **HARNESS-02c:** Agent uses test results to drive next edit (iterate until pass or budget exhausted)
-- [ ] **HARNESS-02d:** Anti-vacuity test: agent declares done on broken code without running tests → assert FAIL
+- [ ] **BUDGET-02a:** `AGENT_MAX_TURNS` env var still works (no code change needed)
+- [ ] **BUDGET-02b:** Attribution uses the new default (20) unless env var overrides
 
-### HARNESS-03: Verb-Arg Hardening
+### BUDGET-03: Re-run Attribution
 
-- [ ] **HARNESS-03a:** Audit verb call sites for positional-arg misuse (the v2.4 gap)
-- [ ] **HARNESS-03b:** Add error-budget tracking (max N verb errors before abort)
-- [ ] **HARNESS-03c:** Anti-vacuity test: malformed argv passes silently → assert FAIL
+- [ ] **BUDGET-03a:** Run attribution with `max_turns=20`
+- [ ] **BUDGET-03b:** Record ON/OFF success rates and costs
+- [ ] **BUDGET-03c:** Calculate delta (ON - OFF)
 
-### HARNESS-04: Real GEPA Module
+### BUDGET-04: Update Report
 
-- [ ] **HARNESS-04a:** Rebuild agent as real `dspy.Module` (not ad-hoc Python)
-- [ ] **HARNESS-04b:** AgentProgram emits reflectable predictor trace for GEPA
-- [ ] **HARNESS-04c:** GEPA `forward` returns trace that reflective mutation can optimize
-- [ ] **HARNESS-04d:** Anti-vacuity test: empty/constant trace on real run → assert FAIL
+- [ ] **BUDGET-04a:** Add v2.6 section to `REPORT.md`
+- [ ] **BUDGET-04b:** Document honest verdict (delta > 0 or "corpus too hard")
+- [ ] **BUDGET-04c:** Record per-arm costs
 
-### HARNESS-05: Re-run Attribution
+---
 
-- [ ] **HARNESS-05a:** Re-run v2.4 attribution pipeline on fixed harness (same corpus, same split)
-- [ ] **HARNESS-05b:** Verify agent tool-call rate ≥ 80% on held-out split (demonstrates engagement)
-- [ ] **HARNESS-05c:** Record ON/OFF delta with per-arm cost (same attribution.py from v2.4)
-- [ ] **HARNESS-05d:** Gate for TUNE-FUT-03: if delta > 0 AND significant, SKILL.md adoption path ready
+## Success Criteria
+
+1. Attribution completes with `max_turns=20`
+2. ON and OFF both run with higher budget
+3. **Measurable delta OR documented "corpus too hard"**
+4. Cost < $2.00 total (abort if exceeded)
+5. All tests pass (`uv run pytest test_agent.py test_gepa.py test_scale.py`)
+
+---
+
+## Cost Estimate
+
+- v2.5: $0.06 OFF + $0.14 ON = $0.20 total (8 turns, 0/51 solved)
+- v2.6 estimate: $0.15-0.30 OFF + $0.30-0.60 ON = $0.50-1.00 total (20 turns)
 
 ---
 
 ## Constraint Cross-Check
 
-| Constraint | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
-|------------|---------|---------|---------|---------|
-| Zero new Go deps | ✓ | ✓ | ✓ | ✓ |
-| Tuning in dev-venv Python | ✓ | ✓ | ✓ | ✓ |
-| Anti-vacuity tests | ✓ | ✓ | ✓ | ✓ |
-| Forced dependency chain | 01/02 first | 03 after 01/02 | 04 after 03 | 05 after 01-04 |
-
----
-
-## Dependency Chain (Enforced)
-
-```
-Phase 1 (HARNESS-01/02) ──► Phase 2 (HARNESS-03) ──► Phase 3 (HARNESS-04) ──► Phase 4 (HARNESS-05)
-```
-
-- Phase 2 requires Phase 1 (can't harden verbs if agent doesn't use them)
-- Phase 3 requires Phase 2 (can't tune GEPA if agent still fails on basics)
-- Phase 4 requires Phases 1-3 (can't measure meaningful delta on broken agent)
+| Constraint | Phase 119 |
+|------------|-----------|
+| Zero new Go deps | ✓ |
+| Tuning in dev-venv Python | ✓ |
+| All tests pass | ✓ |
+| Honest verdict recorded | ✓ |
 
 ---
 
 ## Out of Scope
 
-- Corpus growth (already past `val_size>50` gate at 103 tasks)
+- Corpus filtering (Phase 120, conditional on delta ≈ 0)
 - SWE-bench scale-up (TUNE-FUT-05)
-- SKILL.md adoption (TUNE-FUT-03, human-gated separate step)
 - Significance test in `decide_ship` (future enhancement)
-
----
-
-## Traceability
-
-| REQ-ID | Phase | Status |
-|--------|-------|--------|
-| HARNESS-01a | 115 | planned |
-| HARNESS-01b | 115 | planned |
-| HARNESS-01c | 115 | planned |
-| HARNESS-01d | 115 | planned |
-| HARNESS-02a | 115 | planned |
-| HARNESS-02b | 115 | planned |
-| HARNESS-02c | 115 | planned |
-| HARNESS-02d | 115 | planned |
-| HARNESS-03a | 116 | planned |
-| HARNESS-03b | 116 | planned |
-| HARNESS-03c | 116 | planned |
-| HARNESS-04a | 117 | planned |
-| HARNESS-04b | 117 | planned |
-| HARNESS-04c | 117 | planned |
-| HARNESS-04d | 117 | planned |
-| HARNESS-05a | 118 | planned |
-| HARNESS-05b | 118 | planned |
-| HARNESS-05c | 118 | planned |
-| HARNESS-05d | 118 | planned |
+- Model tuning (same DeepSeek model)

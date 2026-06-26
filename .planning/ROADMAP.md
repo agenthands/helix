@@ -22,10 +22,19 @@
 - [x] **v2.4 Corpus Growth & Real Optimization Verdict** -- Phases 111-114 (shipped 2026-06-24) — see `.planning/milestones/v2.4-ROADMAP.md`
 - [x] **v2.5 Agent Harness Rebuild** -- Phases 115-118 (shipped 2026-06-26) — see `.planning/milestones/v2.5-ROADMAP.md`
 - [x] **v2.6 Turn Budget Tuning** -- Phase 119 (shipped 2026-06-26)
+- [x] **v2.7 Corpus Analysis & Benchmark Pivot** -- Phase 120 (shipped 2026-06-26)
 
 ## Phases
 
-**Current: No active milestone** — v2.6 complete, awaiting next phase decision
+**Current: No active milestone** — v2.7 complete, awaiting benchmark pivot decision
+
+### Phase 120: Corpus Analysis & Easy Subset (COMPLETE)
+
+**Goal:** Filter to easy Exercism tasks and re-measure steering delta to determine if corpus difficulty is the issue.
+
+**Result:** delta=+0.0000, 0/13 easy tasks solved. Even the simplest Exercism problems (380-979 char descriptions) are beyond current agent capability. The agent terminates on `no_progress` — it cannot solve even trivially-described problems.
+
+**Recommendation:** Switch to a simpler benchmark (HumanEval, MBPP) or improve agent architecture.
 
 ### Phase 119: Increase Turn Budget (COMPLETE)
 

@@ -744,6 +744,82 @@ def test_done_on_broken_without_tests_fails(monkeypatch):
         "first step should be an edit verb"
 
 
+# --------------------------------------------------------------------------- #
+# HARNESS-03: Error budget exhaustion aborts correctly.                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_tool_error_budget_exhaustion_aborts(monkeypatch):
+    """HARNESS-03: Anti-vacuity test for budget exhaustion.
+
+    A fake LLM that makes tool calls which ALWAYS fail (exit != 0) should
+    exhaust the budget and terminate with reason="tool_error_budget" after
+    exactly _TOOL_ERROR_BUDGET failures.
+
+    Break-the-invariant: If budget tracking silently broke (e.g., counter
+    not incremented, check removed, budget raised), this test would FAIL.
+    The agent would continue past 5 errors and hit max_turns instead.
+
+    Note: The test must vary stdout each turn to avoid triggering the no_progress
+    bound (identical argv+output two turns running). The no_progress check runs
+    BEFORE the budget check, so we must ensure each turn has different output.
+    """
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    from agent.react import _TOOL_ERROR_BUDGET
+
+    # A fake LLM that always makes a tool call that fails.
+    # Each call returns exit=1 (error), burning the budget.
+    always_failing = [
+        _tool_turn(f"call_{i}", "read-file", {"path": f"/nonexistent/file_{i}.go"})
+        for i in range(20)  # More than budget
+    ]
+    llm = FakeLLM(always_failing)
+
+    # Stub that always returns failure (exit=1) with DIFFERENT stdout each call
+    # to avoid no_progress bound (identical output triggers no_progress before budget)
+    call_counter = [0]
+
+    def _failing_run_verb(call, cwd, timeout=60):
+        call_counter[0] += 1
+        # Vary stdout to avoid no_progress bound (checks for identical argv+output)
+        return VerbResult(
+            argv=["helix", "read-file", "--path", f"/nonexistent/file_{call_counter[0]}.go"],
+            exit=1,
+            stdout=f"error {call_counter[0]}: file not found\n",
+            stderr="error: file not found",
+        )
+
+    monkeypatch.setattr(agent_tools, "run_verb", _failing_run_verb)
+    import agent.react as agent_react
+    if hasattr(agent_react, "run_verb"):
+        monkeypatch.setattr(agent_react, "run_verb", _failing_run_verb)
+
+    agent = ReActAgent(system_prompt="SYS", llm=llm)
+    transcript = agent.run("read nonexistent files", cwd=".", max_turns=20)
+
+    # HARNESS-03 anti-vacuity assertions:
+    # 1. Must terminate on budget exhaustion, NOT max_turns
+    assert transcript.reason == "tool_error_budget", (
+        f"expected tool_error_budget termination, got {transcript.reason!r}"
+    )
+
+    # 2. Must have exactly _TOOL_ERROR_BUDGET error steps
+    assert len(transcript.steps) == _TOOL_ERROR_BUDGET, (
+        f"expected {_TOOL_ERROR_BUDGET} steps on budget exhaustion, got {len(transcript.steps)}"
+    )
+
+    # 3. Every step must have exit != 0 (error)
+    for i, step in enumerate(transcript.steps):
+        assert step.exit != 0, (
+            f"step {i} should have exit != 0 (error), got exit={step.exit}"
+        )
+
+    # 4. No final answer (terminated on bound, not "done")
+    assert transcript.final is None
+
+
 if __name__ == "__main__":
     # Script-runnable path (the existing test_*.py convention). pytest's
     # monkeypatch fixture is unavailable here, so drive a minimal MonkeyPatch.
@@ -777,4 +853,5 @@ if __name__ == "__main__":
     _run(test_get_diagnostics_in_tool_schemas)
     _run(test_agent_observes_test_results)
     _run(test_done_on_broken_without_tests_fails)
+    _run(test_tool_error_budget_exhaustion_aborts)
     print("agent OK")

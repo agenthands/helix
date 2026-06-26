@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Agent Harness Rebuild
-status: phase_complete
-stopped_at: Phase 117 complete
-last_updated: "2026-06-26T18:00:00.000Z"
-last_activity: 2026-06-26 — Phase 117 complete (real GEPA module)
+status: milestone_complete
+stopped_at: Milestone v2.5 complete
+last_updated: "2026-06-26T21:00:00.000Z"
+last_activity: 2026-06-26 — Milestone v2.5 complete (HARNESS fixes + attribution)
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 75
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
+  percent: 100
 current_phase: 118
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Phase: 118 ready (Re-run Attribution + Verdict)
-Plan: None yet
-Status: Ready for planning
-Last activity: 2026-06-26 — Phase 117 complete (real GEPA module)
+Phase: 118 COMPLETE (Re-run Attribution + Verdict)
+Plan: Executed
+Status: Milestone complete
+Last activity: 2026-06-26 — Phase 118 complete (attribution run, delta=+0.0000, NO-SHIP verdict recorded)
 
 ## Performance Metrics
 

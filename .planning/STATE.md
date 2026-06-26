@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Agent Harness Rebuild
-status: phase_complete
-stopped_at: Phase 115-01 SUMMARY committed
-last_updated: "2026-06-26T14:30:00.000Z"
-last_activity: 2026-06-26 — Phase 115-01 complete (HARNESS-01/02 implemented, all tests pass)
+status: phase_context_gathered
+stopped_at: Phase 116 context gathered
+last_updated: "2026-06-26T15:30:00.000Z"
+last_activity: 2026-06-26 — Phase 116 context gathered (verb-arg hardening)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 1
   completed_plans: 1
   percent: 25
-current_phase: 115
+current_phase: 116
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Phase: 115-01 COMPLETE (Task-Solving Prompt + Feedback Loop)
-Plan: 115-01 SUMMARY committed
-Status: Ready for Phase 116
-Last activity: 2026-06-26 — Phase 115-01 complete with all HARNESS-01/02 tests passing
+Phase: 116 CONTEXT gathered (Verb-Arg Hardening)
+Plan: None yet (plan next)
+Status: Ready for planning
+Last activity: 2026-06-26 — Phase 116 context gathered
 
 ## Performance Metrics
 
@@ -48,10 +48,10 @@ Last activity: 2026-06-26 — Phase 115-01 complete with all HARNESS-01/02 tests
 
 Cross-cutting exit gates (an agent-harness rebuild on the v2.3/v2.4 pipeline; carries forward all v2.3/v2.4 discipline):
 
-- **Forced dependency chain (do not reorder):** task-solving prompt + feedback loop (Phase 1) → verb-arg hardening (Phase 2) → real GEPA module (Phase 3) → re-run attribution (Phase 4). Phase 4 is gated on Phases 1–3 completing successfully.
-- **System prompt MUST force editing (HARNESS-01):** the prompt names the solution file, declares "success = hidden tests pass", forbids prose answers, and says "not done until implemented". A break-the-invariant test (agent answers in prose → assert FAIL) ships with Phase 1.
-- **Feedback loop MUST verify completion (HARNESS-02):** run-tests / get-diagnostics in the ReAct loop, so the agent knows when it's done. A break-the-invariant test (no feedback loop → agent declares done on broken code → assert FAIL) ships with Phase 1.
-- **Verb-arg usage MUST be hardened (HARNESS-03):** the error budget is finite; malformed calls burn it. A break-the-invariant test (malformed argv passes silently → assert FAIL) ships with Phase 2.
+- **Forced dependency chain (do not reorder):** task-solving prompt + feedback loop (Phase 115) → verb-arg hardening (Phase 116) → real GEPA module (Phase 117) → re-run attribution (Phase 118). Phase 118 is gated on Phases 115–117 completing successfully.
+- **System prompt MUST force editing (HARNESS-01):** the prompt names the solution file, declares "success = hidden tests pass", forbids prose answers, and says "not done until implemented". A break-the-invariant test (agent answers in prose → assert FAIL) ships with Phase 115. **DONE** (Phase 115 complete).
+- **Feedback loop MUST verify completion (HARNESS-02):** run-tests / get-diagnostics in the ReAct loop, so the agent knows when it's done. A break-the-invariant test (no feedback loop → agent declares done on broken code → assert FAIL) ships with Phase 115. **DONE** (Phase 115 complete).
+- **Verb-arg usage MUST be hardened (HARNESS-03):** the error budget is finite; malformed calls burn it. A break-the-invariant test (malformed argv passes silently → assert FAIL) ships with Phase 116.
 - **GEPA MUST evolve (HARNESS-04):** the `AgentProgram` must emit a reflectable trace so GEPA's reflective mutation has something to optimize. A break-the-invariant test (trace is empty/constant → assert FAIL) ships with Phase 3.
 - **Re-run attribution after harness is fixed (HARNESS-05):** Phase 4 re-runs the v2.4 attribution pipeline ON THE FIXED HARNESS. The delta is only meaningful if the agent demonstrably uses helix on most tasks.
 - **ADOPT-04 single-binary / no-runtime-Python (carried forward):** zero new Go deps; all tuning stays in dev-venv Python (`tools/dspy-tune/`); no `helix` subcommand shells to Python.
@@ -128,28 +128,28 @@ None yet.
 
 Watch items for v2.5:
 
-- **HARNESS-01 system prompt:** must force editing, forbid prose, name the file, success = hidden tests pass. A prose-answer test MUST fail.
-- **HARNESS-02 feedback loop:** must wire run-tests/get-diagnostics into ReAct. A no-feedback test MUST fail.
+- **HARNESS-01/02 (DONE):** task-solving prompt + feedback loop implemented, all anti-vacuity tests passing
 - **HARNESS-03 verb hardening:** must stop burning error budget. A malformed-call test MUST fail.
 - **HARNESS-04 GEPA evolution:** AgentProgram MUST emit a predictor trace. An empty-trace test MUST fail.
 - **HARNESS-05 re-run attribution:** only meaningful after HARNESS-01/02/03/04 complete. Delta on a broken agent is noise.
 
 ## Session Continuity
 
-Last session: 2026-06-26T07:30:00.000Z
-Stopped at: Phase 115 PLAN committed
-Resume file: .planning/phases/115-task-solving-prompt-feedback-loop/115-PLAN.md
+Last session: 2026-06-26T08:00:00.000Z
+Stopped at: Phase 116 CONTEXT gathered
+Resume file: .planning/phases/116-verb-arg-hardening/116-CONTEXT.md
 
 ## Decisions
 
-- **D-01:** Solution file naming (explicit or extracted from task description)
-- **D-02:** Success criterion "hidden tests must pass" declared in prompt
-- **D-03:** Agent-driven test execution (both verbs: get-diagnostics, run-tests)
-- **D-04:** Retry nudge then fail on repeat prose
-- **D-05:** Both verbs for test discovery (get-diagnostics + run-tests)
+- **D-01:** Budget fixed at `_TOOL_ERROR_BUDGET = 5` (constant, not configurable)
+- **D-02:** Errors strictly cumulative (no reset on success)
+- **D-03:** Only `exit != 0` counts toward budget (no timeout/stderr)
+- **D-04:** Post-hoc counting only (trust helix to reject, no pre-call validation)
+- **D-05:** Anti-vacuity test verifies budget exhaustion aborts correctly
+- **D-06:** v2.4 positional→flags fix verified correct
 
 ## Operator Next Steps
 
-- Execute Plan 115-01 (Task-Solving System Prompt)
-- Execute Plan 115-02 (Feedback Loop) after 115-01 completes
-- Run anti-vacuity tests to verify both gates work
+- Run `/gsd-plan-phase 116` to create the PLAN.md
+- Execute Plan 116-01 after planning completes
+- Run anti-vacuity tests to verify HARNESS-03 gate works

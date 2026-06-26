@@ -20,10 +20,13 @@
 - [x] **v2.2 Agent-Facing Skill Quality & Prompt Tuning** -- Phases 103-106 (shipped 2026-06-24) — see `.planning/milestones/v2.2-ROADMAP.md`
 - [x] **v2.3 Task-Success-Driven Skill Optimization** -- Phases 107-110 (shipped 2026-06-24) — see `.planning/milestones/v2.3-ROADMAP.md`
 - [x] **v2.4 Corpus Growth & Real Optimization Verdict** -- Phases 111-114 (shipped 2026-06-24) — see `.planning/milestones/v2.4-ROADMAP.md`
+- [x] **v2.5 Agent Harness Rebuild** -- Phases 115-118 (shipped 2026-06-26) — see `.planning/milestones/v2.5-ROADMAP.md`
 
 ## Phases
 
-**Current: v2.5 Agent Harness Rebuild (Phases 115–118)** — defining requirements
+**Current: v2.5 Agent Harness Rebuild (Phases 115–118)** — COMPLETE (shipped 2026-06-26)
+
+All phases complete. See `.planning/milestones/v2.5-ROADMAP.md` for archived milestone details.
 
 ### Phase 115: Task-Solving Prompt + Feedback Loop
 

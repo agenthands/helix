@@ -172,7 +172,16 @@ def run_verb(call, cwd, timeout=60):
     pytest directly instead of going through helix.
     """
     verb = call.function.name
-    args = json.loads(call.function.arguments or "{}")
+    try:
+        args = json.loads(call.function.arguments or "{}")
+    except json.JSONDecodeError as e:
+        # LLM returned malformed JSON - return error instead of crashing
+        return VerbResult(
+            argv=[verb, f"<malformed-json: {e.msg}>"],
+            exit=1,
+            stdout="",
+            stderr=f"JSON decode error in tool arguments: {e.msg}\nRaw: {call.function.arguments[:200]}"
+        )
 
     # HARNESS-02a: Dispatch run-tests to pytest directly
     if verb == "run-tests":

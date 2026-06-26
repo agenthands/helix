@@ -42,8 +42,8 @@ def run_one(desc, steering_text, steering, max_turns=None, provider="deepseek"):
     """Run + grade one task. `desc` is a corpus descriptor
     {task, language, task_dir, gold_src, gold_tests}. `steering` is "on"|"off";
     when "on" the candidate `steering_text` is injected as the agent system
-    prompt. Returns a dict {passed, tests_run, cost_usd, agent_reason, steps}."""
-    from agent.react import ReActAgent, build_system_prompt
+    prompt. Returns a dict {passed, tests_run, cost_usd, agent_reason, steps, transcript}."""
+    from agent.react import ReActAgent, build_system_prompt, Transcript
     from agent.llm import LLM
     from sandbox import make_sandbox, restore_gold_tests, cleanup_sandbox
     from attribution import MeteredLLM
@@ -67,6 +67,7 @@ def run_one(desc, steering_text, steering, max_turns=None, provider="deepseek"):
             "cost_usd": float(metered.cost_usd),
             "agent_reason": transcript.reason,
             "steps": len(transcript.steps),
+            "transcript": transcript,  # HARNESS-04: Return full transcript for trace
         }
     finally:
         cleanup_sandbox(sb)

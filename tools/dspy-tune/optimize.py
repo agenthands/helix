@@ -273,7 +273,21 @@ def main():
                 if r["passed"]
                 else f"task NOT solved: {r['tests_run']} test(s) ran, not all green"
             )
-            return dspy.Prediction(passed=r["passed"], tests_run=r["tests_run"], feedback=fb)
+            # HARNESS-04: Build trace from transcript for GEPA reflective mutation.
+            # The trace shows step-level agent behavior that GEPA can reflect on.
+            transcript = r.get("transcript")
+            trace_steps = []
+            if transcript:
+                trace_steps = [
+                    {"verb": s.verb, "argv": s.argv, "exit": s.exit, "stdout": s.stdout[:200] if s.stdout else ""}
+                    for s in transcript.steps
+                ]
+            return dspy.Prediction(
+                passed=r["passed"],
+                tests_run=r["tests_run"],
+                feedback=fb,
+                trace=trace_steps,  # HARNESS-04: emit trace for GEPA reflection
+            )
 
     program = AgentProgram()
 

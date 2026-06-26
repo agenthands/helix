@@ -45,13 +45,36 @@ def _load_corpus_descriptors(corpus_dir):
     return out
 
 
-def _heldout():
+def _heldout(easy_only=False):
+    """Load the held-out test split. If easy_only=True, load only easy tasks."""
+    # Try easy subset first if requested
+    if easy_only:
+        easy_path = os.path.join(_OUT, "heldout_easy.json")
+        if os.path.isfile(easy_path):
+            with open(easy_path, encoding="utf-8") as fh:
+                return json.load(fh)
+        # Fall back to filtering the full heldout
+        print("[attribution] Note: heldout_easy.json not found, will filter heldout_test.json")
+
     if os.path.isfile(_HELDOUT):
         with open(_HELDOUT, encoding="utf-8") as fh:
-            return json.load(fh)
-    examples = _load_corpus_descriptors(_CORPUS)
-    _train, _val, test = split_corpus(examples)
-    return test
+            tasks = json.load(fh)
+    else:
+        examples = _load_corpus_descriptors(_CORPUS)
+        _train, _val, test = split_corpus(examples)
+        tasks = test
+
+    # Filter to easy tasks if requested
+    if easy_only:
+        EASY_THRESHOLD = 1000  # task description length < 1000 chars
+        easy_tasks = []
+        for task in tasks:
+            task_len = len(task.get("task", ""))
+            if task_len < EASY_THRESHOLD:
+                easy_tasks.append(task)
+        return easy_tasks
+
+    return tasks
 
 
 def _steering_text():
@@ -70,13 +93,14 @@ def smoke(n=1, max_turns=6):
     return 0
 
 
-def attribution(max_turns=20):
+def attribution(max_turns=20, easy_only=False):
     if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")):
         print("No LM key — attribution is a real billed run and needs one. no-ship stands.")
         return 0
-    heldout = _heldout()
+    heldout = _heldout(easy_only=easy_only)
     steering = _steering_text()
-    print(f"[attribution] held-out split = {len(heldout)} tasks (gate > {VAL_SIZE_GATE}); "
+    subset = "easy" if easy_only else "full"
+    print(f"[attribution] held-out split = {len(heldout)} tasks ({subset}); "
           f"steering candidate = embedded SKILL.md ({len(steering)} chars); max_turns={max_turns}")
 
     def run_arm(arm, examples):
@@ -121,8 +145,9 @@ def main(argv):
         return smoke(n)
     if mode == "attribution":
         mt = int(os.environ.get("AGENT_MAX_TURNS") or 20)
-        return attribution(max_turns=mt)
-    print(f"unknown mode {mode!r}; use: smoke [N] | attribution")
+        easy_only = "--easy" in argv
+        return attribution(max_turns=mt, easy_only=easy_only)
+    print(f"unknown mode {mode!r}; use: smoke [N] | attribution [--easy]")
     return 2
 
 

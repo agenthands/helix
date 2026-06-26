@@ -55,6 +55,81 @@ steering effect even with generous turn budgets.
 
 ---
 
+# v2.6 Phase 120: Easy Subset Attribution
+
+**Date:** 2026-06-26
+**Budget:** Easy subset (task_len < 1000 chars)
+
+## Verdict: NO-SHIP (delta = 0.0000 on easy subset)
+
+We filtered the corpus to the **13 easiest tasks** (task_len < 1000 chars) and
+re-ran attribution. Even on these simplest problems, the agent solved **zero tasks**
+with both steering ON and OFF.
+
+### Attribution Results (Easy Subset)
+
+| Arm | success_rate | successes / n | cost (USD) |
+|-----|--------------|---------------|------------|
+| OFF | 0.0000 | 0 / 13 | 0.0141 |
+| ON | 0.0000 | 0 / 13 | 0.0272 |
+
+- **Attribution delta (ON − OFF): +0.0000**
+- **Held-out val_size:** 13 (easy subset, task_len < 1000)
+- **Total cost:** $0.0413 (5x cheaper than full corpus)
+
+### Easy Tasks Analyzed
+
+| Task | Language | task_len | tests |
+|------|----------|----------|-------|
+| counter | go | 912 | 0 |
+| forth | go | 936 | 2 |
+| hexadecimal | go | 380 | 0 |
+| ledger | go | 682 | 0 |
+| markdown | go | 733 | 0 |
+| matrix | go | 979 | 0 |
+| paasio | go | 411 | 0 |
+| poker | go | 566 | 2 |
+| react | go | 727 | 0 |
+| transpose | go | 850 | 2 |
+| trinary | go | 740 | 0 |
+| word-search | go | 514 | 2 |
+| dominoes | python | 818 | 13 |
+
+### Comparison: Full vs Easy
+
+| Corpus | Tasks | ON pass | OFF pass | Delta | Cost |
+|--------|-------|---------|----------|-------|------|
+| Full (v2.6) | 51 | 0/51 | 0/51 | +0.0000 | $0.20 |
+| Easy (v2.6) | 13 | 0/13 | 0/13 | +0.0000 | $0.04 |
+
+**Both show delta=+0.0000.** The problem is **agent capability**, not corpus difficulty.
+
+### Honest Verdict
+
+The agent cannot solve even the simplest Exercism problems. Possible causes:
+
+1. **Task format mismatch:** Exercism problems require reading a description, understanding
+   the test file, and implementing a solution. The agent may not be getting the right context.
+
+2. **Agent architecture:** The ReAct loop with helix verbs may not be the right approach
+   for algorithmic problem-solving.
+
+3. **Model capability:** DeepSeek-v4-flash may lack the reasoning depth for these tasks.
+
+4. **Steering ineffectiveness:** The SKILL.md steering text doesn't provide actionable
+   guidance for problem-solving.
+
+### Recommendation
+
+**Switch benchmarks.** Exercism is too hard for the current agent. Try:
+- HumanEval (function completion, simpler scope)
+- MBPP (Mostly Basic Python Problems)
+- Or design a simpler corpus focused on file operations (what helix is optimized for)
+
+**Do not** continue tuning on this corpus without improving agent architecture.
+
+---
+
 # v2.5 REPORT — HARNESS Fix Attribution (Phases 115–118)
 
 **Milestone:** v2.5 (Phases 115–118) · **Requirements:** HARNESS-01/02/03/04/05

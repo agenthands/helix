@@ -1,3 +1,60 @@
+# v2.6 REPORT — Turn Budget Tuning (Phase 119)
+
+**Milestone:** v2.6 (Phase 119) · **Requirements:** BUDGET-01/02/03/04
+**Date:** 2026-06-26
+
+## Verdict: NO-SHIP (delta = 0.0000)
+
+After increasing the turn budget from 8 to 20, the attribution delta remains **+0.0000**.
+Neither arm solves any tasks. The corpus is too hard for current agent capability.
+
+### Attribution Results
+
+| Arm | success_rate | successes / n | cost (USD) |
+|-----|--------------|---------------|------------|
+| OFF (control) | 0.0000 | 0 / 51 | 0.0589 |
+| ON (steering) | 0.0000 | 0 / 51 | 0.1389 |
+
+- **Attribution delta (ON − OFF): +0.0000**
+- **Held-out val_size:** 51 (passes TUNE-03 gate: > 50)
+- **Total per-arm cost:** $0.1978
+- **Turn budget:** 20 (was 8 in v2.5)
+
+### Comparison with v2.5
+
+| Version | max_turns | ON pass | OFF pass | Delta | Total Cost |
+|--------|-----------|---------|----------|-------|------------|
+| v2.5 | 8 | 0/51 | 0/51 | +0.0000 | $0.1971 |
+| v2.6 | 20 | 0/51 | 0/51 | +0.0000 | $0.1978 |
+
+**Key insight:** Costs are nearly identical despite 2.5x turn budget. The agent is hitting
+`no_progress` termination (identical output for N consecutive turns) before `max_turns`,
+not running out of turns. Increasing the budget doesn't change behavior.
+
+### Honest Caveats
+
+1. **Corpus difficulty, not turn budget.** Both v2.5 (8 turns) and v2.6 (20 turns) show
+   identical results: 0/51 tasks solved. The Aider corpus (Exercism-style problems)
+   requires more than tool calls — it needs algorithm design, test understanding,
+   and iteration patterns the agent doesn't demonstrate.
+
+2. **Agent hits `no_progress` early.** The similar costs (~$0.20 total) across both
+   runs suggest the agent terminates on `no_progress` (byte-identical output for N
+   consecutive turns) rather than `max_turns`. The steering signal isn't helping
+   the agent make progress.
+
+3. **The harness is functionally correct.** The agent uses tools (ON costs 2.4x higher
+   than OFF), runs tests, gets diagnostics. GEPA receives traces. The pipeline works.
+   The issue is task difficulty vs agent capability.
+
+### Recommendation
+
+**Proceed to Phase 120 (Corpus Analysis).** Filter the corpus to easier tasks
+or switch to a simpler benchmark. The current corpus doesn't demonstrate the
+steering effect even with generous turn budgets.
+
+---
+
 # v2.5 REPORT — HARNESS Fix Attribution (Phases 115–118)
 
 **Milestone:** v2.5 (Phases 115–118) · **Requirements:** HARNESS-01/02/03/04/05

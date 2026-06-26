@@ -2,19 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Agent Harness Rebuild
-current_phase_name: defining requirements
-status: Planning
-stopped_at: Phase 115 context gathered
-last_updated: "2026-06-26T07:20:48.878Z"
-last_activity: 2026-06-26
-last_activity_desc: Milestone v2.5 started
+status: phase_complete
+stopped_at: Phase 115-01 SUMMARY committed
+last_updated: "2026-06-26T14:30:00.000Z"
+last_activity: 2026-06-26 — Phase 115-01 complete (HARNESS-01/02 implemented, all tests pass)
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-current_phase: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 25
+current_phase: 115
 ---
 
 # Project State
@@ -28,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-26 — Milestone v2.5 started
+Phase: 115-01 COMPLETE (Task-Solving Prompt + Feedback Loop)
+Plan: 115-01 SUMMARY committed
+Status: Ready for Phase 116
+Last activity: 2026-06-26 — Phase 115-01 complete with all HARNESS-01/02 tests passing
 
 ## Performance Metrics
 
@@ -138,14 +136,20 @@ Watch items for v2.5:
 
 ## Session Continuity
 
-Last session: 2026-06-26T07:20:48.873Z
-Stopped at: Phase 115 context gathered
-Resume file: .planning/phases/115-task-solving-prompt-feedback-loop/115-CONTEXT.md
+Last session: 2026-06-26T07:30:00.000Z
+Stopped at: Phase 115 PLAN committed
+Resume file: .planning/phases/115-task-solving-prompt-feedback-loop/115-PLAN.md
 
 ## Decisions
 
-(To be filled during milestone execution)
+- **D-01:** Solution file naming (explicit or extracted from task description)
+- **D-02:** Success criterion "hidden tests must pass" declared in prompt
+- **D-03:** Agent-driven test execution (both verbs: get-diagnostics, run-tests)
+- **D-04:** Retry nudge then fail on repeat prose
+- **D-05:** Both verbs for test discovery (get-diagnostics + run-tests)
 
 ## Operator Next Steps
 
-- Run `/gsd-plan-phase 1` after requirements and roadmap are defined
+- Execute Plan 115-01 (Task-Solving System Prompt)
+- Execute Plan 115-02 (Feedback Loop) after 115-01 completes
+- Run anti-vacuity tests to verify both gates work

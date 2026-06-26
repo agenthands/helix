@@ -9,6 +9,10 @@ subprocess), observes each verb's stdout/exit, and returns a Transcript with a
 deterministic termination reason. Two bounds prevent runaway loops (T-107-03):
 a hard `max_turns` cap and a no-progress heuristic (byte-identical argv+output
 across consecutive turns), plus a tool-error budget.
+
+HARNESS-01/02 (Phase 115): Task-solving system prompt forces editing, forbids
+prose, and requires test verification. Prose-only answers trigger a retry nudge
+then failure on repetition (D-04).
 """
 
 import json
@@ -29,6 +33,39 @@ _BASE_SYSTEM_PROMPT = (
     "by emitting tool calls; each runs `helix <verb>` and returns its output. "
     "When you have the answer, respond with a final message and no tool call."
 )
+
+# HARNESS-01: Task-solving system prompt (D-01/D-02/D-03/D-05)
+# Injected under STEERING_SENTINEL when steering="on".
+_TASK_SOLVING_PROMPT = """
+## Task-Solving Protocol
+
+You are given a task that requires editing files. Follow these rules:
+
+1. **Solution file**: Identify the solution file from the task context (explicitly named or extracted from the description). This is the file you must edit.
+
+2. **Success criterion**: You are done when hidden tests pass. You must run tests to verify your work.
+
+3. **No prose answers**: Do NOT answer in prose. You must edit files. You are not done until the code is implemented.
+
+4. **Test discovery**: Use `get-diagnostics` to find test files and compilation errors in your solution.
+
+5. **Test verification**: Use `run-tests` to execute tests and verify your work.
+
+6. **Iterate**: Edit, run tests, check results, repeat until tests pass.
+
+## Workflow
+
+Think → Act (tool call) → Observe (result) → Repeat until tests pass.
+
+Use these verbs:
+- `get-diagnostics` — discover test files and compilation errors
+- `run-tests` — execute tests and see results
+- `fuzzy-edit` / `replace-in-file` — edit files
+- `read-file` — read file contents
+- Other helix verbs as needed
+
+You may NOT declare "done" until tests pass. If you find yourself writing prose without tool calls, STOP and make a tool call instead.
+"""
 
 # Independent OFF control prompt — NOT derived from the steering text at runtime.
 OFF_CONTROL_PROMPT = _BASE_SYSTEM_PROMPT
@@ -58,12 +95,13 @@ def _resolve_max_turns(explicit=None):
 def build_system_prompt(steering_text, steering):
     """Build the agent system prompt.
 
-    `steering == "on"`  -> base prompt + the steering text under STEERING_SENTINEL.
+    `steering == "on"`  -> base prompt + task-solving prompt + steering text under STEERING_SENTINEL.
     `steering == "off"` -> the independent OFF_CONTROL_PROMPT (provably omits the
-                           sentinel AND the steering text).
+                           sentinel, the task-solving prompt, and the steering text).
     """
     if steering == "on":
-        return f"{_BASE_SYSTEM_PROMPT}\n\n{STEERING_SENTINEL}\n{steering_text}"
+        # HARNESS-01: Task-solving prompt is always included when steering is ON
+        return f"{_BASE_SYSTEM_PROMPT}\n\n{_TASK_SOLVING_PROMPT}\n\n{STEERING_SENTINEL}\n{steering_text}"
     return OFF_CONTROL_PROMPT
 
 
@@ -81,9 +119,17 @@ class Step:
 class Transcript:
     """The result of a bounded ReAct run. `reason` is the termination cause."""
 
-    reason: str  # one of: done | max_turns | no_progress | tool_error_budget
+    reason: str  # one of: done | max_turns | no_progress | tool_error_budget | prose_refused
     final: Optional[str]  # the final answer text, or None if terminated on a bound
     steps: list = field(default_factory=list)
+
+
+# HARNESS-01/D-04: Nudge prompt injected when agent returns prose-only answer.
+_PROSE_NUDGE_PROMPT = (
+    "You returned a prose answer without making any tool calls. "
+    "You must edit files, not answer in prose. "
+    "Please make a tool call to edit files or run tests."
+)
 
 
 class ReActAgent:
@@ -102,13 +148,34 @@ class ReActAgent:
         steps = []
         last_sig = None
         tool_errors = 0
+        prose_nudged = False  # HARNESS-01: Track if we've already nudged for prose
 
         for _turn in range(max_turns):
             msg = self.llm.chat(messages, tools=TOOL_SCHEMAS)
 
-            # No tool call -> final answer. reason="done".
+            # No tool call -> final answer or prose-only response.
             if not getattr(msg, "tool_calls", None):
-                return Transcript(reason="done", final=msg.content, steps=steps)
+                # HARNESS-01/D-04: Prose-only answer detection and retry-nudge.
+                # If agent returns prose without making ANY tool calls in the entire
+                # conversation, inject a nudge. On repeated prose after nudge,
+                # terminate with reason="prose_refused".
+                # If agent has made tool calls before (len(steps) > 0), this is a
+                # legitimate final answer after completing work.
+                if len(steps) == 0 and not prose_nudged:
+                    # First prose-only turn with no prior tool calls: nudge once.
+                    prose_nudged = True
+                    messages.append(msg.model_dump(exclude_none=True))
+                    messages.append({"role": "user", "content": _PROSE_NUDGE_PROMPT})
+                    continue
+                elif len(steps) == 0 and prose_nudged:
+                    # Second consecutive prose-only turn with no prior tool calls: fail.
+                    return Transcript(reason="prose_refused", final=None, steps=steps)
+                else:
+                    # Agent has made tool calls before - this is a legitimate final answer.
+                    return Transcript(reason="done", final=msg.content, steps=steps)
+
+            # Reset prose_nudged after successful tool call - agent is making progress.
+            prose_nudged = False
 
             # OpenAI ordering: append the assistant tool-call message via
             # model_dump(exclude_none=True) BEFORE the tool-result messages.

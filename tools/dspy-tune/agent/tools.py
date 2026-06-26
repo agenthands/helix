@@ -9,6 +9,9 @@ Security (T-107-01): `run_verb` builds a FIXED argv list and calls
 `subprocess.run([...])` — never a shell, never string concatenation. The verb
 name is constrained to the curated TOOL_SCHEMAS set, so a model cannot invoke
 an arbitrary command; only `helix <curated-verb> <args...>` is ever spawned.
+
+HARNESS-02a: `run-tests` verb calls pytest directly (not helix) to close the
+feedback loop. Agent can now verify work by running tests.
 """
 
 import json
@@ -80,6 +83,11 @@ _VERB_SPECS = {
         "symbol_name": ("--symbol-name", "string", True),
         "content": ("--content", "string", True),
     }),
+    # HARNESS-02a: run-tests verb for feedback loop (calls pytest directly).
+    "run-tests": ("Run tests for a file or directory.", {
+        "path": ("--path", "string", True),
+        "extra_args": ("--extra-args", "string", False),  # optional pytest args
+    }),
 }
 
 
@@ -129,14 +137,48 @@ def _argv_for(verb, args):
     return argv
 
 
+def _run_tests_verb(args, cwd, timeout=120):
+    """HARNESS-02a: Run pytest directly for the test feedback loop.
+
+    This verb bypasses helix and calls pytest via `uv run pytest` directly,
+    allowing the agent to run tests and observe results.
+    """
+    path = args.get("path", ".")
+    extra_args = args.get("extra_args", "")
+
+    # Build argv: uv run pytest <path> --tb=short -q [extra_args]
+    argv = ["uv", "run", "pytest", path, "--tb=short", "-q"]
+    if extra_args:
+        # Split extra_args by space to pass individual args
+        argv.extend(extra_args.split())
+
+    proc = subprocess.run(
+        argv,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return VerbResult(argv=argv, exit=proc.returncode, stdout=proc.stdout, stderr=proc.stderr)
+
+
 def run_verb(call, cwd, timeout=60):
     """Run one model tool-call as `helix <verb> <args...>` via fixed-argv subprocess.
 
     `call` duck-types an OpenAI tool_call: `.function.name` (kebab verb) and
     `.function.arguments` (a JSON STRING). NEVER uses a shell.
+
+    HARNESS-02a: `run-tests` verb dispatches to _run_tests_verb which calls
+    pytest directly instead of going through helix.
     """
     verb = call.function.name
     args = json.loads(call.function.arguments or "{}")
+
+    # HARNESS-02a: Dispatch run-tests to pytest directly
+    if verb == "run-tests":
+        return _run_tests_verb(args, cwd, timeout=timeout)
+
+    # All other verbs go through helix subprocess
     argv = _argv_for(verb, args)
     proc = subprocess.run(
         argv,

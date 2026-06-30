@@ -3,6 +3,7 @@ package extract
 import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/classifier"
+	"github.com/agenthands/helix/internal/semantic/dataflow"
 	"github.com/agenthands/helix/internal/semantic/minhash"
 	"github.com/agenthands/helix/internal/semantic/relatedidx"
 )
@@ -110,19 +111,20 @@ type SymbolFact struct {
 	Partial          bool
 	PartialReason    string
 
-	// Fingerprint carries structural near-clone (MinHash), structural-
-	// profile (ASTProfile), and semantic-vocabulary (Random-Indexing context
-	// vector) signatures computed at extraction time over the symbol's body
-	// AST. Only populated for function/method symbols with a body large enough
-	// to fingerprint; nil otherwise. The tree-sitter tree is closed when
-	// Extract returns, so these MUST be computed inside the provider while the
-	// AST is alive (see FingerprintBody). factsFromExtracted consumes them to
-	// emit SIMILAR_TO (MinHash, structure), DATA_FLOWS (ASTProfile, structure),
-	// and SEMANTICALLY_RELATED (ContextVec, vocabulary) edges. MinHash/Profile
-	// capture SHAPE; ContextVec captures VOCABULARY — orthogonal by design.
-	MinHash    *minhash.Signature
-	Profile    *classifier.ASTProfile
-	ContextVec *relatedidx.Vector
+	// Fingerprint carries structural near-clone (MinHash), structural-profile
+	// (ASTProfile -> STRUCTURAL_TWIN edges), semantic-vocabulary (Random-Indexing
+	// context vector -> SEMANTICALLY_RELATED edges), and case-1 param flow
+	// (FlowSummary -> DATA_FLOWS edges) signatures computed at extraction time
+	// over the symbol's body AST. Only populated for function/method symbols
+	// with a body large enough to fingerprint; nil otherwise. The tree-sitter
+	// tree is closed when Extract returns, so these MUST be computed inside the
+	// provider while the AST is alive (see FingerprintBody). MinHash/Profile
+	// capture SHAPE; ContextVec captures VOCABULARY; FlowSummary captures
+	// param->target DATA DEPENDENCE — three orthogonal signals.
+	MinHash     *minhash.Signature
+	Profile     *classifier.ASTProfile
+	ContextVec  *relatedidx.Vector
+	FlowSummary *dataflow.Summary
 }
 
 // ReceiverFact carries method-receiver metadata (Go-style methods,

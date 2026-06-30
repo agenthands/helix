@@ -22,7 +22,7 @@ const (
 	EdgeKindContains            EdgeKindSurface = "contains"
 	EdgeKindImports             EdgeKindSurface = "imports"
 	EdgeKindDefines             EdgeKindSurface = "defines"
-	EdgeKindDataFlows           EdgeKindSurface = "data_flows"      // reserved for true interprocedural flow (v2.8 Workstream B)
+	EdgeKindDataFlows           EdgeKindSurface = "data_flows"      // interprocedural caller.param -> callee.param flow (v2.9; emitted by dataFlowEdges)
 	EdgeKindStructuralTwin      EdgeKindSurface = "structural_twin" // control-flow/expression-shape profile cosine
 	EdgeKindHTTPCalls           EdgeKindSurface = "http_calls"
 	EdgeKindAsyncCalls          EdgeKindSurface = "async_calls"

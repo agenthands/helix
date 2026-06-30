@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.8
-milestone_name: Graph Intelligence Depth (cbm-mcp parity)
-status: shipped
-last_updated: "2026-06-30T15:06:55.336Z"
-last_activity: 2026-06-30 — v2.8 shipped (Workstream A + B0-a); MILESTONE-AUDIT PASSED; archived
+milestone: v2.9
+milestone_name: Interprocedural DATA_FLOWS (param-flow reachability substrate)
+status: active
+last_updated: "2026-06-30T17:30:00.000Z"
+last_activity: 2026-06-30 — v2.9 Phases 125-126 COMPLETE + verified (build/tests/make vet/generated gates green); NOT yet committed (user's call)
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
   percent: 100
 ---
 
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.8 Graph Intelligence Depth — Workstream A (SEMANTICALLY_RELATED via Random Indexing) COMPLETE; Workstream B (true interprocedural DATA_FLOWS) paused at the B0 design-fork gate.
+**Current focus:** v2.9 Interprocedural DATA_FLOWS — build the `DATA_FLOWS` producer (case-1-only param→param interprocedural flow; a syntactic pass-through reachability substrate, NOT full taint analysis). 2 phases (125 flow-summary engine + 126 emission/read-surface/reachability). Roadmap red-teamed (agent://RedTeamV29, PROCEED-WITH-FIXES); all findings folded — notably that DEFINES is a flat container heuristic (callee params resolve by emit-order adjacency, not DEFINES).
 
 ## Current Position
 
-Phase: 121-124 (Workstream A + B0-a) — COMPLETE, verified, AUDIT PASSED
-Status: SEMANTICALLY_RELATED emitted via Random Indexing (distinct/selective/deterministic/readable); structural edge renamed STRUCTURAL_TWIN, DATA_FLOWS reserved for real flow. Red-team folded; MILESTONE-AUDIT passed (see .planning/milestones/v2.8-MILESTONE-AUDIT.md). debt=0, ledger 0 errors. NOT committed; complete-milestone/archive not yet run (separate ship decision). Workstream B feature build = future milestone.
+Phase: 125-126 (v2.9) — COMPLETE + verified; red-team-folded
+Status: v2.9 built end-to-end. DATA_FLOWS now has a real producer: case-1 param→param interprocedural flow (caller.param → callee.param via a resolved in-repo call), a syntactic pass-through reachability substrate (NOT full taint analysis). 15 pkgs green, make vet (8 vettools) clean, zero new deps, no migration, generated --check gates pass. Red-team (agent://RedTeamV29, PROCEED-WITH-FIXES) all 2 blocking + 6 major findings folded — notably DEFINES is a flat container heuristic (callee params resolve by emit-order adjacency) and reference nodes are a separate namespace (SrcNodeID is always a param symbol node). NOT committed — commit is the user's call.
 Last activity: 2026-06-30
 
 ## Performance Metrics

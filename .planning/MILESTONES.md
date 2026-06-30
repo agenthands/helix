@@ -1,5 +1,19 @@
 # Milestones
 
+## v2.9 Interprocedural DATA_FLOWS — param-flow reachability substrate (Complete + verified 2026-06-30; pending commit)
+
+**Phases:** 2 (125 intraprocedural flow-summary engine + 126 arg→param emission / read surface / reachability) — BOTH COMPLETE + verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.9-MILESTONE-AUDIT.md`).
+
+**Goal: give the `DATA_FLOWS` edge kind a real producer.** v2.8 reserved it as producerless (after renaming the structural-shape edge to `STRUCTURAL_TWIN`). v2.9 emits **case-1-only param→param interprocedural flow** (caller.param → callee.param through a resolved in-repo call) — the classical function-summary taint-composition primitive. **Honest framing:** a syntactic pass-through *reachability substrate*, NOT full taint analysis (no in-body origins / field-flow / sinks / sanitization — those need variable-level nodes, deferred).
+
+**Roadmap red-teamed** (`agent://RedTeamV29`, PROCEED-WITH-FIXES, all findings folded). Two blocking findings caught pre-build: (1) `DEFINES` is a flat file-container heuristic (`semantic_wiring.go:2218`, comment "First symbol in file is typically the outer class/module") — callee params resolve by **emit-order adjacency**, not DEFINES; (2) reference nodes are a separate namespace — `SrcNodeID` must be a symbol (caller.param), never a call-reference node. Plus 6 majors folded (no tree-sitter CALLS edge — substrate = reference.call refs + name index; anti-mis-bind on >1 callee candidate; non-positional handling; directed dedup; total-edge-budget bound; Phase 127 collapses into 126).
+
+**Invariants (planned):** zero new Go deps, no schema migration (binding = node identity), deterministic, bounded; `explain-symbol-deep` read surface already wired (`MapInternalKind` maps DATA_FLOWS).
+
+**Deferred (by design):** dedicated `trace-data-flow` verb (milestone-sized); variable-level nodes / in-body origins; queryable arg/param-position column.
+
+---
+
 ## v2.8 Graph Intelligence Depth — cbm-mcp parity (Shipped: 2026-06-30)
 
 **Phases completed:** 4 phases (121–124), MILESTONE-AUDIT PASSED (goal-backward, code-grounded). Run inline (native standing-team/SMTC substrate absent); independence gate delegated to an `oracle` red-team (PROCEED-WITH-FIXES, all 6 findings folded).

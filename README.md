@@ -295,23 +295,13 @@ A language is **first-class** when it has both a warm LSP server *and* a native 
 
 Markdown, Vue, Clojure, Elixir, Perl, PowerShell, Dart, Elm, Erlang, Fortran, F#, Groovy, HLSL, MATLAB, Nix, Pascal, Rego, Solidity, SystemVerilog, TOML, YAML, AL, Ansible — full LSP navigation, RepoMap via `documentSymbol` (◐), no native grammar or body-surgery editing.
 
-### Semantic graph (Go, Python, TS/JS)
+### Semantic graph (11 first-class languages)
 
-The semantic graph (`internal/semantic/`) — the live fact graph behind `find_related_symbols`, `explain_symbol_deep`, and `validate_graph_edge` — is intentionally **narrower** than the LSP/tree-sitter surface above. It supports exactly three languages:
+The semantic graph (`internal/semantic/`) — the live fact graph behind `find_related_symbols`, `explain_symbol_deep`, and `validate_graph_edge` — spans **11 first-class extractors**: Go, TypeScript/JavaScript, Python, Java, C#, Rust, C, C++, Kotlin, PHP, Ruby. Each ships its own `extract.Provider` package with a dedicated tree-sitter query file (`internal/semantic/extract/<lang>/queries.scm`); providers are wired into the daemon-owned `Registry` keyed by `Provider.Language()`, which **panics on a duplicate or missing provider** — so the supported set is a hard, enumerated allow-list. (Type resolution is full for Go / TypeScript / Python and LSP-conditional for the other eight.)
 
-| Language | Provider package | Covers |
-|----------|------------------|--------|
-| Go | `internal/semantic/extract/golang/` | `.go` |
-| Python | `internal/semantic/extract/python/` | `.py` |
-| TypeScript / JavaScript | `internal/semantic/extract/typescript/` | `.ts .tsx .js .jsx .mjs .cjs` |
+The graph engine itself (`internal/semantic/graph/`) is **language-agnostic** — it operates on abstract `NodeID`/`EdgeKind`, so the only gating factor is "does a `Provider` exist for this language." Files in any other language get `ExtractionStatus = "unsupported"`.
 
-It is a **per-language extractor model**, not a reuse of the 23-grammar RepoMap tagger:
-
-- Each language ships its own `extract.Provider` with a dedicated tree-sitter query file (`golang/queries.scm`, `python/queries.scm`, `typescript/queries.scm` — the only three `.scm` files under `internal/semantic/`).
-- Providers are wired into the daemon-owned `Registry` keyed by `Provider.Language()` (`internal/semantic/extract/registry.go`), which **panics on a duplicate or missing provider** — so the supported set is a hard, enumerated allow-list.
-- The graph engine itself (`internal/semantic/graph/`) is **language-agnostic** — it operates on abstract `NodeID`/`EdgeKind`, so the only gating factor is "does a `Provider` exist for this language." Files in any other language get `ExtractionStatus = "unsupported"`.
-
-This is a deliberate first-release scope (per `SPEC-DRAFT.md`: *"scope production correctness to Go, TypeScript/JavaScript, and Python first, with other languages best-effort"*). Adding a fourth language means implementing a new `extract.Provider` package with its own `queries.scm`.
+**Edge model** (the `EdgeKindSurface` enum, `internal/skill/semantic/edge_kind_surface.go`): structural/reference edges (CALLS, REFERENCES, IMPLEMENTS, EXTENDS, USES_TYPE, IMPORTS, DEFINES, HANDLES, TESTS, MEMBER_OF, CROSS_IMPORTS, CROSS_CALLS), framework-classified edges (HTTP_CALLS, ASYNC_CALLS, EMITS, LISTENS_ON, CONFIGURES, WRITES), git co-change (FILE_CHANGES_WITH), and three similarity edges — **SIMILAR_TO** (MinHash near-clone), **STRUCTURAL_TWIN** (control-flow/expression-shape profile cosine), **SEMANTICALLY_RELATED** (Random-Indexing vocabulary) — plus **DATA_FLOWS** (v2.9): interprocedural `caller.param → callee.param` flow, the syntactic pass-through substrate for source→sink reachability. New analytical edges surface via `explain_symbol_deep` (its edge accessors apply no edge-kind filter).
 
 ## Features
 

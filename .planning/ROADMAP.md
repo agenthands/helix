@@ -24,10 +24,19 @@
 - [x] **v2.6 Turn Budget Tuning** -- Phase 119 (shipped 2026-06-26)
 - [x] **v2.7 Corpus Analysis & Benchmark Pivot** -- Phase 120 (shipped 2026-06-26)
 - [x] **v2.8 Graph Intelligence Depth (cbm-mcp parity)** -- Phases 121-124 (shipped 2026-06-30) — see `.planning/milestones/v2.8-ROADMAP.md`
+- [x] **v2.9 Interprocedural DATA_FLOWS (param-flow reachability substrate)** -- Phases 125-126 (complete + verified 2026-06-30; pending commit) — see `.planning/milestones/v2.9-REQUIREMENTS.md`
 
 ## Phases
 
-**Current: No active milestone** — v2.8 shipped (Workstream A: SEMANTICALLY_RELATED via Random Indexing + B0-a: DATA_FLOWS→STRUCTURAL_TWIN rename; MILESTONE-AUDIT PASSED). Workstream B (true interprocedural DATA_FLOWS feature build) is deferred to a future milestone — own roadmap + red-team cycle.
+**Current: v2.9 Interprocedural DATA_FLOWS (Phases 125–126)** — build the `DATA_FLOWS` producer: case-1-only param→param interprocedural flow (caller.param → callee.param), a syntactic pass-through reachability substrate (NOT full taint analysis — no in-body origins/field-flow/sinks). Full detail + folded red-team in `.planning/milestones/v2.9-REQUIREMENTS.md`. v2.8 shipped Workstream A + B0-a (the rename that reserved this name).
+
+### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
+
+**Goal:** Pure-Go deterministic per-function case-1 flow summary (param → reaches-return / reaches-call(name,argPos)) via tree-sitter body walk; plumbed through the shared `FingerprintBody` seam so all 11 providers inherit it. Foundation for Phase 126 emission. Red-team-folded: case-1 only (exact syntactic dependence, no over-approximation); param identity from the AST, not symbol emission order.
+
+### Phase 126: Arg→Param DATA_FLOWS Emission + Read Surface + Reachability
+
+**Goal:** Emit real `DATA_FLOWS` edges (caller.param → callee.param); prove they are a distinct flow signal, reachable from `helix explain-symbol-deep`, and that multi-hop source→sink reachability holds over the emitted edges. This is the whole feature — Phase 127 (propagation) collapsed into it (reachability = graph walk, no engine). Red-team-folded: callee params via emit-order adjacency (NOT the flat DEFINES heuristic); anti-mis-bind (>1 callee candidate ⇒ no edge); non-positional handling (receiver/variadic/kwargs); directed dedup; total-edge-budget bound.
 
 ### Phase 121: Random-Indexing Engine (`internal/semantic/relatedidx/`)
 

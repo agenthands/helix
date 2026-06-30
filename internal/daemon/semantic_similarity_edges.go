@@ -26,11 +26,14 @@ package daemon
 //     here is classifier.ComputeProfile. Confidence is held low to reflect that
 //     the edge is a structural-similarity signal.
 import (
+	"fmt"
+
 	"math"
 	"sort"
 	"strconv"
 
 	"github.com/agenthands/helix/internal/semantic/classifier"
+	"github.com/agenthands/helix/internal/semantic/dataflow"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/minhash"
 	"github.com/agenthands/helix/internal/semantic/relatedidx"
@@ -129,8 +132,9 @@ func importTargetCandidates(imp extract.ImportFact) []string {
 // per fingerprintable symbol (function / method with a body), zipping
 // ef.Symbols[k] (carrying MinHash / Profile / ContextVec) onto
 // single.Symbols[k] (carrying the masked NodeID) — the two slices are 1:1 in
-// order. sig/profile feed structure edges (SIMILAR_TO / DATA_FLOWS); vec feeds
-// the vocabulary edge (SEMANTICALLY_RELATED).
+// order. sig/profile feed structure edges (SIMILAR_TO / STRUCTURAL_TWIN); vec
+// feeds the vocabulary edge (SEMANTICALLY_RELATED); flow feeds the
+// interprocedural data-dependence edge (DATA_FLOWS, emitted by dataFlowEdges).
 type fingerprintedNode struct {
 	nodeID   uint64
 	kind     string
@@ -138,6 +142,7 @@ type fingerprintedNode struct {
 	sig      *minhash.Signature
 	profile  *classifier.ASTProfile
 	vec      *relatedidx.Vector
+	flow     *dataflow.Summary
 }
 
 // similarToEdges emits SIMILAR_TO edges between near-clone function bodies.
@@ -439,6 +444,89 @@ func semanticallyRelatedEdges(nodes []fingerprintedNode) []semanticstore.EdgeFac
 			})
 			if fanout[n.nodeID] >= minhash.MaxEdgesPerNode {
 				break
+			}
+		}
+	}
+	return edges
+}
+
+// dataFlowEdges emits DATA_FLOWS edges from Phase 125's per-function flow
+// summaries. Each edge is a directed caller.param -> callee.param flow through
+// one resolved in-repo call (case-1-only, exact syntactic data dependence). The
+// edge set is the substrate for source->sink reachability — a plain graph walk,
+// since consecutive edges share the callee-param node (Phase 127 collapsed).
+//
+// Honesty guards (v2.9 red-team-folded):
+//   - D1b: callee params resolved by emit-order adjacency (nodeToParams), NOT
+//     the flat DEFINES container heuristic.
+//   - D2:  binding = node identity; SrcNodeID is always a param symbol node,
+//     never a reference node (a different namespace).
+//   - D5:  a callee name resolves only when it maps to exactly one node
+//     (nameCount == 1); overloaded/duplicate names => no edge (anti-mis-bind).
+//   - D7:  bounded by directed dedup on (SrcNodeID, DstNodeID), not the
+//     similarity per-node cap (flow edges are legitimately dense for hubs).
+//   - D8:  dedup key is (SrcNodeID, DstNodeID) — DATA_FLOWS is directed.
+//
+// Determinism: nodes processed in ascending NodeID; each ordered (src,dst)
+// pair emitted once. The buildFn's dense EdgeID stamp covers the PK.
+func dataFlowEdges(
+	nodes []fingerprintedNode,
+	nodeToParams map[uint64][]uint64,
+	nameToNode map[string]uint64,
+	nameCount map[string]int,
+) []semanticstore.EdgeFact {
+	withFlow := make([]fingerprintedNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.flow != nil && len(n.flow.Params) > 0 {
+			withFlow = append(withFlow, n)
+		}
+	}
+	sort.Slice(withFlow, func(i, j int) bool { return withFlow[i].nodeID < withFlow[j].nodeID })
+
+	var edges []semanticstore.EdgeFact
+	seen := make(map[[2]uint64]struct{})
+	for _, n := range withFlow {
+		callerParams := nodeToParams[n.nodeID]
+		for _, pf := range n.flow.Params {
+			if pf.Index < 0 || pf.Index >= len(callerParams) {
+				continue // caller param node not recoverable (emit-order miss)
+			}
+			srcParam := callerParams[pf.Index]
+			if srcParam == 0 {
+				continue
+			}
+			for _, ca := range pf.CallArgs {
+				if nameCount[ca.Callee] != 1 {
+					continue // anti-mis-bind (D5)
+				}
+				calleeNode := nameToNode[ca.Callee]
+				if calleeNode == 0 || calleeNode == n.nodeID {
+					continue
+				}
+				calleeParams := nodeToParams[calleeNode]
+				if ca.ArgPos < 0 || ca.ArgPos >= len(calleeParams) {
+					continue // callee param node not recoverable
+				}
+				dstParam := calleeParams[ca.ArgPos]
+				if dstParam == 0 {
+					continue
+				}
+				key := [2]uint64{srcParam, dstParam}
+				if _, dup := seen[key]; dup {
+					continue
+				}
+				seen[key] = struct{}{}
+				edges = append(edges, semanticstore.EdgeFact{
+					SrcNodeID:  srcParam,
+					DstNodeID:  dstParam,
+					SrcKind:    "parameter",
+					DstKind:    "parameter",
+					EdgeKind:   "DATA_FLOWS",
+					Source:     "def_use",
+					Confidence: 0.55,
+					Weight:     0.5,
+					Reason:     fmt.Sprintf("arg%d -> callee param%d", ca.ArgPos, ca.ArgPos),
+				})
 			}
 		}
 	}

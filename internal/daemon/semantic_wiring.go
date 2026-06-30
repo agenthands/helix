@@ -1945,6 +1945,7 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 	seenExtModule := make(map[uint64]bool) // dedup external-module nodes across files
 	var pendingDst []pendingDstResolve     // shallow edges awaiting name-index resolution
 	var fpNodes []fingerprintedNode        // per-symbol fingerprints for SIMILAR_TO / DATA_FLOWS
+	var nodeToParams = map[uint64][]uint64{} // func/method NodeID -> ordered param NodeIDs (emit-order adjacency, D1b)
 	for i, ef := range extracted {
 		if ef == nil {
 			continue
@@ -2017,7 +2018,7 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 				break
 			}
 			es := ef.Symbols[k]
-			if es.MinHash == nil && es.Profile == nil && es.ContextVec == nil {
+			if es.MinHash == nil && es.Profile == nil && es.ContextVec == nil && es.FlowSummary == nil {
 				continue
 			}
 			fpNodes = append(fpNodes, fingerprintedNode{
@@ -2027,7 +2028,33 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 				sig:      es.MinHash,
 				profile:  es.Profile,
 				vec:      es.ContextVec,
+				flow:     es.FlowSummary,
 			})
+		}
+		// nodeToParams: a function/method's params are the maximal consecutive
+		// KindParameter run following it in single.Symbols (emit-order adjacency —
+		// NOT the flat DEFINES container heuristic; v2.9 D1b red-team fold).
+		for k := range single.Symbols {
+			sk := single.Symbols[k].Kind
+			if sk != string(extract.KindFunction) && sk != string(extract.KindMethod) {
+				continue
+			}
+			fnID := single.Symbols[k].NodeID
+			if fnID == 0 {
+				continue
+			}
+			var params []uint64
+			for j := k + 1; j < len(single.Symbols); j++ {
+				if single.Symbols[j].Kind != string(extract.KindParameter) {
+					break
+				}
+				if single.Symbols[j].NodeID != 0 {
+					params = append(params, single.Symbols[j].NodeID)
+				}
+			}
+			if len(params) > 0 {
+				nodeToParams[fnID] = params
+			}
 		}
 
 		// Heritage → IMPLEMENTS/EXTENDS edges. Source is the file's first
@@ -2324,6 +2351,7 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 		fileIDToPath[out.Files[i].FileID] = out.Files[i].Path
 	}
 	nameToNode := make(map[string]uint64, len(out.Symbols))
+	nameCount := make(map[string]int, len(out.Symbols)) // anti-mis-bind: callee name -> candidate count (D5)
 	for i := range out.Symbols {
 		s := out.Symbols[i]
 		if s.NodeID == 0 || s.Name == "" || s.Kind == string(extract.KindRoute) || s.Kind == string(extract.KindResource) {
@@ -2332,6 +2360,7 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 		if isTestSymbol(s.Language, s.Name, fileIDToPath[s.FileID]) {
 			continue
 		}
+		nameCount[s.Name]++
 		if _, exists := nameToNode[s.Name]; !exists {
 			nameToNode[s.Name] = s.NodeID
 		}
@@ -2394,11 +2423,12 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 	// collected during the file loop. Each is bounded (LSH candidate set /
 	// quantized profile buckets / language buckets) and per-node fan-out capped
 	// at minhash.MaxEdgesPerNode. SIMILAR_TO/STRUCTURAL_TWIN read SHAPE; RELATED
-	// reads VOCABULARY — orthogonal signals over the same nodes. (DATA_FLOWS is
-	// reserved for true interprocedural flow, v2.8 Workstream B — not emitted here.)
+	// reads VOCABULARY — orthogonal signals over the same nodes. DATA_FLOWS
+	// (def_use) reads param->param interprocedural DATA DEPENDENCE (v2.9).
 	out.Edges = append(out.Edges, similarToEdges(fpNodes)...)
 	out.Edges = append(out.Edges, structuralTwinEdges(fpNodes)...)
 	out.Edges = append(out.Edges, semanticallyRelatedEdges(fpNodes)...)
+	out.Edges = append(out.Edges, dataFlowEdges(fpNodes, nodeToParams, nameToNode, nameCount)...)
 
 	return out
 }

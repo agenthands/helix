@@ -4,6 +4,7 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
 	"github.com/agenthands/helix/internal/semantic/classifier"
+	"github.com/agenthands/helix/internal/semantic/dataflow"
 	"github.com/agenthands/helix/internal/semantic/minhash"
 	"github.com/agenthands/helix/internal/semantic/relatedidx"
 )
@@ -47,6 +48,10 @@ func FingerprintBody(sf *SymbolFact, body *tree_sitter.Node, source []byte) {
 	if vec, ok := relatedidx.ComputeVector(body, source); ok {
 		sf.ContextVec = vec
 	}
+	// Case-1 param->target flow summary (DATA_FLOWS). Unlike MinHash/Profile/
+	// ContextVec, this is a data-dependence signal, not a similarity one; nil
+	// when the body has no params or no param reaches a target (anti-vacuity).
+	sf.FlowSummary = dataflow.AnalyzeFlow(body, source)
 }
 
 // IsFingerprintableKind reports whether a symbol kind has a behavioral body

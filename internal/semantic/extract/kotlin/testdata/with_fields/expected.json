@@ -1,0 +1,115 @@
+{
+  "file": {
+    "path": "with_fields/before.kt",
+    "language": "kotlin",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 81
+      },
+      "signature": "class Person(val name: String, var age: Int) { fun greet(): String = \"Hi $name\" }",
+      "signature_hash": "class Person(val name: String, var age: Int)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 21
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 35,
+        "end_line": 0,
+        "end_col": 38
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 47,
+        "end_line": 0,
+        "end_col": 79
+      },
+      "signature": "fun greet(): String = \"Hi $name\"",
+      "signature_hash": "fun greet(): String = \"Hi $name\"",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 29
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Int",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 40,
+        "end_line": 0,
+        "end_col": 43
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_fields/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 60,
+        "end_line": 0,
+        "end_col": 66
+      },
+      "confidence": 0.7
+    }
+  ]
+}

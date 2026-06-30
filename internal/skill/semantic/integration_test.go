@@ -924,14 +924,14 @@ type matrixEnvelope struct {
 //	                      function the kernel handler invokes per request)
 func TestE2E_StranglerFig_SourceMatrix(t *testing.T) {
 	type row struct {
-		name           string
-		cfgEnabled     bool
-		lookupAvail    bool
-		rankErr        error // for repomap reclassify branch
-		wantSource     integ.Source
-		wantReason     integ.FallbackReason
-		wantHealthSrc  integ.Source       // health uses ChooseSource(cfg, lookup, nil) — err is irrelevant
-		wantHealthRsn  integ.FallbackReason
+		name          string
+		cfgEnabled    bool
+		lookupAvail   bool
+		rankErr       error // for repomap reclassify branch
+		wantSource    integ.Source
+		wantReason    integ.FallbackReason
+		wantHealthSrc integ.Source // health uses ChooseSource(cfg, lookup, nil) — err is irrelevant
+		wantHealthRsn integ.FallbackReason
 	}
 	rows := []row{
 		{
@@ -1770,15 +1770,16 @@ func newFourToolsHarness(t *testing.T) *fourToolsHarness {
 // TestFourTools_ClusterToImpact — D7 cluster-to-impact chain.
 //
 // Pipeline:
-//   Step 1: get_cluster_map(top_n=1) → assert returns ≥1 cluster; capture
-//           Clusters[0].ClusterID as clusterID and record GraphVersion (cmGV).
-//   Step 2: explain_cluster(cluster_id=clusterID) → assert IsError==false,
-//           len(Members)≥1; capture Members[0].SymbolID as repSymbol and
-//           record GraphVersion (ecGV).
-//   Step 3: get_change_impact_graph(seed.symbol_id=repSymbol) → assert
-//           IsError==false; record GraphVersion (igGV).
-//   Step 4: assert cmGV == ecGV == igGV == 42 (all three read graphVersion=42).
-//   Step 5: assert ec.MemberCount ≥ 1.
+//
+//	Step 1: get_cluster_map(top_n=1) → assert returns ≥1 cluster; capture
+//	        Clusters[0].ClusterID as clusterID and record GraphVersion (cmGV).
+//	Step 2: explain_cluster(cluster_id=clusterID) → assert IsError==false,
+//	        len(Members)≥1; capture Members[0].SymbolID as repSymbol and
+//	        record GraphVersion (ecGV).
+//	Step 3: get_change_impact_graph(seed.symbol_id=repSymbol) → assert
+//	        IsError==false; record GraphVersion (igGV).
+//	Step 4: assert cmGV == ecGV == igGV == 42 (all three read graphVersion=42).
+//	Step 5: assert ec.MemberCount ≥ 1.
 func TestFourTools_ClusterToImpact(t *testing.T) {
 	h := newFourToolsHarness(t)
 	ctx := context.Background()

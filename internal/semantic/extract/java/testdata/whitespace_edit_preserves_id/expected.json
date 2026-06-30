@@ -1,0 +1,83 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Greeter",
+      "qualified_name": "Greeter",
+      "file": "whitespace_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class Greeter { public void greet() { System.out.println(\"hi\"); } }",
+      "signature_hash": "public class Greeter",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "whitespace_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 53
+      },
+      "signature": "public void greet() { System.out.println(\"hi\"); }",
+      "signature_hash": "public void greet()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "field",
+      "name": "out",
+      "file": "whitespace_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 33,
+        "end_line": 1,
+        "end_col": 36
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "println",
+      "file": "whitespace_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 37,
+        "end_line": 1,
+        "end_col": 44
+      },
+      "receiver_text": "System.out",
+      "confidence": 0.7
+    },
+    {
+      "kind": "call",
+      "name": "println",
+      "file": "whitespace_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 37,
+        "end_line": 1,
+        "end_col": 44
+      },
+      "receiver_text": "System.out",
+      "confidence": 0.7
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "file": {
+    "path": "with_imports/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Demo",
+      "qualified_name": "Demo",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 34
+      },
+      "signature": "class Demo { List\u003cstring\u003e items; }",
+      "signature_hash": "class Demo",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "qualified_name": "items",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 26,
+        "end_line": 3,
+        "end_col": 31
+      },
+      "signature": "items",
+      "signature_hash": "items",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "System",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "System",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 6,
+        "end_line": 1,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Collections",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 13,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Generic",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 25,
+        "end_line": 1,
+        "end_col": 32
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Demo",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "List",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 13,
+        "end_line": 3,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "items",
+      "file": "with_imports/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 26,
+        "end_line": 3,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    }
+  ]
+}

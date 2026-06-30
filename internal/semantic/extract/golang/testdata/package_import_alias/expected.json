@@ -75,6 +75,7 @@
         "end_line": 8,
         "end_col": 13
       },
+      "receiver_text": "f",
       "confidence": 0.7
     },
     {
@@ -99,6 +100,7 @@
         "end_line": 9,
         "end_col": 20
       },
+      "receiver_text": "s",
       "confidence": 0.7
     },
     {

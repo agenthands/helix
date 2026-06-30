@@ -1,0 +1,92 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/after.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "transform",
+      "qualified_name": "transform",
+      "file": "signature_change_churns_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 49
+      },
+      "signature": "pub fn transform(x: i32, y: i32) -\u003e i32 { x + y }",
+      "signature_hash": "pub fn transform(x: i32, y: i32) -\u003e i32",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "signature_change_churns_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 18
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "signature_change_churns_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 26
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 23
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 28,
+        "end_line": 0,
+        "end_col": 31
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 36,
+        "end_line": 0,
+        "end_col": 39
+      }
+    }
+  ]
+}

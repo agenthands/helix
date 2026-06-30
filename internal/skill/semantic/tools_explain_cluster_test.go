@@ -364,9 +364,9 @@ func TestExplainCluster_CohesionConductance(t *testing.T) {
 		graphVersion:   graphVersion,
 		latestSnapshot: 3,
 		adjacencyOut: map[graph.NodeID]map[graph.NodeID]float64{
-			101: {102: 1.0, 999: 1.0},   // 1 intra + 1 leaving
-			102: {103: 1.0, 998: 1.0},   // 1 intra + 1 leaving
-			103: {101: 1.0},             // 1 intra
+			101: {102: 1.0, 999: 1.0}, // 1 intra + 1 leaving
+			102: {103: 1.0, 998: 1.0}, // 1 intra + 1 leaving
+			103: {101: 1.0},           // 1 intra
 			// node 104 has no outgoing edges in this fixture
 		},
 	}
@@ -486,7 +486,7 @@ func TestExplainCluster_EntryPoints(t *testing.T) {
 	// node 30: exported (Init starts with capital I after last ':')
 	// node 40: unexported (helper starts with 'h')
 	memberRows := []ClusterMemberRow{
-		{NodeID: 10, SymbolID: "pkg:TypeA:MethodX"},      // exported
+		{NodeID: 10, SymbolID: "pkg:TypeA:MethodX"},        // exported
 		{NodeID: 20, SymbolID: "pkg:TypeB:methodInternal"}, // unexported
 		{NodeID: 30, SymbolID: "pkg:TypeC:Init"},           // exported
 		{NodeID: 40, SymbolID: "pkg:TypeD:helper"},         // unexported

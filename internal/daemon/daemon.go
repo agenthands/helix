@@ -39,8 +39,16 @@ import (
 	"github.com/agenthands/helix/internal/semantic"
 	"github.com/agenthands/helix/internal/semantic/compact"
 	"github.com/agenthands/helix/internal/semantic/extract"
+	cextract "github.com/agenthands/helix/internal/semantic/extract/c"
+	cppextract "github.com/agenthands/helix/internal/semantic/extract/cpp"
+	csharpextract "github.com/agenthands/helix/internal/semantic/extract/csharp"
 	goextract "github.com/agenthands/helix/internal/semantic/extract/golang"
+	javaextract "github.com/agenthands/helix/internal/semantic/extract/java"
+	kotlinextract "github.com/agenthands/helix/internal/semantic/extract/kotlin"
+	phpextract "github.com/agenthands/helix/internal/semantic/extract/php"
 	pyextract "github.com/agenthands/helix/internal/semantic/extract/python"
+	rubyextract "github.com/agenthands/helix/internal/semantic/extract/ruby"
+	rustextract "github.com/agenthands/helix/internal/semantic/extract/rust"
 	tsextract "github.com/agenthands/helix/internal/semantic/extract/typescript"
 	"github.com/agenthands/helix/internal/semantic/integ"
 	"github.com/agenthands/helix/internal/semantic/lspenrich"
@@ -369,6 +377,14 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			goextract.NewProvider(grammarRegistry),
 			tsextract.NewProvider(grammarRegistry),
 			pyextract.NewProvider(grammarRegistry),
+			javaextract.NewProvider(grammarRegistry),
+			csharpextract.NewProvider(grammarRegistry),
+			rustextract.NewProvider(grammarRegistry),
+			cextract.NewProvider(grammarRegistry),
+			cppextract.NewProvider(grammarRegistry),
+			kotlinextract.NewProvider(grammarRegistry),
+			phpextract.NewProvider(grammarRegistry),
+			rubyextract.NewProvider(grammarRegistry),
 		)
 		logger.Info("semantic extract registry constructed",
 			"providers", len(semanticExtractRegistry.Languages()),
@@ -596,10 +612,15 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"java":       javaTypeStub(reader),
 			"php":        phpTypeStub(),
 			"ruby":       rubyTypeStub(),
+			"c_sharp":    csharpTypeStub(reader),
+			"rust":       rustTypeStub(reader),
+			"c":          cTypeStub(reader),
+			"cpp":        cppTypeStub(reader),
+			"kotlin":     kotlinTypeStub(reader),
 		})
 		typeResolver = typeDispatcher
 		logger.Info("type resolver registered",
-			"languages", []string{"go", "typescript", "javascript", "python", "java", "php", "ruby"},
+			"languages", []string{"go", "typescript", "javascript", "python", "java", "php", "ruby", "c_sharp", "rust", "c", "cpp", "kotlin"},
 			"max_chain_depth", cfg.SemanticIndex.TypeResolution.MaxChainDepth,
 			"max_fixpoint_iterations", cfg.SemanticIndex.TypeResolution.MaxFixpointIterations,
 			"comment_parsers_enabled", cfg.SemanticIndex.Types.CommentParsersEnabled,

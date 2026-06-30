@@ -1,0 +1,151 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/after.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calc",
+      "qualified_name": "Calc",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "public class Calc { public int Add( int a, int b ) { return a + b; } }",
+      "signature_hash": "public class Calc",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Add",
+      "qualified_name": "Add",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 5
+      },
+      "signature": "public int Add( int a, int b ) { return a + b; }",
+      "signature_hash": "public int Add( int a, int b )",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 31,
+        "end_line": 1,
+        "end_col": 32
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 42,
+        "end_line": 1,
+        "end_col": 43
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Calc",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Add",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 19,
+        "end_line": 1,
+        "end_col": 22
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "a",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 31,
+        "end_line": 1,
+        "end_col": 32
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "b",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 42,
+        "end_line": 1,
+        "end_col": 43
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "a",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 2,
+        "start_col": 17,
+        "end_line": 2,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "b",
+      "file": "whitespace_edit_preserves_id/after.cs",
+      "range": {
+        "start_line": 2,
+        "start_col": 25,
+        "end_line": 2,
+        "end_col": 26
+      },
+      "confidence": 0.7
+    }
+  ]
+}

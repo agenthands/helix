@@ -1,0 +1,173 @@
+{
+  "file": {
+    "path": "with_fields/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "pub struct Person { name: String, age: u32, }",
+      "signature_hash": "pub struct Person",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 8
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 7
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 5,
+        "start_col": 0,
+        "end_line": 9,
+        "end_col": 1
+      },
+      "signature": "impl Person { pub fn name(\u0026self) -\u003e \u0026str { \u0026self.name } }",
+      "signature_hash": "impl Person",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 6,
+        "start_col": 4,
+        "end_line": 8,
+        "end_col": 5
+      },
+      "signature": "pub fn name(\u0026self) -\u003e \u0026str { \u0026self.name }",
+      "signature_hash": "pub fn name(\u0026self) -\u003e \u0026str",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "\u0026self",
+      "qualified_name": "\u0026self",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 6,
+        "start_col": 16,
+        "end_line": 6,
+        "end_col": 21
+      },
+      "signature": "\u0026self",
+      "signature_hash": "\u0026self",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Person",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 11,
+        "end_line": 0,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 10,
+        "end_line": 1,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Person",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 5,
+        "start_col": 5,
+        "end_line": 5,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "name",
+      "file": "with_fields/before.rs",
+      "range": {
+        "start_line": 7,
+        "start_col": 14,
+        "end_line": 7,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "\u0026str",
+      "range": {
+        "start_line": 6,
+        "start_col": 26,
+        "end_line": 6,
+        "end_col": 30
+      }
+    }
+  ]
+}

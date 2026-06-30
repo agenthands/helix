@@ -1,0 +1,98 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "Add",
+      "qualified_name": "Add",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 59
+      },
+      "signature": "function Add(int $a, int $b): int { return $a + $b; }",
+      "signature_hash": "function Add(int $a, int $b): int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 32,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 22
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 27,
+        "end_line": 0,
+        "end_col": 30
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "whitespace_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 36,
+        "end_line": 0,
+        "end_col": 39
+      },
+      "confidence": 0.7
+    }
+  ]
+}

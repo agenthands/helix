@@ -1,0 +1,110 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Worker",
+      "qualified_name": "Worker",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 71
+      },
+      "signature": "public class Worker { public int Process(int input) { return input; } }",
+      "signature_hash": "public class Worker",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Process",
+      "qualified_name": "Process",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 69
+      },
+      "signature": "public int Process(int input) { return input; }",
+      "signature_hash": "public int Process(int input)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "input",
+      "qualified_name": "input",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 45,
+        "end_line": 0,
+        "end_col": 50
+      },
+      "signature": "input",
+      "signature_hash": "input",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Worker",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Process",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 33,
+        "end_line": 0,
+        "end_col": 40
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "input",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 45,
+        "end_line": 0,
+        "end_col": 50
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "input",
+      "file": "signature_change_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 61,
+        "end_line": 0,
+        "end_col": 66
+      },
+      "confidence": 0.7
+    }
+  ]
+}

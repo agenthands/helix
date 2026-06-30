@@ -17,12 +17,12 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	serr "github.com/agenthands/helix/internal/errors"
 	"github.com/agenthands/helix/internal/guardrails"
 	"github.com/agenthands/helix/internal/kernel"
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/integ"
-	serr "github.com/agenthands/helix/internal/errors"
 )
 
 // D4 surface caps for explain_cluster (CONTEXT.md).
@@ -173,11 +173,11 @@ func isExportedSymbol(stableKey string) bool {
 //     filtered to intra/leaving edges for this cluster's node set.
 //     TODO(perf): O(E) per explain_cluster call; future: persist intra_edge_count +
 //     leaving_edge_count on semantic_clusters.
-// 10. Identify entry points: members where isExportedSymbol(SymbolID) == true,
+//  10. Identify entry points: members where isExportedSymbol(SymbolID) == true,
 //     sorted by PageRank desc.
-// 11. Dominant edge kinds: top-3 surface-enum values by intra-edge count.
-// 12. guardrails.IssueReceiptOnSuccess.
-// 13. return jsonResult(ExplainClusterResult{...}).
+//  11. Dominant edge kinds: top-3 surface-enum values by intra-edge count.
+//  12. guardrails.IssueReceiptOnSuccess.
+//  13. return jsonResult(ExplainClusterResult{...}).
 //
 // HARD INVARIANT (D-09 / D-13): this function MUST NOT reach the snapshot-
 // write surface of *Store nor the per-workspace compactor's flush trigger.

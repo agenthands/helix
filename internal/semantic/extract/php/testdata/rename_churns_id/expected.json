@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "rename_churns_id/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "OldName",
+      "qualified_name": "OldName",
+      "file": "rename_churns_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 43
+      },
+      "signature": "function OldName(): int { return 1; }",
+      "signature_hash": "function OldName(): int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "rename_churns_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 26,
+        "end_line": 0,
+        "end_col": 29
+      },
+      "confidence": 0.7
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "file": {
+    "path": "class_basic/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calculator",
+      "qualified_name": "Calculator",
+      "file": "class_basic/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "class Calculator { public: int add(int a, int b) { return a + b; } }",
+      "signature_hash": "class Calculator",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "class_basic/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 43
+      },
+      "signature": "int add(int a, int b) { return a + b; }",
+      "signature_hash": "int add(int a, int b)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "class_basic/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "class_basic/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 23,
+        "end_line": 2,
+        "end_col": 24
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Calculator",
+      "file": "class_basic/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 7
+      }
+    }
+  ]
+}

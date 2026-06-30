@@ -275,7 +275,7 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 		}
 
 		if refNameNode != nil && refKind != "" {
-			out.References = append(out.References, extract.ReferenceFact{
+			rf := extract.ReferenceFact{
 				Language:        "go",
 				Kind:            extract.ReferenceKind(refKind),
 				Name:            refNameNode.Utf8Text(source),
@@ -283,7 +283,17 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 				Range:           nodeRange(*refNameNode),
 				ValidationState: "syntactic",
 				Confidence:      extract.ConfidenceTSOnly,
-			})
+			}
+			// Receiver capture for member-call references (pkg.Foo()): enables
+			// CROSS_CALLS edges by matching the receiver to an external import.
+			if refKind == "call" {
+				if p := refNameNode.Parent(); p != nil && p.Kind() == "selector_expression" {
+					if op := p.ChildByFieldName("operand"); op != nil {
+						rf.ReceiverText = op.Utf8Text(source)
+					}
+				}
+			}
+			out.References = append(out.References, rf)
 		}
 
 		if haveImport {
@@ -297,6 +307,10 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 		}
 	}
 
+	// HTTP route detection (net/http + gin/echo/gorilla/chi call sites).
+	out.Routes = detectGoRoutes(*tree.RootNode(), source, file.Path)
+	// GORM entity detection (structs with gorm struct tags / gorm.Model embed).
+	out.Resources = detectGoResources(*tree.RootNode(), source, file.Path)
 	return out, nil
 }
 

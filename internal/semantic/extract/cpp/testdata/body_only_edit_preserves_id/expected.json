@@ -1,0 +1,69 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calc",
+      "qualified_name": "Calc",
+      "file": "body_only_edit_preserves_id/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "class Calc { public: int f() { return 1; } }",
+      "signature_hash": "class Calc",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "body_only_edit_preserves_id/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 25
+      },
+      "signature": "int f() { return 1; }",
+      "signature_hash": "int f()",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Calc",
+      "file": "body_only_edit_preserves_id/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 7
+      }
+    }
+  ]
+}

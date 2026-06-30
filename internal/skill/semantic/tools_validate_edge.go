@@ -102,7 +102,7 @@ type EvidenceCitation struct {
 type ValidateGraphEdgeArgs struct {
 	From     SeedInput `json:"from"      jsonschema:"source seed — symbol_id OR (file_path AND symbol_name)"`
 	To       SeedInput `json:"to"        jsonschema:"target seed — symbol_id OR (file_path AND symbol_name)"`
-	EdgeKind string    `json:"edge_kind" jsonschema:"closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / other"`
+	EdgeKind string    `json:"edge_kind" jsonschema:"closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other"`
 }
 
 // ValidateGraphEdgeResult is the validate_graph_edge response shape. Both
@@ -226,6 +226,40 @@ func surfaceToInternalKinds(surface EdgeKindSurface) []string {
 		return []string{"CONTAINS", "DEFINED_IN"}
 	case EdgeKindOther:
 		return []string{"OTHER"}
+	case EdgeKindDefines:
+		return []string{"DEFINES"}
+	case EdgeKindImports:
+		return []string{"IMPORTS"}
+	case EdgeKindDataFlows:
+		return []string{"DATA_FLOWS"}
+	case EdgeKindHTTPCalls:
+		return []string{"HTTP_CALLS"}
+	case EdgeKindAsyncCalls:
+		return []string{"ASYNC_CALLS"}
+	case EdgeKindEmits:
+		return []string{"EMITS"}
+	case EdgeKindListensOn:
+		return []string{"LISTENS_ON"}
+	case EdgeKindSimilarTo:
+		return []string{"SIMILAR_TO"}
+	case EdgeKindSemanticallyRelated:
+		return []string{"SEMANTICALLY_RELATED"}
+	case EdgeKindHandles:
+		return []string{"HANDLES"}
+	case EdgeKindConfigures:
+		return []string{"CONFIGURES"}
+	case EdgeKindWrites:
+		return []string{"WRITES"}
+	case EdgeKindMemberOf:
+		return []string{"MEMBER_OF"}
+	case EdgeKindTests:
+		return []string{"TESTS"}
+	case EdgeKindFileChangesWith:
+		return []string{"FILE_CHANGES_WITH"}
+	case EdgeKindCrossImports:
+		return []string{"CROSS_IMPORTS"}
+	case EdgeKindCrossCalls:
+		return []string{"CROSS_CALLS"}
 	default:
 		return nil
 	}
@@ -235,14 +269,31 @@ func surfaceToInternalKinds(surface EdgeKindSurface) []string {
 // Used by handleValidateGraphEdge to validate the EdgeKind arg before any
 // accessor I/O.
 var validSurfaceEdgeKinds = map[string]EdgeKindSurface{
-	string(EdgeKindCalls):      EdgeKindCalls,
-	string(EdgeKindReferences): EdgeKindReferences,
-	string(EdgeKindImplements): EdgeKindImplements,
-	string(EdgeKindExtends):    EdgeKindExtends,
-	string(EdgeKindHasType):    EdgeKindHasType,
-	string(EdgeKindUsesType):   EdgeKindUsesType,
-	string(EdgeKindContains):   EdgeKindContains,
-	string(EdgeKindOther):      EdgeKindOther,
+	string(EdgeKindCalls):               EdgeKindCalls,
+	string(EdgeKindReferences):          EdgeKindReferences,
+	string(EdgeKindImplements):          EdgeKindImplements,
+	string(EdgeKindExtends):             EdgeKindExtends,
+	string(EdgeKindHasType):             EdgeKindHasType,
+	string(EdgeKindUsesType):            EdgeKindUsesType,
+	string(EdgeKindContains):            EdgeKindContains,
+	string(EdgeKindImports):             EdgeKindImports,
+	string(EdgeKindDefines):             EdgeKindDefines,
+	string(EdgeKindDataFlows):           EdgeKindDataFlows,
+	string(EdgeKindHTTPCalls):           EdgeKindHTTPCalls,
+	string(EdgeKindAsyncCalls):          EdgeKindAsyncCalls,
+	string(EdgeKindEmits):               EdgeKindEmits,
+	string(EdgeKindListensOn):           EdgeKindListensOn,
+	string(EdgeKindSimilarTo):           EdgeKindSimilarTo,
+	string(EdgeKindSemanticallyRelated): EdgeKindSemanticallyRelated,
+	string(EdgeKindHandles):             EdgeKindHandles,
+	string(EdgeKindConfigures):          EdgeKindConfigures,
+	string(EdgeKindWrites):              EdgeKindWrites,
+	string(EdgeKindMemberOf):            EdgeKindMemberOf,
+	string(EdgeKindTests):               EdgeKindTests,
+	string(EdgeKindFileChangesWith):     EdgeKindFileChangesWith,
+	string(EdgeKindCrossImports):        EdgeKindCrossImports,
+	string(EdgeKindCrossCalls):          EdgeKindCrossCalls,
+	string(EdgeKindOther):               EdgeKindOther,
 }
 
 // tierContribution scales the per-tier confidence weight used by
@@ -307,7 +358,7 @@ func parseLSPMethod(source string) string {
 //  9. Sort evidence by ConfidenceContribution desc; cap at 10; record honest
 //     totals.
 //  10. Compute raw sum + evidence_status. Top-level confidence:
-//      degraded → types.CapCommentConfidence (clamps to ≤ 0.6).
+//     degraded → types.CapCommentConfidence (clamps to ≤ 0.6).
 //  11. Assemble FreshnessV2 envelope (shared helper from 71-03).
 //  12. Issue receipt; return jsonResult.
 //
@@ -327,7 +378,7 @@ func (s *SemanticSkill) handleValidateGraphEdge(ctx context.Context, args Valida
 	if !ok {
 		return errorResult(
 			serr.New(serr.InvalidArgs,
-				fmt.Sprintf("edge_kind %q is not in the closed surface enum (calls/references/implements/extends/has_type/uses_type/contains/other)",
+				fmt.Sprintf("edge_kind %q is not in the closed surface enum (calls/references/implements/extends/has_type/uses_type/contains/defines/imports/data_flows/http_calls/async_calls/emits/listens_on/similar_to/semantically_related/handles/configures/writes/member_of/tests/file_changes_with/cross_imports/cross_calls/other)",
 					args.EdgeKind)).Error(),
 		)
 	}

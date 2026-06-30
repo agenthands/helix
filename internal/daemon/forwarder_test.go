@@ -33,11 +33,11 @@ import (
 // StreamMCP's lifecycle emission. Only Recv() and Context() are exercised
 // by the SUT; the rest of the gRPC ServerStream surface is no-op.
 type fakeForwarderStream struct {
-	mu       sync.Mutex
-	ctx      context.Context
-	queue    []recvResult
-	sent     []*serenav1.MCPMessage
-	recvIdx  int
+	mu      sync.Mutex
+	ctx     context.Context
+	queue   []recvResult
+	sent    []*serenav1.MCPMessage
+	recvIdx int
 }
 
 type recvResult struct {

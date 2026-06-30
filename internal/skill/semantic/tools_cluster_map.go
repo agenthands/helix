@@ -144,6 +144,7 @@ func registerGetClusterMap(server *mcp.SerenaMCPServer, s *SemanticSkill, tracer
 //  8. Dominant edge kinds via StoreAccessor.QueryEffectiveAdjacency + intra-cluster
 //     edge counting (OQ-3 compute-on-demand); TODO(OQ-3): O(E) cost comment.
 //  9. assembleFreshness for FreshnessV2 envelope.
+//
 // 10. guardrails.IssueReceiptOnSuccess.
 // 11. return jsonResult(GetClusterMapResult{...}).
 //
@@ -356,7 +357,7 @@ func computeDominantEdgeKinds(
 	// That accessor is deferred to the explain_cluster plan per OQ-3.
 	// The current implementation returns empty non-nil since StoreAccessor.
 	// QueryEffectiveAdjacency only carries weights (float64), not kind labels.
-	_ = adjOut       // consumed for adjacency presence check above
+	_ = adjOut // consumed for adjacency presence check above
 	_ = clusterNodeID
 	_ = topK
 	return result

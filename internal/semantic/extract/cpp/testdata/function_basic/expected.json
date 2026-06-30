@@ -1,0 +1,19 @@
+{
+  "file": {
+    "path": "function_basic/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

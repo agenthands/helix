@@ -51,6 +51,9 @@ import (
 	"github.com/agenthands/helix/internal/mcp"
 	"github.com/agenthands/helix/internal/obs"
 	semanticpkg "github.com/agenthands/helix/internal/semantic"
+	"github.com/agenthands/helix/internal/semantic/classifier"
+	"github.com/agenthands/helix/internal/semantic/cochange"
+	"github.com/agenthands/helix/internal/semantic/crossrepo"
 	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/graph"
 	"github.com/agenthands/helix/internal/semantic/integ"
@@ -102,6 +105,10 @@ type semanticBundle struct {
 	extractRegistry *extract.Registry
 	logger          *slog.Logger
 	metrics         *obs.Metrics
+	// repoReg tracks indexed repos for cross-repo (CROSS_IMPORTS) resolution.
+	// Multi-repo awareness without the activeWSKey refactor (in-memory; the
+	// buildFn registers each repo as it indexes).
+	repoReg *multiRepoRegistry
 
 	// getSession is the per-request session-lookup closure captured from
 	// daemon.go (the SAME closure passed to InstallMiddleware at
@@ -230,6 +237,7 @@ func newSemanticBundle(
 		extractRegistry: extractRegistry,
 		logger:          logger,
 		metrics:         metrics,
+		repoReg:         newMultiRepoRegistry(),
 		getSession:      getSession,
 		wsKeyFn:         wsKeyFn,
 		engines:         make(map[string]*retrieval.Engine),
@@ -1546,7 +1554,48 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 		//    symbols / references can be re-stamped with the file's
 		//    assigned FileID — preserving the (snapshot_id, file_id) and
 		//    (snapshot_id, symbol_id / ref_id) primary-key invariants.
-		facts := factsFromExtracted(extracted, repoID, b.logger)
+		repoModule := detectRepoModulePath(ws.RepoRoot)
+		// Register this repo in the in-memory multi-repo registry so sibling
+		// repos' imports can resolve to it; query the known set (minus self) to
+		// let this repo's CROSS_IMPORTS resolve to siblings when present.
+		var knownRepos map[string]string
+		if b.repoReg != nil {
+			b.repoReg.Register(repoID, repoModule, ws.RepoRoot)
+			knownRepos = b.repoReg.KnownRepos(repoID)
+		}
+		facts := factsFromExtracted(extracted, repoID, repoModule, knownRepos, b.logger)
+
+		// 4b. FILE_CHANGES_WITH: mine git history for file co-change coupling.
+		//     Best-effort — a non-git workspace or git failure is non-fatal;
+		//     co-change is enrichment layered on top of the symbol graph.
+		if co, cerr := cochange.Mine(ctx, ws.RepoRoot); cerr == nil {
+			for _, c := range co {
+				na := cochange.FileNodeID(repoID, c.PathA)
+				nb := cochange.FileNodeID(repoID, c.PathB)
+				weight := float64(c.Count)
+				if weight > 1 {
+					weight = 1
+				}
+				conf := 0.3 + 0.1*float64(c.Count)
+				if conf > 0.9 {
+					conf = 0.9
+				}
+				facts.Edges = append(facts.Edges,
+					semanticstore.EdgeFact{
+						SrcNodeID: na, DstNodeID: nb, EdgeKind: "FILE_CHANGES_WITH",
+						SrcKind: "file", DstKind: "file", Source: "git.cochange",
+						Confidence: conf, Weight: weight,
+					},
+					semanticstore.EdgeFact{
+						SrcNodeID: nb, DstNodeID: na, EdgeKind: "FILE_CHANGES_WITH",
+						SrcKind: "file", DstKind: "file", Source: "git.cochange",
+						Confidence: conf, Weight: weight,
+					},
+				)
+			}
+		} else if b.logger != nil {
+			b.logger.Debug("cochange mine skipped", "repo_root", ws.RepoRoot, "err", cerr)
+		}
 
 		// 5. Snapshot lifecycle.
 		snap, err := b.store.BeginSnapshot(ctx, semanticstore.SnapshotMeta{
@@ -1868,7 +1917,7 @@ func (b *semanticBundle) classifyAndExtract(ctx context.Context, repoID string, 
 // snapshot pipeline and breaks ingest determinism; logging-only does
 // not. A genuine collision-fix (assigning fresh IDs on conflict) is
 // tracked as a deferred follow-up — see plan's `<deferred>` block.
-func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string, logger *slog.Logger) semanticstore.Facts {
+func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePath string, knownRepos map[string]string, logger *slog.Logger) semanticstore.Facts {
 	if len(extracted) == 0 {
 		return semanticstore.Facts{}
 	}
@@ -1880,6 +1929,8 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string, logge
 		References: make([]semanticstore.ReferenceFact, 0, 4*len(extracted)),
 	}
 	var refSeq uint64
+	var routeHandlers []routeHandlerLink
+	seenExtModule := make(map[uint64]bool) // dedup external-module nodes across files
 	for i, ef := range extracted {
 		if ef == nil {
 			continue
@@ -1940,7 +1991,326 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID string, logge
 		out.Files = append(out.Files, single.Files...)
 		out.Symbols = append(out.Symbols, single.Symbols...)
 		out.References = append(out.References, single.References...)
+
+		// Heritage → IMPLEMENTS/EXTENDS edges (Phase 62 deferred — wired 2026-06-28).
+		// Uses first symbol in file as source; perfect resolution needs type resolver.
+		for _, h := range ef.Heritage {
+			srcID := uint64(0)
+			if len(single.Symbols) > 0 {
+				srcID = single.Symbols[0].NodeID
+			}
+			kind := "IMPLEMENTS"
+			if h.Relation == "extends" {
+				kind = "EXTENDS"
+			}
+			out.Edges = append(out.Edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcID,
+				DstNodeID:  0, // unresolved — type resolver fills later
+				EdgeKind:   kind,
+				Source:     "tree_sitter",
+				Confidence: 0.20,
+				Weight:     0.5,
+			})
+		}
+
+		extByLocalName := make(map[string]uint64) // import local-name → external-module node (for CROSS_CALLS)
+		for _, imp := range ef.Imports {
+			srcID := uint64(0)
+			if len(single.Symbols) > 0 {
+				srcID = single.Symbols[0].NodeID
+			}
+			out.Edges = append(out.Edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcID,
+				DstNodeID:  0, // unresolved
+				EdgeKind:   "IMPORTS",
+				Source:     "tree_sitter",
+				Confidence: 0.20,
+				Weight:     0.5,
+			})
+
+			// CROSS_IMPORTS: imports whose module path is external to this repo
+			// promote to a named external-module node + a CROSS_IMPORTS edge.
+			// When the module resolves to a known sibling repo (in-memory
+			// multi-repo registry), the node's LSPIdentity carries the sibling
+			// repoID and node+edge are stamped at higher confidence (federation).
+			if crossrepo.ClassifyImport(repoModulePath, ef.File.Language, imp.Source) != crossrepo.External {
+				continue
+			}
+			modPrefix := crossrepo.ModulePathPrefix(ef.File.Language, imp.Source)
+			if modPrefix == "" {
+				continue
+			}
+			resolvedRepo, resolved := crossrepo.Resolve(ef.File.Language, imp.Source, knownRepos)
+			extID := uint64(extract.StableSymbolID(extract.BuildProviderKey(extract.SymbolMeta{
+				RepoID: repoID, Language: ef.File.Language, PackagePath: modPrefix,
+				QualifiedName: modPrefix, Kind: string(extract.KindExternalModule),
+				SignatureHash: modPrefix, RelPath: modPrefix, Visibility: "exported",
+			}))) & lowBitsMask
+			if !seenExtModule[extID] {
+				seenExtModule[extID] = true
+				node := semanticstore.SymbolFact{
+					SymbolID:         extID,
+					NodeID:           extID,
+					FileID:           fileID,
+					Language:         ef.File.Language,
+					Kind:             string(extract.KindExternalModule),
+					Name:             modPrefix,
+					QualifiedName:    modPrefix,
+					PackagePath:      modPrefix,
+					Visibility:       "exported",
+					ExtractionSource: "crossrepo",
+					Confidence:       0.50,
+				}
+				if resolved {
+					node.LSPIdentity = resolvedRepo
+					node.Confidence = 0.70
+				}
+				out.Symbols = append(out.Symbols, node)
+			}
+			edgeConf := 0.50
+			edgeSource := "crossrepo.classifier"
+			if resolved {
+				edgeConf = 0.70
+				edgeSource = "crossrepo.resolved"
+			}
+			out.Edges = append(out.Edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcID,
+				DstNodeID:  extID,
+				EdgeKind:   "CROSS_IMPORTS",
+				Source:     edgeSource,
+				Confidence: edgeConf,
+				Weight:     0.4,
+			})
+			if ln := importLocalName(ef.File.Language, imp.Source); ln != "" {
+				if _, ok := extByLocalName[ln]; !ok {
+					extByLocalName[ln] = extID
+				}
+			}
+		}
+
+		// CROSS_CALLS: a member-call (pkg.Method / Bar.method) whose receiver
+		// matches an external module's local binding → cross-repo call edge.
+		// Requires providers to populate ReceiverText on member-call references.
+		for j := range single.References {
+			ref := &single.References[j]
+			if ref.RefKind != "call" || ref.ReceiverText == "" {
+				continue
+			}
+			extID, ok := extByLocalName[ref.ReceiverText]
+			if !ok {
+				continue
+			}
+			srcID := ref.NodeID
+			if srcID == 0 && len(single.Symbols) > 0 {
+				srcID = single.Symbols[0].NodeID
+			}
+			out.Edges = append(out.Edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcID,
+				DstNodeID:  extID,
+				EdgeKind:   "CROSS_CALLS",
+				Source:     "crossrepo.classifier",
+				Confidence: 0.45,
+				Weight:     0.4,
+			})
+		}
+
+		// Classifier-based edges: HTTP_CALLS, ASYNC_CALLS, EMITS, LISTENS_ON.
+		// Walk reference.calls and classify by name using per-language pattern tables.
+		lang := ef.File.Language
+		for j := range single.References {
+			ref := &single.References[j]
+			if ref.RefKind != "call" {
+				continue
+			}
+			kind := string(classifier.ClassifyCall(lang, ref.Name))
+			if kind == "" {
+				continue
+			}
+			// Use the reference's NodeID as source
+			srcID := ref.NodeID
+			if srcID == 0 && len(single.Symbols) > 0 {
+				srcID = single.Symbols[0].NodeID
+			}
+			out.Edges = append(out.Edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcID,
+				DstNodeID:  0, // unresolved
+				EdgeKind:   kind,
+				Source:     "classifier",
+				Confidence: 0.45,
+				Weight:     0.3,
+			})
+		}
+
+		// DEFINES edges: container symbol → contained symbols.
+		// First symbol in file is typically the outer class/module.
+		if len(single.Symbols) >= 2 {
+			containerID := single.Symbols[0].NodeID
+			for j := 1; j < len(single.Symbols); j++ {
+				out.Edges = append(out.Edges, semanticstore.EdgeFact{
+					SrcNodeID:  containerID,
+					DstNodeID:  single.Symbols[j].NodeID,
+					EdgeKind:   "DEFINES",
+					Source:     "tree_sitter",
+					Confidence: 0.70,
+					Weight:     0.9,
+				})
+			}
+		}
+		// Route synthesis: promote detected HTTP route registrations into
+		// Route symbols. HANDLES edges (handler → route) are emitted after
+		// the batch name index is built, so the handler can be resolved by
+		// name across files.
+		for _, r := range ef.Routes {
+			if r.Path == "" {
+				continue
+			}
+			name := r.Method + " " + r.Path
+			key := extract.BuildProviderKey(extract.SymbolMeta{
+				RepoID:        repoID,
+				Language:      r.Language,
+				PackagePath:   r.File,
+				QualifiedName: name,
+				Kind:          string(extract.KindRoute),
+				SignatureHash: name,
+				RelPath:       r.File,
+				Visibility:    "exported",
+			})
+			sid := uint64(extract.StableSymbolID(key)) & lowBitsMask
+			out.Symbols = append(out.Symbols, semanticstore.SymbolFact{
+				SymbolID:         sid,
+				NodeID:           sid,
+				FileID:           fileID,
+				Language:         r.Language,
+				Kind:             string(extract.KindRoute),
+				Name:             name,
+				QualifiedName:    name,
+				Visibility:       "exported",
+				ExtractionSource: "tree_sitter",
+				Confidence:       0.60,
+			})
+			if r.Handler != "" {
+				routeHandlers = append(routeHandlers, routeHandlerLink{
+					handlerName: r.Handler,
+					routeNodeID: sid,
+				})
+			}
+		}
+		// Resource synthesis: promote detected ORM / data-entity definitions
+		// (GORM, SQLAlchemy, TypeORM, JPA, EF, Diesel, …) into Resource symbols.
+		for _, rc := range ef.Resources {
+			if rc.Name == "" {
+				continue
+			}
+			key := extract.BuildProviderKey(extract.SymbolMeta{
+				RepoID: repoID, Language: rc.Language, PackagePath: rc.File,
+				QualifiedName: rc.Name, Kind: string(extract.KindResource),
+				SignatureHash: rc.Name, RelPath: rc.File, Visibility: "exported",
+			})
+			sid := uint64(extract.StableSymbolID(key)) & lowBitsMask
+			out.Symbols = append(out.Symbols, semanticstore.SymbolFact{
+				SymbolID:         sid,
+				NodeID:           sid,
+				FileID:           fileID,
+				Language:         rc.Language,
+				Kind:             string(extract.KindResource),
+				Name:             rc.Name,
+				QualifiedName:    rc.Name,
+				Visibility:       "exported",
+				ExtractionSource: "tree_sitter",
+				Confidence:       0.60,
+			})
+		}
 	}
+	// ── Batch-level cross-cutting edges: MEMBER_OF + TESTS ──
+	//
+	// MEMBER_OF is the inverse of DEFINES (member → container), enabling
+	// "what does X belong to?" outgoing traversal. Derived from the per-file
+	// DEFINES edges emitted above so the two directions never diverge.
+	memberEdges := make([]semanticstore.EdgeFact, 0, len(out.Edges))
+	for _, e := range out.Edges {
+		if e.EdgeKind == "DEFINES" && e.SrcNodeID != 0 && e.DstNodeID != 0 {
+			memberEdges = append(memberEdges, semanticstore.EdgeFact{
+				SrcNodeID:  e.DstNodeID,
+				DstNodeID:  e.SrcNodeID,
+				EdgeKind:   "MEMBER_OF",
+				SrcKind:    e.DstKind,
+				DstKind:    e.SrcKind,
+				Source:     "tree_sitter",
+				Confidence: 0.70,
+				Weight:     0.9,
+			})
+		}
+	}
+	out.Edges = append(out.Edges, memberEdges...)
+
+	// TESTS links a test symbol to the production symbol it most likely
+	// exercises. Name-heuristic, batch-level: build a name→NodeID index over
+	// non-test symbols, then for each test symbol strip the test prefix and
+	// look up candidates. Low confidence (0.30) — name match, not reference.
+	fileIDToPath := make(map[uint64]string, len(out.Files))
+	for i := range out.Files {
+		fileIDToPath[out.Files[i].FileID] = out.Files[i].Path
+	}
+	nameToNode := make(map[string]uint64, len(out.Symbols))
+	for i := range out.Symbols {
+		s := out.Symbols[i]
+		if s.NodeID == 0 || s.Name == "" || s.Kind == string(extract.KindRoute) || s.Kind == string(extract.KindResource) {
+			continue
+		}
+		if isTestSymbol(s.Language, s.Name, fileIDToPath[s.FileID]) {
+			continue
+		}
+		if _, exists := nameToNode[s.Name]; !exists {
+			nameToNode[s.Name] = s.NodeID
+		}
+	}
+	testEdges := make([]semanticstore.EdgeFact, 0, 16)
+	for i := range out.Symbols {
+		s := out.Symbols[i]
+		if s.NodeID == 0 {
+			continue
+		}
+		path := fileIDToPath[s.FileID]
+		if !isTestSymbol(s.Language, s.Name, path) {
+			continue
+		}
+		for _, cand := range testTargetCandidates(s.Language, s.Name) {
+			tgt, ok := nameToNode[cand]
+			if !ok || tgt == s.NodeID {
+				continue
+			}
+			testEdges = append(testEdges, semanticstore.EdgeFact{
+				SrcNodeID:  s.NodeID,
+				DstNodeID:  tgt,
+				EdgeKind:   "TESTS",
+				Source:     "tree_sitter",
+				Confidence: 0.30,
+				Weight:     0.5,
+			})
+			break // first matching candidate wins
+		}
+	}
+	out.Edges = append(out.Edges, testEdges...)
+
+	// HANDLES edges: link each route's handler symbol to the Route symbol.
+	// Handler resolved by name against the batch index built above.
+	handleEdges := make([]semanticstore.EdgeFact, 0, len(routeHandlers))
+	for _, rl := range routeHandlers {
+		handlerNode, ok := nameToNode[rl.handlerName]
+		if !ok || handlerNode == 0 || handlerNode == rl.routeNodeID {
+			continue
+		}
+		handleEdges = append(handleEdges, semanticstore.EdgeFact{
+			SrcNodeID:  handlerNode,
+			DstNodeID:  rl.routeNodeID,
+			EdgeKind:   "HANDLES",
+			Source:     "tree_sitter",
+			Confidence: 0.45,
+			Weight:     0.4,
+		})
+	}
+	out.Edges = append(out.Edges, handleEdges...)
+
 	return out
 }
 

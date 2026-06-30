@@ -1,0 +1,103 @@
+{
+  "file": {
+    "path": "with_methods/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Widget",
+      "qualified_name": "Widget",
+      "file": "with_methods/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 5,
+        "end_col": 1
+      },
+      "signature": "class Widget { public: void start(); void stop(); int status() { return 0; } }",
+      "signature_hash": "class Widget",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "start",
+      "qualified_name": "start",
+      "file": "with_methods/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 17
+      },
+      "signature": "void start();",
+      "signature_hash": "void start();",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "stop",
+      "qualified_name": "stop",
+      "file": "with_methods/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 16
+      },
+      "signature": "void stop();",
+      "signature_hash": "void stop();",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "status",
+      "qualified_name": "status",
+      "file": "with_methods/before.cpp",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 30
+      },
+      "signature": "int status() { return 0; }",
+      "signature_hash": "int status()",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Widget",
+      "file": "with_methods/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 7
+      }
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Counter",
+      "qualified_name": "Counter",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 65
+      },
+      "signature": "public class Counter { public int Next(int x) { return x + 1; } }",
+      "signature_hash": "public class Counter",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Next",
+      "qualified_name": "Next",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 63
+      },
+      "signature": "public int Next(int x) { return x + 1; }",
+      "signature_hash": "public int Next(int x)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 43,
+        "end_line": 0,
+        "end_col": 44
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Counter",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Next",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 34,
+        "end_line": 0,
+        "end_col": 38
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "x",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 43,
+        "end_line": 0,
+        "end_col": 44
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "x",
+      "file": "body_only_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 55,
+        "end_line": 0,
+        "end_col": 56
+      },
+      "confidence": 0.7
+    }
+  ]
+}

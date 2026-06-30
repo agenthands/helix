@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "function_basic/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "hello",
+      "qualified_name": "hello",
+      "file": "function_basic/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "signature": "function hello() {}",
+      "signature_hash": "function hello()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

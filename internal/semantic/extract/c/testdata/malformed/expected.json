@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "malformed/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "broken",
+      "qualified_name": "broken",
+      "file": "malformed/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 18
+      },
+      "signature": "int broken(void) {",
+      "signature_hash": "int broken(void)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

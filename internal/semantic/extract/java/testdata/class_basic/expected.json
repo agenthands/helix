@@ -1,0 +1,77 @@
+{
+  "file": {
+    "path": "class_basic/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calculator",
+      "qualified_name": "Calculator",
+      "file": "class_basic/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class Calculator { public int add(int a, int b) { return a + b; } }",
+      "signature_hash": "public class Calculator",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "class_basic/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 50
+      },
+      "signature": "public int add(int a, int b) { return a + b; }",
+      "signature_hash": "public int add(int a, int b)",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "class_basic/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 23,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "class_basic/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 30,
+        "end_line": 1,
+        "end_col": 31
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

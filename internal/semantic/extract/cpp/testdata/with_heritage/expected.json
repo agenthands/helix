@@ -1,0 +1,123 @@
+{
+  "file": {
+    "path": "with_heritage/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Animal",
+      "qualified_name": "Animal",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 1
+      },
+      "signature": "class Animal { }",
+      "signature_hash": "class Animal",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "class",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 6,
+        "end_col": 1
+      },
+      "signature": "class Dog : public Animal { public: void bark() {} }",
+      "signature_hash": "class Dog : public Animal",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "bark",
+      "qualified_name": "bark",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 5,
+        "start_col": 4,
+        "end_line": 5,
+        "end_col": 18
+      },
+      "signature": "void bark() {}",
+      "signature_hash": "void bark()",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Dog",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 6,
+        "end_line": 3,
+        "end_col": 9
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 19,
+        "end_line": 3,
+        "end_col": 25
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "void",
+      "range": {
+        "start_line": 5,
+        "start_col": 4,
+        "end_line": 5,
+        "end_col": 8
+      }
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Animal",
+      "range": {
+        "start_line": 3,
+        "start_col": 19,
+        "end_line": 3,
+        "end_col": 25
+      }
+    }
+  ]
+}

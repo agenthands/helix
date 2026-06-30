@@ -1,0 +1,7 @@
+{
+  "file": {
+    "path": "malformed/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  }
+}

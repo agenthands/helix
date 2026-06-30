@@ -1,0 +1,144 @@
+{
+  "file": {
+    "path": "with_fields/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 38
+      },
+      "signature": "struct Person { char* name; int age; }",
+      "signature_hash": "struct Person",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 32,
+        "end_line": 0,
+        "end_col": 35
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "get_age",
+      "qualified_name": "get_age",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 48
+      },
+      "signature": "int get_age(struct Person* p) { return p-\u003eage; }",
+      "signature_hash": "int get_age(struct Person* p)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "struct",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 12,
+        "end_line": 1,
+        "end_col": 25
+      },
+      "signature": "struct Person",
+      "signature_hash": "struct Person",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "p",
+      "qualified_name": "p",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 27,
+        "end_line": 1,
+        "end_col": 28
+      },
+      "signature": "p",
+      "signature_hash": "p",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Person",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Person",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 19,
+        "end_line": 1,
+        "end_col": 25
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "file": "with_fields/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 42,
+        "end_line": 1,
+        "end_col": 45
+      },
+      "confidence": 0.7
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 3
+      }
+    }
+  ]
+}

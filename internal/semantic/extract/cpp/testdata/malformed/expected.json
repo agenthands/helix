@@ -1,0 +1,21 @@
+{
+  "file": {
+    "path": "malformed/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "references": [
+    {
+      "kind": "type",
+      "name": "Broken",
+      "file": "malformed/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ]
+}

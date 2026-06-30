@@ -14,9 +14,9 @@ import (
 	"github.com/agenthands/helix/internal/langregistry"
 	"github.com/agenthands/helix/internal/obs"
 	"github.com/agenthands/helix/internal/semantic"
+	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/semantic/scheduler"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
-	"github.com/agenthands/helix/internal/semantic/lspenrich"
 	"github.com/agenthands/helix/internal/workspace"
 )
 
@@ -30,11 +30,11 @@ import (
 //     in-place edit (60-03).
 //   - Wait for the coalescer debounce and assert two things:
 //     1. semantic_live_overlay_meta.current_epoch advanced to ≥ 1
-//        (LIVE-06: monotonic epoch on overlay tx commit).
+//     (LIVE-06: monotonic epoch on overlay tx commit).
 //     2. semantic_live_overlay_files contains a row for the edited path
-//        with write_epoch matching the bumped current_epoch
-//        (LIVE-07: edited files emit a ChangeHelixEdit event into the
-//        live queue and the handler upserts via overlay tx).
+//     with write_epoch matching the bumped current_epoch
+//     (LIVE-07: edited files emit a ChangeHelixEdit event into the
+//     live queue and the handler upserts via overlay tx).
 //
 // This is the cross-wave integration check that could not run from either
 // 60-05A or 60-05B in isolation — both must merge to main first. It also

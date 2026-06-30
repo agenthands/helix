@@ -1,0 +1,67 @@
+{
+  "file": {
+    "path": "with_heritage/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "with_heritage/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 68
+      },
+      "signature": "class Dog extends Animal implements Pet { function bark() {} }",
+      "signature_hash": "class Dog extends Animal implements Pet",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "bark",
+      "qualified_name": "bark",
+      "file": "with_heritage/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 48,
+        "end_line": 0,
+        "end_col": 66
+      },
+      "signature": "function bark() {}",
+      "signature_hash": "function bark()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Animal",
+      "range": {
+        "start_line": 0,
+        "start_col": 24,
+        "end_line": 0,
+        "end_col": 30
+      }
+    },
+    {
+      "subject": "0",
+      "relation": "implements",
+      "target": "Pet",
+      "range": {
+        "start_line": 0,
+        "start_col": 42,
+        "end_line": 0,
+        "end_col": 45
+      }
+    }
+  ]
+}

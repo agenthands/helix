@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "namespace/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "helper",
+      "qualified_name": "helper",
+      "file": "namespace/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 26,
+        "end_line": 0,
+        "end_col": 58
+      },
+      "signature": "function helper() { return 42; }",
+      "signature_hash": "function helper()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

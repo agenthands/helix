@@ -1,0 +1,81 @@
+{
+  "file": {
+    "path": "with_imports/before.cpp",
+    "language": "cpp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Demo",
+      "qualified_name": "Demo",
+      "file": "with_imports/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "class Demo { std::vector\u003cint\u003e items; }",
+      "signature_hash": "class Demo",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "qualified_name": "items",
+      "file": "with_imports/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 21,
+        "end_line": 3,
+        "end_col": 26
+      },
+      "signature": "items",
+      "signature_hash": "items",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Demo",
+      "file": "with_imports/before.cpp",
+      "range": {
+        "start_line": 2,
+        "start_col": 6,
+        "end_line": 2,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "vector",
+      "file": "with_imports/before.cpp",
+      "range": {
+        "start_line": 3,
+        "start_col": 9,
+        "end_line": 3,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "vector",
+      "file": "with_imports/before.cpp",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 17
+      }
+    }
+  ]
+}

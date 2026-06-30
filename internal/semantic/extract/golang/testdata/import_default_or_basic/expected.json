@@ -34,6 +34,7 @@
         "end_line": 4,
         "end_col": 26
       },
+      "receiver_text": "fmt",
       "confidence": 0.7
     },
     {

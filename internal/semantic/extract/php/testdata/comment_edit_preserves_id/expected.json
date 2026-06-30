@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "F",
+      "qualified_name": "F",
+      "file": "comment_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 37
+      },
+      "signature": "function F(): int { return 0; }",
+      "signature_hash": "function F(): int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "comment_edit_preserves_id/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 23
+      },
+      "confidence": 0.7
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "interface_basic/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Pet",
+      "qualified_name": "Pet",
+      "file": "interface_basic/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 56
+      },
+      "signature": "interface Pet { public function speak(): string; }",
+      "signature_hash": "interface Pet",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "speak",
+      "qualified_name": "speak",
+      "file": "interface_basic/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 54
+      },
+      "signature": "public function speak(): string;",
+      "signature_hash": "public function speak(): string;",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "string",
+      "file": "interface_basic/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 47,
+        "end_line": 0,
+        "end_col": 53
+      },
+      "confidence": 0.7
+    }
+  ]
+}

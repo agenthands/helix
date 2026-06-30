@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "method_rename_churns_id/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Processor",
+      "qualified_name": "Processor",
+      "file": "method_rename_churns_id/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 3
+      },
+      "signature": "class Processor def old_process \"done\" end end",
+      "signature_hash": "class Processor",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "old_process",
+      "qualified_name": "old_process",
+      "file": "method_rename_churns_id/before.rb",
+      "range": {
+        "start_line": 1,
+        "start_col": 2,
+        "end_line": 3,
+        "end_col": 5
+      },
+      "signature": "def old_process \"done\" end",
+      "signature_hash": "def old_process",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Processor",
+      "file": "method_rename_churns_id/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ]
+}

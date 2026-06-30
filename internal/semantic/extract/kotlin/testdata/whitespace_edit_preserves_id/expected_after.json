@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/after.kt",
+    "language": "kotlin",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Greeter",
+      "qualified_name": "Greeter",
+      "file": "whitespace_edit_preserves_id/after.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "class Greeter { fun greet() = println(\"hi\") }",
+      "signature_hash": "class Greeter",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "whitespace_edit_preserves_id/after.kt",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 31
+      },
+      "signature": "fun greet() = println(\"hi\")",
+      "signature_hash": "fun greet() = println(\"hi\")",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "call",
+      "name": "println",
+      "file": "whitespace_edit_preserves_id/after.kt",
+      "range": {
+        "start_line": 1,
+        "start_col": 18,
+        "end_line": 1,
+        "end_col": 25
+      },
+      "confidence": 0.7
+    }
+  ]
+}

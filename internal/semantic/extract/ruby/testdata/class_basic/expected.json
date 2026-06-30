@@ -1,0 +1,91 @@
+{
+  "file": {
+    "path": "class_basic/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calculator",
+      "qualified_name": "Calculator",
+      "file": "class_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 48
+      },
+      "signature": "class Calculator; def add(a, b); a + b; end; end",
+      "signature_hash": "class Calculator; def add(a, b); a + b; end; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "class_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 18,
+        "end_line": 0,
+        "end_col": 43
+      },
+      "signature": "def add(a, b); a + b; end",
+      "signature_hash": "def add(a, b); a + b; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "class_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 26,
+        "end_line": 0,
+        "end_col": 27
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "class_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 29,
+        "end_line": 0,
+        "end_col": 30
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Calculator",
+      "file": "class_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/after.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Worker",
+      "qualified_name": "Worker",
+      "file": "body_only_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 3
+      },
+      "signature": "class Worker def work \"new and different body\" end end",
+      "signature_hash": "class Worker",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "work",
+      "qualified_name": "work",
+      "file": "body_only_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 1,
+        "start_col": 2,
+        "end_line": 3,
+        "end_col": 5
+      },
+      "signature": "def work \"new and different body\" end",
+      "signature_hash": "def work",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Worker",
+      "file": "body_only_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ]
+}

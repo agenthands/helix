@@ -1,0 +1,1 @@
+class OldName { fun run() {} }

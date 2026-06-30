@@ -1,0 +1,98 @@
+{
+  "file": {
+    "path": "class_basic/before.kt",
+    "language": "kotlin",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calculator",
+      "qualified_name": "Calculator",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 57
+      },
+      "signature": "class Calculator { fun add(a: Int, b: Int): Int = a + b }",
+      "signature_hash": "class Calculator",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 27,
+        "end_line": 0,
+        "end_col": 28
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 35,
+        "end_line": 0,
+        "end_col": 36
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Int",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 30,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Int",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 38,
+        "end_line": 0,
+        "end_col": 41
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Int",
+      "file": "class_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 44,
+        "end_line": 0,
+        "end_col": 47
+      },
+      "confidence": 0.7
+    }
+  ]
+}

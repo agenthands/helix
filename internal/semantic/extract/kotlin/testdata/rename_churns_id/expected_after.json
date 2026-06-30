@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "rename_churns_id/after.kt",
+    "language": "kotlin",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "NewName",
+      "qualified_name": "NewName",
+      "file": "rename_churns_id/after.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 30
+      },
+      "signature": "class NewName { fun run() {} }",
+      "signature_hash": "class NewName",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "run",
+      "qualified_name": "run",
+      "file": "rename_churns_id/after.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 28
+      },
+      "signature": "fun run() {}",
+      "signature_hash": "fun run()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

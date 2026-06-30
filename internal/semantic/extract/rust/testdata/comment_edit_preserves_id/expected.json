@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "process",
+      "qualified_name": "process",
+      "file": "comment_edit_preserves_id/before.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 29
+      },
+      "signature": "pub fn process() -\u003e i32 { 1 }",
+      "signature_hash": "pub fn process() -\u003e i32",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 1,
+        "start_col": 20,
+        "end_line": 1,
+        "end_col": 23
+      }
+    }
+  ]
+}

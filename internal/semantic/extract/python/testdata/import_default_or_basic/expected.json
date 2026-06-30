@@ -34,6 +34,7 @@
         "end_line": 3,
         "end_col": 20
       },
+      "receiver_text": "os",
       "confidence": 0.7
     },
     {

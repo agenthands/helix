@@ -1,0 +1,69 @@
+{
+  "file": {
+    "path": "function_basic/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Program",
+      "qualified_name": "Program",
+      "file": "function_basic/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 40
+      },
+      "signature": "class Program { static void Hello() {} }",
+      "signature_hash": "class Program",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Hello",
+      "qualified_name": "Hello",
+      "file": "function_basic/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 38
+      },
+      "signature": "static void Hello() {}",
+      "signature_hash": "static void Hello()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Program",
+      "file": "function_basic/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Hello",
+      "file": "function_basic/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 28,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "confidence": 0.7
+    }
+  ]
+}

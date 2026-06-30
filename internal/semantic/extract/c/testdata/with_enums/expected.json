@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "with_enums/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "enum",
+      "name": "Color",
+      "qualified_name": "Color",
+      "file": "with_enums/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 31
+      },
+      "signature": "enum Color { RED, GREEN, BLUE }",
+      "signature_hash": "enum Color",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Color",
+      "file": "with_enums/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 5,
+        "end_line": 0,
+        "end_col": 10
+      },
+      "confidence": 0.7
+    }
+  ]
+}

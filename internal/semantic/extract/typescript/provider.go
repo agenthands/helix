@@ -232,7 +232,7 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 		}
 
 		if refNameNode != nil && refKind != "" {
-			out.References = append(out.References, extract.ReferenceFact{
+			rf := extract.ReferenceFact{
 				Language:        "typescript",
 				Kind:            extract.ReferenceKind(refKind),
 				Name:            refNameNode.Utf8Text(source),
@@ -240,7 +240,17 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 				Range:           nodeRange(*refNameNode),
 				ValidationState: "syntactic",
 				Confidence:      extract.ConfidenceTSOnly,
-			})
+			}
+			// Receiver capture for member-call references (lib.foo()): enables
+			// CROSS_CALLS edges by matching the receiver to an external import.
+			if refKind == "call" {
+				if p := refNameNode.Parent(); p != nil && p.Kind() == "member_expression" {
+					if obj := p.ChildByFieldName("object"); obj != nil {
+						rf.ReceiverText = obj.Utf8Text(source)
+					}
+				}
+			}
+			out.References = append(out.References, rf)
 		}
 
 		if haveImport {
@@ -285,6 +295,10 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 		}
 	}
 
+	// HTTP route detection (Express app.get / NestJS @Get / ...).
+	out.Routes = detectTSRoutes(*tree.RootNode(), source, file.Path)
+	// ORM-entity detection (TypeORM @Entity on a class_declaration).
+	out.Resources = detectTSResources(*tree.RootNode(), source, file.Path)
 	return out, nil
 }
 

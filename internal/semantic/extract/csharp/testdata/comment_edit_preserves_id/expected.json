@@ -1,0 +1,110 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Processor",
+      "qualified_name": "Processor",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 72
+      },
+      "signature": "public class Processor { public int Transform(int x) { return x * 2; } }",
+      "signature_hash": "public class Processor",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Transform",
+      "qualified_name": "Transform",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 25,
+        "end_line": 1,
+        "end_col": 70
+      },
+      "signature": "public int Transform(int x) { return x * 2; }",
+      "signature_hash": "public int Transform(int x)",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 50,
+        "end_line": 1,
+        "end_col": 51
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Processor",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 13,
+        "end_line": 1,
+        "end_col": 22
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Transform",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 36,
+        "end_line": 1,
+        "end_col": 45
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "x",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 50,
+        "end_line": 1,
+        "end_col": 51
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "x",
+      "file": "comment_edit_preserves_id/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 62,
+        "end_line": 1,
+        "end_col": 63
+      },
+      "confidence": 0.7
+    }
+  ]
+}

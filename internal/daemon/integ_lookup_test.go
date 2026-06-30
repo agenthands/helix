@@ -151,12 +151,12 @@ func TestExtractIntegLookupMethodBodies_ParserSeesAllMethods(t *testing.T) {
 	// the extractor missed a method body OR the interface lost a
 	// real-implementation method (caught here, not silently).
 	wantSubstrings := []string{
-		"l.store.LatestCommittedSnapshot",  // RankFiles + Status
-		"QueryRankedFiles",                 // RankFiles
-		"QuerySymbolByLocation",            // SymbolID
-		"QueryEffectiveAdjacency",          // ExpandFrom
-		"QuerySymbolLocationByStableKey",   // LocateSymbol (Task 1)
-		"OverlayHasPendingRows",            // Status
+		"l.store.LatestCommittedSnapshot", // RankFiles + Status
+		"QueryRankedFiles",                // RankFiles
+		"QuerySymbolByLocation",           // SymbolID
+		"QueryEffectiveAdjacency",         // ExpandFrom
+		"QuerySymbolLocationByStableKey",  // LocateSymbol (Task 1)
+		"OverlayHasPendingRows",           // Status
 	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(body, want) {

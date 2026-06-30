@@ -1,0 +1,72 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "whitespace_edit_preserves_id/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 39
+      },
+      "signature": "int add(int a, int b) { return a + b; }",
+      "signature_hash": "int add(int a, int b)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "whitespace_edit_preserves_id/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 12,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "whitespace_edit_preserves_id/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

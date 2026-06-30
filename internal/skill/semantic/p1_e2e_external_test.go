@@ -71,6 +71,22 @@ const (
 	p1SeedTSUser      = "repo/web/types.ts::User"
 	p1SeedJavaFooBar  = "repo/api/Foo.java::Foo.bar"
 	p1SeedJavaBar     = "repo/api/Bar.java::Bar"
+	p1SeedPyHello     = "repo/py/hello.py::hello"
+	p1SeedPyWorld     = "repo/py/types.py::World"
+	p1SeedCsCalc      = "repo/cs/Calc.cs::Calc.Add"
+	p1SeedCsResult    = "repo/cs/Result.cs::Result"
+	p1SeedRsMain      = "repo/rs/main.rs::main"
+	p1SeedRsConfig    = "repo/rs/config.rs::Config"
+	p1SeedCHello      = "repo/c/hello.c::hello"
+	p1SeedCTypes      = "repo/c/types.h::Request"
+	p1SeedCppRun      = "repo/cpp/run.cpp::run"
+	p1SeedCppEngine   = "repo/cpp/engine.hpp::Engine"
+	p1SeedKtGreet     = "repo/kt/Greet.kt::Greet.greet"
+	p1SeedKtPerson    = "repo/kt/Person.kt::Person"
+	p1SeedPhpIndex    = "repo/php/index.php::index"
+	p1SeedPhpHelper   = "repo/php/Helper.php::Helper"
+	p1SeedRbInit      = "repo/rb/init.rb::init"
+	p1SeedRbBase      = "repo/rb/base.rb::Base"
 )
 
 // Internal numeric NodeID values used in semantic_symbols and adjacency maps.
@@ -82,6 +98,22 @@ const (
 	p1NodeTSUser    uint64 = 1005
 	p1NodeJavaFoo   uint64 = 1006
 	p1NodeJavaBar   uint64 = 1007
+	p1NodePyHello   uint64 = 1008
+	p1NodePyWorld   uint64 = 1009
+	p1NodeCsCalc    uint64 = 1010
+	p1NodeCsResult  uint64 = 1011
+	p1NodeRsMain    uint64 = 1012
+	p1NodeRsConfig  uint64 = 1013
+	p1NodeCHello    uint64 = 1014
+	p1NodeCTypes    uint64 = 1015
+	p1NodeCppRun    uint64 = 1016
+	p1NodeCppEngine uint64 = 1017
+	p1NodeKtGreet   uint64 = 1018
+	p1NodeKtPerson  uint64 = 1019
+	p1NodePhpIndex  uint64 = 1020
+	p1NodePhpHelper uint64 = 1021
+	p1NodeRbInit    uint64 = 1022
+	p1NodeRbBase    uint64 = 1023
 )
 
 // ---------------------------------------------------------------------------
@@ -150,6 +182,22 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 		{FileID: 4, RepoID: repoID, Path: "repo/web/types.ts", Language: "typescript", ContentHash: "h4"},
 		{FileID: 5, RepoID: repoID, Path: "repo/api/Foo.java", Language: "java", ContentHash: "h5"},
 		{FileID: 6, RepoID: repoID, Path: "repo/api/Bar.java", Language: "java", ContentHash: "h6"},
+		{FileID: 7, RepoID: repoID, Path: "repo/py/hello.py", Language: "python", ContentHash: "p1"},
+		{FileID: 8, RepoID: repoID, Path: "repo/py/types.py", Language: "python", ContentHash: "p2"},
+		{FileID: 9, RepoID: repoID, Path: "repo/cs/Calc.cs", Language: "c_sharp", ContentHash: "c1"},
+		{FileID: 10, RepoID: repoID, Path: "repo/cs/Result.cs", Language: "c_sharp", ContentHash: "c2"},
+		{FileID: 11, RepoID: repoID, Path: "repo/rs/main.rs", Language: "rust", ContentHash: "r1"},
+		{FileID: 12, RepoID: repoID, Path: "repo/rs/config.rs", Language: "rust", ContentHash: "r2"},
+		{FileID: 13, RepoID: repoID, Path: "repo/c/hello.c", Language: "c", ContentHash: "cc1"},
+		{FileID: 14, RepoID: repoID, Path: "repo/c/types.h", Language: "c", ContentHash: "cc2"},
+		{FileID: 15, RepoID: repoID, Path: "repo/cpp/run.cpp", Language: "cpp", ContentHash: "cpp1"},
+		{FileID: 16, RepoID: repoID, Path: "repo/cpp/engine.hpp", Language: "cpp", ContentHash: "cpp2"},
+		{FileID: 17, RepoID: repoID, Path: "repo/kt/Greet.kt", Language: "kotlin", ContentHash: "k1"},
+		{FileID: 18, RepoID: repoID, Path: "repo/kt/Person.kt", Language: "kotlin", ContentHash: "k2"},
+		{FileID: 19, RepoID: repoID, Path: "repo/php/index.php", Language: "php", ContentHash: "ph1"},
+		{FileID: 20, RepoID: repoID, Path: "repo/php/Helper.php", Language: "php", ContentHash: "ph2"},
+		{FileID: 21, RepoID: repoID, Path: "repo/rb/init.rb", Language: "ruby", ContentHash: "rb1"},
+		{FileID: 22, RepoID: repoID, Path: "repo/rb/base.rb", Language: "ruby", ContentHash: "rb2"},
 	}
 
 	symbols := []semanticstore.SymbolFact{
@@ -188,6 +236,86 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 			QualifiedName: "Bar", StableKey: p1SeedJavaBar,
 			StartLine: 1, StartCol: 1, EndLine: 20, EndCol: 1,
 			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodePyHello, NodeID: p1NodePyHello, FileID: 7,
+			Language: "python", Kind: "function", Name: "hello",
+			QualifiedName: "hello.hello", StableKey: p1SeedPyHello,
+			StartLine: 1, StartCol: 1, EndLine: 3, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodePyWorld, NodeID: p1NodePyWorld, FileID: 8,
+			Language: "python", Kind: "class", Name: "World",
+			QualifiedName: "types.World", StableKey: p1SeedPyWorld,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCsCalc, NodeID: p1NodeCsCalc, FileID: 9,
+			Language: "c_sharp", Kind: "method", Name: "Calc.Add",
+			QualifiedName: "Calc.Add", StableKey: p1SeedCsCalc,
+			StartLine: 5, StartCol: 1, EndLine: 10, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCsResult, NodeID: p1NodeCsResult, FileID: 10,
+			Language: "c_sharp", Kind: "class", Name: "Result",
+			QualifiedName: "Result", StableKey: p1SeedCsResult,
+			StartLine: 1, StartCol: 1, EndLine: 8, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeRsMain, NodeID: p1NodeRsMain, FileID: 11,
+			Language: "rust", Kind: "function", Name: "main",
+			QualifiedName: "main", StableKey: p1SeedRsMain,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeRsConfig, NodeID: p1NodeRsConfig, FileID: 12,
+			Language: "rust", Kind: "struct", Name: "Config",
+			QualifiedName: "config.Config", StableKey: p1SeedRsConfig,
+			StartLine: 1, StartCol: 1, EndLine: 10, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCHello, NodeID: p1NodeCHello, FileID: 13,
+			Language: "c", Kind: "function", Name: "hello",
+			QualifiedName: "hello", StableKey: p1SeedCHello,
+			StartLine: 1, StartCol: 1, EndLine: 3, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCTypes, NodeID: p1NodeCTypes, FileID: 14,
+			Language: "c", Kind: "struct", Name: "Request",
+			QualifiedName: "Request", StableKey: p1SeedCTypes,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCppRun, NodeID: p1NodeCppRun, FileID: 15,
+			Language: "cpp", Kind: "function", Name: "run",
+			QualifiedName: "run", StableKey: p1SeedCppRun,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeCppEngine, NodeID: p1NodeCppEngine, FileID: 16,
+			Language: "cpp", Kind: "class", Name: "Engine",
+			QualifiedName: "Engine", StableKey: p1SeedCppEngine,
+			StartLine: 1, StartCol: 1, EndLine: 10, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeKtGreet, NodeID: p1NodeKtGreet, FileID: 17,
+			Language: "kotlin", Kind: "method", Name: "Greet.greet",
+			QualifiedName: "Greet.greet", StableKey: p1SeedKtGreet,
+			StartLine: 3, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeKtPerson, NodeID: p1NodeKtPerson, FileID: 18,
+			Language: "kotlin", Kind: "class", Name: "Person",
+			QualifiedName: "Person", StableKey: p1SeedKtPerson,
+			StartLine: 1, StartCol: 1, EndLine: 10, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodePhpIndex, NodeID: p1NodePhpIndex, FileID: 19,
+			Language: "php", Kind: "function", Name: "index",
+			QualifiedName: "index", StableKey: p1SeedPhpIndex,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodePhpHelper, NodeID: p1NodePhpHelper, FileID: 20,
+			Language: "php", Kind: "class", Name: "Helper",
+			QualifiedName: "Helper", StableKey: p1SeedPhpHelper,
+			StartLine: 1, StartCol: 1, EndLine: 8, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeRbInit, NodeID: p1NodeRbInit, FileID: 21,
+			Language: "ruby", Kind: "method", Name: "init",
+			QualifiedName: "init", StableKey: p1SeedRbInit,
+			StartLine: 1, StartCol: 1, EndLine: 5, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
+		{SymbolID: p1NodeRbBase, NodeID: p1NodeRbBase, FileID: 22,
+			Language: "ruby", Kind: "class", Name: "Base",
+			QualifiedName: "Base", StableKey: p1SeedRbBase,
+			StartLine: 1, StartCol: 1, EndLine: 10, EndCol: 1,
+			Visibility: "public", Confidence: 1.0},
 	}
 
 	// Seed edges with EdgeKind="call_graph" so ExpandFrom's QueryEffectiveAdjacency
@@ -200,6 +328,14 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 			EdgeKind: "call_graph", Weight: 0.9, Confidence: 0.9, Source: "ast"},
 		{EdgeID: 3, SrcNodeID: p1NodeJavaFoo, DstNodeID: p1NodeJavaBar,
 			EdgeKind: "call_graph", Weight: 0.8, Confidence: 0.8, Source: "ast"},
+		{EdgeID: 4, SrcNodeID: p1NodePyHello, DstNodeID: p1NodePyWorld, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 5, SrcNodeID: p1NodeCsCalc, DstNodeID: p1NodeCsResult, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 6, SrcNodeID: p1NodeRsMain, DstNodeID: p1NodeRsConfig, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 7, SrcNodeID: p1NodeCHello, DstNodeID: p1NodeCTypes, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 8, SrcNodeID: p1NodeCppRun, DstNodeID: p1NodeCppEngine, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 9, SrcNodeID: p1NodeKtGreet, DstNodeID: p1NodeKtPerson, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 10, SrcNodeID: p1NodePhpIndex, DstNodeID: p1NodePhpHelper, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
+		{EdgeID: 11, SrcNodeID: p1NodeRbInit, DstNodeID: p1NodeRbBase, EdgeKind: "call_graph", Weight: 0.7, Confidence: 0.7, Source: "ast"},
 	}
 
 	snap, err := store.BeginSnapshot(ctx, semanticstore.SnapshotMeta{RepoID: repoID})
@@ -239,6 +375,22 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 		{NodeID: p1NodeTSUser, Score: 0.50, GraphVersion: gv, Status: "exact"},
 		{NodeID: p1NodeJavaFoo, Score: 0.65, GraphVersion: gv, Status: "exact"},
 		{NodeID: p1NodeJavaBar, Score: 0.45, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodePyHello, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodePyWorld, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCsCalc, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCsResult, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeRsMain, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeRsConfig, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCHello, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCTypes, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCppRun, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeCppEngine, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeKtGreet, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeKtPerson, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodePhpIndex, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodePhpHelper, Score: 0.35, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeRbInit, Score: 0.55, GraphVersion: gv, Status: "exact"},
+		{NodeID: p1NodeRbBase, Score: 0.35, GraphVersion: gv, Status: "exact"},
 	}
 	require.NoError(t, tx.UpsertGraphScores(ctx, "call_graph", scoreRows))
 
@@ -247,6 +399,14 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 		{ID: 1, MemberCount: 3},
 		{ID: 2, MemberCount: 2},
 		{ID: 3, MemberCount: 2},
+		{ID: 4, MemberCount: 2},
+		{ID: 5, MemberCount: 2},
+		{ID: 6, MemberCount: 2},
+		{ID: 7, MemberCount: 2},
+		{ID: 8, MemberCount: 2},
+		{ID: 9, MemberCount: 2},
+		{ID: 10, MemberCount: 2},
+		{ID: 11, MemberCount: 2},
 	}))
 	require.NoError(t, tx.UpsertClusterMembers(ctx, "weak_components", gv, []semanticstore.ClusterMemberRow{
 		{ClusterID: 1, NodeID: p1NodeServeHTTP},
@@ -256,6 +416,22 @@ func buildP1E2EFixture(t *testing.T) *p1E2EFixture {
 		{ClusterID: 2, NodeID: p1NodeTSUser},
 		{ClusterID: 3, NodeID: p1NodeJavaFoo},
 		{ClusterID: 3, NodeID: p1NodeJavaBar},
+		{ClusterID: 4, NodeID: p1NodePyHello},
+		{ClusterID: 4, NodeID: p1NodePyWorld},
+		{ClusterID: 5, NodeID: p1NodeCsCalc},
+		{ClusterID: 5, NodeID: p1NodeCsResult},
+		{ClusterID: 6, NodeID: p1NodeRsMain},
+		{ClusterID: 6, NodeID: p1NodeRsConfig},
+		{ClusterID: 7, NodeID: p1NodeCHello},
+		{ClusterID: 7, NodeID: p1NodeCTypes},
+		{ClusterID: 8, NodeID: p1NodeCppRun},
+		{ClusterID: 8, NodeID: p1NodeCppEngine},
+		{ClusterID: 9, NodeID: p1NodeKtGreet},
+		{ClusterID: 9, NodeID: p1NodeKtPerson},
+		{ClusterID: 10, NodeID: p1NodePhpIndex},
+		{ClusterID: 10, NodeID: p1NodePhpHelper},
+		{ClusterID: 11, NodeID: p1NodeRbInit},
+		{ClusterID: 11, NodeID: p1NodeRbBase},
 	}))
 	require.NoError(t, tx.Commit())
 
@@ -390,6 +566,22 @@ func (a *p1InlineClusterMembership) ClusterIDOf(_ context.Context, _ string, sym
 		return 2, 2, nil
 	case p1SeedJavaFooBar, p1SeedJavaBar:
 		return 3, 2, nil
+	case p1SeedPyHello, p1SeedPyWorld:
+		return 4, 2, nil
+	case p1SeedCsCalc, p1SeedCsResult:
+		return 5, 2, nil
+	case p1SeedRsMain, p1SeedRsConfig:
+		return 6, 2, nil
+	case p1SeedCHello, p1SeedCTypes:
+		return 7, 2, nil
+	case p1SeedCppRun, p1SeedCppEngine:
+		return 8, 2, nil
+	case p1SeedKtGreet, p1SeedKtPerson:
+		return 9, 2, nil
+	case p1SeedPhpIndex, p1SeedPhpHelper:
+		return 10, 2, nil
+	case p1SeedRbInit, p1SeedRbBase:
+		return 11, 2, nil
 	}
 	return 0, 0, nil
 }
@@ -405,6 +597,22 @@ func (a *p1InlineTypeChain) TypeChainForSymbol(_ context.Context, _ string, sym 
 		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedTSUser}}, nil
 	case p1SeedJavaFooBar:
 		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedJavaBar}}, nil
+	case p1SeedPyHello:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedPyWorld}}, nil
+	case p1SeedCsCalc:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedCsResult}}, nil
+	case p1SeedRsMain:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedRsConfig}}, nil
+	case p1SeedCHello:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedCTypes}}, nil
+	case p1SeedCppRun:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedCppEngine}}, nil
+	case p1SeedKtGreet:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedKtPerson}}, nil
+	case p1SeedPhpIndex:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedPhpHelper}}, nil
+	case p1SeedRbInit:
+		return []semantic.TypeChainRow{{Tier: "tier1_lsp", EvidenceKind: "lsp", TargetSymbolID: p1SeedRbBase}}, nil
 	}
 	return []semantic.TypeChainRow{}, nil
 }
@@ -413,28 +621,85 @@ func (a *p1InlineTypeChain) TypeChainForSymbol(_ context.Context, _ string, sym 
 type p1InlineSymbolEdges struct{}
 
 func (a *p1InlineSymbolEdges) CallersOf(_ context.Context, _ string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
-	if string(sym) == p1SeedGoHandle {
-		return []semantic.SymbolEdgeRow{
-			{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"},
-		}, nil
+	switch string(sym) {
+	case p1SeedGoHandle:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"}}, nil
+	case p1SeedTSUser:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedTSFetch), To: integ.SymbolID(p1SeedTSUser), InternalKind: "CALLS"}}, nil
+	case p1SeedJavaBar:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedJavaFooBar), To: integ.SymbolID(p1SeedJavaBar), InternalKind: "CALLS"}}, nil
+	case p1SeedPyWorld:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPyHello), To: integ.SymbolID(p1SeedPyWorld), InternalKind: "CALLS"}}, nil
+	case p1SeedCsResult:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCsCalc), To: integ.SymbolID(p1SeedCsResult), InternalKind: "CALLS"}}, nil
+	case p1SeedRsConfig:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRsMain), To: integ.SymbolID(p1SeedRsConfig), InternalKind: "CALLS"}}, nil
+	case p1SeedCTypes:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCHello), To: integ.SymbolID(p1SeedCTypes), InternalKind: "CALLS"}}, nil
+	case p1SeedCppEngine:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCppRun), To: integ.SymbolID(p1SeedCppEngine), InternalKind: "CALLS"}}, nil
+	case p1SeedKtPerson:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedKtGreet), To: integ.SymbolID(p1SeedKtPerson), InternalKind: "CALLS"}}, nil
+	case p1SeedPhpHelper:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPhpIndex), To: integ.SymbolID(p1SeedPhpHelper), InternalKind: "CALLS"}}, nil
+	case p1SeedRbBase:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRbInit), To: integ.SymbolID(p1SeedRbBase), InternalKind: "CALLS"}}, nil
 	}
 	return []semantic.SymbolEdgeRow{}, nil
 }
 
 func (a *p1InlineSymbolEdges) IncomingEdgesOf(_ context.Context, _ string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
-	if string(sym) == p1SeedGoHandle {
-		return []semantic.SymbolEdgeRow{
-			{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"},
-		}, nil
+	switch string(sym) {
+	case p1SeedGoHandle:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"}}, nil
+	case p1SeedTSUser:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedTSFetch), To: integ.SymbolID(p1SeedTSUser), InternalKind: "CALLS"}}, nil
+	case p1SeedJavaBar:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedJavaFooBar), To: integ.SymbolID(p1SeedJavaBar), InternalKind: "CALLS"}}, nil
+	case p1SeedPyWorld:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPyHello), To: integ.SymbolID(p1SeedPyWorld), InternalKind: "CALLS"}}, nil
+	case p1SeedCsResult:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCsCalc), To: integ.SymbolID(p1SeedCsResult), InternalKind: "CALLS"}}, nil
+	case p1SeedRsConfig:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRsMain), To: integ.SymbolID(p1SeedRsConfig), InternalKind: "CALLS"}}, nil
+	case p1SeedCTypes:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCHello), To: integ.SymbolID(p1SeedCTypes), InternalKind: "CALLS"}}, nil
+	case p1SeedCppEngine:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCppRun), To: integ.SymbolID(p1SeedCppEngine), InternalKind: "CALLS"}}, nil
+	case p1SeedKtPerson:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedKtGreet), To: integ.SymbolID(p1SeedKtPerson), InternalKind: "CALLS"}}, nil
+	case p1SeedPhpHelper:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPhpIndex), To: integ.SymbolID(p1SeedPhpHelper), InternalKind: "CALLS"}}, nil
+	case p1SeedRbBase:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRbInit), To: integ.SymbolID(p1SeedRbBase), InternalKind: "CALLS"}}, nil
 	}
 	return []semantic.SymbolEdgeRow{}, nil
 }
 
 func (a *p1InlineSymbolEdges) OutgoingEdgesOf(_ context.Context, _ string, sym integ.SymbolID) ([]semantic.SymbolEdgeRow, error) {
-	if string(sym) == p1SeedGoServeHTTP {
-		return []semantic.SymbolEdgeRow{
-			{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"},
-		}, nil
+	switch string(sym) {
+	case p1SeedGoServeHTTP:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedGoServeHTTP), To: integ.SymbolID(p1SeedGoHandle), InternalKind: "CALLS"}}, nil
+	case p1SeedTSFetch:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedTSFetch), To: integ.SymbolID(p1SeedTSUser), InternalKind: "CALLS"}}, nil
+	case p1SeedJavaFooBar:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedJavaFooBar), To: integ.SymbolID(p1SeedJavaBar), InternalKind: "CALLS"}}, nil
+	case p1SeedPyHello:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPyHello), To: integ.SymbolID(p1SeedPyWorld), InternalKind: "CALLS"}}, nil
+	case p1SeedCsCalc:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCsCalc), To: integ.SymbolID(p1SeedCsResult), InternalKind: "CALLS"}}, nil
+	case p1SeedRsMain:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRsMain), To: integ.SymbolID(p1SeedRsConfig), InternalKind: "CALLS"}}, nil
+	case p1SeedCHello:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCHello), To: integ.SymbolID(p1SeedCTypes), InternalKind: "CALLS"}}, nil
+	case p1SeedCppRun:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedCppRun), To: integ.SymbolID(p1SeedCppEngine), InternalKind: "CALLS"}}, nil
+	case p1SeedKtGreet:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedKtGreet), To: integ.SymbolID(p1SeedKtPerson), InternalKind: "CALLS"}}, nil
+	case p1SeedPhpIndex:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedPhpIndex), To: integ.SymbolID(p1SeedPhpHelper), InternalKind: "CALLS"}}, nil
+	case p1SeedRbInit:
+		return []semantic.SymbolEdgeRow{{From: integ.SymbolID(p1SeedRbInit), To: integ.SymbolID(p1SeedRbBase), InternalKind: "CALLS"}}, nil
 	}
 	return []semantic.SymbolEdgeRow{}, nil
 }
@@ -443,21 +708,33 @@ func (a *p1InlineSymbolEdges) OutgoingEdgesOf(_ context.Context, _ string, sym i
 type p1InlineEdgeEvidence struct{}
 
 func (a *p1InlineEdgeEvidence) EvidenceForEdge(_ context.Context, _ string, from, to integ.SymbolID, internalKinds []string) ([]semantic.EdgeEvidenceRow, error) {
-	if string(from) == p1SeedGoServeHTTP && string(to) == p1SeedGoHandle {
-		for _, k := range internalKinds {
-			if k == "CALLS" {
-				return []semantic.EdgeEvidenceRow{
-					{
-						InternalKind:   "CALLS",
-						Source:         "lsp.go.text_document_references",
-						TreeSitterKind: "call_expression",
-						File:           "repo/src/svc.go",
-						Range:          &semantic.EvidenceRange{StartLine: 12, EndLine: 12, EndCol: 20},
-						Tier:           "tier1_lsp",
-						EvidenceKind:   "lsp",
-					},
-				}, nil
-			}
+	for _, k := range internalKinds {
+		if k != "CALLS" {
+			continue
+		}
+		switch {
+		case string(from) == p1SeedGoServeHTTP && string(to) == p1SeedGoHandle:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.go", TreeSitterKind: "call_expression", File: "repo/src/svc.go", Range: &semantic.EvidenceRange{StartLine: 12, EndLine: 12, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedTSFetch && string(to) == p1SeedTSUser:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.ts", TreeSitterKind: "call_expression", File: "repo/web/api.ts", Range: &semantic.EvidenceRange{StartLine: 5, EndLine: 5, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedJavaFooBar && string(to) == p1SeedJavaBar:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.java", TreeSitterKind: "method_invocation", File: "repo/api/Foo.java", Range: &semantic.EvidenceRange{StartLine: 12, EndLine: 12, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedPyHello && string(to) == p1SeedPyWorld:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.py", TreeSitterKind: "call", File: "repo/py/hello.py", Range: &semantic.EvidenceRange{StartLine: 2, EndLine: 2, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedCsCalc && string(to) == p1SeedCsResult:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.cs", TreeSitterKind: "invocation_expression", File: "repo/cs/Calc.cs", Range: &semantic.EvidenceRange{StartLine: 7, EndLine: 7, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedRsMain && string(to) == p1SeedRsConfig:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.rs", TreeSitterKind: "call_expression", File: "repo/rs/main.rs", Range: &semantic.EvidenceRange{StartLine: 3, EndLine: 3, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedCHello && string(to) == p1SeedCTypes:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.c", TreeSitterKind: "call_expression", File: "repo/c/hello.c", Range: &semantic.EvidenceRange{StartLine: 2, EndLine: 2, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedCppRun && string(to) == p1SeedCppEngine:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.cpp", TreeSitterKind: "call_expression", File: "repo/cpp/run.cpp", Range: &semantic.EvidenceRange{StartLine: 3, EndLine: 3, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedKtGreet && string(to) == p1SeedKtPerson:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.kt", TreeSitterKind: "call_expression", File: "repo/kt/Greet.kt", Range: &semantic.EvidenceRange{StartLine: 4, EndLine: 4, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedPhpIndex && string(to) == p1SeedPhpHelper:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.php", TreeSitterKind: "function_call_expression", File: "repo/php/index.php", Range: &semantic.EvidenceRange{StartLine: 3, EndLine: 3, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
+		case string(from) == p1SeedRbInit && string(to) == p1SeedRbBase:
+			return []semantic.EdgeEvidenceRow{{InternalKind: "CALLS", Source: "lsp.rb", TreeSitterKind: "call", File: "repo/rb/init.rb", Range: &semantic.EvidenceRange{StartLine: 2, EndLine: 2, EndCol: 15}, Tier: "tier1_lsp", EvidenceKind: "lsp"}}, nil
 		}
 	}
 	return []semantic.EdgeEvidenceRow{}, nil

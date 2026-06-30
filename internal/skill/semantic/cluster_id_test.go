@@ -9,11 +9,11 @@ import (
 
 func TestClusterID_EncodeRoundTrip(t *testing.T) {
 	tests := []struct {
-		name        string
-		projection  string
+		name         string
+		projection   string
 		graphVersion uint64
 		clusterIntID uint64
-		wantToken   string
+		wantToken    string
 	}{
 		{"basic", "weak_components", 42, 7, "weak_components:42:7"},
 		{"zero_ids", "call_graph", 0, 0, "call_graph:0:0"},
@@ -32,9 +32,9 @@ func TestClusterID_EncodeRoundTrip(t *testing.T) {
 
 func TestClusterID_DecodeValid(t *testing.T) {
 	tests := []struct {
-		name    string
-		token   string
-		want    decodedClusterID
+		name  string
+		token string
+		want  decodedClusterID
 	}{
 		{
 			name:  "basic",

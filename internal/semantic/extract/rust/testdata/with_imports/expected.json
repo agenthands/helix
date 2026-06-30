@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "with_imports/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "demo",
+      "qualified_name": "demo",
+      "file": "with_imports/before.rs",
+      "range": {
+        "start_line": 2,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 16
+      },
+      "signature": "pub fn demo() {}",
+      "signature_hash": "pub fn demo()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "std::collections::HashMap",
+      "file": "with_imports/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 4,
+        "end_line": 0,
+        "end_col": 29
+      }
+    }
+  ]
+}

@@ -75,6 +75,7 @@
         "end_line": 8,
         "end_col": 15
       },
+      "receiver_text": "fmt",
       "confidence": 0.7
     },
     {
@@ -99,6 +100,7 @@
         "end_line": 9,
         "end_col": 26
       },
+      "receiver_text": "strings",
       "confidence": 0.7
     },
     {

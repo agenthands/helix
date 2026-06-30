@@ -546,4 +546,3 @@ func sortByKey(entries []fixtureScoreEntry) {
 		}
 	}
 }
-

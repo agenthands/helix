@@ -1,0 +1,21 @@
+{
+  "file": {
+    "path": "malformed/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "references": [
+    {
+      "kind": "type",
+      "name": "Broken",
+      "file": "malformed/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    }
+  ]
+}

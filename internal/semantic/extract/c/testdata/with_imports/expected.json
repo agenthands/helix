@@ -1,0 +1,50 @@
+{
+  "file": {
+    "path": "with_imports/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "main",
+      "qualified_name": "main",
+      "file": "with_imports/before.c",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 28
+      },
+      "signature": "int main(void) { return 0; }",
+      "signature_hash": "int main(void)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "imports": [
+    {
+      "source": "stdio.h",
+      "file": "with_imports/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 9,
+        "end_line": 0,
+        "end_col": 18
+      }
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 1,
+        "end_col": 3
+      }
+    }
+  ]
+}

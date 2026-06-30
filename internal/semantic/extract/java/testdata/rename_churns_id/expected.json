@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "rename_churns_id/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "OldName",
+      "qualified_name": "OldName",
+      "file": "rename_churns_id/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class OldName { public void run() {} }",
+      "signature_hash": "public class OldName",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "run",
+      "qualified_name": "run",
+      "file": "rename_churns_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 24
+      },
+      "signature": "public void run() {}",
+      "signature_hash": "public void run()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

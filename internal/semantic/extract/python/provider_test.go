@@ -75,3 +75,36 @@ func TestProvider_Determinism(t *testing.T) {
 		t.Errorf("non-deterministic emit:\n--- a ---\n%s\n--- b ---\n%s", an, bn)
 	}
 }
+
+// TestProvider_ReceiverCapture — a member call lib.foo() stamps the
+// receiver ("lib") on the call reference (backs CROSS_CALLS edges that
+// match a call receiver to an external import); a bare foo() leaves it
+// empty.
+func TestProvider_ReceiverCapture(t *testing.T) {
+	registry := testutil.NewTestRegistry(t)
+	p := NewProvider(registry).(*Provider)
+	src := []byte("def run():\n    lib.foo()\n    foo()\n")
+	ef, err := p.Extract(context.Background(), src, extract.SourceFile{Path: "recv.py", Language: "python"})
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	var member, bare *extract.ReferenceFact
+	for i := range ef.References {
+		r := &ef.References[i]
+		if r.Kind != extract.ReferenceKind("call") || r.Name != "foo" {
+			continue
+		}
+		switch r.ReceiverText {
+		case "lib":
+			member = r
+		case "":
+			bare = r
+		}
+	}
+	if member == nil {
+		t.Errorf("member call lib.foo(): want reference.call with ReceiverText %q, found none", "lib")
+	}
+	if bare == nil {
+		t.Errorf("bare call foo(): want reference.call with empty ReceiverText, found none")
+	}
+}

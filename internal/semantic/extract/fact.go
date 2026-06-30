@@ -8,17 +8,20 @@ import "github.com/agenthands/helix/internal/semantic"
 type SymbolKind string
 
 const (
-	KindFunction  SymbolKind = "function"
-	KindMethod    SymbolKind = "method"
-	KindStruct    SymbolKind = "struct"
-	KindClass     SymbolKind = "class"
-	KindInterface SymbolKind = "interface"
-	KindEnum      SymbolKind = "enum"
-	KindType      SymbolKind = "type"
-	KindVariable  SymbolKind = "variable"
-	KindConstant  SymbolKind = "constant"
-	KindParameter SymbolKind = "parameter"
-	KindField     SymbolKind = "field"
+	KindFunction       SymbolKind = "function"
+	KindMethod         SymbolKind = "method"
+	KindStruct         SymbolKind = "struct"
+	KindClass          SymbolKind = "class"
+	KindInterface      SymbolKind = "interface"
+	KindEnum           SymbolKind = "enum"
+	KindType           SymbolKind = "type"
+	KindVariable       SymbolKind = "variable"
+	KindConstant       SymbolKind = "constant"
+	KindParameter      SymbolKind = "parameter"
+	KindField          SymbolKind = "field"
+	KindRoute          SymbolKind = "route"
+	KindResource       SymbolKind = "resource"
+	KindExternalModule SymbolKind = "external_module"
 )
 
 // ReferenceKind enumerates the reference categories Phase 59 emits.
@@ -180,6 +183,34 @@ type SourceFile struct {
 	Language string
 }
 
+// RouteFact captures an HTTP route registration detected in source: a
+// (method, path, handler) triple synthesized from framework call sites /
+// decorators — Go net/http + gin/echo/gorilla/chi, Python Flask/FastAPI,
+// TS/JS Express/NestJS. factsFromExtracted promotes each RouteFact into a
+// synthetic Route SymbolFact plus a HANDLES edge from the handler symbol.
+type RouteFact struct {
+	Language string
+	Method   string // "GET","POST",... "" when the framework does not fix one
+	Path     string // "/users/:id"
+	Handler  string // handler symbol name (best-effort; "" when unresolved)
+	File     string
+	Range    Range
+}
+
+// ResourceFact captures a data-resource / ORM-entity definition detected in
+// source — a class/struct that maps to a persistence table (Go GORM, Python
+// SQLAlchemy, TS TypeORM, Java JPA, C# EF, Rust Diesel, …). factsFromExtracted
+// promotes each into a synthetic Resource SymbolFact so the graph has typed
+// data-entity nodes alongside Route nodes.
+type ResourceFact struct {
+	Language string
+	Name     string // entity class/struct name
+	Table    string // mapped table name (best-effort; "" / same as Name)
+	ORM      string // "gorm","sqlalchemy","typeorm","jpa","ef","diesel","eloquent","activerecord"
+	File     string
+	Range    Range
+}
+
 // ExtractedFile bundles the per-file extraction output. The provider's
 // ExtractFile (in P04 per-language packages) returns one of these per
 // successful or partial extraction.
@@ -190,6 +221,8 @@ type ExtractedFile struct {
 	Imports       []ImportFact
 	Types         []TypeFact
 	Heritage      []HeritageFact
+	Routes        []RouteFact
+	Resources     []ResourceFact
 	Partial       bool
 	PartialReason string
 }

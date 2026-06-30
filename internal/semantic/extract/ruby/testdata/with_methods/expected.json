@@ -1,0 +1,74 @@
+{
+  "file": {
+    "path": "with_methods/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Greeter",
+      "qualified_name": "Greeter",
+      "file": "with_methods/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 65
+      },
+      "signature": "class Greeter; def hello; \"hi\"; end; def goodbye; \"bye\"; end; end",
+      "signature_hash": "class Greeter; def hello; \"hi\"; end; def goodbye; \"bye\"; end; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "hello",
+      "qualified_name": "hello",
+      "file": "with_methods/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 35
+      },
+      "signature": "def hello; \"hi\"; end",
+      "signature_hash": "def hello; \"hi\"; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "goodbye",
+      "qualified_name": "goodbye",
+      "file": "with_methods/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 37,
+        "end_line": 0,
+        "end_col": 60
+      },
+      "signature": "def goodbye; \"bye\"; end",
+      "signature_hash": "def goodbye; \"bye\"; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Greeter",
+      "file": "with_methods/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ]
+}

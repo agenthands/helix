@@ -17,8 +17,8 @@ import (
 	_ "github.com/agenthands/helix/internal/kernel/fileops"
 	_ "github.com/agenthands/helix/internal/kernel/symbols"
 	_ "github.com/agenthands/helix/internal/profile"
-	_ "github.com/agenthands/helix/internal/skill/memory"
 	_ "github.com/agenthands/helix/internal/skill/guardrails" // Phase 66 GUARD-01: fires init() for blank-import side effects
+	_ "github.com/agenthands/helix/internal/skill/memory"
 	_ "github.com/agenthands/helix/internal/skill/repomap"
 	_ "github.com/agenthands/helix/internal/skill/semantic"
 	_ "github.com/agenthands/helix/internal/skill/workflow"

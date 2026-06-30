@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "rename_churns_id/after.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "new_name",
+      "qualified_name": "new_name",
+      "file": "rename_churns_id/after.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 33
+      },
+      "signature": "int new_name(void) { return 42; }",
+      "signature_hash": "int new_name(void)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

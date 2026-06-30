@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "val",
+      "qualified_name": "val",
+      "file": "body_only_edit_preserves_id/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 27
+      },
+      "signature": "int val(void) { return 0; }",
+      "signature_hash": "int val(void)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "function_basic/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Main",
+      "qualified_name": "Main",
+      "file": "function_basic/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class Main { public static void hello() {} }",
+      "signature_hash": "public class Main",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "hello",
+      "qualified_name": "hello",
+      "file": "function_basic/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 33
+      },
+      "signature": "public static void hello() {}",
+      "signature_hash": "public static void hello()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

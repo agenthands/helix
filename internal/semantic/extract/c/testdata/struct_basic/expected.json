@@ -1,0 +1,74 @@
+{
+  "file": {
+    "path": "struct_basic/before.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Point",
+      "qualified_name": "Point",
+      "file": "struct_basic/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 30
+      },
+      "signature": "struct Point { int x; int y; }",
+      "signature_hash": "struct Point",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "struct_basic/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "struct_basic/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 26,
+        "end_line": 0,
+        "end_col": 27
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Point",
+      "file": "struct_basic/before.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ]
+}

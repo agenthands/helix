@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/after.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Greeter",
+      "qualified_name": "Greeter",
+      "file": "whitespace_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 10,
+        "end_col": 3
+      },
+      "signature": "class Greeter def greet \"hi\" end end",
+      "signature_hash": "class Greeter",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "greet",
+      "qualified_name": "greet",
+      "file": "whitespace_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 3,
+        "start_col": 2,
+        "end_line": 7,
+        "end_col": 5
+      },
+      "signature": "def greet \"hi\" end",
+      "signature_hash": "def greet",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Greeter",
+      "file": "whitespace_edit_preserves_id/after.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ]
+}

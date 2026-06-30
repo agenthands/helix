@@ -179,6 +179,7 @@ func registerGetChangeImpactGraph(server *mcp.SerenaMCPServer, s *SemanticSkill,
 //  7. Filter by args.EdgeKinds using surfaceToInternalKinds (same package, Pitfall 5).
 //  8. NodesCount = len(impacts) before cap; EdgesCount = total edges before cap.
 //  9. Cap nodes at impactNodeCap, edges at impactEdgeCap; set Truncated.
+//
 // 10. OQ-1 predicate: if any impact.Confidence < 0.8 → capEdgeConfidences(edges, 0.6);
 //
 //	set ConfidenceCap{Value: 0.6, Reason: "type_resolver_tier_3"}.

@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "malformed/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Broken",
+      "qualified_name": "Broken",
+      "file": "malformed/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 21
+      },
+      "signature": "public class Broken {",
+      "signature_hash": "public class Broken",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

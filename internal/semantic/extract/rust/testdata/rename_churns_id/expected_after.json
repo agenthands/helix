@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "rename_churns_id/after.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "new_name",
+      "qualified_name": "new_name",
+      "file": "rename_churns_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 30
+      },
+      "signature": "pub fn new_name() -\u003e i32 { 1 }",
+      "signature_hash": "pub fn new_name() -\u003e i32",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 21,
+        "end_line": 0,
+        "end_col": 24
+      }
+    }
+  ]
+}

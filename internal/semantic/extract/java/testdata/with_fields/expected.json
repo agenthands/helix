@@ -1,0 +1,103 @@
+{
+  "file": {
+    "path": "with_fields/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "public class Person { private String name; private int age; public String getName() { return name; } }",
+      "signature_hash": "public class Person",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 19,
+        "end_line": 1,
+        "end_col": 23
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 19
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "getName",
+      "qualified_name": "getName",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 44
+      },
+      "signature": "public String getName() { return name; }",
+      "signature_hash": "public String getName()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 12,
+        "end_line": 1,
+        "end_col": 18
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_fields/before.java",
+      "range": {
+        "start_line": 3,
+        "start_col": 11,
+        "end_line": 3,
+        "end_col": 17
+      },
+      "confidence": 0.7
+    }
+  ]
+}

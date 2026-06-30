@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Demo",
+      "qualified_name": "Demo",
+      "file": "body_only_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class Demo { public int compute() { return 1; } }",
+      "signature_hash": "public class Demo",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "compute",
+      "qualified_name": "compute",
+      "file": "body_only_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 38
+      },
+      "signature": "public int compute() { return 1; }",
+      "signature_hash": "public int compute()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

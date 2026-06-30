@@ -28,11 +28,16 @@ import (
 	"github.com/agenthands/helix/internal/semantic/graph"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/semantic/types"
+	typesc "github.com/agenthands/helix/internal/semantic/types/c"
+	typescsharp "github.com/agenthands/helix/internal/semantic/types/c_sharp"
+	typescpp "github.com/agenthands/helix/internal/semantic/types/cpp"
 	typesgo "github.com/agenthands/helix/internal/semantic/types/golang"
 	typesjava "github.com/agenthands/helix/internal/semantic/types/java"
+	typeskotlin "github.com/agenthands/helix/internal/semantic/types/kotlin"
 	typesphp "github.com/agenthands/helix/internal/semantic/types/php"
 	typespython "github.com/agenthands/helix/internal/semantic/types/python"
 	typesruby "github.com/agenthands/helix/internal/semantic/types/ruby"
+	typesrust "github.com/agenthands/helix/internal/semantic/types/rust"
 	typests "github.com/agenthands/helix/internal/semantic/types/typescript"
 )
 
@@ -102,6 +107,11 @@ func pyTypeResolver(r types.EffectiveReader) types.Resolver { return typespython
 func javaTypeStub(r types.EffectiveReader) types.Resolver   { return typesjava.NewStub(r) }
 func phpTypeStub() types.Resolver                           { return typesphp.NewStub() }
 func rubyTypeStub() types.Resolver                          { return typesruby.NewStub() }
+func csharpTypeStub(r types.EffectiveReader) types.Resolver { return typescsharp.NewStub(r) }
+func rustTypeStub(r types.EffectiveReader) types.Resolver   { return typesrust.NewStub(r) }
+func cTypeStub(r types.EffectiveReader) types.Resolver      { return typesc.NewStub(r) }
+func cppTypeStub(r types.EffectiveReader) types.Resolver    { return typescpp.NewStub(r) }
+func kotlinTypeStub(r types.EffectiveReader) types.Resolver { return typeskotlin.NewStub(r) }
 
 // SetSemanticGraph attaches the daemon's rank engine + type-resolver
 // dispatcher to a downstream consumer. Phase 64 (semantic MCP tools) will

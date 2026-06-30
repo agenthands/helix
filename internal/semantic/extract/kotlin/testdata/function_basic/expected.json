@@ -1,0 +1,26 @@
+{
+  "file": {
+    "path": "function_basic/before.kt",
+    "language": "kotlin",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "hello",
+      "qualified_name": "hello",
+      "file": "function_basic/before.kt",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "signature": "fun hello() {}",
+      "signature_hash": "fun hello()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

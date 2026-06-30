@@ -401,9 +401,9 @@ func TestFindRelatedSymbols_ClusterBoostApplied(t *testing.T) {
 	// Cluster: seed → cluster 1, A → cluster 1, B → cluster 2.
 	cm := &recorderClusterMembership{
 		clusters: map[integ.SymbolID]uint64{
-			seed:                  1,
-			"pkg/x/A.go::A":       1,
-			"pkg/x/B.go::B":       2,
+			seed:            1,
+			"pkg/x/A.go::A": 1,
+			"pkg/x/B.go::B": 2,
 		},
 	}
 	s, store := newSkillForFindRelatedTest(t, "read", fx, retr, cm)

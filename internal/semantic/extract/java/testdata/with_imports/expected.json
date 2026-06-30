@@ -1,0 +1,91 @@
+{
+  "file": {
+    "path": "with_imports/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Demo",
+      "qualified_name": "Demo",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 5,
+        "end_col": 1
+      },
+      "signature": "public class Demo { List\u003cString\u003e items; }",
+      "signature_hash": "public class Demo",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "items",
+      "qualified_name": "items",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 4,
+        "start_col": 17,
+        "end_line": 4,
+        "end_col": 22
+      },
+      "signature": "items",
+      "signature_hash": "items",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "List",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 4,
+        "start_col": 4,
+        "end_line": 4,
+        "end_col": 8
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "String",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 4,
+        "start_col": 9,
+        "end_line": 4,
+        "end_col": 15
+      },
+      "confidence": 0.7
+    }
+  ],
+  "imports": [
+    {
+      "source": "java.util.List",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 21
+      }
+    },
+    {
+      "source": "java.util.ArrayList",
+      "file": "with_imports/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 7,
+        "end_line": 1,
+        "end_col": 26
+      }
+    }
+  ]
+}

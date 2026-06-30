@@ -1,0 +1,38 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/after.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "calc",
+      "qualified_name": "calc",
+      "file": "comment_edit_preserves_id/after.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 49
+      },
+      "signature": "int calc(void) { /* compute result */ return 1; }",
+      "signature_hash": "int calc(void)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

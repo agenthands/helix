@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "rename_churns_id/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "OldName",
+      "qualified_name": "OldName",
+      "file": "rename_churns_id/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 32
+      },
+      "signature": "class OldName; def run; end; end",
+      "signature_hash": "class OldName; def run; end; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "run",
+      "qualified_name": "run",
+      "file": "rename_churns_id/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 15,
+        "end_line": 0,
+        "end_col": 27
+      },
+      "signature": "def run; end",
+      "signature_hash": "def run; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "OldName",
+      "file": "rename_churns_id/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 13
+      },
+      "confidence": 0.7
+    }
+  ]
+}

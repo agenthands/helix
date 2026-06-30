@@ -1,0 +1,72 @@
+{
+  "file": {
+    "path": "signature_change_churns_id/after.c",
+    "language": "c",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "f",
+      "qualified_name": "f",
+      "file": "signature_change_churns_id/after.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 37
+      },
+      "signature": "int f(int a, int b) { return a + b; }",
+      "signature_hash": "int f(int a, int b)",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "signature_change_churns_id/after.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 11
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "signature_change_churns_id/after.c",
+      "range": {
+        "start_line": 0,
+        "start_col": 17,
+        "end_line": 0,
+        "end_col": 18
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "global",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "int",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "file": {
+    "path": "whitespace_edit_preserves_id/after.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "whitespace_edit_preserves_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "pub fn add(a: i32, b: i32) -\u003e i32 { a + b }",
+      "signature_hash": "pub fn add(a: i32, b: i32) -\u003e i32",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "whitespace_edit_preserves_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 11,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "whitespace_edit_preserves_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 14,
+        "end_line": 0,
+        "end_col": 17
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 22,
+        "end_line": 0,
+        "end_col": 25
+      }
+    },
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 30,
+        "end_line": 0,
+        "end_col": 33
+      }
+    }
+  ]
+}

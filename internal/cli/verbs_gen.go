@@ -433,7 +433,7 @@ var verbSpecs = map[string]verbSpec{
 		flags: []verbFlag{
 			{name: "from-json", toolArg: "from", kind: flagJSON, required: true, help: "source seed — symbol_id OR (file_path AND symbol_name)"},
 			{name: "to-json", toolArg: "to", kind: flagJSON, required: true, help: "target seed — symbol_id OR (file_path AND symbol_name)"},
-			{name: "edge-kind", toolArg: "edge_kind", kind: flagString, required: true, help: "closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / other"},
+			{name: "edge-kind", toolArg: "edge_kind", kind: flagString, required: true, help: "closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other"},
 		},
 	},
 	"verify-edit": {

@@ -1,0 +1,94 @@
+{
+  "file": {
+    "path": "with_heritage/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "with_heritage/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 51
+      },
+      "signature": "public class Dog : Animal { public void Bark() {} }",
+      "signature_hash": "public class Dog : Animal",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Bark",
+      "qualified_name": "Bark",
+      "file": "with_heritage/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 28,
+        "end_line": 0,
+        "end_col": 49
+      },
+      "signature": "public void Bark() {}",
+      "signature_hash": "public void Bark()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Dog",
+      "file": "with_heritage/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 25
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Bark",
+      "file": "with_heritage/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 40,
+        "end_line": 0,
+        "end_col": 44
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Animal",
+      "range": {
+        "start_line": 0,
+        "start_col": 19,
+        "end_line": 0,
+        "end_col": 25
+      }
+    }
+  ]
+}

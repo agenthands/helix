@@ -1,0 +1,57 @@
+{
+  "file": {
+    "path": "module_basic/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Helpers",
+      "qualified_name": "Helpers",
+      "file": "module_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 46
+      },
+      "signature": "module Helpers; def self.help; \"yes\"; end; end",
+      "signature_hash": "module Helpers; def self.help; \"yes\"; end; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "help",
+      "qualified_name": "help",
+      "file": "module_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 16,
+        "end_line": 0,
+        "end_col": 41
+      },
+      "signature": "def self.help; \"yes\"; end",
+      "signature_hash": "def self.help; \"yes\"; end",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Helpers",
+      "file": "module_basic/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 7,
+        "end_line": 0,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    }
+  ]
+}

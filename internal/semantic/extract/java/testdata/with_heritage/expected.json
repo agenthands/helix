@@ -1,0 +1,93 @@
+{
+  "file": {
+    "path": "with_heritage/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "with_heritage/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "public class Dog extends Animal implements Pet { public void bark() {} }",
+      "signature_hash": "public class Dog extends Animal implements Pet",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "bark",
+      "qualified_name": "bark",
+      "file": "with_heritage/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 25
+      },
+      "signature": "public void bark() {}",
+      "signature_hash": "public void bark()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Pet",
+      "file": "with_heritage/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 43,
+        "end_line": 0,
+        "end_col": 46
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "extends",
+      "target": "Animal",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 31
+      }
+    },
+    {
+      "subject": "0",
+      "relation": "implements",
+      "target": "Pet",
+      "range": {
+        "start_line": 0,
+        "start_col": 43,
+        "end_line": 0,
+        "end_col": 46
+      }
+    }
+  ]
+}

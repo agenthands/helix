@@ -1,0 +1,43 @@
+{
+  "file": {
+    "path": "comment_edit_preserves_id/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Demo",
+      "qualified_name": "Demo",
+      "file": "comment_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "public class Demo { public int value() { return 42; } }",
+      "signature_hash": "public class Demo",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "value",
+      "qualified_name": "value",
+      "file": "comment_edit_preserves_id/before.java",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 37
+      },
+      "signature": "public int value() { return 42; }",
+      "signature_hash": "public int value()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

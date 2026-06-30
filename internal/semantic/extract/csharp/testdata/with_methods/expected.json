@@ -1,0 +1,151 @@
+{
+  "file": {
+    "path": "with_methods/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Widget",
+      "qualified_name": "Widget",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 1
+      },
+      "signature": "public class Widget { private int count; public void Reset() { count = 0; } public int Count() { return count; } }",
+      "signature_hash": "public class Widget",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "count",
+      "qualified_name": "count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 16,
+        "end_line": 1,
+        "end_col": 21
+      },
+      "signature": "count",
+      "signature_hash": "count",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Reset",
+      "qualified_name": "Reset",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 38
+      },
+      "signature": "public void Reset() { count = 0; }",
+      "signature_hash": "public void Reset()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Count",
+      "qualified_name": "Count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 4,
+        "end_line": 3,
+        "end_col": 40
+      },
+      "signature": "public int Count() { return count; }",
+      "signature_hash": "public int Count()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Widget",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 1,
+        "start_col": 16,
+        "end_line": 1,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Reset",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 2,
+        "start_col": 16,
+        "end_line": 2,
+        "end_col": 21
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 2,
+        "start_col": 26,
+        "end_line": 2,
+        "end_col": 31
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 15,
+        "end_line": 3,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "count",
+      "file": "with_methods/before.cs",
+      "range": {
+        "start_line": 3,
+        "start_col": 32,
+        "end_line": 3,
+        "end_col": 37
+      },
+      "confidence": 0.7
+    }
+  ]
+}

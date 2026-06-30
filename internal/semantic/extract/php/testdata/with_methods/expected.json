@@ -1,0 +1,202 @@
+{
+  "file": {
+    "path": "with_methods/before.php",
+    "language": "php",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Calculator",
+      "qualified_name": "Calculator",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 148
+      },
+      "signature": "class Calculator { public function add(int $a, int $b): int { return $a + $b; } public function sub(int $a, int $b): int { return $a - $b; } }",
+      "signature_hash": "class Calculator",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "add",
+      "qualified_name": "add",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 25,
+        "end_line": 0,
+        "end_col": 85
+      },
+      "signature": "public function add(int $a, int $b): int { return $a + $b; }",
+      "signature_hash": "public function add(int $a, int $b): int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 50,
+        "end_line": 0,
+        "end_col": 51
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 58,
+        "end_line": 0,
+        "end_col": 59
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "sub",
+      "qualified_name": "sub",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 86,
+        "end_line": 0,
+        "end_col": 146
+      },
+      "signature": "public function sub(int $a, int $b): int { return $a - $b; }",
+      "signature_hash": "public function sub(int $a, int $b): int",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "a",
+      "qualified_name": "a",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 111,
+        "end_line": 0,
+        "end_col": 112
+      },
+      "signature": "a",
+      "signature_hash": "a",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "b",
+      "qualified_name": "b",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 119,
+        "end_line": 0,
+        "end_col": 120
+      },
+      "signature": "b",
+      "signature_hash": "b",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 45,
+        "end_line": 0,
+        "end_col": 48
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 53,
+        "end_line": 0,
+        "end_col": 56
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 62,
+        "end_line": 0,
+        "end_col": 65
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 106,
+        "end_line": 0,
+        "end_col": 109
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 114,
+        "end_line": 0,
+        "end_col": 117
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "int",
+      "file": "with_methods/before.php",
+      "range": {
+        "start_line": 0,
+        "start_col": 123,
+        "end_line": 0,
+        "end_col": 126
+      },
+      "confidence": 0.7
+    }
+  ]
+}

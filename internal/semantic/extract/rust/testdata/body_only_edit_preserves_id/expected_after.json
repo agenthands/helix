@@ -1,0 +1,55 @@
+{
+  "file": {
+    "path": "body_only_edit_preserves_id/after.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "compute",
+      "qualified_name": "compute",
+      "file": "body_only_edit_preserves_id/after.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "pub fn compute() -\u003e i32 { let x = 1 + 2; x - 2 }",
+      "signature_hash": "pub fn compute() -\u003e i32",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "variable",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "body_only_edit_preserves_id/after.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 9
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "types": [
+    {
+      "subject": "0",
+      "annotation": "i32",
+      "range": {
+        "start_line": 0,
+        "start_col": 20,
+        "end_line": 0,
+        "end_col": 23
+      }
+    }
+  ]
+}

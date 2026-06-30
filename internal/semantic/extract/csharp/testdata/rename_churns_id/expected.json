@@ -1,0 +1,69 @@
+{
+  "file": {
+    "path": "rename_churns_id/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "OldName",
+      "qualified_name": "OldName",
+      "file": "rename_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 45
+      },
+      "signature": "public class OldName { public void Run() {} }",
+      "signature_hash": "public class OldName",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "Run",
+      "qualified_name": "Run",
+      "file": "rename_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 23,
+        "end_line": 0,
+        "end_col": 43
+      },
+      "signature": "public void Run() {}",
+      "signature_hash": "public void Run()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "OldName",
+      "file": "rename_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 20
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Run",
+      "file": "rename_churns_id/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 35,
+        "end_line": 0,
+        "end_col": 38
+      },
+      "confidence": 0.7
+    }
+  ]
+}

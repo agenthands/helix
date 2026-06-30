@@ -1,0 +1,40 @@
+{
+  "file": {
+    "path": "malformed/before.rb",
+    "language": "ruby",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Broken",
+      "qualified_name": "Broken",
+      "file": "malformed/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "signature": "class Broken",
+      "signature_hash": "class Broken",
+      "visibility": "public",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Broken",
+      "file": "malformed/before.rb",
+      "range": {
+        "start_line": 0,
+        "start_col": 6,
+        "end_line": 0,
+        "end_col": 12
+      },
+      "confidence": 0.7
+    }
+  ]
+}

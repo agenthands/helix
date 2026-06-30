@@ -161,10 +161,10 @@ func registerFindRelatedSymbols(server *mcp.SerenaMCPServer, s *SemanticSkill, t
 //  9. Re-sort post-boost by (Score desc, SymbolID asc) to preserve the same
 //     determinism doctrine retrieval.Fuse uses internally.
 //  10. Apply paths filter to RESULTS (strict-subset). total_count =
-//      len(filtered).
+//     len(filtered).
 //  11. Truncate to k.
 //  12. Assemble FreshnessV2 envelope (status=current when snapshot_id != 0
-//      && !overlay_active && runID != "").
+//     && !overlay_active && runID != "").
 //  13. Issue context-gathered receipt; return jsonResult.
 //
 // HARD INVARIANT (D-09 / D-13): this function MUST NOT reach the snapshot-

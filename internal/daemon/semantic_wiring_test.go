@@ -33,9 +33,9 @@ type testBuildState struct {
 	filesReused  int64
 }
 
-func (b *testBuildState) SetSnapshotID(id uint64)   { b.snapshotID = id }
-func (b *testBuildState) AddFilesIndexed(d int64)   { b.filesIndexed += d }
-func (b *testBuildState) AddFilesReused(d int64)    { b.filesReused += d }
+func (b *testBuildState) SetSnapshotID(id uint64) { b.snapshotID = id }
+func (b *testBuildState) AddFilesIndexed(d int64) { b.filesIndexed += d }
+func (b *testBuildState) AddFilesReused(d int64)  { b.filesReused += d }
 
 // TestProductionBuildFn_WritesNonEmptyFacts is the Phase 65 / 65-01 RED gate.
 // It asserts that running the production buildFn against a tempdir
@@ -229,11 +229,11 @@ func TestFactsFromExtracted_HighBitSetSymbolIDLogged(t *testing.T) {
 		},
 		Symbols: []extract.SymbolFact{
 			{
-				ID:               semantic.SymbolID(violatingID),
-				Language:         "go",
-				Kind:             extract.SymbolKind("function"),
-				Name:             "Violator",
-				QualifiedName:    "violator.Violator",
+				ID:            semantic.SymbolID(violatingID),
+				Language:      "go",
+				Kind:          extract.SymbolKind("function"),
+				Name:          "Violator",
+				QualifiedName: "violator.Violator",
 				StableKey: extract.StableSymbolKey{
 					RepoID:        "r-violator",
 					Language:      "go",
@@ -251,7 +251,7 @@ func TestFactsFromExtracted_HighBitSetSymbolIDLogged(t *testing.T) {
 		},
 	}
 
-	got := factsFromExtracted([]*extract.ExtractedFile{ef}, "r-violator", logger)
+	got := factsFromExtracted([]*extract.ExtractedFile{ef}, "r-violator", "", nil, logger)
 	if len(got.Symbols) != 1 {
 		t.Fatalf("got %d Symbols, want 1", len(got.Symbols))
 	}

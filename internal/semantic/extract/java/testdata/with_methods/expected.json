@@ -1,0 +1,60 @@
+{
+  "file": {
+    "path": "with_methods/before.java",
+    "language": "java",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Service",
+      "qualified_name": "Service",
+      "file": "with_methods/before.java",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "public class Service { public void start() {} public void stop() {} }",
+      "signature_hash": "public class Service",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "start",
+      "qualified_name": "start",
+      "file": "with_methods/before.java",
+      "range": {
+        "start_line": 1,
+        "start_col": 4,
+        "end_line": 1,
+        "end_col": 26
+      },
+      "signature": "public void start() {}",
+      "signature_hash": "public void start()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "stop",
+      "qualified_name": "stop",
+      "file": "with_methods/before.java",
+      "range": {
+        "start_line": 2,
+        "start_col": 4,
+        "end_line": 2,
+        "end_col": 25
+      },
+      "signature": "public void stop() {}",
+      "signature_hash": "public void stop()",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ]
+}

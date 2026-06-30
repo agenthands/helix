@@ -1,0 +1,174 @@
+{
+  "file": {
+    "path": "with_heritage/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "interface",
+      "name": "Animal",
+      "qualified_name": "Animal",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 2,
+        "end_col": 1
+      },
+      "signature": "pub trait Animal { fn speak(\u0026self); }",
+      "signature_hash": "pub trait Animal",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "\u0026self",
+      "qualified_name": "\u0026self",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 13,
+        "end_line": 1,
+        "end_col": 18
+      },
+      "signature": "\u0026self",
+      "signature_hash": "\u0026self",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "struct",
+      "name": "Dog",
+      "qualified_name": "Dog",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 4,
+        "start_col": 0,
+        "end_line": 4,
+        "end_col": 15
+      },
+      "signature": "pub struct Dog;",
+      "signature_hash": "pub struct Dog;",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "speak",
+      "qualified_name": "speak",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 6,
+        "start_col": 0,
+        "end_line": 8,
+        "end_col": 1
+      },
+      "signature": "impl Animal for Dog { fn speak(\u0026self) {} }",
+      "signature_hash": "impl Animal for Dog",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "function",
+      "name": "speak",
+      "qualified_name": "speak",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 7,
+        "start_col": 4,
+        "end_line": 7,
+        "end_col": 22
+      },
+      "signature": "fn speak(\u0026self) {}",
+      "signature_hash": "fn speak(\u0026self)",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "parameter",
+      "name": "\u0026self",
+      "qualified_name": "\u0026self",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 7,
+        "start_col": 13,
+        "end_line": 7,
+        "end_col": 18
+      },
+      "signature": "\u0026self",
+      "signature_hash": "\u0026self",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 10,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Dog",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 4,
+        "start_col": 11,
+        "end_line": 4,
+        "end_col": 14
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Animal",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 6,
+        "start_col": 5,
+        "end_line": 6,
+        "end_col": 11
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "Dog",
+      "file": "with_heritage/before.rs",
+      "range": {
+        "start_line": 6,
+        "start_col": 16,
+        "end_line": 6,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    }
+  ],
+  "heritage": [
+    {
+      "subject": "0",
+      "relation": "implements",
+      "target": "Animal",
+      "range": {
+        "start_line": 6,
+        "start_col": 5,
+        "end_line": 6,
+        "end_col": 11
+      }
+    }
+  ]
+}

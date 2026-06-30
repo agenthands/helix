@@ -1,0 +1,139 @@
+{
+  "file": {
+    "path": "with_fields/before.cs",
+    "language": "c_sharp",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "class",
+      "name": "Person",
+      "qualified_name": "Person",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 0,
+        "end_col": 102
+      },
+      "signature": "public class Person { private string name; private int age; public string GetName() { return name; } }",
+      "signature_hash": "public class Person",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "name",
+      "qualified_name": "name",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 37,
+        "end_line": 0,
+        "end_col": 41
+      },
+      "signature": "name",
+      "signature_hash": "name",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "age",
+      "qualified_name": "age",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 55,
+        "end_line": 0,
+        "end_col": 58
+      },
+      "signature": "age",
+      "signature_hash": "age",
+      "visibility": "private",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "method",
+      "name": "GetName",
+      "qualified_name": "GetName",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 60,
+        "end_line": 0,
+        "end_col": 100
+      },
+      "signature": "public string GetName() { return name; }",
+      "signature_hash": "public string GetName()",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Person",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 13,
+        "end_line": 0,
+        "end_col": 19
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "name",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 37,
+        "end_line": 0,
+        "end_col": 41
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "age",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 55,
+        "end_line": 0,
+        "end_col": 58
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "GetName",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 74,
+        "end_line": 0,
+        "end_col": 81
+      },
+      "confidence": 0.7
+    },
+    {
+      "kind": "type",
+      "name": "name",
+      "file": "with_fields/before.cs",
+      "range": {
+        "start_line": 0,
+        "start_col": 93,
+        "end_line": 0,
+        "end_col": 97
+      },
+      "confidence": 0.7
+    }
+  ]
+}

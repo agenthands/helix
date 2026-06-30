@@ -1,0 +1,74 @@
+{
+  "file": {
+    "path": "struct_basic/before.rs",
+    "language": "rust",
+    "extraction_status": "ready"
+  },
+  "symbols": [
+    {
+      "kind": "struct",
+      "name": "Point",
+      "qualified_name": "Point",
+      "file": "struct_basic/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 0,
+        "end_line": 3,
+        "end_col": 1
+      },
+      "signature": "pub struct Point { pub x: i32, pub y: i32, }",
+      "signature_hash": "pub struct Point",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "x",
+      "qualified_name": "x",
+      "file": "struct_basic/before.rs",
+      "range": {
+        "start_line": 1,
+        "start_col": 8,
+        "end_line": 1,
+        "end_col": 9
+      },
+      "signature": "x",
+      "signature_hash": "x",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    },
+    {
+      "kind": "field",
+      "name": "y",
+      "qualified_name": "y",
+      "file": "struct_basic/before.rs",
+      "range": {
+        "start_line": 2,
+        "start_col": 8,
+        "end_line": 2,
+        "end_col": 9
+      },
+      "signature": "y",
+      "signature_hash": "y",
+      "visibility": "exported",
+      "confidence": 0.7,
+      "extraction_source": "tree_sitter"
+    }
+  ],
+  "references": [
+    {
+      "kind": "type",
+      "name": "Point",
+      "file": "struct_basic/before.rs",
+      "range": {
+        "start_line": 0,
+        "start_col": 11,
+        "end_line": 0,
+        "end_col": 16
+      },
+      "confidence": 0.7
+    }
+  ]
+}

@@ -1,6 +1,11 @@
 package extract
 
-import "github.com/agenthands/helix/internal/semantic"
+import (
+	"github.com/agenthands/helix/internal/semantic"
+	"github.com/agenthands/helix/internal/semantic/classifier"
+	"github.com/agenthands/helix/internal/semantic/minhash"
+	"github.com/agenthands/helix/internal/semantic/relatedidx"
+)
 
 // SymbolKind enumerates the symbol categories Phase 59's tree-sitter
 // providers emit. Closed enum (D-01b): consumers may rely on exhaustive
@@ -104,6 +109,20 @@ type SymbolFact struct {
 	ExtractionSource string        // "tree_sitter" in this phase
 	Partial          bool
 	PartialReason    string
+
+	// Fingerprint carries structural near-clone (MinHash), structural-
+	// profile (ASTProfile), and semantic-vocabulary (Random-Indexing context
+	// vector) signatures computed at extraction time over the symbol's body
+	// AST. Only populated for function/method symbols with a body large enough
+	// to fingerprint; nil otherwise. The tree-sitter tree is closed when
+	// Extract returns, so these MUST be computed inside the provider while the
+	// AST is alive (see FingerprintBody). factsFromExtracted consumes them to
+	// emit SIMILAR_TO (MinHash, structure), DATA_FLOWS (ASTProfile, structure),
+	// and SEMANTICALLY_RELATED (ContextVec, vocabulary) edges. MinHash/Profile
+	// capture SHAPE; ContextVec captures VOCABULARY — orthogonal by design.
+	MinHash    *minhash.Signature
+	Profile    *classifier.ASTProfile
+	ContextVec *relatedidx.Vector
 }
 
 // ReceiverFact carries method-receiver metadata (Go-style methods,

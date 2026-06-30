@@ -1,5 +1,23 @@
 # Milestones
 
+## v2.8 Graph Intelligence Depth — cbm-mcp parity (Shipped: 2026-06-30)
+
+**Phases completed:** 4 phases (121–124), MILESTONE-AUDIT PASSED (goal-backward, code-grounded). Run inline (native standing-team/SMTC substrate absent); independence gate delegated to an `oracle` red-team (PROCEED-WITH-FIXES, all 6 findings folded).
+
+**Outcome: the one declared-but-unwired cbm-mcp edge kind, SEMANTICALLY_RELATED, now emits — honestly distinct, selective, deterministic, and readable.** Closed the depth gap (not just the schema gap) for the relatedness edge, via Random Indexing (cbm-mcp's own mechanism) rather than the unported neural embedder — keeping the single-binary / zero-runtime-dep invariant.
+
+**Key accomplishments:**
+- **Workstream A (121–123):** new pure-Go RI engine `internal/semantic/relatedidx/` (256-dim int32 context vectors over identifier/comment vocabulary; deterministic by integer accumulation, SimHash LSH for bounded emission, curated stop-list against boilerplate saturation); `SymbolFact.ContextVec` plumbed through the shared `FingerprintBody` seam → all 11 providers; emitted in `semanticallyRelatedEdges`, readable via `helix explain-symbol-deep`.
+- **Distinctness measured + mutation-confirmed:** same-struct/disjoint-vocab → Jaccard 1.0 / cosine 0.0; diff-struct/shared-vocab → Jaccard 0.0 / cosine 0.80; removing the stop-list links boilerplate-saturated unrelated bodies (cosine 0.69 > 0.55) → guard goes RED.
+- **B0-a (124):** renamed the structural-shape edge (mis-named `DATA_FLOWS`) to `STRUCTURAL_TWIN`; reserved `DATA_FLOWS`/`data_flows` (declared + validatable, producerless) for the true interprocedural arg-to-param flow of a future Workstream B.
+- **Invariants held:** zero new Go deps (`go.mod`/`go.sum` byte-unchanged), no schema migration, generated-file `--check` gates pass; 45 pkg `go test` ok, `make vet` (8 vettools) clean.
+
+**Audit:** PASSED — see `.planning/milestones/v2.8-MILESTONE-AUDIT.md`. `debt query: raw_debt=0`; `ledger validate: 0 errors`. One process finding: verify gates were authored as prose VERIFICATION.md, not §5 typed `gate_result` records, so `measure refusal-rate` reads 0 gates (observability gap, not correctness — the tests are real + mutation-confirmed).
+
+**Deferred (by design):** Workstream B feature build (true interprocedural DATA_FLOWS: def-use → arg→param → propagation) — own roadmap + red-team cycle, future milestone.
+
+---
+
 ## v2.4 Corpus Growth & Real Optimization Verdict (Shipped: 2026-06-24)
 
 **Phases completed:** 4 phases (111–114), 4 plans, 10/10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05)

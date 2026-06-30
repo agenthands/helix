@@ -926,7 +926,7 @@ helix switch-mode
 
 - `--from-json` (json, required) — source seed — symbol_id OR (file_path AND symbol_name)
 - `--to-json` (json, required) — target seed — symbol_id OR (file_path AND symbol_name)
-- `--edge-kind` (string, required) — closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other
+- `--edge-kind` (string, required) — closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / structural_twin / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other
 
 **Output:** a ranked, token-budgeted structural overview or context bundle (relpath-anchored).
 

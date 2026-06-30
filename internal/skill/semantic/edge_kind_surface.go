@@ -22,7 +22,8 @@ const (
 	EdgeKindContains            EdgeKindSurface = "contains"
 	EdgeKindImports             EdgeKindSurface = "imports"
 	EdgeKindDefines             EdgeKindSurface = "defines"
-	EdgeKindDataFlows           EdgeKindSurface = "data_flows"
+	EdgeKindDataFlows           EdgeKindSurface = "data_flows"      // reserved for true interprocedural flow (v2.8 Workstream B)
+	EdgeKindStructuralTwin      EdgeKindSurface = "structural_twin" // control-flow/expression-shape profile cosine
 	EdgeKindHTTPCalls           EdgeKindSurface = "http_calls"
 	EdgeKindAsyncCalls          EdgeKindSurface = "async_calls"
 	EdgeKindEmits               EdgeKindSurface = "emits"
@@ -64,6 +65,8 @@ func MapInternalKind(internal string) EdgeKindSurface {
 		return EdgeKindDefines
 	case "DATA_FLOWS":
 		return EdgeKindDataFlows
+	case "STRUCTURAL_TWIN":
+		return EdgeKindStructuralTwin
 	case "HTTP_CALLS":
 		return EdgeKindHTTPCalls
 	case "ASYNC_CALLS":

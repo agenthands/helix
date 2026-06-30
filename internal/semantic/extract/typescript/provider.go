@@ -227,6 +227,11 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 					Visibility:    visib,
 				})
 				sf.ID = extract.StableSymbolID(sf.StableKey)
+				if extract.IsFingerprintableKind(defKind) {
+					if decl := defNameNode.Parent(); decl != nil {
+						extract.FingerprintBody(&sf, decl, source)
+					}
+				}
 				out.Symbols = append(out.Symbols, sf)
 			}
 		}

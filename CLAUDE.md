@@ -191,16 +191,16 @@ LazyInit MUST run first so the workspace is activated before `TelemetryMiddlewar
 - **LSP only**: No JetBrains or proprietary backends
 - **Repo**: Go-only; the historical Python reference tree has been removed (see git history)
 
-## GSD Workflow Enforcement
+## Anvil Workflow Enforcement
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+Before using Edit, Write, or other file-changing tools, start work through an Anvil workflow so planning artifacts and execution context stay in sync.
 
 Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
+- `anvil-discuss-phase` then `anvil-plan-phase` to scope and plan a phase before building
+- `anvil-execute-phase` for planned phase work (`anvil-autonomous` to drive all remaining phases)
+- `anvil-debugging` for investigation and bug fixing
 
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+Do not make direct repo edits outside an Anvil workflow unless the user explicitly asks to bypass it.
 
 ## Helix CLI tool routing (this product's agent surface)
 

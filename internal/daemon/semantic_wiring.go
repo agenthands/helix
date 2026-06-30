@@ -1597,6 +1597,18 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			b.logger.Debug("cochange mine skipped", "repo_root", ws.RepoRoot, "err", cerr)
 		}
 
+		// Assign a dense 1-based EdgeID across the assembled batch. The
+		// semantic_edges PK is (snapshot_id, edge_id) and WriteSnapshotFacts
+		// inserts EdgeID verbatim with no allocator, so edges left at the
+		// zero default collide on the second row. This is the single
+		// allocation point for the whole snapshot — it covers BOTH the
+		// factsFromExtracted edges (heritage / imports / classifier /
+		// CROSS_* / DEFINES / MEMBER_OF / TESTS / HANDLES / SIMILAR_TO /
+		// DATA_FLOWS) AND the FILE_CHANGES_WITH edges appended just above.
+		for i := range facts.Edges {
+			facts.Edges[i].EdgeID = uint64(i + 1)
+		}
+
 		// 5. Snapshot lifecycle.
 		snap, err := b.store.BeginSnapshot(ctx, semanticstore.SnapshotMeta{
 			RepoID:         repoID,
@@ -1931,6 +1943,8 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 	var refSeq uint64
 	var routeHandlers []routeHandlerLink
 	seenExtModule := make(map[uint64]bool) // dedup external-module nodes across files
+	var pendingDst []pendingDstResolve     // shallow edges awaiting name-index resolution
+	var fpNodes []fingerprintedNode        // per-symbol fingerprints for SIMILAR_TO / DATA_FLOWS
 	for i, ef := range extracted {
 		if ef == nil {
 			continue
@@ -1992,8 +2006,36 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 		out.Symbols = append(out.Symbols, single.Symbols...)
 		out.References = append(out.References, single.References...)
 
-		// Heritage → IMPLEMENTS/EXTENDS edges (Phase 62 deferred — wired 2026-06-28).
-		// Uses first symbol in file as source; perfect resolution needs type resolver.
+		// Collect per-symbol fingerprints for the batch-level SIMILAR_TO /
+		// DATA_FLOWS passes. single.Symbols[k] (masked NodeID) and
+		// ef.Symbols[k] (provider-computed MinHash / ASTProfile) are 1:1 in
+		// index — ToStoreFacts iterates ef.Symbols in order. Only symbols the
+		// provider fingerprinted (function/method bodies ≥ minhash.MinNodes)
+		// carry a non-nil signature/profile.
+		for k := range single.Symbols {
+			if k >= len(ef.Symbols) {
+				break
+			}
+			es := ef.Symbols[k]
+			if es.MinHash == nil && es.Profile == nil && es.ContextVec == nil {
+				continue
+			}
+			fpNodes = append(fpNodes, fingerprintedNode{
+				nodeID:   single.Symbols[k].NodeID,
+				kind:     single.Symbols[k].Kind,
+				language: single.Symbols[k].Language,
+				sig:      es.MinHash,
+				profile:  es.Profile,
+				vec:      es.ContextVec,
+			})
+		}
+
+		// Heritage → IMPLEMENTS/EXTENDS edges. Source is the file's first
+		// symbol (providers don't populate HeritageFact.SubjectID); the
+		// target NAME (h.Target, possibly qualified) is resolved against the
+		// batch name index after the loop (resolvePendingDst). In-repo
+		// targets get a real DstNodeID + raised confidence; out-of-repo
+		// targets (stdlib/external types) stay DstNodeID=0 at base confidence.
 		for _, h := range ef.Heritage {
 			srcID := uint64(0)
 			if len(single.Symbols) > 0 {
@@ -2005,11 +2047,18 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 			}
 			out.Edges = append(out.Edges, semanticstore.EdgeFact{
 				SrcNodeID:  srcID,
-				DstNodeID:  0, // unresolved — type resolver fills later
+				DstNodeID:  0, // resolved post-loop via batch name index (in-repo only)
 				EdgeKind:   kind,
 				Source:     "tree_sitter",
 				Confidence: 0.20,
 				Weight:     0.5,
+			})
+			pendingDst = append(pendingDst, pendingDstResolve{
+				edgeIdx:    len(out.Edges) - 1,
+				candidates: []string{h.Target, lastNameSegment(h.Target)},
+				srcNodeID:  srcID,
+				confidence: 0.70, // tree-sitter + local name resolution
+				weight:     0.6,
 			})
 		}
 
@@ -2021,12 +2070,25 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 			}
 			out.Edges = append(out.Edges, semanticstore.EdgeFact{
 				SrcNodeID:  srcID,
-				DstNodeID:  0, // unresolved
+				DstNodeID:  0, // resolved post-loop: named imports → in-repo symbol; bare module imports stay 0
 				EdgeKind:   "IMPORTS",
 				Source:     "tree_sitter",
 				Confidence: 0.20,
 				Weight:     0.5,
 			})
+			// Named imports ({ Foo } from "./mod" / from mod import Foo) carry
+			// the imported symbol name; resolve to its in-repo definition when
+			// present. Bare module imports (import "fmt") have no named symbol
+			// and stay DstNodeID=0 (module-level, no single in-repo target).
+			if importCands := importTargetCandidates(imp); len(importCands) > 0 {
+				pendingDst = append(pendingDst, pendingDstResolve{
+					edgeIdx:    len(out.Edges) - 1,
+					candidates: importCands,
+					srcNodeID:  srcID,
+					confidence: 0.60,
+					weight:     0.5,
+				})
+			}
 
 			// CROSS_IMPORTS: imports whose module path is external to this repo
 			// promote to a named external-module node + a CROSS_IMPORTS edge.
@@ -2133,11 +2195,21 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 			}
 			out.Edges = append(out.Edges, semanticstore.EdgeFact{
 				SrcNodeID:  srcID,
-				DstNodeID:  0, // unresolved
+				DstNodeID:  0, // resolved post-loop: callee name → in-repo symbol when present
 				EdgeKind:   kind,
 				Source:     "classifier",
 				Confidence: 0.45,
 				Weight:     0.3,
+			})
+			// Resolve the callee NAME to its in-repo definition when present
+			// (e.g. an in-repo emitter/handler function). External-library
+			// callees (the common case for HTTP/async) stay DstNodeID=0.
+			pendingDst = append(pendingDst, pendingDstResolve{
+				edgeIdx:    len(out.Edges) - 1,
+				candidates: []string{ref.Name},
+				srcNodeID:  srcID,
+				confidence: 0.55, // name-classified + resolved in-repo callee
+				weight:     0.3,
 			})
 		}
 
@@ -2264,6 +2336,11 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 			nameToNode[s.Name] = s.NodeID
 		}
 	}
+
+	// Resolve the shallow IMPLEMENTS/EXTENDS/IMPORTS/classifier edges whose
+	// DstNodeID was deferred to the batch name index. In-repo targets get a
+	// real endpoint + raised confidence; out-of-repo targets keep DstNodeID=0.
+	resolvePendingDst(out.Edges, pendingDst, nameToNode)
 	testEdges := make([]semanticstore.EdgeFact, 0, 16)
 	for i := range out.Symbols {
 		s := out.Symbols[i]
@@ -2310,6 +2387,18 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 		})
 	}
 	out.Edges = append(out.Edges, handleEdges...)
+
+	// SIMILAR_TO (MinHash near-clone) + STRUCTURAL_TWIN (ASTProfile structural-
+	// profile similarity) + SEMANTICALLY_RELATED (Random-Indexing vocabulary
+	// similarity) — batch-level passes over the per-symbol fingerprints
+	// collected during the file loop. Each is bounded (LSH candidate set /
+	// quantized profile buckets / language buckets) and per-node fan-out capped
+	// at minhash.MaxEdgesPerNode. SIMILAR_TO/STRUCTURAL_TWIN read SHAPE; RELATED
+	// reads VOCABULARY — orthogonal signals over the same nodes. (DATA_FLOWS is
+	// reserved for true interprocedural flow, v2.8 Workstream B — not emitted here.)
+	out.Edges = append(out.Edges, similarToEdges(fpNodes)...)
+	out.Edges = append(out.Edges, structuralTwinEdges(fpNodes)...)
+	out.Edges = append(out.Edges, semanticallyRelatedEdges(fpNodes)...)
 
 	return out
 }

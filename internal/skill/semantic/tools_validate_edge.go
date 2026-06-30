@@ -102,7 +102,7 @@ type EvidenceCitation struct {
 type ValidateGraphEdgeArgs struct {
 	From     SeedInput `json:"from"      jsonschema:"source seed — symbol_id OR (file_path AND symbol_name)"`
 	To       SeedInput `json:"to"        jsonschema:"target seed — symbol_id OR (file_path AND symbol_name)"`
-	EdgeKind string    `json:"edge_kind" jsonschema:"closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other"`
+	EdgeKind string    `json:"edge_kind" jsonschema:"closed surface enum: calls / references / implements / extends / has_type / uses_type / contains / defines / imports / data_flows / structural_twin / http_calls / async_calls / emits / listens_on / similar_to / semantically_related / handles / configures / writes / member_of / tests / file_changes_with / cross_imports / cross_calls / other"`
 }
 
 // ValidateGraphEdgeResult is the validate_graph_edge response shape. Both
@@ -232,6 +232,8 @@ func surfaceToInternalKinds(surface EdgeKindSurface) []string {
 		return []string{"IMPORTS"}
 	case EdgeKindDataFlows:
 		return []string{"DATA_FLOWS"}
+	case EdgeKindStructuralTwin:
+		return []string{"STRUCTURAL_TWIN"}
 	case EdgeKindHTTPCalls:
 		return []string{"HTTP_CALLS"}
 	case EdgeKindAsyncCalls:
@@ -279,6 +281,7 @@ var validSurfaceEdgeKinds = map[string]EdgeKindSurface{
 	string(EdgeKindImports):             EdgeKindImports,
 	string(EdgeKindDefines):             EdgeKindDefines,
 	string(EdgeKindDataFlows):           EdgeKindDataFlows,
+	string(EdgeKindStructuralTwin):      EdgeKindStructuralTwin,
 	string(EdgeKindHTTPCalls):           EdgeKindHTTPCalls,
 	string(EdgeKindAsyncCalls):          EdgeKindAsyncCalls,
 	string(EdgeKindEmits):               EdgeKindEmits,
@@ -378,7 +381,7 @@ func (s *SemanticSkill) handleValidateGraphEdge(ctx context.Context, args Valida
 	if !ok {
 		return errorResult(
 			serr.New(serr.InvalidArgs,
-				fmt.Sprintf("edge_kind %q is not in the closed surface enum (calls/references/implements/extends/has_type/uses_type/contains/defines/imports/data_flows/http_calls/async_calls/emits/listens_on/similar_to/semantically_related/handles/configures/writes/member_of/tests/file_changes_with/cross_imports/cross_calls/other)",
+				fmt.Sprintf("edge_kind %q is not in the closed surface enum (calls/references/implements/extends/has_type/uses_type/contains/defines/imports/data_flows/structural_twin/http_calls/async_calls/emits/listens_on/similar_to/semantically_related/handles/configures/writes/member_of/tests/file_changes_with/cross_imports/cross_calls/other)",
 					args.EdgeKind)).Error(),
 		)
 	}

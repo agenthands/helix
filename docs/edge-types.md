@@ -91,5 +91,6 @@ build pipeline (the v2.8 PK-collision fix).
 11 first-class extractors: Go, TypeScript/JavaScript, Python, Java, C#, Rust, C,
 C++, Kotlin, PHP, Ruby (`internal/semantic/extract/<lang>/`, one `queries.scm`
 each). The graph engine itself is language-agnostic (`NodeID`/`EdgeKind`); only the
-extractor + type-resolver depth varies (full type resolution for Go/TypeScript/Python;
-LSP-conditional stubs for the other eight).
+extractor + type-resolver depth varies (full type resolution for Go/TypeScript/Python
+and — since v2.11 — Java/C#/C/C++; LSP-conditional stubs for PHP/Ruby/Rust/Kotlin). See
+`docs/type-resolution.md` for the per-language tier ladder.

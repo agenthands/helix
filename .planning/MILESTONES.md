@@ -1,6 +1,24 @@
 # Milestones
 
-## v2.10 trace_data_flow verb — DATA_FLOWS read surface (Complete + verified 2026-06-30; pending commit)
+## v2.11 Type-resolution depth (C-family) (Shipped 2026-07-01)
+
+**Phases:** 5 (130 plumbing + 131 C + 132 C++ + 133 C# + 134 Java) — ALL COMPLETE + committed (`d43d7ce7`..`97fc4bc9`). MILESTONE-AUDIT PASSED (`.planning/milestones/v2.11-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`RedTeamV211`, PROCEED-WITH-FIXES, folded) + a close red-team (oracle).
+
+**Goal: replace the 4 C-family stub type-resolvers (Java/C#/C/C++) with full tiered resolvers**, raising their RESOLVES_TO/USES_TYPE/CALLS edges from a flat `0.20 unresolved` to real tiered confidence. The engine (7-tier ladder, fixpoint, dispatcher) already existed (Phase 62); v2.11 was per-language resolver depth + the data-plumbing prerequisite the red-team surfaced.
+
+**Key accomplishments:**
+- **Phase 130 (plumbing) — the load-bearing unblock.** The daemon adapter's `QueryEffectiveSymbol` returned an empty `SymbolFact`, so EVERY resolver's tiers 2–6 collapsed to Tier 7 in production (the existing Go/Py/TS resolvers were production-inert too). New `Store.QueryEffectiveSymbolFact` (snapshot JOIN `semantic_symbols`⋈`semantic_files`) + adapter re-route; proven end-to-end (real go resolver → real store → Tier-2 edge).
+- **Phases 131–134 (C-family resolvers):** each stub → a full resolver walking the ladder with language-specific parsing. C: tiers 2/4/6 (no ctor). C++: 2/3/4/6 + template/qualifier normalization. C#: 2/3/4/6 + attribute-strip + namespace scope. Java: 2/3/4/6 + `@`-strip + `*Impl`/`Abstract*`/`get*` heuristics + package scope. Docs: `docs/type-resolution.md`.
+
+**Red-team folds (RedTeamV211, all applied):** B1 (starved adapter → Phase 130); B2 (no `doc_comment` column → Tier 5/comment DROPPED, no migration); B3 (c_sharp/java `stub_test.go` orphans → replaced with `resolver_test.go`); M1 (real per-language scope: Java/C# intra-package/namespace, C/C++ flat program-wide); M2 (C++ stack/brace + heap-new construction); M3 (Java/C# T2 = typed declaration, annotations auxiliary); m5 (risk-first build C→C++→C#→Java).
+
+**Invariants held:** zero new Go deps (`go.mod`/`go.sum` byte-unchanged), no schema migration, deterministic, RE2 (no ReDoS); `make vet` (8 vettools) clean; 13 pkg `go test` ok; D-12 always-emit preserved. Leaf boundary (stdlib + `internal/semantic/{graph,types}`).
+
+**Honest scope limits (stated in the audit):** E2E composition (extraction→snapshot→resolver→emit→graph) inferred not tested for the 4 new languages; production cross-package cap is test-seam-gated (`typeIndex` nil in production — pre-existing Phase-62 characteristic); T6 heuristic is best-effort 0.45.
+
+**Deferred:** T5/comment tier (needs `doc_comment` schema migration + extraction backfill); Rust/Kotlin/PHP/Ruby resolvers (v2.12); production E2E for the C-family.
+
+## v2.10 trace_data_flow verb — DATA_FLOWS read surface (Shipped 2026-06-30, `12a9ec3c`)
 
 **Phases:** 3 (127 ReachableFrom primitive + 128 handler + 129 atomic frozen-51 surface bump) — ALL COMPLETE + verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.10-MILESTONE-AUDIT.md`).
 

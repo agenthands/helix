@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.10
-milestone_name: trace_data_flow verb (DATA_FLOWS read surface)
-status: active
-last_updated: "2026-06-30T19:30:00.000Z"
-last_activity: 2026-06-30 — v2.10 Phases 127-129 COMPLETE + verified (51st verb, build/tests/make vet/generated gates green); NOT yet committed. v2.9 committed earlier (6618de08).
+milestone: v2.11
+milestone_name: Type-resolution depth (C-family)
+status: shipped
+last_updated: "2026-07-01T00:00:00.000Z"
+last_activity: 2026-07-01 — v2.11 Phases 130-134 COMPLETE + committed (d43d7ce7 plumbing, 12805bd6 C, 7c9acb1b C++, 03df9fee C#, 97fc4bc9 Java); MILESTONE-AUDIT PASSED; docs/type-resolution.md added. v2.9 (6618de08) + v2.10 (12a9ec3c/dafab515) shipped earlier.
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 

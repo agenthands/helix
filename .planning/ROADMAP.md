@@ -24,12 +24,13 @@
 - [x] **v2.6 Turn Budget Tuning** -- Phase 119 (shipped 2026-06-26)
 - [x] **v2.7 Corpus Analysis & Benchmark Pivot** -- Phase 120 (shipped 2026-06-26)
 - [x] **v2.8 Graph Intelligence Depth (cbm-mcp parity)** -- Phases 121-124 (shipped 2026-06-30) — see `.planning/milestones/v2.8-ROADMAP.md`
-- [x] **v2.9 Interprocedural DATA_FLOWS (param-flow reachability substrate)** -- Phases 125-126 (complete + verified 2026-06-30; pending commit) — see `.planning/milestones/v2.9-REQUIREMENTS.md`
-- [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (complete + verified 2026-06-30; pending commit) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
+- [x] **v2.9 Interprocedural DATA_FLOWS (param-flow reachability substrate)** -- Phases 125-126 (shipped 2026-06-30, `6618de08`) — see `.planning/milestones/v2.9-REQUIREMENTS.md`
+- [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (shipped 2026-06-30, `12a9ec3c`) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
+- [x] **v2.11 Type-resolution depth (C-family)** -- Phases 130-134 (shipped 2026-07-01, `d43d7ce7`..`97fc4bc9`) — see `.planning/milestones/v2.11-REQUIREMENTS.md`
 
 ## Phases
 
-**Current: v2.9 Interprocedural DATA_FLOWS (Phases 125–126)** — build the `DATA_FLOWS` producer: case-1-only param→param interprocedural flow (caller.param → callee.param), a syntactic pass-through reachability substrate (NOT full taint analysis — no in-body origins/field-flow/sinks). Full detail + folded red-team in `.planning/milestones/v2.9-REQUIREMENTS.md`. v2.8 shipped Workstream A + B0-a (the rename that reserved this name).
+**Current: none — v2.11 shipped (Phases 130–134, `d43d7ce7`..`97fc4bc9`).** All C-family type resolvers (Java/C#/C/C++) are now full tiered resolvers; the resolver adapter plumbing (Phase 130) unblocked tiers 2–6 for every language. Next milestone undecided (deferred options: T5/comment migration; Rust/Kotlin/PHP/Ruby resolvers = v2.12; production E2E for the C-family). The v2.9→v2.11 detail below is historical.
 
 ### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
 

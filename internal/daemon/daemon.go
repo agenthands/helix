@@ -612,7 +612,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"java":       javaTypeStub(reader),
 			"php":        phpTypeStub(),
 			"ruby":       rubyTypeStub(),
-			"c_sharp":    csharpTypeStub(reader),
+			"c_sharp":    csharpTypeResolver(reader),
 			"rust":       rustTypeStub(reader),
 			"c":          cTypeResolver(reader),
 			"cpp":        cppTypeResolver(reader),

@@ -8,45 +8,35 @@ A Go-native, CLI-first code intelligence platform: universal LSP gateway at the 
 
 The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
-## Current Milestone: v2.5 Agent Harness Rebuild (TUNE-FUT-06)
+## Current Milestone: v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)
 
-**Goal:** Make the optimization agent actually solve tasks by editing — with a feedback loop and real GEPA tuning — so that steering deltas become meaningful.
+**Goal:** Deepen the v2.9 case-1 DATA_FLOWS substrate so flow originating **mid-body** — the return of an in-body call (`y := producer(); sink(y)`), not just a parameter — is modeled and queryable across **all 11 languages**, using the **no-schema-change** cut: edges anchor on existing **function** + **parameter** symbol nodes, never on persistent variable-level nodes.
 
-**Why now:** v2.4's +0.0392 delta is **noise between two broken configs**. The agent makes 0 tool calls on ~40% of tasks (answers in prose), has no feedback loop, burns verb-error budget, and GEPA reflection is a no-op (AgentProgram emits no predictor trace). The pipeline plumbing works; the harness doesn't.
+**Why now:** v2.9 shipped case-1 param→param flow and explicitly deferred in-body origins / variable-level precision ("needs variable-level nodes"). v2.10 made it agent-consumable (`trace_data_flow`). The co-driver chose the cheaper honest cut: widen the flow-summary origin space (`{param idx}` → `{param idx ∪ callReturn(callee)}`) rather than extract locals as graph nodes — preserving the zero-dep / no-migration / node=symbol-identity invariants while closing the single remaining genuine depth gap.
 
-**Target features:**
+**Target features (FLOW-04..06 — see `.planning/milestones/v2.13-REQUIREMENTS.md`):**
 
-1. **HARNESS-01: Task-solving system prompt** — Name the solution file, "success = hidden tests pass", forbid prose, "not done until implemented"
-2. **HARNESS-02: Feedback loop** — Wire run-tests / get-diagnostics into ReAct so the agent knows when it's done
-3. **HARNESS-03: Verb-arg hardening** — Stop burning error budget on malformed calls
-4. **HARNESS-04: Real GEPA module** — Rebuild as a `dspy` agent that emits a reflectable trace, then tune THAT
-5. **HARNESS-05: Re-run attribution** — After the above, measure a real delta with an engaged agent
+1. **FLOW-04: Origin-space widening + kind-union extension** — model in-body call-return origins in the flow-summary engine; extend the tree-sitter kind unions so all 11 grammars are covered (red-team B1: only 6/11 worked); prove via a cheap all-11 unit matrix.
+2. **FLOW-05: In-body + return-bridge emission** — emit `producer.function → consumer.param` edges (`Source:"def_use_inbody"`) + reclaim the dead `ParamFlow.Returns` flag as a `param → own-function` return-bridge (`Source:"def_use_return"`) so in-body origins compose for multi-hop reachability; Go-proven in-process.
+3. **FLOW-06: All-11 real-binary E2E + function-seeded multi-hop + docs** — confirm end-to-end through the real `helix` binary across the languages, with an honest per-language proven/limitation ledger.
 
 **Key constraints:**
-- Zero new Go deps (go.mod stays untouched since v2.0)
-- All tuning stays in dev-venv Python (`tools/dspy-tune/`)
-- Human-gated adoption (no auto-write of SKILL.md)
-- Corpus at 103 tasks (already past `val_size>50` gate)
+- Zero new Go deps (`go.mod`/`go.sum` byte-unchanged)
+- No schema migration (`EdgeFact` unchanged; binding = symbol-node identity)
+- Deterministic snapshot; v2.9 `def_use` param→param edge SET unchanged for the 6 already-working languages
+- All 11 languages proven E2E (co-driver); breadth risk retired at the cheapest phase (all-11 unit test in Phase 138)
 
-**Root causes to fix (from v2.4 investigation):**
-
-| Finding | Fix |
-|---------|-----|
-| ~40% of tasks: 0 tool calls | Force editing in system prompt |
-| No run-tests in loop | Add feedback loop |
-| Verb errors burn budget | Harden arg usage |
-| SKILL.md is wrong artifact | Build task-solving prompt |
-| GEPA no-op | Real `dspy` module |
+**Red-team folded (`agent://RedTeamV213`, PROCEED-WITH-FIXES):** B1 (5/11 grammars' kind unions were uncovered — Ruby emitted ZERO DATA_FLOWS since v2.9), M1 (non-regression reframed to the def_use edge SET; append-order pinned), M2 (function-seeded multi-hop), M3 (false param-anchored invariants corrected), M4 (bridge-pass determinism), M5 (all-11 unit test moved to Phase 138).
 
 ---
 
-## Last Shipped Milestone: v2.4 Corpus Growth & Real Optimization Verdict (TUNE-FUT-01) — SHIPPED 2026-06-24
+## Last Shipped Milestone: v2.12 Production wiring for the type resolvers (C-family E2E) — SHIPPED 2026-07-01
 
-**Shipped:** 4 phases (111–114), 10/10 requirements (CORPUS-01/02, SCALE-01/02/03, RUN-01/02/03, REPORT-01, ADOPT-05), audit PASSED. Grew the optimization corpus past the strict `val_size > 50` held-out gate (103 Aider tasks → train 26 / val 26 / sequestered held-out 51) and ran the v2.3 task-success pipeline **for real, cost-aware ($0.23)** — turning v2.3's "NO-SHIP by design" into an actual, numbers-backed verdict.
+**Shipped:** 3 phases (135 extraction foundation + 136 resolver ChainTokens/producer/emit + 137 real-binary E2E + docs), audit PASSED (`.planning/milestones/v2.12-MILESTONE-AUDIT.md`), committed `f7e5f4b3`. Made the ORPHANED 12-language type-resolver dispatcher a production consumer: a C-family type reference becomes a committed `RESOLVES_TO` edge (typeIndex from `nameToNode`), surfaced to agents as `has_type` via `helix explain-symbol-deep` — proven through the real binary (`TestCLI_E2E_CTypeResolution`) + in-process (`TestResolveTypeEdges_PositiveCommitsRealEdge`).
 
-**Outcome: SHIP-by-rule (marginal) — adoption NOT recommended on this margin (REPORT-only).** The ON-vs-OFF attribution on the sequestered held-out split measured a delta of **+0.0392** (ON 3/51 vs OFF 1/51, val_size 51 > 50); the SWE-bench Verified gold-patch confirming leg resolved **2/2** on Podman (fail-not-skip proven). `decide_ship` returns SHIP (delta > 0 AND val_size > 50), but the +2-task margin at n=51 is within noise — so adoption stays a separate human `helix-refgen --check`-gated decision and is explicitly not recommended on this run alone.
+**Outcome:** the red-team (`agent://RedTeamV212`, REWORK→all folded) caught a latent v2.11 Signature-strip contract break (resolvers parsed the type from a `Signature` the extractors strip to a bare name; the "tiers work" proof used a fabricated signature). Fixed via co-driver **Option A** (the producer links var→type and feeds the type name via `ChainTokens`; the resolver's annotation tier consumes it). Clean cutover — orphaned bootstrap dispatcher + dead seams removed.
 
-**The real win:** the v2.3 pipeline was never functional end-to-end (its hermetic fakes hid three integration gaps); v2.4 found and fixed all three — agent verb argv (positional → real `--flags`), a **real product bug** (`helix activate` now also calls `activate_project` so the CLI file/edit verbs get a workspace; E2E regression-tested), and the GEPA candidate→agent steering thread. **ADOPT-04 preserved** — zero new Go deps (`go.mod` untouched since v2.0); the only Go change is the user-approved product-bug fix; all tuning deps are dev-venv Python only. Full detail: `.planning/milestones/v2.4-ROADMAP.md` + `v2.4-MILESTONE-AUDIT.md`; ship/no-ship REPORT at `tools/dspy-tune/REPORT.md`.
+**Invariants held:** zero new Go deps, no schema migration, deterministic (byte-identical snapshot), extractor goldens byte-identical, `make vet` (8 vettools) clean, 12 pkg `go test` ok. **Honest limit:** C is the proven language; C++/C#/Java share the wiring but lack co-capture linkage + a dedicated E2E (fast-follow). Recent milestone artifacts live under `.planning/milestones/`; the milestone ledger is `.planning/MILESTONES.md`.
 
 ## Requirements
 

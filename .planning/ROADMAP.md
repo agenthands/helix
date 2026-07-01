@@ -28,10 +28,11 @@
 - [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (shipped 2026-06-30, `12a9ec3c`) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
 - [x] **v2.11 Type-resolution depth (C-family)** -- Phases 130-134 (shipped 2026-07-01, `d43d7ce7`..`97fc4bc9`) — see `.planning/milestones/v2.11-REQUIREMENTS.md`
 - [x] **v2.12 Production wiring for the type resolvers (C-family E2E)** -- Phases 135-137 (shipped 2026-07-01) — see `.planning/milestones/v2.12-ROADMAP.md` + `.planning/milestones/v2.12-MILESTONE-AUDIT.md`
+- [ ] **v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)** -- Phases 138-140 (in progress) — see `.planning/milestones/v2.13-ROADMAP.md` + `.planning/milestones/v2.13-REQUIREMENTS.md`
 
 ## Phases
 
-**Current: none — v2.12 shipped (Phases 135-137).** The orphaned 12-language type-resolver dispatcher is now a production consumer: a C-family type reference becomes a committed `RESOLVES_TO` edge (typeIndex from `nameToNode`), surfaced to agents as `has_type` via `helix explain-symbol-deep` — proven through the real binary (`TestCLI_E2E_CTypeResolution`) + in-process (`TestResolveTypeEdges_PositiveCommitsRealEdge`). Red-team `agent://RedTeamV212` (REWORK→all folded) caught the latent v2.11 Signature-strip contract break; fixed via Option A (ChainTokens). MILESTONE-AUDIT PASSED. NOT committed (user's call). Next milestone undecided (deferred: C++/C#/Java var→type co-capture + E2E = v2.13-candidate; type_chain/Schema-v6 migration [also unblocks v2.11 Tier-5]; Tier-1 LSP; Rust/Kotlin/PHP/Ruby resolvers; cross-package resolution). The v2.9→v2.11 detail below is historical.
+**Current: v2.13 in progress (Phases 138-140) — kickoff complete, not yet built.** Deepen the v2.9 case-1 DATA_FLOWS substrate to model in-body call-return origins (`y := producer(); sink(y)`) across all 11 languages, no schema change (edges anchor on function + param nodes; the dead `ParamFlow.Returns` flag reclaimed as a `param → own-function` return-bridge for multi-hop). Red-team `agent://RedTeamV213` (PROCEED-WITH-FIXES) refuted the "all-11 is free" premise — 5/11 grammars' kind unions were uncovered (Ruby emitted ZERO DATA_FLOWS since v2.9); B1 union extension + all-11 unit test folded into Phase 138. Prior: v2.12 shipped (Phases 135-137, `f7e5f4b3`), MILESTONE-AUDIT PASSED. Next step: `/anvil-discuss-phase 138` (or `/anvil-plan-phase 138`).
 
 ### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
 

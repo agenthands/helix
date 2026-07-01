@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.12
-milestone_name: Production wiring for the type resolvers (C-family E2E)
-status: shipped
+milestone: v2.13
+milestone_name: True intraprocedural DATA_FLOWS (in-body origins, variable-level)
+status: planned
 last_updated: "2026-07-01T00:00:00.000Z"
-last_activity: 2026-07-01 — v2.12 SHIPPED (autonomous). 3 phases COMPLETE + independently verified: 135 extraction foundation (langFromExt C-family + var→type co-capture linkage + latent struct-collision dedup fix), 136 resolver ChainTokens + producer/driver/emit (in-process proof: committed RESOLVES_TO p→Foo), 137 real-binary E2E (helix explain-symbol-deep → has_type edge) + docs. Orphaned type-resolver subsystem now a production consumer. Red-team (agent://RedTeamV212, REWORK→all folded). MILESTONE-AUDIT PASSED. NOT committed — commit is the user's call.
+last_activity: 2026-07-01 — v2.13 KICKOFF complete. REQUIREMENTS (FLOW-04/05/06) + ROADMAP (Phases 138-140) authored; red-team agent://RedTeamV213 (PROCEED-WITH-FIXES) folded (B1 union gap: 5/11 grammars uncovered, Ruby zero DATA_FLOWS since v2.9; M1 non-regression reframe + append-order pin; M2 function-seeded multi-hop; M3 false invariants; M4 bridge determinism; M5 all-11 unit test → Phase 138). Not yet built. Prior: v2.12 SHIPPED (f7e5f4b3), AUDIT PASSED.
 progress:
   total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.12 Production wiring for the type resolvers — wire the orphaned 12-language dispatcher into the committed-snapshot batch build (`factsFromExtracted`) so a C-family type reference becomes a queryable `RESOLVES_TO`/`has_type` edge, proven in a real-binary E2E via `helix explain-symbol-deep`. Option A (ChainTokens): producer links var→type, resolver annotation tier consumes ChainTokens (fixing the v2.11 Signature-strip contract break). See `.planning/milestones/v2.12-ROADMAP.md` + `agent://RedTeamV212`.
+**Current focus:** v2.13 True intraprocedural DATA_FLOWS — model in-body call-return origins (`y := producer(); sink(y)`) by widening the flow-summary origin space (`{param idx}` → `{param idx ∪ callReturn(callee)}`), emitting `producer.function → consumer.param` edges (`def_use_inbody`) + a reclaimed `param → own-function` return-bridge (`def_use_return`) for multi-hop reachability. No schema change; edges anchor on existing symbol nodes. All 11 languages E2E (co-driver). See `.planning/milestones/v2.13-ROADMAP.md` + `agent://RedTeamV213`.
 
 ## Current Position
 
-Phase: 135-137 (v2.12) — COMPLETE + verified; red-team-folded; MILESTONE-AUDIT PASSED.
-Status: v2.12 built end-to-end. The orphaned 12-language type-resolver dispatcher is now wired into the production index build (makeProductionBuildFn → factsFromExtracted → resolveTypeEdges): a C var→type reference becomes a committed RESOLVES_TO edge (real target via typeIndex from nameToNode), surfaced to agents as has_type via `helix explain-symbol-deep` — proven through the REAL binary (TestCLI_E2E_CTypeResolution) + in-process (TestResolveTypeEdges_PositiveCommitsRealEdge). Option A (ChainTokens) fixed the v2.11 Signature-strip contract break. Clean cutover: bootstrap dispatcher + dead TypeResolver/SetSemanticGraph seams removed. 12 pkg green, make vet (8 vettools) clean, zero new deps, no migration, extractor goldens byte-identical. Honest limit: C is the proven language; C++/C#/Java share the wiring but lack co-capture linkage + a dedicated E2E (fast-follow). Deferred: Tier-1 LSP, type_chain/Schema-v6, cross-package. NOT committed — commit is the user's call.
+Phase: 138-140 (v2.13) — kickoff complete (REQUIREMENTS + ROADMAP + red-team fold); not yet built. Next: `/anvil-discuss-phase 138` or `/anvil-plan-phase 138`.
+Status: v2.13 planned. The single load-bearing risk is folded: the flow-engine tree-sitter kind unions (`internal/semantic/dataflow/summary.go:54-83`) cover only 6/11 languages today — Python/Ruby/Kotlin/C/C++ need union extensions + a Kotlin `property_declaration` split (B1), verified by a cheap all-11 unit test in Phase 138 (M5). The design reclaims the dead `ParamFlow.Returns` flag as the multi-hop return-bridge (D-BRIDGE, red-team-confirmed correct). Invariants: zero new deps, no schema migration, deterministic, v2.9 def_use edge SET unchanged for the 6 already-working langs.
 Last activity: 2026-07-01
 
 ## Performance Metrics
@@ -33,6 +33,14 @@ Last activity: 2026-07-01
 **Velocity:** v2.6 completed 1/1 phases. v2.7 completed 1/1 phases.
 
 ## Accumulated Context
+
+### v2.8–v2.12 Outcome (graph intelligence depth + type resolution)
+
+- **v2.8** (121-124): cbm-mcp graph-intelligence parity — SEMANTICALLY_RELATED (Random Indexing), SIMILAR_TO (MinHash), STRUCTURAL_TWIN (AST profile); reclaimed the `DATA_FLOWS` name from the structural edge.
+- **v2.9** (125-126): DATA_FLOWS real producer — case-1 **param→param** interprocedural flow, 11-lang seam (`FingerprintBody`). Honest limit recorded: no in-body origins / variable-level nodes (→ v2.13).
+- **v2.10** (127-129): `trace_data_flow` verb — DATA_FLOWS read surface (BFS reachability from a param seed). 51st frozen verb.
+- **v2.11** (130-134): C-family type-resolution depth (full tiered resolvers, C/C++/C#/Java). Data-plumbing unblock (`QueryEffectiveSymbolFact`).
+- **v2.12** (135-137, `f7e5f4b3`): production-wired the orphaned type-resolver dispatcher — a C type ref → committed `RESOLVES_TO`/`has_type` edge, real-binary E2E. Option A (ChainTokens). C proven; C++/C#/Java fast-follow.
 
 ### v2.5 Outcome
 

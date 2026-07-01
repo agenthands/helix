@@ -615,7 +615,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"c_sharp":    csharpTypeStub(reader),
 			"rust":       rustTypeStub(reader),
 			"c":          cTypeResolver(reader),
-			"cpp":        cppTypeStub(reader),
+			"cpp":        cppTypeResolver(reader),
 			"kotlin":     kotlinTypeStub(reader),
 		})
 		typeResolver = typeDispatcher

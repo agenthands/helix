@@ -119,7 +119,7 @@ func rubyTypeStub() types.Resolver                          { return typesruby.N
 func csharpTypeStub(r types.EffectiveReader) types.Resolver { return typescsharp.NewStub(r) }
 func rustTypeStub(r types.EffectiveReader) types.Resolver   { return typesrust.NewStub(r) }
 func cTypeResolver(r types.EffectiveReader) types.Resolver { return typesc.NewResolver(r) }
-func cppTypeStub(r types.EffectiveReader) types.Resolver    { return typescpp.NewStub(r) }
+func cppTypeResolver(r types.EffectiveReader) types.Resolver { return typescpp.NewResolver(r) }
 func kotlinTypeStub(r types.EffectiveReader) types.Resolver { return typeskotlin.NewStub(r) }
 
 // SetSemanticGraph attaches the daemon's rank engine + type-resolver

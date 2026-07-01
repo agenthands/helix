@@ -609,7 +609,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"typescript": tsResolver,
 			"javascript": tsResolver, // shared with TS (D-11)
 			"python":     pyTypeResolver(reader),
-			"java":       javaTypeStub(reader),
+			"java":       javaTypeResolver(reader),
 			"php":        phpTypeStub(),
 			"ruby":       rubyTypeStub(),
 			"c_sharp":    csharpTypeResolver(reader),

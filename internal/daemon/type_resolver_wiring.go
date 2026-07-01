@@ -113,7 +113,7 @@ func (a *typeStoreAdapter) QueryEffectiveSymbol(ctx context.Context, repoID stri
 func goTypeResolver(r types.EffectiveReader) types.Resolver { return typesgo.NewResolver(r) }
 func tsTypeResolver(r types.EffectiveReader) types.Resolver { return typests.NewResolver(r) }
 func pyTypeResolver(r types.EffectiveReader) types.Resolver { return typespython.NewResolver(r) }
-func javaTypeStub(r types.EffectiveReader) types.Resolver   { return typesjava.NewStub(r) }
+func javaTypeResolver(r types.EffectiveReader) types.Resolver { return typesjava.NewResolver(r) }
 func phpTypeStub() types.Resolver                           { return typesphp.NewStub() }
 func rubyTypeStub() types.Resolver                          { return typesruby.NewStub() }
 func csharpTypeResolver(r types.EffectiveReader) types.Resolver { return typescsharp.NewResolver(r) }

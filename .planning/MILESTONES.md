@@ -1,5 +1,26 @@
 # Milestones
 
+## v2.12 Production wiring for the type resolvers (C-family E2E) (Shipped 2026-07-01)
+
+**Phases:** 3 (135 extraction foundation + 136 resolver ChainTokens/producer/emit + 137 real-binary E2E + docs) — ALL COMPLETE + independently verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.12-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`agent://RedTeamV212`, verdict REWORK → all folded); each phase re-verified by the architect via uncached test runs + code re-read; headline E2E re-run against a freshly-built binary.
+
+**Goal: make the ORPHANED type-resolver subsystem run in production** so a C-family type reference becomes a real, queryable `RESOLVES_TO`/`has_type` edge — proven end-to-end through the `helix` CLI. v2.11 shipped unit-tested C-family resolvers but the whole subsystem was orphaned (dispatcher built at bootstrap, never consumed; `EmitEdges` zero callers; no working `RESOLVES_TO` producer at all). This milestone delivered exactly the "production E2E for the C-family" that v2.11 deferred.
+
+**The red-team's decisive finding:** the milestone rested on a LATENT v2.11 contract break — resolvers parse the type from the referencing symbol's `Signature`, but extractors strip it to a bare name (`"x"`, not `"Foo x"`), so no type ever reached the resolver in production; the v2.11 "tiers 2-6 work" proof used a FABRICATED signature. Fork resolved (co-driver: **Option A**): the producer links each var→type and feeds the type name via `ChainTokens`; the resolver's annotation tier consumes it.
+
+**Key accomplishments:**
+- **Phase 135 (extraction foundation):** extended `langFromExt` so the production index extracts C-family files (was a 4-lang go/ts/js/py allowlist); added an in-memory-only `extract.SymbolFact.DeclaredType` populated for C var/field/param via tree-sitter co-capture; a pure deterministic `linkVarTypes` helper yielding `(var → type-name)` tuples. Fixed a PRE-EXISTING latent crash B1 exposed: C `signatureHash` truncates at `{`, so a struct definition + type-use collided on SymbolID → PK violation once C hit the committed path → a deterministic snapshot-level SymbolID dedup (prefer-richer definition).
+- **Phase 136 (resolver wiring, in-process proof):** all 7 full resolvers' annotation tier consumes `ChainTokens` (Option A) + `NewResolverWithIndex`; a per-batch producer/driver in `factsFromExtracted` (`resolveTypeEdges`) builds `typeIndex` from `nameToNode` (skipping `nameCount>1` anti-mis-bind), runs `FixpointResolve` over sorted groups (determinism), converts to `RESOLVES_TO` EdgeFacts (gating dst=0/low-confidence). Proven in-process against the REAL C extractor: exactly one committed `RESOLVES_TO` p→Foo. Clean cutover: the orphaned bootstrap dispatcher + dead `TypeResolver()`/`SetSemanticGraph`/`typeStoreAdapter` seams REMOVED (no shim).
+- **Phase 137 (real-binary E2E + docs):** `TestCLI_E2E_CTypeResolution` drives a REAL `helix` binary — `explain-symbol-deep` returns a `has_type` edge (RESOLVES_TO→has_type) for the C fixture; differential anti-vacuity (primitive param → zero) + determinism (re-index identical). `docs/type-resolution.md` reconciled to the production path.
+
+**Invariants held:** zero new Go deps (`go.mod`/`go.sum` byte-unchanged), no schema migration, deterministic (byte-identical snapshot), extractor goldens byte-identical; `make vet` (8 vettools) clean; 12 pkg `go test` ok; D-12 always-emit preserved. Leaf boundary relaxed (Option A: extractors + `internal/semantic/types/*` + daemon).
+
+**Honest scope limits (stated in the audit):** C is the proven language — C++/C#/Java share the identical batch wiring + ChainTokens path but only C has co-capture linkage + a dedicated real-binary E2E (fast-follow). The `explain-symbol-deep` seed `file_path` must be absolute (paths stored verbatim from the full-walk).
+
+**Deferred:** Tier-1 LSP short-circuit (`QueryEffectiveEdges` stub); the `type_chain` response field + its Schema-v6 migration (also unblocks v2.11 Tier-5 comment); cross-package/cross-TU resolution (intra-package/TU only); C++/C#/Java var→type co-capture + E2E fixtures; the deeper C fix (extractor emits struct type-uses as `definition.struct` symbols — would churn the `with_fields` golden).
+
+**NOT committed** — the working tree carries v2.12 (135-137) + the planning artifacts; commit is the user's call.
+
 ## v2.11 Type-resolution depth (C-family) (Shipped 2026-07-01)
 
 **Phases:** 5 (130 plumbing + 131 C + 132 C++ + 133 C# + 134 Java) — ALL COMPLETE + committed (`d43d7ce7`..`97fc4bc9`). MILESTONE-AUDIT PASSED (`.planning/milestones/v2.11-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`RedTeamV211`, PROCEED-WITH-FIXES, folded) + a close red-team (oracle).

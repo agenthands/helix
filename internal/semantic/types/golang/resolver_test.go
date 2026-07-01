@@ -42,10 +42,10 @@ func (f *fakeStore) QueryEffectiveSymbol(_ context.Context, _ string, n graph.No
 
 // fixture is the JSON shape used by testdata/ladder/<tier>_input.json.
 type fixture struct {
-	Name     string                       `json:"name"`
-	Symbols  map[uint64]types.SymbolFact  `json:"symbols"`
-	Edges    map[uint64][]types.EdgeFact  `json:"edges"`
-	Request  types.ChainRequest           `json:"request"`
+	Name     string                      `json:"name"`
+	Symbols  map[uint64]types.SymbolFact `json:"symbols"`
+	Edges    map[uint64][]types.EdgeFact `json:"edges"`
+	Request  types.ChainRequest          `json:"request"`
 	Expected struct {
 		Resolved        bool    `json:"resolved"`
 		Confidence      float64 `json:"confidence"`
@@ -100,13 +100,23 @@ func runFixture(t *testing.T, fx fixture) {
 	}
 }
 
-func TestGoResolver_LadderTier_LSP(t *testing.T)         { runFixture(t, loadFixture(t, "lsp_input.json")) }
-func TestGoResolver_LadderTier_Annotation(t *testing.T)  { runFixture(t, loadFixture(t, "annotation_input.json")) }
-func TestGoResolver_LadderTier_Constructor(t *testing.T) { runFixture(t, loadFixture(t, "constructor_input.json")) }
-func TestGoResolver_LadderTier_Assignment(t *testing.T)  { runFixture(t, loadFixture(t, "assignment_input.json")) }
-func TestGoResolver_LadderTier_GoDoc(t *testing.T)       { runFixture(t, loadFixture(t, "godoc_input.json")) }
-func TestGoResolver_LadderTier_Heuristic(t *testing.T)   { runFixture(t, loadFixture(t, "heuristic_input.json")) }
-func TestGoResolver_LadderTier_Unknown(t *testing.T)     { runFixture(t, loadFixture(t, "unknown_input.json")) }
+func TestGoResolver_LadderTier_LSP(t *testing.T) { runFixture(t, loadFixture(t, "lsp_input.json")) }
+func TestGoResolver_LadderTier_Annotation(t *testing.T) {
+	runFixture(t, loadFixture(t, "annotation_input.json"))
+}
+func TestGoResolver_LadderTier_Constructor(t *testing.T) {
+	runFixture(t, loadFixture(t, "constructor_input.json"))
+}
+func TestGoResolver_LadderTier_Assignment(t *testing.T) {
+	runFixture(t, loadFixture(t, "assignment_input.json"))
+}
+func TestGoResolver_LadderTier_GoDoc(t *testing.T) { runFixture(t, loadFixture(t, "godoc_input.json")) }
+func TestGoResolver_LadderTier_Heuristic(t *testing.T) {
+	runFixture(t, loadFixture(t, "heuristic_input.json"))
+}
+func TestGoResolver_LadderTier_Unknown(t *testing.T) {
+	runFixture(t, loadFixture(t, "unknown_input.json"))
+}
 
 // TestGoResolver_CrossPackageStopsAtLastInPackage: ref in /repo/foo/a.go
 // resolves to a target whose file is /repo/bar/b.go. Even though annotation
@@ -134,12 +144,11 @@ func TestGoResolver_CrossPackageStopsAtLastInPackage(t *testing.T) {
 	r := NewResolver(store)
 	r.typeIndex = map[string]graph.NodeID{"OtherType": 200} // test-only seam
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
-		RepoID:      "r",
-		Language:    "go",
-		FilePath:    "/repo/foo/a.go",
-		RefNodeID:   100,
-		RefKind:     "RESOLVES_TO",
-		ChainTokens: []string{"x"},
+		RepoID:    "r",
+		Language:  "go",
+		FilePath:  "/repo/foo/a.go",
+		RefNodeID: 100,
+		RefKind:   "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)
@@ -200,5 +209,51 @@ func TestGoComment_NoMatchReturnsEmpty(t *testing.T) {
 		if got := ParseGoDocType(doc); got != "" {
 			t.Fatalf("ParseGoDocType(%q) = %q, want empty", doc, got)
 		}
+	}
+}
+
+// TestGoResolver_ChainTokensAnnotation (v2.12 Phase 136 A1): a ChainRequest
+// with ChainTokens:["Foo"] + a typeIndex mapping "Foo"→N resolves at the
+// annotation tier to Target=N WITHOUT relying on the Signature.
+func TestGoResolver_ChainTokensAnnotation(t *testing.T) {
+	store := newFakeStore()
+	// Bare signature — only ChainTokens supplies "Foo".
+	store.symsByNode[10] = types.SymbolFact{NodeID: 10, Language: "go", Kind: "variable", StableKey: "p", FilePath: "/repo/pkg/a.go", Signature: "p"}
+	store.symsByNode[42] = types.SymbolFact{NodeID: 42, Language: "go", Kind: "type", StableKey: "Foo", FilePath: "/repo/pkg/b.go"}
+	r := NewResolverWithIndex(store, map[string]graph.NodeID{"Foo": 42})
+	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
+		RepoID: "r", Language: "go", FilePath: "/repo/pkg/a.go",
+		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"Foo"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveChain err: %v", err)
+	}
+	if !resp.Resolved {
+		t.Fatalf("ChainTokens annotation did not resolve: %+v", resp)
+	}
+	if resp.EvidenceKind != types.EvidenceAnnotation || resp.Confidence != types.ConfidenceAnnotation {
+		t.Errorf("tier = %q/%v, want annotation/0.90", resp.EvidenceKind, resp.Confidence)
+	}
+	if resp.Target != 42 {
+		t.Errorf("Target = %d, want 42 (via typeIndex, not Signature)", resp.Target)
+	}
+}
+
+// TestGoResolver_NewResolverWithIndex (A2): the constructor seam populates the
+// index and a Signature-fallback resolve uses it for Target.
+func TestGoResolver_NewResolverWithIndex(t *testing.T) {
+	store := newFakeStore()
+	store.symsByNode[10] = types.SymbolFact{NodeID: 10, Language: "go", Kind: "variable", StableKey: "b", FilePath: "/repo/pkg/a.go", Signature: "var b Bar"}
+	store.symsByNode[7] = types.SymbolFact{NodeID: 7, Language: "go", Kind: "type", StableKey: "Bar", FilePath: "/repo/pkg/a.go"}
+	r := NewResolverWithIndex(store, map[string]graph.NodeID{"Bar": 7})
+	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
+		RepoID: "r", Language: "go", FilePath: "/repo/pkg/a.go",
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
+	})
+	if err != nil {
+		t.Fatalf("ResolveChain err: %v", err)
+	}
+	if !resp.Resolved || resp.Target != 7 {
+		t.Fatalf("NewResolverWithIndex resolve = %+v, want resolved Target=7", resp)
 	}
 }

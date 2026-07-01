@@ -1,30 +1,31 @@
-// Package daemon: Phase 62 P05 type-resolver dispatcher wiring.
+// Package daemon: v2.12 Phase 136 type-resolver production consumer.
 //
-// type_resolver_wiring.go owns:
+// type_resolver_wiring.go owns the batch type-edge pipeline that turns a
+// C-family var→type link (Phase 135's linkVarTypes) into a committed
+// RESOLVES_TO edge with a real target:
 //
-//   - typeStoreAdapter — adapts *semanticstore.Store into the
-//     types.EffectiveReader narrow seam (D-11). The Store-level
-//     QueryEffectiveEdges / QueryEffectiveSymbols are Phase 57 stubs
-//     returning empty slices today; the adapter normalises their
-//     `[]any` shape to the typed types.EdgeFact / types.SymbolFact
-//     contract.
+//   - batchEffectiveReader — a types.EffectiveReader over the in-memory
+//     out.Symbols of the CURRENT batch (NOT the committed store, which is
+//     stale at factsFromExtracted time). Tier-1 LSP stays dead in-batch.
 //
-//   - buildTypeResolverDispatcher — constructs a *types.Dispatcher with
-//     the 7 v1 language entries (go / typescript / javascript / python /
-//     java / php / ruby) per D-11 and the JS-aliases-TS rule.
+//   - newIndexedResolver — constructs a per-language resolver carrying the
+//     batch typeIndex (via NewResolverWithIndex) so the annotation tier binds
+//     a real NodeID target.
 //
-//   - SetSemanticGraph — optional setter the daemon exposes for
-//     downstream consumers (Phase 64 will wrap the dispatcher in MCP
-//     tools). Per RESEARCH Open Question 4, ranker + resolver are
-//     bundled in a single setter to keep the consumer-side seam narrow.
+//   - resolveTypeEdges — the producer + deterministic driver + converter:
+//     linkVarTypes → ChainRequests → per-(scope,lang) sorted FixpointResolve
+//     → EdgeFacts appended to out.Edges BEFORE the dense EdgeID stamp.
 //
-// Per CLAUDE.md the daemon owns construction; the dispatcher and adapter
-// hold no goroutine state.
+// This REPLACES the Phase-62 bootstrap dispatcher + the dead
+// SetSemanticGraph/TypeResolver seams (removed in Phase 136 — the per-batch
+// dispatcher here is the dispatcher's real production consumer).
 package daemon
 
 import (
 	"context"
+	"sort"
 
+	"github.com/agenthands/helix/internal/semantic/extract"
 	"github.com/agenthands/helix/internal/semantic/graph"
 	semanticstore "github.com/agenthands/helix/internal/semantic/store"
 	"github.com/agenthands/helix/internal/semantic/types"
@@ -33,123 +34,263 @@ import (
 	typescpp "github.com/agenthands/helix/internal/semantic/types/cpp"
 	typesgo "github.com/agenthands/helix/internal/semantic/types/golang"
 	typesjava "github.com/agenthands/helix/internal/semantic/types/java"
-	typeskotlin "github.com/agenthands/helix/internal/semantic/types/kotlin"
-	typesphp "github.com/agenthands/helix/internal/semantic/types/php"
 	typespython "github.com/agenthands/helix/internal/semantic/types/python"
-	typesruby "github.com/agenthands/helix/internal/semantic/types/ruby"
-	typesrust "github.com/agenthands/helix/internal/semantic/types/rust"
 	typests "github.com/agenthands/helix/internal/semantic/types/typescript"
 )
 
-// typeStoreAdapter adapts the *semanticstore.Store query helpers (Phase 57
-// stubs at the moment — they return empty `[]any` slices) into the
-// types.EffectiveReader contract that per-language resolvers consume.
-//
-// Both methods are nil-safe: when the underlying store is unavailable the
-// adapter returns empty results without erroring, so the resolver simply
-// falls through to its lower tiers.
-type typeStoreAdapter struct {
-	store *semanticstore.Store
+// typeResolveParams carries the type-resolution knobs threaded from
+// semanticConfig into the batch driver. Values default to the
+// TypeResolutionConfig defaults (8 / 0.45 / false) in loadSemanticConfig.
+type typeResolveParams struct {
+	maxFixpoint    int
+	minConfidence  float64
+	emitUnresolved bool
 }
 
-func newTypeStoreAdapter(s *semanticstore.Store) *typeStoreAdapter {
-	return &typeStoreAdapter{store: s}
+// batchEffectiveReader is a types.EffectiveReader backed by the in-memory
+// symbols of the current batch (out.Symbols), keyed by NodeID. It is built
+// once per batch and is deterministic. QueryEffectiveEdges returns nil — the
+// Tier-1 LSP-cascade read stays dead in-batch (uncommitted; L5).
+type batchEffectiveReader struct {
+	syms map[graph.NodeID]types.SymbolFact
 }
 
-// QueryEffectiveEdges normalises the store's stub `[]any` return into a
-// typed slice of types.EdgeFact. The Phase 57 implementation always
-// returns an empty slice; once the schema lands in a future phase, this
-// adapter is the one place that needs an updated row → struct shape
-// translation.
-func (a *typeStoreAdapter) QueryEffectiveEdges(ctx context.Context, q types.EdgeQuery) ([]types.EdgeFact, error) {
-	if a == nil || a.store == nil {
-		return nil, nil
-	}
-	rows, err := a.store.QueryEffectiveEdges(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	out := make([]types.EdgeFact, 0, len(rows))
-	// Phase 57 schema returns []any{} — the loop body is intentionally
-	// reachable only when a future schema lands real rows. Until then the
-	// loop is a no-op; we keep it to make the future shape obvious.
-	for _, r := range rows {
-		if e, ok := r.(types.EdgeFact); ok {
-			out = append(out, e)
-		}
-	}
-	return out, nil
+func (r *batchEffectiveReader) QueryEffectiveEdges(context.Context, types.EdgeQuery) ([]types.EdgeFact, error) {
+	return nil, nil
 }
 
-// QueryEffectiveSymbol returns the LIVE symbol fact for (repo, node). v2.11
-// Phase 130: now backed by Store.QueryEffectiveSymbolFact (the real
-// committed-snapshot row: Signature / StableKey / Kind / Language / FilePath),
-// which unblocks the per-language resolvers' tiers 2-6 (previously this
-// returned an empty SymbolFact, starving every resolver to Tier 7). On a miss
-// it degrades to NodeID-only (Tier 7) — the D-12 invariant still holds.
-func (a *typeStoreAdapter) QueryEffectiveSymbol(ctx context.Context, repoID string, n graph.NodeID) (types.SymbolFact, error) {
-	sf, filePath, ok, err := a.store.QueryEffectiveSymbolFact(ctx, repoID, uint64(n))
-	if err != nil || !ok {
-		return types.SymbolFact{NodeID: n}, err
+func (r *batchEffectiveReader) QueryEffectiveSymbol(_ context.Context, _ string, n graph.NodeID) (types.SymbolFact, error) {
+	if s, ok := r.syms[n]; ok {
+		return s, nil
 	}
-	return types.SymbolFact{
-		NodeID:    n,
-		Language:  sf.Language,
-		Kind:      sf.Kind,
-		StableKey: sf.StableKey,
-		FilePath:  filePath,
-		Signature: sf.Signature,
-	}, nil
+	// Degrade to NodeID-only (Tier-7 D-12 floor) on a miss.
+	return types.SymbolFact{NodeID: n}, nil
 }
 
-// Per-language Resolver constructor wrappers.
-//
-// daemon.go calls types.NewDispatcher directly with these wrappers so the
-// dispatcher-registration site is grep-anchored at the bootstrap step.
-// The wrappers keep daemon.go free of the per-language package imports.
-func goTypeResolver(r types.EffectiveReader) types.Resolver { return typesgo.NewResolver(r) }
-func tsTypeResolver(r types.EffectiveReader) types.Resolver { return typests.NewResolver(r) }
-func pyTypeResolver(r types.EffectiveReader) types.Resolver { return typespython.NewResolver(r) }
-func javaTypeResolver(r types.EffectiveReader) types.Resolver { return typesjava.NewResolver(r) }
-func phpTypeStub() types.Resolver                           { return typesphp.NewStub() }
-func rubyTypeStub() types.Resolver                          { return typesruby.NewStub() }
-func csharpTypeResolver(r types.EffectiveReader) types.Resolver { return typescsharp.NewResolver(r) }
-func rustTypeStub(r types.EffectiveReader) types.Resolver   { return typesrust.NewStub(r) }
-func cTypeResolver(r types.EffectiveReader) types.Resolver { return typesc.NewResolver(r) }
-func cppTypeResolver(r types.EffectiveReader) types.Resolver { return typescpp.NewResolver(r) }
-func kotlinTypeStub(r types.EffectiveReader) types.Resolver { return typeskotlin.NewStub(r) }
-
-// SetSemanticGraph attaches the daemon's rank engine + type-resolver
-// dispatcher to a downstream consumer. Phase 64 (semantic MCP tools) will
-// invoke this setter at registration time. In Phase 62 the setter is
-// OPTIONAL — when no consumer is wired the dispatcher is merely logged at
-// bootstrap and held on the daemon for later attachment.
-//
-// The pair is bundled per RESEARCH Open Question 4: the rank engine and
-// the type-resolver dispatcher are co-consumers (the same MCP tool that
-// returns ranked nodes also returns resolved type edges), so a single
-// setter keeps the consumer-side seam narrow.
-//
-// Nil-safe on every input.
-func (d *Daemon) SetSemanticGraph(ranker any, resolver types.Resolver) {
-	if d == nil {
-		return
-	}
-	d.typeResolver = resolver
-	// `ranker` is intentionally typed `any` here so this setter does not
-	// import the rank engine's concrete type into the public daemon
-	// surface. Phase 64 will narrow this to a typed ranker interface.
-	d.semanticGraphRanker = ranker
-}
-
-// TypeResolver returns the Phase 62 P05 type-resolver dispatcher, or nil
-// when the semantic store is unavailable. Phase 64 consumers MUST nil-check.
-func (d *Daemon) TypeResolver() types.Resolver {
-	if d == nil {
+// newIndexedResolver returns the per-language resolver carrying the batch
+// typeIndex, or nil for languages without a full resolver (php/ruby/rust/
+// kotlin stubs — they carry no typeIndex path and produce no links).
+func newIndexedResolver(lang string, reader types.EffectiveReader, idx map[string]graph.NodeID) types.Resolver {
+	switch lang {
+	case "go":
+		return typesgo.NewResolverWithIndex(reader, idx)
+	case "typescript", "javascript":
+		return typests.NewResolverWithIndex(reader, idx)
+	case "python":
+		return typespython.NewResolverWithIndex(reader, idx)
+	case "java":
+		return typesjava.NewResolverWithIndex(reader, idx)
+	case "c_sharp":
+		return typescsharp.NewResolverWithIndex(reader, idx)
+	case "c":
+		return typesc.NewResolverWithIndex(reader, idx)
+	case "cpp":
+		return typescpp.NewResolverWithIndex(reader, idx)
+	default:
 		return nil
 	}
-	return d.typeResolver
+}
+
+// typeEdgeGroupKey groups ChainRequests per (language, scope-file) for the
+// fixpoint driver. Iterating SORTED keys — and refs sorted within a group —
+// keeps the emit order deterministic (the EdgeID stamp is positional; a
+// nondeterministic edge order = non-byte-identical snapshot).
+type typeEdgeGroupKey struct {
+	lang string
+	file string
+}
+
+// resolveTypeEdges is the batch type-edge producer + driver + converter. It
+// runs at the tail of factsFromExtracted, AFTER dedup + the nameToNode build,
+// so out.Symbols is final and nameToNode keys point at definition nodes. It
+// appends RESOLVES_TO EdgeFacts to out.Edges (BEFORE the dense EdgeID stamp
+// the buildFn applies later).
+//
+// Determinism: every map is materialized into a sorted slice before it drives
+// the emit path — no Go-map iteration order leaks into out.Edges.
+func resolveTypeEdges(
+	out *semanticstore.Facts,
+	repoID string,
+	extracted []*extract.ExtractedFile,
+	nameToNode map[string]uint64,
+	nameCount map[string]int,
+	fileIDToPath map[uint64]string,
+	params typeResolveParams,
+) {
+	// 1. typeIndex from nameToNode. Skip ambiguous names (nameCount>1): they
+	//    have no unique target, so the annotation tier must NOT fabricate one
+	//    (anti-mis-bind — the edge is gated, never bound to an arbitrary node).
+	typeIndex := make(map[string]graph.NodeID, len(nameToNode))
+	for name, node := range nameToNode {
+		if nameCount[name] > 1 {
+			continue
+		}
+		typeIndex[name] = graph.NodeID(node)
+	}
+
+	// 2. Batch reader over out.Symbols + a RefStableKey→NodeID map. The
+	//    reader carries FilePath (via fileIDToPath) so cross-package langs'
+	//    D-13 scope guard behaves; for flat-scope C it is not load-bearing.
+	symsByNode := make(map[graph.NodeID]types.SymbolFact, len(out.Symbols))
+	stableKeyToNode := make(map[string]uint64, len(out.Symbols))
+	for i := range out.Symbols {
+		s := out.Symbols[i]
+		if s.NodeID == 0 {
+			continue
+		}
+		symsByNode[graph.NodeID(s.NodeID)] = types.SymbolFact{
+			NodeID:    graph.NodeID(s.NodeID),
+			Language:  s.Language,
+			Kind:      s.Kind,
+			StableKey: s.StableKey,
+			FilePath:  fileIDToPath[s.FileID],
+			Signature: s.Signature,
+		}
+		if s.StableKey != "" {
+			if _, exists := stableKeyToNode[s.StableKey]; !exists {
+				stableKeyToNode[s.StableKey] = s.NodeID
+			}
+		}
+	}
+	reader := &batchEffectiveReader{syms: symsByNode}
+
+	// 3. Producer: linkVarTypes → ChainRequests. Slice-order iteration keeps
+	//    the pre-group order deterministic. Skip links whose TypeName is not a
+	//    UNIQUE nameToNode key, or whose RefStableKey did not survive dedup.
+	links := linkVarTypes(extracted)
+	refs := make([]types.ChainRequest, 0, len(links))
+	for _, l := range links {
+		if _, ok := typeIndex[l.TypeName]; !ok {
+			continue
+		}
+		refNode, ok := stableKeyToNode[extract.CanonicalizeStableSymbolKey(l.RefStableKey)]
+		if !ok || refNode == 0 {
+			continue
+		}
+		sym := symsByNode[graph.NodeID(refNode)]
+		refs = append(refs, types.ChainRequest{
+			RepoID:      repoID,
+			Language:    sym.Language,
+			FilePath:    sym.FilePath,
+			RefNodeID:   graph.NodeID(refNode),
+			RefKind:     "RESOLVES_TO",
+			ChainTokens: []string{l.TypeName},
+		})
+	}
+	if len(refs) == 0 {
+		return
+	}
+
+	// 4a. One per-batch dispatcher with an indexed resolver per language present.
+	reg := map[string]types.Resolver{}
+	for _, r := range refs {
+		if _, seen := reg[r.Language]; seen {
+			continue
+		}
+		if res := newIndexedResolver(r.Language, reader, typeIndex); res != nil {
+			reg[r.Language] = res
+		}
+	}
+	dispatcher := types.NewDispatcher(reg)
+
+	// 4b. Group by (lang, scope-file); iterate SORTED keys, refs sorted within.
+	groups := map[typeEdgeGroupKey][]types.ChainRequest{}
+	for _, r := range refs {
+		k := typeEdgeGroupKey{lang: r.Language, file: r.FilePath}
+		groups[k] = append(groups[k], r)
+	}
+	keys := make([]typeEdgeGroupKey, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].lang != keys[j].lang {
+			return keys[i].lang < keys[j].lang
+		}
+		return keys[i].file < keys[j].file
+	})
+
+	maxIter := params.maxFixpoint
+	if maxIter <= 0 {
+		maxIter = 8
+	}
+	ctx := context.Background()
+	for _, k := range keys {
+		gr := groups[k]
+		sort.Slice(gr, func(i, j int) bool {
+			if gr[i].RefNodeID != gr[j].RefNodeID {
+				return gr[i].RefNodeID < gr[j].RefNodeID
+			}
+			return firstChainToken(gr[i]) < firstChainToken(gr[j])
+		})
+		resps, err := types.FixpointResolve(ctx, dispatcher, gr, maxIter)
+		if err != nil {
+			// Best-effort: a resolver error degrades this group to no edges
+			// rather than failing the whole snapshot build.
+			continue
+		}
+		for i := range resps {
+			edge, ok := typeEdgeFromResponse(gr[i], resps[i], symsByNode, params)
+			if !ok {
+				continue
+			}
+			out.Edges = append(out.Edges, edge)
+		}
+	}
+}
+
+// firstChainToken returns the request's first chain token ("" when empty) —
+// the secondary sort key for within-group determinism.
+func firstChainToken(r types.ChainRequest) string {
+	if len(r.ChainTokens) > 0 {
+		return r.ChainTokens[0]
+	}
+	return ""
+}
+
+// typeEdgeFromResponse converts one resolved ChainResponse into a RESOLVES_TO
+// EdgeFact, applying the gates:
+//
+//   - dst=0 (unreadable target) → dropped (never persist a fabricated/empty
+//     endpoint; L4 row-bloat guard).
+//   - Confidence < MinConfidenceForEdge → dropped.
+//   - Unresolved response → dropped unless EmitUnresolvedEdges is set.
+func typeEdgeFromResponse(
+	req types.ChainRequest,
+	resp types.ChainResponse,
+	symsByNode map[graph.NodeID]types.SymbolFact,
+	params typeResolveParams,
+) (semanticstore.EdgeFact, bool) {
+	if resp.Target == 0 {
+		return semanticstore.EdgeFact{}, false
+	}
+	if resp.Confidence < params.minConfidence {
+		return semanticstore.EdgeFact{}, false
+	}
+	if !resp.Resolved && !params.emitUnresolved {
+		return semanticstore.EdgeFact{}, false
+	}
+	srcKind := "symbol"
+	if s, ok := symsByNode[req.RefNodeID]; ok && s.Kind != "" {
+		srcKind = s.Kind
+	}
+	source := resp.Source
+	if source == "" {
+		source = "unknown"
+	}
+	state := resp.ValidationState
+	if !resp.Resolved {
+		state = "unresolved"
+	}
+	return semanticstore.EdgeFact{
+		SrcNodeID:       uint64(req.RefNodeID),
+		DstNodeID:       uint64(resp.Target),
+		EdgeKind:        req.RefKind, // "RESOLVES_TO"
+		SrcKind:         srcKind,
+		DstKind:         "type",
+		Source:          source,
+		Weight:          1.0,
+		Confidence:      resp.Confidence,
+		ValidationState: state,
+	}, true
 }

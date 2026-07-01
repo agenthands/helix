@@ -80,14 +80,25 @@ type semanticConfig struct {
 	// per-request max_duration_ms is supplied (or the request cap exceeds
 	// this). 120s matches SPEC §23.1.
 	IndexTimeout time.Duration
+	// TypeResolMaxFixpoint / TypeResolMinConfidence / TypeResolEmitUnresolved
+	// are the v2.12 Phase 136 type-resolution knobs, mirroring
+	// TypeResolutionConfig.{MaxFixpointIterations, MinConfidenceForEdge,
+	// EmitUnresolvedEdges}. Inlined here (no koanf surface yet) so the batch
+	// type-edge driver in factsFromExtracted has its parameters.
+	TypeResolMaxFixpoint    int
+	TypeResolMinConfidence  float64
+	TypeResolEmitUnresolved bool
 }
 
 // loadSemanticConfig returns the daemon-side semantic config with defaults.
 // Phase 64 ships defaults only; no koanf surface yet.
 func loadSemanticConfig() semanticConfig {
 	return semanticConfig{
-		BleveSubdir:  ".helix/semantic.bleve",
-		IndexTimeout: 120 * time.Second,
+		BleveSubdir:             ".helix/semantic.bleve",
+		IndexTimeout:            120 * time.Second,
+		TypeResolMaxFixpoint:    8,
+		TypeResolMinConfidence:  0.45,
+		TypeResolEmitUnresolved: false,
 	}
 }
 
@@ -1565,7 +1576,12 @@ func (b *semanticBundle) makeProductionBuildFn() semantic.RunnerBuildFn {
 			b.repoReg.Register(repoID, repoModule, ws.RepoRoot)
 			knownRepos = b.repoReg.KnownRepos(repoID)
 		}
-		facts := factsFromExtracted(extracted, repoID, repoModule, knownRepos, b.logger)
+		facts := factsFromExtracted(extracted, repoID, repoModule, knownRepos, b.logger,
+			withTypeResolution(typeResolveParams{
+				maxFixpoint:    b.cfg.TypeResolMaxFixpoint,
+				minConfidence:  b.cfg.TypeResolMinConfidence,
+				emitUnresolved: b.cfg.TypeResolEmitUnresolved,
+			}))
 
 		// 4b. FILE_CHANGES_WITH: mine git history for file co-change coupling.
 		//     Best-effort — a non-git workspace or git failure is non-fatal;
@@ -1807,8 +1823,14 @@ func (b *semanticBundle) fullWalkPaths(ws workspace.WorkspaceKey) []string {
 // langFromExt maps a file path to a canonical extract.Provider language
 // identifier. Returns "" for unrecognized extensions; the buildFn loop
 // treats that as "skip silently". The mapping mirrors the per-language
-// providers registered by the daemon at bootstrap (Phase 59 P05): Go,
-// TypeScript / TSX, JavaScript / JSX, Python.
+// providers registered by the daemon at bootstrap (Phase 59 P05 +
+// v2.12 Phase 135): Go, TypeScript / TSX, JavaScript / JSX, Python, and
+// the C-family — C (.c/.h), C++ (.cpp/.cc/.cxx/.hpp/.hh/.hxx), C# (.cs),
+// and Java (.java).
+//
+// Rust / Kotlin / PHP / Ruby are intentionally NOT mapped here: their
+// type resolvers are v2.13 stubs, so enabling their extraction now would
+// add untested surface. They stay "" until v2.13 wires them.
 func langFromExt(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".go":
@@ -1819,6 +1841,14 @@ func langFromExt(path string) string {
 		return "javascript"
 	case ".py":
 		return "python"
+	case ".c", ".h":
+		return "c"
+	case ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx":
+		return "cpp"
+	case ".cs":
+		return "c_sharp"
+	case ".java":
+		return "java"
 	default:
 		return ""
 	}
@@ -1900,6 +1930,29 @@ func (b *semanticBundle) classifyAndExtract(ctx context.Context, repoID string, 
 	return extracted
 }
 
+// factsOption configures optional passes in factsFromExtracted. The ~20
+// existing callers pass none (backward-compatible); only the production
+// buildFn opts into the type-edge driver via withTypeResolution. Decision B1
+// (least churn): the driver runs INSIDE factsFromExtracted where nameToNode /
+// nameCount live, so no caller's signature changes and nameToNode need not be
+// returned.
+type factsOption func(*factsConfig)
+
+// factsConfig accumulates the applied factsOptions.
+type factsConfig struct {
+	typeResolve    bool
+	typeResolveCfg typeResolveParams
+}
+
+// withTypeResolution enables the batch RESOLVES_TO type-edge driver with the
+// given knobs. Only the production buildFn passes it.
+func withTypeResolution(p typeResolveParams) factsOption {
+	return func(c *factsConfig) {
+		c.typeResolve = true
+		c.typeResolveCfg = p
+	}
+}
+
 // factsFromExtracted composes the wire-format Facts payload from a slice of
 // per-language ExtractedFile records. Each ExtractedFile is converted via
 // extract.ToStoreFacts (the locked Phase 65 D-08 adapter) and then re-
@@ -1931,9 +1984,13 @@ func (b *semanticBundle) classifyAndExtract(ctx context.Context, repoID string, 
 // snapshot pipeline and breaks ingest determinism; logging-only does
 // not. A genuine collision-fix (assigning fresh IDs on conflict) is
 // tracked as a deferred follow-up — see plan's `<deferred>` block.
-func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePath string, knownRepos map[string]string, logger *slog.Logger) semanticstore.Facts {
+func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePath string, knownRepos map[string]string, logger *slog.Logger, opts ...factsOption) semanticstore.Facts {
 	if len(extracted) == 0 {
 		return semanticstore.Facts{}
+	}
+	var fc factsConfig
+	for _, o := range opts {
+		o(&fc)
 	}
 	const highBitMask uint64 = 0x8000000000000000
 	const lowBitsMask uint64 = 0x7FFFFFFFFFFFFFFF
@@ -2322,6 +2379,50 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 			})
 		}
 	}
+
+	// Snapshot-level SymbolID dedup (WR — v2.12 Phase 135). The store's
+	// semantic_symbols PRIMARY KEY is (snapshot_id, symbol_id); two rows with
+	// the same SymbolID abort the whole WriteSnapshotFacts INSERT. Collapsing
+	// same-SymbolID rows is always semantically safe: SymbolID is derived from
+	// the canonical StableKey, so two rows sharing it ARE one node by
+	// definition — and edges already reference NodeID (== SymbolID), which
+	// survives on the kept row, so no endpoint is lost.
+	//
+	// Root cause (C, deferred follow-up): the C extractor emits a
+	// definition.struct symbol for a struct DEFINITION *and* for every struct
+	// TYPE-USE (`struct Foo* p`), and signatureHash truncates at `{`, so both
+	// hash to `struct Foo` → identical StableKey → identical SymbolID. Latent
+	// since the store PK always demanded per-snapshot SymbolID uniqueness; only
+	// reached now that Phase 135 B1 routes C into production. The deeper fix
+	// (C should not emit type-uses as definition symbols) would churn the
+	// with_fields golden and is out of scope here.
+	//
+	// Tiebreak is DETERMINISTIC and prefers the RICHER symbol (the definition):
+	// document/cross-file order does not guarantee the definition is seen
+	// first (C forward-refs), and keeping an impoverished type-use row would
+	// strip the struct's body/fields from explain-symbol-deep. Richness order:
+	// (1) a signature containing `{` (a body) beats one without; (2) else the
+	// longer signature; (3) else first-seen (stable). This layer, NOT the
+	// provider: per-provider StableKey dedup would change existing goldens.
+	if len(out.Symbols) > 1 {
+		idxBySymbolID := make(map[uint64]int, len(out.Symbols))
+		kept := out.Symbols[:0]
+		for _, s := range out.Symbols {
+			if s.SymbolID == 0 {
+				kept = append(kept, s)
+				continue
+			}
+			if prevIdx, seen := idxBySymbolID[s.SymbolID]; seen {
+				if richerSymbol(s, kept[prevIdx]) {
+					kept[prevIdx] = s
+				}
+				continue
+			}
+			idxBySymbolID[s.SymbolID] = len(kept)
+			kept = append(kept, s)
+		}
+		out.Symbols = kept
+	}
 	// ── Batch-level cross-cutting edges: MEMBER_OF + TESTS ──
 	//
 	// MEMBER_OF is the inverse of DEFINES (member → container), enabling
@@ -2432,7 +2533,36 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 	out.Edges = append(out.Edges, semanticallyRelatedEdges(fpNodes)...)
 	out.Edges = append(out.Edges, dataFlowEdges(fpNodes, nodeToParams, nameToNode, nameCount)...)
 
+	// RESOLVES_TO type edges (v2.12 Phase 136). Runs LAST — after out.Symbols
+	// is final (deduped) and nameToNode/nameCount are built — so the typeIndex
+	// points at definition nodes and the batch reader is self-consistent
+	// pre-commit. Appends to out.Edges BEFORE the buildFn's dense EdgeID stamp.
+	// Gated to the production buildFn (which opts in); the many test callers
+	// pass no opts and skip it.
+	if fc.typeResolve {
+		resolveTypeEdges(&out, repoID, extracted, nameToNode, nameCount, fileIDToPath, fc.typeResolveCfg)
+	}
+
 	return out
+}
+
+// richerSymbol reports whether candidate c is a "richer" symbol than the
+// currently-kept row k for the same SymbolID, and thus should replace it in
+// the snapshot-level dedup. Deterministic total order over the two rows:
+//
+//  1. a signature containing `{` (carries a body / field list — i.e. the
+//     definition) beats one that does not;
+//  2. else the longer signature wins (more structural detail);
+//  3. else keep the incumbent (false) — stable, first-seen order preserved.
+//
+// No wall-clock, no map iteration, no rand: same inputs → same verdict.
+func richerSymbol(c, k semanticstore.SymbolFact) bool {
+	cHasBody := strings.Contains(c.Signature, "{")
+	kHasBody := strings.Contains(k.Signature, "{")
+	if cHasBody != kHasBody {
+		return cHasBody
+	}
+	return len(c.Signature) > len(k.Signature)
 }
 
 // ----- Phase 74 P1 store-backed accessor adapters (D-01) -----

@@ -82,14 +82,15 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 			return partialFile(file, extract.PartialReasonTimeout, err), nil
 		}
 		var (
-			defKind     extract.SymbolKind
-			defNameNode *tree_sitter.Node
-			defBodyNode *tree_sitter.Node
-			refKind     string
-			refNameNode *tree_sitter.Node
-			importSrc   string
-			importRange extract.Range
-			haveImport  bool
+			defKind          extract.SymbolKind
+			defNameNode      *tree_sitter.Node
+			defBodyNode      *tree_sitter.Node
+			declaredTypeNode *tree_sitter.Node
+			refKind          string
+			refNameNode      *tree_sitter.Node
+			importSrc        string
+			importRange      extract.Range
+			haveImport       bool
 		)
 		for _, c := range m.Captures {
 			cn := captureNames[c.Index]
@@ -135,6 +136,12 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 					Annotation: condenseWhitespace(node.Utf8Text(source)),
 					Range:      nodeRange(node),
 				})
+			case cn == "declared.type":
+				// Co-captured declared type node of a variable / field /
+				// parameter (v2.12 Phase 135 B3). NOT emitted as a TypeFact
+				// (the standalone type.annotation captures own out.Types);
+				// used only to set the in-memory SymbolFact.DeclaredType.
+				declaredTypeNode = &node
 			case strings.HasPrefix(cn, "def."):
 				defBodyNode = &node
 			}
@@ -182,6 +189,15 @@ func (p *Provider) Extract(ctx context.Context, source []byte, file extract.Sour
 			sf.ID = extract.StableSymbolID(sf.StableKey)
 			if extract.IsFingerprintableKind(defKind) {
 				extract.FingerprintBody(&sf, body, source)
+			}
+			// Attach the co-captured declared type NAME (in-memory only —
+			// see extract.SymbolFact.DeclaredType). Empty for C primitives
+			// (`int`, `char`, …), which are not type references; the daemon
+			// var→type linkage helper treats empty as "no link" (anti-vacuity).
+			// Signature is intentionally left UNCHANGED (still the bare name)
+			// so StableKey / SignatureHash do not churn.
+			if declaredTypeNode != nil {
+				sf.DeclaredType = bareTypeName(*declaredTypeNode, source)
 			}
 			out.Symbols = append(out.Symbols, sf)
 		}
@@ -261,6 +277,38 @@ func signatureHash(body tree_sitter.Node, source []byte) string {
 		text = text[:idx]
 	}
 	return condenseWhitespace(text)
+}
+
+// bareTypeName reduces a co-captured declaration TYPE node to the bare
+// declared-type NAME used by the daemon var→type linkage helper and (in
+// Phase 136) the C resolver's nameToNode lookup, whose keys are bare tags
+// (e.g. "Foo"). It returns:
+//
+//   - type_identifier               → its text ("Foo")
+//   - struct/union/enum_specifier   → the tag name field ("Foo"); "" if anonymous
+//   - primitive_type / anything else → "" (a C primitive like `int` is NOT a
+//     type reference — the extractor's own @reference.type fires only on
+//     type_identifier — so it MUST yield no link; this is the anti-vacuity
+//     precondition the linkage helper relies on).
+//
+// For NAMED types this matches types/c/resolver.go parseAnnotation output for
+// the same declaration (struct/union/enum tag stripped to the bare name,
+// pointer `*` lives in the declarator not the type node). The one intentional
+// divergence is primitives (parseAnnotation would echo "int"); a primitive is
+// never a nameToNode key, so returning "" changes no resolution and is
+// required for anti-vacuity.
+func bareTypeName(typeNode tree_sitter.Node, source []byte) string {
+	switch typeNode.Kind() {
+	case "type_identifier":
+		return condenseWhitespace(typeNode.Utf8Text(source))
+	case "struct_specifier", "union_specifier", "enum_specifier":
+		if nameNode := typeNode.ChildByFieldName("name"); nameNode != nil {
+			return condenseWhitespace(nameNode.Utf8Text(source))
+		}
+		return ""
+	default:
+		return ""
+	}
 }
 
 func condenseWhitespace(s string) string {

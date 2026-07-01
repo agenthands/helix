@@ -10,7 +10,7 @@
     "FilePath": "/repo/pkg/a.py",
     "RefNodeID": 6,
     "RefKind": "RESOLVES_TO",
-    "ChainTokens": ["user_repo"]
+    "ChainTokens": []
   },
   "expected": {
     "resolved": true,

@@ -17,7 +17,15 @@ type Resolver struct {
 
 // NewResolver constructs a TS/JS resolver over the given EffectiveReader seam.
 func NewResolver(store types.EffectiveReader) *Resolver {
-	return &Resolver{store: store}
+	return NewResolverWithIndex(store, nil)
+}
+
+// NewResolverWithIndex constructs a TS/JS resolver over the given
+// EffectiveReader seam plus an optional stable-type-name → NodeID index. The
+// v2.12 Phase 136 daemon producer injects the batch nameToNode index so the
+// annotation tier binds a real RESOLVES_TO target; callers with no index pass nil.
+func NewResolverWithIndex(store types.EffectiveReader, idx map[string]graph.NodeID) *Resolver {
+	return &Resolver{store: store, typeIndex: idx}
 }
 
 // `let x: Foo` / `const x: Foo` / `var x: Foo`.
@@ -55,9 +63,15 @@ func (r *Resolver) ResolveChain(ctx context.Context, req types.ChainRequest) (ty
 
 	sym, _ := r.store.QueryEffectiveSymbol(ctx, req.RepoID, req.RefNodeID)
 
-	// Tier 2: annotation `: Foo`.
-	if t := parseTSAnnotation(sym.Signature); t != "" {
-		return r.tier(req, sym, t, types.EvidenceAnnotation, types.ConfidenceAnnotation, "annotation")
+	// Tier 2: annotation `: Foo`. Option A (v2.12 Phase 136): a co-driver-
+	// supplied declared type in req.ChainTokens[0] takes precedence; an empty
+	// token falls back to parseTSAnnotation.
+	annType := parseTSAnnotation(sym.Signature)
+	if len(req.ChainTokens) > 0 && req.ChainTokens[0] != "" {
+		annType = req.ChainTokens[0]
+	}
+	if annType != "" {
+		return r.tier(req, sym, annType, types.EvidenceAnnotation, types.ConfidenceAnnotation, "annotation")
 	}
 	// Tier 3: constructor `new Foo()`.
 	if t := parseTSConstructor(sym.Signature); t != "" {

@@ -10,7 +10,7 @@
     "FilePath": "/repo/src/a.ts",
     "RefNodeID": 5,
     "RefKind": "RESOLVES_TO",
-    "ChainTokens": ["doThing"]
+    "ChainTokens": []
   },
   "expected": {
     "resolved": true,

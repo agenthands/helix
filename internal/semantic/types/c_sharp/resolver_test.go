@@ -42,7 +42,7 @@ func resolve(t *testing.T, sym types.SymbolFact, edges []types.EdgeFact) types.C
 	r := NewResolver(store)
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "c_sharp", FilePath: "src/a/f.cs",
-		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)
@@ -167,7 +167,7 @@ func TestCSharpResolver_CrossNamespaceCaps(t *testing.T) {
 	r.typeIndex = map[string]graph.NodeID{"Other": 200}
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "c_sharp", FilePath: "src/a/f.cs",
-		RefNodeID: 100, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 100, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)
@@ -192,7 +192,7 @@ func TestCSharpResolver_IntraNamespaceResolves(t *testing.T) {
 	r.typeIndex = map[string]graph.NodeID{"Sibling": 200}
 	resp, _ := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "c_sharp", FilePath: "src/a/f.cs",
-		RefNodeID: 100, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 100, RefKind: "RESOLVES_TO",
 	})
 	if !resp.Resolved || resp.Confidence != types.ConfidenceAnnotation {
 		t.Fatalf("intra-namespace = %+v, want resolved annotation 0.90", resp)

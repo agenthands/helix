@@ -27,10 +27,11 @@
 - [x] **v2.9 Interprocedural DATA_FLOWS (param-flow reachability substrate)** -- Phases 125-126 (shipped 2026-06-30, `6618de08`) — see `.planning/milestones/v2.9-REQUIREMENTS.md`
 - [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (shipped 2026-06-30, `12a9ec3c`) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
 - [x] **v2.11 Type-resolution depth (C-family)** -- Phases 130-134 (shipped 2026-07-01, `d43d7ce7`..`97fc4bc9`) — see `.planning/milestones/v2.11-REQUIREMENTS.md`
+- [x] **v2.12 Production wiring for the type resolvers (C-family E2E)** -- Phases 135-137 (shipped 2026-07-01) — see `.planning/milestones/v2.12-ROADMAP.md` + `.planning/milestones/v2.12-MILESTONE-AUDIT.md`
 
 ## Phases
 
-**Current: none — v2.11 shipped (Phases 130–134, `d43d7ce7`..`97fc4bc9`).** All C-family type resolvers (Java/C#/C/C++) are now full tiered resolvers; the resolver adapter plumbing (Phase 130) unblocked tiers 2–6 for every language. Next milestone undecided (deferred options: T5/comment migration; Rust/Kotlin/PHP/Ruby resolvers = v2.12; production E2E for the C-family). The v2.9→v2.11 detail below is historical.
+**Current: none — v2.12 shipped (Phases 135-137).** The orphaned 12-language type-resolver dispatcher is now a production consumer: a C-family type reference becomes a committed `RESOLVES_TO` edge (typeIndex from `nameToNode`), surfaced to agents as `has_type` via `helix explain-symbol-deep` — proven through the real binary (`TestCLI_E2E_CTypeResolution`) + in-process (`TestResolveTypeEdges_PositiveCommitsRealEdge`). Red-team `agent://RedTeamV212` (REWORK→all folded) caught the latent v2.11 Signature-strip contract break; fixed via Option A (ChainTokens). MILESTONE-AUDIT PASSED. NOT committed (user's call). Next milestone undecided (deferred: C++/C#/Java var→type co-capture + E2E = v2.13-candidate; type_chain/Schema-v6 migration [also unblocks v2.11 Tier-5]; Tier-1 LSP; Rust/Kotlin/PHP/Ruby resolvers; cross-package resolution). The v2.9→v2.11 detail below is historical.
 
 ### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
 

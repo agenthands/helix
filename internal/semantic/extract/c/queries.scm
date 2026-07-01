@@ -30,19 +30,27 @@
   declarator: (type_identifier) @definition.type)
 
 ;; -- Struct fields -----------------------------------------------------------
+;; Co-capture the field's declared type node (@declared.type) alongside the
+;; field identifier so the provider can attach SymbolFact.DeclaredType in ONE
+;; match (in-memory only; @declared.type is NOT emitted as a TypeFact — the
+;; standalone type.annotation captures below own that). v2.12 Phase 135 B3.
 (field_declaration
+  type: (_) @declared.type
   declarator: (field_identifier) @definition.field)
 
 ;; -- Global variables --------------------------------------------------------
 (declaration
+  type: (_) @declared.type
   declarator: (init_declarator
     declarator: (identifier) @definition.variable))
 
 ;; -- Parameters --------------------------------------------------------------
 (parameter_declaration
+  type: (_) @declared.type
   declarator: (identifier) @definition.parameter)
 
 (parameter_declaration
+  type: (_) @declared.type
   declarator: (pointer_declarator
     declarator: (identifier) @definition.parameter))
 

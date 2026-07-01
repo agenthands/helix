@@ -42,7 +42,7 @@ func resolve(t *testing.T, sym types.SymbolFact, edges []types.EdgeFact) types.C
 	r := NewResolver(store)
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "java", FilePath: "src/com/app/F.java",
-		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)
@@ -159,7 +159,7 @@ func TestJavaResolver_CrossPackageCaps(t *testing.T) {
 	r.typeIndex = map[string]graph.NodeID{"Other": 200}
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "java", FilePath: "src/com/app/F.java",
-		RefNodeID: 100, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 100, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)

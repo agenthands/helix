@@ -30,7 +30,15 @@ type Resolver struct {
 // NewResolver constructs a C++ resolver over the given EffectiveReader seam.
 // This replaces the Phase-62 LSP-conditional stub (v2.11 Phase 132).
 func NewResolver(store types.EffectiveReader) *Resolver {
-	return &Resolver{store: store}
+	return NewResolverWithIndex(store, nil)
+}
+
+// NewResolverWithIndex constructs a C++ resolver over the given EffectiveReader
+// seam plus an optional stable-type-name → NodeID index. The v2.12 Phase 136
+// daemon producer injects the batch nameToNode index so the annotation tier
+// binds a real RESOLVES_TO target; callers with no index pass nil.
+func NewResolverWithIndex(store types.EffectiveReader, idx map[string]graph.NodeID) *Resolver {
+	return &Resolver{store: store, typeIndex: idx}
 }
 
 // cppNewRE matches `new Foo` / `new ns::Foo<T>` — the heap-construction form.
@@ -79,8 +87,15 @@ func (r *Resolver) ResolveChain(ctx context.Context, req types.ChainRequest) (ty
 	sym, _ := r.store.QueryEffectiveSymbol(ctx, req.RepoID, req.RefNodeID)
 
 	// Tier 2: annotation — explicit typed declaration (`Foo x`, `Foo x{...}`).
-	if t := parseAnnotation(sym.Signature); t != "" {
-		return r.tierResponse(req, t, types.EvidenceAnnotation,
+	// Option A (v2.12 Phase 136): a co-driver-supplied declared type in
+	// req.ChainTokens[0] takes precedence over re-parsing the signature;
+	// an empty token falls back to parseAnnotation.
+	annType := parseAnnotation(sym.Signature)
+	if len(req.ChainTokens) > 0 && req.ChainTokens[0] != "" {
+		annType = req.ChainTokens[0]
+	}
+	if annType != "" {
+		return r.tierResponse(req, annType, types.EvidenceAnnotation,
 			types.ConfidenceAnnotation, "annotation")
 	}
 

@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.11
-milestone_name: Type-resolution depth (C-family)
+milestone: v2.12
+milestone_name: Production wiring for the type resolvers (C-family E2E)
 status: shipped
 last_updated: "2026-07-01T00:00:00.000Z"
-last_activity: 2026-07-01 — v2.11 Phases 130-134 COMPLETE + committed (d43d7ce7 plumbing, 12805bd6 C, 7c9acb1b C++, 03df9fee C#, 97fc4bc9 Java); MILESTONE-AUDIT PASSED; docs/type-resolution.md added. v2.9 (6618de08) + v2.10 (12a9ec3c/dafab515) shipped earlier.
+last_activity: 2026-07-01 — v2.12 SHIPPED (autonomous). 3 phases COMPLETE + independently verified: 135 extraction foundation (langFromExt C-family + var→type co-capture linkage + latent struct-collision dedup fix), 136 resolver ChainTokens + producer/driver/emit (in-process proof: committed RESOLVES_TO p→Foo), 137 real-binary E2E (helix explain-symbol-deep → has_type edge) + docs. Orphaned type-resolver subsystem now a production consumer. Red-team (agent://RedTeamV212, REWORK→all folded). MILESTONE-AUDIT PASSED. NOT committed — commit is the user's call.
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.9 Interprocedural DATA_FLOWS — build the `DATA_FLOWS` producer (case-1-only param→param interprocedural flow; a syntactic pass-through reachability substrate, NOT full taint analysis). 2 phases (125 flow-summary engine + 126 emission/read-surface/reachability). Roadmap red-teamed (agent://RedTeamV29, PROCEED-WITH-FIXES); all findings folded — notably that DEFINES is a flat container heuristic (callee params resolve by emit-order adjacency, not DEFINES).
+**Current focus:** v2.12 Production wiring for the type resolvers — wire the orphaned 12-language dispatcher into the committed-snapshot batch build (`factsFromExtracted`) so a C-family type reference becomes a queryable `RESOLVES_TO`/`has_type` edge, proven in a real-binary E2E via `helix explain-symbol-deep`. Option A (ChainTokens): producer links var→type, resolver annotation tier consumes ChainTokens (fixing the v2.11 Signature-strip contract break). See `.planning/milestones/v2.12-ROADMAP.md` + `agent://RedTeamV212`.
 
 ## Current Position
 
-Phase: 125-126 (v2.9) — COMPLETE + verified; red-team-folded
-Status: v2.9 built end-to-end. DATA_FLOWS now has a real producer: case-1 param→param interprocedural flow (caller.param → callee.param via a resolved in-repo call), a syntactic pass-through reachability substrate (NOT full taint analysis). 15 pkgs green, make vet (8 vettools) clean, zero new deps, no migration, generated --check gates pass. Red-team (agent://RedTeamV29, PROCEED-WITH-FIXES) all 2 blocking + 6 major findings folded — notably DEFINES is a flat container heuristic (callee params resolve by emit-order adjacency) and reference nodes are a separate namespace (SrcNodeID is always a param symbol node). NOT committed — commit is the user's call.
-Last activity: 2026-06-30
+Phase: 135-137 (v2.12) — COMPLETE + verified; red-team-folded; MILESTONE-AUDIT PASSED.
+Status: v2.12 built end-to-end. The orphaned 12-language type-resolver dispatcher is now wired into the production index build (makeProductionBuildFn → factsFromExtracted → resolveTypeEdges): a C var→type reference becomes a committed RESOLVES_TO edge (real target via typeIndex from nameToNode), surfaced to agents as has_type via `helix explain-symbol-deep` — proven through the REAL binary (TestCLI_E2E_CTypeResolution) + in-process (TestResolveTypeEdges_PositiveCommitsRealEdge). Option A (ChainTokens) fixed the v2.11 Signature-strip contract break. Clean cutover: bootstrap dispatcher + dead TypeResolver/SetSemanticGraph seams removed. 12 pkg green, make vet (8 vettools) clean, zero new deps, no migration, extractor goldens byte-identical. Honest limit: C is the proven language; C++/C#/Java share the wiring but lack co-capture linkage + a dedicated E2E (fast-follow). Deferred: Tier-1 LSP, type_chain/Schema-v6, cross-package. NOT committed — commit is the user's call.
+Last activity: 2026-07-01
 
 ## Performance Metrics
 

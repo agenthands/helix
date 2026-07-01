@@ -125,6 +125,18 @@ type SymbolFact struct {
 	Profile     *classifier.ASTProfile
 	ContextVec  *relatedidx.Vector
 	FlowSummary *dataflow.Summary
+
+	// DeclaredType is the bare declared-type NAME of a variable / field /
+	// parameter symbol (e.g. `Foo` for `struct Foo* p`), populated by the
+	// provider via tree-sitter co-capture while the AST is alive. IN-MEMORY
+	// ONLY, exactly like the Fingerprint* fields above: it is read by the
+	// daemon var→type linkage helper from the raw ExtractedFile BEFORE
+	// ToStoreFacts, so it is deliberately NOT persisted — NOT part of
+	// StableKey / SignatureHash, NOT copied into the store row by
+	// ToStoreFacts, and NEVER changes an existing extractor golden. Empty
+	// when the symbol has no resolvable named type (e.g. a C primitive like
+	// `int`, which is not a type reference).
+	DeclaredType string
 }
 
 // ReceiverFact carries method-receiver metadata (Go-style methods,

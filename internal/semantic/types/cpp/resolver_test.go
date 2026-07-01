@@ -41,7 +41,7 @@ func resolve(t *testing.T, sym types.SymbolFact, edges []types.EdgeFact) types.C
 	r := NewResolver(store)
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "cpp", FilePath: "src/a.cpp",
-		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)

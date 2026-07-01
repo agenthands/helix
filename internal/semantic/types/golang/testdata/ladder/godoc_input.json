@@ -11,7 +11,7 @@
     "FilePath": "/repo/pkg/a.go",
     "RefNodeID": 5,
     "RefKind": "RESOLVES_TO",
-    "ChainTokens": ["Foo"]
+    "ChainTokens": []
   },
   "expected": {
     "resolved": true,

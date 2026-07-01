@@ -16,20 +16,66 @@ ResolveSymbol(ctx, SymbolRequest) -> SymbolResponse  // resolve one symbol's typ
 ```
 
 The `Dispatcher` (`types.NewDispatcher`) routes a request to the resolver for
-`ChainRequest.Language`. The daemon registers all languages at bootstrap
-(`internal/daemon/daemon.go`, `type_resolver_wiring.go`).
+`ChainRequest.Language`.
 
-Resolvers read the graph through the narrow `EffectiveReader` seam (two reads):
-- `QueryEffectiveEdges` — the LIVE `RESOLVES_TO` edges (Phase-61 LSP cascade).
-- `QueryEffectiveSymbol` — the LIVE symbol fact (`Signature`/`StableKey`/`Kind`/
-  `Language`/`FilePath`) for the referenced node.
+### Production wiring (v2.12 Phase 136 — per-batch, inside the index build)
 
-The daemon adapter (`typeStoreAdapter`, `type_resolver_wiring.go`) backs the second
-read with `Store.QueryEffectiveSymbolFact` (`internal/semantic/store/effective_graph.go`)
-— a snapshot JOIN (`semantic_symbols` ⋈ `semantic_files`) at the latest committed
-snapshot. **Before v2.11 this adapter returned an empty `SymbolFact`, so every
-resolver's tiers 2–6 collapsed to Tier 7 in production; v2.11 Phase 130 wired the
-real read.**
+Type resolution runs **per batch, inside the committed-snapshot index build** —
+there is NO daemon-bootstrap dispatcher (the Phase-62 bootstrap dispatcher and
+the dead `SetSemanticGraph`/`TypeResolver`/`typeStoreAdapter` seams were removed
+in the Phase-136 clean cutover). The path is:
+
+1. The production `buildFn` (`internal/daemon/semantic_wiring.go
+   makeProductionBuildFn`) extracts the batch and calls `factsFromExtracted`
+   with `withTypeResolution(...)` — the ONLY caller that opts in; the ~20 test
+   callers pass no option and skip the driver.
+2. As the LAST pass of `factsFromExtracted` (after dedup + the `nameToNode`
+   index build, so type names point at definition nodes), `resolveTypeEdges`
+   (`internal/daemon/type_resolver_wiring.go`) runs the producer + driver:
+   - the C-family **var→type linkage** (`linkVarTypes`, Phase 135) yields the
+     `(referencing var/param → type name)` requests;
+   - each request's type name feeds the resolver's **ChainTokens annotation
+     tier** (Option A, Phase 136) via `NewResolverWithIndex`, which carries the
+     batch `typeIndex` (`type name → NodeID`) so the annotation tier binds a
+     REAL target node;
+   - a per-`(scope, language)` sorted `FixpointResolve` produces
+     `ChainResponse`s, and `typeEdgeFromResponse` converts each into a committed
+     `RESOLVES_TO` `EdgeFact` (gating `dst=0` / `confidence < 0.45` /
+     unresolved), appended to `out.Edges` before the dense EdgeID stamp.
+3. `WriteSnapshotFacts` + `CommitSnapshot` persist the edges in the snapshot.
+
+The resolver's `EffectiveReader` seam is backed **in-batch** by
+`batchEffectiveReader` (over the current batch's in-memory `out.Symbols`, keyed
+by NodeID) rather than the committed store (which is stale at
+`factsFromExtracted` time). `QueryEffectiveSymbol` returns the batch symbol fact
+(`Signature`/`StableKey`/`Kind`/`Language`/`FilePath`); `QueryEffectiveEdges`
+returns nil — the Tier-1 LSP-cascade read stays dead in-batch (deferred, below).
+
+### Read surface (how agents see it)
+
+A committed `RESOLVES_TO` edge surfaces to agents as **`has_type`** via
+`helix explain-symbol-deep`: the read path
+(`SemanticSkill.handleExplainSymbolDeep` → `SymbolEdgesAccessor.OutgoingEdgesOf`,
+no edge-kind filter → `MapInternalKind("RESOLVES_TO") == "has_type"`,
+`internal/skill/semantic/edge_kind_surface.go`). This is proven end-to-end
+through the REAL `helix` binary for C by
+`internal/cli.TestCLI_E2E_CTypeResolution` (Phase 137): a `struct Foo *p`
+parameter yields exactly one `has_type` edge p→Foo; a primitive-typed parameter
+yields none.
+
+### Deferred surfaces
+
+- **Tier-1 LSP (`QueryEffectiveEdges`)** — the in-batch reader returns nil, so
+  the LSP-confirmed `RESOLVES_TO` tier is not consulted during the batch build
+  (L5). Wiring the committed/live overlay edges into the batch reader is future
+  work.
+- **`type_chain` response field** — `explain-symbol-deep` exposes the resolved
+  edges (`has_type`), but the richer per-symbol `type_chain` field is backed by
+  a separate `TypeChainAccessor` that has no Schema-5 materialization; surfacing
+  it needs the Schema-v6 migration.
+- **Cross-package / cross-file resolution** — the batch reader + `typeIndex` are
+  intra-package/translation-unit only (the v2.11 M1 limit); a type defined in a
+  different package/TU is not bound.
 
 ## The 7-tier confidence ladder
 
@@ -98,11 +144,16 @@ reference's scope (D-13 + Pitfall 5). Scope is per-language:
 | C# | namespace ≈ directory (projection lacks declared namespace) | **intra-namespace only** (M1) |
 | C, C++ | flat / program-wide (header linkage) | never caps — **uplift is C/C++-heavy** (M1) |
 
-**Note (pre-existing Phase-62 characteristic):** the cap depends on an optional
-`typeIndex` (parsed-type-name → NodeID) that lets the resolver find the target
-type's file. The production daemon leaves `typeIndex` nil (for ALL resolvers,
-including Go/TS/Python), so in production the cap fires only when a `typeIndex` is
-populated (tests). In production, resolvers emit at raw tier confidence.
+**Note (updated v2.12 Phase 136):** the cap depends on a `typeIndex`
+(parsed-type-name → NodeID) that lets the resolver find the target type's node.
+Before Phase 136 the production daemon left `typeIndex` nil (the cap only fired
+in tests). Phase 136's batch driver now POPULATES it: `resolveTypeEdges` builds
+the index from `nameToNode` (skipping names with `nameCount > 1` — the anti-
+mis-bind guard) and injects it via `NewResolverWithIndex`, so the annotation
+tier binds a real target node in production. The C/C++ scope is flat (program-
+wide / header linkage) so their edges never cap; the batch index is
+intra-package/TU only (cross-package targets stay unbound — see deferred
+surfaces above).
 
 ## Invariants
 
@@ -119,7 +170,12 @@ populated (tests). In production, resolvers emit at raw tier confidence.
 - **Comment tier (T5) absent for the C-family** — no `doc_comment` column (above).
 - **Heuristic (T6) is best-effort (0.45)** — idiomatic snake_case (esp. C) rarely
   matches the camelCase suffix rules; the tier is a fallback, not a primary signal.
-- **End-to-end composition is inferred** — each resolver's logic is unit-tested
-  (fakeStore) and the plumbing is real-store-tested (Phase 130, Go). The full
-  production path (extraction → snapshot → resolver → emit → graph edge) is not yet
-  exercised end-to-end for the four new languages.
+- **End-to-end composition proven for C; inferred for C++/C#/Java** — each
+  resolver's logic is unit-tested (fakeStore) and the plumbing is real-store-
+  tested (Phase 130, Go). The full production path (extraction → snapshot →
+  batch resolver → committed `RESOLVES_TO` → `has_type` via
+  `helix explain-symbol-deep`) is proven end-to-end for **C** through the real
+  binary (Phase 136 in-process `TestResolveTypeEdges_PositiveCommitsRealEdge` +
+  Phase 137 real-binary `TestCLI_E2E_CTypeResolution`). The other three C-family
+  languages (C++/C#/Java) share the identical batch wiring but do not yet have a
+  dedicated real-binary E2E fixture.

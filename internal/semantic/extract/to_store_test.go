@@ -551,3 +551,76 @@ func TestToStoreFacts_CrossProcessDeterminism(t *testing.T) {
 		t.Fatalf("cross-process determinism failed: byte streams differ (len_a=%d len_b=%d)", len(a), len(b))
 	}
 }
+
+// TestToStoreFacts_DropsDeclaredType pins the v2.12 Phase 135 B3 invariant:
+// SymbolFact.DeclaredType is IN-MEMORY ONLY. ToStoreFacts must not copy it
+// into the store row, and the StableKey the store row carries must be
+// byte-identical whether or not DeclaredType was set — proving DeclaredType
+// is absent from the StableKey / SignatureHash and cannot cause golden churn.
+func TestToStoreFacts_DropsDeclaredType(t *testing.T) {
+	base := SymbolFact{
+		ID:               semantic.SymbolID(200),
+		Language:         "c",
+		Kind:             KindParameter,
+		Name:             "p",
+		QualifiedName:    "p",
+		File:             "a.c",
+		Range:            Range{Start: Position{Line: 1, Column: 27}, End: Position{Line: 1, Column: 28}},
+		Signature:        "p",
+		SignatureHash:    "p",
+		Visibility:       "global",
+		Confidence:       ConfidenceTSOnly,
+		ExtractionSource: "tree_sitter",
+		StableKey: StableSymbolKey{
+			RepoID:        "r",
+			Language:      "c",
+			QualifiedName: "p",
+			Kind:          string(KindParameter),
+			SignatureHash: "p",
+		},
+	}
+	withType := base
+	withType.DeclaredType = "Foo"
+
+	efNoType := []*ExtractedFile{{File: FileFact{Path: "a.c", Language: "c", ExtractionStatus: ExtractionStatusReady}, Symbols: []SymbolFact{base}}}
+	efWithType := []*ExtractedFile{{File: FileFact{Path: "a.c", Language: "c", ExtractionStatus: ExtractionStatusReady}, Symbols: []SymbolFact{withType}}}
+
+	outNoType := ToStoreFacts(efNoType)
+	outWithType := ToStoreFacts(efWithType)
+
+	if len(outWithType.Symbols) != 1 {
+		t.Fatalf("expected 1 symbol row, got %d", len(outWithType.Symbols))
+	}
+	got := outWithType.Symbols[0]
+
+	// The store SymbolFact has no type-name column; DeclaredType must not have
+	// leaked into any string field. Signature stays the bare name.
+	if got.Signature != "p" {
+		t.Errorf("Signature = %q, want %q (DeclaredType must not alter Signature)", got.Signature, "p")
+	}
+	if got.SignatureHash != "p" {
+		t.Errorf("SignatureHash = %q, want %q", got.SignatureHash, "p")
+	}
+	for _, f := range []struct {
+		name, val string
+	}{
+		{"Name", got.Name}, {"QualifiedName", got.QualifiedName},
+		{"Signature", got.Signature}, {"SignatureHash", got.SignatureHash},
+		{"PackagePath", got.PackagePath}, {"Visibility", got.Visibility},
+		{"ExtractionSource", got.ExtractionSource},
+	} {
+		if f.val == "Foo" {
+			t.Errorf("store field %s == %q — DeclaredType leaked into the store row", f.name, f.val)
+		}
+	}
+
+	// StableKey byte-identical with vs. without DeclaredType.
+	if outNoType.Symbols[0].StableKey != got.StableKey {
+		t.Errorf("StableKey changed by DeclaredType:\n without = %q\n with    = %q",
+			outNoType.Symbols[0].StableKey, got.StableKey)
+	}
+	if outNoType.Symbols[0].SymbolID != got.SymbolID {
+		t.Errorf("SymbolID changed by DeclaredType: without=%d with=%d",
+			outNoType.Symbols[0].SymbolID, got.SymbolID)
+	}
+}

@@ -43,7 +43,7 @@ func resolve(t *testing.T, sym types.SymbolFact, edges []types.EdgeFact) types.C
 	r := NewResolver(store)
 	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
 		RepoID: "repo", Language: "c", FilePath: "src/a.c",
-		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"x"},
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
 	})
 	if err != nil {
 		t.Fatalf("ResolveChain err: %v", err)
@@ -191,8 +191,8 @@ func TestCResolver_ParseAssignment(t *testing.T) {
 	cases := []struct{ sig, want string }{
 		{"y = x", "x"},
 		{"a = bee", "bee"},
-		{"x = f()", ""},      // function call RHS — rejected
-		{"Foo x = y", ""},    // typed decl (two-token LHS) — not a bare assign
+		{"x = f()", ""},   // function call RHS — rejected
+		{"Foo x = y", ""}, // typed decl (two-token LHS) — not a bare assign
 		{"noequals", ""},
 		{"", ""},
 	}
@@ -243,5 +243,54 @@ func TestCResolver_ResolveSymbol(t *testing.T) {
 	}
 	if !resp.Resolved || resp.EvidenceKind != types.EvidenceAnnotation {
 		t.Fatalf("ResolveSymbol = %+v, want resolved annotation", resp)
+	}
+}
+
+// TestCResolver_ChainTokensAnnotation (v2.12 Phase 136 A1): a ChainRequest
+// with ChainTokens:["Foo"] + a typeIndex mapping "Foo"→N resolves at the
+// annotation tier to Target=N WITHOUT relying on the Signature (the co-driver
+// supplies the declared type). This is the production producer's path.
+func TestCResolver_ChainTokensAnnotation(t *testing.T) {
+	store := newFakeStore()
+	// The referencing symbol carries a BARE signature (no parseable type) —
+	// only ChainTokens can supply "Foo".
+	store.symsByNode[10] = types.SymbolFact{NodeID: 10, Signature: "p", FilePath: "src/a.c"}
+	store.symsByNode[42] = types.SymbolFact{NodeID: 42, Kind: "struct", StableKey: "Foo", FilePath: "src/a.c"}
+	r := NewResolverWithIndex(store, map[string]graph.NodeID{"Foo": 42})
+	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
+		RepoID: "repo", Language: "c", FilePath: "src/a.c",
+		RefNodeID: 10, RefKind: "RESOLVES_TO", ChainTokens: []string{"Foo"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveChain err: %v", err)
+	}
+	if !resp.Resolved {
+		t.Fatalf("ChainTokens annotation did not resolve: %+v", resp)
+	}
+	if resp.EvidenceKind != types.EvidenceAnnotation || resp.Confidence != types.ConfidenceAnnotation {
+		t.Errorf("tier = %q/%v, want annotation/0.90", resp.EvidenceKind, resp.Confidence)
+	}
+	if resp.Target != 42 {
+		t.Errorf("Target = %d, want 42 (via typeIndex, not Signature)", resp.Target)
+	}
+}
+
+// TestCResolver_NewResolverWithIndex (A2): the constructor seam populates the
+// index and a resolve uses it for Target.
+func TestCResolver_NewResolverWithIndex(t *testing.T) {
+	store := newFakeStore()
+	store.symsByNode[10] = types.SymbolFact{NodeID: 10, Signature: "struct Bar b", FilePath: "src/a.c"}
+	store.symsByNode[7] = types.SymbolFact{NodeID: 7, Kind: "struct", StableKey: "Bar", FilePath: "src/a.c"}
+	r := NewResolverWithIndex(store, map[string]graph.NodeID{"Bar": 7})
+	// No ChainTokens → Signature fallback ("struct Bar b" → "Bar") + index target.
+	resp, err := r.ResolveChain(context.Background(), types.ChainRequest{
+		RepoID: "repo", Language: "c", FilePath: "src/a.c",
+		RefNodeID: 10, RefKind: "RESOLVES_TO",
+	})
+	if err != nil {
+		t.Fatalf("ResolveChain err: %v", err)
+	}
+	if !resp.Resolved || resp.Target != 7 {
+		t.Fatalf("NewResolverWithIndex resolve = %+v, want resolved Target=7", resp)
 	}
 }

@@ -1177,6 +1177,54 @@ func (s *Store) QueryAllDataFlowEdges(ctx context.Context, snapshotID uint64) ([
 	return out, nil
 }
 
+// QueryEffectiveSymbolFact returns the committed symbol fact for (repoID,
+// nodeID) plus its file path — the data the Phase-62 type resolvers read for
+// tiers 2-6 (Signature/StableKey/Kind/Language). v2.11 Phase 130: this is the
+// plumbing that unblocks the resolver tier ladder (previously the daemon
+// adapter returned an empty SymbolFact, starving every resolver to Tier 7).
+//
+// Reads the LATEST committed snapshot only (signatures are extraction-time
+// facts; the live-edit overlay does not carry a symbol-fact row). Returns
+// found=false when no row matches (caller degrades to NodeID-only / Tier 7).
+// Lock-free (pure SELECT on s.db).
+func (s *Store) QueryEffectiveSymbolFact(ctx context.Context, repoID string, nodeID uint64) (SymbolFact, string, bool, error) {
+	if s == nil || s.db == nil {
+		return SymbolFact{}, "", false, nil
+	}
+	const q = `
+		SELECT s.symbol_id, s.kind, s.language, s.stable_key, s.name,
+		       s.qualified_name, s.signature, f.path
+		  FROM semantic_symbols AS s
+		  JOIN semantic_snapshots AS snap ON snap.snapshot_id = s.snapshot_id
+		  JOIN semantic_files    AS f   ON f.snapshot_id = s.snapshot_id AND f.file_id = s.file_id
+		 WHERE snap.repo_id = ? AND snap.status = 'committed'
+		   AND s.symbol_id = ?
+		   AND snap.snapshot_id = (
+		     SELECT MAX(snapshot_id) FROM semantic_snapshots
+		      WHERE repo_id = ? AND status = 'committed'
+		   )
+	`
+	rows, err := s.queryContext(ctx, q, repoID, nodeID, repoID)
+	if err != nil {
+		return SymbolFact{}, "", false, fmt.Errorf("QueryEffectiveSymbolFact(repo=%s, node=%d): %w", repoID, nodeID, err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return SymbolFact{}, "", false, nil
+	}
+	var sf SymbolFact
+	var filePath string
+	if err := rows.Scan(&sf.SymbolID, &sf.Kind, &sf.Language, &sf.StableKey, &sf.Name,
+		&sf.QualifiedName, &sf.Signature, &filePath); err != nil {
+		return SymbolFact{}, "", false, fmt.Errorf("QueryEffectiveSymbolFact scan: %w", err)
+	}
+	sf.NodeID = sf.SymbolID
+	if err := rows.Err(); err != nil {
+		return SymbolFact{}, "", false, fmt.Errorf("QueryEffectiveSymbolFact rows.Err: %w", err)
+	}
+	return sf, filePath, true, nil
+}
+
 // QueryClusterIDOfNode returns the cluster_id and member count for the
 // cluster that contains nodeID at the given (repoID, graphVersion).
 // member count is derived from CAST(c.score AS INTEGER) (UpsertClusters

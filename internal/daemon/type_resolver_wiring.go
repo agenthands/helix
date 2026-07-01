@@ -84,16 +84,25 @@ func (a *typeStoreAdapter) QueryEffectiveEdges(ctx context.Context, q types.Edge
 	return out, nil
 }
 
-// QueryEffectiveSymbol returns a single symbol fact for a given (repo, node)
-// pair. Today the underlying Store does not expose a per-node lookup
-// (Phase 57 schema 1 returns empty slices via QueryEffectiveSymbols); the
-// adapter therefore returns an empty SymbolFact carrying just the node ID
-// so the per-language resolvers fall through to lower tiers cleanly.
-//
-// A future phase will add a typed Store.QueryEffectiveSymbol single-row
-// helper; this adapter is the seam that will be updated then.
-func (a *typeStoreAdapter) QueryEffectiveSymbol(_ context.Context, _ string, n graph.NodeID) (types.SymbolFact, error) {
-	return types.SymbolFact{NodeID: n}, nil
+// QueryEffectiveSymbol returns the LIVE symbol fact for (repo, node). v2.11
+// Phase 130: now backed by Store.QueryEffectiveSymbolFact (the real
+// committed-snapshot row: Signature / StableKey / Kind / Language / FilePath),
+// which unblocks the per-language resolvers' tiers 2-6 (previously this
+// returned an empty SymbolFact, starving every resolver to Tier 7). On a miss
+// it degrades to NodeID-only (Tier 7) — the D-12 invariant still holds.
+func (a *typeStoreAdapter) QueryEffectiveSymbol(ctx context.Context, repoID string, n graph.NodeID) (types.SymbolFact, error) {
+	sf, filePath, ok, err := a.store.QueryEffectiveSymbolFact(ctx, repoID, uint64(n))
+	if err != nil || !ok {
+		return types.SymbolFact{NodeID: n}, err
+	}
+	return types.SymbolFact{
+		NodeID:    n,
+		Language:  sf.Language,
+		Kind:      sf.Kind,
+		StableKey: sf.StableKey,
+		FilePath:  filePath,
+		Signature: sf.Signature,
+	}, nil
 }
 
 // Per-language Resolver constructor wrappers.

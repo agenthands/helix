@@ -34,6 +34,17 @@ func NewP1SymbolEdgesAdapterForTest(store *semanticstore.Store) semantic.SymbolE
 	return &semP1SymbolEdgesAdapter{store: store}
 }
 
+// NewP1DataFlowReachabilityAdapterForTest constructs a production
+// semP1DataFlowReachabilityAdapter wrapped around the caller-supplied *Store
+// and returns it as the semantic.DataFlowReachabilityAccessor interface. Used
+// by v2.10 trace_data_flow tests to drive the REAL reachability BFS over a
+// populated store without test-only inline fakes.
+//
+// Test-fixture only — no production code should call this function.
+func NewP1DataFlowReachabilityAdapterForTest(store *semanticstore.Store) semantic.DataFlowReachabilityAccessor {
+	return &semP1DataFlowReachabilityAdapter{store: store}
+}
+
 // NewP1ClusterMembershipAdapterForTest constructs a production
 // semP1ClusterMembershipAdapter wrapped around the caller-supplied *Store and
 // returns it as the semantic.ClusterMembershipAccessor interface. Used by Plan

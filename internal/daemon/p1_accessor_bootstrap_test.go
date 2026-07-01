@@ -81,6 +81,7 @@ func TestSemanticBundleWiresP1Accessors(t *testing.T) {
 
 	// D-01a FOLD: SymbolEdges and ClusterMembership wired by Plan 74-03/74-04.
 	require.True(t, wired.SymbolEdges, "SetSymbolEdges must be wired (D-01a FOLD)")
+	require.True(t, wired.DataFlowReachability, "SetDataFlowReachability must be wired (v2.10)")
 	require.True(t, wired.ClusterMembership, "SetClusterMembership must be wired (D-01a FOLD)")
 
 	// DEFERRED to Phase 75 — schema columns absent in Schema v6.
@@ -89,14 +90,14 @@ func TestSemanticBundleWiresP1Accessors(t *testing.T) {
 }
 
 // TestSemanticBundleSetterCountLog asserts A-03: the setters log line in
-// semantic_wiring.go contains the literal string `"setters", 14` (static
+// semantic_wiring.go contains the literal string `"setters", 15` (static
 // grep check — executed in-process to ensure CI enforces the invariant).
 //
 // A-03 is verified at acceptance-criteria time by:
 //
-//	grep -v '^//' internal/daemon/semantic_wiring.go | grep -c '"setters", 14'
+//	grep -v '^//' internal/daemon/semantic_wiring.go | grep -c '"setters", 15'
 //
 // This test documents the assertion in the suite so it appears in test output.
 func TestSemanticBundleSetterCountLog(t *testing.T) {
-	t.Log("A-03: semantic_wiring.go setters log count = 14 (verified by grep at CI acceptance)")
+	t.Log("A-03: semantic_wiring.go setters log count = 15 (verified by grep at CI acceptance)")
 }

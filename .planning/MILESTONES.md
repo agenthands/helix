@@ -1,5 +1,19 @@
 # Milestones
 
+## v2.10 trace_data_flow verb — DATA_FLOWS read surface (Complete + verified 2026-06-30; pending commit)
+
+**Phases:** 3 (127 ReachableFrom primitive + 128 handler + 129 atomic frozen-51 surface bump) — ALL COMPLETE + verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.10-MILESTONE-AUDIT.md`).
+
+**Goal: make v2.9's DATA_FLOWS substrate consumable by an agent.** A dedicated `trace_data_flow` verb answers "from this seed PARAMETER, what's reachable via interprocedural data flow?" via a new read-only `DataFlowReachabilityAccessor` (bulk `QueryAllDataFlowEdges` → in-memory BFS → `[]ReachableSymbol{symbol_id, hops}`). The verb is the **51st frozen verb** (the frozen-50 anchor bumped deliberately, the sanctioned mechanism).
+
+**Red-team** (`agent://RedTeamV210`, PROCEED-WITH-FIXES): its headline finding (frozen-50 anchor absent) was REFUTED by direct read — the anchor IS real; its grep regex failed. Its real wins were the 4 count-sensitive gates (render-class, querySet, graphReaderVerbs, D-09 gatedHandlerFiles) + the bulk-query + 3-phase-split folds. The function-seed trap (B3) confirmed: param-only seed is the only HEAD-viable design (no CONTAINS function→param emission).
+
+**Invariants held:** zero new Go deps, no schema migration, deterministic, bounded; `make vet` (8 vettools) clean; cligen/refgen/docgen --check green at 51.
+
+**Deferred:** function-seed support (needs OwnerSymbolID population); field-access DATA_FLOWS extension; `get-change-impact-graph` multi-projection rework.
+
+---
+
 ## v2.9 Interprocedural DATA_FLOWS — param-flow reachability substrate (Complete + verified 2026-06-30; pending commit)
 
 **Phases:** 2 (125 intraprocedural flow-summary engine + 126 arg→param emission / read surface / reachability) — BOTH COMPLETE + verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.9-MILESTONE-AUDIT.md`).

@@ -27,7 +27,8 @@ type WiredAccessorsBoolMap struct {
 	ClusterMap        bool
 	ClusterMember     bool
 	ClusterPageRank   bool
-	ImpactLookup      bool
+	ImpactLookup         bool
+	DataFlowReachability bool
 }
 
 // WiredAccessorsForTest returns a WiredAccessorsBoolMap snapshot of which P1
@@ -48,6 +49,7 @@ func WiredAccessorsForTest(s *SemanticSkill) WiredAccessorsBoolMap {
 		ClusterMap:        s.clusterMap != nil,
 		ClusterMember:     s.clusterMember != nil,
 		ClusterPageRank:   s.clusterPageRank != nil,
-		ImpactLookup:      s.impactLookup != nil,
+		ImpactLookup:         s.impactLookup != nil,
+		DataFlowReachability: s.dataFlowReachability != nil,
 	}
 }

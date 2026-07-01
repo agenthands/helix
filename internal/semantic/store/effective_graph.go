@@ -1141,6 +1141,42 @@ func (s *Store) QuerySymbolEdgesOutgoing(ctx context.Context, snapshotID, srcNod
 	return out, nil
 }
 
+// QueryAllDataFlowEdges returns every DATA_FLOWS edge row in the snapshot — the
+// bulk input the trace_data_flow reachability walk (v2.10) consumes in ONE query,
+// avoiding N per-node OutgoingEdgesOf roundtrips and the per-edge
+// QueryStableKeyByNodeID storm. DATA_FLOWS is sparse (case-1 forwarding-only),
+// so the snapshot-wide set is bounded.
+//
+// Lock-free (pure SELECT on s.db).
+func (s *Store) QueryAllDataFlowEdges(ctx context.Context, snapshotID uint64) ([]SymbolEdgeRaw, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	const q = `
+		SELECT e.src_node_id, e.dst_node_id, e.edge_kind
+		  FROM semantic_edges AS e
+		 WHERE e.snapshot_id = ?
+		   AND e.edge_kind   = 'DATA_FLOWS'
+	`
+	rows, err := s.queryContext(ctx, q, snapshotID)
+	if err != nil {
+		return nil, fmt.Errorf("QueryAllDataFlowEdges(snap=%d): %w", snapshotID, err)
+	}
+	defer rows.Close()
+	var out []SymbolEdgeRaw
+	for rows.Next() {
+		var r SymbolEdgeRaw
+		if err := rows.Scan(&r.SrcNodeID, &r.DstNodeID, &r.EdgeKind); err != nil {
+			return nil, fmt.Errorf("QueryAllDataFlowEdges scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryAllDataFlowEdges rows.Err: %w", err)
+	}
+	return out, nil
+}
+
 // QueryClusterIDOfNode returns the cluster_id and member count for the
 // cluster that contains nodeID at the given (repoID, graphVersion).
 // member count is derived from CAST(c.score AS INTEGER) (UpsertClusters

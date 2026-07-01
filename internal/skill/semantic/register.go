@@ -30,4 +30,5 @@ func RegisterAll(server *mcp.SerenaMCPServer, s *SemanticSkill, tracer trace.Tra
 	registerGetClusterMap(server, s, tracer)
 	registerExplainCluster(server, s, tracer)
 	registerGetChangeImpactGraph(server, s, tracer)
+	registerTraceDataFlow(server, s, tracer)
 }

@@ -25,6 +25,7 @@
 - [x] **v2.7 Corpus Analysis & Benchmark Pivot** -- Phase 120 (shipped 2026-06-26)
 - [x] **v2.8 Graph Intelligence Depth (cbm-mcp parity)** -- Phases 121-124 (shipped 2026-06-30) — see `.planning/milestones/v2.8-ROADMAP.md`
 - [x] **v2.9 Interprocedural DATA_FLOWS (param-flow reachability substrate)** -- Phases 125-126 (complete + verified 2026-06-30; pending commit) — see `.planning/milestones/v2.9-REQUIREMENTS.md`
+- [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (complete + verified 2026-06-30; pending commit) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
 
 ## Phases
 

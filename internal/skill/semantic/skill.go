@@ -49,7 +49,8 @@ type SemanticSkill struct {
 	// unwired and the handler degrades gracefully (empty type_chain / no
 	// edges) rather than erroring.
 	typeChain   TypeChainAccessor
-	symbolEdges SymbolEdgesAccessor
+	symbolEdges          SymbolEdgesAccessor
+	dataFlowReachability DataFlowReachabilityAccessor // v2.10: trace_data_flow seed->sink reachability over DATA_FLOWS
 
 	// Phase 71-05 addition: per-edge evidence seam driving
 	// validate_graph_edge. Read-only; nil means the seam is unwired and
@@ -192,6 +193,24 @@ func (s *SemanticSkill) SetSymbolEdges(a SymbolEdgesAccessor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.symbolEdges = a
+}
+
+// SetDataFlowReachability wires the DataFlowReachabilityAccessor adapter
+// (v2.10 seam). Drives trace_data_flow's source->sink reachability walk over
+// DATA_FLOWS edges. Production binding wraps the *Store bulk-edge reader at the
+// latest committed snapshot.
+func (s *SemanticSkill) SetDataFlowReachability(a DataFlowReachabilityAccessor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dataFlowReachability = a
+}
+
+// getDataFlowReachability returns the wired DataFlowReachabilityAccessor under
+// the skill mutex, or nil (the handler MUST nil-guard and degrade gracefully).
+func (s *SemanticSkill) getDataFlowReachability() DataFlowReachabilityAccessor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dataFlowReachability
 }
 
 // SetEdgeEvidence wires the EdgeEvidenceAccessor adapter (Phase 71-05 seam).
@@ -391,6 +410,12 @@ func (s *SemanticSkill) Tools() []*mcp.ToolDef {
 			Description:      "Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+).",
 			BriefDescription: "Change impact subgraph",
 			HelpText:         getChangeImpactGraphHelp,
+		},
+		{
+			Name:             "trace_data_flow",
+			Description:      "Source->sink reachability over DATA_FLOWS edges from a seed parameter (read+).",
+			BriefDescription: "Data-flow reachability",
+			HelpText:         traceDataFlowHelp,
 		},
 	}
 }

@@ -341,6 +341,7 @@ The graph engine itself (`internal/semantic/graph/`) is **language-agnostic** â€
 | `helix get-cluster-map` | semantic | Workspace-level cluster overview: count, top-N clusters, members, representative symbols, dominant edge kinds (read+). |
 | `helix explain-cluster` | semantic | Full cluster member list with per-member PageRank, cohesion/conductance metrics, and dominant entry points (read+). |
 | `helix get-change-impact-graph` | semantic | Pre-edit blast-radius subgraph (nodes + edges + edge kinds) for a seed symbol (review+). |
+| `helix trace-data-flow` | semantic | Source->sink reachability over DATA_FLOWS edges from a seed parameter (read+). |
 | `helix replace-symbol-body` | symbol-editing | Replace a symbol's body with new content using tree-sitter for precise extraction |
 | `helix insert-before-symbol` | symbol-editing | Insert content immediately before a symbol |
 | `helix insert-after-symbol` | symbol-editing | Insert content immediately after a symbol |

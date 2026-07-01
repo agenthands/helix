@@ -283,12 +283,13 @@ func newSemanticBundle(
 		b.skill.SetClusterPageRank(b.clusterPageRankAccessor())
 		b.skill.SetImpactLookup(b.integLookupAccessor())
 		b.skill.SetSymbolEdges(b.symbolEdgesAccessor())
+		b.skill.SetDataFlowReachability(b.dataFlowReachabilityAccessor())
 		b.skill.SetClusterMembership(b.clusterMembershipAccessor())
 		// TypeChain (SetTypeChain) and EdgeEvidence (SetEdgeEvidence) deferred to Phase 75
 		// — schema columns absent in Schema v6 (no tree_sitter_kind / tier / evidence_kind).
 		if logger != nil {
 			logger.Info("semantic skill setters wired",
-				"setters", 14,
+				"setters", 15,
 				"bleve_subdir", cfg.BleveSubdir,
 				"index_timeout", cfg.IndexTimeout,
 			)
@@ -316,6 +317,7 @@ func newSemanticBundle(
 		b.skill.SetClusterPageRank(nil)
 		b.skill.SetImpactLookup(nil)
 		b.skill.SetSymbolEdges(nil)
+		b.skill.SetDataFlowReachability(nil)
 		b.skill.SetClusterMembership(nil)
 		if logger != nil {
 			logger.Info("semantic skill accessors gated off (effSemanticDisabled)",
@@ -2665,6 +2667,99 @@ func (a *semP1SymbolEdgesAdapter) OutgoingEdgesOf(ctx context.Context, repoID st
 		return nil, err
 	}
 	return a.assembleEdgeRows(ctx, repoID, raw)
+}
+
+// semP1DataFlowReachabilityAdapter satisfies DataFlowReachabilityAccessor
+// (v2.10) for trace_data_flow. ReachableFrom resolves the seed PARAMETER symbol
+// to its node, bulk-loads ALL DATA_FLOWS edges in the snapshot in ONE query
+// (QueryAllDataFlowEdges — the red-team M1 fold, avoiding N OutgoingEdgesOf
+// roundtrips + the per-edge QueryStableKeyByNodeID storm), runs an in-memory
+// BFS from the seed (hop-capped, visited-set, deterministic), and resolves
+// reachable nodeIDs back to SymbolIDs. Read-only (D-09 invariant).
+//
+// Seed semantics (v2.10 L3): the seed MUST be a PARAMETER. A function seed
+// returns empty because DATA_FLOWS edges are param-anchored (src_node_id = the
+// param node, not the function node) and there is no query-time function->params
+// path at HEAD (CONTAINS function->param is not tree-sitter-emitted).
+type semP1DataFlowReachabilityAdapter struct {
+	store *semanticstore.Store
+}
+
+func (b *semanticBundle) dataFlowReachabilityAccessor() semantic.DataFlowReachabilityAccessor {
+	return &semP1DataFlowReachabilityAdapter{store: b.store}
+}
+
+func (a *semP1DataFlowReachabilityAdapter) ReachableFrom(ctx context.Context, repoID string, seed integ.SymbolID, maxHops int) ([]semantic.ReachableNode, error) {
+	if a == nil || a.store == nil {
+		return nil, nil
+	}
+	snapshotID, err := a.store.LatestCommittedSnapshot(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	if snapshotID == 0 {
+		return nil, nil
+	}
+	seedNode, ok, err := a.store.QueryNodeIDByStableKey(ctx, repoID, string(seed))
+	if err != nil {
+		return nil, err
+	}
+	if !ok || seedNode == 0 {
+		return nil, nil // seed symbol not in the latest committed snapshot
+	}
+	if maxHops < 0 {
+		maxHops = 0
+	}
+	// Bulk-load all DATA_FLOWS edges once; BFS in-memory over the adjacency.
+	all, err := a.store.QueryAllDataFlowEdges(ctx, snapshotID)
+	if err != nil {
+		return nil, err
+	}
+	adj := make(map[uint64][]uint64, len(all))
+	for _, e := range all {
+		adj[e.SrcNodeID] = append(adj[e.SrcNodeID], e.DstNodeID)
+	}
+	// Deterministic BFS: process neighbors in ascending nodeID order.
+	visited := map[uint64]int{seedNode: 0}
+	frontier := []uint64{seedNode}
+	for hop := 1; hop <= maxHops; hop++ {
+		var next []uint64
+		for _, n := range frontier {
+			nb := append([]uint64(nil), adj[n]...)
+			sort.Slice(nb, func(i, j int) bool { return nb[i] < nb[j] })
+			for _, d := range nb {
+				if _, seen := visited[d]; seen {
+					continue
+				}
+				visited[d] = hop
+				next = append(next, d)
+			}
+		}
+		sort.Slice(next, func(i, j int) bool { return next[i] < next[j] })
+		frontier = next
+		if len(frontier) == 0 {
+			break
+		}
+	}
+	// Resolve reachable nodeIDs -> SymbolIDs; sort by (Hops, SymbolID).
+	out := make([]semantic.ReachableNode, 0, len(visited))
+	for nodeID, hops := range visited {
+		key, keyOK, err := a.store.QueryStableKeyByNodeID(ctx, repoID, nodeID)
+		if err != nil {
+			return nil, err
+		}
+		if !keyOK {
+			continue
+		}
+		out = append(out, semantic.ReachableNode{SymbolID: integ.SymbolID(key), Hops: hops})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Hops != out[j].Hops {
+			return out[i].Hops < out[j].Hops
+		}
+		return out[i].SymbolID < out[j].SymbolID
+	})
+	return out, nil
 }
 
 // semP1ClusterMembershipAdapter satisfies ClusterMembershipAccessor with

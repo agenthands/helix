@@ -76,6 +76,7 @@ var renderClassByTool = map[string]renderClass{
 	"explain_symbol_deep":       classOpaque,
 	"find_related_symbols":      classOpaque,
 	"get_change_impact_graph":   classOpaque,
+	"trace_data_flow":          classOpaque,
 	"get_semantic_graph_status": classOpaque,
 	"index_semantic_graph":      classOpaque,
 	"refresh_semantic_graph":    classOpaque,

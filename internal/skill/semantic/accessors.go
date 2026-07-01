@@ -282,6 +282,26 @@ type SymbolEdgesAccessor interface {
 	OutgoingEdgesOf(ctx context.Context, repoID string, sym integ.SymbolID) ([]SymbolEdgeRow, error)
 }
 
+// DataFlowReachabilityAccessor is the read seam for trace_data_flow (v2.10):
+// a bounded, deterministic source->sink reachability walk over DATA_FLOWS
+// edges. ReachableFrom seeds at a PARAMETER symbol (the taint entry point —
+// DATA_FLOWS edges are param->param, so a function seed cannot reach them at
+// HEAD: QuerySymbolEdgesOutgoing(functionNode) returns the function's own
+// CALLS/IMPLEMENTS edges, not its params' DATA_FLOWS edges). It returns the
+// set of symbols reachable within maxHops, each with its hop distance. Read-
+// only (D-09 invariant); nil means the seam is unwired and the handler MUST
+// guard (degrade gracefully).
+type DataFlowReachabilityAccessor interface {
+	ReachableFrom(ctx context.Context, repoID string, seed integ.SymbolID, maxHops int) ([]ReachableNode, error)
+}
+
+// ReachableNode is one symbol reachable from the seed via DATA_FLOWS edges.
+// Hops is 0 for the seed itself, 1+ for symbols reached in N data-flow hops.
+type ReachableNode struct {
+	SymbolID integ.SymbolID
+	Hops     int
+}
+
 // ----- Phase 71-05 additions: per-edge evidence seam for validate_graph_edge -----
 //
 // EdgeEvidenceRow is one piece of citation evidence the validate_graph_edge

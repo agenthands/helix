@@ -918,6 +918,25 @@ helix switch-mode
 
 **Use this, not that:** Use `helix switch-mode` to change the active profile mode instead of editing config by hand — it re-gates the tool surface atomically.
 
+## `helix trace-data-flow`
+
+**Synopsis:** Source->sink reachability over DATA_FLOWS edges from a seed parameter (read+).
+
+**Args:**
+
+- `--seed-json` (json, required) — seed
+- `--max-hops` (int, optional) — reachability BFS depth (default 5, max 10)
+
+**Output:** a ranked, token-budgeted structural overview or context bundle (relpath-anchored).
+
+**Example:**
+
+```
+helix trace-data-flow --seed-json='[]'
+```
+
+**Use this, not that:** Use `helix trace-data-flow` for a ranked structural overview instead of reading many files by hand.
+
 ## `helix validate-graph-edge`
 
 **Synopsis:** Validate a (from, to, edge_kind) graph claim with confidence + evidence (read+).

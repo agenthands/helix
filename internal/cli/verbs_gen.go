@@ -426,6 +426,15 @@ var verbSpecs = map[string]verbSpec{
 		groupID:  "memory",
 		flags:    nil,
 	},
+	"trace-data-flow": {
+		toolName: "trace_data_flow",
+		short:    "Run the trace_data_flow tool against the warm daemon",
+		groupID:  "repomap",
+		flags: []verbFlag{
+			{name: "seed-json", toolArg: "seed", kind: flagJSON, required: true, help: "seed"},
+			{name: "max-hops", toolArg: "max_hops", kind: flagInt, required: false, help: "reachability BFS depth (default 5, max 10)"},
+		},
+	},
 	"validate-graph-edge": {
 		toolName: "validate_graph_edge",
 		short:    "Run the validate_graph_edge tool against the warm daemon",

@@ -59,6 +59,13 @@ func HandleGetChangeImpactGraphForTest(s *SemanticSkill, ctx context.Context, ar
 	return s.handleGetChangeImpactGraph(ctx, args)
 }
 
+// HandleTraceDataFlowForTest invokes the unexported handleTraceDataFlow handler
+// (v2.10). E2E tests call this against a SemanticSkill wired with a real
+// *Store + DataFlowReachabilityAccessor.
+func HandleTraceDataFlowForTest(s *SemanticSkill, ctx context.Context, args TraceDataFlowArgs) *mcpsdk.CallToolResult {
+	return s.handleTraceDataFlow(ctx, args)
+}
+
 // WiredAccessorsBoolMap and WiredAccessorsForTest moved to
 // wired_accessors_seam.go (non-test file) so that internal/daemon tests can
 // import them across the package boundary. export_test.go files are only

@@ -483,6 +483,7 @@ var querySet = map[string]bool{
 	"read_file":                 true,
 	"search_in_files":           true,
 	"get_diagnostics":           true,
+	"trace_data_flow":          true,
 	"get_code_actions":          true,
 	"get_repo_map":              true,
 	"get_context":               true,
@@ -537,6 +538,7 @@ var graphReaderVerbs = map[string]bool{
 	"find_related_symbols":      true,
 	"get_semantic_context":      true,
 	"get_cluster_map":           true,
+	"trace_data_flow":      true,
 }
 
 // matrixRowMixesQueryAction (SKILL-01) returns true iff the row's `Use this`

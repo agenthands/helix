@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.9
-milestone_name: Interprocedural DATA_FLOWS (param-flow reachability substrate)
+milestone: v2.10
+milestone_name: trace_data_flow verb (DATA_FLOWS read surface)
 status: active
-last_updated: "2026-06-30T17:30:00.000Z"
-last_activity: 2026-06-30 — v2.9 Phases 125-126 COMPLETE + verified (build/tests/make vet/generated gates green); NOT yet committed (user's call)
+last_updated: "2026-06-30T19:30:00.000Z"
+last_activity: 2026-06-30 — v2.10 Phases 127-129 COMPLETE + verified (51st verb, build/tests/make vet/generated gates green); NOT yet committed. v2.9 committed earlier (6618de08).
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 

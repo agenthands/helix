@@ -49,7 +49,8 @@ var gatedHandlerFiles = []string{
 	"tools_validate_edge.go",
 	"tools_cluster_map.go",     // Phase 72 addition
 	"tools_explain_cluster.go", // Phase 72 addition
-	"tools_change_impact.go",   // Phase 72 addition
+	"tools_change_impact.go",     // Phase 72 addition
+	"tools_trace_data_flow.go",   // v2.10 addition
 }
 
 // TestReadOnlyGate_Phase71Handlers scans each handler file line-by-line,

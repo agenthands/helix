@@ -46,7 +46,7 @@ func referenceMissingVerbs(refBytes string, authority []string) []string {
 }
 
 // TestReferenceCoversEveryVerb is the ADOPT-01a completeness gate. The authority is
-// cli.VerbToolNames() (the 50 frozen verbs) — NOT refgen's own output (97-RESEARCH
+// cli.VerbToolNames() (the 51 frozen verbs) — NOT refgen's own output (97-RESEARCH
 // Pitfall 2: never source completeness from the generator that produced the file,
 // that is a set-compared-to-itself tautology that can never go RED). Every frozen
 // verb must have its own section in the embedded reference.md.
@@ -54,9 +54,9 @@ func TestReferenceCoversEveryVerb(t *testing.T) {
 	authority := VerbToolNames()
 
 	// Anchor the authority size: a future verb addition without a reference regen
-	// must trip this gate (and REF-03's --check). 50 frozen verbs.
-	require.Equal(t, 50, len(authority),
-		"VerbToolNames() is the completeness authority; expected the 50 frozen verbs, got %d", len(authority))
+	// must trip this gate (and REF-03's --check). 51 frozen verbs.
+	require.Equal(t, 51, len(authority),
+		"VerbToolNames() is the completeness authority; expected the 51 frozen verbs, got %d", len(authority))
 
 	ref := readEmbeddedReference(t)
 	missing := referenceMissingVerbs(ref, authority)

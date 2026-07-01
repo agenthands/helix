@@ -614,7 +614,7 @@ func newDaemon(cfg *config.SerenaConfig, logger *slog.Logger, observability *obs
 			"ruby":       rubyTypeStub(),
 			"c_sharp":    csharpTypeStub(reader),
 			"rust":       rustTypeStub(reader),
-			"c":          cTypeStub(reader),
+			"c":          cTypeResolver(reader),
 			"cpp":        cppTypeStub(reader),
 			"kotlin":     kotlinTypeStub(reader),
 		})

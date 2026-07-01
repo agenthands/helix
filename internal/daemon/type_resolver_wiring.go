@@ -118,7 +118,7 @@ func phpTypeStub() types.Resolver                           { return typesphp.Ne
 func rubyTypeStub() types.Resolver                          { return typesruby.NewStub() }
 func csharpTypeStub(r types.EffectiveReader) types.Resolver { return typescsharp.NewStub(r) }
 func rustTypeStub(r types.EffectiveReader) types.Resolver   { return typesrust.NewStub(r) }
-func cTypeStub(r types.EffectiveReader) types.Resolver      { return typesc.NewStub(r) }
+func cTypeResolver(r types.EffectiveReader) types.Resolver { return typesc.NewResolver(r) }
 func cppTypeStub(r types.EffectiveReader) types.Resolver    { return typescpp.NewStub(r) }
 func kotlinTypeStub(r types.EffectiveReader) types.Resolver { return typeskotlin.NewStub(r) }
 

@@ -1,5 +1,26 @@
 # Milestones
 
+## v2.14 Codebase-Map Re-mapping (Go tree) (Shipped 2026-07-01)
+
+**Phases:** 3 (141 STRUCTURE + STACK · 142 ARCHITECTURE + INTEGRATIONS + CONVENTIONS · 143 CONCERNS + TESTING + integrity gate) — ALL COMPLETE. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.14-MILESTONE-AUDIT.md`). Assess-and-document milestone (documentation-only; no source change).
+
+**Goal: make the codebase map honest.** The v2.13 audit flagged (HIGH) that `.planning/codebase/` still described the REMOVED pre-Go Python `serena` tree (`src/serena/`, `SerenaAgent`, `*_tools.py`) as of its sole 2026-04-07 commit — ~13 milestones stale. Re-mapped all 7 files to the current Go tree at HEAD (85,472 non-test LOC; 24 `internal/` packages; largest subsystem `internal/semantic/` at 30.8k LOC; 16 `cmd/` binaries; 51 frozen verbs), every claim grounded in a citable Go path.
+
+**Key accomplishments:**
+- **Phase 141 (STRUCTURE + STACK):** Go directory layout (16 `cmd/` binaries incl. 7 `vet-*` gates, 24 `internal/` packages with per-package purpose + LOC, `api/proto`, `protocol/{gen,patch}`, `bench/`, `tools/dspy-tune/`) mapped onto the 4 layers; real dep stack read verbatim from `go.mod` (Go 1.25.1, CGO=1 split-runner, MCP go-sdk v1.5.0, cobra v1.10.2, koanf v2, tree-sitter + 23 grammars, modernc sqlite, duckdb, chromem-go, prometheus/otel, sigstore, arrow; anthropic/openai SDKs dev-time bench/tools only; no runtime Python).
+- **Phase 142 (ARCHITECTURE + INTEGRATIONS + CONVENTIONS):** 4 layers + daemon bootstrap + the true **6-deep** MCP middleware LIFO chain (LazyInit→ProfileEnforce→Guardrail→Suggestion→ProfileFilter→Telemetry); `internal/semantic/` surveyed FRESH as an extract→store→enrich→emit pipeline with the edge-kind ledger; LSP three-tier installer / tree-sitter / gRPC StreamMCP / sigstore / otel / container auto-detect integrations; Go conventions + gofmt/vet + 7 custom `cmd/vet-*` architectural gates + generated-code drift gates.
+- **Phase 143 (CONCERNS + TESTING + integrity gate):** grounded tech-debt / fragile-seam / security-posture map (vet-enforced layering invariants, CGO=1 constraint, retained-lineage naming, sourced deferred items; NO invented debt — 0 TODO/FIXME confirmed); Go test architecture (`go test` + testify, `testdata/` fixtures, vet-gate suite, real-binary E2E, `bench/` harness + 6 CI workflows). Integrity gate: all staleness banners removed, every `Analysis Date` → 2026-07-01, residue-grep clean (only labeled retained-lineage `SerenaMCPServer` + `api/proto/serena/v1/` remain).
+
+**Grounding discipline held — the writers corrected 3 stale source-of-record facts** by reading real code, not parroting: `cmd/` = 16 (not 17); MCP middleware = 6-deep (not CLAUDE.md's 4 — `ProfileEnforce`+`Guardrail` omitted there); `helix setup` = 8 clients (not 7); cobra v1.10.2 (not CLAUDE.md's v1.9.1). The map is now more accurate than CLAUDE.md.
+
+**Also bundled — planning-integrity fix:** the stale `ROADMAP.md` `## Phases` detail section (still describing v2.5-era phases 115-126) was regenerated. That stale section was the root cause of `anvil-cc roadmap analyze` manufacturing phantom incomplete phases 121-123 — which is how this milestone surfaced. `roadmap analyze` now reports 141/142/143 cleanly.
+
+**Invariants held:** documentation-only — zero `.go`/`go.mod`/`go.sum` changes (so `go build`/`go vet`/`go test` are provably unaffected); no formatters/tests run by writers; every sampled claim independently re-verified against HEAD at audit time.
+
+**Deferred / follow-ons (non-blocking):** (1) **CLAUDE.md drift (LOW)** — its hand-maintained Architecture/Stack sections carry the same 3 stale facts the map corrected; recommend a cheap reconcile pass (CLAUDE.md was out of scope for v2.14). (2) `docs/` contributor docs current (v2.13), untouched.
+
+**Prior:** v2.13 remains uncommitted (co-driver's call); v2.14's commit is separate and additive.
+
 ## v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level) (Shipped 2026-07-01)
 
 **Phases:** 3 (138 origin-space engine + 11-lang unions + all-11 unit matrix · 139 in-body + return-bridge emission + read surface + Go multi-hop · 140 all-11 real-binary E2E + function-seeded multi-hop + docs) — ALL COMPLETE + independently verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.13-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`agent://RedTeamV213`, PROCEED-WITH-FIXES → all folded); each phase carried an independent qa VERIFICATION.md with its own revert-and-fail (138: m2 guards RED; 139: return-bridge gate inverted RED; 140: langFromExt arm removed + binary rebuilt → subtest RED), all restored byte-identical; audit-time consolidated fresh-binary re-run.

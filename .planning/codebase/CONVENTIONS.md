@@ -1,225 +1,222 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
 
 ## Naming Patterns
 
+**Packages:**
+- Short, lowercase, single-word, no underscores: `daemon`, `kernel`, `mcp`,
+  `semantic`, `langregistry`, `repomap`, `lspool`, `obs`, `errors`.
+- Package name matches the directory; subsystems nest by concern
+  (`internal/semantic/store`, `internal/kernel/symbols`).
+
 **Files:**
-- snake_case for all Python files: `file_tools.py`, `symbol_tools.py`, `serena_config.py`
-- Test files follow pattern: `test_<domain>.py` (e.g., `test_python_basic.py`, `test_serena_agent.py`)
-- Package directories use snake_case: `src/serena/tools/`, `src/solidlsp/language_servers/`
+- lowercase, `snake_case` where multi-word: `daemon.go`, `middleware.go`,
+  `lazy_init.go`, `profile_enforce.go`, `edge_kind_surface.go`.
+- Tests are `*_test.go`; real-binary end-to-end tests are `*_e2e_test.go`
+  (`internal/cli/*_e2e_test.go`, driven by `HELIX_BIN`).
+- Platform-conditional files use the Go suffix convention: `pressure_linux.go`,
+  `pressure_darwin.go`, `swap_windows.go`; build-tag conditionals are rare
+  (`internal/semantic/store/duckdb.go` `//go:build !(windows && arm64)`).
 
-**Classes:**
-- PascalCase for all class names: `ReadFileTool`, `LanguageServerManager`, `SerenaConfig`
-- Tool classes end with `Tool`: `ReadFileTool`, `CreateTextFileTool`, `ReplaceContentTool`
-- Enum classes inherit from StrEnum: `class LineType(StrEnum):`
-- Marker classes for tools: `ToolMarkerCanEdit`, `ToolMarkerSymbolicRead`, `ToolMarkerBeta`
+**Exported symbols:**
+- PascalCase for exported identifiers: `Daemon`, `SerenaMCPServer`, `GrammarRegistry`,
+  `SemanticLookup`, `InstallMiddleware`. `SerenaMCPServer` is a deliberately retained
+  lineage identifier (Phase 52-03), not a stale name.
+- Interfaces are named for behavior, often `-er`: `ToolProvider`, `WorkflowProvider`,
+  `LeaseProvider`, `SkillToolExecutor`, `ClientRegistrar`.
+- Argument structs for MCP tools use a `<Tool>Args` suffix: `GoToDefinitionArgs`,
+  `FindReferencesArgs` (`internal/kernel/symbols/tools.go`).
 
-**Functions/Methods:**
-- snake_case for all function and method names: `apply()`, `get_symbol_overview()`, `create_language_server_manager()`
-- Private/internal methods start with underscore: `_create_ls()`, `_limit_length()`
-- Context managers prefixed with `start_` or suffixed with `_context`: `start_ls_context()`, `project_context()`
+**Unexported symbols:**
+- camelCase: `newDaemon`, `resolveAllowedToolsForMode`, `defaultSessionRunner`,
+  `getSessionFn`. Struct fields unexported when internal (`slogHandler`, `metrics`,
+  `tracerProvider` in `obs.Provider`).
 
-**Variables:**
-- snake_case for variables: `repo_path`, `original_content`, `language_server`
-- Constants in UPPER_SNAKE_CASE: `DEFAULT_SOURCE_FILE_ENCODING`, `SERENA_MANAGED_DIR_NAME`
-- Type variables use single uppercase letter: `T`, `TTool` (with `TypeVar` bounds where needed)
-- Private instance variables prefixed with underscore: `self._tool_names`, `self._encoding`
-- Boolean variables often prefixed: `is_ci`, `is_windows`, `has_malformed_name`
-
-**Module-level patterns:**
-- Each module has a module logger: `log = logging.getLogger(__name__)`
-- Docstring at module top level: `"""File and file system-related tools..."""`
+**Constants / enums:**
+- Closed enums are typed string aliases with grouped `const` blocks:
+  `Kind` (`internal/errors/kinds.go`), `Freshness` / `ChangeSource`
+  (`internal/semantic/`). Sentinel errors are `Err<Kind>` vars
+  (`ErrNotFound`, `ErrUnsupported`).
 
 ## Code Style
 
 **Formatting:**
-- Tool: ruff (run via `uv run poe format`)
-- Line length: 140 characters (configured in `pyproject.toml`)
-- Quote style: double quotes for strings
-- Indent: 4 spaces
-- Docstring formatting: enabled via `docstring-code-format = true`
+- `gofmt` is the sole formatter (`make fmt` / `gofmt -w .`); tabs for indentation,
+  no configurable line length. No third-party formatter.
 
-**Linting:**
-- Tool: ruff check (run via `uv run poe lint`)
-- Configuration: `pyproject.toml` with extensive rule selection
-- Key ignored rules: unused variables allowed, long lines allowed, unspecific except clauses allowed for error recovery
-- Max complexity: 20 (McCabe)
+**Vetting:**
+- `go vet ./...` plus 7 custom `cmd/vet-*` singlechecker analyzers, all run by
+  `make vet` (`Makefile` `vet` target):
+  `vet-noduckdb` (confine the duckdb-go import to `internal/semantic/store`),
+  `vet-nokernel2semantic` and `vet-nosemantic2kernel` (pin the kernel↔semantic import
+  boundary in both directions; kernel may import only `internal/semantic/integ`),
+  `vet-compact-uses-store` (compact must go through the store, not duckdb directly),
+  `vet-ablation-leakage` and `vet-bench-rag-leakage` (bench arms must not import
+  disabled subsystems), and `vet-tools-quarantine` (nothing outside `tools/` may
+  import the dev-time `tools/` tree). `verify-no-docker-sdk` bans the Docker Go SDK.
 
-**Type Checking:**
-- Tool: mypy (run via `uv run poe type-check`)
-- Settings: strict mode with `disallow_untyped_defs = true` for core code
-- Exception: `disallow_untyped_defs = false` for test code (tests use less strict typing)
-- Use `TYPE_CHECKING` guard for circular import prevention: `if TYPE_CHECKING: from serena.agent import SerenaAgent`
+**Testing:**
+- `make test` = `make vet` + `go test`; `testify` assertions; `testdata/` fixtures per
+  package; real-binary E2E tests gated on `HELIX_BIN`.
 
 ## Import Organization
 
-**Order (enforced by ruff):**
-1. Standard library: `import os`, `from pathlib import Path`
-2. Third-party: `import pytest`, `from pydantic import BaseModel`
-3. Local relative: `from serena.tools import Tool`, `from solidlsp.ls_config import Language`
-4. Within each group, sort alphabetically
+**Grouping (gofmt/goimports order):**
+1. Standard library.
+2. Third-party modules.
+3. Local `github.com/agenthands/helix/...` packages.
 
-**Path Aliases:**
-- No path aliases configured; use absolute imports from `src/` roots
-- Import from public namespaces: `from serena.tools import ReadFileTool` not internal paths
-- Use `TYPE_CHECKING` guards for optional/circular imports
+Groups separated by blank lines; alphabetical within each group. Example from
+`internal/kernel/symbols/tools.go`:
 
-**Example structure from `src/serena/tools/file_tools.py`:**
-```python
-import os
-from collections import defaultdict
-from fnmatch import fnmatch
-from pathlib import Path
-from typing import Literal
+```go
+import (
+	"context"
+	"fmt"
+	"strings"
 
-from serena.tools import SUCCESS_RESULT, EditedFileContext, Tool, ToolMarkerCanEdit, ToolMarkerOptional
-from serena.util.file_system import scan_directory
-from serena.util.text_utils import ContentReplacer, search_files
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
+
+	serr "github.com/agenthands/helix/internal/errors"
+	"github.com/agenthands/helix/internal/guardrails"
+	"github.com/agenthands/helix/internal/kernel"
+	"github.com/agenthands/helix/internal/mcp"
+	"github.com/agenthands/helix/internal/semantic/integ"
+	"github.com/agenthands/helix/internal/workspace"
+)
 ```
+
+**Aliases:**
+- `serr` for `internal/errors` (avoids shadowing stdlib `errors`; convention pinned in
+  `kinds.go`). `mcpsdk` for the upstream MCP SDK to distinguish it from the local
+  `internal/mcp`. Blank imports for driver/init side effects
+  (`_ "modernc.org/sqlite"`, `_ "github.com/duckdb/duckdb-go/v2"`, and the daemon's
+  `imports.go` skill blank-imports).
 
 ## Error Handling
 
-**Patterns:**
-- Explicit exception types preferred over broad `except Exception`
-- Language server failures use `SolidLSPException` with checks like `e.is_language_server_terminated()`
-- Tool execution wraps errors in `apply_ex()` method with automatic retry on language server restart
-- Custom exceptions extend Exception: `class ProjectNotFoundError(Exception): pass`
-- Validation exceptions use `ValueError` with descriptive messages
-- File path validation: `self.project.validate_relative_path(relative_path, require_not_ignored=True)`
-- File not found: `raise FileNotFoundError(f"Relative path {relative_path} does not exist.")`
-
-**Error recovery:**
-- Language server crashes trigger automatic restart via `get_language_server_manager_or_raise().restart_language_server()`
-- Tool execution catches exceptions and returns error strings to LLM: `return f"Error executing tool: {e.__class__.__name__} - {e}"`
-- Graceful degradation: shortened result factories try progressively shorter versions when output too long
+**Typed error taxonomy (`internal/errors/`):**
+- `Error{Kind, Message, Tool, Detail, cause}` with a closed `Kind` enum. Construct
+  with `serr.New(kind, msg)` / `serr.Wrap(kind, msg, cause)`; builder chaining via
+  `WithTool` / `WithDetail`.
+- Match by kind, not string: `errors.Is(err, serr.ErrNotFound)`. `Error.Is` compares
+  `Kind`; `Unwrap` preserves the chain; `MarshalJSON` renders errors onto the MCP wire.
+- Never return a typed nil `*Error` as `error` — return `nil` directly (documented
+  pitfall in `errors.go`).
+- Wrapping with `fmt.Errorf("...: %w", err)` at package boundaries where a bare cause
+  suffices (e.g. `internal/config/loader.go`).
+- Domain extension: `NewGuardrailViolation` / `AsGuardrailViolation` carry a typed
+  `GuardrailViolationDetail`; disabled subsystems reuse `Unsupported` with a greppable
+  `subsystem_disabled:` message prefix.
 
 ## Logging
 
-**Framework:** sensai.util.logging (custom wrapper)
-
-**Patterns:**
-- Module-level logger: `log = logging.getLogger(__name__)`
-- Log levels: INFO for normal operations, WARNING for non-fatal issues, ERROR for failures
-- Use f-strings in log messages: `log.info(f"Starting language server for {language} {repo_path}")`
-- Parameter logging in tool execution: `log.info(f"{self.get_name_from_cls()}: {dict_string(params)}")`
-- Exception logging: `log.error(f"Error executing tool: {e}", exc_info=e)` includes exception info
-- LSP communication tracing: optional via `trace_lsp_communication=True` parameter
-
-**Configuration:**
-- Logging configured at test startup: `configure(level=logging.INFO)` in conftest
-- Log viewer available via GUI in production mode
-- Default log level in tests: ERROR to reduce noise
+**Framework:** `log/slog` (standard library) — no third-party logging framework.
+- Loggers are dependency-injected (`*slog.Logger` passed into `New`, middleware
+  installers, workers), not package globals.
+- `internal/cli/root.go` `newLogger` builds a text or JSON handler to stderr and wraps
+  it with `obs.NewContextHandler` so traced requests emit `trace_id`/`span_id`.
+- Structured key/value attributes; level via `slog.HandlerOptions{Level: ...}`.
 
 ## Comments
 
-**When to Comment:**
-- Add docstrings for all public methods and classes (enforced by ruff D rules)
-- Explain non-obvious algorithm choices: `# capture kind names and depth-0 snapshots before grouping, which mutates the dicts`
-- Explain temporary workarounds: `# TODO: Fix when language server behavior changes`
-- Document parameter constraints in docstrings
-
-**JSDoc/Docstring Style:**
-- Use triple-quoted docstrings for modules, classes, and functions
-- Include parameter descriptions with type hints: `:param relative_path: the relative path to the file to read`
-- Include return type description: `:return: a message indicating success or failure`
-- Example from `ReadFileTool.apply()`:
-```python
-def apply(self, relative_path: str, start_line: int = 0, end_line: int | None = None, max_answer_chars: int = -1) -> str:
-    """
-    Reads the given file or a chunk of it. Generally, symbolic operations
-    like find_symbol or find_referencing_symbols should be preferred if you know which symbols you are looking for.
-
-    :param relative_path: the relative path to the file to read
-    :param start_line: the 0-based index of the first line to be retrieved.
-    :param end_line: the 0-based index of the last line to be retrieved (inclusive). If None, read until the end of the file.
-    :param max_answer_chars: if the file (chunk) is longer than this number of characters,
-        no content will be returned. Don't adjust unless there is really no other way to get the content
-        required for the task.
-    :return: the full text of the file at the given relative path
-    """
-```
+**Doc comments:**
+- Standard Go doc comments: every exported identifier has a `//` comment beginning with
+  the identifier name (`// Daemon is the persistent supervisor...`,
+  `// InstallMiddleware wires...`).
+- Package docs live in `doc.go` (or atop the primary file) and state invariants,
+  allowed/forbidden imports, and design rules (`internal/semantic/store/doc.go`,
+  `internal/semantic/scheduler/doc.go`, `internal/obs/obs.go`).
+- Inline comments explain non-obvious invariants and cite the governing phase/decision
+  (e.g. `// LazyInit MUST run first ...`, `D-12`, `Phase 91 SEC-01`), and flag
+  concurrency/pitfall hazards.
 
 ## Function Design
 
-**Size Guidelines:**
-- Prefer focused, single-responsibility functions (max complexity 20)
-- Break large methods into private helper methods with leading underscore: `_create_ls()`, `_limit_length()`
-- Use nested functions for context managers: `start_ls_context()` yields after logging entry
+**Signatures:**
+- `context.Context` is the first parameter on any call that does I/O or can be
+  cancelled (`Resolve(ctx, entry)`, `Probe(ctx)`, `StreamMCP(stream)`).
+- Multiple returns with a trailing `error`; named returns only when they aid clarity
+  (`Resolve(...) (command string, args []string, err error)`).
+- Options passed as structs (`InstallerConfig`, `SkillDeps`, `RegistrationConfig`,
+  `MiddlewareDeps`) rather than long positional lists.
 
-**Parameters:**
-- Use type hints on all parameters: `def apply(self, relative_path: str, start_line: int = 0, ...) -> str:`
-- Optional parameters with `| None`: `repo_path: str | None = None`
-- Use keyword-only arguments in dataclasses: `@dataclass(kw_only=True)`
-- Union types use `|` syntax (Python 3.10+): `Literal["read", "write"]`
-- Avoid mutable defaults; use `None` with factory pattern: `def __init__(self, items: list[T] | None = None): self.items = items or []`
-
-**Return Values:**
-- Single return type clearly typed: `def get_name(self) -> str:`
-- Union returns use `|`: `str | None`
-- Strings for tool results (consumed by LLM): tools always return `str`
-- Context managers use `Iterator[T]` return type: `def start_ls_context(...) -> Iterator[SolidLanguageServer]:`
-- Use `SUCCESS_RESULT = "OK"` constant for successful operations
+**Seams for testing:**
+- Overridable function-typed package vars are the test seam (`runDaemonFn = runDaemon`
+  in `root.go`, `sessionRunner` in `daemon.go`) so tests substitute fakes without
+  spawning real processes.
 
 ## Module Design
 
-**Exports:**
-- Public classes/functions exposed at module level: `from serena.tools import Tool, ReadFileTool`
-- Private implementation details use leading underscore: `_create_ls()`, `_disabled_languages`
-- No star imports: always use explicit imports
+**Boundaries:**
+- `internal/` is the private surface; `api/proto/` and `protocol/` hold generated
+  wire/LSP types; `cmd/` holds binary entrypoints; `bench/` and `tools/` are dev-time
+  and quarantined from the shipped binary (`vet-tools-quarantine`,
+  `vet-*-leakage`).
+- Cross-subsystem coupling flows through narrow, types-only seams: the kernel reaches
+  the semantic engine only via `internal/semantic/integ` (`SemanticLookup`), never
+  through the store or duckdb.
+- Third-party-dependency blast radius is contained by package ownership: `internal/obs`
+  is the sole home of prometheus/otel; `internal/semantic/store` is the sole home of
+  duckdb-go. Vet gates enforce both.
 
-**Barrel Files:**
-- `src/serena/tools/__init__.py` exports public tool API
-- `src/serena/__init__.py` exports version and main classes
-- Each language server directory has `__init__.py` exporting main class
+**Registration:**
+- Caddy-style plugin registration: a skill package's `init()` calls
+  `skill.Register(&MySkill{})` (`internal/skill/memory/skill.go:24`,
+  `internal/skill/workflow/skill.go:24`, `internal/skill/semantic/skill.go:72`); the
+  daemon blank-imports skill packages (`imports.go`) and calls `skill.InitAll(deps)`,
+  then `skill.ToolProviders()` / `skill.WorkflowProviders()`.
 
-**Module conventions:**
-- Tools inherit from `Tool` base class: `class ReadFileTool(Tool):`
-- Tools implement `apply()` method with documented parameters
-- Tools use marker classes for capabilities: `class CreateTextFileTool(Tool, ToolMarkerCanEdit):`
-- Docstring on class and on `apply()` method both required for MCP tool registration
+## Struct Usage
 
-## Dataclass Usage
+*(This section covers Go structs — the analogous value-carrier shape.)*
 
-**Pattern (from `TextLine` in `text_utils.py`):**
-```python
-@dataclass(kw_only=True)
-class TextLine:
-    """Represents a line of text with information on how it relates to the match."""
-    
-    line_number: int
-    line_content: str
-    match_type: LineType
-    """Represents the type of line (match, prefix, postfix)"""
-
-    def get_display_prefix(self) -> str:
-        """Get the display prefix for this line based on the match type."""
-        if self.match_type == LineType.MATCH:
-            return "  >"
-        return "..."
+**Pattern (MCP tool arg struct, `internal/kernel/symbols/tools.go`):**
+```go
+// GoToDefinitionArgs is the input schema for the go_to_definition tool.
+type GoToDefinitionArgs struct {
+	Path string `json:"path" jsonschema:"File path"`
+	Line int    `json:"line" jsonschema:"Line number (1-indexed, matches editor display)"`
+	Col  int    `json:"column" jsonschema:"Column number (1-indexed, matches editor display)"`
+}
 ```
 
-- Use `@dataclass(kw_only=True)` for required keyword arguments
-- Add field docstrings on the same line or after the field
-- Include methods for formatting/display
-- Use `field(default_factory=list)` for mutable defaults
+- Exported fields carry `json:` tags (wire field names) and `jsonschema:` tags (the
+  agent-facing parameter descriptions that drive the tool schema); `omitempty` for
+  optional inputs.
+- Config structs mirror koanf keys one tag per leaf (`koanf:"enabled"` in
+  `internal/semantic/config.go`), so a SPEC key rename must change the tag in lockstep.
+- Structs (never interfaces) are used for extensible value carriers like `obs.Provider`
+  so methods can be added without breaking call sites; typed IDs are single-field
+  aliases (`type SnapshotID uint64`, `internal/semantic/types.go`).
+- Compile-time interface guards: `var _ health.SemanticIndexAccessor =
+  (*daemonSemIndexAccessor)(nil)` (`internal/daemon/daemon.go`).
 
 ## Code Organization Examples
 
-**Tool structure (`ReadFileTool`):**
-- Class docstring explains purpose
-- `apply()` method signature shows all parameters with types
-- Docstring on `apply()` explains each parameter and return
-- Implementation handles edge cases (start_line, end_line)
-- Uses helper methods for output limiting: `self._limit_length(result, max_answer_chars)`
+**Middleware installer (`internal/mcp/`):** each middleware is a
+`func Install<Name>Middleware(server *mcpsdk.Server, ...)` that calls
+`server.AddReceivingMiddleware(...)`. Because the SDK composes middleware LIFO, the
+daemon installs in the order Telemetry+ProfileFilter → Suggestion → Guardrail →
+ProfileEnforce → LazyInit so execution runs LazyInit-first; install-order comments
+document the invariant (`lazy_init.go:106-112`, `profile_enforce.go:16-23`).
 
-**Test structure (`test_python_basic.py`):**
-- Class per logical test group: `class TestPythonLanguageServerBasics:`
-- Pytest marker on class: `@pytest.mark.python`
-- Parametrized fixtures: `@pytest.mark.parametrize("language_server", PYTHON_BACKEND_LANGUAGES, indirect=True)`
-- Clear test names: `test_request_references_user_class()`
-- Assertion-heavy verification of expected conditions
+**Generated-code discipline:** generated files carry a `// Code generated by ...; DO
+NOT EDIT.` header and are regenerated, never hand-edited:
+- `internal/cli/verbs_gen.go` (`helix-cligen`) — the frozen verb→tool catalog; the
+  `verify-cligen` drift gate hard-fails if it diverges from the live registry.
+- `protocol/gen/*.go` (`cmd/lspgen` from LSP metaModel.json 3.17.0).
+- `api/proto/serena/v1/ipc.pb.go` / `ipc_grpc.pb.go` (`protoc-gen-go`; `make proto`).
+- Companion drift gates: `verify-docs` (README tool table) and `verify-reference`
+  (`internal/cli/skills/helix/reference.md`) keep hand-written docs in lockstep with
+  the registry.
+
+**Test structure:** `testify` (`assert`/`require`), table-driven subtests, `testdata/`
+fixtures per package, and real-binary E2E tests (`*_e2e_test.go`, `HELIX_BIN`) for the
+CLI surface.
 
 ---
 
-*Convention analysis: 2026-04-07*
+*Convention analysis: 2026-07-01*

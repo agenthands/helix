@@ -1,260 +1,308 @@
 # Architecture
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
 
 ## Pattern Overview
 
-**Overall:** Serena is a modular, multi-layered coding agent toolkit with a dual-stack backend supporting both Language Server Protocol (LSP) and JetBrains IDEs. The architecture follows a clear separation of concerns with a central orchestrator (`SerenaAgent`) coordinating language servers, tool execution, and MCP protocol exposure.
+**Overall:** Helix is a Go-native, CLI-first code-intelligence platform shipped as a
+**single Go binary** (`cmd/helix/main.go`) with no runtime Python, Docker, or LSP
+dependencies. It runs as a **persistent supervisor daemon** (`internal/daemon/`)
+that keeps language servers warm between agent sessions and exposes symbol-level
+operations as `helix <verb>` commands. The design is a **4-layer architecture**
+(MCP Runtime → Kernel → Skills & Multi-Lang → Profiles & Setup) with a
+first-class **semantic-graph index** (`internal/semantic/`, ~30.8k LOC) built
+alongside the kernel.
 
 **Key Characteristics:**
-- **Pluggable backends**: LSP (language servers) or JetBrains IDE integrations
-- **Tool-driven interactions**: 40+ composable tools exposed via MCP protocol
-- **Configuration-driven behavior**: Contexts and modes customize tool sets and prompts without code changes
-- **Multi-language support**: 19+ languages via LSP servers with automatic runtime dependency management
-- **Project-aware**: Per-project memory persistence, configuration, and tool sets
+- **Single binary, warm daemon**: one process supervises the workspace registry,
+  kernel, skills, and listeners; survives client disconnects (`internal/daemon/daemon.go`).
+- **CLI-first surface**: agents drive 51 frozen `helix` verbs over gRPC; the MCP Go
+  SDK + gRPC IPC are internal plumbing, not an agent-facing surface (`internal/cli/root.go`).
+- **Skill-driven tool set**: kernel tools + `init()`-registered skills compose the
+  tool registry without touching core (`internal/skill/`).
+- **Multi-language via LSP + tree-sitter**: 52-language registry
+  (`internal/langregistry/`), 23 tree-sitter grammars (`internal/treesitter/registry.go`),
+  11 first-class semantic extractors.
+- **Semantic graph**: typed, language-agnostic edge graph over code symbols, backed
+  by a DuckDB store (`internal/semantic/store/`).
+- **Architectural boundaries enforced by custom vet gates**: kernel↔semantic import
+  boundary pinned in both directions (`make vet`).
 
 ## Layers
 
-**MCP Protocol Layer (`src/serena/mcp.py`):**
-- Purpose: Expose SerenaAgent tools as a Model Context Protocol server
-- Location: `src/serena/mcp.py`
-- Contains: `SerenaMCPFactory` for server creation, tool schema generation, OpenAI compatibility transformation
-- Depends on: SerenaAgent, Tool instances, configuration
-- Used by: AI agents via MCP-compliant clients (Claude, ChatGPT, etc.)
-- Converts Serena Tools to MCP tool specifications with parameter validation and docstring parsing
+**Layer 0 — MCP Runtime:**
+- Purpose: MCP server, middleware stack, persistent daemon supervision, gRPC IPC.
+- `internal/mcp/` — MCP server over the official Go SDK (`server.go`,
+  `SerenaMCPServer` type — Go identifier retained for internal-API stability,
+  Phase 52-03), tool registry (`registry.go`), and the middleware stack (below).
+- `internal/daemon/daemon.go` — persistent supervisor (`Daemon` struct); errgroup
+  orchestration, signal-first lifecycle, kernel-first shutdown; bootstraps every
+  subsystem (see Data Flow).
+- `internal/forwarder/` — stdio-to-gRPC proxy with daemon auto-start.
+- `api/proto/serena/v1/` — gRPC IPC proto (`ipc.proto`, `ForwarderService`);
+  package directory name `serena/v1` retained as a wire-format lineage artifact
+  (Phase 52-03), NOT residue.
+- Transport: the agent-facing surface is the `helix` CLI dialing the daemon over
+  gRPC `StreamMCP` (unix-domain socket by default; opt-in loopback-gated gRPC TCP).
+  The stdio MCP forwarder head and the Streamable-HTTP `/mcp` head were removed in
+  Phase 94 — only the internal gRPC `StreamMCP` wire remains.
 
-**Agent Orchestration Layer (`src/serena/agent.py`):**
-- Purpose: Central orchestrator managing project activation, tool registry, modes, and context
-- Location: `src/serena/agent.py`
-- Contains: `SerenaAgent` (main orchestrator), `ToolSet` (tool filtering), `ActiveModes` (mode management), `AvailableTools` (tool exposure)
-- Depends on: Tool registry, language server manager, project manager, configuration
-- Used by: MCP server, CLI, JetBrains plugins
-- Manages lifecycle: tool instantiation, language server initialization, project switching, mode activation
+**Layer 1 — Code Intelligence Kernel (`internal/kernel/`):**
+- Purpose: warm language-server orchestration and symbol/edit/file/diagnostic tools.
+- `internal/kernel/kernel.go` — kernel orchestrator; `workspace.go` — workspace runtime + language detection.
+- `internal/kernel/lspool/` — LS worker pool: share-until-dirty (`pool.go`),
+  adaptive TTL with reuse scoring, circuit breaking (`circuit.go`), platform-aware
+  memory-pressure eviction (`pressure_linux.go`, `pressure_darwin.go`).
+- `internal/kernel/symbols/` — 9 symbol tools (definition, references, hover,
+  implementations, call/type hierarchy, blast radius) in `tools.go`, `hierarchy.go`, `blast.go`.
+- `internal/kernel/edit/` — 6 edit tools with tree-sitter body surgery (`tools.go`, `rename.go`, `replace.go`).
+- `internal/kernel/fileops/` — 7 file tools (read/write/list/find/search/replace/fuzzy_edit).
+- `internal/kernel/diag/` — 3 diagnostic tools (diagnostics, code actions, formatting).
+- `internal/kernel/jsonrpc/` — JSON-RPC 2.0 codec for LS communication.
+- `internal/kernel/health/`, `internal/kernel/help/` — `get_health` / `get_tool_help`
+  MCP tools, wrapped as skills via each package's `skill_adapter.go`.
+- Supporting: `internal/fuzzy/` (4-strategy fuzzy cascade), `internal/repomap/`
+  (tag extraction, SQLite tag cache, PageRank, token-budget renderer),
+  `protocol/gen/` (generated LSP 3.17 types).
 
-**Configuration & Customization Layer (`src/serena/config/`):**
-- Purpose: Define execution contexts and operational modes
-- Location: `src/serena/config/context_mode.py`, `src/serena/config/serena_config.py`
-- Contains:
-  - `SerenaAgentContext`: Tool availability and descriptions per integration context (IDE, agent, desktop-app, etc.)
-  - `SerenaAgentMode`: Operational patterns (planning, editing, interactive) with tool inclusion/exclusion
-  - `SerenaConfig`: Global configuration (language backend, logging, tool defaults)
-  - `RegisteredProject`: Project metadata and per-project overrides
-- Depends on: YAML loading, project registry
-- Used by: SerenaAgent, Tool instantiation, prompt generation
+**Layer 2 — Skills & Multi-Language (`internal/skill/`):**
+- Purpose: extend the tool set without touching core; multi-language registry.
+- `internal/skill/skill.go` — `Skill` / `ToolProvider` / `WorkflowProvider`
+  interfaces; `registry.go` — Caddy-style `init()` registration.
+- `internal/skill/memory/` — 7 memory tools over markdown + SQLite FTS5.
+- `internal/skill/workflow/` — onboarding and session-handoff prompts.
+- `internal/skill/repomap/` — `get_repo_map` / `get_context` wrapping the RepoMap engine.
+- `internal/skill/semantic/` — the semantic-graph MCP tools (11 tools registered by
+  `register.go` `RegisterAll`).
+- `internal/skill/guardrails/` — guardrail skill surface.
+- `internal/memory/` — memory store, FTS5 index (`index.go`), fsnotify watcher.
+- `internal/langregistry/` — 52-language embedded registry (`languages.go`), YAML
+  override (`registry.go`), three-tier LS installer (`installer.go`).
 
-**Tool System (`src/serena/tools/`):**
-- Purpose: Provide composable, reusable code operations
-- Location: `src/serena/tools/`
-- Contains: Base `Tool` class and specialized tools:
-  - `file_tools.py`: File I/O (read, create, append, delete)
-  - `symbol_tools.py`: LSP-based symbol operations (find, navigate, edit)
-  - `memory_tools.py`: Project memory persistence (read, write, delete)
-  - `config_tools.py`: Project activation and configuration queries
-  - `cmd_tools.py`: Command execution (shell, npm, etc.)
-  - `query_project_tools.py`: Project metadata queries
-  - `workflow_tools.py`: Onboarding and initialization
-  - `jetbrains_tools.py`: JetBrains IDE integration
-- Depends on: Projects, language servers, code editors
-- Used by: MCP protocol, agents, IDEs
-- Each tool has markers (`ToolMarker*` classes) indicating: editing capability, LSP requirements, optional status, beta status
+**Layer 3 — Profiles & Setup (`internal/profile/`, `internal/config/`, `internal/cli/`):**
+- Purpose: agent profiles, layered config, client setup.
+- `internal/profile/` — 5 agent profiles (claude-code, codex, ide-assistant, ci-bot,
+  full) plus ablation profiles (`profiles/*.yaml`) and 4 modes (read/edit/review/admin, `modes/*.yaml`).
+- `internal/config/` — 4-layer koanf config: CLI > project `.helix/` > user
+  `~/.helix/` > profile defaults (`loader.go` `Load`).
+- `internal/cli/setup*.go` — `helix setup <client>` across 8 registrars
+  (`setup_clients.go`); `internal/cli/status*.go` — `helix status`.
 
-**Language Server Wrapper (`src/solidlsp/ls.py`):**
-- Purpose: Unified interface to multiple language servers via LSP
-- Location: `src/solidlsp/ls.py`
-- Contains: `SolidLanguageServer` - manages LSP communication, file buffers, caching, and symbol operations
-- Depends on: LSP protocol handler, language-specific servers, file system
-- Used by: Tools (via LanguageServerSymbolRetriever), symbol operations
-- Handles: Request/response marshaling, file version tracking, symbol caching, error recovery
+**Semantic-Graph Subsystem (`internal/semantic/`, first-class, ~30.8k LOC):**
+- Purpose: a typed, language-agnostic edge graph over code symbols, built and
+  maintained daemon-side; consumed by Layer-2 semantic MCP tools through a
+  types-only seam (`internal/semantic/integ/`).
+- Pipeline stages (**extract → store → enrich → emit**):
+  - **extract** (`internal/semantic/extract/`, ~8.4k LOC): per-language tree-sitter
+    symbol/reference/import/type/heritage extraction; 11 first-class extractors
+    (Go, TypeScript/JavaScript, Python, Java, C#, Rust, C, C++, Kotlin, PHP, Ruby),
+    each `extract/<lang>/` with a `queries.scm`.
+  - **store** (`internal/semantic/store/`, ~5.2k LOC): DuckDB-backed graph store;
+    SOLE owner of the `duckdb-go` import (`duckdb.go`, D-12); snapshot ⊕ overlay −
+    tombstone effective-read model; three-tier open (open / quarantine+rebuild / hard-fail).
+  - **enrich** (`internal/semantic/lspenrich/`, ~2.7k LOC): LSP enrichment of
+    extracted facts via warm LS leases (`worker.go`), budget-bounded cascade.
+  - **types** (`internal/semantic/types/`, ~3.4k LOC): per-language type resolvers
+    (C-family tiered resolvers, fixpoint chains).
+  - **emit / graph**: `graph/` (graph_version advance, read-time score_status),
+    `compact/` (snapshot compaction), `relatedidx/` (Random Indexing →
+    SEMANTICALLY_RELATED), `dataflow/` (case-1 + in-body flow → DATA_FLOWS),
+    `minhash/` (near-clone → SIMILAR_TO), `classifier/` (call classification),
+    `retrieval/`, `scheduler/`, `live/` (fsnotify-driven live index), `cluster/`,
+    `crossrepo/`, `cochange/`.
+- Edge kinds emitted: DEFINES/contains/imports/implements/extends,
+  calls/references/has_type/uses_type, DATA_FLOWS (def_use / def_use_inbody /
+  def_use_return), SEMANTICALLY_RELATED, SIMILAR_TO, STRUCTURAL_TWIN, and call
+  classifications (http_calls/async_calls/emits/listens_on/...). Read surface and
+  full ledger: `docs/edge-types.md`.
+- Boundary: the kernel may import only `internal/semantic/integ/` (types-only);
+  enforced statically by `vet-nokernel2semantic` / `vet-nosemantic2kernel`, and the
+  duckdb import is confined by `vet-noduckdb` / `vet-compact-uses-store`.
 
-**Language Server Process Management (`src/solidlsp/ls_process.py`):**
-- Purpose: Spawn and manage language server processes
-- Location: `src/solidlsp/ls_process.py`
-- Contains: `LanguageServerProcess` - subprocess lifecycle, stdio communication, restart logic
-- Depends on: Platform-specific process management, subprocess utilities
-- Used by: SolidLanguageServer
-- Manages: Process spawning, PID tracking, signal handling, automatic restart on crash
-
-**Project Context (`src/serena/project.py`):**
-- Purpose: Encapsulate project-specific operations and state
-- Location: `src/serena/project.py`
-- Contains:
-  - `Project`: Project root, config, language servers, file operations
-  - `MemoriesManager`: Project-local and global markdown-based memory files
-- Depends on: File system, .serena project directory, language server manager
-- Used by: Tools, SerenaAgent
-- Manages: Project metadata, .gitignore handling, memory persistence, line-ending conventions
-
-**Language Server Manager (`src/serena/ls_manager.py`):**
-- Purpose: Manage language server instances per project
-- Location: `src/serena/ls_manager.py`
-- Contains: `LanguageServerManager`, `LanguageServerFactory`
-- Depends on: SolidLanguageServer, project configuration
-- Used by: Project, Symbol tools
-- Manages: Multi-language server lifecycle, parallel startup, fallback servers
-
-**Prompt & Templating (`src/interprompt/`):**
-- Purpose: Generate system prompts from Jinja2 templates with context variables
-- Location: `src/interprompt/`
-- Contains: `JinjaTemplate` (template rendering), `MultiLangPrompt` (language-specific prompt fallback)
-- Depends on: Jinja2
-- Used by: SerenaAgent, mode configuration
-- Provides: Dynamic prompt generation based on active tools, modes, and project context
+**MCP Middleware Stack (`internal/mcp/`, installed in `internal/daemon/daemon.go`):**
+- `TelemetryMiddleware` (`middleware.go`) — RED metrics on `tools/call`, per-tool
+  deadlines via `BudgetFunc`, outcome classification (success / timeout /
+  circuit_open / internal).
+- `ProfileFilterMiddleware` (`middleware.go`) — filters `tools/list` by active
+  profile and applies brief + profile-specific descriptions on the same pass.
+- `SuggestionMiddleware` (`suggest.go`) — enriches parameter-typo / enum errors with
+  Levenshtein "Did you mean?" suggestions; never redirects.
+- `GuardrailMiddleware` (`guardrail_middleware.go`) — gates destructive tool calls on
+  guardrail receipts.
+- `ProfileEnforcementMiddleware` (`profile_enforce.go`) — refuses out-of-profile
+  `tools/call` with a typed `PermissionDenied` error (Phase 91 SEC-01).
+- `LazyInitMiddleware` (`lazy_init.go`) — `sync.Once` per workspace path; activates
+  the workspace on first tool call; installed LAST so it runs FIRST.
 
 ## Data Flow
 
-**Initialization Flow:**
+**Daemon bootstrap (`internal/daemon/daemon.go` `newDaemon`):**
+1. Build config-derived subsystems: language registry + three-tier installer, kernel
+   with LS pool, `GrammarRegistry` (23 grammars), SQLite `TagCache`.
+2. Open the semantic store when `cfg.SemanticIndex.Enabled` (three-tier open); wire
+   the semantic bundle, scheduler, and live index.
+3. Blank-import all skill packages (`imports.go`) for `init()` registration; call
+   `skill.InitAll(deps)`; register kernel tools + skill tools centrally with the MCP SDK.
+4. Post-init wiring: `SetEnrichFn` (RepoMap LSP enrichment), workspace activation
+   callback, fallback extractor for languages without tree-sitter coverage,
+   `semantic.RegisterAll` for the semantic MCP tools.
+5. Install middleware in order (step 14 `InstallMiddleware` → 14b Suggestion →
+   14b.5 Guardrail → 14b.6 ProfileEnforce → 14c LazyInit); resolve active profile.
+6. Fail-fast for core subsystems (D-06); degrade gracefully for optional providers (D-07).
 
-1. **Startup** (`src/serena/cli.py` or `src/serena/mcp.py`)
-   - Load SerenaConfig from `~/.serena/serena_config.yml` or command-line overrides
-   - Load SerenaAgentContext (e.g., "agent" for MCP server)
-   - Create SerenaAgent with configuration
+**Middleware execution (LIFO):** `AddReceivingMiddleware` composes in LIFO order, so
+the on-request execution order is the reverse of the install order:
 
-2. **SerenaAgent.__init__** (`src/serena/agent.py`)
-   - Instantiate all Tool subclasses from `ToolRegistry`
-   - Compute base tool set based on language backend, context, and modes
-   - Activate startup project (if provided)
-   - Initialize language servers for active project's languages
-   - Start web dashboard (if enabled)
+`LazyInitMiddleware` → `ProfileEnforcementMiddleware` → `GuardrailMiddleware` →
+`SuggestionMiddleware` → `ProfileFilterMiddleware` (applies brief descriptions on
+`tools/list`) → `TelemetryMiddleware` → tool handler.
 
-3. **Project Activation** (via `ActivateProjectTool` or startup)
-   - Load `.serena/project.yml` or register project by path
-   - Create `LanguageServerManager` from configured languages
-   - Spawn LSP processes for each language in parallel
-   - Update active modes based on project configuration
+LazyInit MUST run first so the workspace is activated before `TelemetryMiddleware`
+applies its per-tool deadline (install-order comment at
+`internal/mcp/lazy_init.go:106-112`); ProfileEnforce runs before Guardrail so an
+out-of-profile call is refused before receipt evaluation
+(`internal/mcp/profile_enforce.go:16-23`). Any change to this order must preserve
+both invariants.
 
-**Tool Execution Flow:**
+**Verb execution:** an agent runs `helix <verb>` → `internal/cli/root.go` maps the
+verb (via generated `verbSpecs`, `verbs_gen.go`) to a tool name and args → dials the
+daemon over gRPC `StreamMCP` (`forwarder.CallTool`) → the daemon's MCP server routes
+through the middleware chain to the tool handler → typed result string returned to
+the CLI, which prints it `relpath:line:col`-anchored.
 
-1. **MCP Call** (from AI agent)
-   - FastMCP server receives tool invocation with parameters
+**Session lifecycle (`forwarderServiceHandler.StreamMCP`):** on first message the
+daemon emits `(started, stdio)`, wraps the gRPC stream in a `GRPCTransport`, calls
+`mcpServer.SDK().Connect`, and waits; emits `(ended)` on clean close or `(error)` on
+Connect/Wait failure.
 
-2. **Tool Dispatch** (`src/serena/mcp.py::SerenaMCPFactory._set_mcp_tools`)
-   - Look up tool instance by name
-   - Invoke `Tool.apply_ex()` with parameters
-
-3. **Tool Execution** (`src/serena/tools/tools_base.py::Tool`)
-   - Access active project via `self.project` (raises if none active)
-   - Perform operation (file read/write, symbol lookup, etc.)
-   - Log execution and timing
-   - Return result as string
-
-4. **Symbol Lookup** (for symbol tools)
-   - Create `LanguageServerSymbolRetriever` (wraps language server manager)
-   - Request symbols via LSP `textDocument/documentSymbol` or `workspace/symbol`
-   - Cache results in language server's file buffer
-   - Return unified symbol representation
-
-5. **Result Return**
-   - Tool result converted to JSON for MCP response
-   - Logged to web dashboard and memory log handler
-
-**State Management:**
-
-- **Tool State**: Stateless; access project/language servers on demand
-- **Project State**: Held in `SerenaAgent._active_project`; persists for tool session
-- **Language Server State**: Persistent processes with file buffer versioning; auto-restarts on crash
-- **Mode/Context State**: Loaded on demand; can change during session
-- **Memory State**: Markdown files in `.serena/memories/` or `~/.serena/memories/global/`
+**Semantic index build:** on workspace activation the scheduler
+(`internal/semantic/scheduler/`) runs the initial extraction walk (RepoMap PageRank
+priority); file changes drive incremental extraction via the live pipeline
+(`internal/semantic/live/`, fsnotify + kernel `EditNotifier`); facts land in the
+DuckDB overlay, are enriched by LSP, and compacted into snapshots. Consumers read
+through `integ.SemanticLookup` (read-only seam) which returns effective facts
+(snapshot ⊕ overlay − tombstones).
 
 ## Key Abstractions
 
-**Tool:**
-- Purpose: Represents a single, composable action (read file, find symbol, replace code, etc.)
-- Examples: `ReadFileTool`, `FindSymbolTool`, `WriteMemoryTool`, `ReplaceContentTool`
-- Location: `src/serena/tools/tools_base.py` (base), individual files for implementations
-- Pattern: Inherit from `Tool`, implement `apply()` method with typed parameters, use markers for capabilities
+**Daemon (`internal/daemon/daemon.go`):**
+- Purpose: the persistent supervisor owning registry, MCP server, kernel, skills, listeners.
+- Pattern: `New`/`NewWithObsProvider` → `Run(ctx)` blocks until shutdown; signal
+  handlers registered first; kernel-first shutdown ordering.
 
-**ToolRegistry:**
-- Purpose: Central registry of all available tools with discovery and factory methods
-- Location: `src/serena/tools/__init__.py`
-- Pattern: Singleton; auto-discovers Tool subclasses; provides name-to-class mapping
+**Kernel (`internal/kernel/kernel.go`):**
+- Purpose: workspace-runtime orchestrator over the warm LS worker pool.
+- Pattern: `ActivateWorkspace(ctx, path)` returns a runtime; tools acquire warm LS
+  leases from `lspool`.
 
-**ToolSet:**
-- Purpose: Represent a filtered subset of tools based on inclusion/exclusion rules
-- Location: `src/serena/agent.py`
-- Pattern: Apply `ToolInclusionDefinition`s to create new tool sets; supports legacy tool name mapping
+**Skill / ToolProvider / WorkflowProvider (`internal/skill/skill.go`):**
+- Purpose: reusable capability packages contributing MCP tools and/or prompts.
+- Pattern: register via `init()` → `skill.Register(&MySkill{})`; the daemon calls
+  `skill.InitAll(deps)`, then `skill.ToolProviders()` / `skill.WorkflowProviders()`.
+- Kernel-resident tools (`health/`, `help/`) are exposed as skills via thin
+  `skill_adapter.go` wrappers so the ToolProvider surface stays uniform.
 
-**Project:**
-- Purpose: Encapsulate all project-specific state and operations
-- Examples: Project root, source languages, file paths, language servers, memories
-- Location: `src/serena/project.py`
-- Pattern: Singleton per SerenaAgent session; lazily initialized on project activation
+**LS Worker Pool (`internal/kernel/lspool/pool.go`):**
+- Purpose: keep language servers warm across sessions.
+- Pattern: share-until-dirty (clean sessions share a warm worker), adaptive TTL with
+  reuse scoring, circuit breaking with backoff for crashy workers, platform-aware
+  memory-pressure eviction.
 
-**MemoriesManager:**
-- Purpose: Persistent, markdown-based knowledge storage
-- Pattern: Project-local memories in `.serena/memories/`; global memories in `~/.serena/memories/global/`
-- Scope: Topic-based organization via "/" separators; read-only and ignored patterns for protection
+**Semantic Store (`internal/semantic/store/duckdb.go`):**
+- Purpose: durable, per-workspace semantic graph in DuckDB.
+- Pattern: sole `duckdb-go` owner; three-tier open (open / quarantine+rebuild /
+  hard-fail); effective reads = snapshot ⊕ overlay − tombstones; per-snapshot dense
+  EdgeIDs.
 
-**SolidLanguageServer:**
-- Purpose: Unified LSP client wrapping language-specific servers
-- Location: `src/solidlsp/ls.py`
-- Pattern: One instance per language per project; manages file buffers, caching, request marshaling
+**SemanticLookup seam (`internal/semantic/integ/`):**
+- Purpose: types-only, read-only boundary between the daemon-resident engine and MCP
+  consumers; keeps kernel free of DuckDB and `internal/semantic/*` concretions.
+- Pattern: `SemanticLookup` interface + `NoopLookup{}` default; every error classified
+  by `ClassifyLookupErr` before reaching the wire.
 
-**Language Server Config:**
-- Purpose: Language-specific server setup (binary paths, arguments, initialization options)
-- Location: `src/solidlsp/ls_config.py`
-- Pattern: Per-language subclass; defines LSP server implementation and runtime dependencies
+**Language Registry + Installer (`internal/langregistry/`):**
+- Purpose: 52-language LS catalog with YAML overrides and a three-tier installer.
+- Pattern: `NewRegistry(overridePaths...)` layers embedded `defaultEntries` under YAML
+  overrides; `Installer.Resolve` tries PATH → managed download (npm/pip/cargo/gem/dotnet/binary)
+  → helpful error.
 
 ## Entry Points
 
-**CLI (`src/serena/cli.py`):**
-- Location: `src/serena/cli.py`
-- Triggers: User runs `serena` command via entry point
-- Responsibilities: Parse arguments, manage command lifecycle, project discovery, tool invocation
-- Core commands: activate-project, init, config, start-mcp-server
+**CLI (`cmd/helix/main.go` + `internal/cli/root.go`):**
+- Trigger: user/agent runs `helix ...`.
+- `main.go` threads the ldflag-injected version into the CLI and MCP identity, builds
+  the cobra root (`NewRootCommand`), and maps typed exit codes via `ExitCodeForError`.
+- `root.go` mounts all subcommands (setup, status, activate, deactivate, nudge,
+  daemon `--serve`) and the generated per-verb catalog (`verbs_gen.go`).
 
-**MCP Server (`src/serena/mcp.py`):**
-- Location: `src/serena/mcp.py`
-- Triggers: AI agent connects via MCP protocol
-- Responsibilities: Create SerenaMCPFactory, instantiate SerenaAgent, expose tools as MCP server
-- Flow: SerenaMCPFactory.create_mcp_server() -> starts FastMCP -> waits for tool calls
+**Daemon (`internal/cli/root.go` `runDaemon` → `internal/daemon/daemon.go` `Run`):**
+- Trigger: `helix --serve` (or auto-start via the forwarder).
+- Responsibilities: load layered config, build the structured logger, bootstrap all
+  subsystems, listen on a unix socket, serve `ForwarderService` over gRPC.
 
-**Prompt Factory (`src/serena/prompt_factory.py`):**
-- Location: `src/serena/prompt_factory.py`
-- Triggers: SerenaAgent needs to format system prompt
-- Responsibilities: Render Jinja2 template from mode with agent context variables
-- Used by: Mode prompt generation for language model system message
+**gRPC `ForwarderService` (`api/proto/serena/v1/ipc.proto`):**
+- Trigger: a `helix` verb dials the daemon.
+- RPCs: `StreamMCP` (bidirectional MCP JSON-RPC), `GetStatus`, `ActivateWorkspace`, `DeactivateWorkspace`.
 
 ## Error Handling
 
-**Strategy:** Layered error recovery with graceful degradation
+**Strategy:** typed error taxonomy for programmatic matching by agents, with graceful
+degradation across subsystems.
 
 **Patterns:**
-
-- **Language Server Crashes**: `LanguageServerProcess` automatically restarts on error; file buffers invalidated
-- **Tool Execution Errors**: Wrapped in try/catch by MCP layer; errors logged and returned to client
-- **Missing Project**: Tools raise `ValueError` if no active project; MCP handles and formats error
-- **LSP Timeouts**: Configurable timeout per request; raises `LSPError` which propagates
-- **Invalid Paths**: `Project.validate_relative_path()` prevents directory traversal before file operations
-- **Encoding Issues**: File operations use project-specific encoding (default UTF-8); explicit handling in file tools
+- **Typed errors (`internal/errors/`):** `Error{Kind, Message, Tool, Detail, cause}`
+  with a closed `Kind` enum (`not_found`, `invalid_args`, `no_workspace`,
+  `unsupported`, `internal`, `circuit_open`, `timeout`, `permission_denied`,
+  `guardrail_violation`). Callers match with `errors.Is(err, serr.ErrNotFound)`;
+  imported under alias `serr`. `MarshalJSON` renders errors onto the MCP wire.
+- **Guardrail violations:** `NewGuardrailViolation` wraps `*Error` with a typed
+  `GuardrailViolationDetail` (required receipt classes + `see_also` remediation),
+  recoverable via `AsGuardrailViolation` / `errors.As`.
+- **Exit codes:** `cli.ExitCodeForError` parses the typed `<kind>: msg` prefix into a
+  frozen per-kind exit code (`cmd/helix/main.go`).
+- **Subsystem disable / ablation:** disabled subsystems return `Unsupported` with a
+  greppable `subsystem_disabled:` message prefix (`internal/errors/kinds.go`).
+- **LS worker crashes:** `lspool` circuit-breaks crashy workers with exponential
+  backoff and evicts under memory pressure rather than crashing the daemon.
+- **Semantic store corruption:** three-tier open quarantines a corrupt DB
+  (`<path>.corrupt.<ts>`) and rebuilds; a rebuild failure is a hard-fail that refuses
+  daemon start (`internal/semantic/store/doc.go`).
+- **Bootstrap:** fail-fast for core subsystems (D-06); optional providers degrade to a
+  usable subset (D-07).
 
 ## Cross-Cutting Concerns
 
-**Logging:** 
-- Framework: Python `logging` module with structured logging via `sensai.util.logging`
-- Patterns: Module-level loggers with level control via config; memory log handler for dashboard
-- Files: `src/serena/util/logging.py` - custom handler `MemoryLogHandler` captures logs for web UI
+**Observability (`internal/obs/`):**
+- `Provider` is the single home for `prometheus/client_golang` and
+  `go.opentelemetry.io/otel` imports; `Noop` returns a non-nil provider with a real
+  metrics sink and a no-op tracer, so call sites never nil-check.
+- RED metrics on `tools/call` via `TelemetryMiddleware`; OTLP/gRPC trace export when
+  configured; `ContextHandler` injects `trace_id`/`span_id` into slog records.
 
-**Validation:**
-- File paths: `Project.validate_relative_path()` checks .gitignore, ignores patterns, bounds
-- Relative path enforcement: No absolute paths allowed in tool parameters
-- Tool parameters: Pydantic models auto-validate via `FuncMetadata`
+**Logging:**
+- `log/slog` structured logging; `internal/cli/root.go` `newLogger` builds a
+  text/JSON handler to stderr wrapped in `obs.NewContextHandler` for trace correlation.
+  Level configurable via config; no third-party logging framework in the shipped path.
 
-**Authentication:**
-- LSP: Per-server configuration (environment variables for creds, API keys)
-- Project: No project-level auth; assumes file system access is granted
-- Secrets: Tool operations do not handle secrets; delegation to IDE/environment
+**Guardrails (`internal/guardrails/`):**
+- Rule engine (`rules/` — g001 rename-by-grep, g002 delete-without-refs, g004
+  large-fuzzy-edit, g005 security-sensitive) issuing receipts; enforced by
+  `GuardrailMiddleware`; per-language catalogs (`catalogs/*.yaml`).
+
+**Degradation (`internal/degrade/`):**
+- Token/output budgeting (`budget.go`) so oversized tool results degrade gracefully
+  rather than overflow.
 
 **Concurrency:**
-- Language servers: Run in separate processes (isolated from Python asyncio)
-- Tools: Execute in single executor thread (`TaskExecutor`) to maintain linear execution
-- Startup: Parallel language server process spawning via threading
-- Dashboard: Separate thread for web server
+- Daemon runs subsystems under an errgroup with signal-first lifecycle; LS workers run
+  as isolated subprocesses; `LazyInitMiddleware` serializes concurrent first-calls per
+  workspace via `sync.Once`.
 
-**Multi-tenancy:**
-- Project-local: Memories, language servers, state isolated per project
-- Global: Memories shared via `~/.serena/memories/global/`, contexts/modes in `~/.serena/`
-- Sessions: Each SerenaAgent instance is independent; multiple sessions can coexist
+**Architectural boundary enforcement (`make vet`):**
+- 7 custom `cmd/vet-*` analyzers pin import boundaries (kernel↔semantic both
+  directions, duckdb confinement, compact→store, ablation/bench leakage, tools
+  quarantine) on every vet run.
 
 ---
 
-*Architecture analysis: 2026-04-07*
+*Architecture analysis: 2026-07-01*

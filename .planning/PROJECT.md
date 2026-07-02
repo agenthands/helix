@@ -8,35 +8,29 @@ A Go-native, CLI-first code intelligence platform: universal LSP gateway at the 
 
 The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
 
-## Current Milestone: v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)
+## Current Milestone: v2.14 Codebase-Map Re-mapping (Go tree)
 
-**Goal:** Deepen the v2.9 case-1 DATA_FLOWS substrate so flow originating **mid-body** — the return of an in-body call (`y := producer(); sink(y)`), not just a parameter — is modeled and queryable across **all 11 languages**, using the **no-schema-change** cut: edges anchor on existing **function** + **parameter** symbol nodes, never on persistent variable-level nodes.
+**Goal:** Re-map all 7 `.planning/codebase/*.md` files from the removed pre-Go Python `serena` tree (2026-04-07 snapshot — ~13 milestones stale) to the current Go tree at HEAD, so every architectural/structural/stack/integration/convention/concern/testing claim is grounded in real Go source at a citable path and the Python-serena residue is gone.
 
-**Why now:** v2.9 shipped case-1 param→param flow and explicitly deferred in-body origins / variable-level precision ("needs variable-level nodes"). v2.10 made it agent-consumable (`trace_data_flow`). The co-driver chose the cheaper honest cut: widen the flow-summary origin space (`{param idx}` → `{param idx ∪ callReturn(callee)}`) rather than extract locals as graph nodes — preserving the zero-dep / no-migration / node=symbol-identity invariants while closing the single remaining genuine depth gap.
+**Why now:** The v2.13 MILESTONE-AUDIT flagged this as its top-priority (HIGH) documentation-integrity follow-on. A codebase map is a claim the team acts on; the current map describes a codebase that no longer exists (`src/serena/`, `SerenaAgent`, `*_tools.py`), which removes caution exactly where it is needed and misleads any new contributor. This is an assess-and-document milestone — the re-mapped files are phase deliverables verified by a source-grounding gate.
 
-**Target features (FLOW-04..06 — see `.planning/milestones/v2.13-REQUIREMENTS.md`):**
+**Target features (MAP-01..08 — see `.planning/milestones/v2.14-REQUIREMENTS.md`):**
 
-1. **FLOW-04: Origin-space widening + kind-union extension** — model in-body call-return origins in the flow-summary engine; extend the tree-sitter kind unions so all 11 grammars are covered (red-team B1: only 6/11 worked); prove via a cheap all-11 unit matrix.
-2. **FLOW-05: In-body + return-bridge emission** — emit `producer.function → consumer.param` edges (`Source:"def_use_inbody"`) + reclaim the dead `ParamFlow.Returns` flag as a `param → own-function` return-bridge (`Source:"def_use_return"`) so in-body origins compose for multi-hop reachability; Go-proven in-process.
-3. **FLOW-06: All-11 real-binary E2E + function-seeded multi-hop + docs** — confirm end-to-end through the real `helix` binary across the languages, with an honest per-language proven/limitation ledger.
+1. **Phase 141 (MAP-01, MAP-03):** re-map `STRUCTURE.md` + `STACK.md` — the Go directory layout (16 `cmd/` binaries, 24 `internal/` packages) and real dependency stack (Go 1.25.1, CGO=1, `go.mod` direct deps, no runtime Python).
+2. **Phase 142 (MAP-02, MAP-04, MAP-05):** re-map `ARCHITECTURE.md` + `INTEGRATIONS.md` + `CONVENTIONS.md` — the 4 layers + daemon/middleware + the freshly-surveyed `internal/semantic/` index (30.8k LOC, the largest subsystem); LSP/tree-sitter/gRPC/sigstore/otel integrations; Go conventions + vet gates.
+3. **Phase 143 (MAP-06, MAP-07, MAP-08):** re-map `CONCERNS.md` + `TESTING.md`, then the integrity gate — remove staleness banners, refresh `Analysis Date`, grep-confirm zero Python-serena residue beyond deliberately-retained lineage artifacts.
 
 **Key constraints:**
-- Zero new Go deps (`go.mod`/`go.sum` byte-unchanged)
-- No schema migration (`EdgeFact` unchanged; binding = symbol-node identity)
-- Deterministic snapshot; v2.9 `def_use` param→param edge SET unchanged for the 6 already-working languages
-- All 11 languages proven E2E (co-driver); breadth risk retired at the cheapest phase (all-11 unit test in Phase 138)
-
-**Red-team folded (`agent://RedTeamV213`, PROCEED-WITH-FIXES):** B1 (5/11 grammars' kind unions were uncovered — Ruby emitted ZERO DATA_FLOWS since v2.9), M1 (non-regression reframed to the def_use edge SET; append-order pinned), M2 (function-seeded multi-hop), M3 (false param-anchored invariants corrected), M4 (bridge-pass determinism), M5 (all-11 unit test moved to Phase 138).
+- Documentation-only — no source-code change; `go build`/`go vet`/`go test` remain green (untouched).
+- Every claim source-grounded to a citable Go path at HEAD; no fabricated paths.
+- `internal/semantic/` documented as a first-class layer (surveyed fresh, not parroted from CLAUDE.md).
+- Bundles the planning-integrity fix: regenerated the stale `ROADMAP.md` `## Phases` section that made `roadmap analyze` manufacture phantom phases 115-126.
 
 ---
 
-## Last Shipped Milestone: v2.12 Production wiring for the type resolvers (C-family E2E) — SHIPPED 2026-07-01
+## Last Shipped Milestone: v2.13 True intraprocedural DATA_FLOWS (in-body origins) — SHIPPED 2026-07-01
 
-**Shipped:** 3 phases (135 extraction foundation + 136 resolver ChainTokens/producer/emit + 137 real-binary E2E + docs), audit PASSED (`.planning/milestones/v2.12-MILESTONE-AUDIT.md`), committed `f7e5f4b3`. Made the ORPHANED 12-language type-resolver dispatcher a production consumer: a C-family type reference becomes a committed `RESOLVES_TO` edge (typeIndex from `nameToNode`), surfaced to agents as `has_type` via `helix explain-symbol-deep` — proven through the real binary (`TestCLI_E2E_CTypeResolution`) + in-process (`TestResolveTypeEdges_PositiveCommitsRealEdge`).
-
-**Outcome:** the red-team (`agent://RedTeamV212`, REWORK→all folded) caught a latent v2.11 Signature-strip contract break (resolvers parsed the type from a `Signature` the extractors strip to a bare name; the "tiers work" proof used a fabricated signature). Fixed via co-driver **Option A** (the producer links var→type and feeds the type name via `ChainTokens`; the resolver's annotation tier consumes it). Clean cutover — orphaned bootstrap dispatcher + dead seams removed.
-
-**Invariants held:** zero new Go deps, no schema migration, deterministic (byte-identical snapshot), extractor goldens byte-identical, `make vet` (8 vettools) clean, 12 pkg `go test` ok. **Honest limit:** C is the proven language; C++/C#/Java share the wiring but lack co-capture linkage + a dedicated E2E (fast-follow). Recent milestone artifacts live under `.planning/milestones/`; the milestone ledger is `.planning/MILESTONES.md`.
+**Shipped:** 3 phases (138 origin-space widening + 11-lang kind unions, 139 in-body + return-bridge emission + Go multi-hop, 140 all-11 real-binary E2E + multi-hop + docs), audit PASSED (`.planning/milestones/v2.13-MILESTONE-AUDIT.md`), security review PASSED (0 findings), self-audit CLEAN. In-body-origin DATA_FLOWS (`y := producer(); sink(y)`) modeled, emitted at existing function+param symbol nodes (no schema change), proven E2E through the real `helix` binary for all 11 languages with a function-seeded multi-hop payoff. Two new Source markers: `def_use_inbody` + `def_use_return`. Red-team `agent://RedTeamV213` (PROCEED-WITH-FIXES) folded (B1: Ruby's zero-DATA_FLOWS-since-v2.9 latent bug fixed). Co-driver-approved Path B wired .rs/.kt/.php/.rb into `langFromExt` for 11/11 E2E. NOT yet committed (co-driver's call). Recent milestone artifacts live under `.planning/milestones/`; the milestone ledger is `.planning/MILESTONES.md`.
 
 ## Requirements
 

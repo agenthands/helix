@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.13
-milestone_name: True intraprocedural DATA_FLOWS (in-body origins, variable-level)
+milestone: v2.14
+milestone_name: Codebase-Map Re-mapping (Go tree)
 status: shipped
-last_updated: "2026-07-01T00:00:00.000Z"
-last_activity: 2026-07-01 — v2.13 SHIPPED. 3/3 phases (138 engine+11-lang-unions, 139 emission+Go-multihop, 140 all-11 real-binary E2E) built + independently qa-verified; MILESTONE-AUDIT PASSED; security review PASSED (0 findings); self-audit CLEAN. In-body-origin DATA_FLOWS (def_use_inbody + def_use_return) proven E2E for all 11 languages through the real helix binary + function-seeded multi-hop. Co-driver-approved Path B: langFromExt wired .rs/.kt/.php/.rb (11/11 E2E; zero new has_type edges). Latent Ruby zero-DATA_FLOWS-since-v2.9 bug fixed. Zero new deps, no schema migration. NOT committed (co-driver's call). Follow-on: codebase-map re-mapping pass (still describes removed Python serena tree). Prior: v2.12 SHIPPED (f7e5f4b3).
+last_updated: "2026-07-01T22:30:00.000Z"
+last_activity: 2026-07-01 — v2.14 SHIPPED. All 7 .planning/codebase/*.md re-mapped from the removed Python serena tree to the current Go tree at HEAD; every sampled claim source-grounded, residue clean (only labeled retained-lineage SerenaMCPServer + serena/v1), staleness banners removed, all Analysis Dates → 2026-07-01. MILESTONE-AUDIT PASSED. Writers corrected 3 stale source-of-record facts (cmd=16 not 17; middleware 6-deep not 4; setup=8 clients not 7; cobra v1.10.2). Bundled planning-integrity fix: regenerated stale ROADMAP `## Phases` (v2.5-era 115-126) that made roadmap analyze manufacture phantom phases; analyze now reports 141/142/143 clean. Documentation-only, zero source change. Prior: v2.13 SHIPPED (uncommitted, co-driver's call).
 progress:
   total_phases: 3
   completed_phases: 3
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value (v2.0):** The `helix` CLI is the only surface an agent touches — terse, `relpath:line:col`-anchored, zero schema-preload tax — driving the unchanged warm LSP/RepoMap kernel behind it, so agents use the toolset instead of falling back to grep/sed/cat.
-**Current focus:** v2.13 True intraprocedural DATA_FLOWS — model in-body call-return origins (`y := producer(); sink(y)`) by widening the flow-summary origin space (`{param idx}` → `{param idx ∪ callReturn(callee)}`), emitting `producer.function → consumer.param` edges (`def_use_inbody`) + a reclaimed `param → own-function` return-bridge (`def_use_return`) for multi-hop reachability. No schema change; edges anchor on existing symbol nodes. All 11 languages E2E (co-driver). See `.planning/milestones/v2.13-ROADMAP.md` + `agent://RedTeamV213`.
+**Current focus:** v2.14 Codebase-Map Re-mapping — re-map all 7 `.planning/codebase/*.md` from the removed pre-Go Python serena tree to the current Go tree at HEAD, source-grounded, staleness banners removed. Assess-and-document milestone (docs-only, no source change). See `.planning/milestones/v2.14-REQUIREMENTS.md`.
 
 ## Current Position
 
-Phase: 138-140 (v2.13) — kickoff complete (REQUIREMENTS + ROADMAP + red-team fold); not yet built. Next: `/anvil-discuss-phase 138` or `/anvil-plan-phase 138`.
-Status: v2.13 planned. The single load-bearing risk is folded: the flow-engine tree-sitter kind unions (`internal/semantic/dataflow/summary.go:54-83`) cover only 6/11 languages today — Python/Ruby/Kotlin/C/C++ need union extensions + a Kotlin `property_declaration` split (B1), verified by a cheap all-11 unit test in Phase 138 (M5). The design reclaims the dead `ParamFlow.Returns` flag as the multi-hop return-bridge (D-BRIDGE, red-team-confirmed correct). Invariants: zero new deps, no schema migration, deterministic, v2.9 def_use edge SET unchanged for the 6 already-working langs.
+Phase: 141-143 (v2.14) — kickoff complete (REQUIREMENTS + ROADMAP authored; stale Phases section regenerated). Not yet built. Next: discuss/plan phase 141.
+Status: v2.14 planned. Ground truth measured: 85,472 non-test internal LOC, 24 `internal/` packages, 16 `cmd/` binaries, 291-file `bench/`; largest subsystem `internal/semantic/` at 30.8k LOC (must be surveyed fresh — nearly absent from CLAUDE.md's arch section); 51 frozen verbs (`internal/cli/verbs_gen.go`); 590 `*_test.go`; 0 TODO/FIXME in internal+cmd; Go 1.25.1 CGO=1. Deliberately-retained lineage artifacts (NOT residue): `SerenaMCPServer` Go identifier + proto `serena/v1` package dir (Phase 52-03). `docs/` (edge-types, type-resolution, runbooks) is current — out of scope.
 Last activity: 2026-07-01
 
 ## Performance Metrics

@@ -1,158 +1,191 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
 
 ## APIs & External Services
 
-**LLM Providers:**
-- Anthropic Claude API - Token counting and model invocation
-  - SDK/Client: `anthropic` 0.59.0 (imported in `src/serena/analytics.py`)
-  - Auth: `ANTHROPIC_API_KEY` environment variable
-  - Purpose: Token counting via `AnthropicTokenCount` class for exact token estimation
+**Language Servers (primary external integration):**
+- 52-language embedded registry (`internal/langregistry/languages.go`
+  `defaultEntries`); each entry declares command, args, file extensions, and an
+  optional `InstallInfo`.
+- Three-tier installer (`internal/langregistry/installer.go` `Installer.Resolve`):
+  PATH lookup → managed download (npm / pip / cargo / gem / dotnet / binary) →
+  helpful error. Examples: `gopls serve` (Go), `pyright-langserver --stdio` (Python,
+  pip), `typescript-language-server --stdio` (npm), `rust-analyzer` (Rust), `jdtls`
+  (Java, binary), `clangd --background-index` (C/C++).
 
-- Google Generative AI (optional) - Alternative LLM provider
-  - SDK/Client: `google-genai` 1.27.0 (optional dependency)
-  - Auth: `GOOGLE_API_KEY` environment variable (from `.env.example`)
-  - Purpose: Alternative model integration for agent framework
+**MCP protocol (internal plumbing, not agent-facing):**
+- MCP server on the official Go SDK, `github.com/modelcontextprotocol/go-sdk v1.5.0`
+  (`internal/mcp/server.go`; server type `SerenaMCPServer` — Go identifier retained
+  for internal-API stability, Phase 52-03). The user-facing MCP
+  `Implementation.Name` is `helix`.
+- Transport: gRPC `StreamMCP` bidirectional stream over a unix-domain socket by
+  default (`api/proto/serena/v1/ipc.proto`, `google.golang.org/grpc v1.80.0`). The
+  stdio MCP head and Streamable-HTTP `/mcp` head were removed in Phase 94.
 
-- Agno Agent Framework (optional) - Higher-level agent orchestration
-  - SDK/Client: `agno` 2.5.10 (optional dependency)
-  - Location: `src/serena/agno.py` - SerenaAgnoAgentProvider, SerenaAgnoToolkit
-  - Purpose: Wraps Serena tools as Agno-compatible functions for UI-based agent interaction
+**LLM provider SDKs (DEV-TIME bench/tools only — NOT in the shipped agent path):**
+- `github.com/anthropics/anthropic-sdk-go v1.35.0` and
+  `github.com/openai/openai-go v1.12.0` appear only in the `bench/` harness and
+  dev-time tooling; the runtime `helix` daemon makes zero LLM API calls. The
+  bench scripted-agent path is local-only, no-network, no-API-key (`Makefile`
+  eval/bench targets, D-01).
 
-**IDE/Editor Integration:**
-- JetBrains IDE Plugin
-  - Client: `src/serena/jetbrains/jetbrains_plugin_client.py` (HTTP REST calls)
-  - Protocol: HTTP requests to `http://[server_address]:[port]` (local IDE plugin)
-  - Purpose: Remote code editing and symbol operations through JetBrains IDEs
-  - Implementation: `JetBrainsPluginClient` class using `requests` library
+**Container engines (bench harness only):**
+- `bench/container` drives a local engine purely via `os/exec` (`engine.go`
+  `Detect`), probing `docker` then `podman` (docker wins when both present;
+  `TestDetectPrefersDocker`). It NEVER imports the Docker Go SDK — the ban is
+  enforced by the `verify-no-docker-sdk` gate in `make vet`. This dev environment
+  uses Podman.
 
-**Protocol Layers:**
-- Model Context Protocol (MCP) 1.26.0
-  - Implementation: FastMCP server in `src/serena/mcp.py`
-  - Transport: SSE (Server-Sent Events) by default, configurable via `--transport` flag
-  - Port: Default 9121 (configurable via `SERENA_PORT`)
-  - Purpose: Exposes Serena tools to Claude and other MCP-compatible clients
-  - Lifespan: Async context manager with setup/teardown in `SerenaMCPFactory`
+**Container registry (bench image mirror):**
+- `github.com/google/go-containerregistry v0.20.7` (`bench/container/pull.go`)
+  performs daemon-free, digest-pinned registry round-trips for bench image mirroring.
 
 ## Data Storage
 
-**Databases:**
-- SQLite (optional, via Agno integration)
-  - ORM: SQLAlchemy 2.0.41 (optional dependency)
-  - Purpose: Session persistence for Agno agent conversations
-  - Location: `temp/agno_agent_storage.db` (deleted between sessions by design in `src/serena/agno.py`)
-  - Usage: `SqliteDb` from agno.db.sqlite (line 9 of agno.py)
+**Semantic graph store — DuckDB:**
+- `github.com/duckdb/duckdb-go/v2 v2.10502.0` (CGO). SOLE owner is
+  `internal/semantic/store/duckdb.go` (D-12); the import is confined by the
+  `vet-noduckdb` gate. Per-workspace file at `<workspace>/.helix/semantic.duckdb`.
+- Three-tier open (`internal/semantic/store/doc.go`): open-clean / quarantine+rebuild
+  (`<path>.corrupt.<unix-ts>`) / hard-fail. Effective reads = snapshot ⊕ overlay −
+  tombstones. DuckDB holds its own file lock → single-daemon-per-workspace.
+- Platform-conditional build tag: `duckdb.go` carries `//go:build !(windows && arm64)`
+  (the only build-tag constraint in the source tree).
 
-**File Storage:**
-- Local filesystem only
-  - Project root: User-specified directory or registered project
-  - Language server cache: `~/.cache/serena/language_servers/`
-  - Serena config: `~/.serena/` (user) or `.serena/` (project-local)
-  - Memory storage: `.serena/memories/` - Markdown files for project knowledge persistence
-  - Docker workspace: `/workspace/` (mounted volumes for containerized deployment)
+**Memory / knowledge store — SQLite FTS5:**
+- `modernc.org/sqlite v1.48.1` (CGO-free). `internal/memory/index.go` opens the
+  `sqlite` driver and `schema.go` creates a `memories` table plus a `memories_fts`
+  FTS5 virtual table; search orders by FTS5 rank. Backs the 7 memory tools.
 
-**Caching:**
-- joblib 1.5.1 - Job-level caching and parallelization (`src/solidlsp/util/cache.py`)
-- Language server protocol handler caching - Reduces LSP overhead via `SolidLSPSettings`
-- Token count estimator cache - In-memory singleton pattern for `TiktokenCountEstimator` and `AnthropicTokenCount` (`src/serena/analytics.py` lines 85-116)
+**RepoMap tag cache — SQLite:**
+- `internal/repomap/` persists a mtime-invalidated tag cache in SQLite for PageRank
+  and token-budgeted repo overview (`TagCache`, wired in `internal/daemon/daemon.go`).
+
+**Embeddings:**
+- `github.com/philippgille/chromem-go v0.7.0` — embedded vector store used by the
+  semantic retrieval path.
+
+**Columnar / bench data:**
+- `github.com/apache/arrow-go/v18` — Arrow tables in the bench evaluation stack.
+
+**File storage (local filesystem only):**
+- Project config/data: `.helix/` (project) and `~/.helix/` (user).
+- Semantic DB: `<workspace>/.helix/semantic.duckdb`. Memory: SQLite index under the
+  helix data dir. No cloud storage; no runtime network dependency.
 
 ## Authentication & Identity
 
-**Auth Provider:**
-- Custom API key-based authentication
-  - Anthropic: `ANTHROPIC_API_KEY` environment variable
-  - Google: `GOOGLE_API_KEY` environment variable
-  - Implementation: `dotenv` library loads from `.env` file
-  - No user identity system; authentication is service-level only
+**No agent-facing auth:** the `helix` daemon exposes no authenticated network
+service. The default transport is a unix-domain socket (filesystem-permissioned);
+gRPC TCP is opt-in and loopback-gated.
 
-**Token Management:**
-- Dual token estimators:
-  1. Tiktoken (free, GPT-based estimation)
-  2. Anthropic API (exact count via API, rate-limited, requires API key)
-  3. Character-based fallback (naive estimation)
-  - Selection via `RegisteredTokenCountEstimator` enum in `src/serena/analytics.py`
-  - Used for token budget tracking in tool execution
+**Supply-chain identity — sigstore keyless attestation:**
+- `github.com/sigstore/sigstore-go v1.1.4` (`internal/upgrade/verify.go`). Self-upgrade
+  verifies the release archive's sigstore bundle against a pinned GitHub Actions OIDC
+  issuer (`https://token.actions.githubusercontent.com`) and a pinned certificate SAN
+  regex for the `agenthands/helix` `release.yml` workflow on a canonical semver tag.
+  Every failure branch returns the identical `signature verification FAILED` message
+  (Pitfall 4) so failure modes are indistinguishable to a probing attacker; the
+  Rekor-unreachable branch is the sole exception. Trust root: `internal/upgrade/trusted_root.json`.
 
 ## Monitoring & Observability
 
-**Error Tracking:**
-- Custom exception handling via `src/serena/util/exception.py`
-- No external error tracking service (Sentry, etc.) integrated
-- Fatal exceptions display via `show_fatal_exception_safe()` function
+**Metrics — Prometheus:**
+- `github.com/prometheus/client_golang v1.23.2`, confined to `internal/obs/`
+  (`metrics.go`). RED metrics on `tools/call` via `TelemetryMiddleware`; exposed on
+  the admin listener `/metrics` when `observability.admin_addr` is set.
 
-**Logs:**
-- In-memory logging via `MemoryLogHandler` from `sensai.util.logging`
-- Console/file output with sensai logging framework (`src/serena/util/logging.py`)
-- Log level configurable via `LOG_LEVEL` environment variable
-- GUI log viewer: `src/serena/gui_log_viewer.py` - pywebview-based log display
-- Dashboard analytics: Tool usage statistics and token tracking in `src/serena/analytics.py`
+**Tracing — OpenTelemetry:**
+- `go.opentelemetry.io/otel v1.43.0` + `otlptrace/otlptracegrpc` +
+  `contrib/.../otelgrpc`. `obs.Provider` holds the `TracerProvider` (noop by default;
+  OTLP/gRPC exporter via `WithTracing`); spans across daemon, kernel, and semantic
+  ops. `ShutdownTracing` flushes on shutdown.
 
-**Profiling:**
-- pyinstrument 5.1.1 (dev dependency) - Performance profiling support
+**Logging:**
+- `log/slog` to stderr (text or JSON), wrapped in `obs.NewContextHandler` so traced
+  requests carry `trace_id`/`span_id` (`internal/cli/root.go` `newLogger`).
 
 ## CI/CD & Deployment
 
-**Hosting:**
-- Docker Compose - Local/self-hosted deployment via `compose.yaml`
-- Docker image: `serena:latest` built from `Dockerfile` (Python 3.11-slim base)
-- Container ports: 9121 (MCP) and 24282 (Dashboard)
-- Environment variables: `SERENA_PORT`, `SERENA_DASHBOARD_PORT`, `SERENA_DOCKER`
+**Distribution:** single Go binary; no container or compose deployment. Self-upgrade
+via `internal/upgrade/` pulls signed release archives from GitHub Releases.
 
-**CI Pipeline:**
-- GitHub Actions - Configured in `.github/workflows/docker.yml`
-- No external CI service integration documented; local testing via pytest
+**Build (CGO=1, split-runner per Phase 59.1):**
+- Local: `make build` uses the host CC (no zig required). `make release-snapshot`
+  needs `zig` for cross-compilation (host-platform partial matrix only).
+- CI: `ubuntu-22.04` builds linux + windows (4 archives) via `zig cc`; `macos-14`
+  builds darwin (2 archives) natively; the merge job runs cosign keyless attestation
+  over all 6 archives. Per-target within-runner reproducibility (Pass-1 ≡ Pass-2
+  byte-identical sha256).
+
+**CI workflows (`.github/workflows/`):**
+- `go-test.yml` — `make test` (= `make vet` + `go test`).
+- `release.yml` — split-runner build + cosign attestation + GitHub Release.
+- `bench.yml`, `bench-mirror.yml` — bench harness + image mirror.
+- `codeql.yml` — CodeQL static analysis. `codespell.yml` — spelling.
+
+**Test gates (`make vet`):** `go vet` + 7 custom `cmd/vet-*` architectural gates +
+`verify-no-docker-sdk`; drift gates `verify-cligen` / `verify-docs` /
+`verify-reference` keep generated catalogs in lockstep.
 
 ## Environment Configuration
 
-**Required env vars:**
-- `ANTHROPIC_API_KEY` - Anthropic Claude API key (optional if using alternative tokenizer)
-- `GOOGLE_API_KEY` - Google Generative AI API key (optional, only if using Google models)
+**Config precedence (`internal/config/loader.go` `Load`, koanf v2):**
+CLI flags > project `.helix/project.yml` > user `~/.helix/helix_config.yml` >
+built-in defaults. Providers: `koanf/parsers/yaml`, `providers/file`, `providers/confmap`.
 
-**Optional env vars:**
-- `LOG_LEVEL` - Logging verbosity (default: INFO)
-- `SERENA_HOME` - Serena config directory (default: `~/.serena/`)
-- `SERENA_DOCKER` - Flag to indicate Docker environment (set to 1 in container)
-- `SERENA_PORT` - MCP server port (default: 9121)
-- `SERENA_DASHBOARD_PORT` - Dashboard port (default: 24282, hex 0x5EDA)
-- `FASTMCP_*` - FastMCP configuration via environment (settings prefixed with `FASTMCP_`)
-- `PYDEVD_DISABLE_FILE_VALIDATION` - PyCharm debugger compatibility (set in `tool.poe.env`)
+**Key CLI flags (`internal/cli/root.go` `runDaemon`):**
+- `--serve`, `--socket` (`daemon.socket_path`), `--config`, `--profile`,
+  `--admin-addr` (`observability.admin_addr`), `--grpc-addr` (`daemon.grpc_addr`;
+  empty = unix-socket only), `--json` (JSON logs), and subsystem-disable ablation
+  flags `--disable-lsp-subsystem` / `--disable-structured-edit-subsystem` /
+  `--disable-semantic-subsystem`.
 
-**Secrets location:**
-- User: `~/.serena/serena_config.yml` - User-level sensitive config (not committed)
-- Project: `.serena/project.yml` - Project-level config with language server paths
-- Environment: `.env` file (excluded from git, template provided as `.env.example`)
+**Semantic index config (`internal/semantic/config.go`, koanf `semantic_index.*`):**
+`semantic_index.enabled` gates the whole subsystem; `semantic_index.bench_disabled`
+is the distinct ablation gate. Defaults live in `internal/config/defaults.go`.
+
+**Version injection:** `main.version` set via `-ldflags "-X main.version=$VERSION"`
+by goreleaser; threaded into both `helix --version` and the MCP `Implementation.Version`.
 
 ## Webhooks & Callbacks
 
-**Incoming:**
-- Dashboard API endpoints:
-  - HTTP GET `/heartbeat` - Health check
-  - HTTP POST `/query_project` - Project querying via `ProjectServer` (`src/serena/project_server.py`)
-  - HTTP GET `/api/` routes - REST API for dashboard operations
-  - HTTP static file serving - HTML/CSS/JS dashboard assets from `src/serena/resources/dashboard/`
-  - WebSocket (implied): pywebview desktop app communication
+**Client hooks (`helix setup <client>`):** for Claude-family clients,
+`internal/cli/setup_hooks.go` installs Claude Code hooks — SessionStart (activate
+workspace), PreToolUse (nudge toward symbolic tools), Stop (cleanup); `--no-hooks`
+opts out. Non-skill clients receive MCP-teardown only.
 
-**Outgoing:**
-- JetBrains IDE Plugin - HTTP requests to IDE plugin server
-  - Purpose: Symbol updates, code editing commands
-  - Implementation: `JetBrainsPluginClient` REST calls in `src/serena/jetbrains/jetbrains_plugin_client.py`
+**Daemon post-init callbacks (`internal/daemon/daemon.go`):** internal wiring
+callbacks rather than network webhooks — `SetEnrichFn` (RepoMap LSP enrichment on
+graph rebuild), the workspace activation callback (`ActivateWorkspace` /
+`DeactivateWorkspace` gRPC RPCs invoked by client hooks), and the kernel
+`EditNotifier` bridge that feeds edits into the semantic live overlay.
+
+*(The prior web-dashboard HTTP/WebSocket endpoints and proprietary IDE plugin
+callbacks no longer exist — Helix ships no dashboard and no proprietary IDE backend.
+Non-Claude setup clients receive MCP-teardown only.)*
 
 ## Language Server Communication
 
-**Protocol:**
-- JSON-RPC 2.0 over stdin/stdout - LSP protocol via `src/solidlsp/lsp_protocol_handler/server.py`
-- 40+ language servers as external processes managed by `SolidLanguageServer`
-- Subprocess management via `src/solidlsp/ls_process.py` and `src/solidlsp/util/subprocess_util.py`
+**Protocol:** LSP 3.17 over JSON-RPC 2.0 on the language server's stdin/stdout.
+`internal/kernel/jsonrpc/` provides the JSON-RPC 2.0 codec (`codec.go`, `conn.go`);
+generated LSP types live in `protocol/gen/` (324 structs, 216 union types from the
+official metaModel.json).
 
-**Key External Language Servers:**
-- pyright (Python) - Microsoft's static type checker
-- gopls (Go) - Official Go language server
-- eclipse-jdtls (Java) - Eclipse JDT language server
-- rust-analyzer (Rust) - Official Rust language server
-- typescript-language-server (TypeScript) - Node-based implementation
-- And 35+ additional language servers (comprehensive list in `src/solidlsp/language_servers/`)
+**Process management:** language servers run as external subprocesses managed by the
+LS worker pool (`internal/kernel/lspool/`): `process.go` (spawn/lifecycle),
+`worker.go` (per-worker LSP session), `circuit.go` (circuit breaking with backoff),
+`pressure_linux.go` / `pressure_darwin.go` (memory-pressure eviction). Warm workers
+are shared across clean sessions (share-until-dirty) and kept alive between agent
+sessions by the persistent daemon.
+
+**Key external language servers (from `internal/langregistry/languages.go`):**
+- `gopls` (Go), `pyright-langserver` (Python), `typescript-language-server`
+  (TypeScript), `rust-analyzer` (Rust), `jdtls` (Java, Eclipse JDT LS), `clangd`
+  (C/C++), `csharp-ls` (C#), `kotlin-language-server` (Kotlin), plus ~44 more entries
+  (Ruby, PHP, Scala, Swift, Lua, Haskell, Julia, OCaml, Zig, Terraform, and others).
 
 ---
 
-*Integration audit: 2026-04-07*
+*Integration audit: 2026-07-01*

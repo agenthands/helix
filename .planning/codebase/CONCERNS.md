@@ -1,210 +1,250 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
+
+> Documentation of posture and debt for the current Go tree at HEAD. This is
+> a map, not an audit: every concern below is grounded in a real Go path, a
+> symbol, or a cited planning artifact. No runtime security scan was run.
 
 ## Tech Debt
 
-**Bare exception handlers throughout codebase:**
-- Issue: Multiple bare `except:` blocks catch all exceptions indiscriminately, swallowing errors and making debugging difficult
-- Files: 
-  - `src/serena/task_executor.py:105` - `wait_until_done()` silently swallows all exceptions
-  - `src/serena/jetbrains/jetbrains_plugin_client.py:46, :258` - JSON parsing failures masked
-  - `src/serena/util/dotnet.py:34` - .NET version detection failures silently ignored
-  - `src/serena/util/file_system.py:57` - Relative path conversion errors suppressed
-  - `src/serena/util/git.py:21` - All git operations fail silently
-  - `src/serena/util/logging.py:58` - Log callbacks that fail prevent log processing
-  - `src/serena/__init__.py:21` - Git status retrieval failures masked
-- Impact: Silent failures make production debugging impossible; errors propagate upstream without context
-- Fix approach: Replace bare `except:` with specific exception types; log errors before catching; consider propagating exceptions vs. graceful degradation per case
+**The tree is clean of in-code debt markers:**
+- `grep -rIn 'TODO\|FIXME\|HACK' internal/ cmd/` returns **0 matches** (verified
+  2026-07-01). There is no accumulated `TODO`/`FIXME` backlog to document — the
+  debt in this codebase is architectural and cross-cutting, tracked in planning
+  artifacts (`.planning/deferred-items.md`, milestone audits), not in comments.
+- Stated honestly rather than manufactured: there is no bare-except / silent-swallow
+  class of debt here (that was the removed Python tree). Go error handling is
+  explicit `error` returns; the structured-error taxonomy lives in `internal/errors/`.
 
-**Unimplemented/placeholder completion handling:**
-- Issue: LSP completion handling has unreachable code paths with bare `assert False` statements
-- Files: `src/solidlsp/ls.py:1253, :1255`
-- Context: Edge cases for completion items with only `textEdit.insert` or other combinations are not handled
-- Impact: Completion will fail with unhelpful assertion errors for certain LSP server responses
-- Fix approach: Implement proper handling for all completion item variants or explicitly reject unsupported cases with descriptive errors
+**Retained-lineage naming artifacts (intentional, NOT a bug):**
+- `SerenaMCPServer` — the exported Go type in `internal/mcp/server.go:45` (plus
+  `NewSerenaMCPServer`, `RegisterTools(server *SerenaMCPServer, ...)`). The name is
+  a deliberately-frozen internal-API identifier (Phase 52-03 SUMMARY); the
+  user-facing MCP `Implementation.Name` is `helix`. Renaming it is a churny,
+  zero-value refactor that would touch every kernel `RegisterTools` call site.
+- `api/proto/serena/v1/` — the gRPC IPC proto package directory (`proto`
+  target in the `Makefile:12-15`). The directory name is a wire-format lineage
+  artifact (Phase 52-03): it is baked into the generated `.pb.go` import paths
+  and the on-wire fully-qualified message names, so renaming it is a
+  wire-compatibility break, not a cleanup.
+- These two identifiers are the ONLY `serena`-spelled surfaces that remain; they
+  are documented quirks carried forward on purpose, not residue.
 
-**Hardcoded sleep-based synchronization in language servers:**
-- Issue: Multiple language servers rely on fixed `time.sleep()` calls for synchronization instead of proper event-based mechanisms
-- Files:
-  - `src/solidlsp/language_servers/intelephense.py:202, :208` - 1-second sleep after every references/definition request
-  - `src/solidlsp/language_servers/sourcekit_lsp.py:383` - 5-second hardcoded sleep in ready check
-  - `src/solidlsp/language_servers/haskell_language_server.py:381` - 5-second hardcoded sleep
-  - `src/solidlsp/language_servers/perl_language_server.py:213`, `erlang_language_server.py:183, :193` - Settling times
-- Impact: Tests become slow; CI timeout issues; race conditions on fast systems; reliability varies by hardware
-- Fix approach: Implement proper LSP event waiting (notification handlers); add configurable timeouts with exponential backoff
-
-**False ready signals in language server initialization:**
-- Issue: Some language servers signal readiness before they're actually operational
-- Files:
-  - `src/solidlsp/language_servers/clangd_language_server.py:324-325` - `TODO: This defeats the purpose of the event; we should wait for the server to actually be ready`
-  - `src/solidlsp/language_servers/intelephense.py:192` - `TODO: This is probably incorrect; the server does send an initialized notification, which we could wait for!`
-- Impact: Requests may be sent before server is ready; operations fail intermittently
-- Fix approach: Wait for proper LSP notifications (e.g., `$/status` with "ready" state) instead of arbitrary timings
-
-**Python version constraint allows Python 3.14 which may not be tested:**
-- Issue: `pyproject.toml` specifies `requires-python = ">=3.11, <3.15"` but testing may not cover Python 3.14
-- Impact: Silent compatibility issues if Python 3.14 introduces breaking changes in stdlib or dependencies
-- Fix approach: Test against Python 3.14 beta releases; tighten constraint to `<3.14` until verified
-
-**Pre-release dependency on Windows:**
-- Issue: `pythonnet==3.1.0-rc0` is a release candidate, not stable
-- Files: `pyproject.toml:50`
-- Impact: May contain bugs or breaking changes not present in final release; Windows-only issue affects subset of users
-- Fix approach: Monitor for 3.1.0 final release and upgrade immediately; add tests for Windows-specific functionality
+**CGO=1 single-mode build coupling:**
+- Since Phase 59.1 the source tree is single-mode `CGO_ENABLED=1`; the previous
+  CGO=0 stub apparatus was removed. The build now hard-depends on a host C
+  compiler (`make build` uses host CC; cross-compile via `zig cc` is CI/release
+  only). This is real build complexity: the semantic store links the DuckDB
+  static library through CGO, so `go test ./...` and `make build` cannot run in a
+  CGO-less environment.
+- The single surviving build tag is **platform**-conditional, not
+  CGO-conditional: `internal/semantic/store/duckdb.go` carries
+  `//go:build !(windows && arm64)` and its sibling stub
+  `internal/semantic/store/duckdb_winarm64.go` carries `//go:build windows && arm64`
+  (returns `serr.Unsupported`). This keeps the 6-archive release matrix buildable
+  while honestly signalling that the semantic store is unavailable on win/arm64.
 
 ## Known Bugs & Fragile Areas
 
-**Language server test flakiness (marked xfail):**
-- Files: 
-  - `test/solidlsp/fsharp/test_fsharp_basic.py` - Multiple tests marked xfail with reason "Test is flaky"
-  - `test/solidlsp/nix/test_nix_basic.py:121` - Hover test marked flaky
-  - `test/serena/test_serena_agent.py` - Multiple xfail marks for F# and Rust language servers
-- Root cause: Underlying language servers are unreliable or have timing-dependent issues
-- Impact: Test suite can't validate functionality; reliability varies between runs
-- Workaround: Tests skipped in CI, but failures may appear in user environments
+**No open bug backlog in code.** There are no skipped-because-broken markers in
+the Go suite. Language-server-dependent tests skip *cleanly* on tool
+absence (e.g. `t.Skip("gopls not installed...")` in `internal/cli/cli_e2e_test.go`),
+which is availability gating, not a masked failure.
 
-**Kotlin JSP crashes on CI restart:**
-- Files: `test/serena/test_serena_agent.py:191, :286, :619, :662`, `test/conftest.py:259`
-- Issue: Kotlin LSP JVM process crashes when language server restarts
-- Impact: CI tests skip Kotlin entirely; users on CI may experience crashes
-- Context: JVM-specific issue; needs investigation with Kotlin LSP maintainers
+**C-family SymbolID collision (fixed as a deviation, root cause deferred):**
+- Source: v2.12 MILESTONE-AUDIT "Honest limitations" #2. C `signatureHash`
+  truncates at `{`, so a `struct` definition and a type-use of that struct
+  collided on `SymbolID` → primary-key violation once C was routed into the
+  committed index path. Fixed by a deterministic snapshot-level SymbolID dedup
+  (prefer-richer definition). The deeper cause — C emits struct type-uses as
+  `definition.struct` symbols — is a documented deferred follow-up (fixing it
+  would churn the `with_fields` extractor golden). Fragile because the dedup is
+  a corrective layer over the extractor's shape, not a fix at the emit site.
 
-**Python-specific hack in reference resolution:**
-- Issue: When a variable reference can't be resolved (e.g., `instance.status = "new status"`), fallback logic uses Python-specific heuristics
-- Files: `src/solidlsp/ls.py:1826-1848`
-- Comment: `TODO: HORRIBLE HACK! I don't know how to do it better for now... THIS IS BOUND TO BREAK IN MANY CASES! IT IS ALSO SPECIFIC TO PYTHON!`
-- Impact: Non-Python languages will fail to find containing symbols; reference resolution may return wrong symbols
-- Fix approach: Implement language-specific fallback strategies per language; prefer LSP workspace symbol queries
-
-**Text search inefficiency:**
-- Issue: Multi-line regex search mode is marked as "extremely inefficient"
-- Files: `src/serena/util/text_utils.py:213-214`
-- Impact: Search performance degrades with large files or many matches; currently unused but creates technical debt
-- Fix approach: Profile and optimize; consider using regex engine's multi-line mode efficiently; or remove option if not needed
+**Absolute-path seed contract for deep queries:**
+- Source: v2.12 MILESTONE-AUDIT "Honest limitations" #4. `explain-symbol-deep`'s
+  `file_path` seed must be **absolute** — `semantic_files.path` is stored verbatim
+  from the full-walk. Documented in the E2E; it is a usage contract, not a defect,
+  but a relative seed silently finds nothing.
 
 ## Performance Bottlenecks
 
-**Completion item deduplication via JSON serialization:**
-- Issue: Completions are deduplicated by converting to/from JSON strings and using set operations
-- Files: `src/solidlsp/ls.py:1260`
-- Code: `[json.loads(json_repr) for json_repr in set(json.dumps(item, sort_keys=True) for item in completions_list)]`
-- Impact: O(n log n) operation; redundant serialization; fails if objects aren't JSON-serializable
-- Fix approach: Use dataclass equality or implement `__eq__`/`__hash__`; or use frozenset with proper key function
+**No unresolved hot-path bottleneck is tracked.** The performance-sensitive
+subsystems ship with their mitigation already in the design; the debt is the
+*bound*, not a naive implementation:
 
-**Document symbols caching with modification tracking:**
-- Issue: Two levels of symbol caching (`_raw_document_symbols_cache_is_modified`, `_document_symbols_cache_is_modified`) with manual invalidation
-- Files: `src/solidlsp/ls.py:500, :505, :1314, :1467, :2371, :2401, :2407, :2441`
-- Impact: Easy to forget cache invalidation; hard to track why cache is stale; potential memory leaks if files grow large
-- Fix approach: Implement cache versioning by file hash; consider weak references; or time-based expiration
-
-**Task executor polling with fixed sleep interval:**
-- Issue: `TaskExecutor._process_task_queue()` uses `time.sleep(0.1)` in busy-wait loop
-- Files: `src/serena/task_executor.py:109-116`
-- Impact: Wastes CPU cycles; 100ms latency per task; poor scalability with many tasks
-- Fix approach: Use queue.Queue's blocking get with timeout instead of polling
+- **LS worker pool** (`internal/kernel/lspool/`): share-until-dirty reuse, adaptive
+  TTL, circuit breaking, and platform-aware memory-pressure eviction are the
+  intended cost controls. The fragility is that these knobs interact; mis-tuning
+  TTL or the pressure threshold trades warmth for memory.
+- **RepoMap token budgeting** (`internal/repomap/`): output is fit to a token
+  budget via binary search over the elided tag tree, and extraction is lazy
+  (SQLite tag cache, mtime invalidation). Cost scales with cache coldness, not
+  repository size — a cold cache pays the full tree-sitter walk once.
+- **Semantic batch typeIndex is intra-package/TU only** (v2.12 M1 limit): the
+  per-batch `types.NewDispatcher` + `FixpointResolve` resolve within a translation
+  unit / package. Cross-package/cross-TU resolution is explicitly out of scope, so
+  wide cross-module type queries return nothing rather than paying an unbounded
+  whole-graph cost. This is a deliberate scaling boundary, documented in
+  `docs/type-resolution.md`.
 
 ## Fragile Areas Requiring Careful Modification
 
-**LSP type protocol handler code generation:**
-- Files: `src/solidlsp/lsp_protocol_handler/lsp_types.py:2460` - `TODO: I think this type is missing the 'children' field - DJ`
-- Issue: LSP type definitions may be incorrect or incomplete
-- Fragility: Type mismatches will cause silent data loss or assertion failures
-- Safe modification: Add comprehensive type validation tests; compare against official LSP spec; use ts2python as suggested in `lsp_requests.py:3`
+**MCP middleware install order (LIFO invariant):**
+- Files: `internal/daemon/daemon.go` (steps 14/14b/14c), `internal/mcp/lazy_init.go:106-108`.
+- The SDK composes `AddReceivingMiddleware` in LIFO order, so install order
+  `Telemetry+ProfileFilter → Suggestion → LazyInit` yields execution order
+  `LazyInit → Suggestion → ProfileFilter → Telemetry → handler`. `LazyInitMiddleware`
+  MUST execute first so the workspace is active before `TelemetryMiddleware`
+  applies its per-tool deadline. Reordering the installs silently breaks the
+  deadline-vs-activation invariant. Safe modification: preserve the documented
+  install-order comment and its rationale.
 
-**Eclipse JDTLS completion capability configuration:**
-- Files: `src/solidlsp/language_servers/eclipse_jdtls.py:571-572`
-- Issue: `TODO: we have an assert that completion provider is not included in the capabilities at server startup. Removing this will cause the assert to fail. Investigate why this is the case, simplify config`
-- Fragility: Configuration is brittle; removing lines breaks assertions; coupling between config and validation
-- Safe modification: Add integration test validating actual JDTLS capabilities response; decouple config from assertions
+**Architectural import boundaries enforced by the 7 `vet-*` gates:**
+These are the load-bearing seams; each gate is the compile-time guard that a
+refactor will trip. Wired into `make vet` (Makefile:55) and run in CI
+(`.github/workflows/go-test.yml`). Do NOT introduce the forbidden edge:
+- `vet-nokernel2semantic` (`internal/lint/nokernel2semantic`): `internal/kernel/`
+  MUST NOT import `internal/semantic/` (Phase 60 LIVE-07 #1). One-directional —
+  semantic→kernel is the architecture (semantic depends on kernel for typed IDs).
+- `vet-nosemantic2kernel` (`internal/lint/nosemantic2kernel`):
+  `internal/semantic/lspenrich/` MUST NOT import `internal/kernel/` except the
+  `internal/kernel/lspool` carve-out (Phase 61 ENRICH-01 #1). Together with the
+  sibling above, pins the kernel↔semantic boundary in BOTH directions.
+- `vet-noduckdb` (`internal/lint/noduckdb`): the `duckdb-go` module may only be
+  imported from `internal/semantic/store/*` (STORE-06). A stray DuckDB import
+  anywhere else fails the build.
+- `vet-compact-uses-store` (`internal/lint/compactusesstore`):
+  `internal/semantic/compact/` MUST route all DB access through
+  `internal/semantic/store` — no direct `duckdb-go` (Phase 63 P63-02).
+  Belt-and-braces over `vet-noduckdb`, keeping the SQL boundary auditable in one
+  package.
+- `vet-ablation-leakage` (`internal/lint/ablationleakage`): the bench-runner
+  namespace `bench/runners` MUST NOT import `internal/kernel/lspool` or
+  `internal/semantic/store` (Phase 76 ABLATE-08) — a bench runner orchestrates a
+  daemon subprocess, it never links the pool or store directly.
+- `vet-bench-rag-leakage` (`internal/lint/benchragleakage`): the standalone
+  control-arm binary `cmd/helix-bench-rag` MUST NOT import `internal/kernel` or
+  `internal/semantic` (Phase 83 ABLATE-04 #1c) — it is a provably-isolated RAG
+  baseline.
+- `vet-tools-quarantine` (`internal/lint/toolsquarantine`): no package outside
+  `github.com/agenthands/helix/tools` may import the dev-time `tools/` tree
+  (Phase 106 TUNE-01), so the DSPy offline-tuning harness never leaks into the
+  shipped binary or `go.mod`.
 
-**OmniSharp .NET version compatibility assumption:**
-- Files: `src/solidlsp/language_servers/omnisharp.py:189-192`
-- Issue: `.NET 7, 8, 9` are aliased to `.NET 6` runtime binaries with a TODO to "Do away with this assumption"
-- Impact: May break if binary compatibility changes; unclear if 6 binaries actually work with higher versions
-- Safe modification: Test against real .NET 7/8/9 installations; document compatibility matrix; add version validation tests
+**Generated-artifact drift gates (hand-edits fail CI):**
+- `internal/cli/verbs_gen.go` (`// Code generated by helix-cligen; DO NOT EDIT`) is
+  the frozen 51-verb catalog; `verify-cligen` (`go run ./cmd/helix-cligen --check`)
+  hard-fails on drift. The README tool table (`verify-docs`) and the skill
+  `reference.md` (`verify-reference`) are the same discipline. Editing any of these
+  by hand instead of regenerating breaks the build.
 
-**Workspace configuration handling in OmniSharp:**
-- Files: `src/solidlsp/language_servers/omnisharp.py:273`
-- Issue: `TODO: We do not know the appropriate way to handle this request. Should ideally contact the OmniSharp dev team`
-- Impact: Config values may be incorrect; OmniSharp behavior may be suboptimal; unknown future compatibility
-- Safe modification: File issue with OmniSharp; document findings; add telemetry for what options are actually used
-
-**Terraforming language server fallback logic:**
-- Files: `src/solidlsp/language_servers/terraform_ls.py:73, :79`
-- Issue: `TODO: is this needed?` and `TODO: use binary name from runtime dependencies if we keep this code`
-- Impact: Dead code or incomplete migration; unclear intent makes refactoring dangerous
-- Safe modification: Trace call sites; determine if fallback is actually used; remove or complete the TODO
+**Semantic dataflow append order (EdgeID stability):**
+- Source: v2.13 MILESTONE-AUDIT (M1). The in-body + return-bridge edge passes in
+  `semantic_similarity_edges.go` MUST append strictly after `dataFlowEdges`
+  (`semantic_wiring.go:2541-2542`) to keep existing EdgeIDs unshifted. Reordering
+  churns edge identity and breaks the deterministic re-index invariant.
 
 ## Security Considerations
 
-**Transitive dependency pinning for CVE mitigation:**
-- Issue: Multiple transitive dependencies are pinned for security reasons (see comments in `pyproject.toml:41-48`)
-- Files: `pyproject.toml:43-48`
-  - `urllib3==2.6.3`
-  - `werkzeug==3.1.7`
-  - `starlette==1.0.0`
-  - `python-multipart==0.0.22`
-  - `filelock==3.25.2`
-  - `cryptography==46.0.6`
-  - `regex==2026.2.28`
-- Concern: Exact pins prevent automatic security updates via tools like dependabot; requires manual tracking
-- Recommendation: Implement automated security scanning; set up Dependabot alerts; establish SLA for CVE patching
+> Posture documentation only — no penetration test or dependency CVE scan was
+> run for this map. Findings below are structural, grounded in build/config.
 
-**Pre-release pythonnet on Windows:**
-- Risk: RC software may have security vulnerabilities not present in stable release
-- Recommendation: Monitor pythonnet releases; test Windows builds against release versions immediately; consider adding pre-release warning to Windows setup docs
+**Runtime attack surface is minimal and unchanged:**
+- Single Go binary, no runtime Python/Docker/interpreter dependency (CLAUDE.md
+  Constraints). The agent-facing surface is the `helix` CLI dialing the daemon
+  over gRPC `StreamMCP` on a unix socket / named pipe by default (opt-in
+  loopback-gated TCP). The stdio MCP forwarder head and the Streamable-HTTP `/mcp`
+  head were REMOVED in Phase 94 — only the internal gRPC wire remains, shrinking
+  the exposed surface.
+- v2.12 and v2.13 milestone security reviews both recorded **PASSED, 0 findings**
+  (v2.13 MILESTONE-AUDIT: "Security review: PASSED, 0 findings (5/5 checks
+  clean)"). The recent dataflow/type-resolver work added no new deps, no new I/O,
+  and no schema change (pure in-memory transforms over already-extracted facts).
 
-**Flask security fixes applied but not documented in CLAUDE.md:**
-- Issue: `pyproject.toml:23` notes "bumped from 3.1.1 for CVE fix (also fixes werkzeug alert)"
-- Current issue: No CVE documentation or security advisory references
-- Recommendation: Document CVE numbers in comments; link to security bulletins; add to CHANGELOG
+**Supply-chain posture (sigstore keyless attestation):**
+- Release archives are signed with cosign keyless Sigstore attestation
+  (`sigstore/sigstore-go` dep; `internal/upgrade/trusted_root.json`, refreshed via
+  `make update-trust-root`). This is the ONLY signature on the darwin archives —
+  Apple Developer ID signing/notarization is deferred (see Missing Critical
+  Features / DEF-59-NOTARIZE).
+- The bench container stack drives docker/podman purely via `os/exec`; the
+  `verify-no-docker-sdk` gate (Makefile:422) hard-fails if the Docker Go SDK
+  (`github.com/docker/docker`) ever enters `go.mod`, keeping the Engine SDK out of
+  the supply chain. The `vet-tools-quarantine` gate keeps the dev-time tuning
+  harness out of the shipped module.
 
-**Bare exception handlers swallowing security-critical exceptions:**
-- Files: `src/serena/util/git.py:21`, `src/serena/__init__.py:21`
-- Risk: If git operations fail due to command injection or auth issues, errors are silently ignored
-- Recommendation: At minimum, log warnings when these operations fail; validate git status retrieval with tests
+**No secret handling in the shipped path:** benches that touch provider API keys
+are nightly/on-demand only and never run on `pull_request` (`.github/workflows/bench.yml`
+least-privilege `permissions: {contents: read}`); the PR-gating `bench-quick` is a
+hermetic scripted-agent smoke with no API key.
 
 ## Missing Critical Features
 
-**Mode caching not implemented for default/base modes:**
-- Issue: TODO comment indicates missing caching optimization
-- Files: `src/serena/agent.py:243`
-- Impact: `get_default_modes()` and `get_base_modes()` reload modes from disk every call, unlike cached `get_modes()`
-- Priority: Low/Medium - optimization opportunity, not a blocker
+These are documented, intentionally-deferred items with a cited source and a
+trigger-to-reconsider — not silent gaps.
 
-**Configuration path consolidation needed:**
-- Issue: Constants should be moved from `src/serena/constants.py` to `src/serena/config/serena_config.py`
-- Files: `src/serena/config/serena_config.py:112`, `src/serena/constants.py:8`
-- Impact: Path management is scattered; makes configuration system harder to maintain
-- Priority: Medium - technical debt, refactoring opportunity
+**C++/C#/Java variable→type linkage co-capture (no dedicated E2E):**
+- Source: v2.12 MILESTONE-AUDIT "Honest limitations" #1. C++/C#/Java share the
+  identical batch wiring + ChainTokens resolver path, but only **C** has the
+  var→type co-capture linkage (Phase 135 scoped `DeclaredType` co-capture +
+  `linkVarTypes` to C) and a dedicated real-binary E2E fixture
+  (`internal/cli/cli_type_resolution_e2e_test.go`, `TestCLI_E2E_CTypeResolution`).
+  C++/C#/Java var→type linkage is a stated fast-follow. Priority: Medium.
+
+**`trace_data_flow` function-seed verb contract:**
+- Source: v2.13 MILESTONE-AUDIT "Deferred / follow-ons". v2.13 proves the
+  mechanically-accepted function seed for the multi-hop reachability path (the BFS
+  filters `edge_kind='DATA_FLOWS'`, kind-agnostic on the seed), but the verb's
+  *documented* seed contract remains a parameter. Aligning the documented contract
+  with the accepted function seed is a fast-follow. Priority: Low/Medium.
+
+**Variable-level graph nodes, field/heap flow, source/sink taint:**
+- Source: v2.13 MILESTONE-AUDIT "Deferred / follow-ons". Explicitly milestone
+  out-of-scope (the honest cut the co-driver locked): DATA_FLOWS edges anchor on
+  existing function + parameter symbol nodes; the return value's identity IS the
+  producer function node by design. There are no variable-level nodes and no
+  taint source/sink model. Helix ships NO taint/CFG/IR/slice verbs (CLAUDE.md).
+  Priority: out-of-scope until a milestone reopens it.
+
+**Full 6-archive release matrix (linux/windows via zig):**
+- Source: `DEF-59.1-LINUX-ZIG-LIBSTDCXX` (`.planning/deferred-items.md`). CI's
+  `zig cc -target *-linux-musl` cannot link the prebuilt `libduckdb_static.a`
+  (compiled against libstdc++ on glibc; zig musl ships libc++ only), producing
+  ~25 undefined-symbol errors on the linux targets. The darwin path (Apple clang
+  on macos-14) is end-to-end PASS. Resolution options 1–4 are enumerated in the
+  deferred item. Priority: Medium (blocks full linux/windows distribution).
+
+**Apple Developer ID signing + notarization; win/arm64 semantic store:**
+- `DEF-59-NOTARIZE`: macOS Gatekeeper blocks the unsigned darwin binaries on first
+  launch; users need the right-click→Open workaround (~$99/yr Apple Developer
+  Program to fix). `DEF-59-WIN-ARM64-RESTORE`: native windows-arm64 semantic-store
+  is stubbed to `serr.Unsupported` because `duckdb-go-bindings` ships no
+  `lib/windows-arm64` artifact upstream. Both cited in `.planning/deferred-items.md`.
 
 ## Test Coverage Gaps
 
-**Untested completion edge cases:**
-- What's not tested: Completion items with `textEdit.insert` field or non-standard field combinations
-- Files: `src/solidlsp/ls.py:1252-1255`
-- Risk: Assertions will fail at runtime; certain LSP servers will produce broken completions
-- Priority: High - affects core functionality
+**C++/C#/Java type-resolution E2E:** only C has a dedicated real-binary E2E
+fixture (`TestCLI_E2E_CTypeResolution`); C++/C#/Java are proven at the
+engine/emission level but lack the equivalent end-to-end oracle (v2.12
+MILESTONE-AUDIT limitation #1). Risk: a daemon-layer gate regression on those
+languages would not be caught end-to-end — precisely the class of gap v2.13's
+Phase 140 hit for the DATA_FLOWS `langFromExt` daemon gate (v2.13 MILESTONE-AUDIT
+"one scope deviation").
 
-**Windows-specific integration tests missing:**
-- What's not tested: Windows MCP server launch, shell tool execution, pythonnet interop
-- Files: `src/serena/dashboard.py:717`, `src/serena/util/exception.py:18` - Windows-specific code paths
-- Risk: Windows deployments may fail silently; distribution of broken builds
-- Priority: High if Windows is production target; Medium otherwise
+**LS-backed behavioral chains are environment-gated:** the gopls/jdtls-dependent
+E2E oracles in `internal/cli/cli_e2e_test.go` (`requireGoplsE2E`,
+`TestCLI_DualRunParity` `needsLS` rows) `t.Skip` when the language server or the
+`HELIX_BIN` binary is absent. On a runner without gopls/jdtls those paths are not
+exercised, so LS-dependent regressions can escape a local `go test ./...`.
 
-**LSP server ready-state synchronization tests:**
-- What's not tested: Language server initialization timing; early requests before actual readiness
-- Files: `src/solidlsp/language_servers/` - multiple ready-state implementations
-- Risk: Intermittent test failures; race conditions only visible under load
-- Priority: High - affects test reliability and user experience
-
-**Cross-file reference resolution tests:**
-- What's not tested: References to symbols in other files, especially Python attribute assignments
-- Files: `src/solidlsp/ls.py:1826` - Python-specific hack
-- Risk: Hack may fail for certain code patterns; non-Python languages return wrong results
-- Priority: Medium - limited to specific use cases, but important when encountered
+**Coverage is not enforced:** there is no `-coverprofile`/`-cover` gate in the
+`Makefile` or any `.github/workflows/*.yml` (verified — 0 matches). Coverage is a
+posture (extensive co-located `_test.go` + golden regression nets + real-binary
+E2E), not a numeric threshold. Adding a coverage floor is an open opportunity, not
+a current guarantee.
 
 ---
 
-*Concerns audit: 2026-04-07*
+*Concerns map: 2026-07-01 — Go tree at HEAD.*

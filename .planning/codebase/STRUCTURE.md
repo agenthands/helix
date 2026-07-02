@@ -1,362 +1,284 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
 
-> **⚠ STALENESS BANNER (added 2026-07-01, v2.13 docs refresh).** Everything
-> below this addendum describes the **pre-Go Python `serena` codebase**
-> (`src/serena/`, `src/solidlsp/`, `SerenaAgent`, Python `*_tools.py`) as it
-> stood on 2026-04-07 — the map's sole `git` commit. That tree was **removed**
-> from the repo (see CHANGELOG > v1.9 rename and the pre-v1.12 legacy removal);
-> Helix now ships as a **single Go binary** (`cmd/helix`, `internal/**`). This
-> file has NOT tracked the v1.9→v2.13 Go rewrite (~13 milestones). Treat the
-> Python layout below as **historical only**. A dedicated re-mapping pass is
-> recommended — see `.planning/milestones/v2.13-DOCS-REFRESH.md`. The single
-> current-tree section that follows is the only part reflecting the shipped Go
-> codebase.
-
-## v2.13 Addendum — Intraprocedural Data-Flow Subsystem (current Go tree)
-
-*Scope-limited current-tree entry added for the v2.13 milestone close; the rest
-of this file is stale (see banner).*
-
-**`internal/semantic/dataflow/` — case-1 + in-body intraprocedural flow engine:**
-- Purpose: computes a per-function **case-1 flow summary** — for each parameter,
-  the exact syntactic def-use targets its value reaches (the function's return,
-  and call-argument positions), with **no over-approximation**. v2.13 extends it
-  to model **in-body origins**: the return value of an in-body call
-  (`y := producer(); sink(y)`) flowing into a later call argument.
-- Key types (`summary.go`): `Summary{Params []ParamFlow, InBodyFlows []InBodyFlow}`;
-  `Origin{Param int, Callee string}` (Callee=="" ⇒ param origin, else callReturn
-  origin); `InBodyFlow{Producer, Consumer string, ArgPos int}`;
-  `ParamFlow{Name, Index, Returns, CallArgs}`.
-- Entry point: `AnalyzeFlow(node, source) *Summary` — walks a function-declaration
-  tree-sitter node; returns nil under a generalized anti-vacuity gate (no param
-  reaches a target AND no in-body flow recorded).
-- **Leaf package**: stdlib + tree-sitter only (mirrors the `minhash` / `relatedidx`
-  / `classifier` leaf boundary). Invoked from the shared
-  `extract.FingerprintBody` seam (`fingerprint.go:54`), so **all 11 language
-  providers** inherit flow-summary computation with no per-provider edit; the
-  result rides on `ExtractedSymbol.FlowSummary` (`fact.go:127`).
-- Tests: `dataflow_test.go`, `dataflow_matrix_test.go` (all-11-grammar unit matrix).
-
-**Daemon emission (`internal/daemon/semantic_similarity_edges.go`) — feeds `DATA_FLOWS`:**
-- `dataFlowEdges` (v2.9) — `caller.param → callee.param`, Source `def_use`, conf 0.55.
-- `inBodyDataFlowEdges` (v2.13) — `producer.function → consumer.param`, Source
-  `def_use_inbody`, conf 0.50 (a return value has no distinct graph node, so it
-  honestly anchors on the producer's *function* node — D-ANCHOR).
-- `returnBridgeEdges` (v2.13) — `param → enclosing-function`, Source
-  `def_use_return`, conf 0.55; the minimal zero-schema multi-hop connector
-  (`producer.fn → transform.param → transform.fn → sink.param`).
-- All three share the anti-mis-bind guard (`nameCount==1` ⇒ no fabricated edge)
-  and directed dedup on `(SrcNodeID, DstNodeID)`. Wired in `factsFromExtracted`
-  (`semantic_wiring.go:2546-2554`) **strictly after** `dataFlowEdges` — EdgeID is
-  a dense append-order stamp, so ordering is an M1 hard constraint.
-- v2.13 also widened `langFromExt` (`semantic_wiring.go:1838`) to map
-  `.rs/.kt/.kts/.php/.rb → rust/kotlin/php/ruby`, so **all 11 languages** index +
-  emit `DATA_FLOWS` through the real daemon (their type resolvers stay nil-stubs
-  ⇒ no `has_type`/`uses_type`). Read surface + full ledger: `docs/edge-types.md`.
+Helix ships as a **single Go binary** (`cmd/helix`, entrypoint `cmd/helix/main.go`)
+driving an `internal/**` codebase. Module `github.com/agenthands/helix`, Go 1.25.1,
+`CGO_ENABLED=1`. Scale: **85,472 non-test LOC** across 24 `internal/` packages;
+595 non-test `.go` files, 590 `*_test.go`; zero TODO/FIXME/HACK in `internal`+`cmd`.
+The agent-facing surface is the `helix <verb>` CLI (51 frozen verbs, generated
+catalog `internal/cli/verbs_gen.go`; full inventory auto-generated in `README.md`).
 
 ## Directory Layout
 
 ```
-serena/
-├── src/
-│   ├── serena/                          # Main agent and tools package
-│   │   ├── agent.py                     # SerenaAgent orchestrator
-│   │   ├── cli.py                       # Click CLI interface
-│   │   ├── mcp.py                       # MCP server factory
-│   │   ├── project.py                   # Project context and memory management
-│   │   ├── ls_manager.py                # Language server lifecycle management
-│   │   ├── code_editor.py               # Code editing operations
-│   │   ├── symbol.py                    # Symbol retrieval and manipulation
-│   │   ├── task_executor.py             # Linear task executor for tool execution
-│   │   ├── prompt_factory.py            # System prompt generation
-│   │   ├── dashboard.py                 # Web dashboard API and viewer
-│   │   ├── jetbrains/                   # JetBrains IDE plugin integration
-│   │   ├── config/
-│   │   │   ├── context_mode.py          # Context and Mode configuration classes
-│   │   │   └── serena_config.py         # Global Serena configuration and project registry
-│   │   ├── tools/                       # Tool implementations
-│   │   │   ├── tools_base.py            # Tool base class and markers
-│   │   │   ├── file_tools.py            # File I/O tools
-│   │   │   ├── symbol_tools.py          # LSP symbol operation tools
-│   │   │   ├── memory_tools.py          # Project memory tools
-│   │   │   ├── config_tools.py          # Configuration and project activation tools
-│   │   │   ├── cmd_tools.py             # Command execution tools
-│   │   │   ├── workflow_tools.py        # Onboarding and workflow tools
-│   │   │   ├── query_project_tools.py   # Project metadata query tools
-│   │   │   ├── jetbrains_tools.py       # JetBrains-specific tools
-│   │   │   └── __init__.py              # Tool registry and exports
-│   │   ├── resources/
-│   │   │   └── config/
-│   │   │       ├── contexts/            # Built-in context configurations (agent, ide, chatgpt, etc.)
-│   │   │       ├── modes/               # Built-in mode configurations (planning, editing, interactive, etc.)
-│   │   │       ├── internal_modes/      # Internal modes (jetbrains, etc.)
-│   │   │       └── prompt_templates/    # System prompt and tool output templates
-│   │   ├── util/                        # Utility modules
-│   │   │   ├── logging.py               # MemoryLogHandler and logging utilities
-│   │   │   ├── file_system.py           # File scanning, .gitignore parsing
-│   │   │   ├── text_utils.py            # Text search and replacement utilities
-│   │   │   └── [other utilities]
-│   │   └── constants.py                 # Module constants and defaults
-│   │
-│   ├── solidlsp/                        # Language Server Protocol wrapper
-│   │   ├── ls.py                        # SolidLanguageServer main implementation
-│   │   ├── ls_config.py                 # Language enumeration and server configs
-│   │   ├── ls_types.py                  # LSP type definitions and UnifiedSymbolInformation
-│   │   ├── ls_process.py                # Language server process management
-│   │   ├── ls_request.py                # LSP request building and execution
-│   │   ├── ls_utils.py                  # LSP utility functions (file, text, path ops)
-│   │   ├── ls_exceptions.py             # LSP-specific exceptions
-│   │   ├── settings.py                  # SolidLSP settings configuration
-│   │   ├── language_servers/            # Language-specific server implementations
-│   │   │   ├── common.py                # RuntimeDependency and shared base classes
-│   │   │   ├── gopls.py                 # Go language server
-│   │   │   ├── eclipse_jdtls.py         # Java language server
-│   │   │   ├── [50+ other language servers]
-│   │   │   └── elixir_tools/            # Elixir-specific tools
-│   │   ├── lsp_protocol_handler/        # LSP protocol implementation
-│   │   │   └── server.py                # LSP server connection and communication
-│   │   └── util/
-│   │       ├── cache.py                 # LSP cache operations
-│   │       └── subprocess_util.py       # Cross-platform subprocess utilities
-│   │
-│   └── interprompt/                     # Prompt templating and formatting
-│       ├── jinja_template.py            # Jinja2 template wrapper
-│       ├── multilang_prompt.py          # Multi-language prompt fallback logic
-│       ├── prompt_factory.py            # Prompt factory interface
-│       └── util/                        # Utility functions
-│
-├── test/
-│   ├── serena/
-│   │   ├── test_serena_agent.py         # SerenaAgent integration tests
-│   │   ├── test_cli_project_commands.py # CLI command tests
-│   │   ├── test_mcp.py                  # MCP server tests
-│   │   └── [other test modules]
-│   ├── solidlsp/
-│   │   ├── [language]/                  # Language-specific symbol operation tests
-│   │   └── util/                        # LSP utility tests
-│   └── resources/
-│       └── repos/                       # Test repositories for each language
-│           ├── python/
-│           ├── go/
-│           ├── java/
-│           └── [other languages]/
-│
-├── pyproject.toml                       # Project metadata, dependencies, tool config
-├── .serena/                             # Project configuration (created per project)
-│   ├── project.yml                      # Project-specific overrides
-│   └── memories/                        # Project-local memories (markdown files)
-└── ~/.serena/                           # User home Serena directory (created at first use)
-    ├── serena_config.yml                # Global Serena configuration
-    ├── contexts/                        # User-defined contexts (override built-in)
-    ├── modes/                           # User-defined modes (override built-in)
-    ├── prompt_templates/                # User-defined prompt templates
-    ├── memories/
-    │   └── global/                      # Global memories shared across projects
-    └── solidlsp/                        # Language server cache and runtime deps
+helix/
+├── cmd/                                 # 16 binaries (product + generators + gates)
+│   ├── helix/                           # THE product; single entrypoint main.go, subcommands in internal/cli
+│   ├── docgen/                          # generates README.md tool/language tables from skill init() registry
+│   ├── lspgen/                          # generates protocol/gen/*.go from protocol/metaModel.json (LSP 3.17)
+│   ├── helix-cligen/                    # generates internal/cli/verbs_gen.go (verbSpecs catalog)
+│   ├── helix-refgen/                    # generates internal/cli/skills/helix/reference.md (per-verb reference)
+│   ├── helix-eval/                      # Phase 67 evaluation harness (run/report subcommands)
+│   ├── helix-bench/                     # Phase 75 provider-independent benchmark harness entrypoint
+│   ├── helix-bench-rag/                 # standalone provably-isolated baseline_rag MCP server (ABLATE-04)
+│   ├── eval-attestation-check/          # warn-only date-staleness check for eval/EVAL.md attestation
+│   ├── vet-noduckdb/                    # go/analysis gate: STORE-06 (no direct duckdb import)
+│   ├── vet-nokernel2semantic/           # gate: LIVE-07 #1 (kernel must not import semantic)
+│   ├── vet-nosemantic2kernel/           # gate: ENRICH-01 #1 (semantic must not import kernel)
+│   ├── vet-compact-uses-store/          # gate: compact→store boundary (belt-and-braces over noduckdb)
+│   ├── vet-ablation-leakage/            # gate: ABLATE-08 (bench-runner → disabled-subsystem imports)
+│   ├── vet-bench-rag-leakage/           # gate: ABLATE-04 #1c (baseline_rag → kernel/semantic imports)
+│   └── vet-tools-quarantine/            # gate: runtime → dev-time tools/ import boundary
+├── internal/                            # 24 packages, 85,472 non-test LOC
+│   ├── semantic/    (30,814)            # semantic index subsystem (18 subpackages; see below)
+│   ├── kernel/      (11,046)            # code-intelligence kernel + 8 subpackages
+│   ├── daemon/       (9,025)            # persistent supervisor, rank engine, semantic wiring, middleware install
+│   ├── skill/        (7,841)            # Skill/ToolProvider/WorkflowProvider interfaces + 5 subpackages
+│   ├── cli/          (5,204)            # cobra command tree, verbSpecs (51 verbs), setup/status/activate
+│   ├── mcp/          (2,043)            # SerenaMCPServer wrapper, ToolRegistry, middleware, gRPC transport
+│   ├── repomap/      (1,891)            # tree-sitter tag extraction, SQLite tag cache, PageRank, token-budget render
+│   ├── obs/          (1,539)            # observability scaffolding (Prometheus RED metrics, OTel tracing)
+│   ├── upgrade/      (1,534)            # in-binary self-upgrade subcommand pair
+│   ├── guardrails/     (956)            # server-side capability receipts (Phase 66, GUARD-01..07)
+│   ├── langregistry/   (747)            # 52-language embedded registry, YAML override, three-tier LS installer
+│   ├── forwarder/      (773)            # client-side gRPC StreamMCP dial path (CallTool/OpenSession)
+│   ├── fuzzy/          (745)            # pure 4-strategy fuzzy text matcher with ambiguity refusal
+│   ├── memory/         (728)            # markdown memory store, SQLite FTS5 index, fsnotify watcher
+│   ├── profile/        (728)            # 5 agent profiles, 4 operational modes
+│   ├── phasegraph/     (601)            # stdlib-only DAG orchestrator (ordered, validated)
+│   ├── config/         (464)            # koanf-backed daemon configuration (4-layer precedence)
+│   ├── graph/          (265)            # deterministic generic PageRank engine
+│   ├── errors/         (225)            # typed error taxonomy for MCP tools
+│   ├── degrade/        (141)            # tool classification + timeout budget lookup
+│   ├── treesitter/     (137)            # shared grammar registry (23 grammars)
+│   ├── workspace/      (132)            # workspace registry, WorkspaceKey (repo root + lang + toolchain)
+│   ├── lint/         (subpkgs)          # 7 go/analysis Analyzers backing the vet-* gate binaries
+│   └── eval/           (384)            # top-level runner library for the Phase 67 eval harness
+├── api/proto/serena/v1/                 # gRPC IPC proto (ipc.proto/ipc.pb.go/ipc_grpc.pb.go)
+│                                        #   dir name "serena/v1" retained as wire-format lineage (Phase 52-03), NOT residue
+├── protocol/
+│   ├── gen/                             # generated LSP 3.17 types (324 structs, 216 union types) from metaModel.json
+│   ├── patch/                           # metaModel patches (compatibility.go, rename_params.go)
+│   └── metaModel.json                   # LSP 3.17 machine-readable spec (lspgen input)
+├── bench/                               # 291 .go files: milestone bench harness (SWE-bench, Multi-SWE-bench,
+│                                        #   Terminal-Bench, aider-polyglot, repobench, crosscodeeval); Podman/Docker auto-detect
+├── tools/dspy-tune/                     # dev-time-only Python (DSPy tuning harness); NOT shipped, uv/uvx, .venv git-ignored
+├── eval/                                # eval corpus, fixtures, generated tasks, reports, EVAL.md
+├── test/                               # cross-package harnesses (bench, harness, integration, oracle)
+├── testdata/                            # shared fixtures + profiles
+├── deploy/grafana/                      # Grafana dashboards for the obs metrics
+└── docs/                                # edge-types.md, type-resolution.md, runbooks/ (CURRENT; refreshed v2.13)
+```
+
+### `internal/semantic/` subtree (30,814 LOC — the largest subsystem)
+
+18 subpackages emitting a semantic graph (edges DEFINES, RESOLVES_TO/has_type,
+DATA_FLOWS, SEMANTICALLY_RELATED, SIMILAR_TO, STRUCTURAL_TWIN; read surface +
+ledger in `docs/edge-types.md`). LOC per subpackage (non-test):
+
+```
+internal/semantic/
+├── extract/     (8,410)  # per-language tree-sitter symbol extraction (11 langs w/ testdata: go/ts/java/csharp/kotlin/php/python/ruby/rust/c/cpp)
+├── store/       (5,211)  # duckdb-backed graph store + overlay write API
+├── types/       (3,373)  # type resolvers (C-family tiered resolvers), RESOLVES_TO/has_type
+├── live/        (3,087)  # live index / fsnotify-driven FileFactDiff populator
+├── lspenrich/   (2,706)  # async LSP enrichment of tree-sitter-extracted facts
+├── graph/       (1,628)  # graph_version advance machinery, weak-component wiring
+├── compact/       (913)  # graph compaction (store-backed; enforced by vet-compact-uses-store)
+├── retrieval/     (881)  # bleve-backed full-text retrieval engine
+├── integ/         (744)  # types-only seam between semantic subsystem and consumers
+├── scheduler/     (624)  # extraction lifecycle (initial-walk on workspace activation)
+├── classifier/    (584)  # per-language name-based edge classification
+├── relatedidx/    (507)  # Random Indexing over function bodies → SEMANTICALLY_RELATED edges
+├── dataflow/      (485)  # case-1 + in-body intraprocedural flow summary → DATA_FLOWS edges
+├── cluster/       (297)  # deterministic weak-component clustering (GRAPH-06)
+├── crossrepo/     (268)  # pure resolution logic behind CROSS_* edges
+├── minhash/       (227)  # MinHash + LSH fingerprinting → SIMILAR_TO near-clone edges
+├── bench/         (187)  # minimal probe binary pulling in bleve for the linker
+└── cochange/      (186)  # mines git history for file co-change relationships
+```
+
+The **intraprocedural data-flow** path spans two subsystems: `semantic/dataflow`
+computes a per-function case-1 flow summary (leaf package, stdlib + tree-sitter
+only) invoked from the shared `extract.FingerprintBody` seam so all 11 language
+providers inherit it with no per-provider edit; the daemon then turns those
+summaries into `DATA_FLOWS` edges in `internal/daemon/semantic_similarity_edges.go`
+(`dataFlowEdges` def_use, `inBodyDataFlowEdges` def_use_inbody, `returnBridgeEdges`
+def_use_return), wired in `semantic_wiring.go` strictly after `dataFlowEdges`.
+
+The semantic subsystem is walled off by four `vet-*` gates: `vet-nokernel2semantic`
+(kernel↛semantic), `vet-nosemantic2kernel` (semantic↛kernel), `vet-compact-uses-store`
+(compact→store), `vet-noduckdb` (no direct duckdb outside store).
+
+### `internal/kernel/` and `internal/skill/` subtrees
+
+```
+internal/kernel/            internal/skill/
+├── symbols/  (9 symbol tools)   ├── memory/     (7 memory tools; markdown + FTS5)
+├── edit/     (6 edit tools)     ├── workflow/   (onboarding, session handoff)
+├── fileops/  (7 file tools)     ├── repomap/    (get_repo_map, get_context)
+├── diag/     (3 diag tools)     ├── semantic/   (Phase 64 semantic MCP tools)
+├── lspool/   (LS worker pool)   └── guardrails/ (capability-receipt tools)
+├── jsonrpc/  (JSON-RPC 2.0 codec)
+├── health/   (get_health tool)
+└── help/     (get_tool_help tool)
 ```
 
 ## Directory Purposes
 
-**`src/serena/`:**
-- Purpose: Core agent orchestration, tool system, and project management
-- Contains: Agent orchestrator, tool registry, project activation, mode/context config
-- Key files: `agent.py` (main), `cli.py` (entry), `mcp.py` (MCP protocol), `project.py` (project state)
+Layout maps onto the 4-layer architecture (see `ARCHITECTURE.md`):
 
-**`src/serena/tools/`:**
-- Purpose: Implements 40+ composable tools for code operations
-- Contains: File I/O, symbol operations, memory management, configuration, command execution
-- Organization: One file per logical group (file_tools, symbol_tools, etc.); tools auto-registered via `__init__.py`
-- Base class: `Tool` in `tools_base.py` with markers for capabilities
+- **Layer 0 — MCP Runtime.** `internal/mcp/` (MCP server `SerenaMCPServer`, tool
+  registry, middleware stack, gRPC transport), `internal/daemon/` (persistent
+  supervisor, errgroup orchestration, signal-first lifecycle), `internal/forwarder/`
+  (client-side gRPC `StreamMCP` dial path), `api/proto/serena/v1/` (gRPC IPC wire).
+- **Layer 1 — Code-Intelligence Kernel.** `internal/kernel/` (orchestrator,
+  workspace runtime, language detection) + subpackages `lspool` (share-until-dirty
+  LS pool, adaptive TTL, circuit breaking, pressure eviction), `symbols`, `edit`,
+  `fileops`, `diag`, `jsonrpc`, `health`, `help`; `internal/fuzzy/` (4-strategy
+  cascade), `internal/repomap/` (tag cache + PageRank + budgeted renderer),
+  `protocol/gen/`.
+- **Layer 2 — Skills & Multi-Language.** `internal/skill/` (Skill/ToolProvider/
+  WorkflowProvider interfaces, Caddy-style `init()` registration) + subpackages
+  `memory`, `workflow`, `repomap`, `semantic`, `guardrails`; `internal/memory/`,
+  `internal/langregistry/` (52-lang embedded registry, three-tier LS installer).
+- **Layer 3 — Profiles & Setup.** `internal/profile/` (5 profiles, 4 modes),
+  `internal/config/` (4-layer koanf: CLI > project `.helix/` > user `~/.helix/` >
+  profile defaults), `internal/cli/setup*.go` and `status*.go`.
 
-**`src/serena/config/`:**
-- Purpose: Configuration system for contexts, modes, and global settings
-- Contains:
-  - `context_mode.py`: `SerenaAgentContext` (tool availability by integration), `SerenaAgentMode` (operational patterns)
-  - `serena_config.py`: `SerenaConfig` (global settings), `ProjectConfig` (per-project overrides), `RegisteredProject` (project registry)
-- YAML-based: Loaded from `src/serena/resources/config/` built-ins or `~/.serena/` user configs
-
-**`src/serena/resources/config/`:**
-- Purpose: Built-in configuration templates (read-only)
-- Contains:
-  - `contexts/`: Configurations for different integration points (agent, IDE, ChatGPT, etc.)
-  - `modes/`: Operational patterns (planning, editing, interactive, one-shot, onboarding)
-  - `internal_modes/`: Special modes for internal use (JetBrains plugin)
-  - `prompt_templates/`: Jinja2 templates for system prompt and tool output formatting
-
-**`src/solidlsp/`:**
-- Purpose: Unified LSP (Language Server Protocol) wrapper for 19+ languages
-- Contains: Language server abstraction, process management, protocol handling, file buffering
-- Key file: `ls.py` (main implementation, 2500+ lines)
-- Configuration: `ls_config.py` defines Language enum and per-language server setup
-
-**`src/solidlsp/language_servers/`:**
-- Purpose: Language-specific server implementations
-- Contains: 50+ files, one per language (gopls.py, eclipse_jdtls.py, etc.)
-- Pattern: Each defines server startup command, runtime dependencies, initialization options
-- Runtime deps: Auto-downloaded from URLs with SHA256 verification via `RuntimeDependency`
-
-**`src/interprompt/`:**
-- Purpose: Prompt templating and multi-language fallback
-- Contains: Jinja2 template wrapper, multi-language prompt logic, factory
-- Used by: Mode prompt generation, system prompt rendering
-
-**`src/serena/util/`:**
-- Purpose: Shared utility functions
-- Key modules:
-  - `logging.py`: `MemoryLogHandler` for capturing logs to web dashboard
-  - `file_system.py`: .gitignore parsing, path validation
-  - `text_utils.py`: Text search, line matching, content replacement
-
-**`.serena/` (project-local):**
-- Purpose: Per-project Serena metadata and state
-- Contains:
-  - `project.yml`: Language configuration, tool defaults, mode overrides
-  - `memories/`: Markdown files organized by topic (auto-created on first write)
-- User-controlled: Committed to version control
-
-**`~/.serena/` (user home):**
-- Purpose: Global Serena user configuration and data
-- Contains:
-  - `serena_config.yml`: Global defaults, project registry, language backend choice
-  - `contexts/`, `modes/`, `prompt_templates/`: User overrides (inherit/override built-ins)
-  - `memories/global/`: Markdown memories shared across projects
-  - `solidlsp/`: LSP cache and runtime dependencies
-- Managed: Created by Serena on first use; customizable via SERENA_HOME env var
+The **semantic index** (`internal/semantic/`) is an independent subsystem consumed
+by Layer 2's `skill/semantic` and wired by `internal/daemon/`; it does not sit on
+the kernel critical path and is import-isolated from the kernel by vet gates.
 
 ## Key File Locations
 
 **Entry Points:**
-- `src/serena/cli.py`: CLI command handler (Click-based)
-- `src/serena/mcp.py`: MCP server factory
-- `src/serena/agent.py:SerenaAgent`: Central orchestrator class
+- `cmd/helix/main.go`: the sole product binary; delegates to `internal/cli/root.go`
+  (cobra command tree). `version` injected via `-ldflags`.
+- `internal/cli/verbs_gen.go`: generated `verbSpecs` catalog (51 verbs); one
+  `helix <verb>` subcommand per callable tool. Regenerate via `cmd/helix-cligen`.
+- `internal/daemon/daemon.go`: daemon bootstrap — registry, kernel+pool,
+  GrammarRegistry (23 grammars), TagCache, skill `InitAll`, middleware install
+  (steps 14/14b/14c), profile resolution.
+- `internal/mcp/server.go`: `SerenaMCPServer` / `NewSerenaMCPServer`, the MCP
+  server wrapper (Go identifier retained per Phase 52-03; user-facing name `helix`).
 
 **Configuration:**
-- `src/serena/config/serena_config.py`: SerenaConfig (global), ProjectConfig (per-project)
-- `src/serena/resources/config/contexts/*.yml`: Built-in contexts
-- `src/serena/resources/config/modes/*.yml`: Built-in modes
-- `~/.serena/serena_config.yml`: User global configuration
-- `.serena/project.yml`: User project configuration
+- `internal/config/`: koanf loader with 4-layer precedence.
+- `internal/profile/`: profile/mode YAMLs (embedded).
+- `internal/langregistry/languages.go`, `registry.go`, `entry.go`, `installer.go`:
+  embedded language registry + LS installer.
 
 **Core Logic:**
-- `src/serena/agent.py`: SerenaAgent orchestration, tool instantiation, mode/context management
-- `src/serena/project.py`: Project state, memory management, language server coordination
-- `src/serena/tools/tools_base.py`: Tool base class and marker definitions
-- `src/solidlsp/ls.py`: SolidLanguageServer LSP client implementation
+- `internal/kernel/`: kernel orchestrator + workspace runtime; symbol/edit/file/diag
+  tools in the named subpackages.
+- `internal/semantic/`: extraction → store → enrichment → graph pipeline (18 subpkgs).
+- `internal/repomap/`: RepoMap tag extraction, cache, PageRank, renderer.
+- `internal/fuzzy/`: fuzzy match cascade used by edit tools.
 
-**Tool Implementations:**
-- `src/serena/tools/file_tools.py`: ReadFileTool, CreateTextFileTool, ReplaceContentTool
-- `src/serena/tools/symbol_tools.py`: FindSymbolTool, GetSymbolsOverviewTool, RenameSymbolTool
-- `src/serena/tools/memory_tools.py`: ReadMemoryTool, WriteMemoryTool, ListMemoriesTool
-- `src/serena/tools/config_tools.py`: ActivateProjectTool, GetCurrentConfigTool
+**Tool Registration:**
+- Kernel tools: `RegisterTools(server *mcp.SerenaMCPServer, ...)` in each
+  `internal/kernel/<group>/tools.go`.
+- Skill tools: `ToolProvider.Tools()` returning `[]*mcp.ToolDef`; registered
+  centrally by `internal/daemon/`.
+
+**Generated / Committed Artifacts:**
+- `internal/cli/verbs_gen.go` (helix-cligen), `README.md` tool table (docgen),
+  `internal/cli/skills/helix/reference.md` (helix-refgen), `protocol/gen/*.go` (lspgen).
+  All guarded by drift gates (`verify-cligen`, `verify-docs`, `verify-reference`).
 
 **Testing:**
-- `test/serena/test_serena_agent.py`: Integration tests for SerenaAgent
-- `test/serena/test_mcp.py`: MCP server tests
-- `test/serena/test_cli_project_commands.py`: CLI command tests
-- `test/resources/repos/`: Test repositories (python/, go/, java/, etc.) for language testing
+- `*_test.go` colocated per package (590 files); `testdata/` fixtures per package.
+- Real-binary E2E: `internal/cli/*_e2e_test.go` (driven by `HELIX_BIN`).
+- Cross-package harnesses under `test/` (bench, harness, integration, oracle).
 
 ## Naming Conventions
 
+**Packages / Directories:**
+- Lowercase single-word package names: `kernel`, `semantic`, `repomap`, `langregistry`.
+- Subsystem subpackages by role: `kernel/lspool`, `kernel/symbols`, `semantic/extract`,
+  `semantic/store`, `skill/memory`.
+- Command binaries: product is `cmd/helix`; generators are verb-descriptive
+  (`cmd/docgen`, `cmd/lspgen`, `cmd/helix-cligen`); architectural gates are
+  `cmd/vet-<invariant>` wrapping a matching `internal/lint/<invariant>` Analyzer.
+
 **Files:**
-- Snake_case for Python modules: `file_tools.py`, `serena_config.py`
-- Class names in CamelCase: `SerenaAgent`, `SolidLanguageServer`, `ToolRegistry`
-- Tool classes: Always `*Tool` suffix: `ReadFileTool`, `FindSymbolTool`, `WriteMemoryTool`
-- Exception classes: Always `*Error` or `*Exception` suffix: `ProjectNotFoundError`, `SolidLSPException`
-- Config files: Lowercase with hyphens for multi-word names: `planning.yml`, `one-shot.yml`
+- Snake_case Go filenames: `semantic_wiring.go`, `lazy_init.go`, `setup_hooks.go`.
+- Tool registration files: `tools.go` (kernel) / `tools_<name>.go` (skill/semantic).
+- Generated files carry `// Code generated by <gen>; DO NOT EDIT.` and end `_gen.go`
+  or live under `protocol/gen/`.
+- Tests: `<file>_test.go`; real-binary end-to-end: `<name>_e2e_test.go`.
 
-**Directories:**
-- Plural for resource collections: `tools/`, `language_servers/`, `contexts/`, `modes/`
-- Singular for logical modules: `config/`, `jetbrains/`, `util/`
-- Underscore for internal/private directories: `_pycache__/`, `.git/`
-
-**Classes:**
-- Base classes: Suffix with clear role: `Tool`, `ToolMarker`, `Component`, `LanguageServerConfig`
-- Concrete tool implementations: Always `*Tool`: `ReadFileTool`, `RestartLanguageServerTool`
-- Managers/orchestrators: Suffix with `Manager` or `Factory`: `LanguageServerManager`, `LanguageServerFactory`
-- Enums: PascalCase: `Language`, `LanguageBackend`, `SymbolKind`
-
-**Functions:**
-- Lowercase with underscores: `apply()`, `get_project_root()`, `apply_ex()`
-- Private/internal: Prefix with underscore: `_update_active_tools()`, `_format_prompt()`
-- Factory methods: Prefix with `from_` or `create_`: `from_yaml()`, `create_mcp_server()`
+**Types / Identifiers:**
+- CamelCase exported types: `SerenaMCPServer` (retained lineage identifier),
+  `GrammarRegistry`, `WorkspaceKey`, `ToolRegistry`.
+- Middleware types suffixed `Middleware`: `TelemetryMiddleware`, `ProfileFilterMiddleware`,
+  `SuggestionMiddleware`, `LazyInitMiddleware`.
+- Frozen CLI verbs: kebab-case (`go-to-definition`, `analyze-blast-radius`) = the
+  tool name with `_`→`-`; defined only in `verbs_gen.go`.
 
 ## Where to Add New Code
 
-**New Feature (e.g., add a new code editing capability):**
-- Primary code: `src/serena/tools/` → Create tool class inheriting from `Tool`
-  - If file-related: Add to `file_tools.py`
-  - If symbol-related: Add to `symbol_tools.py`
-  - If new category: Create new file matching pattern `*_tools.py`
-- Markers: Add appropriate `ToolMarker*` classes to indicate capabilities
-- Tests: `test/serena/test_[category].py`
-- Registration: Tools auto-register via `__init__.py` imports
-- Exposure: No additional config needed; tool automatically included in available tool sets
+**New `helix` verb / tool:**
+- Kernel-resident: add the handler under the relevant `internal/kernel/<group>/`,
+  register in that group's `tools.go` via `RegisterTools`.
+- Skill-resident: add under `internal/skill/<skill>/`, expose through
+  `ToolProvider.Tools()`; the skill self-registers via Caddy-style `init()`.
+- Regenerate the verb catalog: `go run ./cmd/helix-cligen` (updates `verbs_gen.go`),
+  then `go run ./cmd/docgen` and `go run ./cmd/helix-refgen`; the drift gates
+  (`verify-cligen`, `verify-docs`, `verify-reference`) enforce the regen.
 
-**New Language Server:**
-- Language support: `src/solidlsp/language_servers/[language]_language_server.py`
-  - Subclass `LanguageServerConfig` from `ls_config.py`
-  - Define `RuntimeDependency` items for binaries/downloads
-  - Specify LSP server command and initialization options
-- Configuration: Update `Language` enum in `src/solidlsp/ls_config.py`
-- Factory: Update `LanguageServerConfig.get_language_server_config()` method
-- Testing: Create `test/resources/repos/[language]/` with sample code
-- Tests: Create `test/solidlsp/[language]/` for symbol operations
+**New language support:**
+- Grammar: add the tree-sitter binding to `internal/treesitter/registry.go`
+  `NewGrammarRegistry`.
+- Language server: add an entry to `internal/langregistry/` (embedded registry +
+  installer wiring).
+- Extraction: add a per-language provider under `internal/semantic/extract/` with
+  `testdata/` fixtures.
 
-**New Context:**
-- Definition: `src/serena/resources/config/contexts/[name].yml`
-  - Specify tool availability, descriptions, exclusions
-  - Format: YAML with `fixed_tools` or `included_optional_tools`/`excluded_tools`
-- Loading: Contexts auto-discovered from `contexts/` directory
-- Usage: Reference by name in CLI or config: `--context [name]`
-- User override: Copy to `~/.serena/contexts/[name].yml` to customize
+**New semantic edge / analysis:**
+- Add a leaf subpackage under `internal/semantic/` (stdlib + tree-sitter only for
+  leaf boundaries, mirroring `minhash`/`relatedidx`/`dataflow`), emit facts through
+  the extract seam, then wire edge emission in `internal/daemon/semantic_wiring.go`.
+- Respect the import boundaries enforced by the `vet-*` gates.
 
-**New Mode:**
-- Definition: `src/serena/resources/config/modes/[name].yml`
-  - Provide Jinja2 prompt template, tool inclusion/exclusion, description
-- Loading: Modes auto-discovered from `modes/` directory
-- Usage: Reference by name in modes list: `--mode [name]`
-- User override: Copy to `~/.serena/modes/[name].yml` to customize
+**New architectural invariant:**
+- Author a `go/analysis` Analyzer under `internal/lint/<name>/`, wrap it in a
+  `cmd/vet-<name>/` singlechecker binary, and wire it into `make vet`.
 
-**Utilities & Helpers:**
-- Shared utility functions: `src/serena/util/`
-- LSP-specific utilities: `src/solidlsp/util/`
-- Tool-shared helpers: Module-level functions in `src/serena/tools/tools_base.py`
+**Configuration / profiles:**
+- Config keys: `internal/config/`. Profile/mode definitions: `internal/profile/`.
 
 ## Special Directories
 
-**`src/serena/jetbrains/`:**
-- Purpose: JetBrains IDE plugin integration
-- Generated: Contains generated proxy code for IDE communication
-- Committed: Yes, part of source control
+**`api/proto/serena/v1/`:**
+- Purpose: gRPC IPC proto between forwarder client and daemon (`StreamMCP`).
+- Lineage: the `serena/v1` package-directory name is a **retained wire-format
+  lineage artifact** (Phase 52-03), NOT residue — renaming it would break the wire.
+- Committed: yes (`ipc.proto` + generated `ipc.pb.go`, `ipc_grpc.pb.go`).
 
-**`src/serena/generated/`:**
-- Purpose: Auto-generated code (if any)
-- Generated: Likely empty or minimal
-- Committed: Depends on generation strategy
+**`protocol/gen/`:**
+- Purpose: generated LSP 3.17 Go types (324 structs, 216 union types).
+- Generated: by `cmd/lspgen` from `protocol/metaModel.json` + `protocol/patch/`.
+- Committed: yes; do not hand-edit.
 
-**`test/resources/repos/`:**
-- Purpose: Sample projects for language-specific testing
-- Contains: Real (small) code samples in each language
-- Generated: No; hand-written test fixtures
-- Committed: Yes; part of test suite
+**`tools/dspy-tune/`:**
+- Purpose: dev-time-only Python DSPy tuning harness.
+- Shipped: NO — not in the binary, not on the runtime path; uses `uv`/`uvx`,
+  `.venv/` git-ignored. Import-isolated from runtime by `vet-tools-quarantine`.
 
-**`.serena/memories/`:**
-- Purpose: Project-local persistent memories
-- Generated: Yes; created on first memory write
-- Committed: Yes; part of project history (user-managed content)
+**`bench/`:**
+- Purpose: milestone benchmark harness (291 `.go` files) — SWE-bench,
+  Multi-SWE-bench, Terminal-Bench, aider-polyglot, repobench, crosscodeeval.
+- Container-backed: engine-agnostic, auto-detects Podman or Docker.
+- Committed: yes; exercised via `cmd/helix-bench`.
 
-**`~/.serena/`:**
-- Purpose: User global Serena data
-- Generated: Yes; created on first run
-- Committed: No; user-specific (per system)
+**`docs/`:**
+- Purpose: CURRENT reference docs (`edge-types.md`, `type-resolution.md`,
+  `runbooks/`), refreshed in v2.13.
+- Out of scope for this map; reference only.
 
-**`~/.serena/solidlsp/`:**
-- Purpose: Language server runtime dependencies cache
-- Generated: Yes; auto-downloaded on first language server startup
-- Committed: No; built from declared dependencies
-
----
-
-*Structure analysis: 2026-04-07*
+**`deploy/grafana/`:**
+- Purpose: Grafana dashboards for the `internal/obs` RED metrics.
+- Committed: yes.

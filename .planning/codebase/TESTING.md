@@ -1,484 +1,335 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-07-01
 
 ## Test Framework
 
 **Runner:**
-- pytest 8.4.1
-- Config: `pyproject.toml` with `addopts = "--snapshot-patch-pycharm-diff"`
-- Run commands:
+- Go's built-in `go test`. No external test runner.
+- Run commands (CLAUDE.md "Go Development Commands", `Makefile`):
   ```bash
-  uv run poe test                    # Run all tests (uses PYTEST_MARKERS env var)
-  uv run poe test -m "python or go"  # Run specific language tests
-  uv run poe test -m vue             # Run Vue tests
-  uv run poe test -m snapshot        # Run snapshot tests only
+  go test ./...            # run all Go tests
+  go test ./... -count=1   # uncached (CI uses this; .github/workflows/go-test.yml)
+  make test                # == `vet` + `go test ./...` (Makefile:17-18)
+  make vet                 # go vet ./... + the 7 project vettools (Makefile:55)
   ```
+- `make test` depends on `make vet`, so the architectural gates run BEFORE the
+  test binaries (`test: vet` in `Makefile:17`).
 
 **Assertion Library:**
-- Built-in pytest assertions (`assert`)
-- Snapshot testing via syrupy 4.9.1: `assert actual == snapshot`
-- Comparison utilities from conftest helpers
+- `github.com/stretchr/testify v1.11.1` (`go.mod`). `require.*` (fail-fast) and
+  `assert.*` (continue). Verified in use across **83** internal test files; top
+  calls tree-wide: `require.NoError` (693), `assert.Equal` (575),
+  `assert.Contains` (247), `assert.True` (198), `require.NotNil` (129).
+- Plain `t.Fatalf`/`t.Errorf` are also used directly (e.g. golden-file mismatch
+  reporting in `internal/semantic/extract/testutil/golden.go`, scenario-count
+  guards in provider tests).
 
-**Test Markers:**
-Available pytest markers for selective testing:
-- Language markers: `python`, `go`, `java`, `rust`, `typescript`, `vue`, `php`, `perl`, `powershell`, `csharp`, `elixir`, `terraform`, `clojure`, `swift`, `bash`, `ruby`, `ruby_solargraph`, `cpp`, `csharp`, `fsharp`, `yaml`, `julia`, `fortran`, `haskell`, `toml`, `matlab`, `systemverilog`, `hlsl`, `lean4`, `solidity`, `ansible`, `kotlin`, `groovy`, `zig`, `lua`, `luau`, `nix`, `dart`, `erlang`, `ocaml`, `scala`, `al`, `rego`, `markdown`, `pascal`, `r`, `elm`
-- `snapshot` - for symbolic editing operation tests
-- `slow` - tests requiring multiple Expert instances with ~60-90s startup time
+**Test Selectors:**
+- No custom test-tag/marker DSL. Selection is by package path and `-run <regex>`:
+  ```bash
+  go test -count=1 ./internal/semantic/dataflow/... ./internal/daemon/...
+  HELIX_BIN=/tmp/helix go test -run TestCLI_E2E_InBody ./internal/cli/
+  ```
+- Build tags gate platform/heavy paths, e.g. `//go:build !windows` on the
+  real-binary E2E files (`internal/cli/cli_type_resolution_e2e_test.go:1`).
+- `testing.Short()` guards the heaviest E2E (e.g. `TestE2E_LiveEditFiresPreciseDiff`
+  in `internal/semantic/live/handler/handler_diff_e2e_test.go` skips under `-short`).
 
 ## Test File Organization
 
-**Location Pattern:**
-- Language-specific tests: `test/solidlsp/<language>/test_<domain>.py`
-  - Example: `test/solidlsp/python/test_python_basic.py`
-  - Example: `test/solidlsp/typescript/test_typescript_basic.py`
-- Serena agent tests: `test/serena/test_<domain>.py`
-  - Example: `test/serena/test_serena_agent.py`
-  - Example: `test/serena/test_symbol_editing.py`
-- Utility tests: `test/serena/util/test_<domain>.py`
-  - Example: `test/serena/util/test_file_system.py`
+**Location Pattern (Go co-location convention):**
+- Tests live beside the code they test as `<name>_test.go` in the SAME package
+  directory — there is no separate `test/` tree. **590** `*_test.go` files across
+  `internal/` + `cmd/` + `bench/` + `protocol/` + `api/` (verified 2026-07-01;
+  429 under `internal/` alone).
+- Package-internal (white-box) tests share the package (`package fuzzy`); external
+  (black-box) tests use `package <name>_test` (e.g. `package cli_test` in the CLI
+  E2E files, `package handler_test` in the live-handler tests).
+- `export_test.go` files expose unexported test seams within a package without
+  widening the public API (e.g. `internal/semantic/live/handler/export_test.go`
+  exports `LastRecorderSnapshotForTest`).
 
 **Naming:**
-- Test files: `test_<domain>.py`
-- Test classes: `Test<Feature>` (PascalCase): `TestPythonLanguageServerBasics`, `TestProjectBasics`
-- Test methods: `test_<specific_scenario>` (snake_case): `test_request_references_user_class`, `test_retrieve_content_around_line`
+- Test files: `<name>_test.go`; E2E oracles: `*_e2e_test.go`
+  (`internal/cli/cli_e2e_test.go`, `cli_type_resolution_e2e_test.go`,
+  `cli_dataflow_inbody_e2e_test.go`, `cli_sec_e2e_test.go`).
+- Test funcs: `TestFeature_Scenario` (`TestSweepExact`,
+  `TestResolveTypeEdges_PositiveCommitsRealEdge`, `TestCLI_E2E_CTypeResolution`).
+- Subtests via `t.Run(name, ...)` inside table loops.
 
-**Directory structure:**
+**Directory shape (representative):**
 ```
-test/
-├── conftest.py                    # Global fixtures and utilities
-├── resources/
-│   ├── repos/                     # Test repositories per language
-│   │   ├── python/test_repo/
-│   │   ├── typescript/test_repo/
-│   │   └── go/test_repo/
-│   └── __snapshots__/             # Snapshot test outputs
-├── solidlsp/
-│   ├── conftest.py                # Language-specific fixture utilities
-│   ├── python/
-│   │   ├── test_python_basic.py
-│   │   ├── test_python_auto_update.py
-│   │   └── __init__.py
-│   └── typescript/
-│       ├── test_typescript_basic.py
-│       └── __init__.py
-└── serena/
-    ├── __snapshots__/             # Snapshot outputs for serena tests
-    ├── test_serena_agent.py
-    ├── test_symbol_editing.py
-    ├── util/
-    │   └── test_file_system.py
-    └── config/
-        └── test_serena_config.py
+internal/
+  fuzzy/
+    strategies.go
+    strategies_test.go            # table-driven, testify
+  semantic/extract/
+    golang/
+      provider.go
+      provider_test.go            # iterates testdata scenarios
+      stable_id_test.go
+      testdata/<scenario>/before.go + expected.json
+    testutil/golden.go            # shared golden-compare helper
+  cli/
+    cli_e2e_test.go               # HELIX_BIN-gated real-binary harness
+    cli_type_resolution_e2e_test.go
+  semantic/live/handler/
+    handler.go
+    export_test.go                # test seams
+    handler_diff_e2e_test.go
 ```
 
 ## Test Structure
 
-**Suite Organization (from `test_python_basic.py`):**
-```python
-import os
-import pytest
-
-from serena.project import Project
-from serena.util.text_utils import LineType
-from solidlsp import SolidLanguageServer
-from test.solidlsp.conftest import PYTHON_BACKEND_LANGUAGES, format_symbol_for_assert, has_malformed_name, request_all_symbols
-
-@pytest.mark.python
-class TestPythonLanguageServerBasics:
-    """Test basic functionality of the language server."""
-
-    @pytest.mark.parametrize("language_server", PYTHON_BACKEND_LANGUAGES, indirect=True)
-    def test_request_references_user_class(self, language_server: SolidLanguageServer) -> None:
-        """Test request_references on the User class."""
-        # Arrange: Get the symbol
-        file_path = os.path.join("test_repo", "models.py")
-        symbols = language_server.request_document_symbols(file_path).get_all_symbols_and_roots()
-        user_symbol = next((s for s in symbols[0] if s.get("name") == "User"), None)
-        
-        # Act: Request references
-        sel_start = user_symbol["selectionRange"]["start"]
-        references = language_server.request_references(file_path, sel_start["line"], sel_start["character"])
-        
-        # Assert: Verify results
-        assert len(references) > 1, "User class should be referenced in multiple files"
+**Table-driven, from `internal/fuzzy/strategies_test.go` (real, verbatim shape):**
+```go
+func TestSweepExact(t *testing.T) {
+	tests := []struct {
+		name  string
+		whole []string
+		part  []string
+		want  []int
+	}{
+		{"single hit", []string{"a", "b", "c", "d"}, []string{"b", "c"}, []int{1}},
+		{"ambiguous 2 hits", []string{"x", "y", "z", "x", "y"}, []string{"x", "y"}, []int{0, 3}},
+		{"no hit", []string{"a", "b", "c"}, []string{"z"}, nil},
+		{"1-line at EOF (off-by-one)", []string{"a", "b", "c"}, []string{"c"}, []int{2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, sweepExact(tt.whole, tt.part))
+		})
+	}
+}
 ```
 
 **Patterns:**
-- Pytest marker on class: `@pytest.mark.python`
-- Parametrized fixtures: `@pytest.mark.parametrize("language_server", PYTHON_BACKEND_LANGUAGES, indirect=True)`
-- Docstring on test method explaining what is being tested
-- Arrange-Act-Assert pattern (explicit or implicit)
-- Comments only where clarity is needed
+- A `[]struct{ name; inputs...; want }` slice, then `for _, tt := range tests`
+  with `t.Run(tt.name, ...)`. Cases name their edge (off-by-one, ambiguity,
+  empty input) rather than the happy path only.
+- `require.*` for preconditions that must hold before the assertion is meaningful
+  (a nil-check that would otherwise panic); `assert.*` for the value under test.
+- E2E oracles assert the DIFFERENTIAL: the positive arm yields exactly one edge
+  (asserted first), the negative arm yields zero — anti-vacuity
+  (`internal/cli/cli_type_resolution_e2e_test.go` `cTypeSeed` carries both arms).
 
 ## Fixtures
 
-**Scope Hierarchy (from `test/conftest.py`):**
+**Go has no fixture-injection framework; setup is helper constructors + `t.Cleanup`.**
 
-**Session-level:**
-```python
-@pytest.fixture(scope="session")
-def resources_dir() -> Path:
-    """Path to the test resources directory."""
-    current_dir = Path(__file__).parent
-    return current_dir / "resources"
+**Real-binary E2E fixture (`internal/cli/cli_e2e_test.go`):**
+```go
+func newE2EFixture(t *testing.T, runID string, daemonOpts ...sandbox.DaemonOption) *e2eFixture {
+	t.Helper()
+	helixBin := resolveHelixBin()          // HELIX_BIN env, else `helix` on PATH
+	if helixBin == "" {
+		t.Skip("helix binary not resolvable (set HELIX_BIN or 'go build -o helix ./cmd/helix'); skipping E2E oracle")
+	}
+	// stands up a sandbox + real daemon via internal/eval/sandbox.StartDaemon;
+	// daemon reaped (h.Kill) and sandbox removed (sb.Cleanup) via t.Cleanup so
+	// no orphan process survives a failed run.
+	...
+}
 ```
+- `resolveHelixBin()` prefers `HELIX_BIN` (points at a freshly-built binary
+  without polluting PATH), then falls back to `helix` on PATH; returns `""` → the
+  caller `t.Skip`s. Same convention as the bench harness.
+- Cleanup is registered with `t.Cleanup` (not `defer` in a fixture), so teardown
+  runs even on subtest failure.
 
-**Module-level (reused across test module):**
-```python
-@pytest.fixture(scope="module")
-def language_server(request: LanguageParamRequest):
-    """Create a language server instance configured for the specified language."""
-    if not hasattr(request, "param"):
-        raise ValueError("Language parameter must be provided via pytest.mark.parametrize")
-    
-    language = request.param
-    with start_default_ls_context(language) as ls:
-        yield ls
-```
-
-**Context managers:**
-```python
-@contextmanager
-def start_ls_context(
-    language: Language,
-    repo_path: str | None = None,
-    ignored_paths: list[str] | None = None,
-    trace_lsp_communication: bool = False,
-    ls_specific_settings: dict[Language, dict[str, Any]] | None = None,
-    solidlsp_dir: Path | None = None,
-) -> Iterator[SolidLanguageServer]:
-    ls = _create_ls(language, repo_path, ignored_paths, trace_lsp_communication, ls_specific_settings, solidlsp_dir)
-    log.info(f"Starting language server for {language} {repo_path}")
-    ls.start()
-    try:
-        log.info(f"Language server started for {language} {repo_path}")
-        yield ls
-    finally:
-        log.info(f"Stopping language server for {language} {repo_path}")
-        try:
-            ls.stop(shutdown_timeout=5)
-        except Exception as e:
-            log.warning(f"Warning: Error stopping language server: {e}")
-            # try to force cleanup
-            if hasattr(ls, "server") and hasattr(ls.server, "process"):
-                try:
-                    ls.server.process.terminate()
-                except:
-                    pass
-```
-
-**Parametrized Fixtures (indirect=True):**
-```python
-@pytest.fixture(scope="module")
-def project(request: LanguageParamRequest, repo_root_override: str | None = None) -> Iterator[Project]:
-    """Create a Project for the specified language.
-
-    This fixture requires a language parameter via pytest.mark.parametrize:
-
-    Example:
-    ```
-    @pytest.mark.parametrize("project", [Language.PYTHON], indirect=True)
-    def test_python_project(project: Project) -> None:
-        # Use the Python project to test something
-        pass
-    ```
-    """
-    if not hasattr(request, "param"):
-        raise ValueError("Language parameter must be provided via pytest.mark.parametrize")
-    language = request.param
-    with project_context(language, repo_root_override) as project:
-        yield project
-```
-
-**Test fixture from Serena agent tests (from `test/serena/test_serena_agent.py`):**
-```python
-@pytest.fixture
-def serena_config():
-    config = SerenaConfig(gui_log_window=False, web_dashboard=False, log_level=logging.ERROR)
-    
-    # Create test projects for all supported languages
-    test_projects = []
-    for language in [Language.PYTHON, Language.GO, ...]:
-        repo_path = get_repo_path(language)
-        if repo_path.exists():
-            project_name = f"test_repo_{language}"
-            project = Project(
-                project_root=str(repo_path),
-                project_config=ProjectConfig(...),
-                serena_config=config,
-            )
-            test_projects.append(RegisteredProject.from_project_instance(project))
-    
-    config.projects = test_projects
-    return config
-
-@contextmanager
-def project_file_modification_context(serena_agent: SerenaAgent, relative_path: str) -> Iterator[None]:
-    """Context manager to modify a project file and revert the changes after use."""
-    project = serena_agent.get_active_project()
-    file_path = os.path.join(project.project_root, relative_path)
-    
-    # Read the original content
-    original_content = read_project_file(project, relative_path)
-    
-    try:
-        yield
-    finally:
-        # Revert to the original content
-        with open(file_path, "w", encoding=project.project_config.encoding) as f:
-            f.write(original_content)
-```
+**Test seams instead of fixtures for DI (`export_test.go` pattern):**
+- `internal/semantic/live/handler/export_test.go` exports
+  `LastRecorderSnapshotForTest(h)` and `DiffSymbolsForTest(...)`; the handler
+  captures its recorder snapshot into `h.lastRecorderSnapshot` at commit time
+  (`handler.go:467-470`) purely so the E2E can observe it.
+- `internal/daemon/daemon.go` exposes `sessionRunner`/`serveSession` seams (nil in
+  production, stubbed in tests to bypass the MCP runtime); `SetEnrichFn`,
+  `SetCollectCandidatePathsHook` are post-init wiring hooks tests toggle.
 
 ## Mocking
 
-**Framework:** pytest fixtures + context managers (no external mocking library required)
+**Framework:** none. There is NO `gomock`, `mockery`, or `testify/mock` in
+`go.mod` (verified — 0 matches). Tests run against real subsystems or hand-written
+fakes/seams.
 
 **Patterns:**
-```python
-# Language server context setup (fixtures handle lifecycle)
-with start_ls_context(Language.PYTHON) as ls:
-    # Test language server operations
-    symbols = ls.request_document_symbols("test_repo/models.py")
+- **Real HTTP boundary via `net/http/httptest`** — the upgrade client's network
+  path is tested against a real in-process server, not a mock
+  (`internal/upgrade/api_test.go`, `upgrade_test.go`, `verify_test.go`:
+  `httptest.NewServer(...)`; 12 internal files use `httptest`). This exercises the
+  actual redirect/auth-strip/rate-limit/`Retry-After` logic.
+- **Real daemon subprocess** for CLI E2E (`newE2EFixture` above) — the shipped
+  binary is driven as a subprocess, never a fake CLI.
+- **Interface seams** injected only where a real dependency is unavailable or
+  non-deterministic (the `export_test.go` / `Set*Hook` seams above).
 
-# Project context (fixtures handle cleanup)
-with project_context(Language.PYTHON) as project:
-    # Test project operations
-    content = project.read_file("test_repo/models.py")
-
-# File modification tracking and revert
-with project_file_modification_context(serena_agent, "test_repo/models.py"):
-    # Modify file
-    serena_agent.activate_project("test_repo_python")
-    # File reverted after context exits
-```
-
-**What to Mock:**
-- Language server lifecycle: use `start_ls_context()` or `start_default_ls_context()`
-- Project state: use `project_context()` or `project_with_ls_context()`
-- File modifications: use `project_file_modification_context()` to ensure cleanup
-
-**What NOT to Mock:**
-- Actual language server operations (test against real test repositories)
-- File system operations (use real `test/resources/repos/` test repositories)
-- Symbol parsing (test with actual LSP servers)
-- Tool execution (integration tests use real tools)
+**What is NOT mocked:**
+- The `helix` binary (real subprocess), the daemon, the semantic store (real
+  `*Store` in `TestResolveTypeEdges_*`), tree-sitter extraction (real providers
+  over `testdata/` fixtures), the HTTP upgrade path (`httptest`).
 
 ## Test Data & Fixtures
 
-**Test Repositories:**
-Located in `test/resources/repos/<language>/test_repo/`:
-- `test/resources/repos/python/test_repo/` - Contains models.py, services.py, etc.
-- `test/resources/repos/typescript/test_repo/` - Contains index.ts with DemoClass, etc.
-- `test/resources/repos/go/test_repo/` - Go package structure
+**Per-package `testdata/` directories** (Go's conventional, `go`-ignored fixture
+dir). 47 `testdata/` dirs across `internal/` + `bench/` (verified). Real ones:
+- **Per-language extractor goldens:** `internal/semantic/extract/<lang>/testdata/`
+  for c, cpp, csharp, golang, java, kotlin, php, python, ruby, rust, typescript.
+  Each scenario is a directory holding `before.<ext>` (+ optional `after.<ext>`)
+  and an `expected.json` golden (e.g.
+  `internal/semantic/extract/golang/testdata/function_basic/{before.go,expected.json}`;
+  ~44 scenarios: `call_reference`, `generic_type_param`, `rename_churns_id`,
+  `whitespace_edit_preserves_id`, ...).
+- **Type-resolver goldens:** `internal/semantic/types/{golang,python,typescript}/testdata`.
+- **Graph/PageRank goldens:** `internal/graph/testdata`, `internal/semantic/graph/testdata`,
+  `internal/semantic/cluster/testdata` (`golden_*.txt`).
+- **Lint analyzer fixtures:** `internal/lint/<gate>/testdata/` for the 7 vet gates
+  (analysistest-style: source files that must or must not trigger the analyzer).
+- **Bench fixtures:** `bench/languages/<lang>/testdata`, `bench/evaluators/*/testdata`,
+  `bench/datasets/*/testdata`, `bench/container/testdata`, `bench/schema/testdata`.
+- **Repo/skill fixtures:** `internal/skill/repomap/testdata`, `internal/upgrade/testdata`,
+  `internal/semantic/{live,lspenrich,compact}/testdata`; Java LS fixtures under
+  `testdata/fixtures/java/` (referenced by the CI warm-cache key).
 
-**Fixture utilities (from `test/solidlsp/conftest.py`):**
-```python
-PYTHON_BACKEND_LANGUAGES = [Language.PYTHON, Language.PYTHON_TY]
-
-def has_malformed_name(
-    symbol: UnifiedSymbolInformation,
-    whitespace_allowed: bool = False,
-    period_allowed: bool = False,
-    colon_allowed: bool = False,
-    brace_allowed: bool = False,
-    parenthesis_allowed: bool = False,
-    comma_allowed: bool = False,
-) -> bool:
-    """Check if symbol name contains forbidden characters."""
-    forbidden_chars: list[str] = []
-    if not whitespace_allowed:
-        forbidden_chars.append(" ")
-    # ... more forbidden chars
-    return any(separator in symbol["name"] for separator in forbidden_chars)
-
-def request_all_symbols(language_server: SolidLanguageServer) -> list[UnifiedSymbolInformation]:
-    """Recursively get all symbols from language server."""
-    result: list[UnifiedSymbolInformation] = []
-    
-    def visit(symbol: UnifiedSymbolInformation) -> None:
-        result.append(symbol)
-        for child in symbol.get("children", []):
-            visit(child)
-    
-    symbols = language_server.request_full_symbol_tree()
-    for symbol in symbols:
-        visit(symbol)
-    
-    return result
-
-def format_symbol_for_assert(symbol: UnifiedSymbolInformation) -> str:
-    """Format symbol for test assertion error messages."""
-    relative_path = symbol.get("location", {}).get("relativePath", "<unknown>")
-    try:
-        kind = SymbolKind(symbol["kind"]).name
-    except ValueError:
-        kind = str(symbol["kind"])
-    return f"{symbol['name']} [{kind}] ({relative_path})"
-```
+**Shared golden helper (`internal/semantic/extract/testutil/golden.go`):**
+- `NormalizeForGolden(ef)` produces deterministic JSON (sorts records by
+  (file, range, kind, name), strips absolute paths to relative, two-space indent).
+- `GoldenCompare(t, root, scenario, actual)` reads `testdata/<scenario>/expected.json`
+  and diffs; `ListScenarios`/`FindBefore`/`FindAfter` discover scenarios by the
+  presence of a `before.*` file.
+- A dev-only `-update` flag (`var Update = flag.Bool("update", ...)`) regenerates
+  the goldens from the current emit; **CI runs WITHOUT it**, so the goldens are the
+  regression net.
 
 ## Coverage
 
-**Requirements:** Not enforced
+**Requirements:** Not enforced. No `-cover`/`-coverprofile` in `Makefile` or any
+`.github/workflows/*.yml` (verified — 0 matches). Coverage is a posture (dense
+co-located tests + golden regression + real-binary E2E), not a numeric gate.
 
-**View Coverage:**
+**View coverage locally:**
 ```bash
-# Coverage tracking through pytest, but no explicit pytest-cov configuration
-# Tests are extensive with markers for language-specific and feature-specific testing
+go test ./... -coverprofile=cover.out && go tool cover -func=cover.out
 ```
 
 ## Test Types
 
-**Unit Tests:**
-- Scope: Individual tool methods, utility functions, simple operations
-- Approach: Test single function with real data but isolated from side effects
-- Example: `test_retrieve_content_around_line()` - tests line retrieval edge cases
+**Unit / white-box:** table-driven tests in-package over pure functions
+(`internal/fuzzy/strategies_test.go` `sweepExact`/`sweepWhitespace`/`sweepIndentFlex`;
+extractor stable-ID tests `internal/semantic/extract/golang/stable_id_test.go`).
 
-**Integration Tests:**
-- Scope: Language server operations, project-wide symbol navigation
-- Approach: Real language servers start via fixtures, test real file parsing
-- Example: `test_request_references_user_class()` - uses real LSP to find references
-- Language-specific: Parametrized across language variants (Python, Python-TY, etc.)
+**Golden regression:** deterministic-emit comparisons against committed
+`expected.json` / `golden_*.txt` (extractor providers, PageRank, clustering).
 
-**Symbolic Editing Tests:**
-- Framework: pytest with syrupy snapshots
-- Location: `test/serena/test_symbol_editing.py`
-- Marker: `@pytest.mark.snapshot`
-- Pattern: Modify code symbols, assert output matches snapshot
-- Example: Renaming class, editing method body, safe deletion
+**In-process integration:** real subsystem, no subprocess — e.g.
+`TestResolveTypeEdges_PositiveCommitsRealEdge` runs the resolver against a real
+`*Store` and asserts exactly one `RESOLVES_TO` edge; `TestE2E_LiveEditFiresPreciseDiff`
+drives a real edit through `Handler.populateRecorderForFile → tryFullDiff →
+diffSymbols → ComputeGraphRepair`.
+
+**Real-binary E2E:** the `HELIX_BIN`-gated `internal/cli/*_e2e_test.go` oracles
+drive the shipped `helix` binary as a subprocess against a live daemon
+(`TestCLI_E2E_OneShot`, `TestCLI_DualRunParity`, `TestCLI_E2E_CTypeResolution`,
+`TestCLI_E2E_InBodyDataFlow`/`InBodyMultiHop`). These prove the agent-facing CLI
+surface end-to-end (parse → gRPC `StreamMCP` → daemon → result).
+
+**Architectural gate tests:** the 7 `vet-*` singlecheckers (`cmd/vet-*` wrapping
+`internal/lint/*`) run under `make vet` as part of `make test`; each has its own
+`internal/lint/<gate>/*_test.go` + `testdata/` proving it flags the forbidden
+import edge and passes the allowed ones.
+
+**Milestone bench harness:** `bench/` (291 `.go` files) is a separate evaluator
+stack (SWE-bench, Multi-SWE-bench, Terminal-Bench, aider-polyglot, repobench,
+crosscodeeval), container-backed via Podman/Docker auto-detect. Its hermetic
+smoke (`make bench-quick`, scripted agent, no API key, ≤90s/≤5m CI cap) is the only
+bench path in PR-gating CI; the full `make bench` is nightly/on-demand only.
 
 ## Common Patterns
 
-**Async Testing:**
-Not heavily used; language servers handle async internally via LSP protocol.
+**Subprocess-with-cleanup:** stand up a real daemon/binary in a helper, register
+teardown with `t.Cleanup` so orphans never survive a failed test
+(`newE2EFixture`).
 
-**Error Testing:**
-```python
-# Symbol not found scenario
-user_symbol = next((s for s in symbols[0] if s.get("name") == "User"), None)
-if not user_symbol or "selectionRange" not in user_symbol:
-    raise AssertionError("User symbol or its selectionRange not found")
-
-# Edge cases
-first_line_with_context_around = project.retrieve_content_around_line(file_path, 0, 2, 1)
-assert len(first_line_with_context_around.lines) <= 4  # Should have at most 4 lines
-for line in first_line_with_context_around.lines:
-    if line.line_number == 0:
-        assert line.match_type == LineType.MATCH
-    elif line.line_number < 0:
-        assert line.match_type == LineType.BEFORE_MATCH
-    else:
-        assert line.match_type == LineType.AFTER_MATCH
+**Clean skips, not silent broken-test markers:** tool-availability gates skip with a reason
+rather than masking a failure —
+```go
+if _, err := exec.LookPath("gopls"); err != nil {
+	t.Skip("gopls not installed, skipping LS-backed behavioral chain oracle")
+}
 ```
+(`internal/cli/cli_e2e_test.go` `requireGoplsE2E`); the `HELIX_BIN` gate skips the
+same way. A skipped LS test is "environment lacks the LS", never "known broken".
 
-**Skip Conditions:**
-```python
-# Language-specific skips
-Language.CLOJURE: [
-    pytest.mark.clojure,
-    pytest.mark.skipif(not is_clojure_cli_available(), reason="clojure CLI is not installed"),
-]
+**Differential anti-vacuity:** a single fixture carries a positive arm and a
+negative arm so an assertion can prove BOTH that the wanted edge appears AND that
+an unwanted one does not (`cTypeSeed`: `struct Foo`-typed param → one `has_type`;
+primitive param → zero).
 
-# Environment skips
-Language.KOTLIN: [
-    pytest.mark.kotlin,
-    pytest.mark.skipif(is_ci, reason="Kotlin LSP JVM crashes on restart in CI"),
-]
+**Determinism assertions:** re-run / re-index and assert byte-identical output
+(sorted-before-range drivers; `TestResolveTypeEdges_Deterministic`; the golden
+files themselves encode a canonical order).
 
-# Tool availability skips
-Language.LEAN4: [
-    pytest.mark.lean4,
-    pytest.mark.skipif(_sh.which("lean") is None, reason="Lean is not installed"),
-]
-```
+**Uncached verification:** milestone audits re-run with `-count=1` against a
+freshly-built binary to defeat the stale-binary / test-cache hazard
+(`HELIX_BIN=<fresh> go test -count=1 ...`).
 
 ## Snapshot Testing
 
-**Framework:** syrupy 4.9.1
-
-**File Location:** `test/serena/__snapshots__/test_symbol_editing.ambr`
-
-**Pattern:**
-```python
-from syrupy import SnapshotAssertion
-
-def test_example_edit(snapshot: SnapshotAssertion, serena_agent) -> None:
-    # Perform operations
-    result = serena_agent.some_operation()
-    
-    # Assert against snapshot
-    assert result == snapshot
-```
-
-**Usage:** Symbolic editing operations (rename, edit body, delete) generate complex multi-file changes stored in snapshots for regression detection.
+**Golden files ARE the snapshots** (no syrupy/`.ambr` equivalent — this is Go).
+Two shapes:
+- **JSON goldens:** `testdata/<scenario>/expected.json` (+ `expected_after.json`
+  when an `after.<ext>` fixture exists), compared via
+  `testutil.GoldenCompare`/`GoldenCompareAfter` after `NormalizeForGolden`
+  canonicalizes the emit.
+- **Text goldens:** `golden_*.txt` for deterministic numeric/graph output
+  (`internal/graph/testdata/pagerank/golden_{uniform,personalized,tiebreak}.txt`;
+  `internal/semantic/cluster/testdata/golden_{single_component,three_components,isolated_nodes}.txt`).
+- Regeneration is the explicit dev-only `-update` flag on the extractor providers
+  (`internal/semantic/extract/testutil/golden.go`); CI never passes it, so a diff
+  is a hard failure.
 
 ## Language-Server Tests Organization
 
-**Test Repository Aliases (from `conftest.py`):**
-```python
-_LANGUAGE_REPO_ALIASES: dict[Language, Language] = {
-    Language.CPP_CCLS: Language.CPP,
-    Language.PHP_PHPACTOR: Language.PHP,
-    Language.PYTHON_JEDI: Language.PYTHON,
-    Language.RUBY_SOLARGRAPH: Language.RUBY,
-    Language.PYTHON_TY: Language.PYTHON,
-}
-```
-
-Multiple language server implementations use same test repository.
-
-**Test Markers per Language:**
-```python
-_LANGUAGE_PYTEST_MARKERS: dict[Language, list[MarkDecorator | Mark]] = {
-    Language.CLOJURE: [pytest.mark.clojure, pytest.mark.skipif(...)],
-    Language.PYTHON: [pytest.mark.python],
-    Language.RUST: [pytest.mark.rust],
-    Language.TYPESCRIPT: [pytest.mark.typescript],
-    # ... etc for all 40+ languages
-}
-```
-
-**Multi-language testing:**
-```python
-@pytest.mark.parametrize("language_server", [Language.PYTHON, Language.TYPESCRIPT], indirect=True)
-def test_multiple_languages(language_server: SolidLanguageServer) -> None:
-    # This test will run once for each language
-    pass
-```
+Helix's product IS an LSP orchestrator, so several E2E oracles need a real language
+server on PATH and gate on it:
+- **gopls** — the Go LSP-backed behavioral chains (`requireGoplsE2E`,
+  `TestCLI_DualRunParity` `needsLS: true` rows for `go_to_definition` /
+  `find_references`). Skips cleanly when gopls is absent.
+- **jdtls** (Eclipse JDT.LS) — the Java integration path. CI installs a pinned
+  jdtls (`JDTLS_VERSION: 1.57.0`, requires Java 21) via a self-contained wrapper
+  and caches a warm workspace keyed on `testdata/fixtures/java/**`
+  (`.github/workflows/go-test.yml`); `make bench-jdtls-warm` /
+  `make clean-jdtls-cache` manage warm/cold runs locally.
+- The 11-language type-resolution / dataflow E2E fixtures embed source inline
+  (`cTypeSeed`) and drive them through the daemon's own extractor/index path
+  (tree-sitter), not per-language external LSs, so they run without installing 11
+  language servers.
 
 ## CI/Environment Handling
 
-**CI Detection (from `conftest.py`):**
-```python
-is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-is_windows = platform.system() == "Windows"
-```
+**Workflows (`.github/workflows/`):**
+- `go-test.yml` — PR/push gate on `main`: installs jdtls + Java 21, runs
+  `make vet` (go vet + the project vettools), `go test ./... -count=1`, the three
+  drift gates (`helix-cligen --check`, `docgen --check`, `helix-refgen --check`),
+  `make eval-quick` (in-process scripted-agent harness, ≤2m), plus warn-only
+  hygiene steps. A grep gate forbids referencing the LLM judge in any workflow
+  (EVAL-07).
+- `bench.yml` — `bench-quick` hermetic smoke on PRs (≤5m, no secrets); full
+  `bench` nightly/`workflow_dispatch` only. `permissions: {contents: read}`.
+- `bench-mirror.yml` — publishes the cosign-signed GHCR bench-image mirror.
+- `release.yml` — split-runner build (ubuntu-22.04 zig-cross for linux+windows,
+  macos-14 native darwin) + merge-job cosign keyless attestation over all 6
+  archives; per-target within-runner reproducibility (Pass-1 ≡ Pass-2 sha256).
+- `codeql.yml` — CodeQL static analysis. `codespell.yml` — spelling
+  (config in the codespell workflow's referenced settings, not a runtime concern).
 
-**Language Availability (from `conftest.py`):**
-```python
-def _determine_disabled_languages() -> list[Language]:
-    """Determine which language tests should be disabled (based on the environment)"""
-    result: list[Language] = []
-    
-    # Disable Java tests if not available
-    java_tests_enabled = True
-    if not java_tests_enabled:
-        result.append(Language.JAVA)
-    
-    # Disable CPP_CCLS tests if ccls is not available
-    ccls_tests_enabled = _sh.which("ccls") is not None
-    if not ccls_tests_enabled:
-        result.append(Language.CPP_CCLS)
-    
-    return result
-
-_disabled_languages = _determine_disabled_languages()
-
-def language_tests_enabled(language: Language) -> bool:
-    """Check if tests for the given language are enabled in the current environment."""
-    return language not in _disabled_languages
-```
+**Environment gates in tests:**
+- `HELIX_BIN` env → resolve/skip the real-binary E2E (`resolveHelixBin`).
+- `exec.LookPath("gopls")` / jdtls presence → skip LS-backed oracles.
+- `//go:build !windows` on the subprocess E2E files.
+- `testing.Short()` short-circuits the heaviest live-handler E2E.
+- `HELIX_TEST_LS_TIMEOUT` (CI sets `2m`) bounds cold LS startup.
 
 ---
 
-*Testing analysis: 2026-04-07*
+*Testing map: 2026-07-01 — Go tree at HEAD.*

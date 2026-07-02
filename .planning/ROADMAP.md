@@ -29,183 +29,68 @@
 - [x] **v2.11 Type-resolution depth (C-family)** -- Phases 130-134 (shipped 2026-07-01, `d43d7ce7`..`97fc4bc9`) — see `.planning/milestones/v2.11-REQUIREMENTS.md`
 - [x] **v2.12 Production wiring for the type resolvers (C-family E2E)** -- Phases 135-137 (shipped 2026-07-01) — see `.planning/milestones/v2.12-ROADMAP.md` + `.planning/milestones/v2.12-MILESTONE-AUDIT.md`
 - [x] **v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)** -- Phases 138-140 (shipped 2026-07-01) — see `.planning/milestones/v2.13-ROADMAP.md` + `.planning/milestones/v2.13-MILESTONE-AUDIT.md`
+- [x] **v2.14 Codebase-Map Re-mapping (Go tree)** -- Phases 141-143 (shipped 2026-07-01) — see `.planning/milestones/v2.14-REQUIREMENTS.md` + `.planning/milestones/v2.14-MILESTONE-AUDIT.md`
 
 ## Phases
 
-**Current: v2.13 SHIPPED (Phases 138-140) — 3/3 phases built + independently verified, MILESTONE-AUDIT PASSED.** In-body-origin DATA_FLOWS (`y := producer(); sink(y)`) is modeled, emitted at existing function+param symbol nodes (no schema change), and proven E2E through the real `helix` binary for all 11 languages, with a function-seeded multi-hop payoff. Two new Source markers: `def_use_inbody` (producer.function→consumer.param) + `def_use_return` (param→enclosing-function, the reclaimed multi-hop bridge). Red-team `agent://RedTeamV213` (PROCEED-WITH-FIXES) folded (B1 union gap: Ruby's zero-DATA_FLOWS-since-v2.9 latent bug fixed; M1-M5+m1/m2). One co-driver-approved scope call: Path B wired .rs/.kt/.php/.rb into `langFromExt` to reach 11/11 E2E (adds zero has_type edges — type resolvers stay nil-stubs). Security review PASSED (0 findings). NOT committed — commit is the co-driver's call. Prior: v2.12 shipped (`f7e5f4b3`).
+**Current: v2.14 Codebase-Map Re-mapping (Phases 141-143) — SHIPPED 2026-07-01, MILESTONE-AUDIT PASSED.** An
+assess-and-document milestone: re-mapped all 7 `.planning/codebase/*.md` files from the
+**removed pre-Go Python `serena` tree** (2026-04-07, the map's sole commit — ~13
+milestones stale) to the **current Go tree** at HEAD (85,472 non-test LOC; 24
+`internal/` packages; largest subsystem `internal/semantic/` at 30.8k LOC; 16 `cmd/`
+binaries; 51 frozen `helix` verbs). Flagged HIGH by the v2.13 MILESTONE-AUDIT.
+Documentation-only — no source change; every claim source-grounded at HEAD; residue
+clean (only labeled retained-lineage remains). Bundled the planning-integrity fix that
+regenerated this very section (the stale v2.5-era detail here is what made
+`roadmap analyze` manufacture phantom incomplete phases 121-123).
 
-### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
+> **Per-milestone phase detail is canonical in `.planning/milestones/` and per-phase
+> `CONTEXT.md`/`SUMMARY.md`, not duplicated here.** This section carries only the
+> in-flight milestone; shipped milestones are summarized under **Earlier Milestones**
+> below and linked to their `.planning/milestones/vX.Y-*` records. (Prior to v2.14
+> this section retained stale detail for already-shipped phases 115-126, which the
+> tooling mis-read as incomplete — do not reintroduce that pattern.)
 
-**Goal:** Pure-Go deterministic per-function case-1 flow summary (param → reaches-return / reaches-call(name,argPos)) via tree-sitter body walk; plumbed through the shared `FingerprintBody` seam so all 11 providers inherit it. Foundation for Phase 126 emission. Red-team-folded: case-1 only (exact syntactic dependence, no over-approximation); param identity from the AST, not symbol emission order.
+### Phase 141: Structural + Stack skeleton (MAP-01, MAP-03)
 
-### Phase 126: Arg→Param DATA_FLOWS Emission + Read Surface + Reachability
+**Goal:** Re-map `STRUCTURE.md` (current Go directory layout: 16 `cmd/` binaries, 24
+`internal/` packages with per-package purpose, `api/proto`, `protocol/{gen,patch}`,
+`bench/`, `tools/dspy-tune/`, with 4-layer mapping + LOC/scale context) and `STACK.md`
+(Go 1.25.1, CGO=1 split-runner build, direct deps from `go.mod`, no runtime Python).
+The factual skeleton the deeper files reference.
 
-**Goal:** Emit real `DATA_FLOWS` edges (caller.param → callee.param); prove they are a distinct flow signal, reachable from `helix explain-symbol-deep`, and that multi-hop source→sink reachability holds over the emitted edges. This is the whole feature — Phase 127 (propagation) collapsed into it (reachability = graph walk, no engine). Red-team-folded: callee params via emit-order adjacency (NOT the flat DEFINES heuristic); anti-mis-bind (>1 callee candidate ⇒ no edge); non-positional handling (receiver/variadic/kwargs); directed dedup; total-edge-budget bound.
+### Phase 142: Architecture + Integrations + Conventions (MAP-02, MAP-04, MAP-05)
 
-### Phase 121: Random-Indexing Engine (`internal/semantic/relatedidx/`)
+**Goal:** Re-map `ARCHITECTURE.md` (4 layers, daemon bootstrap + LIFO middleware
+stack, the `internal/semantic/` index surveyed fresh, key abstractions, entry points,
+error handling, cross-cutting concerns), `INTEGRATIONS.md` (LSP three-tier installer,
+tree-sitter grammars, gRPC IPC, sigstore, prometheus/otel, container auto-detect, LLM
+SDKs dev-time-only), and `CONVENTIONS.md` (Go naming, gofmt/vet + custom `cmd/vet-*`
+gates, typed errors, skill `init()` registration, generated-code discipline).
 
-**Goal:** Pure-Go deterministic Random-Indexing engine; context vectors over identifier/comment tokens capture semantic relatedness, distinct from MinHash's structural near-clone signal.
+### Phase 143: Concerns + Testing + integrity gate (MAP-06, MAP-07, MAP-08)
 
-### Phase 122: Fingerprint Plumbing (`SymbolFact.ContextVec`)
-
-**Goal:** Every fingerprintable symbol across all 11 languages carries an RI context vector, computed through the shared `FingerprintBody` seam.
-
-### Phase 123: Emission + Distinctness Guard + Read Surface
-
-**Goal:** Emit SEMANTICALLY_RELATED edges, prove they are a distinct edge set from SIMILAR_TO (mutation-confirmed anti-vacuity guard), and prove reachability from a `helix` verb.
-
-### Phase 120: Corpus Analysis & Easy Subset (COMPLETE)
-
-**Goal:** Filter to easy Exercism tasks and re-measure steering delta to determine if corpus difficulty is the issue.
-
-**Result:** delta=+0.0000, 0/13 easy tasks solved. Even the simplest Exercism problems (380-979 char descriptions) are beyond current agent capability. The agent terminates on `no_progress` — it cannot solve even trivially-described problems.
-
-**Recommendation:** Switch to a simpler benchmark (HumanEval, MBPP) or improve agent architecture.
-
-### Phase 119: Increase Turn Budget (COMPLETE)
-
-**Goal:** Give the agent more time to solve tasks and re-measure the steering delta.
-
-**Result:** delta=+0.0000, same as v2.5. Both arms solve 0/51 tasks even with 20 turns.
-The agent terminates on `no_progress` early — the turn budget isn't the limiting factor.
-Corpus is too hard for current agent capability.
-
-**Recommendation:** Phase 120 (Corpus Analysis) — filter to easier tasks or switch benchmarks.
-
-### Phase 115: Task-Solving Prompt + Feedback Loop
-
-**Goal:** Make the agent actually edit files and verify success — the foundation for all tuning.
-
-**Why first:** You can't tune an agent that doesn't use tools. HARNESS-01 and HARNESS-02 fix the core harness.
-
-**Requirements:**
-- HARNESS-01a: System prompt names solution file
-- HARNESS-01b: Success criterion = hidden tests pass
-- HARNESS-01c: Prose forbidden
-- HARNESS-01d: Anti-vacuity test (prose → FAIL)
-- HARNESS-02a: run-tests in ReAct loop
-- HARNESS-02b: get-diagnostics in ReAct loop
-- HARNESS-02c: Agent uses test results to iterate
-- HARNESS-02d: Anti-vacuity test (done-on-broken → FAIL)
-
-**Success criteria:**
-1. Agent tool-call rate ≥ 80% on held-out split (demonstrates engagement)
-2. All anti-vacuity tests assert FAIL on broken harness
-3. `make vet` + `go test ./...` green
-4. No new Go deps (`go.mod` unchanged)
-
-**Exit gate:** Agent demonstrably edits files AND runs tests AND uses results to iterate.
-
----
-
-### Phase 116: Verb-Arg Hardening
-
-**Goal:** Stop burning error budget on malformed calls.
-
-**Why second:** Requires Phase 115 — can't harden verbs if agent doesn't use them.
-
-**Requirements:**
-- HARNESS-03a: Audit verb call sites for positional-arg misuse
-- HARNESS-03b: Add error-budget tracking
-- HARNESS-03c: Anti-vacuity test (malformed argv → FAIL)
-
-**Success criteria:**
-1. All verb call sites audited for `--flag=val` pattern
-2. Error-budget counter tracks verb errors and aborts at threshold
-3. Anti-vacuity test asserts FAIL on malformed argv
-4. `make vet` + `go test ./...` green
-5. No new Go deps
-
-**Exit gate:** Verb errors are budgeted and bounded.
-
----
-
-### Phase 117: Real GEPA Module
-
-**Goal:** Make GEPA actually evolve — rebuild as a `dspy.Module` that emits a reflectable trace.
-
-**Why third:** Requires Phases 115–116 — can't tune GEPA if agent still fails on basics.
-
-**Requirements:**
-- HARNESS-04a: Agent rebuilt as `dspy.Module` (not ad-hoc Python)
-- HARNESS-04b: AgentProgram emits predictor trace
-- HARNESS-04c: GEPA `forward` returns trace for reflective mutation
-- HARNESS-04d: Anti-vacuity test (empty trace → FAIL)
-
-**Success criteria:**
-1. Agent is a subclass of `dspy.Module` with proper `forward` signature
-2. `optimize.py` runs without errors on the real agent
-3. Trace is non-empty and varies across candidates
-4. Anti-vacuity test asserts FAIL on empty/constant trace
-5. `make vet` + `go test ./...` green (Python tests in `tools/dspy-tune/`)
-6. No new Go deps
-
-**Exit gate:** GEPA can actually optimize the agent (non-trivial trace, reflective mutation proposes candidates).
-
----
-
-### Phase 118: Re-run Attribution + Verdict
-
-**Goal:** Measure a meaningful delta on a fixed harness, gate for adoption.
-
-**Why fourth:** Requires Phases 115–117 — can't measure meaningful delta on broken agent.
-
-**Requirements:**
-- HARNESS-05a: Re-run v2.4 attribution pipeline on fixed harness
-- HARNESS-05b: Verify agent tool-call rate ≥ 80% on held-out
-- HARNESS-05c: Record ON/OFF delta with per-arm cost
-- HARNESS-05d: Gate for TUNE-FUT-03 (adoption path ready if delta significant)
-
-**Success criteria:**
-1. Attribution pipeline runs end-to-end on fixed harness
-2. Tool-call rate ≥ 80% demonstrated (the engagement bar)
-3. ON-vs-OFF delta recorded with cost breakdown
-4. REPORT.md updated with honest verdict and caveats
-5. If delta > 0 and significant: SKILL.md adoption path documented
-6. If delta ≈ 0 or noise: documented as "not yet ready for adoption"
-7. `make vet` + `go test ./...` green
-8. No new Go deps
-
-**Exit gate:** Measured verdict with honest caveats. Adoption gate (TUNE-FUT-03) ready if delta is meaningful.
-
----
+**Goal:** Re-map `CONCERNS.md` (real tech debt / fragile seams / security posture /
+vet-enforced invariants / retained-lineage naming artifacts — cite source or omit)
+and `TESTING.md` (`go test`, testify, `testdata/` fixtures, vet-gate suite, real-binary
+E2E, `bench/` harness + CI workflows). Then the integrity gate: remove all staleness
+banners, refresh every `Analysis Date`, and grep-confirm zero Python-serena residue
+beyond the deliberately-retained lineage artifacts.
 
 ## Requirement Coverage
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| HARNESS-01a | 115 | planned |
-| HARNESS-01b | 115 | planned |
-| HARNESS-01c | 115 | planned |
-| HARNESS-01d | 115 | planned |
-| HARNESS-02a | 115 | planned |
-| HARNESS-02b | 115 | planned |
-| HARNESS-02c | 115 | planned |
-| HARNESS-02d | 115 | planned |
-| HARNESS-03a | 116 | planned |
-| HARNESS-03b | 116 | planned |
-| HARNESS-03c | 116 | planned |
-| HARNESS-04a | 117 | planned |
-| HARNESS-04b | 117 | planned |
-| HARNESS-04c | 117 | planned |
-| HARNESS-04d | 117 | planned |
-| HARNESS-05a | 118 | planned |
-| HARNESS-05b | 118 | planned |
-| HARNESS-05c | 118 | planned |
-| HARNESS-05d | 118 | planned |
+| MAP-01 | 141 | planned |
+| MAP-03 | 141 | planned |
+| MAP-02 | 142 | planned |
+| MAP-04 | 142 | planned |
+| MAP-05 | 142 | planned |
+| MAP-06 | 143 | planned |
+| MAP-07 | 143 | planned |
+| MAP-08 | 143 | planned |
 
-**Coverage:** 19/19 REQs mapped (100%)
-
----
-
-## Constraint Verification
-
-| Constraint | Phase 115 | Phase 116 | Phase 117 | Phase 118 |
-|------------|-----------|-----------|-----------|-----------|
-| Zero new Go deps | ✓ | ✓ | ✓ | ✓ |
-| Tuning in dev-venv Python | ✓ | ✓ | ✓ | ✓ |
-| Anti-vacuity tests | ✓ (01d, 02d) | ✓ (03c) | ✓ (04d) | ✓ (embedded) |
-| Dependency chain | — | after 115 | after 116 | after 117 |
+**Coverage:** 8/8 REQs mapped (100%)
 
 ---
 

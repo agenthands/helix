@@ -28,11 +28,11 @@
 - [x] **v2.10 trace_data_flow verb (DATA_FLOWS read surface)** -- Phases 127-129 (shipped 2026-06-30, `12a9ec3c`) — see `.planning/milestones/v2.10-REQUIREMENTS.md`
 - [x] **v2.11 Type-resolution depth (C-family)** -- Phases 130-134 (shipped 2026-07-01, `d43d7ce7`..`97fc4bc9`) — see `.planning/milestones/v2.11-REQUIREMENTS.md`
 - [x] **v2.12 Production wiring for the type resolvers (C-family E2E)** -- Phases 135-137 (shipped 2026-07-01) — see `.planning/milestones/v2.12-ROADMAP.md` + `.planning/milestones/v2.12-MILESTONE-AUDIT.md`
-- [ ] **v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)** -- Phases 138-140 (in progress) — see `.planning/milestones/v2.13-ROADMAP.md` + `.planning/milestones/v2.13-REQUIREMENTS.md`
+- [x] **v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level)** -- Phases 138-140 (shipped 2026-07-01) — see `.planning/milestones/v2.13-ROADMAP.md` + `.planning/milestones/v2.13-MILESTONE-AUDIT.md`
 
 ## Phases
 
-**Current: v2.13 in progress (Phases 138-140) — kickoff complete, not yet built.** Deepen the v2.9 case-1 DATA_FLOWS substrate to model in-body call-return origins (`y := producer(); sink(y)`) across all 11 languages, no schema change (edges anchor on function + param nodes; the dead `ParamFlow.Returns` flag reclaimed as a `param → own-function` return-bridge for multi-hop). Red-team `agent://RedTeamV213` (PROCEED-WITH-FIXES) refuted the "all-11 is free" premise — 5/11 grammars' kind unions were uncovered (Ruby emitted ZERO DATA_FLOWS since v2.9); B1 union extension + all-11 unit test folded into Phase 138. Prior: v2.12 shipped (Phases 135-137, `f7e5f4b3`), MILESTONE-AUDIT PASSED. Next step: `/anvil-discuss-phase 138` (or `/anvil-plan-phase 138`).
+**Current: v2.13 SHIPPED (Phases 138-140) — 3/3 phases built + independently verified, MILESTONE-AUDIT PASSED.** In-body-origin DATA_FLOWS (`y := producer(); sink(y)`) is modeled, emitted at existing function+param symbol nodes (no schema change), and proven E2E through the real `helix` binary for all 11 languages, with a function-seeded multi-hop payoff. Two new Source markers: `def_use_inbody` (producer.function→consumer.param) + `def_use_return` (param→enclosing-function, the reclaimed multi-hop bridge). Red-team `agent://RedTeamV213` (PROCEED-WITH-FIXES) folded (B1 union gap: Ruby's zero-DATA_FLOWS-since-v2.9 latent bug fixed; M1-M5+m1/m2). One co-driver-approved scope call: Path B wired .rs/.kt/.php/.rb into `langFromExt` to reach 11/11 E2E (adds zero has_type edges — type resolvers stay nil-stubs). Security review PASSED (0 findings). NOT committed — commit is the co-driver's call. Prior: v2.12 shipped (`f7e5f4b3`).
 
 ### Phase 125: Intraprocedural Flow-Summary Engine (`internal/semantic/dataflow/`)
 

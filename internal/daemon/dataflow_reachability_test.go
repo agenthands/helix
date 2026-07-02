@@ -135,27 +135,89 @@ func TestDataFlowReachability_BrokenChain(t *testing.T) {
 	}
 }
 
-// TestDataFlowReachability_FunctionSeedEmpty (B3 trap): a function symbol has
-// no DATA_FLOWS edges (they're param-anchored), so a function seed reaches only
-// itself. Demonstrates the documented L3 constraint — the verb must seed a PARAM.
-func TestDataFlowReachability_FunctionSeedEmpty(t *testing.T) {
+// TestDataFlowReachability_FunctionSeedReachesInBody: the corrected v2.13 truth.
+// Pre-v2.13 a function seed reached only itself (DATA_FLOWS was purely
+// param-anchored). Post-v2.13 DATA_FLOWS carries function->param
+// (def_use_inbody) edges, so a FUNCTION seed now mechanically reaches its
+// in-body target over the kind-agnostic node-ID BFS. This asserts the NEW truth
+// (the M3 now-false emptiness invariant is corrected, not re-encoded).
+func TestDataFlowReachability_FunctionSeedReachesInBody(t *testing.T) {
 	store, repoID, cleanup := openDataFlowStore(t, func(r string) semanticstore.Facts {
-		facts := dataFlowFacts(t, r, []string{"src", "sink"}, [][2]string{{"src", "sink"}})
-		fnID := uint64(0x3000_0000_0000_0000) & 0x7FFFFFFFFFFFFFFF
-		facts.Symbols = append(facts.Symbols, semanticstore.SymbolFact{
-			SymbolID: fnID, NodeID: fnID, FileID: 1, Language: "go",
-			Kind: "function", Name: "fn", QualifiedName: "fn", StableKey: "sk:fn",
-			StartLine: 99, StartCol: 1, EndLine: 99, EndCol: 1, Visibility: "public", Confidence: 1.0,
-		})
-		return facts
+		fnID := uint64(0x3000_0000_0000_0001) & 0x7FFFFFFFFFFFFFFF
+		paramID := uint64(0x3000_0000_0000_0002) & 0x7FFFFFFFFFFFFFFF
+		files := []semanticstore.FileFact{{FileID: 1, RepoID: r, Path: "src/flow.go", Language: "go", ContentHash: "h", SizeBytes: 100, LineCount: 10}}
+		symbols := []semanticstore.SymbolFact{
+			{SymbolID: fnID, NodeID: fnID, FileID: 1, Language: "go", Kind: "function", Name: "producer", QualifiedName: "producer", StableKey: "sk:producer", StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 1, Visibility: "public", Confidence: 1.0},
+			{SymbolID: paramID, NodeID: paramID, FileID: 1, Language: "go", Kind: "parameter", Name: "v", QualifiedName: "v", StableKey: "sk:v", StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 1, Visibility: "public", Confidence: 1.0},
+		}
+		// A def_use_inbody edge crosses from the producer FUNCTION node into a
+		// consumer PARAMETER node — the exact shape that makes a function seed
+		// non-empty post-v2.13.
+		edges := []semanticstore.EdgeFact{
+			{EdgeID: 1, SrcNodeID: fnID, DstNodeID: paramID, SrcKind: "function", DstKind: "parameter", EdgeKind: "DATA_FLOWS", Source: "def_use_inbody", Confidence: 0.50, Weight: 0.5},
+		}
+		return semanticstore.Facts{Files: files, Symbols: symbols, Edges: edges}
 	})
 	defer cleanup()
 	a := NewP1DataFlowReachabilityAdapterForTest(store)
 
-	got, _ := a.ReachableFrom(context.Background(), repoID, integ.SymbolID("sk:fn"), 5)
+	got, err := a.ReachableFrom(context.Background(), repoID, integ.SymbolID("sk:producer"), 5)
+	if err != nil {
+		t.Fatalf("ReachableFrom: %v", err)
+	}
+	hops := map[string]int{}
 	for _, n := range got {
-		if string(n.SymbolID) != "sk:fn" {
-			t.Errorf("function seed reached %q (hop %d) — DATA_FLOWS must not cross from a function node; got %+v", n.SymbolID, n.Hops, got)
+		hops[string(n.SymbolID)] = n.Hops
+	}
+	if hops["sk:producer"] != 0 {
+		t.Errorf("seed producer hops = %d, want 0", hops["sk:producer"])
+	}
+	reached, ok := hops["sk:v"]
+	if !ok {
+		t.Fatalf("function seed did NOT reach in-body target sk:v — post-v2.13 a function->param def_use_inbody edge MUST be traversable; got %+v", got)
+	}
+	if reached != 1 {
+		t.Errorf("in-body target sk:v hops = %d, want 1 (function->param in-body edge); got %+v", reached, got)
+	}
+}
+
+// TestDataFlowReachability_FunctionAnchoredNoError (FLOW-05f smoke): the
+// param-seeded BFS traverses a snapshot mixing param->param, function->param
+// (def_use_inbody) and param->function (def_use_return) edges WITHOUT error —
+// function-node endpoints must not crash the walk. Chain:
+// srcFn -(in-body)-> tParam -(return-bridge)-> tFn -(in-body)-> sinkParam.
+func TestDataFlowReachability_FunctionAnchoredNoError(t *testing.T) {
+	store, repoID, cleanup := openDataFlowStore(t, func(r string) semanticstore.Facts {
+		srcFn := uint64(0x4000_0000_0000_0001) & 0x7FFFFFFFFFFFFFFF
+		tParam := uint64(0x4000_0000_0000_0002) & 0x7FFFFFFFFFFFFFFF
+		tFn := uint64(0x4000_0000_0000_0003) & 0x7FFFFFFFFFFFFFFF
+		sinkParam := uint64(0x4000_0000_0000_0004) & 0x7FFFFFFFFFFFFFFF
+		files := []semanticstore.FileFact{{FileID: 1, RepoID: r, Path: "src/flow.go", Language: "go", ContentHash: "h", SizeBytes: 100, LineCount: 10}}
+		symbols := []semanticstore.SymbolFact{
+			{SymbolID: srcFn, NodeID: srcFn, FileID: 1, Language: "go", Kind: "function", Name: "src", QualifiedName: "src", StableKey: "sk:src", StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 1, Visibility: "public", Confidence: 1.0},
+			{SymbolID: tParam, NodeID: tParam, FileID: 1, Language: "go", Kind: "parameter", Name: "x", QualifiedName: "x", StableKey: "sk:x", StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 1, Visibility: "public", Confidence: 1.0},
+			{SymbolID: tFn, NodeID: tFn, FileID: 1, Language: "go", Kind: "function", Name: "transform", QualifiedName: "transform", StableKey: "sk:transform", StartLine: 3, StartCol: 1, EndLine: 3, EndCol: 1, Visibility: "public", Confidence: 1.0},
+			{SymbolID: sinkParam, NodeID: sinkParam, FileID: 1, Language: "go", Kind: "parameter", Name: "v", QualifiedName: "v", StableKey: "sk:v", StartLine: 4, StartCol: 1, EndLine: 4, EndCol: 1, Visibility: "public", Confidence: 1.0},
 		}
+		edges := []semanticstore.EdgeFact{
+			{EdgeID: 1, SrcNodeID: srcFn, DstNodeID: tParam, SrcKind: "function", DstKind: "parameter", EdgeKind: "DATA_FLOWS", Source: "def_use_inbody", Confidence: 0.50, Weight: 0.5},
+			{EdgeID: 2, SrcNodeID: tParam, DstNodeID: tFn, SrcKind: "parameter", DstKind: "function", EdgeKind: "DATA_FLOWS", Source: "def_use_return", Confidence: 0.55, Weight: 0.5},
+			{EdgeID: 3, SrcNodeID: tFn, DstNodeID: sinkParam, SrcKind: "function", DstKind: "parameter", EdgeKind: "DATA_FLOWS", Source: "def_use_inbody", Confidence: 0.50, Weight: 0.5},
+		}
+		return semanticstore.Facts{Files: files, Symbols: symbols, Edges: edges}
+	})
+	defer cleanup()
+	a := NewP1DataFlowReachabilityAdapterForTest(store)
+
+	got, err := a.ReachableFrom(context.Background(), repoID, integ.SymbolID("sk:src"), 5)
+	if err != nil {
+		t.Fatalf("ReachableFrom over function-anchored edges errored: %v", err)
+	}
+	hops := map[string]int{}
+	for _, n := range got {
+		hops[string(n.SymbolID)] = n.Hops
+	}
+	if _, ok := hops["sk:v"]; !ok {
+		t.Errorf("multi-hop over function-anchored edges did not reach sk:v; got %+v", got)
 	}
 }

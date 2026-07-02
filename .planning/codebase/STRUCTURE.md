@@ -2,6 +2,60 @@
 
 **Analysis Date:** 2026-04-07
 
+> **⚠ STALENESS BANNER (added 2026-07-01, v2.13 docs refresh).** Everything
+> below this addendum describes the **pre-Go Python `serena` codebase**
+> (`src/serena/`, `src/solidlsp/`, `SerenaAgent`, Python `*_tools.py`) as it
+> stood on 2026-04-07 — the map's sole `git` commit. That tree was **removed**
+> from the repo (see CHANGELOG > v1.9 rename and the pre-v1.12 legacy removal);
+> Helix now ships as a **single Go binary** (`cmd/helix`, `internal/**`). This
+> file has NOT tracked the v1.9→v2.13 Go rewrite (~13 milestones). Treat the
+> Python layout below as **historical only**. A dedicated re-mapping pass is
+> recommended — see `.planning/milestones/v2.13-DOCS-REFRESH.md`. The single
+> current-tree section that follows is the only part reflecting the shipped Go
+> codebase.
+
+## v2.13 Addendum — Intraprocedural Data-Flow Subsystem (current Go tree)
+
+*Scope-limited current-tree entry added for the v2.13 milestone close; the rest
+of this file is stale (see banner).*
+
+**`internal/semantic/dataflow/` — case-1 + in-body intraprocedural flow engine:**
+- Purpose: computes a per-function **case-1 flow summary** — for each parameter,
+  the exact syntactic def-use targets its value reaches (the function's return,
+  and call-argument positions), with **no over-approximation**. v2.13 extends it
+  to model **in-body origins**: the return value of an in-body call
+  (`y := producer(); sink(y)`) flowing into a later call argument.
+- Key types (`summary.go`): `Summary{Params []ParamFlow, InBodyFlows []InBodyFlow}`;
+  `Origin{Param int, Callee string}` (Callee=="" ⇒ param origin, else callReturn
+  origin); `InBodyFlow{Producer, Consumer string, ArgPos int}`;
+  `ParamFlow{Name, Index, Returns, CallArgs}`.
+- Entry point: `AnalyzeFlow(node, source) *Summary` — walks a function-declaration
+  tree-sitter node; returns nil under a generalized anti-vacuity gate (no param
+  reaches a target AND no in-body flow recorded).
+- **Leaf package**: stdlib + tree-sitter only (mirrors the `minhash` / `relatedidx`
+  / `classifier` leaf boundary). Invoked from the shared
+  `extract.FingerprintBody` seam (`fingerprint.go:54`), so **all 11 language
+  providers** inherit flow-summary computation with no per-provider edit; the
+  result rides on `ExtractedSymbol.FlowSummary` (`fact.go:127`).
+- Tests: `dataflow_test.go`, `dataflow_matrix_test.go` (all-11-grammar unit matrix).
+
+**Daemon emission (`internal/daemon/semantic_similarity_edges.go`) — feeds `DATA_FLOWS`:**
+- `dataFlowEdges` (v2.9) — `caller.param → callee.param`, Source `def_use`, conf 0.55.
+- `inBodyDataFlowEdges` (v2.13) — `producer.function → consumer.param`, Source
+  `def_use_inbody`, conf 0.50 (a return value has no distinct graph node, so it
+  honestly anchors on the producer's *function* node — D-ANCHOR).
+- `returnBridgeEdges` (v2.13) — `param → enclosing-function`, Source
+  `def_use_return`, conf 0.55; the minimal zero-schema multi-hop connector
+  (`producer.fn → transform.param → transform.fn → sink.param`).
+- All three share the anti-mis-bind guard (`nameCount==1` ⇒ no fabricated edge)
+  and directed dedup on `(SrcNodeID, DstNodeID)`. Wired in `factsFromExtracted`
+  (`semantic_wiring.go:2546-2554`) **strictly after** `dataFlowEdges` — EdgeID is
+  a dense append-order stamp, so ordering is an M1 hard constraint.
+- v2.13 also widened `langFromExt` (`semantic_wiring.go:1838`) to map
+  `.rs/.kt/.kts/.php/.rb → rust/kotlin/php/ruby`, so **all 11 languages** index +
+  emit `DATA_FLOWS` through the real daemon (their type resolvers stay nil-stubs
+  ⇒ no `has_type`/`uses_type`). Read surface + full ledger: `docs/edge-types.md`.
+
 ## Directory Layout
 
 ```

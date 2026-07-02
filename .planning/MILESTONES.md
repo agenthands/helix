@@ -1,5 +1,28 @@
 # Milestones
 
+## v2.13 True intraprocedural DATA_FLOWS (in-body origins, variable-level) (Shipped 2026-07-01)
+
+**Phases:** 3 (138 origin-space engine + 11-lang unions + all-11 unit matrix · 139 in-body + return-bridge emission + read surface + Go multi-hop · 140 all-11 real-binary E2E + function-seeded multi-hop + docs) — ALL COMPLETE + independently verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.13-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`agent://RedTeamV213`, PROCEED-WITH-FIXES → all folded); each phase carried an independent qa VERIFICATION.md with its own revert-and-fail (138: m2 guards RED; 139: return-bridge gate inverted RED; 140: langFromExt arm removed + binary rebuilt → subtest RED), all restored byte-identical; audit-time consolidated fresh-binary re-run.
+
+**Goal: model flow originating MID-BODY** — the return of an in-body call (`y := producer(); sink(y)`), not just a parameter — and make it queryable across ALL 11 languages, using the no-schema-change cut (edges anchor on existing function + parameter symbol nodes, never persistent variable-level nodes). v2.9 gave DATA_FLOWS a case-1 param→param producer; v2.13 deepens it to in-body origins.
+
+**Key accomplishments:**
+- **Phase 138 (engine + breadth):** widened the `dataflow` leaf engine's taint origin to `Origin{Param, Callee}` (param ∪ callReturn); records `InBodyFlow{Producer, Consumer, ArgPos}` via a D-COMPOSE strict-whitelist RHS-unwrap (m2 guards: selector/multi-call RHS refuse). Extended the tree-sitter kind unions to all 11 grammars (method_parameters, assignment, init_declarator, value_arguments, property_declaration). All-11 pure-unit matrix: 11/11, 0 skip. Fixed the latent **Ruby zero-DATA_FLOWS-since-v2.9** bug (its params parsed as `method_parameters ∉ paramListKinds` → engine bailed).
+- **Phase 139 (emission + Go proof):** two new DATA_FLOWS passes — `inBodyDataFlowEdges` (producer.function→consumer.param, `def_use_inbody`) + `returnBridgeEdges` (param→enclosing-function, `def_use_return`, the reclaimed dead `ParamFlow.Returns` as the multi-hop connector). Wired STRICTLY after `dataFlowEdges` (M1, EdgeIDs unshifted); map-LOOKUP-only output path (M4 determinism). Distinctness + anti-mis-bind + def_use-SET non-regression guards (mutation-RED); in-process Go multi-hop `src→transform→sink` proven; 3 now-false M3 doc-comments corrected + the function-seed reachability test repurposed.
+- **Phase 140 (all-11 real-binary E2E + docs):** `TestCLI_E2E_InBodyDataFlow` = 11/11 PASS through the real `helix` binary (explain-symbol-deep surfaces the in-body data_flows edge per language); function-seeded multi-hop via `trace-data-flow` (broken-hop → unreachable); determinism guard. `docs/edge-types.md` updated (3 Source markers + all-11 coverage ledger + function-seed note).
+
+**The one scope call (co-driver-approved, Path B):** Phase 140 found the daemon file-walk gate `langFromExt` did NOT map .rs/.kt/.php/.rb — so those 4 langs, proven at engine+emission+unit level, could not index through the real binary (an M5-class gap at the daemon layer the bare-parse-tree unit matrix never exercised). Escalated as a genuine fork; co-driver chose **Path B** — wire the 4 into `langFromExt`, achieving 11/11 E2E. Verified: adds ZERO new `has_type` edges (their type resolvers are nil-stubs, double-guarded); an independent regression pass confirmed no pre-existing daemon/skill test broke.
+
+**Invariants held:** zero new Go deps (`go.mod`/`go.sum` byte-unchanged); no schema migration (`EdgeFact` + `internal/semantic/store/` byte-unchanged); deterministic (re-index → identical edge set); the v2.9 `def_use` param→param SET byte-unchanged for the 6 already-working langs (go/ts/java/csharp/php/rust); `make vet` clean; affected-pkg `go test` + fresh-binary E2E green.
+
+**Security review:** PASSED, 0 findings (5/5 checks clean — langFromExt is a pure ext→id map; emission bounded+deduped; `EdgeFact.Reason` write-only/opaque via parameterized SQL, no injection sink; no new deps; nil-resolver double-guarded). Harness self-audit CLEAN (4 probes, 0 findings).
+
+**Honest scope limits:** in-body origin's source identity is the producer FUNCTION node (a return value has no distinct node — by design, no variable-level nodes); the `trace_data_flow` verb's documented seed stays a parameter (the function-seed multi-hop uses the mechanically-accepted path; full verb support is a fast-follow); callReturn-reaches-return not recorded (no v2.13 edge maps to it).
+
+**Deferred / follow-ons:** (1) **Codebase-map re-mapping pass (HIGH doc-integrity)** — `.planning/codebase/` still describes the REMOVED pre-Go Python serena tree (2026-04-07), never updated through the Go rewrite; contained for v2.13 (STRUCTURE.md addendum + staleness banner), a dedicated re-mapping milestone recommended. (2) Full function-seed support in the `trace_data_flow` verb contract. (3) Variable-level graph nodes, field/heap flow, source/sink taint.
+
+**NOT committed** — the working tree carries v2.13 (138-140) + the planning artifacts; commit is the co-driver's call.
+
 ## v2.12 Production wiring for the type resolvers (C-family E2E) (Shipped 2026-07-01)
 
 **Phases:** 3 (135 extraction foundation + 136 resolver ChainTokens/producer/emit + 137 real-binary E2E + docs) — ALL COMPLETE + independently verified. MILESTONE-AUDIT PASSED (`.planning/milestones/v2.12-MILESTONE-AUDIT.md`). Independence: start-of-milestone red-team (`agent://RedTeamV212`, verdict REWORK → all folded); each phase re-verified by the architect via uncached test runs + code re-read; headline E2E re-run against a freshly-built binary.

@@ -1824,13 +1824,17 @@ func (b *semanticBundle) fullWalkPaths(ws workspace.WorkspaceKey) []string {
 // identifier. Returns "" for unrecognized extensions; the buildFn loop
 // treats that as "skip silently". The mapping mirrors the per-language
 // providers registered by the daemon at bootstrap (Phase 59 P05 +
-// v2.12 Phase 135): Go, TypeScript / TSX, JavaScript / JSX, Python, and
-// the C-family — C (.c/.h), C++ (.cpp/.cc/.cxx/.hpp/.hh/.hxx), C# (.cs),
-// and Java (.java).
+// v2.12 Phase 135 + v2.13 Phase 140): Go, TypeScript / TSX,
+// JavaScript / JSX, Python, the C-family — C (.c/.h),
+// C++ (.cpp/.cc/.cxx/.hpp/.hh/.hxx), C# (.cs), Java (.java) — and, since
+// v2.13, Rust (.rs), Kotlin (.kt/.kts), PHP (.php), Ruby (.rb).
 //
-// Rust / Kotlin / PHP / Ruby are intentionally NOT mapped here: their
-// type resolvers are v2.13 stubs, so enabling their extraction now would
-// add untested surface. They stay "" until v2.13 wires them.
+// v2.13 (Phase 140, D-BREADTH) wires Rust / Kotlin / PHP / Ruby for
+// extraction so the all-11-language DATA_FLOWS surface is reachable E2E.
+// Their type resolvers remain nil-stubs (newIndexedResolver returns nil,
+// type_resolver_wiring.go; a nil resolver is skipped), so enabling them
+// adds NO has_type / uses_type edges — extraction covers symbols,
+// references, similarity, and data_flows only.
 func langFromExt(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".go":
@@ -1849,6 +1853,14 @@ func langFromExt(path string) string {
 		return "c_sharp"
 	case ".java":
 		return "java"
+	case ".rs":
+		return "rust"
+	case ".kt", ".kts":
+		return "kotlin"
+	case ".php":
+		return "php"
+	case ".rb":
+		return "ruby"
 	default:
 		return ""
 	}
@@ -2532,6 +2544,14 @@ func factsFromExtracted(extracted []*extract.ExtractedFile, repoID, repoModulePa
 	out.Edges = append(out.Edges, structuralTwinEdges(fpNodes)...)
 	out.Edges = append(out.Edges, semanticallyRelatedEdges(fpNodes)...)
 	out.Edges = append(out.Edges, dataFlowEdges(fpNodes, nodeToParams, nameToNode, nameCount)...)
+	// v2.13 in-body-origin + return-bridge DATA_FLOWS (Phase 139). Appended
+	// STRICTLY AFTER dataFlowEdges (M1 hard constraint): EdgeID is a dense
+	// index over final append order, so inserting these anywhere else would
+	// shift the downstream RESOLVES_TO / test-callers' EdgeIDs. inBody emits
+	// producer.function -> consumer.param (def_use_inbody); returnBridge emits
+	// param -> enclosing-function (def_use_return, the multi-hop connector).
+	out.Edges = append(out.Edges, inBodyDataFlowEdges(fpNodes, nodeToParams, nameToNode, nameCount)...)
+	out.Edges = append(out.Edges, returnBridgeEdges(fpNodes, nodeToParams)...)
 
 	// RESOLVES_TO type edges (v2.12 Phase 136). Runs LAST — after out.Symbols
 	// is final (deduped) and nameToNode/nameCount are built — so the typeIndex
@@ -2807,10 +2827,14 @@ func (a *semP1SymbolEdgesAdapter) OutgoingEdgesOf(ctx context.Context, repoID st
 // BFS from the seed (hop-capped, visited-set, deterministic), and resolves
 // reachable nodeIDs back to SymbolIDs. Read-only (D-09 invariant).
 //
-// Seed semantics (v2.10 L3): the seed MUST be a PARAMETER. A function seed
-// returns empty because DATA_FLOWS edges are param-anchored (src_node_id = the
-// param node, not the function node) and there is no query-time function->params
-// path at HEAD (CONTAINS function->param is not tree-sitter-emitted).
+// Seed semantics (v2.10 verb contract): the verb's DOCUMENTED seed is a
+// PARAMETER (the taint entry point). Post-v2.13 this is no longer the whole
+// story: DATA_FLOWS now also carries function->param (def_use_inbody) and
+// param->function (def_use_return) edges, so a FUNCTION seed MAY mechanically
+// reach in-body targets over its outgoing def_use_inbody edges (the BFS is
+// node-ID adjacency, kind-agnostic). Full function-seed verb support stays a
+// fast-follow (Phase 140 proves the mechanical multi-hop path); the verb's
+// documented seed remains a parameter until then.
 type semP1DataFlowReachabilityAdapter struct {
 	store *semanticstore.Store
 }

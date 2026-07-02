@@ -26,7 +26,7 @@ import (
 // TestLangFromExt_CFamily is the Phase 135 B1 RED gate: langFromExt must map
 // the C-family extensions to their canonical provider languages so the
 // production index no longer drops C/C++/C#/Java files before extraction.
-// Rust/Kotlin/PHP/Ruby stay explicitly out (their resolvers are v2.13 stubs).
+// Rust/Kotlin/PHP/Ruby are now WIRED for extraction (v2.13 Phase 140 D-BREADTH).
 func TestLangFromExt_CFamily(t *testing.T) {
 	cases := []struct {
 		path string
@@ -53,11 +53,12 @@ func TestLangFromExt_CFamily(t *testing.T) {
 		// Case-insensitivity (langFromExt lowercases the ext).
 		{"A.C", "c"},
 		{"Foo.JAVA", "java"},
-		// Deferred to v2.13 — MUST stay "" (not enabled here).
-		{"a.rs", ""},
-		{"a.kt", ""},
-		{"a.php", ""},
-		{"a.rb", ""},
+		// v2.13 Phase 140 (D-BREADTH) — now WIRED for extraction.
+		{"a.rs", "rust"},
+		{"a.kt", "kotlin"},
+		{"a.kts", "kotlin"},
+		{"a.php", "php"},
+		{"a.rb", "ruby"},
 		// Unknown.
 		{"a.txt", ""},
 		{"noext", ""},

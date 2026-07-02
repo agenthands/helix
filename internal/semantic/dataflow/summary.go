@@ -7,8 +7,9 @@
 // "Case-1" means EXACT syntactic param-to-X data dependence, with no
 // over-approximation: a param reaches a target only when a value derived (via
 // assignment chains) from that param is returned or passed as a call argument.
-// In-body origins (e.g. the return value of an internal call feeding a later
-// argument) are NOT modeled — that needs variable-level nodes and is deferred.
+// In-body origins — the return value of an in-body call feeding a later call
+// argument (e.g. `y := producer(); sink(y)`) — are ALSO modeled, recorded in
+// Summary.InBodyFlows (producer callee -> consumer callee argument position).
 //
 // The package is a leaf: stdlib + tree-sitter only, mirroring the minhash /
 // relatedidx / classifier leaf-package boundary. It is invoked from
@@ -29,6 +30,11 @@ import (
 // nil when the function has no parameters or no parameter reaches anything.
 type Summary struct {
 	Params []ParamFlow
+	// InBodyFlows records producer->consumer in-body data dependences: the
+	// return value of an in-body call C (the "producer") flowing into argument
+	// ArgPos of a later call (the "consumer"). Dedup+sorted for determinism;
+	// nil when the body has no such flow.
+	InBodyFlows []InBodyFlow
 }
 
 // ParamFlow is the per-parameter flow record. Index is the 0-based parameter
@@ -49,13 +55,31 @@ type CallArgTarget struct {
 	ArgPos int
 }
 
+// Origin discriminates the source of a tainted value. Callee=="" means a
+// PARAM origin (Param is the 0-based parameter index). Callee!="" means a
+// callReturn origin: the value is the return of an in-body call to Callee
+// (Param unused, 0). Origin is a comparable struct so it keys a set map.
+type Origin struct {
+	Param  int
+	Callee string
+}
+
+// InBodyFlow records that the return value of in-body call Producer flows into
+// argument position ArgPos of a call to Consumer. Producer/Consumer are
+// last-segment callee names (unresolved; Phase 139 resolves them to nodes).
+type InBodyFlow struct {
+	Producer string
+	Consumer string
+	ArgPos   int
+}
+
 // Cross-language tree-sitter node-kind unions (mirrors the idiom in
 // internal/semantic/classifier/classifier.go walkProfile).
 var (
 	paramListKinds = stringSet{
 		"parameter_list": true, "formal_parameters": true,
 		"function_value_parameters": true, "parameters": true,
-		"parameter_declarations": true,
+		"parameter_declarations": true, "method_parameters": true,
 	}
 	identKinds = stringSet{
 		"identifier": true, "variable_name": true,
@@ -65,8 +89,9 @@ var (
 		"assignment_expression": true, "short_var_declaration": true,
 		"assignment_statement": true, "variable_declaration": true,
 		"let_declaration": true, "const_declaration": true,
-		"init_declaration": true, "variable_declarator": true,
+		"init_declarator": true, "variable_declarator": true,
 		"local_variable_statement": true, "var_spec": true,
+		"assignment": true, "property_declaration": true,
 	}
 	returnKinds = stringSet{
 		"return_statement": true, "return_expression": true,
@@ -78,7 +103,7 @@ var (
 	}
 	argListKinds = stringSet{
 		"argument_list": true, "arguments": true,
-		"argument_lists": true,
+		"argument_lists": true, "value_arguments": true,
 	}
 )
 
@@ -88,25 +113,24 @@ type stringSet map[string]bool
 // case-1 flow summary. The node is the declaration the provider passes to
 // FingerprintBody (it contains both the parameter list and the body block for
 // Go/C-family; for Python/TS it is the declaration node the name's parent
-// resolves to). Returns nil when there are no params or no param reaches a
-// target.
+// resolves to). It ALWAYS walks the body (even for a param-less function) so
+// in-body origins are captured. Returns nil only when neither a param reaches
+// a target NOR any in-body flow is recorded (the generalized anti-vacuity gate).
 func AnalyzeFlow(node *tree_sitter.Node, source []byte) *Summary {
 	if node == nil {
 		return nil
 	}
 	paramNames := collectParams(node, source)
-	if len(paramNames) == 0 {
-		return nil
-	}
 
-	// Seed taint: variable name -> set of origin param indices. Each param
-	// taints itself; assignments propagate taint to derived locals.
-	taint := make(map[string]map[int]bool, len(paramNames))
+	// Seed taint: variable name -> set of origins. Each param taints itself
+	// with a param origin; assignments propagate/introduce origins to derived
+	// locals (including callReturn origins for in-body call results).
+	taint := make(map[string]map[Origin]bool, len(paramNames))
 	for i, name := range paramNames {
 		if taint[name] == nil {
-			taint[name] = map[int]bool{}
+			taint[name] = map[Origin]bool{}
 		}
-		taint[name][i] = true
+		taint[name][Origin{Param: i}] = true
 	}
 
 	flows := make([]ParamFlow, len(paramNames))
@@ -114,7 +138,8 @@ func AnalyzeFlow(node *tree_sitter.Node, source []byte) *Summary {
 		flows[i] = ParamFlow{Name: name, Index: i}
 	}
 
-	walkFlow(node, source, taint, &flows)
+	var inBody []InBodyFlow
+	walkFlow(node, source, taint, &flows, &inBody)
 
 	// Build the summary, dropping dead params (anti-vacuity) and dedup/sort
 	// each param's CallArgs for determinism.
@@ -125,7 +150,8 @@ func AnalyzeFlow(node *tree_sitter.Node, source []byte) *Summary {
 			out.Params = append(out.Params, flows[i])
 		}
 	}
-	if len(out.Params) == 0 {
+	out.InBodyFlows = dedupSortInBody(inBody)
+	if len(out.Params) == 0 && len(out.InBodyFlows) == 0 {
 		return nil
 	}
 	return out
@@ -134,7 +160,7 @@ func AnalyzeFlow(node *tree_sitter.Node, source []byte) *Summary {
 // walkFlow recurses over the declaration, skipping parameter-list subtrees
 // (so param identifiers are not treated as value reads), and processes
 // assignment / return / call nodes to propagate taint and record targets.
-func walkFlow(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool, flows *[]ParamFlow) {
+func walkFlow(n *tree_sitter.Node, source []byte, taint map[string]map[Origin]bool, flows *[]ParamFlow, inBody *[]InBodyFlow) {
 	if n == nil {
 		return
 	}
@@ -148,10 +174,10 @@ func walkFlow(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool,
 	case returnKinds[kind]:
 		processReturn(n, source, taint, flows)
 	case callKinds[kind]:
-		processCall(n, source, taint, flows)
+		processCall(n, source, taint, flows, inBody)
 	}
 	for i := uint(0); i < n.ChildCount(); i++ {
-		walkFlow(n.Child(i), source, taint, flows)
+		walkFlow(n.Child(i), source, taint, flows, inBody)
 	}
 }
 
@@ -175,20 +201,33 @@ func collectParams(decl *tree_sitter.Node, source []byte) []string {
 	return names
 }
 
-// processAssignment propagates taint from RHS identifiers to the LHS
-// identifier. Only direct-identifier LHS is handled (field/index assignments
-// degrade gracefully — no taint recorded, no false edge).
-func processAssignment(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool) {
+// processAssignment records taint on the LHS identifier from the RHS. When the
+// RHS unwraps (via the strict {expression_list, parenthesized_expression}
+// whitelist) to a call C, the LHS receives a callReturn(C) origin (D-COMPOSE:
+// the outermost call's return, NOT the inner args). Otherwise it unions the
+// generic identifier origins found in the RHS (param + callReturn forwarding).
+// Field/index LHS and selector/member/multi-call RHS degrade gracefully — no
+// taint recorded, no false origin.
+func processAssignment(n *tree_sitter.Node, source []byte, taint map[string]map[Origin]bool) {
 	lhs, rhs := splitAssignment(n, source)
 	if lhs == "" || rhs == nil {
 		return
+	}
+	if call := unwrapToCall(rhs); call != nil {
+		if name := calleeName(call, source); name != "" {
+			if taint[lhs] == nil {
+				taint[lhs] = map[Origin]bool{}
+			}
+			taint[lhs][Origin{Callee: name}] = true
+			return
+		}
 	}
 	origins := collectOrigins(rhs, source, taint)
 	if len(origins) == 0 {
 		return
 	}
 	if taint[lhs] == nil {
-		taint[lhs] = map[int]bool{}
+		taint[lhs] = map[Origin]bool{}
 	}
 	for o := range origins {
 		taint[lhs][o] = true
@@ -224,22 +263,26 @@ func splitAssignment(n *tree_sitter.Node, source []byte) (string, *tree_sitter.N
 
 // processReturn marks Returns on every param whose value (possibly via a
 // derived local) appears in the returned expression.
-func processReturn(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool, flows *[]ParamFlow) {
+func processReturn(n *tree_sitter.Node, source []byte, taint map[string]map[Origin]bool, flows *[]ParamFlow) {
 	for i := uint(0); i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
 		if c == nil {
 			continue
 		}
 		for o := range collectOrigins(c, source, taint) {
-			(*flows)[o].Returns = true
+			if o.Callee == "" {
+				(*flows)[o.Param].Returns = true
+			}
+			// callReturn origins reaching a return are NOT recorded (locked
+			// out: no edge maps to it in v2.13).
 		}
 	}
 }
 
-// processCall records CallArgTarget{Callee, ArgPos} on every param whose value
-// reaches an argument of the call. The callee name is the last segment (so
-// obj.method(...) -> "method"), matching the daemon's name-resolution idiom.
-func processCall(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool, flows *[]ParamFlow) {
+// processCall records, per call argument, either a v2.9 CallArgTarget (param
+// origin) or an InBodyFlow (callReturn origin). The callee name is the last
+// segment (so obj.method(...) -> "method"), matching the daemon's idiom.
+func processCall(n *tree_sitter.Node, source []byte, taint map[string]map[Origin]bool, flows *[]ParamFlow, inBody *[]InBodyFlow) {
 	callee := calleeName(n, source)
 	if callee == "" {
 		return
@@ -257,17 +300,23 @@ func processCall(n *tree_sitter.Node, source []byte, taint map[string]map[int]bo
 			continue
 		}
 		for o := range collectOrigins(arg, source, taint) {
-			(*flows)[o].CallArgs = append((*flows)[o].CallArgs, CallArgTarget{
-				Callee: callee, ArgPos: int(i),
-			})
+			if o.Callee == "" {
+				(*flows)[o.Param].CallArgs = append((*flows)[o.Param].CallArgs, CallArgTarget{
+					Callee: callee, ArgPos: int(i),
+				})
+			} else {
+				*inBody = append(*inBody, InBodyFlow{
+					Producer: o.Callee, Consumer: callee, ArgPos: int(i),
+				})
+			}
 		}
 	}
 }
 
 // collectOrigins walks an expression node and returns the union of taint
 // origins over every tainted identifier it contains.
-func collectOrigins(n *tree_sitter.Node, source []byte, taint map[string]map[int]bool) map[int]bool {
-	out := map[int]bool{}
+func collectOrigins(n *tree_sitter.Node, source []byte, taint map[string]map[Origin]bool) map[Origin]bool {
+	out := map[Origin]bool{}
 	var w func(nd *tree_sitter.Node)
 	w = func(nd *tree_sitter.Node) {
 		if nd == nil {
@@ -380,6 +429,49 @@ func dedupSortCallArgs(in []CallArgTarget) []CallArgTarget {
 	sort.Slice(in, func(i, j int) bool {
 		if in[i].Callee != in[j].Callee {
 			return in[i].Callee < in[j].Callee
+		}
+		return in[i].ArgPos < in[j].ArgPos
+	})
+	out := in[:1]
+	for i := 1; i < len(in); i++ {
+		if in[i] != out[len(out)-1] {
+			out = append(out, in[i])
+		}
+	}
+	return out
+}
+
+// unwrapToCall unwraps an RHS expression through the STRICT single-child
+// whitelist {expression_list, parenthesized_expression} to a call node, or nil.
+// A multi-child expression_list (`a, b := f(), g()`) or a non-whitelisted
+// wrapper (selector/member/index/binary) refuses — no in-body origin (D-COMPOSE
+// + m2 guard). Go's short_var_declaration RHS is an expression_list wrapping the
+// call; most other languages hand the call directly.
+func unwrapToCall(n *tree_sitter.Node) *tree_sitter.Node {
+	for n != nil && (n.Kind() == "expression_list" || n.Kind() == "parenthesized_expression") {
+		if n.NamedChildCount() != 1 {
+			return nil // multi-call / ambiguous -> refuse
+		}
+		n = n.NamedChild(0)
+	}
+	if n != nil && callKinds[n.Kind()] {
+		return n
+	}
+	return nil
+}
+
+// dedupSortInBody makes the in-body flow list deterministic and duplicate-free,
+// mirroring dedupSortCallArgs. No Go-map iteration in the output path.
+func dedupSortInBody(in []InBodyFlow) []InBodyFlow {
+	if len(in) == 0 {
+		return nil
+	}
+	sort.Slice(in, func(i, j int) bool {
+		if in[i].Producer != in[j].Producer {
+			return in[i].Producer < in[j].Producer
+		}
+		if in[i].Consumer != in[j].Consumer {
+			return in[i].Consumer < in[j].Consumer
 		}
 		return in[i].ArgPos < in[j].ArgPos
 	})

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.13
 milestone_name: True intraprocedural DATA_FLOWS (in-body origins, variable-level)
-status: planned
+status: shipped
 last_updated: "2026-07-01T00:00:00.000Z"
-last_activity: 2026-07-01 — v2.13 KICKOFF complete. REQUIREMENTS (FLOW-04/05/06) + ROADMAP (Phases 138-140) authored; red-team agent://RedTeamV213 (PROCEED-WITH-FIXES) folded (B1 union gap: 5/11 grammars uncovered, Ruby zero DATA_FLOWS since v2.9; M1 non-regression reframe + append-order pin; M2 function-seeded multi-hop; M3 false invariants; M4 bridge determinism; M5 all-11 unit test → Phase 138). Not yet built. Prior: v2.12 SHIPPED (f7e5f4b3), AUDIT PASSED.
+last_activity: 2026-07-01 — v2.13 SHIPPED. 3/3 phases (138 engine+11-lang-unions, 139 emission+Go-multihop, 140 all-11 real-binary E2E) built + independently qa-verified; MILESTONE-AUDIT PASSED; security review PASSED (0 findings); self-audit CLEAN. In-body-origin DATA_FLOWS (def_use_inbody + def_use_return) proven E2E for all 11 languages through the real helix binary + function-seeded multi-hop. Co-driver-approved Path B: langFromExt wired .rs/.kt/.php/.rb (11/11 E2E; zero new has_type edges). Latent Ruby zero-DATA_FLOWS-since-v2.9 bug fixed. Zero new deps, no schema migration. NOT committed (co-driver's call). Follow-on: codebase-map re-mapping pass (still describes removed Python serena tree). Prior: v2.12 SHIPPED (f7e5f4b3).
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State

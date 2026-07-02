@@ -28,9 +28,10 @@ const (
 // TraceDataFlowArgs is the typed-args input schema for trace_data_flow (v2.10).
 type TraceDataFlowArgs struct {
 	// Seed is the starting PARAMETER symbol — the taint entry point. Either a
-	// direct SymbolID or a (file_path, symbol_name) tuple. A FUNCTION seed is
-	// not useful at HEAD: DATA_FLOWS edges are param-anchored, so a function
-	// node's outgoing edges are CALLS/IMPLEMENTS, not its params' DATA_FLOWS.
+	// direct SymbolID or a (file_path, symbol_name) tuple. Post-v2.13, DATA_FLOWS
+	// also carries function->param (def_use_inbody) edges, so a FUNCTION seed now
+	// mechanically reaches in-body targets; full function-seed support in the verb
+	// contract is a fast-follow (Phase 140) — the documented seed stays a parameter.
 	Seed SeedInput `json:"seed"`
 	// MaxHops bounds the reachability BFS depth. Default 5, max 10.
 	MaxHops int `json:"max_hops,omitempty" jsonschema:"reachability BFS depth (default 5, max 10)"`

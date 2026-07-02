@@ -18,20 +18,50 @@ kind strings map one-way into it via `MapInternalKind`.
 | Graph structure | `handles`, `tests`, `member_of` | tree-sitter batch (name/route heuristics) |
 | Co-change / cross-repo | `file_changes_with`, `cross_imports`, `cross_calls` | git co-change mining; cross-repo resolver |
 | Similarity | `similar_to`, `structural_twin`, `semantically_related` | MinHash+LSH / ASTProfile cosine / Random-Indexing (all computed at extraction via `FingerprintBody`, all 11 providers) |
-| Data flow | `data_flows` | `dataFlowEdges` — case-1 caller.param→callee.param (v2.9) |
+| Data flow | `data_flows` | `dataFlowEdges` — case-1 caller.param→callee.param (v2.9); `inBodyDataFlowEdges` — in-body-origin producer.function→consumer.param (v2.13); `returnBridgeEdges` — return-bridge param→enclosing-function (v2.13) |
 
 ## Edge kinds
 
-### `data_flows` (v2.9 — the taint-reachability substrate)
-- **Internal kind:** `DATA_FLOWS` · **Source:** `def_use` · **Confidence:** ~0.55
-- **Producer:** `dataflow.AnalyzeFlow` computes a per-function case-1 flow summary
-  (param → reaches-return / reaches-call(name, argPos)) at extraction time;
-  `dataFlowEdges` binds caller.param → callee.param through each resolved in-repo
-  call. Anti-mis-bind: a callee name resolves only when it maps to exactly one node.
-- **Honest scope:** syntactic param→param pass-through reachability. NOT taint
-  analysis (no in-body origins, field/heap flow, or sanitization).
-- **Read by:** `helix trace-data-flow` (v2.10 — source→sink reachability from a seed
-  parameter); `helix explain-symbol-deep` (edges verbatim).
+### `data_flows` (v2.9 param→param · v2.13 in-body origins + return-bridge)
+- **Internal kind:** `DATA_FLOWS` (all variants). The `Source` marker distinguishes
+  the three producers; all three surface as `data_flows` (`MapInternalKind`,
+  `edge_kind_surface.go`).
+- **`Source: def_use`** (v2.9 · conf ~0.55) — case-1 **caller.param → callee.param**.
+  `dataflow.AnalyzeFlow` computes a per-function flow summary (param → reaches-return
+  / reaches-call(name, argPos)) at extraction time; `dataFlowEdges` binds
+  caller.param → callee.param through each resolved in-repo call.
+- **`Source: def_use_inbody`** (v2.13 · conf ~0.50) — **producer.function →
+  consumer.param**. The return value of an in-body call (`local := producer();
+  sink(local)`) is an origin; the edge anchors on the producer's *function* node
+  (the honest available identity for a return value — a return has no distinct
+  graph node) and the consumer's *parameter* node. Emitted by `inBodyDataFlowEdges`.
+- **`Source: def_use_return`** (v2.13 · conf ~0.55) — **param → enclosing-function**.
+  A "return-bridge" recorded when a parameter's value reaches its function's return
+  (`transform(x){ return x }`). Emitted by `returnBridgeEdges`; the minimal
+  zero-schema connector that makes in-body origins composable for multi-hop
+  reachability (`producer.fn → transform.param → transform.fn → sink.param`).
+- **Anti-mis-bind (all variants):** a callee/producer name resolves only when it maps
+  to exactly one node (`nameCount==1`); external/overloaded/unresolved endpoint ⇒ no
+  fabricated edge.
+- **Honest scope:** syntactic case-1 data dependence — param→param pass-through PLUS
+  in-body call-return origins and the return-bridge. Binding is **symbol-node
+  identity** (no persistent variable-level nodes). Still NOT taint analysis:
+  **variable-level precision, field/heap flow, and source/sink sanitization remain
+  deferred.**
+- **Language coverage (v2.13 — all 11 proven E2E):** the flow engine records the
+  in-body flow across all 11 grammars (Phase 138 all-11 `AnalyzeFlow` unit matrix),
+  emission is proven for all 11 (`factsFromExtracted`), and the in-body edge is proven
+  **end-to-end through the shipped `helix` binary** (real `helix index-semantic-graph`
+  → `explain-symbol-deep`) for **all 11 languages**: Go, TypeScript, Java, C#, Python,
+  C, C++, Rust, Kotlin, PHP, Ruby (Phase 140). v2.13 wired the last four into the
+  daemon's full-index walk (`langFromExt` now maps `.rs/.kt/.php/.rb`); their type
+  resolvers remain nil-stubs, so they contribute symbols / references / similarity /
+  `data_flows` but **no `has_type` / `uses_type`** edges.
+- **Read by:** `helix trace-data-flow` (v2.10 — source→sink reachability from a seed;
+  the BFS is kind-agnostic node-ID adjacency, so a **function seed** now mechanically
+  reaches in-body targets over `def_use_inbody` edges — full function-seed support in
+  the verb's documented contract is a fast-follow; the documented seed stays a
+  parameter); `helix explain-symbol-deep` (edges verbatim, no kind filter).
 
 ### Similarity (v2.8)
 - **`similar_to`** (`SIMILAR_TO`, source `minhash`, conf ~0.45) — MinHash near-clone
@@ -72,7 +102,12 @@ kind strings map one-way into it via `MapInternalKind`.
   (`IncomingEdgesOf`/`OutgoingEdgesOf` apply NO edge-kind filter; `MapInternalKind`
   maps each internal kind to the surface enum). The general edge reader.
 - **`helix trace-data-flow`** (v2.10) — consumes `data_flows` for source→sink
-  reachability from a seed parameter.
+  reachability from a seed. Documented seed is a parameter, but the BFS is a
+  kind-agnostic node-ID adjacency walk over ALL `data_flows` edges (`def_use` +
+  `def_use_inbody` + `def_use_return`), so post-v2.13 a **function seed** also
+  reaches in-body targets (over the producer.function → consumer.param
+  `def_use_inbody` edge). Full function-seed support in the verb's documented
+  contract is a fast-follow.
 - **`helix get-change-impact-graph`** — hardcoded to the `call_graph` projection
   (filters `edge_kind = 'CALLS'`) and rewrites every returned edge `Kind` to
   `"calls"`; it CANNOT surface other edge kinds. (A multi-projection rework is a

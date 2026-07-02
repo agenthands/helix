@@ -1,6 +1,7 @@
 package dataflow_test
 
 import (
+	"reflect"
 	"testing"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -158,5 +159,157 @@ func TestAnalyzeFlow_TwoParamsDistinct(t *testing.T) {
 		if len(pf.CallArgs) != 1 {
 			t.Fatalf("param %s: want 1 CallArg; got %+v", pf.Name, pf.CallArgs)
 		}
+	}
+}
+
+// inBodyEqual compares two InBodyFlow slices order-sensitively (both are
+// dedup+sorted by AnalyzeFlow, so ordering is canonical).
+func inBodyEqual(a, b []dataflow.InBodyFlow) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func hasInBody(s *dataflow.Summary, want dataflow.InBodyFlow) bool {
+	if s == nil {
+		return false
+	}
+	for _, f := range s.InBodyFlows {
+		if f == want {
+			return true
+		}
+	}
+	return false
+}
+
+// FLOW-04h: single in-body flow — y := producer(); sink(y) => producer->sink.arg0.
+func TestAnalyzeFlow_InBody_Single(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f() { y := producer(); sink(y) }\n")
+	if s == nil {
+		t.Fatal("nil summary; want in-body flow producer->sink")
+	}
+	want := []dataflow.InBodyFlow{{Producer: "producer", Consumer: "sink", ArgPos: 0}}
+	if !inBodyEqual(s.InBodyFlows, want) {
+		t.Fatalf("InBodyFlows = %+v, want %+v", s.InBodyFlows, want)
+	}
+	// A param-less function: no param flows.
+	if len(s.Params) != 0 {
+		t.Errorf("want no param flows; got %+v", s.Params)
+	}
+}
+
+// FLOW-04h: in-body + param coexisting — y := producer(x); sink(y) => in-body
+// producer->sink.arg0 AND v2.9 param flow x->producer.arg0 (both present).
+func TestAnalyzeFlow_InBody_CoexistWithParam(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f(x int) { y := producer(x); sink(y) }\n")
+	if s == nil {
+		t.Fatal("nil summary; want both in-body and param flow")
+	}
+	if !hasInBody(s, dataflow.InBodyFlow{Producer: "producer", Consumer: "sink", ArgPos: 0}) {
+		t.Errorf("want in-body producer->sink.arg0; got %+v", s.InBodyFlows)
+	}
+	// v2.9 param flow: x reaches producer arg0.
+	if len(s.Params) != 1 || len(s.Params[0].CallArgs) != 1 {
+		t.Fatalf("want one param flow x->producer.arg0; got %+v", s.Params)
+	}
+	ca := s.Params[0].CallArgs[0]
+	if ca.Callee != "producer" || ca.ArgPos != 0 {
+		t.Errorf("param CallArg = %+v, want {producer,0}", ca)
+	}
+}
+
+// FLOW-04h: 2-hop chain — a := producer(); b := transform(a); sink(b) =>
+// two in-body flows producer->transform.arg0 and transform->sink.arg0 (D-COMPOSE
+// chaining: b's origin is callReturn(transform), NOT callReturn(producer)).
+func TestAnalyzeFlow_InBody_TwoHopChain(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f() { a := producer(); b := transform(a); sink(b) }\n")
+	if s == nil {
+		t.Fatal("nil summary; want two in-body flows")
+	}
+	want := []dataflow.InBodyFlow{
+		{Producer: "producer", Consumer: "transform", ArgPos: 0},
+		{Producer: "transform", Consumer: "sink", ArgPos: 0},
+	}
+	if !inBodyEqual(s.InBodyFlows, want) {
+		t.Fatalf("InBodyFlows = %+v, want %+v", s.InBodyFlows, want)
+	}
+}
+
+// FLOW-04h m2 RED guard (positive): nested wrap y := wrap(producer()); sink(y)
+// => callReturn(wrap) only (the OUTERMOST call). The InBodyFlow is
+// wrap->sink.arg0, NOT producer->sink. producer() flows INTO wrap (no arg here).
+func TestAnalyzeFlow_InBody_NestedWrapOutermost(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f() { y := wrap(producer()); sink(y) }\n")
+	if s == nil {
+		t.Fatal("nil summary; want in-body flow wrap->sink")
+	}
+	if hasInBody(s, dataflow.InBodyFlow{Producer: "producer", Consumer: "sink", ArgPos: 0}) {
+		t.Errorf("must NOT bind producer->sink (D-COMPOSE = outermost); got %+v", s.InBodyFlows)
+	}
+	want := []dataflow.InBodyFlow{{Producer: "wrap", Consumer: "sink", ArgPos: 0}}
+	if !inBodyEqual(s.InBodyFlows, want) {
+		t.Fatalf("InBodyFlows = %+v, want %+v", s.InBodyFlows, want)
+	}
+}
+
+// FLOW-04h m2 RED guard (negative): selector RHS y := producer().field; sink(y)
+// => NO in-body origin (selector_expression not in the unwrap whitelist).
+func TestAnalyzeFlow_InBody_SelectorRHS_NoOrigin(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f() { y := producer().field; sink(y) }\n")
+	if s != nil && len(s.InBodyFlows) != 0 {
+		t.Fatalf("selector RHS must yield no in-body origin; got %+v", s.InBodyFlows)
+	}
+}
+
+// FLOW-04h m2 RED guard (negative): multi-call RHS a, b := f(), g() =>
+// NO in-body origin (multi-child expression_list refused by unwrapToCall).
+func TestAnalyzeFlow_InBody_MultiCallRHS_NoOrigin(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc c() { a, b := f(), g(); sink(a); sink(b) }\n")
+	if s != nil && len(s.InBodyFlows) != 0 {
+		t.Fatalf("multi-call RHS must yield no in-body origin; got %+v", s.InBodyFlows)
+	}
+}
+
+// FLOW-04g anti-vacuity: dead local — y := producer(); return (y unused) =>
+// no in-body flow. Revert-and-fail RED: an always-record walk breaks this.
+func TestAnalyzeFlow_InBody_DeadLocal_AntiVacuity(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f() { y := producer(); return }\n")
+	if s != nil && len(s.InBodyFlows) != 0 {
+		t.Fatalf("dead local must yield no in-body flow; got %+v", s.InBodyFlows)
+	}
+}
+
+// FLOW-04g anti-vacuity: pure param — f(x){ sink(x) } => only a v2.9 param
+// flow, ZERO in-body flows.
+func TestAnalyzeFlow_InBody_PureParam_NoInBody(t *testing.T) {
+	s := analyzeGo(t, "package p\nfunc f(x int) { sink(x) }\n")
+	if s == nil {
+		t.Fatal("nil summary; want a param flow")
+	}
+	if len(s.InBodyFlows) != 0 {
+		t.Fatalf("pure param must yield no in-body flow; got %+v", s.InBodyFlows)
+	}
+	if len(s.Params) != 1 || len(s.Params[0].CallArgs) != 1 {
+		t.Errorf("want v2.9 param flow x->sink.arg0; got %+v", s.Params)
+	}
+}
+
+// FLOW-04f determinism: re-analyzing the same source yields a DeepEqual summary
+// (no Go-map iteration in the output path).
+func TestAnalyzeFlow_InBody_Determinism(t *testing.T) {
+	src := "package p\nfunc f(x int) { a := producer(x); b := transform(a); sink(b); other(x) }\n"
+	s1 := analyzeGo(t, src)
+	s2 := analyzeGo(t, src)
+	if !reflect.DeepEqual(s1, s2) {
+		t.Fatalf("non-deterministic summary:\n s1=%+v\n s2=%+v", s1, s2)
+	}
+	if s1 == nil || len(s1.InBodyFlows) != 2 {
+		t.Fatalf("want 2 in-body flows; got %+v", s1)
 	}
 }

@@ -284,13 +284,15 @@ type SymbolEdgesAccessor interface {
 
 // DataFlowReachabilityAccessor is the read seam for trace_data_flow (v2.10):
 // a bounded, deterministic source->sink reachability walk over DATA_FLOWS
-// edges. ReachableFrom seeds at a PARAMETER symbol (the taint entry point —
-// DATA_FLOWS edges are param->param, so a function seed cannot reach them at
-// HEAD: QuerySymbolEdgesOutgoing(functionNode) returns the function's own
-// CALLS/IMPLEMENTS edges, not its params' DATA_FLOWS edges). It returns the
-// set of symbols reachable within maxHops, each with its hop distance. Read-
-// only (D-09 invariant); nil means the seam is unwired and the handler MUST
-// guard (degrade gracefully).
+// edges. ReachableFrom seeds at a PARAMETER symbol (the verb's documented taint
+// entry point). Note (post-v2.13): DATA_FLOWS is no longer purely param->param —
+// it also carries function->param (def_use_inbody) and param->function
+// (def_use_return) edges, so a FUNCTION seed MAY now reach in-body targets over
+// its outgoing def_use_inbody edges (the BFS is kind-agnostic node-ID
+// adjacency). Full function-seed verb support is a fast-follow; the documented
+// seed stays a parameter. It returns the set of symbols reachable within
+// maxHops, each with its hop distance. Read-only (D-09 invariant); nil means
+// the seam is unwired and the handler MUST guard (degrade gracefully).
 type DataFlowReachabilityAccessor interface {
 	ReachableFrom(ctx context.Context, repoID string, seed integ.SymbolID, maxHops int) ([]ReachableNode, error)
 }

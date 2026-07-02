@@ -187,3 +187,259 @@ func paramNodeByName(facts semanticstore.Facts, paramName string) uint64 {
 	}
 	return 0
 }
+
+// functionNodeByName resolves a function/method symbol's NodeID by name.
+func functionNodeByName(facts semanticstore.Facts, name string) uint64 {
+	for _, s := range facts.Symbols {
+		if (s.Kind == "function" || s.Kind == "method") && s.Name == name {
+			return s.NodeID
+		}
+	}
+	return 0
+}
+
+// collectDataFlowsBySource returns the DATA_FLOWS edges with a specific Source
+// marker (def_use / def_use_inbody / def_use_return).
+func collectDataFlowsBySource(facts semanticstore.Facts, source string) []semanticstore.EdgeFact {
+	var out []semanticstore.EdgeFact
+	for _, e := range facts.Edges {
+		if e.EdgeKind == "DATA_FLOWS" && e.Source == source {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestFactsFromExtracted_InBodyEmission (FLOW-05a): a caller with an in-body
+// producer()->sink(a) flow emits a def_use_inbody edge producer.function ->
+// sink.param0.
+func TestFactsFromExtracted_InBodyEmission(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := producer(); sink(a) }\n")
+	producer := goExtract(t, p, "producer.go", "package m\nfunc producer() int { return 0 }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{caller, producer, sink}, "r", "", nil, nil)
+	inBody := collectDataFlowsBySource(got, "def_use_inbody")
+	if len(inBody) == 0 {
+		t.Fatalf("want >=1 def_use_inbody edge; got none. all DATA_FLOWS: %+v", collectDataFlows(got))
+	}
+	prodNode := functionNodeByName(got, "producer")
+	sinkParam := paramNodeByName(got, "v")
+	if prodNode == 0 || sinkParam == 0 {
+		t.Fatalf("missing endpoints: producer.fn=%d sink.v=%d", prodNode, sinkParam)
+	}
+	var found bool
+	for _, e := range inBody {
+		if e.SrcNodeID == prodNode && e.DstNodeID == sinkParam {
+			found = true
+			if e.SrcKind != "function" || e.DstKind != "parameter" {
+				t.Errorf("in-body kinds = %q/%q, want function/parameter", e.SrcKind, e.DstKind)
+			}
+			if e.Confidence != 0.50 || e.Weight != 0.5 {
+				t.Errorf("in-body conf/weight = %v/%v, want 0.50/0.5", e.Confidence, e.Weight)
+			}
+			if e.Reason != "return of producer -> sink param0" {
+				t.Errorf("in-body Reason = %q, want %q", e.Reason, "return of producer -> sink param0")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no def_use_inbody edge producer.fn(%d) -> sink.v(%d); got %+v", prodNode, sinkParam, inBody)
+	}
+}
+
+// TestFactsFromExtracted_ReturnBridge (FLOW-05b): a param whose value reaches
+// the function's return emits a def_use_return edge param -> enclosing function.
+func TestFactsFromExtracted_ReturnBridge(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	transform := goExtract(t, p, "transform.go", "package m\nfunc transform(x int) int { return x }\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{transform}, "r", "", nil, nil)
+	bridge := collectDataFlowsBySource(got, "def_use_return")
+	if len(bridge) == 0 {
+		t.Fatalf("want >=1 def_use_return edge; got none. all DATA_FLOWS: %+v", collectDataFlows(got))
+	}
+	fnNode := functionNodeByName(got, "transform")
+	xParam := paramNodeByName(got, "x")
+	if fnNode == 0 || xParam == 0 {
+		t.Fatalf("missing endpoints: transform.fn=%d x=%d", fnNode, xParam)
+	}
+	var found bool
+	for _, e := range bridge {
+		if e.SrcNodeID == xParam && e.DstNodeID == fnNode {
+			found = true
+			if e.SrcKind != "parameter" || e.DstKind != "function" {
+				t.Errorf("bridge kinds = %q/%q, want parameter/function", e.SrcKind, e.DstKind)
+			}
+			if e.Confidence != 0.55 || e.Weight != 0.5 {
+				t.Errorf("bridge conf/weight = %v/%v, want 0.55/0.5", e.Confidence, e.Weight)
+			}
+			if e.Reason != "param0 -> return" {
+				t.Errorf("bridge Reason = %q, want %q", e.Reason, "param0 -> return")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no def_use_return edge x(%d) -> transform.fn(%d); got %+v", xParam, fnNode, bridge)
+	}
+}
+
+// TestFactsFromExtracted_InBodyAntiMisBind (FLOW-05c): two producers sharing the
+// name "producer" (nameCount==2) => NO def_use_inbody edge (anti-mis-bind D5).
+func TestFactsFromExtracted_InBodyAntiMisBind(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := producer(); sink(a) }\n")
+	prod1 := goExtract(t, p, "prod1.go", "package a\nfunc producer() int { return 0 }\n")
+	prod2 := goExtract(t, p, "prod2.go", "package b\nfunc producer() int { return 1 }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{caller, prod1, prod2, sink}, "r", "", nil, nil)
+	if inBody := collectDataFlowsBySource(got, "def_use_inbody"); len(inBody) != 0 {
+		t.Errorf("anti-mis-bind: want 0 def_use_inbody edges for duplicate producer name; got %+v", inBody)
+	}
+}
+
+// TestFactsFromExtracted_InBodyExternalConsumerNoEdge (FLOW-05c): an unresolved
+// consumer (not in the batch name index) => no fabricated in-body edge.
+func TestFactsFromExtracted_InBodyExternalConsumerNoEdge(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	// caller feeds producer()'s return into an external sink not defined in batch.
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := producer(); extsink(a) }\n")
+	producer := goExtract(t, p, "producer.go", "package m\nfunc producer() int { return 0 }\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{caller, producer}, "r", "", nil, nil)
+	if inBody := collectDataFlowsBySource(got, "def_use_inbody"); len(inBody) != 0 {
+		t.Errorf("external consumer: want 0 def_use_inbody edges; got %+v", inBody)
+	}
+}
+
+// TestFactsFromExtracted_Distinctness (FLOW-05d, mutation-confirmed): an
+// in-body-only body emits def_use_inbody + ZERO def_use param->param; a
+// param-only body emits def_use + ZERO def_use_inbody.
+func TestFactsFromExtracted_Distinctness(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+
+	// (1) in-body-only: caller has no params; the only flow is producer()->sink(a).
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := producer(); sink(a) }\n")
+	producer := goExtract(t, p, "producer.go", "package m\nfunc producer() int { return 0 }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+	gotIn := factsFromExtracted([]*extract.ExtractedFile{caller, producer, sink}, "r", "", nil, nil)
+	if n := len(collectDataFlowsBySource(gotIn, "def_use_inbody")); n == 0 {
+		t.Errorf("in-body-only: want >=1 def_use_inbody edge; got 0")
+	}
+	if defuse := collectDataFlowsBySource(gotIn, "def_use"); len(defuse) != 0 {
+		t.Errorf("in-body-only: want 0 def_use param->param edges; got %+v", defuse)
+	}
+
+	// (2) param-only: f(x){ sink(x) } — a v2.9 param->param flow, no in-body call.
+	f := goExtract(t, p, "f.go", "package m\nfunc f(x int) { sink(x) }\n")
+	sink2 := goExtract(t, p, "sink2.go", "package m\nfunc sink(v int) {}\n")
+	gotParam := factsFromExtracted([]*extract.ExtractedFile{f, sink2}, "r", "", nil, nil)
+	if n := len(collectDataFlowsBySource(gotParam, "def_use")); n == 0 {
+		t.Errorf("param-only: want >=1 def_use param->param edge; got 0")
+	}
+	if inBody := collectDataFlowsBySource(gotParam, "def_use_inbody"); len(inBody) != 0 {
+		t.Errorf("param-only: want 0 def_use_inbody edges; got %+v", inBody)
+	}
+}
+
+// TestFactsFromExtracted_DefUseSetNonRegression (FLOW-05e): on a PURE-param Go
+// forward (src->mid->sink, no in-body call-return, so D-COMPOSE never fires),
+// the Source=="def_use" param->param edge SET (by content tuple) is EXACTLY the
+// v2.9 set — the new passes must not mutate it. Go is one of the 6 stable langs
+// (138 ledger); ruby/kotlin/python/c/cpp are excluded (wholesale/partially-new).
+func TestFactsFromExtracted_DefUseSetNonRegression(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	src := goExtract(t, p, "src.go", "package m\nfunc src(x int) { mid(x) }\n")
+	mid := goExtract(t, p, "mid.go", "package m\nfunc mid(m int) { sink(m) }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{src, mid, sink}, "r", "", nil, nil)
+	defuse := collectDataFlowsBySource(got, "def_use")
+
+	// v2.9 content tuple: (Src,Dst,SrcKind,DstKind,Source,Confidence,Weight,Reason).
+	type tup struct {
+		src, dst           uint64
+		sk, dk, so, reason string
+		conf, wt           float64
+	}
+	srcX := paramNodeByName(got, "x")
+	midM := paramNodeByName(got, "m")
+	sinkV := paramNodeByName(got, "v")
+	if srcX == 0 || midM == 0 || sinkV == 0 {
+		t.Fatalf("missing endpoints: x=%d m=%d v=%d", srcX, midM, sinkV)
+	}
+	want := map[tup]struct{}{
+		{srcX, midM, "parameter", "parameter", "def_use", "arg0 -> callee param0", 0.55, 0.5}: {},
+		{midM, sinkV, "parameter", "parameter", "def_use", "arg0 -> callee param0", 0.55, 0.5}: {},
+	}
+	got0 := map[tup]struct{}{}
+	for _, e := range defuse {
+		got0[tup{e.SrcNodeID, e.DstNodeID, e.SrcKind, e.DstKind, e.Source, e.Reason, e.Confidence, e.Weight}] = struct{}{}
+	}
+	if len(got0) != len(want) {
+		t.Fatalf("def_use SET size = %d, want %d (v2.9 set drift). got: %+v", len(got0), len(want), defuse)
+	}
+	for w := range want {
+		if _, ok := got0[w]; !ok {
+			t.Errorf("def_use SET missing v2.9 edge %+v; got %+v", w, defuse)
+		}
+	}
+}
+
+// TestFactsFromExtracted_MultiHop (FLOW-05g): src() -> transform -> sink over
+// real Go. sink.param must be reachable from src's FUNCTION node via
+// in-body(src->transform.param) -> return-bridge(transform.param->transform) ->
+// in-body(transform->sink.param).
+func TestFactsFromExtracted_MultiHop(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	src := goExtract(t, p, "src.go", "package m\nfunc src() int { return 0 }\n")
+	transform := goExtract(t, p, "transform.go", "package m\nfunc transform(x int) int { return x }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := src(); b := transform(a); sink(b) }\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{src, transform, sink, caller}, "r", "", nil, nil)
+	df := collectDataFlows(got)
+
+	srcFn := functionNodeByName(got, "src")
+	sinkV := paramNodeByName(got, "v")
+	if srcFn == 0 || sinkV == 0 {
+		t.Fatalf("missing endpoints: src.fn=%d sink.v=%d", srcFn, sinkV)
+	}
+	if !reachable(df, srcFn, sinkV) {
+		t.Errorf("sink.v(%d) not reachable from src.fn(%d) over multi-hop DATA_FLOWS; edges: %+v", sinkV, srcFn, df)
+	}
+}
+
+// TestFactsFromExtracted_MultiHop_BrokenHop (FLOW-05g revert-and-fail): if
+// transform drops the return (return-bridge hop severed), sink.v is no longer
+// reachable from src's function node.
+func TestFactsFromExtracted_MultiHop_BrokenHop(t *testing.T) {
+	grammars := treesitter.NewGrammarRegistry()
+	p := goextract.NewProvider(grammars)
+	src := goExtract(t, p, "src.go", "package m\nfunc src() int { return 0 }\n")
+	// transform no longer returns its param — the return-bridge hop disappears.
+	transform := goExtract(t, p, "transform.go", "package m\nfunc transform(x int) int { return 0 }\n")
+	sink := goExtract(t, p, "sink.go", "package m\nfunc sink(v int) {}\n")
+	caller := goExtract(t, p, "caller.go", "package m\nfunc caller() { a := src(); b := transform(a); sink(b) }\n")
+
+	got := factsFromExtracted([]*extract.ExtractedFile{src, transform, sink, caller}, "r", "", nil, nil)
+	df := collectDataFlows(got)
+
+	srcFn := functionNodeByName(got, "src")
+	sinkV := paramNodeByName(got, "v")
+	if srcFn == 0 || sinkV == 0 {
+		t.Fatal("missing endpoints")
+	}
+	if reachable(df, srcFn, sinkV) {
+		t.Errorf("sink.v reachable from src.fn despite severed return-bridge hop: %+v", df)
+	}
+}

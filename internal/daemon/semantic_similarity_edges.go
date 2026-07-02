@@ -532,3 +532,136 @@ func dataFlowEdges(
 	}
 	return edges
 }
+
+// inBodyDataFlowEdges emits the v2.13 in-body-origin DATA_FLOWS edges: the
+// return value of an in-body call (the "producer") flowing into an argument of
+// a later call (the "consumer"). Anchors on the producer's FUNCTION node (the
+// honest available identity for a return value — D-ANCHOR) and the consumer's
+// PARAMETER node (emit-order adjacency, as v2.9). Source marker "def_use_inbody"
+// keeps this edge SET distinct from the v2.9 param->param "def_use" set.
+//
+// Mirrors dataFlowEdges: SAME sorted withFlow discipline (ascending nodeID),
+// same nameToNode/nameCount anti-mis-bind (D5) and directed dedup (D8). Honesty
+// (D-HONESTY): an unresolved/overloaded/external endpoint => node 0 => gated out
+// pre-append (no fabricated edge). No Go-map iteration in the output path.
+func inBodyDataFlowEdges(
+	nodes []fingerprintedNode,
+	nodeToParams map[uint64][]uint64,
+	nameToNode map[string]uint64,
+	nameCount map[string]int,
+) []semanticstore.EdgeFact {
+	withFlow := make([]fingerprintedNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.flow != nil && len(n.flow.InBodyFlows) > 0 {
+			withFlow = append(withFlow, n)
+		}
+	}
+	sort.Slice(withFlow, func(i, j int) bool { return withFlow[i].nodeID < withFlow[j].nodeID })
+
+	var edges []semanticstore.EdgeFact
+	seen := make(map[[2]uint64]struct{})
+	for _, n := range withFlow {
+		for _, ib := range n.flow.InBodyFlows {
+			// Producer FUNCTION node (anti-mis-bind D5).
+			if nameCount[ib.Producer] != 1 {
+				continue
+			}
+			prodNode := nameToNode[ib.Producer]
+			if prodNode == 0 {
+				continue
+			}
+			// Consumer FUNCTION node (anti-mis-bind D5).
+			if nameCount[ib.Consumer] != 1 {
+				continue
+			}
+			consNode := nameToNode[ib.Consumer]
+			if consNode == 0 {
+				continue
+			}
+			// Consumer PARAMETER node j (emit-order adjacency, LOOKUP only).
+			consParams := nodeToParams[consNode]
+			if ib.ArgPos < 0 || ib.ArgPos >= len(consParams) {
+				continue
+			}
+			dstParam := consParams[ib.ArgPos]
+			if dstParam == 0 || dstParam == prodNode {
+				continue
+			}
+			key := [2]uint64{prodNode, dstParam}
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			edges = append(edges, semanticstore.EdgeFact{
+				SrcNodeID:  prodNode,
+				DstNodeID:  dstParam,
+				SrcKind:    "function",
+				DstKind:    "parameter",
+				EdgeKind:   "DATA_FLOWS",
+				Source:     "def_use_inbody",
+				Confidence: 0.50,
+				Weight:     0.5,
+				Reason:     fmt.Sprintf("return of %s -> %s param%d", ib.Producer, ib.Consumer, ib.ArgPos),
+			})
+		}
+	}
+	return edges
+}
+
+// returnBridgeEdges emits the v2.13 return-bridge DATA_FLOWS edges: a parameter
+// whose value reaches its own function's return gets a param -> enclosing-
+// FUNCTION edge (Source "def_use_return"). This reclaims the previously-dead
+// ParamFlow.Returns signal as the multi-hop connector (D-BRIDGE) — composing
+// producer(fn) -> transform.param -> transform(fn) -> sink.param reachability.
+//
+// Determinism (M4): iterate the SAME sorted withFlow node list as dataFlowEdges
+// and use nodeToParams for LOOKUP only — NEVER range the map in the output path
+// (a Go map range order is nondeterministic, and EdgeID is a slice-position
+// stamp). Directed-deduped on (src,dst); self-edge guarded.
+func returnBridgeEdges(
+	nodes []fingerprintedNode,
+	nodeToParams map[uint64][]uint64,
+) []semanticstore.EdgeFact {
+	withFlow := make([]fingerprintedNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.flow != nil && len(n.flow.Params) > 0 {
+			withFlow = append(withFlow, n)
+		}
+	}
+	sort.Slice(withFlow, func(i, j int) bool { return withFlow[i].nodeID < withFlow[j].nodeID })
+
+	var edges []semanticstore.EdgeFact
+	seen := make(map[[2]uint64]struct{})
+	for _, n := range withFlow {
+		fnParams := nodeToParams[n.nodeID] // LOOKUP only — never range the map
+		for _, pf := range n.flow.Params {
+			if !pf.Returns {
+				continue
+			}
+			if pf.Index < 0 || pf.Index >= len(fnParams) {
+				continue
+			}
+			srcParam := fnParams[pf.Index]
+			if srcParam == 0 || srcParam == n.nodeID {
+				continue
+			}
+			key := [2]uint64{srcParam, n.nodeID}
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			edges = append(edges, semanticstore.EdgeFact{
+				SrcNodeID:  srcParam,
+				DstNodeID:  n.nodeID,
+				SrcKind:    "parameter",
+				DstKind:    "function",
+				EdgeKind:   "DATA_FLOWS",
+				Source:     "def_use_return",
+				Confidence: 0.55,
+				Weight:     0.5,
+				Reason:     fmt.Sprintf("param%d -> return", pf.Index),
+			})
+		}
+	}
+	return edges
+}

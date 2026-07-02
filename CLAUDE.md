@@ -71,23 +71,25 @@ Targets coding agents (Claude Code, Codex, Gemini CLI, IDE assistants) that need
 ### Layer 3: Agent Profiles & Setup
 - `internal/profile/` -- 5 agent profiles (claude-code, codex, ide-assistant, ci-bot, full), 4 modes (read/edit/review/admin)
 - `internal/config/` -- 4-layer config: CLI > project (.helix/) > user (~/.helix/) > profile defaults
-- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `helix setup <client>` installs the Helix Agent Skill + hooks (Claude-family clients) and idempotently tears down any prior Helix MCP-server registration across 7 clients (Claude Code, VS Code, JetBrains, Claude Desktop, Gemini CLI, OpenCode, generic), with language detection, LS pre-installation, and the Claude Code hook installer. Non-skill clients (vscode, jetbrains, gemini-cli, opencode, generic) get MCP-teardown only — no skill is written. The binary's internal MCP daemon head is left intact.
+- `internal/cli/setup.go`, `internal/cli/setup_clients.go`, `internal/cli/setup_detect.go`, `internal/cli/setup_hooks.go`, `internal/cli/setup_output.go`, `internal/cli/setup_health.go` -- `helix setup <client>` installs agent instructions + hooks (skill-consuming clients) and idempotently tears down any prior Helix MCP-server registration across 8 clients (Claude Code, Claude Desktop, Codex, VS Code, JetBrains, Gemini CLI, OpenCode, generic), with language detection, LS pre-installation, and the Claude Code hook installer. Skill/instruction-writing clients: `claude-code` + `claude-desktop` get the embedded Helix Agent Skill; `codex` (the only non-Claude client that consumes agent instructions) gets an AGENTS.md sentinel block + a PreToolUse `helix nudge` hook. Teardown-only clients (vscode, jetbrains, gemini-cli, opencode, generic) get MCP-teardown only — no skill/instruction is written. The binary's internal MCP daemon head is left intact.
 - `internal/cli/status.go`, `internal/cli/status_output.go` -- `helix status` CLI producing human-readable workspace health summary (`--json`, `--verbose` modes)
 - `cmd/helix/main.go` -- single entrypoint; all CLI subcommands (setup, status, activate, deactivate, nudge, root, daemon wiring) live in `internal/cli/` and are mounted via cobra in `internal/cli/root.go`
 
-### MCP Middleware Stack (installed in `internal/daemon/daemon.go` steps 14, 14b, 14c)
-Four real middlewares, defined in `internal/mcp/`:
-- `TelemetryMiddleware` (middleware.go) -- absorbs the pre-v1.2 logging middleware; emits RED metrics on `tools/call`, injects per-tool deadlines via `BudgetFunc`, classifies outcomes (success / timeout / circuit_open / internal / ...)
-- `ProfileFilterMiddleware` (middleware.go) -- filters `tools/list` by active profile; ALSO applies brief descriptions from `ToolRegistry.BriefDescriptions()` (middleware.go:286-294) and then profile-specific description overrides. Brief descriptions are NOT a separate middleware — they piggyback on the profile filter's `tools/list` pass.
-- `SuggestionMiddleware` (suggest.go) -- enriches parameter-typo and enum-value errors with "Did you mean?" suggestions via Levenshtein distance on tool schemas; never redirects to a different tool
-- `LazyInitMiddleware` (lazy_init.go) -- `sync.Once` per workspace path; transparently activates the workspace on first tool call, serializes concurrent first calls
+### MCP Middleware Stack (installed in `internal/daemon/daemon.go` steps 14, 14b, 14b.5, 14b.6, 14c)
+Six real middlewares, defined in `internal/mcp/`, added in this order (install order = the order `AddReceivingMiddleware` is called):
+- `TelemetryMiddleware` (middleware.go, step 14) -- absorbs the pre-v1.2 logging middleware; emits RED metrics on `tools/call`, injects per-tool deadlines via `BudgetFunc`, classifies outcomes (success / timeout / circuit_open / internal / ...)
+- `ProfileFilterMiddleware` (middleware.go, step 14) -- filters `tools/list` by active profile; ALSO applies brief descriptions from `ToolRegistry.BriefDescriptions()` (middleware.go:286-294) and then profile-specific description overrides. Brief descriptions are NOT a separate middleware — they piggyback on the profile filter's `tools/list` pass.
+- `SuggestionMiddleware` (suggest.go, step 14b) -- enriches parameter-typo and enum-value errors with "Did you mean?" suggestions via Levenshtein distance on tool schemas; never redirects to a different tool
+- `GuardrailMiddleware` (guardrail_middleware.go, step 14b.5, Phase 66 GUARD-01) -- server-side capability-receipt enforcement on `tools/call`
+- `ProfileEnforcementMiddleware` (profile_enforce.go, step 14b.6, Phase 91 SEC-01) -- enforces the active profile/mode on `tools/call` (rejects tools not permitted by the resolved profile/mode)
+- `LazyInitMiddleware` (lazy_init.go, step 14c) -- `sync.Once` per workspace path; transparently activates the workspace on first tool call, serializes concurrent first calls
 
 ### Daemon Bootstrap (`internal/daemon/daemon.go`)
 - Creates language registry, installer, kernel with pool, GrammarRegistry (23 languages), TagCache (SQLite, persistent)
 - Imports all skill packages via blank imports (`imports.go`) for init() registration
 - Calls `skill.InitAll()`, registers all tools centrally with MCP SDK
 - Post-init wiring: `SetEnrichFn` for RepoMap LSP enrichment, `SetActivateCallback` for workspace activation, FallbackExtractor for languages without tree-sitter coverage
-- Installs middleware in three steps (14, 14b, 14c), resolves active profile
+- Installs middleware in five steps (14, 14b, 14b.5, 14b.6, 14c), resolves active profile
 - Fail-fast for core subsystems, degraded mode for optional providers
 - Kernel-first shutdown ordering
 
@@ -100,7 +102,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - **Database:** modernc.org/sqlite (CGO-free, for FTS5 memory search)
 - **Tree-sitter:** go-tree-sitter (body extraction for symbol editing)
 - **IPC:** gRPC (forwarder-daemon communication)
-- **CLI:** cobra v1.9.1 -- the agent interface; agents drive `helix <verb>` via Bash
+- **CLI:** cobra v1.10.2 -- the agent interface; agents drive `helix <verb>` via Bash
 - **Protocol:** MCP Go SDK + gRPC IPC retained as internal daemon plumbing (not an agent-facing surface)
 - **LSP:** LSP 3.17 (generated types from official metamodel)
 - **Container engine:** **Podman** (this dev environment uses Podman, NOT Docker — `podman` is on PATH, `docker` is not). `bench/container` is engine-agnostic and auto-detects docker-or-podman (`Engine.Detect` / `TestDetectFindsPodmanWhenNoDocker`), so container-backed benches (mirror pull, `--network=none` runs, SWE-bench / Multi-SWE-bench / Terminal-Bench) work on Podman. **Do NOT report "Docker not installed → blocked"** — check `podman` first. The only nuance: the upstream `swebench`/`multi_swe_bench` Python harnesses talk the Docker API, so point them at Podman's docker-compatible socket via `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (start it with `podman system service --time=0 &` if no socket is running). That's configuration, not a hard blocker.
@@ -141,7 +143,7 @@ Four real middlewares, defined in `internal/mcp/`:
 - Skill tools use `ToolProvider.Tools()` returning `[]*mcp.ToolDef`, daemon registers centrally
 - Kernel tools wrapped as thin skill adapters for uniform ToolProvider interface
 - "Skills for composition, tool names for execution"
-- Full tool inventory (50 frozen `helix` verbs with profile/mode matrix; the README table renders 51 rows because `analyze-blast-radius` is dual-categorized) is auto-generated in `README.md`; do not hand-edit the tool table
+- Full tool inventory (51 frozen `helix` verbs with profile/mode matrix; the README table renders 52 rows because `analyze-blast-radius` is dual-categorized) is auto-generated in `README.md`; do not hand-edit the tool table
 
 ### Skill System
 - Caddy-style `init()` registration: `skill.Register(&MySkill{})`
@@ -176,11 +178,13 @@ Four real middlewares, defined in `internal/mcp/`:
 Install order in `internal/daemon/daemon.go` is:
 1. `InstallMiddleware` -- adds `TelemetryMiddleware` then `ProfileFilterMiddleware` (step 14)
 2. `InstallSuggestionMiddleware` -- adds `SuggestionMiddleware` (step 14b)
-3. `InstallLazyInitMiddleware` -- adds `LazyInitMiddleware` LAST (step 14c)
+3. `InstallGuardrailMiddleware` -- adds `GuardrailMiddleware` (step 14b.5)
+4. `InstallProfileEnforcementMiddleware` -- adds `ProfileEnforcementMiddleware` (step 14b.6)
+5. `InstallLazyInitMiddleware` -- adds `LazyInitMiddleware` LAST (step 14c)
 
 Because `mcp-go-sdk.AddReceivingMiddleware` composes in LIFO order, the execution order on an incoming request is the reverse of the install order:
 
-`LazyInitMiddleware` → `SuggestionMiddleware` → `ProfileFilterMiddleware` (applies brief descriptions on `tools/list`) → `TelemetryMiddleware` → tool handler
+`LazyInitMiddleware` → `ProfileEnforcementMiddleware` → `GuardrailMiddleware` → `SuggestionMiddleware` → `ProfileFilterMiddleware` (applies brief descriptions on `tools/list`) → `TelemetryMiddleware` → tool handler
 
 LazyInit MUST run first so the workspace is activated before `TelemetryMiddleware` applies its per-tool deadline (see the install-order comment at `internal/mcp/lazy_init.go:106-108`). Any change to this order must preserve that invariant.
 
